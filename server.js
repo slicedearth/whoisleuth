@@ -743,6 +743,83 @@ const PARKING_NS_PATTERNS = [
 
 const FOR_SALE_TEXT_RE = /(this domain (?:may be|is) for sale|buy this domain|domain for sale|make an offer|inquire about (?:this|the) domain|purchase this domain|this domain is available for purchase)/i;
 
+// ---------------------------------------------------------------------------
+// Acquisition/sourcing signals: domain age, privacy-redaction, expiry
+// proximity, and site-activity status. These read data already fetched by
+// checkDomainAvailability (RDAP/WHOIS dates and registrant info) - none of
+// this triggers extra registry queries.
+// ---------------------------------------------------------------------------
+
+// new Date() only reliably parses ISO 8601 - these cover the non-ISO WHOIS
+// date formats seen across ccTLDs this project already supports (.cr, .kr,
+// .tr, .it), so domain age / expiry-proximity actually work for them too,
+// not just RDAP-backed (mostly gTLD) domains.
+function parseWhoisDate(str) {
+  if (!str) return null;
+  const iso = new Date(str);
+  if (!Number.isNaN(iso.getTime())) return iso;
+
+  // DD.MM.YYYY[ HH:MM:SS] - e.g. .cr/.at "14.03.2024 10:46:48"
+  let m = str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?/);
+  if (m) {
+    const [, d, mo, y, h, mi, s] = m;
+    return new Date(Date.UTC(+y, +mo - 1, +d, +(h || 0), +(mi || 0), +(s || 0)));
+  }
+
+  // YYYY. MM. DD.[ ] - e.g. .kr "2006. 09. 18."
+  m = str.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return new Date(Date.UTC(+y, +mo - 1, +d));
+  }
+
+  // YYYY-Mon-DD[.] - e.g. .tr "1999-Feb-16."
+  m = str.match(/^(\d{4})-([A-Za-z]{3})-(\d{1,2})\.?/);
+  if (m) {
+    const parsed = new Date(`${m[2]} ${m[3]}, ${m[1]} UTC`);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
+}
+
+function computeAgeDays(dateStr) {
+  const d = parseWhoisDate(dateStr);
+  return d ? Math.floor((Date.now() - d.getTime()) / 86400000) : null;
+}
+
+function computeDaysUntil(dateStr) {
+  const d = parseWhoisDate(dateStr);
+  return d ? Math.ceil((d.getTime() - Date.now()) / 86400000) : null;
+}
+
+const PRIVACY_MARKERS = [
+  /redacted for privacy/i,
+  /data protected/i,
+  /privacy\s*protect/i,
+  /whoisguard/i,
+  /domains by proxy/i,
+  /perfect privacy/i,
+  /contact privacy/i,
+  /private registration/i,
+  /identity protect/i,
+  /not disclosed/i,
+  /withheld for privacy/i,
+];
+
+// Only ever called after a lookup has already succeeded (this runs inside
+// checkDomainAvailability once RDAP or WHOIS has returned real data), so a
+// missing/empty registrant here isn't "we don't know" - it means the
+// registry gave us a response with no usable contact in it, which for
+// sourcing purposes (can I reach this owner from this data alone?) is the
+// same practical answer as an explicit privacy-proxy service: no.
+function isPrivacyProtected(registrant) {
+  if (!registrant) return true;
+  const blob = [registrant.name, registrant.org, registrant.email].filter(Boolean).join(' ');
+  if (!blob) return true; // record exists but every contact field is blank - that's redaction
+  return PRIVACY_MARKERS.some((re) => re.test(blob));
+}
+
 async function fetchHomepageText(domain) {
   const headers = { 'User-Agent': 'Mozilla/5.0 (compatible; DomainStatusChecker/1.0)' };
   for (const scheme of ['https', 'http']) {
@@ -759,7 +836,13 @@ async function fetchHomepageText(domain) {
   return null;
 }
 
-async function checkDomainAvailability(domain) {
+// fast: true skips the WHOIS fallback (no TCP:43 chain) and the homepage
+// fetch (no for-sale/parking detection) - just RDAP plus the signals
+// derivable from it (age, expiry proximity, privacy). Meant for scanning
+// large sourcing candidate lists quickly and gently on registry rate
+// limits; anything it can't resolve (state "unknown") is meant to get a
+// follow-up deep check (fast: false, the default) on the shortlist only.
+async function checkDomainAvailability(domain, { fast = false } = {}) {
   let nameservers = [];
   let statuses = [];
   let rdapServer = null;
@@ -797,11 +880,11 @@ async function checkDomainAvailability(domain) {
       }
     }
   } catch {
-    /* fall through to WHOIS-based detection */
+    /* fall through to WHOIS-based detection (deep mode only) */
   }
 
   let whoisChain = null;
-  if (!rdapFound) {
+  if (!rdapFound && !fast) {
     try {
       whoisChain = await buildWhoisChain(domain);
       const parsed = parseWhoisChain(whoisChain);
@@ -838,15 +921,32 @@ async function checkDomainAvailability(domain) {
     }
   }
 
-  if (!rdapFound && !whoisChain) {
+  if (!rdapFound && (fast || !whoisChain)) {
     return {
       state: 'unknown',
       confidence: 'low',
-      detail: 'Could not reach RDAP or WHOIS for this domain to determine its status.',
+      detail: fast
+        ? 'No RDAP data for this TLD/domain in a fast scan - run a deep check for a WHOIS-based result.'
+        : 'Could not reach RDAP or WHOIS for this domain to determine its status.',
     };
   }
 
-  const baseInfo = { nameservers, statuses, registrar, registrant, createdDate, expiryDate, rdapServer };
+  const domainAgeDays = computeAgeDays(createdDate);
+  const expiresInDays = computeDaysUntil(expiryDate);
+  const privacyProtected = isPrivacyProtected(registrant);
+
+  const baseInfo = {
+    nameservers,
+    statuses,
+    registrar,
+    registrant,
+    createdDate,
+    expiryDate,
+    rdapServer,
+    domainAgeDays,
+    expiresInDays,
+    privacyProtected,
+  };
 
   if (statuses.some((s) => s.includes('pendingdelete') || s.includes('redemptionperiod'))) {
     return {
@@ -857,18 +957,36 @@ async function checkDomainAvailability(domain) {
     };
   }
 
-  // Registered - look for for-sale signals.
+  if (fast) {
+    return {
+      state: 'registered',
+      confidence: 'high',
+      detail: 'Domain is registered. Run a deep check for parking/for-sale detection.',
+      ...baseInfo,
+    };
+  }
+
+  // Registered - look for for-sale/parked/inactive signals (homepage fetch,
+  // deep mode only).
   const nsSignal = nameservers.find((ns) => PARKING_NS_PATTERNS.some((re) => re.test(ns)));
   let forSaleSignal = nsSignal ? `parking nameserver (${nsSignal})` : null;
+  let activityStatus = nsSignal ? 'parked' : 'unknown';
 
   try {
     const page = await fetchHomepageText(domain);
     if (page) {
       const saleMatch = page.match(FOR_SALE_TEXT_RE);
-      if (saleMatch) forSaleSignal = forSaleSignal || `homepage text ("${saleMatch[0]}")`;
+      if (saleMatch) {
+        forSaleSignal = forSaleSignal || `homepage text ("${saleMatch[0]}")`;
+        activityStatus = 'parked';
+      } else if (activityStatus === 'unknown') {
+        activityStatus = 'active';
+      }
+    } else if (activityStatus === 'unknown') {
+      activityStatus = 'no_site';
     }
   } catch {
-    /* homepage may be unreachable - not fatal */
+    if (activityStatus === 'unknown') activityStatus = 'no_site';
   }
 
   if (!forSaleSignal) {
@@ -876,6 +994,7 @@ async function checkDomainAvailability(domain) {
       state: 'registered',
       confidence: 'high',
       detail: 'Domain is registered and shows no for-sale signals.',
+      activityStatus,
       ...baseInfo,
     };
   }
@@ -884,6 +1003,7 @@ async function checkDomainAvailability(domain) {
     state: 'for_sale',
     confidence: 'medium',
     detail: `Detected a for-sale listing (${forSaleSignal}).`,
+    activityStatus,
     ...baseInfo,
   };
 }
@@ -898,7 +1018,8 @@ app.get('/api/availability', async (req, res) => {
       return res.json({ applicable: false, type });
     }
 
-    const result = await checkDomainAvailability(value);
+    const fast = req.query.fast === '1' || req.query.fast === 'true';
+    const result = await checkDomainAvailability(value, { fast });
     res.json({ applicable: true, domain: value, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -912,6 +1033,12 @@ app.get('/api/availability', async (req, res) => {
 
 const MAX_BULK_DOMAINS = 200;
 const BULK_CONCURRENCY = 6;
+// Fast scans (RDAP-only, no WHOIS/homepage fetch) are cheap enough on both
+// this server and upstream registries to run much larger, more concurrent
+// batches - meant for sourcing/screening large candidate lists, with the
+// deep (default) mode reserved for a shortlist.
+const MAX_FAST_BULK_DOMAINS = 2000;
+const FAST_BULK_CONCURRENCY = 20;
 
 async function runPool(items, concurrency, worker) {
   let idx = 0;
@@ -927,6 +1054,10 @@ async function runPool(items, concurrency, worker) {
 
 app.post('/api/bulk', async (req, res) => {
   const rawDomains = Array.isArray(req.body?.domains) ? req.body.domains : null;
+  const fast = Boolean(req.body?.fast);
+  const maxDomains = fast ? MAX_FAST_BULK_DOMAINS : MAX_BULK_DOMAINS;
+  const concurrency = fast ? FAST_BULK_CONCURRENCY : BULK_CONCURRENCY;
+
   if (!rawDomains || rawDomains.length === 0) {
     return res.status(400).json({ error: 'Request body must include a non-empty "domains" array' });
   }
@@ -940,7 +1071,7 @@ app.post('/api/bulk', async (req, res) => {
     if (seen.has(key)) continue;
     seen.add(key);
     domains.push(trimmed);
-    if (domains.length >= MAX_BULK_DOMAINS) break;
+    if (domains.length >= maxDomains) break;
   }
 
   if (domains.length === 0) {
@@ -954,7 +1085,7 @@ app.post('/api/bulk', async (req, res) => {
   });
   res.write(JSON.stringify({ type: 'start', total: domains.length }) + '\n');
 
-  await runPool(domains, BULK_CONCURRENCY, async (rawEntry, index) => {
+  await runPool(domains, concurrency, async (rawEntry, index) => {
     const { type, value } = classifyQuery(rawEntry);
     let record;
 
@@ -966,7 +1097,7 @@ app.post('/api/bulk', async (req, res) => {
       };
     } else {
       try {
-        const result = await checkDomainAvailability(value);
+        const result = await checkDomainAvailability(value, { fast });
         record = {
           domain: value,
           availability: result.state,
@@ -979,6 +1110,10 @@ app.post('/api/bulk', async (req, res) => {
           createdDate: result.createdDate || null,
           expiryDate: result.expiryDate || null,
           nameservers: Array.isArray(result.nameservers) ? result.nameservers.join('; ') : '',
+          domainAgeDays: result.domainAgeDays ?? null,
+          expiresInDays: result.expiresInDays ?? null,
+          privacyProtected: result.privacyProtected ?? null,
+          activityStatus: result.activityStatus || null,
         };
       } catch (err) {
         record = { domain: value, availability: 'error', availabilityDetail: err.message };

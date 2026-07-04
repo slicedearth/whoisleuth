@@ -227,6 +227,17 @@
     font-size: 0.75rem;
     font-family: var(--mono);
   }
+  .signal-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .signal-chip.neutral { background: rgba(139, 147, 167, 0.15); color: var(--muted); }
+  .signal-chip.good { background: rgba(126, 224, 168, 0.15); color: var(--accent2); }
+  .signal-chip.warn { background: rgba(242, 184, 75, 0.15); color: var(--amber); }
   .ns-list { margin: 0; padding-left: 18px; font-family: var(--mono); font-size: 0.8rem; }
   .ns-list li { margin-bottom: 2px; }
 
@@ -437,12 +448,13 @@
     </div>
     <div class="bulk-inputs">
       <div>
-        <label class="bulk-label" for="bulk-file">...or upload a CSV for bulk lookup (a "domain" column, or one per line, up to 200)</label>
+        <label class="bulk-label" for="bulk-file">...or upload a CSV for a fast bulk scan (a "domain" column, or one per line, up to 2000) - select rows afterwards for a full deep check</label>
         <input type="file" id="bulk-file" accept=".csv,text/csv" />
       </div>
     </div>
     <div class="bulk-actions">
       <button type="button" id="bulk-cancel-btn" class="secondary" style="display:none;">Cancel</button>
+      <button type="button" id="bulk-deep-check-btn" class="secondary" disabled>Deep check selected</button>
       <button type="button" id="bulk-export-btn" class="secondary" disabled>Export CSV</button>
       <span class="bulk-status" id="bulk-status"></span>
     </div>
@@ -455,6 +467,7 @@
     </div>
     <div class="availability-detail" id="availability-detail"></div>
     <div id="availability-confidence"></div>
+    <div class="badge-list" id="availability-signals" style="margin-top: 10px;"></div>
   </section>
 
   <div class="panels">
@@ -481,12 +494,15 @@
     <table class="bulk-results">
       <thead>
         <tr>
+          <th><input type="checkbox" id="bulk-select-all" /></th>
           <th>Domain</th>
           <th>Availability</th>
+          <th>Age</th>
+          <th>Expires in</th>
+          <th>Privacy</th>
+          <th>Activity</th>
           <th>Registrar</th>
           <th>Registrant</th>
-          <th>Created</th>
-          <th>Expires</th>
           <th>Nameservers</th>
         </tr>
       </thead>
@@ -516,6 +532,7 @@ const availabilityDomain = document.getElementById('availability-domain');
 const availabilityPill = document.getElementById('availability-pill');
 const availabilityDetail = document.getElementById('availability-detail');
 const availabilityConfidence = document.getElementById('availability-confidence');
+const availabilitySignals = document.getElementById('availability-signals');
 
 document.querySelectorAll('.chip').forEach((chip) => {
   chip.addEventListener('click', () => {
@@ -702,6 +719,56 @@ const PILL_LABELS = {
   error: 'Lookup failed',
 };
 
+// ---------------------------------------------------------------------------
+// Acquisition/sourcing signals (domain age, expiry proximity, WHOIS privacy,
+// site activity) - shown as small chips on the availability card and as
+// extra columns/CSV fields in bulk results.
+// ---------------------------------------------------------------------------
+
+function fmtAge(days) {
+  if (days === null || days === undefined) return null;
+  if (days < 60) return `${days}d old`;
+  const years = days / 365.25;
+  return years < 1 ? `${Math.round(days / 30)}mo old` : `${years.toFixed(1)}y old`;
+}
+
+function fmtExpiresIn(days) {
+  if (days === null || days === undefined) return null;
+  return days < 0 ? `expired ${Math.abs(days)}d ago` : `expires in ${days}d`;
+}
+
+const ACTIVITY_LABELS = {
+  active: 'Active site',
+  parked: 'Parked / for-sale page',
+  no_site: 'No site (inactive)',
+};
+
+function signalChip(label, tone) {
+  return `<span class="signal-chip ${tone}">${escapeHtml(label)}</span>`;
+}
+
+function buildSignalChips(body) {
+  const chips = [];
+
+  const age = fmtAge(body.domainAgeDays);
+  if (age) chips.push(signalChip(age, 'neutral'));
+
+  const expiresIn = fmtExpiresIn(body.expiresInDays);
+  if (expiresIn) {
+    chips.push(signalChip(expiresIn, body.expiresInDays !== null && body.expiresInDays <= 60 ? 'warn' : 'neutral'));
+  }
+
+  if (body.privacyProtected === true) chips.push(signalChip('Privacy protected', 'warn'));
+  else if (body.privacyProtected === false) chips.push(signalChip('Contact public', 'good'));
+
+  if (body.activityStatus && ACTIVITY_LABELS[body.activityStatus]) {
+    const tone = body.activityStatus === 'active' ? 'good' : body.activityStatus === 'parked' ? 'warn' : 'neutral';
+    chips.push(signalChip(ACTIVITY_LABELS[body.activityStatus], tone));
+  }
+
+  return chips.join('');
+}
+
 function renderAvailability(body) {
   if (!body || body.applicable === false) {
     availabilityCard.classList.remove('visible');
@@ -719,6 +786,8 @@ function renderAvailability(body) {
   availabilityConfidence.innerHTML = body.confidence
     ? `<span class="confidence-note">confidence: ${escapeHtml(body.confidence)}</span>`
     : '';
+
+  availabilitySignals.innerHTML = buildSignalChips(body);
 }
 
 async function runRdap(q) {
@@ -785,9 +854,11 @@ function clearSingleResults() {
 // ---------------------------------------------------------------------------
 
 const MAX_BULK_DOMAINS = 200;
+const MAX_FAST_BULK_DOMAINS = 2000;
 
 const bulkFileInput = document.getElementById('bulk-file');
 const bulkCancelBtn = document.getElementById('bulk-cancel-btn');
+const bulkDeepCheckBtn = document.getElementById('bulk-deep-check-btn');
 const bulkExportBtn = document.getElementById('bulk-export-btn');
 const bulkStatus = document.getElementById('bulk-status');
 const bulkProgressWrap = document.getElementById('bulk-progress-wrap');
@@ -795,9 +866,25 @@ const bulkProgressFill = document.getElementById('bulk-progress-fill');
 const bulkProgressLabel = document.getElementById('bulk-progress-label');
 const bulkResultsWrap = document.getElementById('bulk-results-wrap');
 const bulkResultsBody = document.getElementById('bulk-results-body');
+const bulkSelectAll = document.getElementById('bulk-select-all');
 
 let bulkResults = [];
 let bulkAbortController = null;
+const bulkSelected = new Set();
+
+function updateDeepCheckButton() {
+  bulkDeepCheckBtn.disabled = bulkSelected.size === 0;
+}
+
+function formatPrivacyCell(v) {
+  if (v === true) return 'Protected';
+  if (v === false) return 'Public';
+  return '—';
+}
+
+function formatActivityCell(v) {
+  return ACTIVITY_LABELS[v] || '—';
+}
 
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
@@ -866,6 +953,10 @@ function exportBulkCsv() {
     'Domain',
     'Availability',
     'Availability Detail',
+    'Domain Age (days)',
+    'Expires In (days)',
+    'Privacy Protected',
+    'Activity Status',
     'Registrar Name',
     'Registrar Email',
     'Registrant Name',
@@ -879,6 +970,10 @@ function exportBulkCsv() {
     r.domain,
     r.availability,
     r.availabilityDetail,
+    r.domainAgeDays,
+    r.expiresInDays,
+    formatPrivacyCell(r.privacyProtected),
+    formatActivityCell(r.activityStatus),
     r.registrarName,
     r.registrarEmail,
     r.registrantName,
@@ -900,40 +995,92 @@ function exportBulkCsv() {
   URL.revokeObjectURL(url);
 }
 
-function appendBulkRow(r) {
-  const tr = document.createElement('tr');
+function bulkRowCellsHtml(r) {
   const pillLabel = PILL_LABELS[r.availability] || r.availability;
   const registrar = [r.registrarName].filter(Boolean).join(' ') || '—';
   const registrant = [r.registrantName, r.registrantOrg].filter(Boolean).join(', ') || '—';
-  tr.innerHTML = `
+  return `
     <td class="domain-cell">${escapeHtml(r.domain)}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
+    <td>${escapeHtml(fmtAge(r.domainAgeDays) || '—')}</td>
+    <td>${escapeHtml(fmtExpiresIn(r.expiresInDays) || '—')}</td>
+    <td>${escapeHtml(formatPrivacyCell(r.privacyProtected))}</td>
+    <td>${escapeHtml(formatActivityCell(r.activityStatus))}</td>
     <td>${escapeHtml(registrar)}</td>
     <td>${escapeHtml(registrant)}</td>
-    <td>${escapeHtml(fmtDate(r.createdDate) || '—')}</td>
-    <td>${escapeHtml(fmtDate(r.expiryDate) || '—')}</td>
     <td>${escapeHtml(r.nameservers || '—')}</td>
   `;
+}
+
+// Used both for a fresh scan (every domain is new) and a deep-check
+// follow-up (updates the existing row for a domain in place instead of
+// adding a duplicate).
+function upsertBulkRow(r) {
+  const existingIdx = bulkResults.findIndex((existing) => existing.domain === r.domain);
+  if (existingIdx !== -1) bulkResults[existingIdx] = r;
+  else bulkResults.push(r);
+
+  const existingTr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(r.domain)}"]`);
+  if (existingTr) {
+    const checked = existingTr.querySelector('input[type="checkbox"]')?.checked;
+    existingTr.innerHTML = `<td><input type="checkbox" ${checked ? 'checked' : ''}/></td>${bulkRowCellsHtml(r)}`;
+    wireBulkRowCheckbox(existingTr, r.domain);
+    return;
+  }
+
+  const tr = document.createElement('tr');
+  tr.dataset.domain = r.domain;
+  tr.innerHTML = `<td><input type="checkbox" /></td>${bulkRowCellsHtml(r)}`;
+  wireBulkRowCheckbox(tr, r.domain);
   bulkResultsBody.appendChild(tr);
+}
+
+function wireBulkRowCheckbox(tr, domain) {
+  const checkbox = tr.querySelector('input[type="checkbox"]');
+  checkbox.addEventListener('change', () => {
+    if (checkbox.checked) bulkSelected.add(domain);
+    else bulkSelected.delete(domain);
+    updateDeepCheckButton();
+  });
 }
 
 function clearBulkResults() {
   bulkResultsBody.innerHTML = '';
   bulkResults = [];
+  bulkSelected.clear();
+  bulkSelectAll.checked = false;
+  updateDeepCheckButton();
   bulkResultsWrap.classList.remove('visible');
   bulkProgressWrap.classList.remove('visible');
   bulkExportBtn.disabled = true;
 }
 
-async function runBulkLookup(domains) {
-  bulkResultsBody.innerHTML = '';
-  bulkResults = [];
+bulkSelectAll.addEventListener('change', () => {
+  bulkResultsBody.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.checked = bulkSelectAll.checked;
+    const domain = cb.closest('tr')?.dataset.domain;
+    if (!domain) return;
+    if (cb.checked) bulkSelected.add(domain);
+    else bulkSelected.delete(domain);
+  });
+  updateDeepCheckButton();
+});
+
+// fast: RDAP-only scan (default for a fresh run over a candidate list).
+// append: true means this is a deep-check follow-up on an existing table -
+// update matching rows in place instead of clearing/rebuilding it.
+async function runBulkLookup(domains, { fast = true, append = false } = {}) {
+  if (!append) {
+    bulkResultsBody.innerHTML = '';
+    bulkResults = [];
+  }
   bulkResultsWrap.classList.add('visible');
   bulkExportBtn.disabled = true;
   bulkProgressWrap.classList.add('visible');
   bulkProgressFill.style.width = '0%';
   bulkProgressLabel.textContent = `Processed 0 / ${domains.length}`;
   submitBtn.disabled = true;
+  bulkDeepCheckBtn.disabled = true;
   bulkCancelBtn.style.display = 'inline-block';
   bulkStatus.innerHTML = '';
 
@@ -943,7 +1090,7 @@ async function runBulkLookup(domains) {
     const res = await fetch('/api/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domains }),
+      body: JSON.stringify({ domains, fast }),
       signal: bulkAbortController.signal,
     });
 
@@ -972,8 +1119,7 @@ async function runBulkLookup(domains) {
           bulkProgressLabel.textContent = `Processed 0 / ${total}`;
         } else if (msg.type === 'result') {
           processed += 1;
-          bulkResults.push(msg);
-          appendBulkRow(msg);
+          upsertBulkRow(msg);
           bulkProgressLabel.textContent = `Processed ${processed} / ${total}`;
           bulkProgressFill.style.width = `${Math.round((processed / total) * 100)}%`;
         }
@@ -981,7 +1127,8 @@ async function runBulkLookup(domains) {
     }
 
     bulkExportBtn.disabled = bulkResults.length === 0;
-    bulkStatus.textContent = `Done — ${bulkResults.length} domain${bulkResults.length === 1 ? '' : 's'} processed.`;
+    const verb = fast ? 'scanned' : 'deep-checked';
+    bulkStatus.textContent = `Done — ${domains.length} domain${domains.length === 1 ? '' : 's'} ${verb}.`;
   } catch (err) {
     if (err.name !== 'AbortError') {
       bulkStatus.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
@@ -990,6 +1137,7 @@ async function runBulkLookup(domains) {
     }
   } finally {
     submitBtn.disabled = false;
+    updateDeepCheckButton();
     bulkCancelBtn.style.display = 'none';
     bulkAbortController = null;
   }
@@ -1032,12 +1180,12 @@ form.addEventListener('submit', async (e) => {
   }
 
   clearSingleResults();
-  const truncated = entries.slice(0, MAX_BULK_DOMAINS);
-  if (entries.length > MAX_BULK_DOMAINS) {
-    bulkStatus.innerHTML = `<span class="error-text">Found ${entries.length} entries; only the first ${MAX_BULK_DOMAINS} will be processed.</span>`;
+  const truncated = entries.slice(0, MAX_FAST_BULK_DOMAINS);
+  if (entries.length > MAX_FAST_BULK_DOMAINS) {
+    bulkStatus.innerHTML = `<span class="error-text">Found ${entries.length} entries; only the first ${MAX_FAST_BULK_DOMAINS} will be scanned.</span>`;
   }
 
-  runBulkLookup(truncated);
+  runBulkLookup(truncated, { fast: true, append: false });
 });
 
 bulkCancelBtn.addEventListener('click', () => {
@@ -1045,6 +1193,18 @@ bulkCancelBtn.addEventListener('click', () => {
 });
 
 bulkExportBtn.addEventListener('click', exportBulkCsv);
+
+bulkDeepCheckBtn.addEventListener('click', () => {
+  const selected = [...bulkSelected];
+  if (selected.length === 0) return;
+
+  const truncated = selected.slice(0, MAX_BULK_DOMAINS);
+  if (selected.length > MAX_BULK_DOMAINS) {
+    bulkStatus.innerHTML = `<span class="error-text">Selected ${selected.length} domains; only the first ${MAX_BULK_DOMAINS} will be deep-checked.</span>`;
+  }
+
+  runBulkLookup(truncated, { fast: false, append: true });
+});
 </script>
 </body>
 </html>
