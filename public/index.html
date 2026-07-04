@@ -506,6 +506,26 @@
         <span class="bulk-status" id="typo-status"></span>
       </div>
     </details>
+    <details class="generator">
+      <summary>Shortlist (<span id="shortlist-count">0 domains</span>) - saved in this browser</summary>
+      <div class="bulk-actions" style="margin-top: 10px;">
+        <button type="button" id="shortlist-rescan-btn" class="secondary">Load into query box</button>
+        <button type="button" id="shortlist-export-btn" class="secondary">Export CSV</button>
+      </div>
+      <div style="margin-top: 10px; overflow-x: auto;">
+        <table class="bulk-results">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th>Score</th>
+              <th>Availability</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="shortlist-body"></tbody>
+        </table>
+      </div>
+    </details>
     <div class="bulk-inputs">
       <div>
         <label class="bulk-label" for="bulk-file">...or upload a CSV for a fast bulk scan (a "domain" column, or one per line, up to 2000) - select rows afterwards for a full deep check</label>
@@ -1202,6 +1222,99 @@ function updateDeepCheckButton() {
   bulkDeepCheckBtn.disabled = bulkSelected.size === 0;
 }
 
+// ---------------------------------------------------------------------------
+// Shortlist - a lightweight "remember these across sessions" list backed by
+// localStorage, deliberately not a backend database: this is meant to hold
+// promising finds from active sourcing sessions, not to track/manage an
+// owned domain portfolio.
+// ---------------------------------------------------------------------------
+
+const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
+
+function loadShortlist() {
+  try {
+    return JSON.parse(localStorage.getItem(SHORTLIST_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveShortlist(list) {
+  try {
+    localStorage.setItem(SHORTLIST_KEY, JSON.stringify(list));
+  } catch {
+    /* storage full/unavailable - shortlist just won't persist this time */
+  }
+}
+
+function isShortlisted(domain) {
+  return loadShortlist().some((r) => r.domain === domain);
+}
+
+function toggleShortlist(record) {
+  const list = loadShortlist();
+  const idx = list.findIndex((r) => r.domain === record.domain);
+  if (idx !== -1) list.splice(idx, 1);
+  else list.push(record);
+  saveShortlist(list);
+  renderShortlistPanel();
+}
+
+function renderShortlistPanel() {
+  const list = loadShortlist();
+  document.getElementById('shortlist-count').textContent = `${list.length} domain${list.length === 1 ? '' : 's'}`;
+  document.getElementById('shortlist-body').innerHTML = list
+    .map((r) => {
+      const score = computeOpportunityScore(r);
+      const pillLabel = PILL_LABELS[r.availability] || r.availability;
+      return `
+        <tr>
+          <td class="domain-cell">${escapeHtml(r.domain)}</td>
+          <td>${score === null ? '—' : `<span class="signal-chip ${scoreTone(score)}">${score}</span>`}</td>
+          <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
+          <td><button type="button" class="secondary shortlist-remove-btn" data-domain="${escapeHtml(r.domain)}">Remove</button></td>
+        </tr>
+      `;
+    })
+    .join('');
+}
+
+document.addEventListener('click', (e) => {
+  const starBtn = e.target.closest('.star-btn');
+  if (starBtn) {
+    const record = bulkResults.find((r) => r.domain === starBtn.dataset.domain);
+    if (record) {
+      toggleShortlist(record);
+      const nowStarred = isShortlisted(record.domain);
+      starBtn.textContent = nowStarred ? '★' : '☆';
+      starBtn.title = `${nowStarred ? 'Remove from' : 'Add to'} shortlist`;
+    }
+    return;
+  }
+  const removeBtn = e.target.closest('.shortlist-remove-btn');
+  if (removeBtn) {
+    toggleShortlist({ domain: removeBtn.dataset.domain });
+    // re-render any visible bulk row for this domain so its star reverts
+    const tr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(removeBtn.dataset.domain)}"]`);
+    const record = bulkResults.find((r) => r.domain === removeBtn.dataset.domain);
+    if (tr && record) {
+      const checked = tr.querySelector('input[type="checkbox"]')?.checked;
+      tr.innerHTML = `<td><input type="checkbox" ${checked ? 'checked' : ''}/></td>${bulkRowCellsHtml(record)}`;
+      wireBulkRowCheckbox(tr, record.domain);
+    }
+  }
+});
+
+document.getElementById('shortlist-rescan-btn').addEventListener('click', () => {
+  const list = loadShortlist();
+  if (list.length === 0) return;
+  queryInput.value = list.map((r) => r.domain).join('\n');
+});
+
+document.getElementById('shortlist-export-btn').addEventListener('click', () => {
+  exportCsv(loadShortlist(), `domain-shortlist-${Date.now()}.csv`);
+});
+
 function formatPrivacyCell(v) {
   if (v === true) return 'Protected';
   if (v === false) return 'Public';
@@ -1273,8 +1386,8 @@ function toCsvValue(v) {
   return s;
 }
 
-function exportBulkCsv() {
-  if (bulkResults.length === 0) return;
+function exportCsv(records, filename) {
+  if (records.length === 0) return;
   const headers = [
     'Domain',
     'Opportunity Score',
@@ -1293,7 +1406,7 @@ function exportBulkCsv() {
     'Expiry Date',
     'Nameservers',
   ];
-  const rows = bulkResults.map((r) => [
+  const rows = records.map((r) => [
     r.domain,
     computeOpportunityScore(r),
     r.availability,
@@ -1316,7 +1429,7 @@ function exportBulkCsv() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `domain-lookup-results-${Date.now()}.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1345,8 +1458,11 @@ function bulkRowCellsHtml(r) {
     ? `<a href="${escapeHtml(mailto)}" title="Draft email to ${escapeHtml(r.registrantEmail)}">&#9993;</a> <button type="button" class="secondary outreach-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
     : '—';
 
+  const starred = isShortlisted(r.domain);
+  const star = `<button type="button" class="star-btn" data-domain="${escapeHtml(r.domain)}" title="${starred ? 'Remove from' : 'Add to'} shortlist" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 6px 0 0;font-size:0.95rem;">${starred ? '★' : '☆'}</button>`;
+
   return `
-    <td class="domain-cell">${escapeHtml(r.domain)}</td>
+    <td class="domain-cell">${star}${escapeHtml(r.domain)}</td>
     <td>${score === null ? '—' : `<span class="signal-chip ${scoreTone(score)}">${score}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
     <td>${escapeHtml(fmtAge(r.domainAgeDays) || '—')}</td>
@@ -1553,7 +1669,7 @@ bulkCancelBtn.addEventListener('click', () => {
   if (bulkAbortController) bulkAbortController.abort();
 });
 
-bulkExportBtn.addEventListener('click', exportBulkCsv);
+bulkExportBtn.addEventListener('click', () => exportCsv(bulkResults, `domain-lookup-results-${Date.now()}.csv`));
 
 bulkDeepCheckBtn.addEventListener('click', () => {
   const selected = [...bulkSelected];
@@ -1566,6 +1682,8 @@ bulkDeepCheckBtn.addEventListener('click', () => {
 
   runBulkLookup(truncated, { fast: false, append: true });
 });
+
+renderShortlistPanel();
 </script>
 </body>
 </html>
