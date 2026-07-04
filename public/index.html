@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WHOIS &amp; RDAP Lookup</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e39;
+    --text: #e6e8ee;
+    --muted: #8b93a7;
+    --accent: #5eb3ff;
+    --accent2: #7ee0a8;
+    --error: #ff6b6b;
+    --amber: #f2b84b;
+    --purple: #b48cff;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  header h1 {
+    font-size: 1.6rem;
+    margin: 0 0 4px;
+  }
+  header p {
+    color: var(--muted);
+    margin: 0 0 28px;
+    font-size: 0.95rem;
+  }
+  .search-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #query-input {
+    flex: 1 1 320px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    outline: none;
+    min-height: 48px;
+    max-height: 220px;
+    resize: vertical;
+  }
+  #query-input:focus {
+    border-color: var(--accent);
+  }
+  button {
+    background: var(--accent);
+    color: #08131f;
+    border: none;
+    font-weight: 600;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .examples {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .examples button.chip {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 4px 10px;
+    font-weight: 400;
+    border-radius: 999px;
+    margin: 6px 6px 0 0;
+    font-size: 0.8rem;
+  }
+  .examples button.chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Availability card */
+  .availability {
+    margin-top: 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: none;
+  }
+  .availability.visible { display: block; }
+  .availability-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+  }
+  .status-pill.available { background: rgba(126, 224, 168, 0.15); color: var(--accent2); }
+  .status-pill.registered { background: rgba(94, 179, 255, 0.15); color: var(--accent); }
+  .status-pill.for_sale { background: rgba(242, 184, 75, 0.15); color: var(--amber); }
+  .status-pill.expiring { background: rgba(180, 140, 255, 0.15); color: var(--purple); }
+  .status-pill.unknown, .status-pill.error { background: rgba(139, 147, 167, 0.15); color: var(--muted); }
+  .availability-domain {
+    font-family: var(--mono);
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .availability-detail {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+  .confidence-note {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+  }
+
+  .panels {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 760px) {
+    .panels { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel h2 {
+    font-size: 1rem;
+    margin: 0;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .panel h2 span:first-child {
+    flex: 0 0 auto;
+  }
+  .panel h2 .badge {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--muted);
+    font-family: var(--mono);
+    text-align: right;
+    word-break: break-all;
+    min-width: 0;
+  }
+  .panel-body {
+    padding: 14px 16px;
+    max-height: 620px;
+    overflow: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .placeholder { color: var(--muted); font-family: inherit; }
+  .error-text { color: var(--error); }
+
+  /* Readable key/value summary */
+  .kv-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 14px;
+    font-size: 0.85rem;
+  }
+  .kv-grid dt {
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .kv-grid dd {
+    margin: 0;
+    word-break: break-word;
+  }
+  .section-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 18px 0 8px;
+  }
+  .section-title:first-child { margin-top: 0; }
+  .badge-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .status-chip {
+    background: rgba(94, 179, 255, 0.12);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-family: var(--mono);
+  }
+  .ns-list { margin: 0; padding-left: 18px; font-family: var(--mono); font-size: 0.8rem; }
+  .ns-list li { margin-bottom: 2px; }
+
+  details.raw {
+    margin-top: 16px;
+  }
+  details.raw summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.78rem;
+    user-select: none;
+  }
+  details.raw pre {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    max-height: 320px;
+    overflow: auto;
+  }
+  .hop {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .hop:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .hop-server {
+    color: var(--accent2);
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer {
+    margin-top: 30px;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  footer a { color: var(--accent); }
+
+  /* Bulk lookup */
+  .bulk-inputs {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .bulk-inputs > div { flex: 1 1 300px; }
+  .bulk-label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type="file"] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    resize: vertical;
+  }
+  textarea:focus, input[type="file"]:focus { border-color: var(--accent); outline: none; }
+  .bulk-actions {
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  button.secondary:hover { border-color: var(--accent); }
+  .bulk-status { font-size: 0.85rem; color: var(--muted); }
+
+  .progress-wrap {
+    margin-top: 16px;
+    display: none;
+  }
+  .progress-wrap.visible { display: block; }
+  .progress-track {
+    background: var(--border);
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    background: var(--accent);
+    height: 100%;
+    width: 0%;
+    transition: width 0.2s ease;
+  }
+  .progress-label {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .bulk-results-wrap {
+    margin-top: 20px;
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: auto;
+    max-height: 480px;
+  }
+  .bulk-results-wrap.visible { display: block; }
+  table.bulk-results {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  table.bulk-results th {
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+    text-align: left;
+    padding: 8px 10px;
+    color: var(--muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.bulk-results td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    max-width: 220px;
+    overflow-wrap: break-word;
+  }
+  table.bulk-results td.domain-cell { font-family: var(--mono); }
+  .mini-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .mini-pill.available { background: rgba(126, 224, 168, 0.15); color: var(--accent2); }
+  .mini-pill.registered { background: rgba(94, 179, 255, 0.15); color: var(--accent); }
+  .mini-pill.for_sale { background: rgba(242, 184, 75, 0.15); color: var(--amber); }
+  .mini-pill.expiring { background: rgba(180, 140, 255, 0.15); color: var(--purple); }
+  .mini-pill.unknown, .mini-pill.error { background: rgba(139, 147, 167, 0.15); color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>WHOIS &amp; RDAP Lookup</h1>
+    <p>Queries the official IANA RDAP bootstrap and regional registries (ARIN, RIPE, APNIC, LACNIC, AFRINIC, and TLD registries), plus live WHOIS over port 43 starting from whois.iana.org. Enter one domain, IPv4/IPv6 address, or ASN for full detail, or paste/upload a list of domains for a bulk run with CSV export.</p>
+  </header>
+
+  <form id="lookup-form">
+    <div class="search-row">
+      <textarea
+        id="query-input"
+        rows="1"
+        placeholder="Enter a domain, IPv4/IPv6, or ASN (e.g. example.com, 8.8.8.8, AS15169) - or paste one domain per line for a bulk lookup"
+        required
+      ></textarea>
+      <button type="submit" id="submit-btn">Lookup</button>
+    </div>
+    <div class="examples">
+      Try:
+      <button type="button" class="chip" data-example="example.com">example.com</button>
+      <button type="button" class="chip" data-example="8.8.8.8">8.8.8.8</button>
+      <button type="button" class="chip" data-example="2606:4700:4700::1111">2606:4700:4700::1111</button>
+      <button type="button" class="chip" data-example="AS15169">AS15169</button>
+    </div>
+    <div class="bulk-inputs">
+      <div>
+        <label class="bulk-label" for="bulk-file">...or upload a CSV for bulk lookup (a "domain" column, or one per line, up to 200)</label>
+        <input type="file" id="bulk-file" accept=".csv,text/csv" />
+      </div>
+    </div>
+    <div class="bulk-actions">
+      <button type="button" id="bulk-cancel-btn" class="secondary" style="display:none;">Cancel</button>
+      <button type="button" id="bulk-export-btn" class="secondary" disabled>Export CSV</button>
+      <span class="bulk-status" id="bulk-status"></span>
+    </div>
+  </form>
+
+  <section class="availability" id="availability-card">
+    <div class="availability-top">
+      <span class="availability-domain" id="availability-domain"></span>
+      <span class="status-pill" id="availability-pill"></span>
+    </div>
+    <div class="availability-detail" id="availability-detail"></div>
+    <div id="availability-confidence"></div>
+  </section>
+
+  <div class="panels">
+    <section class="panel">
+      <h2><span>RDAP</span><span class="badge" id="rdap-badge"></span></h2>
+      <div class="panel-body" id="rdap-output">
+        <span class="placeholder">RDAP results will appear here.</span>
+      </div>
+    </section>
+    <section class="panel">
+      <h2><span>WHOIS</span><span class="badge" id="whois-badge"></span></h2>
+      <div class="panel-body" id="whois-output">
+        <span class="placeholder">WHOIS referral chain will appear here.</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="progress-wrap" id="bulk-progress-wrap">
+    <div class="progress-track"><div class="progress-fill" id="bulk-progress-fill"></div></div>
+    <div class="progress-label" id="bulk-progress-label"></div>
+  </div>
+
+  <div class="bulk-results-wrap" id="bulk-results-wrap">
+    <table class="bulk-results">
+      <thead>
+        <tr>
+          <th>Domain</th>
+          <th>Availability</th>
+          <th>Registrar</th>
+          <th>Registrant</th>
+          <th>Created</th>
+          <th>Expires</th>
+          <th>Nameservers</th>
+        </tr>
+      </thead>
+      <tbody id="bulk-results-body"></tbody>
+    </table>
+  </div>
+
+  <footer>
+    Data sourced directly from <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap service</a>
+    and the referring registry's own RDAP/WHOIS servers. This tool runs a small local backend so real WHOIS
+    (TCP/43) and cross-origin RDAP requests are possible &mdash; browsers cannot make either of those calls directly.
+    Most gTLD registries redact registrant contact details for privacy, so registrant fields are often blank &mdash;
+    that reflects the registry's own privacy redaction, not a lookup failure.
+  </footer>
+</div>
+
+<script>
+const form = document.getElementById('lookup-form');
+const queryInput = document.getElementById('query-input');
+const submitBtn = document.getElementById('submit-btn');
+const rdapOutput = document.getElementById('rdap-output');
+const whoisOutput = document.getElementById('whois-output');
+const rdapBadge = document.getElementById('rdap-badge');
+const whoisBadge = document.getElementById('whois-badge');
+const availabilityCard = document.getElementById('availability-card');
+const availabilityDomain = document.getElementById('availability-domain');
+const availabilityPill = document.getElementById('availability-pill');
+const availabilityDetail = document.getElementById('availability-detail');
+const availabilityConfidence = document.getElementById('availability-confidence');
+
+document.querySelectorAll('.chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    queryInput.value = chip.dataset.example;
+    form.requestSubmit();
+  });
+});
+
+// query-input is a textarea (so pasting/uploading a multi-domain list
+// works) - Enter alone still submits like a single-line search box;
+// Shift+Enter inserts a newline for manually typing more than one query.
+queryInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    form.requestSubmit();
+  }
+});
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function setLoading(el, badgeEl) {
+  el.innerHTML = '<span class="placeholder">Looking up<span class="spinner"></span></span>';
+  if (badgeEl) badgeEl.textContent = '';
+}
+
+function fmtDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function kv(label, value) {
+  if (value === null || value === undefined || value === '') return '';
+  return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`;
+}
+
+function entityBlock(title, entity) {
+  if (!entity) return '';
+  const rows = [
+    entity.name ? kv('Name', entity.name) : '',
+    entity.org ? kv('Organisation', entity.org) : '',
+    entity.email ? kv('Email', entity.email) : '',
+    entity.phone ? kv('Phone', entity.phone) : '',
+    entity.address ? kv('Address', entity.address) : '',
+    entity.handle ? kv('Handle', entity.handle) : '',
+  ].join('');
+  if (!rows) return '';
+  return `<div class="section-title">${escapeHtml(title)}</div><dl class="kv-grid">${rows}</dl>`;
+}
+
+function renderRdap(type, parsed, rawData) {
+  if (!parsed) {
+    return `<span class="placeholder">No structured RDAP data available for this record.</span>` + rawBlock(rawData);
+  }
+
+  let html = '';
+
+  if (type === 'domain') {
+    html += `<dl class="kv-grid">${kv('Domain', parsed.domain)}${kv('Handle', parsed.handle)}${kv('DNSSEC', parsed.dnssec)}</dl>`;
+
+    if (parsed.statuses && parsed.statuses.length) {
+      html += `<div class="section-title">Status</div><div class="badge-list">${parsed.statuses
+        .map((s) => `<span class="status-chip">${escapeHtml(s)}</span>`)
+        .join('')}</div>`;
+    }
+
+    if (parsed.events && parsed.events.length) {
+      const rows = parsed.events.map((e) => kv(e.action, fmtDate(e.date))).join('');
+      html += `<div class="section-title">Dates</div><dl class="kv-grid">${rows}</dl>`;
+    }
+
+    if (parsed.nameservers && parsed.nameservers.length) {
+      html += `<div class="section-title">Name servers</div><ul class="ns-list">${parsed.nameservers
+        .map((ns) => `<li>${escapeHtml(ns)}</li>`)
+        .join('')}</ul>`;
+    }
+
+    html += entityBlock('Registrar', parsed.registrar);
+    html += entityBlock('Registrant', parsed.registrant);
+    html += entityBlock('Abuse contact', parsed.abuse);
+  } else if (type === 'ipv4' || type === 'ipv6') {
+    html += `<dl class="kv-grid">${kv('Name', parsed.name)}${kv('Handle', parsed.handle)}${kv(
+      'Range',
+      parsed.startAddress && parsed.endAddress ? `${parsed.startAddress} – ${parsed.endAddress}` : null
+    )}${kv('CIDR', (parsed.cidrs || []).join(', '))}${kv('Country', parsed.country)}${kv('Type', parsed.networkType)}</dl>`;
+
+    if (parsed.events && parsed.events.length) {
+      const rows = parsed.events.map((e) => kv(e.action, fmtDate(e.date))).join('');
+      html += `<div class="section-title">Dates</div><dl class="kv-grid">${rows}</dl>`;
+    }
+
+    html += entityBlock('Organisation', parsed.org);
+    html += entityBlock('Abuse contact', parsed.abuse);
+  } else if (type === 'asn') {
+    html += `<dl class="kv-grid">${kv('Name', parsed.name)}${kv('Handle', parsed.handle)}${kv(
+      'Range',
+      parsed.startAutnum != null ? `AS${parsed.startAutnum} – AS${parsed.endAutnum}` : null
+    )}${kv('Country', parsed.country)}${kv('Type', parsed.autnumType)}</dl>`;
+
+    if (parsed.events && parsed.events.length) {
+      const rows = parsed.events.map((e) => kv(e.action, fmtDate(e.date))).join('');
+      html += `<div class="section-title">Dates</div><dl class="kv-grid">${rows}</dl>`;
+    }
+
+    html += entityBlock('Organisation', parsed.org);
+    html += entityBlock('Abuse contact', parsed.abuse);
+  }
+
+  return html + rawBlock(rawData);
+}
+
+function rawBlock(rawData) {
+  return `<details class="raw"><summary>Show raw RDAP JSON</summary><pre>${escapeHtml(
+    JSON.stringify(rawData, null, 2)
+  )}</pre></details>`;
+}
+
+function renderWhois(parsed, chain) {
+  if (!parsed) return `<span class="placeholder">No WHOIS data.</span>`;
+
+  let html = '<dl class="kv-grid">';
+  html += kv('Domain', parsed.domainName);
+  html += kv('Registrar', parsed.registrar);
+  html += kv('Registrar URL', parsed.registrarUrl);
+  html += kv('Created', fmtDate(parsed.createdDate));
+  html += kv('Expires', fmtDate(parsed.expiryDate));
+  html += kv('Last updated', fmtDate(parsed.updatedDate));
+  html += kv('Abuse email', parsed.abuseEmail);
+  html += kv('Abuse phone', parsed.abusePhone);
+  html += kv('DNSSEC', parsed.dnssec);
+  html += '</dl>';
+
+  if (parsed.statuses && parsed.statuses.length) {
+    html += `<div class="section-title">Status</div><div class="badge-list">${parsed.statuses
+      .map((s) => `<span class="status-chip">${escapeHtml(s)}</span>`)
+      .join('')}</div>`;
+  }
+
+  if (parsed.nameservers && parsed.nameservers.length) {
+    html += `<div class="section-title">Name servers</div><ul class="ns-list">${parsed.nameservers
+      .map((ns) => `<li>${escapeHtml(ns)}</li>`)
+      .join('')}</ul>`;
+  }
+
+  html += entityBlock('Registrant', {
+    name: parsed.registrantName,
+    org: parsed.registrantOrg,
+    email: parsed.registrantEmail,
+    phone: parsed.registrantPhone,
+    address: parsed.registrantAddress,
+  });
+  html += entityBlock('Admin contact', {
+    name: parsed.adminName,
+    org: parsed.adminOrg,
+    email: parsed.adminEmail,
+  });
+
+  const rawChain = (chain || [])
+    .map((hop) => {
+      if (hop.error) {
+        return `<div class="hop"><span class="hop-server">${escapeHtml(hop.server)}</span><span class="error-text">${escapeHtml(hop.error)}</span></div>`;
+      }
+      return `<div class="hop"><span class="hop-server">${escapeHtml(hop.server)}</span><pre style="white-space:pre-wrap;font-family:inherit;margin:0;">${escapeHtml(hop.response || '(empty response)')}</pre></div>`;
+    })
+    .join('');
+
+  html += `<details class="raw"><summary>Show raw WHOIS responses (${(chain || []).length} hop${(chain || []).length === 1 ? '' : 's'})</summary>${rawChain}</details>`;
+
+  return html;
+}
+
+const PILL_LABELS = {
+  available: 'Available to register',
+  registered: 'Registered (active)',
+  for_sale: 'For sale',
+  expiring: 'Expiring / pending delete',
+  unknown: 'Status unknown',
+  error: 'Lookup failed',
+};
+
+function renderAvailability(body) {
+  if (!body || body.applicable === false) {
+    availabilityCard.classList.remove('visible');
+    return;
+  }
+
+  availabilityCard.classList.add('visible');
+  availabilityDomain.textContent = body.domain || '';
+
+  const state = body.state || 'unknown';
+  availabilityPill.className = `status-pill ${state}`;
+  availabilityPill.textContent = PILL_LABELS[state] || state;
+  availabilityDetail.textContent = body.detail || '';
+
+  availabilityConfidence.innerHTML = body.confidence
+    ? `<span class="confidence-note">confidence: ${escapeHtml(body.confidence)}</span>`
+    : '';
+}
+
+async function runRdap(q) {
+  setLoading(rdapOutput, rdapBadge);
+  try {
+    const res = await fetch(`/api/rdap?q=${encodeURIComponent(q)}`);
+    const body = await res.json();
+    if (!res.ok) {
+      rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'RDAP lookup failed')}</span>`;
+      return;
+    }
+    rdapBadge.textContent = body.rdapServer || '';
+    rdapOutput.innerHTML = renderRdap(body.type, body.parsed, body.data);
+  } catch (err) {
+    rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
+  }
+}
+
+async function runWhois(q) {
+  setLoading(whoisOutput, whoisBadge);
+  try {
+    const res = await fetch(`/api/whois?q=${encodeURIComponent(q)}`);
+    const body = await res.json();
+    if (!res.ok) {
+      whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'WHOIS lookup failed')}</span>`;
+      return;
+    }
+    const chain = body.chain || [];
+    whoisBadge.textContent = chain.map((h) => h.server).join(' → ');
+    whoisOutput.innerHTML = renderWhois(body.parsed, chain);
+  } catch (err) {
+    whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
+  }
+}
+
+async function runAvailability(q) {
+  availabilityCard.classList.remove('visible');
+  try {
+    const res = await fetch(`/api/availability?q=${encodeURIComponent(q)}`);
+    const body = await res.json();
+    if (!res.ok) return;
+    renderAvailability(body);
+  } catch {
+    /* availability is best-effort; silently skip on failure */
+  }
+}
+
+async function runSingleLookup(q) {
+  submitBtn.disabled = true;
+  await Promise.allSettled([runRdap(q), runWhois(q), runAvailability(q)]);
+  submitBtn.disabled = false;
+}
+
+function clearSingleResults() {
+  rdapOutput.innerHTML = '<span class="placeholder">RDAP results will appear here.</span>';
+  whoisOutput.innerHTML = '<span class="placeholder">WHOIS referral chain will appear here.</span>';
+  rdapBadge.textContent = '';
+  whoisBadge.textContent = '';
+  availabilityCard.classList.remove('visible');
+}
+
+// ---------------------------------------------------------------------------
+// Bulk CSV lookup
+// ---------------------------------------------------------------------------
+
+const MAX_BULK_DOMAINS = 200;
+
+const bulkFileInput = document.getElementById('bulk-file');
+const bulkCancelBtn = document.getElementById('bulk-cancel-btn');
+const bulkExportBtn = document.getElementById('bulk-export-btn');
+const bulkStatus = document.getElementById('bulk-status');
+const bulkProgressWrap = document.getElementById('bulk-progress-wrap');
+const bulkProgressFill = document.getElementById('bulk-progress-fill');
+const bulkProgressLabel = document.getElementById('bulk-progress-label');
+const bulkResultsWrap = document.getElementById('bulk-results-wrap');
+const bulkResultsBody = document.getElementById('bulk-results-body');
+
+let bulkResults = [];
+let bulkAbortController = null;
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read file'));
+    reader.readAsText(file);
+  });
+}
+
+function splitCsvLine(line) {
+  const result = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur);
+  return result.map((s) => s.trim());
+}
+
+const DOMAIN_HEADER_NAMES = ['domain', 'domain_name', 'domain name', 'hostname', 'name'];
+
+function parseDomainsFromText(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+
+  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
+  const domainColIdx = header.findIndex((h) => DOMAIN_HEADER_NAMES.includes(h));
+
+  let dataLines = lines;
+  let colIdx = 0;
+  if (domainColIdx !== -1) {
+    dataLines = lines.slice(1);
+    colIdx = domainColIdx;
+  }
+
+  return dataLines
+    .map((line) => splitCsvLine(line)[colIdx] || '')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function toCsvValue(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportBulkCsv() {
+  if (bulkResults.length === 0) return;
+  const headers = [
+    'Domain',
+    'Availability',
+    'Availability Detail',
+    'Registrar Name',
+    'Registrar Email',
+    'Registrant Name',
+    'Registrant Org',
+    'Registrant Email',
+    'Created Date',
+    'Expiry Date',
+    'Nameservers',
+  ];
+  const rows = bulkResults.map((r) => [
+    r.domain,
+    r.availability,
+    r.availabilityDetail,
+    r.registrarName,
+    r.registrarEmail,
+    r.registrantName,
+    r.registrantOrg,
+    r.registrantEmail,
+    r.createdDate,
+    r.expiryDate,
+    r.nameservers,
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(toCsvValue).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `domain-lookup-results-${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function appendBulkRow(r) {
+  const tr = document.createElement('tr');
+  const pillLabel = PILL_LABELS[r.availability] || r.availability;
+  const registrar = [r.registrarName].filter(Boolean).join(' ') || '—';
+  const registrant = [r.registrantName, r.registrantOrg].filter(Boolean).join(', ') || '—';
+  tr.innerHTML = `
+    <td class="domain-cell">${escapeHtml(r.domain)}</td>
+    <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
+    <td>${escapeHtml(registrar)}</td>
+    <td>${escapeHtml(registrant)}</td>
+    <td>${escapeHtml(fmtDate(r.createdDate) || '—')}</td>
+    <td>${escapeHtml(fmtDate(r.expiryDate) || '—')}</td>
+    <td>${escapeHtml(r.nameservers || '—')}</td>
+  `;
+  bulkResultsBody.appendChild(tr);
+}
+
+function clearBulkResults() {
+  bulkResultsBody.innerHTML = '';
+  bulkResults = [];
+  bulkResultsWrap.classList.remove('visible');
+  bulkProgressWrap.classList.remove('visible');
+  bulkExportBtn.disabled = true;
+}
+
+async function runBulkLookup(domains) {
+  bulkResultsBody.innerHTML = '';
+  bulkResults = [];
+  bulkResultsWrap.classList.add('visible');
+  bulkExportBtn.disabled = true;
+  bulkProgressWrap.classList.add('visible');
+  bulkProgressFill.style.width = '0%';
+  bulkProgressLabel.textContent = `Processed 0 / ${domains.length}`;
+  submitBtn.disabled = true;
+  bulkCancelBtn.style.display = 'inline-block';
+  bulkStatus.innerHTML = '';
+
+  bulkAbortController = new AbortController();
+
+  try {
+    const res = await fetch('/api/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domains }),
+      signal: bulkAbortController.signal,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Bulk lookup failed (${res.status})`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let total = domains.length;
+    let processed = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (msg.type === 'start') {
+          total = msg.total;
+          bulkProgressLabel.textContent = `Processed 0 / ${total}`;
+        } else if (msg.type === 'result') {
+          processed += 1;
+          bulkResults.push(msg);
+          appendBulkRow(msg);
+          bulkProgressLabel.textContent = `Processed ${processed} / ${total}`;
+          bulkProgressFill.style.width = `${Math.round((processed / total) * 100)}%`;
+        }
+      }
+    }
+
+    bulkExportBtn.disabled = bulkResults.length === 0;
+    bulkStatus.textContent = `Done — ${bulkResults.length} domain${bulkResults.length === 1 ? '' : 's'} processed.`;
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      bulkStatus.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
+    } else {
+      bulkStatus.textContent = 'Cancelled.';
+    }
+  } finally {
+    submitBtn.disabled = false;
+    bulkCancelBtn.style.display = 'none';
+    bulkAbortController = null;
+  }
+}
+
+// Single form for both modes: a CSV upload always means bulk (even a
+// single-row CSV - uploading a file is an explicit "many" signal), while
+// the text box runs a full single-domain/IP/ASN lookup for exactly one
+// entry and falls back to a bulk run for more than one.
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  bulkStatus.textContent = '';
+
+  const file = bulkFileInput.files[0];
+  let entries;
+  if (file) {
+    let text;
+    try {
+      text = await readFileAsText(file);
+    } catch (err) {
+      bulkStatus.innerHTML = `<span class="error-text">Could not read file: ${escapeHtml(err.message)}</span>`;
+      return;
+    }
+    entries = parseDomainsFromText(text);
+  } else {
+    entries = parseDomainsFromText(queryInput.value);
+  }
+
+  if (entries.length === 0) {
+    bulkStatus.innerHTML = '<span class="error-text">Enter a domain, IP, or ASN, or paste/upload a list for a bulk lookup.</span>';
+    return;
+  }
+
+  const isBulk = Boolean(file) || entries.length > 1;
+
+  if (!isBulk) {
+    clearBulkResults();
+    await runSingleLookup(entries[0]);
+    return;
+  }
+
+  clearSingleResults();
+  const truncated = entries.slice(0, MAX_BULK_DOMAINS);
+  if (entries.length > MAX_BULK_DOMAINS) {
+    bulkStatus.innerHTML = `<span class="error-text">Found ${entries.length} entries; only the first ${MAX_BULK_DOMAINS} will be processed.</span>`;
+  }
+
+  runBulkLookup(truncated);
+});
+
+bulkCancelBtn.addEventListener('click', () => {
+  if (bulkAbortController) bulkAbortController.abort();
+});
+
+bulkExportBtn.addEventListener('click', exportBulkCsv);
+</script>
+</body>
+</html>
