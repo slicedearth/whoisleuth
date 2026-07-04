@@ -528,6 +528,7 @@
     <div class="availability-detail" id="availability-detail"></div>
     <div id="availability-confidence"></div>
     <div class="badge-list" id="availability-signals" style="margin-top: 10px;"></div>
+    <div id="availability-outreach" style="margin-top: 12px;"></div>
   </section>
 
   <div class="panels">
@@ -565,6 +566,7 @@
           <th>Registrar</th>
           <th>Registrant</th>
           <th>Nameservers</th>
+          <th>Outreach</th>
         </tr>
       </thead>
       <tbody id="bulk-results-body"></tbody>
@@ -594,6 +596,7 @@ const availabilityPill = document.getElementById('availability-pill');
 const availabilityDetail = document.getElementById('availability-detail');
 const availabilityConfidence = document.getElementById('availability-confidence');
 const availabilitySignals = document.getElementById('availability-signals');
+const availabilityOutreach = document.getElementById('availability-outreach');
 
 document.querySelectorAll('.chip').forEach((chip) => {
   chip.addEventListener('click', () => {
@@ -1030,6 +1033,65 @@ function buildSignalChips(body) {
   return chips.join('');
 }
 
+// ---------------------------------------------------------------------------
+// Outreach draft - only meaningful once a registrant with a real (non-
+// privacy-protected) email has been found, which today only happens after
+// a deep check. A plain mailto: link plus a copy-to-clipboard fallback,
+// since not everyone has a desktop mail client configured to handle mailto.
+// ---------------------------------------------------------------------------
+
+function buildOutreachDraftText(domain, registrant) {
+  const greetingName = (registrant && (registrant.name || registrant.org)) || 'there';
+  return [
+    `Hi ${greetingName},`,
+    '',
+    `I came across ${domain} and wanted to reach out to see if you'd be open to discussing a potential sale.`,
+    '',
+    "Would you be willing to share your asking price, or are you open to receiving an offer?",
+    '',
+    'Looking forward to hearing from you.',
+    '',
+    'Best regards,',
+  ].join('\n');
+}
+
+function buildOutreachMailto(domain, registrant) {
+  if (!registrant || !registrant.email) return null;
+  const query = new URLSearchParams({
+    subject: `Inquiry about ${domain}`,
+    body: buildOutreachDraftText(domain, registrant),
+  }).toString();
+  return `mailto:${registrant.email}?${query}`;
+}
+
+function outreachButtonHtml(domain, registrant) {
+  const mailto = buildOutreachMailto(domain, registrant);
+  if (!mailto) return '';
+  return `
+    <div class="section-title">Outreach</div>
+    <a class="chip" style="text-decoration:none;display:inline-block;" href="${escapeHtml(mailto)}">Draft email to ${escapeHtml(registrant.email)}</a>
+    <button type="button" class="secondary outreach-copy-btn" data-domain="${escapeHtml(domain)}" style="margin-left:6px;">Copy draft</button>
+  `;
+}
+
+// registrant data for the currently-rendered outreach copy buttons, keyed by
+// domain (the delegated click handler below needs this since it fires well
+// after the row/card was rendered).
+const outreachRegistrantByDomain = new Map();
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.outreach-copy-btn');
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText(buildOutreachDraftText(btn.dataset.domain, outreachRegistrantByDomain.get(btn.dataset.domain)));
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  } catch {
+    /* clipboard access denied - the mailto link above still works as a fallback */
+  }
+});
+
 function renderAvailability(body) {
   if (!body || body.applicable === false) {
     availabilityCard.classList.remove('visible');
@@ -1049,6 +1111,9 @@ function renderAvailability(body) {
     : '';
 
   availabilitySignals.innerHTML = buildSignalChips(body);
+
+  if (body.registrant && body.registrant.email) outreachRegistrantByDomain.set(body.domain, body.registrant);
+  availabilityOutreach.innerHTML = outreachButtonHtml(body.domain, body.registrant);
 }
 
 async function runRdap(q) {
@@ -1270,6 +1335,16 @@ function bulkRowCellsHtml(r) {
   const registrar = [r.registrarName].filter(Boolean).join(' ') || '—';
   const registrant = [r.registrantName, r.registrantOrg].filter(Boolean).join(', ') || '—';
   const score = computeOpportunityScore(r);
+
+  const registrantObj = r.registrantEmail
+    ? { name: r.registrantName, org: r.registrantOrg, email: r.registrantEmail }
+    : null;
+  if (registrantObj) outreachRegistrantByDomain.set(r.domain, registrantObj);
+  const mailto = buildOutreachMailto(r.domain, registrantObj);
+  const outreachCell = mailto
+    ? `<a href="${escapeHtml(mailto)}" title="Draft email to ${escapeHtml(r.registrantEmail)}">&#9993;</a> <button type="button" class="secondary outreach-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
+    : '—';
+
   return `
     <td class="domain-cell">${escapeHtml(r.domain)}</td>
     <td>${score === null ? '—' : `<span class="signal-chip ${scoreTone(score)}">${score}</span>`}</td>
@@ -1281,6 +1356,7 @@ function bulkRowCellsHtml(r) {
     <td>${escapeHtml(registrar)}</td>
     <td>${escapeHtml(registrant)}</td>
     <td>${escapeHtml(r.nameservers || '—')}</td>
+    <td>${outreachCell}</td>
   `;
 }
 
