@@ -496,6 +496,7 @@
         <tr>
           <th><input type="checkbox" id="bulk-select-all" /></th>
           <th>Domain</th>
+          <th id="bulk-sort-score" style="cursor: pointer;" title="Click to sort by opportunity score">Score &#8645;</th>
           <th>Availability</th>
           <th>Age</th>
           <th>Expires in</th>
@@ -743,6 +744,49 @@ const ACTIVITY_LABELS = {
   no_site: 'No site (inactive)',
 };
 
+// ---------------------------------------------------------------------------
+// Opportunity score: combines the signals above into one 0-100 number so a
+// large fast-scan result set can be sorted instead of manually scanned.
+// Higher = more actionable (cheap/easy to get), not "more valuable" in an
+// appraisal sense - a parked, aged, publicly-contactable domain scores high
+// because it's an easy approach; an actively-used one scores low because
+// the owner is unlikely to be interested regardless of the domain's worth.
+// ---------------------------------------------------------------------------
+
+const STATE_BASE_SCORE = {
+  for_sale: 95,
+  expiring: 85,
+  available: 90,
+  registered: 40,
+  unknown: null,
+  error: null,
+};
+
+function computeOpportunityScore(r) {
+  const base = STATE_BASE_SCORE[r.availability ?? r.state];
+  if (base === null || base === undefined) return null;
+
+  let score = base;
+
+  if (r.activityStatus === 'parked') score += 15;
+  else if (r.activityStatus === 'no_site') score += 5;
+  else if (r.activityStatus === 'active') score -= 20;
+
+  if (r.privacyProtected === false) score += 10;
+  else if (r.privacyProtected === true) score -= 10;
+
+  if (typeof r.domainAgeDays === 'number') {
+    score += Math.min(20, (r.domainAgeDays / 365) * 2);
+  }
+
+  const state = r.availability ?? r.state;
+  if (state === 'registered' && typeof r.expiresInDays === 'number' && r.expiresInDays >= 0 && r.expiresInDays < 30) {
+    score += 10; // might lapse soon even though not yet flagged "expiring"
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
 function signalChip(label, tone) {
   return `<span class="signal-chip ${tone}">${escapeHtml(label)}</span>`;
 }
@@ -951,6 +995,7 @@ function exportBulkCsv() {
   if (bulkResults.length === 0) return;
   const headers = [
     'Domain',
+    'Opportunity Score',
     'Availability',
     'Availability Detail',
     'Domain Age (days)',
@@ -968,6 +1013,7 @@ function exportBulkCsv() {
   ];
   const rows = bulkResults.map((r) => [
     r.domain,
+    computeOpportunityScore(r),
     r.availability,
     r.availabilityDetail,
     r.domainAgeDays,
@@ -995,12 +1041,21 @@ function exportBulkCsv() {
   URL.revokeObjectURL(url);
 }
 
+function scoreTone(score) {
+  if (score === null) return 'neutral';
+  if (score >= 70) return 'good';
+  if (score >= 40) return 'neutral';
+  return 'warn';
+}
+
 function bulkRowCellsHtml(r) {
   const pillLabel = PILL_LABELS[r.availability] || r.availability;
   const registrar = [r.registrarName].filter(Boolean).join(' ') || '—';
   const registrant = [r.registrantName, r.registrantOrg].filter(Boolean).join(', ') || '—';
+  const score = computeOpportunityScore(r);
   return `
     <td class="domain-cell">${escapeHtml(r.domain)}</td>
+    <td>${score === null ? '—' : `<span class="signal-chip ${scoreTone(score)}">${score}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
     <td>${escapeHtml(fmtAge(r.domainAgeDays) || '—')}</td>
     <td>${escapeHtml(fmtExpiresIn(r.expiresInDays) || '—')}</td>
@@ -1064,6 +1119,19 @@ bulkSelectAll.addEventListener('change', () => {
     else bulkSelected.delete(domain);
   });
   updateDeepCheckButton();
+});
+
+let bulkSortDescending = true;
+document.getElementById('bulk-sort-score').addEventListener('click', () => {
+  const byDomain = new Map(bulkResults.map((r) => [r.domain, r]));
+  const rows = [...bulkResultsBody.querySelectorAll('tr[data-domain]')];
+  rows.sort((a, b) => {
+    const scoreA = computeOpportunityScore(byDomain.get(a.dataset.domain) || {}) ?? -1;
+    const scoreB = computeOpportunityScore(byDomain.get(b.dataset.domain) || {}) ?? -1;
+    return bulkSortDescending ? scoreB - scoreA : scoreA - scoreB;
+  });
+  rows.forEach((tr) => bulkResultsBody.appendChild(tr));
+  bulkSortDescending = !bulkSortDescending;
 });
 
 // fast: RDAP-only scan (default for a fresh run over a candidate list).
