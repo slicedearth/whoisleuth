@@ -62,6 +62,32 @@
   #query-input:focus {
     border-color: var(--accent);
   }
+  input[type="text"] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  input[type="text"]:focus {
+    border-color: var(--accent);
+  }
+  details.generator {
+    margin-top: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  details.generator summary {
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    user-select: none;
+  }
   button {
     background: var(--accent);
     color: #08131f;
@@ -446,6 +472,40 @@
       <button type="button" class="chip" data-example="2606:4700:4700::1111">2606:4700:4700::1111</button>
       <button type="button" class="chip" data-example="AS15169">AS15169</button>
     </div>
+    <details class="generator">
+      <summary>Generate candidates from a keyword</summary>
+      <div class="bulk-inputs" style="margin-top: 10px;">
+        <div>
+          <label class="bulk-label" for="generator-keyword">Keyword or brand (e.g. "acme" or "acme rockets")</label>
+          <input type="text" id="generator-keyword" placeholder="acme" />
+        </div>
+        <div>
+          <label class="bulk-label" for="generator-tlds">TLDs (comma-separated)</label>
+          <input type="text" id="generator-tlds" value="com, net, org, io, co, app, dev, xyz" />
+        </div>
+      </div>
+      <div class="bulk-actions">
+        <button type="button" id="generator-run-btn" class="secondary">Generate</button>
+        <span class="bulk-status" id="generator-status"></span>
+      </div>
+    </details>
+    <details class="generator">
+      <summary>Generate typosquat/brand-protection variants</summary>
+      <div class="bulk-inputs" style="margin-top: 10px;">
+        <div>
+          <label class="bulk-label" for="typo-keyword">Brand/domain to protect (e.g. "acme" or "acme.com")</label>
+          <input type="text" id="typo-keyword" placeholder="acme.com" />
+        </div>
+        <div>
+          <label class="bulk-label" for="typo-tlds">TLDs to check (comma-separated, used if the input has no TLD)</label>
+          <input type="text" id="typo-tlds" value="com, net, org" />
+        </div>
+      </div>
+      <div class="bulk-actions">
+        <button type="button" id="typo-run-btn" class="secondary">Generate typosquat variants</button>
+        <span class="bulk-status" id="typo-status"></span>
+      </div>
+    </details>
     <div class="bulk-inputs">
       <div>
         <label class="bulk-label" for="bulk-file">...or upload a CSV for a fast bulk scan (a "domain" column, or one per line, up to 2000) - select rows afterwards for a full deep check</label>
@@ -719,6 +779,163 @@ const PILL_LABELS = {
   unknown: 'Status unknown',
   error: 'Lookup failed',
 };
+
+// ---------------------------------------------------------------------------
+// Domain name generator - brainstorms candidates from a seed keyword
+// (prefix/suffix/plural variants x a TLD list) and drops them straight into
+// the query box for a fast scan. A fixed, small modifier set rather than a
+// configurable one - keeps this simple while covering the common patterns.
+// ---------------------------------------------------------------------------
+
+const GENERATOR_PREFIXES = ['get', 'my', 'the', 'try', 'use'];
+const GENERATOR_SUFFIXES = ['hq', 'app', 'hub', 'online', 'site', 'now'];
+
+function parseTldList(raw) {
+  return [...new Set(
+    raw
+      .split(',')
+      .map((t) => t.trim().toLowerCase().replace(/^\./, ''))
+      .filter(Boolean)
+  )];
+}
+
+function generateDomainCandidates(rawKeyword, tlds) {
+  const words = rawKeyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0 || tlds.length === 0) return [];
+
+  const concatenated = words.join('');
+  const bases = new Set([concatenated]);
+  if (words.length > 1) bases.add(words.join('-'));
+  for (const p of GENERATOR_PREFIXES) bases.add(p + concatenated);
+  for (const s of GENERATOR_SUFFIXES) bases.add(concatenated + s);
+  if (concatenated.length > 3 && !concatenated.endsWith('s')) bases.add(concatenated + 's');
+
+  const seen = new Set();
+  const candidates = [];
+  for (const base of bases) {
+    for (const tld of tlds) {
+      const domain = `${base}.${tld}`;
+      if (seen.has(domain)) continue;
+      seen.add(domain);
+      candidates.push(domain);
+    }
+  }
+  return candidates;
+}
+
+document.getElementById('generator-run-btn').addEventListener('click', () => {
+  const keyword = document.getElementById('generator-keyword').value;
+  const tlds = parseTldList(document.getElementById('generator-tlds').value);
+  const statusEl = document.getElementById('generator-status');
+  const candidates = generateDomainCandidates(keyword, tlds);
+
+  if (candidates.length === 0) {
+    statusEl.innerHTML = '<span class="error-text">Enter a keyword and at least one TLD.</span>';
+    return;
+  }
+
+  queryInput.value = candidates.join('\n');
+  statusEl.textContent = `Generated ${candidates.length} candidates - review below, then click Lookup to scan them.`;
+});
+
+// ---------------------------------------------------------------------------
+// Typosquat / brand-protection variant generator - character omission,
+// duplication, adjacent-key substitution (QWERTY), adjacent transposition,
+// common homoglyph swaps, and TLD-typo variants of the target's own TLD.
+// Distinct generation strategy from the brainstorming generator above:
+// this one is confusability-driven (finding cybersquatting targets), not
+// idea-driven.
+// ---------------------------------------------------------------------------
+
+const QWERTY_ADJACENT = {
+  q: 'wa', w: 'qeas', e: 'wrds', r: 'etdf', t: 'ryfg', y: 'tugh', u: 'yihj', i: 'uojk', o: 'iplk', p: 'ol',
+  a: 'qwsz', s: 'awedxz', d: 'serfcx', f: 'drtgvc', g: 'ftyhbv', h: 'gyujnb', j: 'huikmn', k: 'jiolm', l: 'kop',
+  z: 'asx', x: 'zsdc', c: 'xdfv', v: 'cfgb', b: 'vghn', n: 'bhjm', m: 'njk',
+};
+
+const HOMOGLYPH_SWAPS = [
+  ['rn', 'm'], ['m', 'rn'], ['o', '0'], ['0', 'o'], ['l', '1'], ['1', 'l'], ['i', '1'], ['vv', 'w'], ['w', 'vv'],
+];
+
+const TLD_TYPOS = {
+  com: ['cm', 'co', 'om', 'con', 'comm', 'cim', 'vom'],
+  net: ['ner', 'nte', 'ne'],
+  org: ['ogr', 'rg', 'orgg'],
+};
+
+function splitDomainParts(input) {
+  const trimmed = input.trim().toLowerCase();
+  const m = trimmed.match(/^([a-z0-9-]+)\.([a-z]+)$/);
+  return m ? { name: m[1], tld: m[2] } : { name: trimmed.replace(/[^a-z0-9-]/g, ''), tld: null };
+}
+
+function generateTyposquatVariants(rawInput, fallbackTlds) {
+  const { name, tld } = splitDomainParts(rawInput);
+  if (!name) return [];
+  const tlds = tld ? [tld] : fallbackTlds;
+  if (tlds.length === 0) return [];
+
+  const nameVariants = new Set();
+
+  // Character omission
+  for (let i = 0; i < name.length; i += 1) nameVariants.add(name.slice(0, i) + name.slice(i + 1));
+  // Character duplication
+  for (let i = 0; i < name.length; i += 1) nameVariants.add(name.slice(0, i + 1) + name[i] + name.slice(i + 1));
+  // Adjacent transposition
+  for (let i = 0; i < name.length - 1; i += 1) {
+    nameVariants.add(name.slice(0, i) + name[i + 1] + name[i] + name.slice(i + 2));
+  }
+  // Adjacent-key substitution
+  for (let i = 0; i < name.length; i += 1) {
+    const adj = QWERTY_ADJACENT[name[i]];
+    if (!adj) continue;
+    for (const key of adj) nameVariants.add(name.slice(0, i) + key + name.slice(i + 1));
+  }
+  // Homoglyph swaps
+  for (const [from, to] of HOMOGLYPH_SWAPS) {
+    if (name.includes(from)) nameVariants.add(name.split(from).join(to));
+  }
+
+  nameVariants.delete(name);
+  nameVariants.delete('');
+
+  const seen = new Set();
+  const candidates = [];
+  for (const variant of nameVariants) {
+    for (const t of tlds) {
+      const domain = `${variant}.${t}`;
+      if (seen.has(domain)) continue;
+      seen.add(domain);
+      candidates.push(domain);
+    }
+  }
+  // Same-name, typo'd TLD (e.g. "example.cm" for "example.com")
+  if (tld && TLD_TYPOS[tld]) {
+    for (const typoTld of TLD_TYPOS[tld]) {
+      const domain = `${name}.${typoTld}`;
+      if (!seen.has(domain)) {
+        seen.add(domain);
+        candidates.push(domain);
+      }
+    }
+  }
+  return candidates;
+}
+
+document.getElementById('typo-run-btn').addEventListener('click', () => {
+  const keyword = document.getElementById('typo-keyword').value;
+  const tlds = parseTldList(document.getElementById('typo-tlds').value);
+  const statusEl = document.getElementById('typo-status');
+  const candidates = generateTyposquatVariants(keyword, tlds);
+
+  if (candidates.length === 0) {
+    statusEl.innerHTML = '<span class="error-text">Enter a brand/domain name.</span>';
+    return;
+  }
+
+  queryInput.value = candidates.join('\n');
+  statusEl.textContent = `Generated ${candidates.length} typosquat variants - review below, then click Lookup to scan them.`;
+});
 
 // ---------------------------------------------------------------------------
 // Acquisition/sourcing signals (domain age, expiry proximity, WHOIS privacy,
