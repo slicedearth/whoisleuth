@@ -6,9 +6,12 @@ RDAP bootstrap service and live WHOIS (TCP/43) queries to the relevant
 registries. Includes availability scoring, keyword/typosquat candidate
 generators, a browser-local shortlist, and CSV import/export for bulk runs.
 
-Runs as a small Node/Express backend (needed for raw WHOIS sockets and
-cross-origin RDAP requests, which browsers can't do directly) serving a
-static frontend with no build step.
+Runs as a small Node backend (needed for raw WHOIS sockets and cross-origin
+RDAP requests, which browsers can't do directly) serving a static frontend
+with no build step. This branch splits the lookup logic into a shared `lib/`
+so it can run either as a traditional always-on Node/Express server
+(`server.js`) or as Netlify Functions (`netlify/functions/`) with no logic
+duplicated between the two.
 
 ## Requirements
 
@@ -40,10 +43,34 @@ PORT=4000 npm start
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
 
+## Deploying to Netlify
+
+This branch also ships `netlify/functions/rdap.js`, `whois.js`, and
+`availability.js` — thin wrappers around the same `lib/` code `server.js`
+uses, so behavior is identical either way. To deploy:
+
+1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
+   from the Netlify CLI if you have it installed).
+2. Netlify reads `netlify.toml` to publish `public/` and build the functions
+   in `netlify/functions/` automatically — no extra build command needed.
+
+Bulk scans run as one `/api/availability` call per domain with client-side
+concurrency (see `public/js/bulk.js`) rather than one long server-held
+request, since serverless functions have a per-invocation execution limit —
+this keeps each function call short regardless of how many domains are in a
+bulk run.
+
 ## Project structure
 
 ```
-server.js            Express backend: RDAP/WHOIS/availability/bulk routes
+server.js            Express backend: RDAP/WHOIS/availability routes
+lib/                  Shared lookup logic, used by both server.js and netlify/functions/
+  classify.js           Query classification (domain/IPv4/IPv6/ASN)
+  rdap.js               IANA bootstrap lookup + RDAP response parsing
+  whois.js              WHOIS (TCP/43) referral chain + response parsing
+  availability.js       Availability/opportunity signal derivation
+netlify/functions/    Netlify Functions (rdap.js, whois.js, availability.js)
+netlify.toml          Netlify build/redirect config
 public/
   index.html          Page markup
   style.css            Styles

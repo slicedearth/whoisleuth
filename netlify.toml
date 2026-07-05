@@ -1,0 +1,21 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/rdap"
+  to = "/.netlify/functions/rdap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/whois"
+  to = "/.netlify/functions/whois"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/availability"
+  to = "/.netlify/functions/availability"
+  status = 200
+  force = true

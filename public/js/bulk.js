@@ -28,10 +28,63 @@ import {
 
 export const MAX_BULK_DOMAINS = 200;
 export const MAX_FAST_BULK_DOMAINS = 2000;
+const BULK_CONCURRENCY = 6;
+// Fast scans (RDAP-only, no WHOIS/homepage fetch) are cheap enough on both
+// this backend and upstream registries to run much larger, more concurrent
+// batches - meant for sourcing/screening large candidate lists, with the
+// deep (default) mode reserved for a shortlist.
+const FAST_BULK_CONCURRENCY = 20;
 
 let bulkResults = [];
 let bulkAbortController = null;
 const bulkSelected = new Set();
+
+// Runs `worker` over `items` with up to `concurrency` in flight at once.
+// Concurrency lives here (client-side) rather than in a single long-lived
+// server request/stream, so a bulk scan is just N independent
+// /api/availability calls - the same shape whether the backend is a
+// long-running Express server or a short-lived serverless function, which
+// only ever handles one domain per invocation.
+async function runPool(items, concurrency, worker) {
+  let idx = 0;
+  const size = Math.min(concurrency, items.length) || 1;
+  const runners = new Array(size).fill(0).map(async () => {
+    while (idx < items.length) {
+      const current = idx++;
+      await worker(items[current]);
+    }
+  });
+  await Promise.allSettled(runners);
+}
+
+// Maps a raw /api/availability response into the flat row shape the bulk
+// results table (and CSV export) expect.
+function toBulkRecord(domain, body) {
+  if (!body.applicable) {
+    return {
+      domain,
+      availability: 'error',
+      availabilityDetail: 'Not a domain name (bulk lookup only supports domains, not IPs/ASNs)',
+    };
+  }
+  return {
+    domain: body.domain || domain,
+    availability: body.state,
+    availabilityDetail: body.detail,
+    registrarName: body.registrar ? body.registrar.name || body.registrar.org : null,
+    registrarEmail: body.registrar ? body.registrar.email : null,
+    registrantName: body.registrant ? body.registrant.name : null,
+    registrantOrg: body.registrant ? body.registrant.org : null,
+    registrantEmail: body.registrant ? body.registrant.email : null,
+    createdDate: body.createdDate || null,
+    expiryDate: body.expiryDate || null,
+    nameservers: Array.isArray(body.nameservers) ? body.nameservers.join('; ') : '',
+    domainAgeDays: body.domainAgeDays ?? null,
+    expiresInDays: body.expiresInDays ?? null,
+    privacyProtected: body.privacyProtected ?? null,
+    activityStatus: body.activityStatus || null,
+  };
+}
 
 function updateDeepCheckButton() {
   bulkDeepCheckBtn.disabled = bulkSelected.size === 0;
@@ -224,73 +277,63 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     bulkResultsBody.innerHTML = '';
     bulkResults = [];
   }
+
+  const seen = new Set();
+  const uniqueDomains = [];
+  for (const raw of domains) {
+    const trimmed = (raw || '').toString().trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueDomains.push(trimmed);
+  }
+
   bulkResultsWrap.classList.add('visible');
   bulkExportBtn.disabled = true;
   bulkProgressWrap.classList.add('visible');
   bulkProgressFill.style.width = '0%';
-  bulkProgressLabel.textContent = `Processed 0 / ${domains.length}`;
+  bulkProgressLabel.textContent = `Processed 0 / ${uniqueDomains.length}`;
   submitBtn.disabled = true;
   bulkDeepCheckBtn.disabled = true;
   bulkCancelBtn.style.display = 'inline-block';
   bulkStatus.innerHTML = '';
 
   bulkAbortController = new AbortController();
+  const { signal } = bulkAbortController;
+  const total = uniqueDomains.length;
+  let processed = 0;
 
-  try {
-    const res = await fetch('/api/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domains, fast }),
-      signal: bulkAbortController.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Bulk lookup failed (${res.status})`);
+  await runPool(uniqueDomains, fast ? FAST_BULK_CONCURRENCY : BULK_CONCURRENCY, async (domain) => {
+    if (signal.aborted) return;
+    let record;
+    try {
+      const res = await fetch(`/api/availability?q=${encodeURIComponent(domain)}${fast ? '&fast=1' : ''}`, { signal });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `Lookup failed (${res.status})`);
+      record = toBulkRecord(domain, body);
+    } catch (err) {
+      if (signal.aborted) return; // cancelled - don't show a spurious error row
+      record = { domain, availability: 'error', availabilityDetail: err.message };
     }
+    processed += 1;
+    upsertBulkRow(record);
+    bulkProgressLabel.textContent = `Processed ${processed} / ${total}`;
+    bulkProgressFill.style.width = `${Math.round((processed / total) * 100)}%`;
+  });
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let total = domains.length;
-    let processed = 0;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const msg = JSON.parse(line);
-        if (msg.type === 'start') {
-          total = msg.total;
-          bulkProgressLabel.textContent = `Processed 0 / ${total}`;
-        } else if (msg.type === 'result') {
-          processed += 1;
-          upsertBulkRow(msg);
-          bulkProgressLabel.textContent = `Processed ${processed} / ${total}`;
-          bulkProgressFill.style.width = `${Math.round((processed / total) * 100)}%`;
-        }
-      }
-    }
-
+  if (signal.aborted) {
+    bulkStatus.textContent = 'Cancelled.';
+  } else {
     bulkExportBtn.disabled = bulkResults.length === 0;
     const verb = fast ? 'scanned' : 'deep-checked';
-    bulkStatus.textContent = `Done — ${domains.length} domain${domains.length === 1 ? '' : 's'} ${verb}.`;
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      bulkStatus.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
-    } else {
-      bulkStatus.textContent = 'Cancelled.';
-    }
-  } finally {
-    submitBtn.disabled = false;
-    updateDeepCheckButton();
-    bulkCancelBtn.style.display = 'none';
-    bulkAbortController = null;
+    bulkStatus.textContent = `Done — ${total} domain${total === 1 ? '' : 's'} ${verb}.`;
   }
+
+  submitBtn.disabled = false;
+  updateDeepCheckButton();
+  bulkCancelBtn.style.display = 'none';
+  bulkAbortController = null;
 }
 
 // Uploading a CSV loads its domains straight into the query box (same
