@@ -10,6 +10,7 @@ import { fmtAge, fmtExpiresIn, formatPrivacyCell, formatActivityCell, computeOpp
 import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
+import { showGate } from './auth.js';
 import {
   bulkFileInput,
   bulkCancelBtn,
@@ -309,6 +310,13 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     let record;
     try {
       const res = await fetch(`/api/availability?q=${encodeURIComponent(domain)}${fast ? '&fast=1' : ''}`, { signal });
+      if (res.status === 401) {
+        if (!signal.aborted) {
+          bulkAbortController.abort();
+          showGate();
+        }
+        return;
+      }
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `Lookup failed (${res.status})`);
       record = toBulkRecord(domain, body);

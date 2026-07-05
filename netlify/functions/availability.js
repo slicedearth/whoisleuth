@@ -1,5 +1,6 @@
 const { classifyQuery } = require('../../lib/classify');
 const { checkDomainAvailability } = require('../../lib/availability');
+const { isAuthenticatedFromCookieHeader } = require('../../lib/auth');
 
 function json(statusCode, body) {
   return {
@@ -10,6 +11,10 @@ function json(statusCode, body) {
 }
 
 exports.handler = async (event) => {
+  if (!isAuthenticatedFromCookieHeader(event.headers && event.headers.cookie)) {
+    return json(401, { error: 'Authentication required' });
+  }
+
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
 

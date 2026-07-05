@@ -438,3 +438,42 @@ table.bulk-results td.domain-cell { font-family: var(--mono); }
   font-size: 0.7rem;
   font-weight: 700;
 }
+.login-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-form {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+.login-form h1 {
+  font-size: 1.3rem;
+  margin: 0 0 8px;
+}
+.login-form p {
+  color: var(--muted);
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+}
+.login-form input[type="password"] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 1rem;
+  margin-bottom: 12px;
+  outline: none;
+}
+.login-form input[type="password"]:focus { border-color: var(--accent); }
+.login-form button { width: 100%; padding: 10px; }
+.login-form .error-text { margin-top: 12px; font-size: 0.9rem; }

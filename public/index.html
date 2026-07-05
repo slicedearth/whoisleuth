@@ -7,7 +7,16 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div class="wrap">
+<div class="login-gate" id="login-gate">
+  <form id="login-form" class="login-form">
+    <h1>WHOIS &amp; RDAP Lookup</h1>
+    <p>Enter the shared password to continue.</p>
+    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
+    <button type="submit">Enter</button>
+    <div class="error-text" id="login-error"></div>
+  </form>
+</div>
+<div class="wrap" id="app-wrap" style="display:none;">
   <header>
     <h1>WHOIS &amp; RDAP Lookup</h1>
     <p>Queries the official IANA RDAP bootstrap and regional registries (ARIN, RIPE, APNIC, LACNIC, AFRINIC, and TLD registries), plus live WHOIS over port 43 starting from whois.iana.org. Enter one domain, IPv4/IPv6 address, or ASN for full detail, or paste/upload a list of domains for a bulk run with CSV export.</p>
@@ -152,6 +161,7 @@
     (TCP/43) and cross-origin RDAP requests are possible &mdash; browsers cannot make either of those calls directly.
     Most gTLD registries redact registrant contact details for privacy, so registrant fields are often blank &mdash;
     that reflects the registry's own privacy redaction, not a lookup failure.
+    <button type="button" id="logout-btn" class="secondary" style="margin-left:10px;">Log out</button>
   </footer>
 </div>
 

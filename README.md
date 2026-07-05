@@ -22,15 +22,22 @@ duplicated between the two.
 
 ```bash
 npm install
-npm start
+SITE_PASSWORD=choose-a-password npm start
 ```
 
-Then open **http://localhost:3000** in a browser.
+Then open **http://localhost:3000** in a browser and enter that password.
+
+The whole tool sits behind a shared-password gate - `SITE_PASSWORD` is
+required, and every `/api/*` route rejects requests without a valid session
+regardless of whether the frontend gate is showing. There's no per-user
+login, just one password shared with whoever you want to have access; anyone
+without it sees only the password prompt. Pick something you're comfortable
+sharing with those people, not a password reused elsewhere.
 
 The server listens on port 3000 by default. To use a different port:
 
 ```bash
-PORT=4000 npm start
+PORT=4000 SITE_PASSWORD=choose-a-password npm start
 ```
 
 ## Usage
@@ -53,6 +60,11 @@ uses, so behavior is identical either way. To deploy:
    from the Netlify CLI if you have it installed).
 2. Netlify reads `netlify.toml` to publish `public/` and build the functions
    in `netlify/functions/` automatically — no extra build command needed.
+3. In the Netlify dashboard, set a `SITE_PASSWORD` environment variable
+   (Site settings → Environment variables) before your first deploy — the
+   login/session functions read it the same way `server.js` does. Without
+   it, `checkPassword`/`isValidSessionToken` fail closed and nobody (not even
+   the correct password) can log in.
 
 Bulk scans run as one `/api/availability` call per domain with client-side
 concurrency (see `public/js/bulk.js`) rather than one long server-held
@@ -63,19 +75,22 @@ bulk run.
 ## Project structure
 
 ```
-server.js            Express backend: RDAP/WHOIS/availability routes
+server.js            Express backend: RDAP/WHOIS/availability/auth routes
 lib/                  Shared lookup logic, used by both server.js and netlify/functions/
   classify.js           Query classification (domain/IPv4/IPv6/ASN)
   rdap.js               IANA bootstrap lookup + RDAP response parsing
   whois.js              WHOIS (TCP/43) referral chain + response parsing
   availability.js       Availability/opportunity signal derivation
-netlify/functions/    Netlify Functions (rdap.js, whois.js, availability.js)
+  safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
+  auth.js               Shared-password session cookie (sign/verify, no user accounts)
+netlify/functions/    Netlify Functions (rdap, whois, availability, login, logout, session)
 netlify.toml          Netlify build/redirect config
 public/
   index.html          Page markup
   style.css            Styles
   js/
     main.js              Entry point: form submit, wiring
+    auth.js              Shared-password login gate
     dom.js               Shared DOM element references
     utils.js             Parsing/formatting helpers
     scoring.js           Opportunity scoring, activity/privacy formatting

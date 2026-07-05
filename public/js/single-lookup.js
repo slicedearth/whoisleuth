@@ -4,6 +4,7 @@
 import { escapeHtml } from './utils.js';
 import { renderRdap, renderWhois, renderAvailability } from './render.js';
 import { rdapOutput, whoisOutput, rdapBadge, whoisBadge, availabilityCard, submitBtn } from './dom.js';
+import { showGate } from './auth.js';
 
 function setLoading(el, badgeEl) {
   el.innerHTML = '<span class="placeholder">Looking up<span class="spinner"></span></span>';
@@ -15,6 +16,7 @@ async function runRdap(q) {
   try {
     const res = await fetch(`/api/rdap?q=${encodeURIComponent(q)}`);
     const body = await res.json();
+    if (res.status === 401) return showGate();
     if (!res.ok) {
       rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'RDAP lookup failed')}</span>`;
       return;
@@ -31,6 +33,7 @@ async function runWhois(q) {
   try {
     const res = await fetch(`/api/whois?q=${encodeURIComponent(q)}`);
     const body = await res.json();
+    if (res.status === 401) return showGate();
     if (!res.ok) {
       whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'WHOIS lookup failed')}</span>`;
       return;
@@ -47,6 +50,7 @@ async function runAvailability(q) {
   availabilityCard.classList.remove('visible');
   try {
     const res = await fetch(`/api/availability?q=${encodeURIComponent(q)}`);
+    if (res.status === 401) return showGate();
     const body = await res.json();
     if (!res.ok) return;
     renderAvailability(body);
