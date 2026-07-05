@@ -62,6 +62,22 @@
   #query-input:focus {
     border-color: var(--accent);
   }
+  .file-upload-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .file-upload-label:hover {
+    border-color: var(--accent);
+  }
   input[type="text"] {
     width: 100%;
     background: var(--panel);
@@ -462,6 +478,8 @@
         rows="1"
         placeholder="example.com, 8.8.8.8, AS15169... or paste a list for bulk"
       ></textarea>
+      <label for="bulk-file" class="file-upload-label" title="Upload a CSV (a &quot;domain&quot; column, or one per line, up to 2000) - loads into the box above for a bulk scan">Upload CSV</label>
+      <input type="file" id="bulk-file" accept=".csv,text/csv" style="display:none;" />
       <button type="submit" id="submit-btn">Lookup</button>
     </div>
     <div class="examples">
@@ -525,12 +543,6 @@
         </table>
       </div>
     </details>
-    <div class="bulk-inputs">
-      <div>
-        <label class="bulk-label" for="bulk-file">...or upload a CSV for a fast bulk scan (a "domain" column, or one per line, up to 2000) - select rows afterwards for a full deep check</label>
-        <input type="file" id="bulk-file" accept=".csv,text/csv" />
-      </div>
-    </div>
     <div class="bulk-actions">
       <button type="button" id="bulk-cancel-btn" class="secondary" style="display:none;">Cancel</button>
       <button type="button" id="bulk-deep-check-btn" class="secondary" disabled>Deep check selected</button>
@@ -1628,37 +1640,49 @@ async function runBulkLookup(domains, { fast = true, append = false } = {}) {
   }
 }
 
-// Single form for both modes: a CSV upload always means bulk (even a
-// single-row CSV - uploading a file is an explicit "many" signal), while
-// the text box runs a full single-domain/IP/ASN lookup for exactly one
-// entry and falls back to a bulk run for more than one.
+// Uploading a CSV loads its domains straight into the query box (same
+// "generate/load, review, then click Lookup" pattern as the generators and
+// the shortlist) rather than being tracked separately until submit - so
+// there's exactly one place that decides what gets scanned.
+bulkFileInput.addEventListener('change', async () => {
+  const file = bulkFileInput.files[0];
+  if (!file) return;
+
+  let text;
+  try {
+    text = await readFileAsText(file);
+  } catch (err) {
+    bulkStatus.innerHTML = `<span class="error-text">Could not read file: ${escapeHtml(err.message)}</span>`;
+    bulkFileInput.value = '';
+    return;
+  }
+
+  const entries = parseDomainsFromText(text);
+  bulkFileInput.value = ''; // consumed - avoid re-reading it on a later submit
+  if (entries.length === 0) {
+    bulkStatus.innerHTML = '<span class="error-text">No domains found in that file.</span>';
+    return;
+  }
+
+  fillQueryInputWithCandidates(entries);
+  bulkStatus.textContent = `Loaded ${entries.length} domain${entries.length === 1 ? '' : 's'} from ${file.name} - click Lookup to scan.`;
+});
+
+// Single form for both modes: the text box runs a full single-domain/IP/ASN
+// lookup for exactly one entry, and a bulk run for more than one - however
+// those entries got there (typed, pasted, generated, or loaded from a CSV).
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   bulkStatus.textContent = '';
 
-  const file = bulkFileInput.files[0];
-  let entries;
-  if (file) {
-    let text;
-    try {
-      text = await readFileAsText(file);
-    } catch (err) {
-      bulkStatus.innerHTML = `<span class="error-text">Could not read file: ${escapeHtml(err.message)}</span>`;
-      return;
-    }
-    entries = parseDomainsFromText(text);
-  } else {
-    entries = parseDomainsFromText(queryInput.value);
-  }
+  const entries = parseDomainsFromText(queryInput.value);
 
   if (entries.length === 0) {
     bulkStatus.innerHTML = '<span class="error-text">Enter a domain, IP, or ASN, or paste/upload a list for a bulk lookup.</span>';
     return;
   }
 
-  const isBulk = Boolean(file) || entries.length > 1;
-
-  if (!isBulk) {
+  if (entries.length === 1) {
     clearBulkResults();
     await runSingleLookup(entries[0]);
     return;
