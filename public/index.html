@@ -882,12 +882,17 @@ document.getElementById('generator-run-btn').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Typosquat / brand-protection variant generator - character omission,
-// duplication, adjacent-key substitution (QWERTY), adjacent transposition,
-// common homoglyph swaps, and TLD-typo variants of the target's own TLD.
-// Distinct generation strategy from the brainstorming generator above:
-// this one is confusability-driven (finding cybersquatting targets), not
-// idea-driven.
+// Typosquat / brand-protection variant generator, modeled on dnstwist's
+// permutation algorithms: character omission, duplication, adjacent-key
+// substitution/insertion (QWERTY), adjacent transposition, vowel-swapping,
+// bitsquatting (simulated single-bit memory/transmission errors), a
+// phishing-relevant dictionary fuzzer, ASCII and real Unicode homoglyphs,
+// and TLD-typo variants. Distinct generation strategy from the
+// brainstorming generator above: this one is confusability-driven (finding
+// cybersquatting/phishing targets), not idea-driven. Deliberately doesn't
+// include dnstwist's active-detection half (DNS/MX resolution, fuzzy-hash
+// content comparison against the real site) - that's a separate, larger
+// feature, not just "generate more candidate names."
 // ---------------------------------------------------------------------------
 
 const QWERTY_ADJACENT = {
@@ -900,6 +905,28 @@ const HOMOGLYPH_SWAPS = [
   ['rn', 'm'], ['m', 'rn'], ['o', '0'], ['0', 'o'], ['l', '1'], ['1', 'l'], ['i', '1'], ['vv', 'w'], ['w', 'vv'],
 ];
 
+// Unicode characters that render near-identically to their Latin
+// counterpart in most fonts (the classic IDN homograph attack set) -
+// encoded to punycode below so the result is a real, queryable domain name,
+// not just a display trick.
+const UNICODE_HOMOGLYPHS = {
+  a: ['а'], // Cyrillic а U+0430
+  c: ['с'], // Cyrillic с U+0441
+  e: ['е'], // Cyrillic е U+0435
+  i: ['і'], // Cyrillic і U+0456
+  o: ['о'], // Cyrillic о U+043E
+  p: ['р'], // Cyrillic р U+0440
+  s: ['ѕ'], // Cyrillic ѕ U+0455
+  x: ['х'], // Cyrillic х U+0445
+  y: ['у'], // Cyrillic у U+0443
+};
+
+const VOWELS = 'aeiou';
+
+// Common in real phishing/typosquat registrations - a brand name combined
+// with a word that implies "this is the legitimate place to log in."
+const PHISHING_DICTIONARY = ['login', 'secure', 'verify', 'account', 'support', 'security', 'update', 'confirm', 'portal', 'admin'];
+
 const TLD_TYPOS = {
   com: ['cm', 'co', 'om', 'con', 'comm', 'cim', 'vom'],
   net: ['ner', 'nte', 'ne'],
@@ -910,6 +937,18 @@ function splitDomainParts(input) {
   const trimmed = input.trim().toLowerCase();
   const m = trimmed.match(/^([a-z0-9-]+)\.([a-z]+)$/);
   return m ? { name: m[1], tld: m[2] } : { name: trimmed.replace(/[^a-z0-9-]/g, ''), tld: null };
+}
+
+// Converts a label that may contain Unicode homoglyphs into its punycode
+// (ASCII-compatible) form via the browser's own URL/IDNA implementation,
+// rather than hand-rolling RFC 3492 punycode encoding. ".example" is just a
+// syntactically-valid placeholder TLD for parsing - nothing is resolved.
+function toAsciiLabel(label) {
+  try {
+    return new URL(`https://${label}.example`).hostname.replace(/\.example$/, '');
+  } catch {
+    return null;
+  }
 }
 
 function generateTyposquatVariants(rawInput, fallbackTlds) {
@@ -928,15 +967,51 @@ function generateTyposquatVariants(rawInput, fallbackTlds) {
   for (let i = 0; i < name.length - 1; i += 1) {
     nameVariants.add(name.slice(0, i) + name[i + 1] + name[i] + name.slice(i + 2));
   }
-  // Adjacent-key substitution
+  // Adjacent-key substitution and insertion (QWERTY)
   for (let i = 0; i < name.length; i += 1) {
     const adj = QWERTY_ADJACENT[name[i]];
     if (!adj) continue;
-    for (const key of adj) nameVariants.add(name.slice(0, i) + key + name.slice(i + 1));
+    for (const key of adj) {
+      nameVariants.add(name.slice(0, i) + key + name.slice(i + 1)); // substitution
+      nameVariants.add(name.slice(0, i) + key + name.slice(i)); // insertion before
+      nameVariants.add(name.slice(0, i + 1) + key + name.slice(i + 1)); // insertion after
+    }
   }
-  // Homoglyph swaps
+  // Vowel swapping
+  for (let i = 0; i < name.length; i += 1) {
+    if (!VOWELS.includes(name[i])) continue;
+    for (const v of VOWELS) {
+      if (v !== name[i]) nameVariants.add(name.slice(0, i) + v + name.slice(i + 1));
+    }
+  }
+  // Bitsquatting - simulates a single-bit memory/transmission error landing
+  // on a still-valid domain character
+  for (let i = 0; i < name.length; i += 1) {
+    const code = name.charCodeAt(i);
+    for (let bit = 0; bit < 8; bit += 1) {
+      const flipped = String.fromCharCode(code ^ (1 << bit));
+      if (/^[a-z0-9-]$/.test(flipped)) nameVariants.add(name.slice(0, i) + flipped + name.slice(i + 1));
+    }
+  }
+  // ASCII homoglyph swaps
   for (const [from, to] of HOMOGLYPH_SWAPS) {
     if (name.includes(from)) nameVariants.add(name.split(from).join(to));
+  }
+  // Real Unicode homoglyphs (punycode-encoded so they're queryable)
+  for (let i = 0; i < name.length; i += 1) {
+    const subs = UNICODE_HOMOGLYPHS[name[i]];
+    if (!subs) continue;
+    for (const sub of subs) {
+      const ascii = toAsciiLabel(name.slice(0, i) + sub + name.slice(i + 1));
+      if (ascii) nameVariants.add(ascii);
+    }
+  }
+  // Dictionary fuzzing (phishing-relevant words, prefix/suffix, +/- hyphen)
+  for (const word of PHISHING_DICTIONARY) {
+    nameVariants.add(`${word}${name}`);
+    nameVariants.add(`${word}-${name}`);
+    nameVariants.add(`${name}${word}`);
+    nameVariants.add(`${name}-${word}`);
   }
 
   nameVariants.delete(name);
