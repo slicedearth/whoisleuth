@@ -846,6 +846,15 @@ function generateDomainCandidates(rawKeyword, tlds) {
   return candidates;
 }
 
+// The query box these fill into sits ABOVE the generator panels on the
+// page, not below - scroll/focus it too so "where did my list go" isn't a
+// recurring question.
+function fillQueryInputWithCandidates(candidates) {
+  queryInput.value = candidates.join('\n');
+  queryInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  queryInput.focus();
+}
+
 document.getElementById('generator-run-btn').addEventListener('click', () => {
   const keyword = document.getElementById('generator-keyword').value;
   const tlds = parseTldList(document.getElementById('generator-tlds').value);
@@ -857,8 +866,8 @@ document.getElementById('generator-run-btn').addEventListener('click', () => {
     return;
   }
 
-  queryInput.value = candidates.join('\n');
-  statusEl.textContent = `Generated ${candidates.length} candidates - review below, then click Lookup to scan them.`;
+  fillQueryInputWithCandidates(candidates);
+  statusEl.textContent = `Generated ${candidates.length} candidates - scrolled to the query box above so you can review them, then click Lookup to scan.`;
 });
 
 // ---------------------------------------------------------------------------
@@ -956,8 +965,8 @@ document.getElementById('typo-run-btn').addEventListener('click', () => {
     return;
   }
 
-  queryInput.value = candidates.join('\n');
-  statusEl.textContent = `Generated ${candidates.length} typosquat variants - review below, then click Lookup to scan them.`;
+  fillQueryInputWithCandidates(candidates);
+  statusEl.textContent = `Generated ${candidates.length} typosquat variants - scrolled to the query box above so you can review them, then click Lookup to scan.`;
 });
 
 // ---------------------------------------------------------------------------
