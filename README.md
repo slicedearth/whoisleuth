@@ -1,4 +1,14 @@
-# WHOISleuth
+<p align="center">
+  <img src="public/favicon.svg" width="72" height="72" alt="WHOISleuth logo" />
+</p>
+
+<h1 align="center">WHOISleuth</h1>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License: Apache 2.0" />
+  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node >= 18" />
+  <img src="https://img.shields.io/badge/build-no%20bundler-lightgrey" alt="No bundler" />
+</p>
 
 A local WHOIS + RDAP lookup tool for checking domain, IP, and ASN records —
 single lookups or bulk scans of a domain list — backed by the official IANA
@@ -15,6 +25,16 @@ with no build step. This branch splits the lookup logic into a shared `lib/`
 so it can run either as a traditional always-on Node/Express server
 (`server.js`) or as Netlify Functions (`netlify/functions/`) with no logic
 duplicated between the two.
+
+## Contents
+
+- [Disclaimer](#disclaimer)
+- [Requirements](#requirements)
+- [Install & run](#install--run)
+- [Usage](#usage)
+- [Rate limiting](#rate-limiting)
+- [Deploying to Netlify](#deploying-to-netlify)
+- [Project structure](#project-structure)
 
 ## Disclaimer
 
@@ -80,6 +100,8 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
 
 ## Usage
 
+### Looking up domains
+
 - Enter a single domain, IPv4/IPv6 address, or ASN in the search box for a
   full RDAP + WHOIS + availability lookup.
 - Paste or upload a CSV/list of multiple domains to run a bulk scan instead.
@@ -87,10 +109,23 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   candidate domains, then click **Lookup**.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
-- A deep-checked (registered) result also gets a **Risk** score — a
-  phishing-risk indicator (active site, configured mail server, hidden
-  ownership, recent registration) distinct from the **Opportunity** score,
-  which instead rates how approachable a domain is to acquire.
+
+### Opportunity & Risk scoring
+
+- A deep-checked (registered) result gets a **Risk** score — a phishing-risk
+  indicator (active site, configured mail server, hidden ownership, recent
+  registration) distinct from the **Opportunity** score, which instead rates
+  how approachable a domain is to acquire.
+- A single-domain lookup's availability card shows the same **Opportunity**
+  and **Risk** score chips as the bulk results table, next to the status
+  pill.
+- Hover any Opportunity/Risk score chip for a tooltip breaking down exactly
+  which signals contributed and by how much (e.g. "Base score for
+  'registered' +40, Active site in use -20, ... Total 30"). The same
+  breakdown is included as extra columns in CSV exports.
+
+### Brand protection & monitoring
+
 - Save a generated typosquat set as a **Watchlist** and re-scan it later —
   domains that moved from available/unknown to registered since the last
   check are flagged as new registrations (a fresh squatting attempt), and
@@ -103,13 +138,6 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   gets a **Report abuse** draft — a prefilled takedown request referencing
   that domain's risk signals, with the same mailto-link-plus-copy-button
   pattern as the acquisition outreach draft.
-- A single-domain lookup's availability card shows the same **Opportunity**
-  and **Risk** score chips as the bulk results table, next to the status
-  pill.
-- Hover any Opportunity/Risk score chip for a tooltip breaking down exactly
-  which signals contributed and by how much (e.g. "Base score for
-  'registered' +40, Active site in use -20, ... Total 30"). The same
-  breakdown is included as extra columns in CSV exports.
 
 ## Rate limiting
 
@@ -155,37 +183,41 @@ bulk run.
 ## Project structure
 
 ```
-server.js            Express backend: RDAP/WHOIS/availability/auth routes
-lib/                  Shared lookup logic, used by both server.js and netlify/functions/
+LICENSE                 Apache 2.0 license text
+NOTICE                  Copyright attribution notice
+PRIVACY.md              Template privacy notice - what data is processed, retention, deletion
+server.js               Express backend: RDAP/WHOIS/availability/auth routes
+lib/                    Shared lookup logic, used by both server.js and netlify/functions/
   classify.js           Query classification (domain/IPv4/IPv6/ASN)
   rdap.js               IANA bootstrap lookup + RDAP response parsing
   whois.js              WHOIS (TCP/43) referral chain + response parsing
   availability.js       Availability/opportunity signal derivation
-  dns-mx.js              MX-record lookup (phishing-risk signal for deep checks)
-  ct-search.js           Certificate Transparency search (crt.sh) for lookalike hostnames
+  dns-mx.js             MX-record lookup (phishing-risk signal for deep checks)
+  ct-search.js          Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)
-  rate-limit.js          Per-IP rate limiting for login and lookup routes
-netlify/functions/    Netlify Functions (rdap, whois, availability, ct-search, login, logout, session)
-netlify.toml          Netlify build/redirect config
+  rate-limit.js         Per-IP rate limiting for login and lookup routes
+netlify/functions/      Netlify Functions (rdap, whois, availability, ct-search, login, logout, session)
+netlify.toml            Netlify build/redirect config
 public/
-  index.html          Page markup
-  style.css            Styles
+  favicon.svg           App logo/favicon
+  index.html            Page markup
+  style.css             Styles
   js/
-    main.js              Entry point: form submit, wiring
-    auth.js              Shared-password login gate
-    dom.js               Shared DOM element references
-    utils.js             Parsing/formatting helpers
-    scoring.js           Opportunity scoring, activity/privacy formatting
-    render.js            RDAP/WHOIS/availability rendering
-    outreach.js           Acquisition outreach draft + copy-to-clipboard
-    abuse.js               Abuse-report draft + copy-to-clipboard
-    generators.js         Keyword and typosquat candidate generators
-    ct-search.js           Certificate Transparency search UI
-    shortlist.js          localStorage-backed shortlist
-    watchlist.js          localStorage-backed watchlist with re-scan diffing
-    single-lookup.js       Single domain/IP/ASN lookup orchestration
-    bulk.js                Bulk scan/deep-check, sorting, CSV export
+    main.js             Entry point: form submit, wiring
+    auth.js             Shared-password login gate
+    dom.js              Shared DOM element references
+    utils.js            Parsing/formatting helpers
+    scoring.js          Opportunity scoring, activity/privacy formatting
+    render.js           RDAP/WHOIS/availability rendering
+    outreach.js         Acquisition outreach draft + copy-to-clipboard
+    abuse.js            Abuse-report draft + copy-to-clipboard
+    generators.js       Keyword and typosquat candidate generators
+    ct-search.js        Certificate Transparency search UI
+    shortlist.js        localStorage-backed shortlist
+    watchlist.js        localStorage-backed watchlist with re-scan diffing
+    single-lookup.js    Single domain/IP/ASN lookup orchestration
+    bulk.js             Bulk scan/deep-check, sorting, CSV export
 ```
 
 No bundler or framework — the frontend loads native ES modules directly via
