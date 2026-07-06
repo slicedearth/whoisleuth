@@ -182,6 +182,8 @@ function buildSignalChips(body) {
     chips.push(signalChip(ACTIVITY_LABELS[body.activityStatus], tone));
   }
 
+  if (body.hasMx) chips.push(signalChip('Mail configured', 'warn'));
+
   return chips.join('');
 }
 

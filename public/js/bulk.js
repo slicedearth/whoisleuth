@@ -6,7 +6,16 @@
 // file separately until submit).
 
 import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText } from './utils.js';
-import { fmtAge, fmtExpiresIn, formatPrivacyCell, formatActivityCell, computeOpportunityScore, scoreTone } from './scoring.js';
+import {
+  fmtAge,
+  fmtExpiresIn,
+  formatPrivacyCell,
+  formatActivityCell,
+  computeOpportunityScore,
+  scoreTone,
+  computeRiskScore,
+  riskTone,
+} from './scoring.js';
 import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
@@ -84,7 +93,28 @@ function toBulkRecord(domain, body) {
     expiresInDays: body.expiresInDays ?? null,
     privacyProtected: body.privacyProtected ?? null,
     activityStatus: body.activityStatus || null,
+    hasMx: body.hasMx ?? null,
   };
+}
+
+// Read-only accessor for the watchlist feature, which needs to snapshot/diff
+// the current table contents without reaching into this module's private
+// state.
+export function getBulkResults() {
+  return bulkResults;
+}
+
+// Appends a small badge to an already-rendered row's domain cell - used by
+// the watchlist feature to flag rows whose state changed since a previous
+// scan, without bulk.js needing to know anything about watchlists.
+export function flagBulkRow(domain, { label, tone, rowClass }) {
+  const tr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(domain)}"]`);
+  if (!tr) return;
+  if (rowClass) tr.classList.add(rowClass);
+  const cell = tr.querySelector('td.domain-cell');
+  if (cell && !cell.querySelector('.watch-flag')) {
+    cell.insertAdjacentHTML('beforeend', `<span class="watch-flag ${escapeHtml(tone)}">${escapeHtml(label)}</span>`);
+  }
 }
 
 function updateDeepCheckButton() {
@@ -96,12 +126,14 @@ function exportCsv(records, filename) {
   const headers = [
     'Domain',
     'Opportunity Score',
+    'Risk Score',
     'Availability',
     'Availability Detail',
     'Domain Age (days)',
     'Expires In (days)',
     'Privacy Protected',
     'Activity Status',
+    'MX Records',
     'Registrar Name',
     'Registrar Email',
     'Registrant Name',
@@ -114,12 +146,14 @@ function exportCsv(records, filename) {
   const rows = records.map((r) => [
     r.domain,
     computeOpportunityScore(r),
+    computeRiskScore(r),
     r.availability,
     r.availabilityDetail,
     r.domainAgeDays,
     r.expiresInDays,
     formatPrivacyCell(r.privacyProtected),
     formatActivityCell(r.activityStatus),
+    r.hasMx === true ? 'Yes' : r.hasMx === false ? 'No' : '',
     r.registrarName,
     r.registrarEmail,
     r.registrantName,
@@ -146,6 +180,7 @@ function bulkRowCellsHtml(r) {
   const registrar = [r.registrarName].filter(Boolean).join(' ') || '—';
   const registrant = [r.registrantName, r.registrantOrg].filter(Boolean).join(', ') || '—';
   const score = computeOpportunityScore(r);
+  const risk = computeRiskScore(r);
 
   const registrantObj = r.registrantEmail
     ? { name: r.registrantName, org: r.registrantOrg, email: r.registrantEmail }
@@ -162,11 +197,12 @@ function bulkRowCellsHtml(r) {
   return `
     <td class="domain-cell">${star}${escapeHtml(r.domain)}</td>
     <td>${score === null ? '—' : `<span class="signal-chip ${scoreTone(score)}">${score}</span>`}</td>
+    <td>${risk === null ? '—' : `<span class="signal-chip ${riskTone(risk)}">${risk}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
     <td>${escapeHtml(fmtAge(r.domainAgeDays) || '—')}</td>
     <td>${escapeHtml(fmtExpiresIn(r.expiresInDays) || '—')}</td>
     <td>${escapeHtml(formatPrivacyCell(r.privacyProtected))}</td>
-    <td>${escapeHtml(formatActivityCell(r.activityStatus))}</td>
+    <td>${escapeHtml(formatActivityCell(r.activityStatus, r.hasMx))}</td>
     <td>${escapeHtml(registrar)}</td>
     <td>${escapeHtml(registrant)}</td>
     <td>${escapeHtml(r.nameservers || '—')}</td>
@@ -257,18 +293,25 @@ document.addEventListener('click', (e) => {
   }
 });
 
-let bulkSortDescending = true;
-document.getElementById('bulk-sort-score').addEventListener('click', () => {
-  const byDomain = new Map(bulkResults.map((r) => [r.domain, r]));
-  const rows = [...bulkResultsBody.querySelectorAll('tr[data-domain]')];
-  rows.sort((a, b) => {
-    const scoreA = computeOpportunityScore(byDomain.get(a.dataset.domain) || {}) ?? -1;
-    const scoreB = computeOpportunityScore(byDomain.get(b.dataset.domain) || {}) ?? -1;
-    return bulkSortDescending ? scoreB - scoreA : scoreA - scoreB;
+// Sorts the results table by a given score function (opportunity or risk),
+// toggling ascending/descending independently per column.
+function wireSortableColumn(headerEl, scoreFn) {
+  let descending = true;
+  headerEl.addEventListener('click', () => {
+    const byDomain = new Map(bulkResults.map((r) => [r.domain, r]));
+    const rows = [...bulkResultsBody.querySelectorAll('tr[data-domain]')];
+    rows.sort((a, b) => {
+      const scoreA = scoreFn(byDomain.get(a.dataset.domain) || {}) ?? -1;
+      const scoreB = scoreFn(byDomain.get(b.dataset.domain) || {}) ?? -1;
+      return descending ? scoreB - scoreA : scoreA - scoreB;
+    });
+    rows.forEach((tr) => bulkResultsBody.appendChild(tr));
+    descending = !descending;
   });
-  rows.forEach((tr) => bulkResultsBody.appendChild(tr));
-  bulkSortDescending = !bulkSortDescending;
-});
+}
+
+wireSortableColumn(document.getElementById('bulk-sort-score'), computeOpportunityScore);
+wireSortableColumn(document.getElementById('bulk-sort-risk'), computeRiskScore);
 
 // fast: RDAP-only scan (default for a fresh run over a candidate list).
 // append: true means this is a deep-check follow-up on an existing table -

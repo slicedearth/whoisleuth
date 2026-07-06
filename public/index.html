@@ -94,6 +94,30 @@
         </table>
       </div>
     </details>
+    <details class="generator">
+      <summary>Watchlist (brand monitoring) - saved in this browser</summary>
+      <p class="bulk-label" style="margin-top: 10px;">
+        Save the current results table as a named watchlist, then re-scan it later - domains
+        that moved from available/unknown to registered since the last check are flagged as
+        new registrations, and any that dropped back to available are flagged as released.
+      </p>
+      <div class="bulk-actions">
+        <button type="button" id="watchlist-save-btn" class="secondary">Save current results as watchlist</button>
+      </div>
+      <div style="margin-top: 10px; overflow-x: auto;">
+        <table class="bulk-results">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Domains</th>
+              <th>Last checked</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="watchlist-body"></tbody>
+        </table>
+      </div>
+    </details>
     <div class="bulk-actions">
       <button type="button" id="bulk-cancel-btn" class="secondary" style="display:none;">Cancel</button>
       <button type="button" id="bulk-deep-check-btn" class="secondary" disabled>Deep check selected</button>
@@ -139,7 +163,8 @@
         <tr>
           <th><input type="checkbox" id="bulk-select-all" /></th>
           <th>Domain</th>
-          <th id="bulk-sort-score" style="cursor: pointer;" title="Click to sort by opportunity score">Score &#8645;</th>
+          <th id="bulk-sort-score" style="cursor: pointer;" title="Click to sort by opportunity score">Opportunity &#8645;</th>
+          <th id="bulk-sort-risk" style="cursor: pointer;" title="Click to sort by phishing-risk score">Risk &#8645;</th>
           <th>Availability</th>
           <th>Age</th>
           <th>Expires in</th>

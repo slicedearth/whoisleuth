@@ -283,6 +283,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .signal-chip.neutral { background: rgba(139, 147, 167, 0.15); color: var(--muted); }
 .signal-chip.good { background: rgba(126, 224, 168, 0.15); color: var(--accent2); }
 .signal-chip.warn { background: rgba(242, 184, 75, 0.15); color: var(--amber); }
+.signal-chip.danger { background: rgba(255, 107, 107, 0.15); color: var(--error); }
 .ns-list { margin: 0; padding-left: 18px; font-family: var(--mono); font-size: 0.8rem; }
 .ns-list li { margin-bottom: 2px; }
 
@@ -438,6 +439,19 @@ table.bulk-results td.domain-cell { font-family: var(--mono); }
   font-size: 0.7rem;
   font-weight: 700;
 }
+table.bulk-results tbody tr.newly-registered td { background: rgba(255, 107, 107, 0.08); }
+table.bulk-results tbody tr.released td { background: rgba(126, 224, 168, 0.08); }
+.watch-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.watch-flag.danger { background: rgba(255, 107, 107, 0.15); color: var(--error); }
+.watch-flag.good { background: rgba(126, 224, 168, 0.15); color: var(--accent2); }
 .login-gate {
   min-height: 100vh;
   display: flex;

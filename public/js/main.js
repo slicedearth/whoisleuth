@@ -10,6 +10,7 @@ import { clearBulkResults, runBulkLookup, MAX_FAST_BULK_DOMAINS } from './bulk.j
 import { bulkStatus } from './dom.js';
 import './generators.js';
 import './auth.js';
+import './watchlist.js';
 
 document.querySelectorAll('.chip').forEach((chip) => {
   chip.addEventListener('click', () => {

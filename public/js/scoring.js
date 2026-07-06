@@ -27,8 +27,9 @@ export function formatPrivacyCell(v) {
   return '—';
 }
 
-export function formatActivityCell(v) {
-  return ACTIVITY_LABELS[v] || '—';
+export function formatActivityCell(v, hasMx) {
+  const label = ACTIVITY_LABELS[v] || '—';
+  return hasMx ? `${label} · Mail configured` : label;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,4 +80,42 @@ export function scoreTone(score) {
   if (score >= 70) return 'good';
   if (score >= 40) return 'neutral';
   return 'warn';
+}
+
+// ---------------------------------------------------------------------------
+// Risk score: flags a *registered* lookalike/typosquat domain as likely
+// phishing infrastructure rather than harmless coincidence or idle parking.
+// Deliberately the inverse of the opportunity score above - an actively-used
+// domain with a mail server and hidden ownership is a bad acquisition target
+// but exactly the profile of a live phishing setup, so those signals score
+// opposite ways depending on which question is being asked.
+// ---------------------------------------------------------------------------
+
+const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
+
+export function computeRiskScore(r) {
+  const state = r.availability ?? r.state;
+  if (!RISK_STATES.has(state)) return null;
+
+  let score = 40;
+
+  if (r.activityStatus === 'active') score += 25;
+  else if (r.activityStatus === 'parked') score += 5;
+
+  if (r.hasMx) score += 20;
+  if (r.privacyProtected === true) score += 10;
+
+  if (typeof r.domainAgeDays === 'number') {
+    if (r.domainAgeDays < 90) score += 15;
+    else if (r.domainAgeDays < 365) score += 5;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+export function riskTone(score) {
+  if (score === null) return 'neutral';
+  if (score >= 70) return 'danger';
+  if (score >= 40) return 'warn';
+  return 'neutral';
 }
