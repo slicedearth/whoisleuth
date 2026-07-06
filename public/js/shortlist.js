@@ -4,7 +4,7 @@
 // owned domain portfolio.
 
 import { escapeHtml } from './utils.js';
-import { computeOpportunityScore, scoreTone } from './scoring.js';
+import { explainOpportunityScore, scoreTone, formatScoreBreakdown } from './scoring.js';
 import { PILL_LABELS } from './render.js';
 import { queryInput } from './dom.js';
 
@@ -44,12 +44,12 @@ export function renderShortlistPanel() {
   document.getElementById('shortlist-count').textContent = `${list.length} domain${list.length === 1 ? '' : 's'}`;
   document.getElementById('shortlist-body').innerHTML = list
     .map((r) => {
-      const score = computeOpportunityScore(r);
+      const oppExplain = explainOpportunityScore(r);
       const pillLabel = PILL_LABELS[r.availability] || r.availability;
       return `
         <tr>
           <td class="domain-cell">${escapeHtml(r.domain)}</td>
-          <td>${score === null ? '—' : `<span class="signal-chip ${scoreTone(score)}">${score}</span>`}</td>
+          <td>${oppExplain === null ? '—' : `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">${oppExplain.score}</span>`}</td>
           <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
           <td><button type="button" class="secondary shortlist-remove-btn" data-domain="${escapeHtml(r.domain)}">Remove</button></td>
         </tr>

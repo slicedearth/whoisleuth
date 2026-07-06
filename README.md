@@ -71,6 +71,10 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
 - A single-domain lookup's availability card shows the same **Opportunity**
   and **Risk** score chips as the bulk results table, next to the status
   pill.
+- Hover any Opportunity/Risk score chip for a tooltip breaking down exactly
+  which signals contributed and by how much (e.g. "Base score for
+  'registered' +40, Active site in use -20, ... Total 30"). The same
+  breakdown is included as extra columns in CSV exports.
 
 ## Rate limiting
 

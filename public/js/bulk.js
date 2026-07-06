@@ -12,9 +12,12 @@ import {
   formatPrivacyCell,
   formatActivityCell,
   computeOpportunityScore,
+  explainOpportunityScore,
   scoreTone,
   computeRiskScore,
+  explainRiskScore,
   riskTone,
+  formatScoreBreakdown,
 } from './scoring.js';
 import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
@@ -128,7 +131,9 @@ function exportCsv(records, filename) {
   const headers = [
     'Domain',
     'Opportunity Score',
+    'Opportunity Score Breakdown',
     'Risk Score',
+    'Risk Score Breakdown',
     'Availability',
     'Availability Detail',
     'Domain Age (days)',
@@ -149,7 +154,9 @@ function exportCsv(records, filename) {
   const rows = records.map((r) => [
     r.domain,
     computeOpportunityScore(r),
+    formatScoreBreakdown(explainOpportunityScore(r), '; '),
     computeRiskScore(r),
+    formatScoreBreakdown(explainRiskScore(r), '; '),
     r.availability,
     r.availabilityDetail,
     r.domainAgeDays,
@@ -183,8 +190,8 @@ function bulkRowCellsHtml(r) {
   const pillLabel = PILL_LABELS[r.availability] || r.availability;
   const registrar = [r.registrarName].filter(Boolean).join(' ') || '—';
   const registrant = [r.registrantName, r.registrantOrg].filter(Boolean).join(', ') || '—';
-  const score = computeOpportunityScore(r);
-  const risk = computeRiskScore(r);
+  const oppExplain = explainOpportunityScore(r);
+  const riskExplain = explainRiskScore(r);
 
   const registrantObj = r.registrantEmail
     ? { name: r.registrantName, org: r.registrantOrg, email: r.registrantEmail }
@@ -209,8 +216,8 @@ function bulkRowCellsHtml(r) {
 
   return `
     <td class="domain-cell">${star}${escapeHtml(r.domain)}</td>
-    <td>${score === null ? '—' : `<span class="signal-chip ${scoreTone(score)}">${score}</span>`}</td>
-    <td>${risk === null ? '—' : `<span class="signal-chip ${riskTone(risk)}">${risk}</span>`}</td>
+    <td>${oppExplain === null ? '—' : `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">${oppExplain.score}</span>`}</td>
+    <td>${riskExplain === null ? '—' : `<span class="signal-chip ${riskTone(riskExplain.score)}" title="${escapeHtml(formatScoreBreakdown(riskExplain))}">${riskExplain.score}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
     <td>${escapeHtml(fmtAge(r.domainAgeDays) || '—')}</td>
     <td>${escapeHtml(fmtExpiresIn(r.expiresInDays) || '—')}</td>

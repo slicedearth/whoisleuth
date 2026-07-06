@@ -2,11 +2,18 @@
 // escaping, date formatting, and CSV/file parsing shared across single
 // lookup, bulk lookup, and the generators.
 
+// Escapes " and ' too, not just the three HTML-syntax characters - this is
+// used to build attribute values (title="...", data-domain="...") all over
+// the app, and an unescaped double quote in the source text (e.g. a literal
+// "registered" in a tooltip label) would otherwise close the attribute
+// early and truncate/corrupt the rendered element.
 export function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 export function fmtDate(iso) {

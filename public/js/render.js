@@ -7,10 +7,11 @@ import {
   fmtAge,
   fmtExpiresIn,
   ACTIVITY_LABELS,
-  computeOpportunityScore,
+  explainOpportunityScore,
   scoreTone,
-  computeRiskScore,
+  explainRiskScore,
   riskTone,
+  formatScoreBreakdown,
 } from './scoring.js';
 import { outreachButtonHtml, outreachRegistrantByDomain } from './outreach.js';
 import { abuseButtonHtml, abuseRecordByDomain } from './abuse.js';
@@ -245,11 +246,19 @@ export function renderAvailability(body) {
   availabilityPill.textContent = PILL_LABELS[state] || state;
   availabilityDetail.textContent = body.detail || '';
 
-  const score = computeOpportunityScore(body);
-  const risk = computeRiskScore(body);
+  const oppExplain = explainOpportunityScore(body);
+  const riskExplain = explainRiskScore(body);
   const scoreChips = [];
-  if (score !== null) scoreChips.push(`<span class="signal-chip ${scoreTone(score)}" title="Opportunity score">Opportunity: ${score}</span>`);
-  if (risk !== null) scoreChips.push(`<span class="signal-chip ${riskTone(risk)}" title="Phishing-risk score">Risk: ${risk}</span>`);
+  if (oppExplain) {
+    scoreChips.push(
+      `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">Opportunity: ${oppExplain.score}</span>`
+    );
+  }
+  if (riskExplain) {
+    scoreChips.push(
+      `<span class="signal-chip ${riskTone(riskExplain.score)}" title="${escapeHtml(formatScoreBreakdown(riskExplain))}">Risk: ${riskExplain.score}</span>`
+    );
+  }
   availabilityScores.innerHTML = scoreChips.join(' ');
 
   availabilityConfidence.innerHTML = body.confidence

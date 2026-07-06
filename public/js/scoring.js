@@ -50,29 +50,64 @@ const STATE_BASE_SCORE = {
   error: null,
 };
 
-export function computeOpportunityScore(r) {
-  const base = STATE_BASE_SCORE[r.availability ?? r.state];
+const STATE_LABELS = {
+  for_sale: 'for sale',
+  expiring: 'expiring/pending delete',
+  available: 'available',
+  registered: 'registered',
+};
+
+// Builds the opportunity score alongside a factor-by-factor breakdown (base
+// state score, then each signal's contribution) - the single source of
+// truth computeOpportunityScore() below reads its final number from, and
+// what the score chips' tooltips and the CSV export both render from, so
+// the displayed reasoning can never drift from the actual number.
+export function explainOpportunityScore(r) {
+  const state = r.availability ?? r.state;
+  const base = STATE_BASE_SCORE[state];
   if (base === null || base === undefined) return null;
 
+  const factors = [{ label: `Base score for "${STATE_LABELS[state] || state}"`, delta: base }];
   let score = base;
 
-  if (r.activityStatus === 'parked') score += 15;
-  else if (r.activityStatus === 'no_site') score += 5;
-  else if (r.activityStatus === 'active') score -= 20;
+  if (r.activityStatus === 'parked') {
+    factors.push({ label: 'Parked/for-sale page', delta: 15 });
+    score += 15;
+  } else if (r.activityStatus === 'no_site') {
+    factors.push({ label: 'No site running', delta: 5 });
+    score += 5;
+  } else if (r.activityStatus === 'active') {
+    factors.push({ label: 'Active site in use', delta: -20 });
+    score -= 20;
+  }
 
-  if (r.privacyProtected === false) score += 10;
-  else if (r.privacyProtected === true) score -= 10;
+  if (r.privacyProtected === false) {
+    factors.push({ label: 'Contact info public', delta: 10 });
+    score += 10;
+  } else if (r.privacyProtected === true) {
+    factors.push({ label: 'WHOIS privacy protected', delta: -10 });
+    score -= 10;
+  }
 
   if (typeof r.domainAgeDays === 'number') {
-    score += Math.min(20, (r.domainAgeDays / 365) * 2);
+    const ageBonus = Math.min(20, (r.domainAgeDays / 365) * 2);
+    if (ageBonus !== 0) {
+      factors.push({ label: `Domain age (${fmtAge(r.domainAgeDays)})`, delta: ageBonus });
+      score += ageBonus;
+    }
   }
 
-  const state = r.availability ?? r.state;
   if (state === 'registered' && typeof r.expiresInDays === 'number' && r.expiresInDays >= 0 && r.expiresInDays < 30) {
-    score += 10; // might lapse soon even though not yet flagged "expiring"
+    factors.push({ label: 'Expires within 30 days', delta: 10 }); // might lapse soon even though not yet flagged "expiring"
+    score += 10;
   }
 
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return { score: Math.max(0, Math.min(100, Math.round(score))), factors };
+}
+
+export function computeOpportunityScore(r) {
+  const explained = explainOpportunityScore(r);
+  return explained ? explained.score : null;
 }
 
 export function scoreTone(score) {
@@ -93,24 +128,49 @@ export function scoreTone(score) {
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
-export function computeRiskScore(r) {
+// Same breakdown-plus-final-number pattern as explainOpportunityScore()
+// above - computeRiskScore() reads its number from this, and it's what the
+// risk chips' tooltips and the CSV export render from.
+export function explainRiskScore(r) {
   const state = r.availability ?? r.state;
   if (!RISK_STATES.has(state)) return null;
 
+  const factors = [{ label: 'Base score (registered/for-sale/expiring)', delta: 40 }];
   let score = 40;
 
-  if (r.activityStatus === 'active') score += 25;
-  else if (r.activityStatus === 'parked') score += 5;
-
-  if (r.hasMx) score += 20;
-  if (r.privacyProtected === true) score += 10;
-
-  if (typeof r.domainAgeDays === 'number') {
-    if (r.domainAgeDays < 90) score += 15;
-    else if (r.domainAgeDays < 365) score += 5;
+  if (r.activityStatus === 'active') {
+    factors.push({ label: 'Active site in use', delta: 25 });
+    score += 25;
+  } else if (r.activityStatus === 'parked') {
+    factors.push({ label: 'Parked page', delta: 5 });
+    score += 5;
   }
 
-  return Math.max(0, Math.min(100, Math.round(score)));
+  if (r.hasMx) {
+    factors.push({ label: 'Mail server configured', delta: 20 });
+    score += 20;
+  }
+  if (r.privacyProtected === true) {
+    factors.push({ label: 'WHOIS privacy protected', delta: 10 });
+    score += 10;
+  }
+
+  if (typeof r.domainAgeDays === 'number') {
+    if (r.domainAgeDays < 90) {
+      factors.push({ label: `Recently registered (${fmtAge(r.domainAgeDays)})`, delta: 15 });
+      score += 15;
+    } else if (r.domainAgeDays < 365) {
+      factors.push({ label: `Registered under a year ago (${fmtAge(r.domainAgeDays)})`, delta: 5 });
+      score += 5;
+    }
+  }
+
+  return { score: Math.max(0, Math.min(100, Math.round(score))), factors };
+}
+
+export function computeRiskScore(r) {
+  const explained = explainRiskScore(r);
+  return explained ? explained.score : null;
 }
 
 export function riskTone(score) {
@@ -118,4 +178,13 @@ export function riskTone(score) {
   if (score >= 70) return 'danger';
   if (score >= 40) return 'warn';
   return 'neutral';
+}
+
+// Renders an explain*Score() result as plain text - `separator` is '\n' for
+// a hover tooltip (title attribute) and '; ' for a single CSV cell.
+export function formatScoreBreakdown(explained, separator = '\n') {
+  if (!explained) return '';
+  const parts = explained.factors.map((f) => `${f.label} ${f.delta >= 0 ? '+' : ''}${Math.round(f.delta)}`);
+  parts.push(`Total ${explained.score}`);
+  return parts.join(separator);
 }

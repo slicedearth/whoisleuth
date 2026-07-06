@@ -296,6 +296,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .signal-chip.good { background: rgba(126, 224, 168, 0.15); color: var(--accent2); }
 .signal-chip.warn { background: rgba(242, 184, 75, 0.15); color: var(--amber); }
 .signal-chip.danger { background: rgba(255, 107, 107, 0.15); color: var(--error); }
+/* Only the Opportunity/Risk score chips carry a title attribute (their
+   factor-by-factor breakdown) - this makes that hoverable-for-more-detail
+   affordance visible instead of looking identical to the plain signal
+   chips next to it, which have nothing to hover for. */
+.signal-chip[title] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
 .ns-list { margin: 0; padding-left: 18px; font-family: var(--mono); font-size: 0.8rem; }
 .ns-list li { margin-bottom: 2px; }
 
