@@ -265,6 +265,8 @@ export function clearBulkResults() {
   bulkResultsWrap.classList.remove('visible');
   bulkProgressWrap.classList.remove('visible');
   bulkExportBtn.disabled = true;
+  bulkDeepCheckBtn.style.display = 'none';
+  bulkExportBtn.style.display = 'none';
 }
 
 bulkSelectAll.addEventListener('change', () => {
@@ -349,6 +351,8 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
 
   bulkResultsWrap.classList.add('visible');
   bulkExportBtn.disabled = true;
+  bulkDeepCheckBtn.style.display = 'inline-block';
+  bulkExportBtn.style.display = 'inline-block';
   bulkProgressWrap.classList.add('visible');
   bulkProgressFill.style.width = '0%';
   bulkProgressLabel.textContent = `Processed 0 / ${uniqueDomains.length}`;

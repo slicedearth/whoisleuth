@@ -24,6 +24,17 @@ body {
   margin: 0 auto;
   padding: 40px 20px 80px;
 }
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.header-top .secondary {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  flex: 0 0 auto;
+}
 header h1 {
   font-size: 1.6rem;
   margin: 0 0 4px;
@@ -193,12 +204,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .panels {
   margin-top: 24px;
-  display: grid;
+  display: none;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
 }
+.panels.visible { display: grid; }
 @media (max-width: 760px) {
-  .panels { grid-template-columns: 1fr; }
+  .panels.visible { grid-template-columns: 1fr; }
 }
 .panel {
   background: var(--panel);

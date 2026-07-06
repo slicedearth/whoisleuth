@@ -3,7 +3,7 @@
 
 import { escapeHtml } from './utils.js';
 import { renderRdap, renderWhois, renderAvailability } from './render.js';
-import { rdapOutput, whoisOutput, rdapBadge, whoisBadge, availabilityCard, availabilityScores, submitBtn } from './dom.js';
+import { panels, rdapOutput, whoisOutput, rdapBadge, whoisBadge, availabilityCard, availabilityScores, submitBtn } from './dom.js';
 import { showGate } from './auth.js';
 
 function setLoading(el, badgeEl) {
@@ -61,6 +61,7 @@ async function runAvailability(q) {
 
 export async function runSingleLookup(q) {
   submitBtn.disabled = true;
+  panels.classList.add('visible');
   await Promise.allSettled([runRdap(q), runWhois(q), runAvailability(q)]);
   submitBtn.disabled = false;
 }
@@ -72,4 +73,5 @@ export function clearSingleResults() {
   whoisBadge.textContent = '';
   availabilityScores.innerHTML = '';
   availabilityCard.classList.remove('visible');
+  panels.classList.remove('visible');
 }

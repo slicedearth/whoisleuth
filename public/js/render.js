@@ -107,45 +107,78 @@ export function renderRdap(type, parsed, rawData) {
   return html + rawBlock(rawData);
 }
 
+// True once at least one field worth showing its own kv-grid/section came
+// back - a thin-registry hop (e.g. a root WHOIS server that only confirms a
+// referral, no per-domain data) parses to an object with none of these set,
+// which otherwise rendered as a near-blank panel next to a fully populated
+// RDAP one, indistinguishable from a rendering bug.
+function hasParsedWhoisFields(parsed) {
+  return Boolean(
+    parsed.domainName ||
+      parsed.registrar ||
+      parsed.registrarUrl ||
+      parsed.createdDate ||
+      parsed.expiryDate ||
+      parsed.updatedDate ||
+      parsed.abuseEmail ||
+      parsed.abusePhone ||
+      parsed.dnssec ||
+      (parsed.statuses && parsed.statuses.length) ||
+      (parsed.nameservers && parsed.nameservers.length) ||
+      parsed.registrantName ||
+      parsed.registrantOrg ||
+      parsed.registrantEmail ||
+      parsed.adminName ||
+      parsed.adminOrg ||
+      parsed.adminEmail
+  );
+}
+
 export function renderWhois(parsed, chain) {
   if (!parsed) return `<span class="placeholder">No WHOIS data.</span>`;
 
-  let html = '<dl class="kv-grid">';
-  html += kv('Domain', parsed.domainName);
-  html += kv('Registrar', parsed.registrar);
-  html += kv('Registrar URL', parsed.registrarUrl);
-  html += kv('Created', fmtDate(parsed.createdDate));
-  html += kv('Expires', fmtDate(parsed.expiryDate));
-  html += kv('Last updated', fmtDate(parsed.updatedDate));
-  html += kv('Abuse email', parsed.abuseEmail);
-  html += kv('Abuse phone', parsed.abusePhone);
-  html += kv('DNSSEC', parsed.dnssec);
-  html += '</dl>';
+  let html = '';
 
-  if (parsed.statuses && parsed.statuses.length) {
-    html += `<div class="section-title">Status</div><div class="badge-list">${parsed.statuses
-      .map((s) => `<span class="status-chip">${escapeHtml(s)}</span>`)
-      .join('')}</div>`;
+  if (!hasParsedWhoisFields(parsed)) {
+    html += `<span class="placeholder">No structured WHOIS fields were found in this response - see the raw response below.</span>`;
+  } else {
+    html += '<dl class="kv-grid">';
+    html += kv('Domain', parsed.domainName);
+    html += kv('Registrar', parsed.registrar);
+    html += kv('Registrar URL', parsed.registrarUrl);
+    html += kv('Created', fmtDate(parsed.createdDate));
+    html += kv('Expires', fmtDate(parsed.expiryDate));
+    html += kv('Last updated', fmtDate(parsed.updatedDate));
+    html += kv('Abuse email', parsed.abuseEmail);
+    html += kv('Abuse phone', parsed.abusePhone);
+    html += kv('DNSSEC', parsed.dnssec);
+    html += '</dl>';
+
+    if (parsed.statuses && parsed.statuses.length) {
+      html += `<div class="section-title">Status</div><div class="badge-list">${parsed.statuses
+        .map((s) => `<span class="status-chip">${escapeHtml(s)}</span>`)
+        .join('')}</div>`;
+    }
+
+    if (parsed.nameservers && parsed.nameservers.length) {
+      html += `<div class="section-title">Name servers</div><ul class="ns-list">${parsed.nameservers
+        .map((ns) => `<li>${escapeHtml(ns)}</li>`)
+        .join('')}</ul>`;
+    }
+
+    html += entityBlock('Registrant', {
+      name: parsed.registrantName,
+      org: parsed.registrantOrg,
+      email: parsed.registrantEmail,
+      phone: parsed.registrantPhone,
+      address: parsed.registrantAddress,
+    });
+    html += entityBlock('Admin contact', {
+      name: parsed.adminName,
+      org: parsed.adminOrg,
+      email: parsed.adminEmail,
+    });
   }
-
-  if (parsed.nameservers && parsed.nameservers.length) {
-    html += `<div class="section-title">Name servers</div><ul class="ns-list">${parsed.nameservers
-      .map((ns) => `<li>${escapeHtml(ns)}</li>`)
-      .join('')}</ul>`;
-  }
-
-  html += entityBlock('Registrant', {
-    name: parsed.registrantName,
-    org: parsed.registrantOrg,
-    email: parsed.registrantEmail,
-    phone: parsed.registrantPhone,
-    address: parsed.registrantAddress,
-  });
-  html += entityBlock('Admin contact', {
-    name: parsed.adminName,
-    org: parsed.adminOrg,
-    email: parsed.adminEmail,
-  });
 
   const rawChain = (chain || [])
     .map((hop) => {

@@ -18,8 +18,11 @@
 </div>
 <div class="wrap" id="app-wrap" style="display:none;">
   <header>
-    <h1>WHOIS &amp; RDAP Lookup</h1>
-    <p>Queries the official IANA RDAP bootstrap and regional registries (ARIN, RIPE, APNIC, LACNIC, AFRINIC, and TLD registries), plus live WHOIS over port 43 starting from whois.iana.org. Enter one domain, IPv4/IPv6 address, or ASN for full detail, or paste/upload a list of domains for a bulk run with CSV export.</p>
+    <div class="header-top">
+      <h1>WHOIS &amp; RDAP Lookup</h1>
+      <button type="button" id="logout-btn" class="secondary">Log out</button>
+    </div>
+    <p>Domain, IP, and ASN lookups via the IANA RDAP bootstrap and live WHOIS (TCP/43) &mdash; single queries or bulk CSV scans with export.</p>
   </header>
 
   <form id="lookup-form">
@@ -139,8 +142,8 @@
     </details>
     <div class="bulk-actions">
       <button type="button" id="bulk-cancel-btn" class="secondary" style="display:none;">Cancel</button>
-      <button type="button" id="bulk-deep-check-btn" class="secondary" disabled>Deep check selected</button>
-      <button type="button" id="bulk-export-btn" class="secondary" disabled>Export CSV</button>
+      <button type="button" id="bulk-deep-check-btn" class="secondary" disabled style="display:none;">Deep check selected</button>
+      <button type="button" id="bulk-export-btn" class="secondary" disabled style="display:none;">Export CSV</button>
       <span class="bulk-status" id="bulk-status"></span>
     </div>
   </form>
@@ -208,7 +211,6 @@
     (TCP/43) and cross-origin RDAP requests are possible &mdash; browsers cannot make either of those calls directly.
     Most gTLD registries redact registrant contact details for privacy, so registrant fields are often blank &mdash;
     that reflects the registry's own privacy redaction, not a lookup failure.
-    <button type="button" id="logout-btn" class="secondary" style="margin-left:10px;">Log out</button>
   </footer>
 </div>
 

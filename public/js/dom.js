@@ -6,6 +6,7 @@ export const form = document.getElementById('lookup-form');
 export const queryInput = document.getElementById('query-input');
 export const submitBtn = document.getElementById('submit-btn');
 
+export const panels = document.querySelector('.panels');
 export const rdapOutput = document.getElementById('rdap-output');
 export const whoisOutput = document.getElementById('whois-output');
 export const rdapBadge = document.getElementById('rdap-badge');
