@@ -1,0 +1,45 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/rdap"
+  to = "/.netlify/functions/rdap"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/whois"
+  to = "/.netlify/functions/whois"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/availability"
+  to = "/.netlify/functions/availability"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/login"
+  to = "/.netlify/functions/login"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/logout"
+  to = "/.netlify/functions/logout"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/session"
+  to = "/.netlify/functions/session"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ct-search"
+  to = "/.netlify/functions/ct-search"
+  status = 200
+  force = true

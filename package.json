@@ -1,8 +1,9 @@
 {
-  "name": "whois-rdap-tool",
+  "name": "whoisleuth",
   "version": "1.0.0",
   "private": true,
-  "description": "Local WHOIS + RDAP lookup tool backed by the official IANA bootstrap and regional registries.",
+  "license": "Apache-2.0",
+  "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,6 +12,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "undici": "^7.28.0"
   }
 }
