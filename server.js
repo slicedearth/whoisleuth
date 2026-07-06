@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 
 const { classifyQuery } = require('./lib/classify');
-const { findRdapBase, rdapPathFor, parseRdap } = require('./lib/rdap');
+const { fetchRdapRecord } = require('./lib/rdap');
 const { buildWhoisChain, parseWhoisChain } = require('./lib/whois');
 const { checkDomainAvailability } = require('./lib/availability');
 const { searchCertificateTransparency } = require('./lib/ct-search');
@@ -80,30 +80,12 @@ app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
     const { type, value } = classifyQuery(q);
-    const base = await findRdapBase(type, value);
-    if (!base) {
+    const record = await fetchRdapRecord(type, value);
+    if (!record) {
       return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
     }
 
-    const url = base.replace(/\/$/, '') + '/' + rdapPathFor(type, value);
-    const upstream = await fetch(url, { headers: { Accept: 'application/rdap+json' } });
-    const text = await upstream.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
-    }
-
-    res.status(200).json({
-      query: q,
-      type,
-      rdapServer: url,
-      upstreamStatus: upstream.status,
-      data,
-      parsed: upstream.ok ? parseRdap(type, data) : null,
-    });
+    res.status(200).json({ query: q, type, ...record });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

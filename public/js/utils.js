@@ -27,6 +27,30 @@ export function toCsvValue(v) {
   return s;
 }
 
+// Wires a delegated click handler for a "Copy draft" button that appears
+// next to a mailto: link (outreach.js and abuse.js both use this same
+// pattern - a domain-keyed draft plus clipboard fallback for anyone without
+// a desktop mail client). `getText(domain)` should return the draft text
+// for that button's domain, or a falsy value if there's nothing to copy.
+export function wireCopyToClipboard(buttonClass, getText) {
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest(`.${buttonClass}`);
+    if (!btn) return;
+    const text = getText(btn.dataset.domain);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => {
+        btn.textContent = original;
+      }, 1500);
+    } catch {
+      /* clipboard access denied - the mailto link above still works as a fallback */
+    }
+  });
+}
+
 export function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

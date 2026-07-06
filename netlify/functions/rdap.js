@@ -1,5 +1,5 @@
 const { classifyQuery } = require('../../lib/classify');
-const { findRdapBase, rdapPathFor, parseRdap } = require('../../lib/rdap');
+const { fetchRdapRecord } = require('../../lib/rdap');
 const { isAuthenticatedFromCookieHeader } = require('../../lib/auth');
 const { checkRateLimit, getClientIp, API_RATE_LIMIT } = require('../../lib/rate-limit');
 
@@ -27,30 +27,12 @@ exports.handler = async (event) => {
 
   try {
     const { type, value } = classifyQuery(q);
-    const base = await findRdapBase(type, value);
-    if (!base) {
+    const record = await fetchRdapRecord(type, value);
+    if (!record) {
       return json(404, { error: `No RDAP registry found for "${q}" via IANA bootstrap` });
     }
 
-    const url = base.replace(/\/$/, '') + '/' + rdapPathFor(type, value);
-    const upstream = await fetch(url, { headers: { Accept: 'application/rdap+json' } });
-    const text = await upstream.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
-    }
-
-    return json(200, {
-      query: q,
-      type,
-      rdapServer: url,
-      upstreamStatus: upstream.status,
-      data,
-      parsed: upstream.ok ? parseRdap(type, data) : null,
-    });
+    return json(200, { query: q, type, ...record });
   } catch (err) {
     return json(500, { error: err.message });
   }

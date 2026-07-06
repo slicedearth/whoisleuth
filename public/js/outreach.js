@@ -3,7 +3,7 @@
 // a deep check. A plain mailto: link plus a copy-to-clipboard fallback,
 // since not everyone has a desktop mail client configured to handle mailto.
 
-import { escapeHtml } from './utils.js';
+import { escapeHtml, wireCopyToClipboard } from './utils.js';
 
 function buildOutreachDraftText(domain, registrant) {
   const greetingName = (registrant && (registrant.name || registrant.org)) || 'there';
@@ -44,15 +44,4 @@ export function outreachButtonHtml(domain, registrant) {
 // after the row/card was rendered).
 export const outreachRegistrantByDomain = new Map();
 
-document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.outreach-copy-btn');
-  if (!btn) return;
-  try {
-    await navigator.clipboard.writeText(buildOutreachDraftText(btn.dataset.domain, outreachRegistrantByDomain.get(btn.dataset.domain)));
-    const original = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = original; }, 1500);
-  } catch {
-    /* clipboard access denied - the mailto link above still works as a fallback */
-  }
-});
+wireCopyToClipboard('outreach-copy-btn', (domain) => buildOutreachDraftText(domain, outreachRegistrantByDomain.get(domain)));

@@ -5,7 +5,7 @@
 // copy-to-clipboard pattern, but targets a different recipient and purpose
 // (reporting abuse, not making an acquisition offer).
 
-import { escapeHtml } from './utils.js';
+import { escapeHtml, wireCopyToClipboard } from './utils.js';
 import { fmtAge } from './scoring.js';
 
 function buildAbuseDraftText(domain, record) {
@@ -55,17 +55,7 @@ export function abuseButtonHtml(domain, record) {
 // delegated click handler fires well after the row/card was rendered).
 export const abuseRecordByDomain = new Map();
 
-document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.abuse-copy-btn');
-  if (!btn) return;
-  const record = abuseRecordByDomain.get(btn.dataset.domain);
-  if (!record) return;
-  try {
-    await navigator.clipboard.writeText(buildAbuseDraftText(btn.dataset.domain, record));
-    const original = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = original; }, 1500);
-  } catch {
-    /* clipboard access denied - the mailto link above still works as a fallback */
-  }
+wireCopyToClipboard('abuse-copy-btn', (domain) => {
+  const record = abuseRecordByDomain.get(domain);
+  return record ? buildAbuseDraftText(domain, record) : null;
 });
