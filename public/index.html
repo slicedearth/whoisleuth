@@ -75,6 +75,25 @@
       </div>
     </details>
     <details class="generator">
+      <summary>Search Certificate Transparency logs (crt.sh)</summary>
+      <p class="bulk-label" style="margin-top: 10px;">
+        Finds hostnames that have ever had a publicly-issued TLS certificate matching a keyword -
+        catches lookalikes the typosquat generator's fixed permutations would never guess, often
+        before the domain shows up anywhere else, since phishing sites usually get a free
+        certificate within minutes of going live.
+      </p>
+      <div class="bulk-inputs" style="margin-top: 10px;">
+        <div>
+          <label class="bulk-label" for="ct-search-keyword">Brand/keyword to search for (e.g. "acme")</label>
+          <input type="text" id="ct-search-keyword" placeholder="acme" />
+        </div>
+      </div>
+      <div class="bulk-actions">
+        <button type="button" id="ct-search-run-btn" class="secondary">Search crt.sh</button>
+        <span class="bulk-status" id="ct-search-status"></span>
+      </div>
+    </details>
+    <details class="generator">
       <summary>Shortlist (<span id="shortlist-count">0 domains</span>) - saved in this browser</summary>
       <div class="bulk-actions" style="margin-top: 10px;">
         <button type="button" id="shortlist-rescan-btn" class="secondary">Load into query box</button>
@@ -135,6 +154,7 @@
     <div id="availability-confidence"></div>
     <div class="badge-list" id="availability-signals" style="margin-top: 10px;"></div>
     <div id="availability-outreach" style="margin-top: 12px;"></div>
+    <div id="availability-abuse-report" style="margin-top: 12px;"></div>
   </section>
 
   <div class="panels">
@@ -174,6 +194,7 @@
           <th>Registrant</th>
           <th>Nameservers</th>
           <th>Outreach</th>
+          <th>Abuse Report</th>
         </tr>
       </thead>
       <tbody id="bulk-results-body"></tbody>

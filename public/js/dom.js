@@ -18,6 +18,7 @@ export const availabilityDetail = document.getElementById('availability-detail')
 export const availabilityConfidence = document.getElementById('availability-confidence');
 export const availabilitySignals = document.getElementById('availability-signals');
 export const availabilityOutreach = document.getElementById('availability-outreach');
+export const availabilityAbuseReport = document.getElementById('availability-abuse-report');
 
 export const bulkFileInput = document.getElementById('bulk-file');
 export const bulkCancelBtn = document.getElementById('bulk-cancel-btn');

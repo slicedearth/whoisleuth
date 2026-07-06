@@ -18,6 +18,7 @@ import {
 } from './scoring.js';
 import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
+import { buildAbuseMailto, abuseRecordByDomain } from './abuse.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
 import { showGate } from './auth.js';
 import {
@@ -94,6 +95,7 @@ function toBulkRecord(domain, body) {
     privacyProtected: body.privacyProtected ?? null,
     activityStatus: body.activityStatus || null,
     hasMx: body.hasMx ?? null,
+    abuseEmail: body.abuse ? body.abuse.email : null,
   };
 }
 
@@ -134,6 +136,7 @@ function exportCsv(records, filename) {
     'Privacy Protected',
     'Activity Status',
     'MX Records',
+    'Abuse Email',
     'Registrar Name',
     'Registrar Email',
     'Registrant Name',
@@ -154,6 +157,7 @@ function exportCsv(records, filename) {
     formatPrivacyCell(r.privacyProtected),
     formatActivityCell(r.activityStatus),
     r.hasMx === true ? 'Yes' : r.hasMx === false ? 'No' : '',
+    r.abuseEmail,
     r.registrarName,
     r.registrarEmail,
     r.registrantName,
@@ -191,6 +195,15 @@ function bulkRowCellsHtml(r) {
     ? `<a href="${escapeHtml(mailto)}" title="Draft email to ${escapeHtml(r.registrantEmail)}">&#9993;</a> <button type="button" class="secondary outreach-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
     : '—';
 
+  const abuseRecord = r.abuseEmail
+    ? { abuseEmail: r.abuseEmail, hasMx: r.hasMx, activityStatus: r.activityStatus, privacyProtected: r.privacyProtected, domainAgeDays: r.domainAgeDays }
+    : null;
+  if (abuseRecord) abuseRecordByDomain.set(r.domain, abuseRecord);
+  const abuseMailto = buildAbuseMailto(r.domain, abuseRecord);
+  const abuseCell = abuseMailto
+    ? `<a href="${escapeHtml(abuseMailto)}" title="Draft abuse report to ${escapeHtml(r.abuseEmail)}">&#9888;</a> <button type="button" class="secondary abuse-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
+    : '—';
+
   const starred = isShortlisted(r.domain);
   const star = `<button type="button" class="star-btn" data-domain="${escapeHtml(r.domain)}" title="${starred ? 'Remove from' : 'Add to'} shortlist" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 6px 0 0;font-size:0.95rem;">${starred ? '★' : '☆'}</button>`;
 
@@ -207,6 +220,7 @@ function bulkRowCellsHtml(r) {
     <td>${escapeHtml(registrant)}</td>
     <td>${escapeHtml(r.nameservers || '—')}</td>
     <td>${outreachCell}</td>
+    <td>${abuseCell}</td>
   `;
 }
 

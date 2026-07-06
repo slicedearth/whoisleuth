@@ -5,6 +5,7 @@
 import { escapeHtml, fmtDate, kv } from './utils.js';
 import { fmtAge, fmtExpiresIn, ACTIVITY_LABELS } from './scoring.js';
 import { outreachButtonHtml, outreachRegistrantByDomain } from './outreach.js';
+import { abuseButtonHtml, abuseRecordByDomain } from './abuse.js';
 import {
   availabilityCard,
   availabilityDomain,
@@ -13,6 +14,7 @@ import {
   availabilityConfidence,
   availabilitySignals,
   availabilityOutreach,
+  availabilityAbuseReport,
 } from './dom.js';
 
 function entityBlock(title, entity) {
@@ -209,4 +211,16 @@ export function renderAvailability(body) {
 
   if (body.registrant && body.registrant.email) outreachRegistrantByDomain.set(body.domain, body.registrant);
   availabilityOutreach.innerHTML = outreachButtonHtml(body.domain, body.registrant);
+
+  const abuseRecord = body.abuse && body.abuse.email
+    ? {
+        abuseEmail: body.abuse.email,
+        hasMx: body.hasMx,
+        activityStatus: body.activityStatus,
+        privacyProtected: body.privacyProtected,
+        domainAgeDays: body.domainAgeDays,
+      }
+    : null;
+  if (abuseRecord) abuseRecordByDomain.set(body.domain, abuseRecord);
+  availabilityAbuseReport.innerHTML = abuseButtonHtml(body.domain, abuseRecord);
 }

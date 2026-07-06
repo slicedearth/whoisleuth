@@ -5,6 +5,7 @@ const { classifyQuery } = require('./lib/classify');
 const { findRdapBase, rdapPathFor, parseRdap } = require('./lib/rdap');
 const { buildWhoisChain, parseWhoisChain } = require('./lib/whois');
 const { checkDomainAvailability } = require('./lib/availability');
+const { searchCertificateTransparency } = require('./lib/ct-search');
 const {
   COOKIE_NAME,
   checkPassword,
@@ -119,6 +120,18 @@ app.get('/api/availability', requireAuth, async (req, res) => {
     const fast = req.query.fast === '1' || req.query.fast === 'true';
     const result = await checkDomainAvailability(value, { fast });
     res.json({ applicable: true, domain: value, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/ct-search', requireAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+    const result = await searchCertificateTransparency(q);
+    res.json({ keyword: q, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

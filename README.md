@@ -4,8 +4,10 @@ A local WHOIS + RDAP lookup tool for checking domain, IP, and ASN records —
 single lookups or bulk scans of a domain list — backed by the official IANA
 RDAP bootstrap service and live WHOIS (TCP/43) queries to the relevant
 registries. Includes availability/opportunity scoring, a typosquat
-phishing-risk score, keyword/typosquat candidate generators, a browser-local
-shortlist and watchlist, and CSV import/export for bulk runs.
+phishing-risk score, a Certificate Transparency search for lookalikes not yet
+in any generated candidate list, abuse-report drafting, keyword/typosquat
+candidate generators, a browser-local shortlist and watchlist, and CSV
+import/export for bulk runs.
 
 Runs as a small Node backend (needed for raw WHOIS sockets and cross-origin
 RDAP requests, which browsers can't do directly) serving a static frontend
@@ -58,12 +60,20 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   domains that moved from available/unknown to registered since the last
   check are flagged as new registrations (a fresh squatting attempt), and
   any that lapsed back to available are flagged as released.
+- Use **Search Certificate Transparency logs** to find hostnames with a
+  publicly-issued TLS certificate matching a brand keyword — catches
+  lookalikes the typosquat generator's fixed permutations would never guess,
+  often before the domain shows up anywhere else.
+- A registered result with a published abuse contact (from RDAP or WHOIS)
+  gets a **Report abuse** draft — a prefilled takedown request referencing
+  that domain's risk signals, with the same mailto-link-plus-copy-button
+  pattern as the acquisition outreach draft.
 
 ## Deploying to Netlify
 
-This branch also ships `netlify/functions/rdap.js`, `whois.js`, and
-`availability.js` — thin wrappers around the same `lib/` code `server.js`
-uses, so behavior is identical either way. To deploy:
+This branch also ships `netlify/functions/rdap.js`, `whois.js`,
+`availability.js`, and `ct-search.js` — thin wrappers around the same `lib/`
+code `server.js` uses, so behavior is identical either way. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).
@@ -91,9 +101,10 @@ lib/                  Shared lookup logic, used by both server.js and netlify/fu
   whois.js              WHOIS (TCP/43) referral chain + response parsing
   availability.js       Availability/opportunity signal derivation
   dns-mx.js              MX-record lookup (phishing-risk signal for deep checks)
+  ct-search.js           Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)
-netlify/functions/    Netlify Functions (rdap, whois, availability, login, logout, session)
+netlify/functions/    Netlify Functions (rdap, whois, availability, ct-search, login, logout, session)
 netlify.toml          Netlify build/redirect config
 public/
   index.html          Page markup
@@ -105,8 +116,10 @@ public/
     utils.js             Parsing/formatting helpers
     scoring.js           Opportunity scoring, activity/privacy formatting
     render.js            RDAP/WHOIS/availability rendering
-    outreach.js           Outreach draft + copy-to-clipboard
+    outreach.js           Acquisition outreach draft + copy-to-clipboard
+    abuse.js               Abuse-report draft + copy-to-clipboard
     generators.js         Keyword and typosquat candidate generators
+    ct-search.js           Certificate Transparency search UI
     shortlist.js          localStorage-backed shortlist
     watchlist.js          localStorage-backed watchlist with re-scan diffing
     single-lookup.js       Single domain/IP/ASN lookup orchestration
