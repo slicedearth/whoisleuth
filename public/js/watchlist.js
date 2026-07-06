@@ -50,6 +50,13 @@ export function deleteWatchlist(name) {
   renderWatchlistPanel();
 }
 
+// Bulk erasure alongside the existing per-watchlist Delete button - see
+// shortlist.js's clearShortlist() for why this matters beyond tidying up.
+export function clearAllWatchlists() {
+  saveWatchlists({});
+  renderWatchlistPanel();
+}
+
 // Compares a previously-saved snapshot against a fresh scan and returns one
 // entry per domain whose state crossed the registered/open boundary in
 // either direction. Domains with no meaningful state change (including ones
@@ -111,6 +118,12 @@ document.getElementById('watchlist-save-btn').addEventListener('click', () => {
   if (!name) return;
   saveWatchlistSnapshot(name, results);
   bulkStatus.textContent = `Saved "${name}" as a watchlist (${results.length} domains).`;
+});
+
+document.getElementById('watchlist-clear-btn').addEventListener('click', () => {
+  if (Object.keys(loadWatchlists()).length === 0) return;
+  if (!window.confirm('Delete every saved watchlist? This cannot be undone.')) return;
+  clearAllWatchlists();
 });
 
 document.addEventListener('click', async (e) => {

@@ -39,6 +39,15 @@ export function toggleShortlist(record) {
   renderShortlistPanel();
 }
 
+// Bulk erasure alongside the existing per-domain Remove button - this list
+// holds registrant contact data pulled from WHOIS/RDAP, so clearing all of
+// it in one step (rather than one at a time) matters for actually acting on
+// a deletion request, not just tidying up. See PRIVACY.md.
+export function clearShortlist() {
+  saveShortlist([]);
+  renderShortlistPanel();
+}
+
 export function renderShortlistPanel() {
   const list = loadShortlist();
   document.getElementById('shortlist-count').textContent = `${list.length} domain${list.length === 1 ? '' : 's'}`;
@@ -62,6 +71,12 @@ document.getElementById('shortlist-rescan-btn').addEventListener('click', () => 
   const list = loadShortlist();
   if (list.length === 0) return;
   queryInput.value = list.map((r) => r.domain).join('\n');
+});
+
+document.getElementById('shortlist-clear-btn').addEventListener('click', () => {
+  if (loadShortlist().length === 0) return;
+  if (!window.confirm('Remove every domain from the shortlist? This cannot be undone.')) return;
+  clearShortlist();
 });
 
 renderShortlistPanel();

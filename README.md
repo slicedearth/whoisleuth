@@ -1,4 +1,4 @@
-# WHOIS & RDAP Lookup Tool
+# WHOISleuth
 
 A local WHOIS + RDAP lookup tool for checking domain, IP, and ASN records —
 single lookups or bulk scans of a domain list — backed by the official IANA
@@ -15,6 +15,41 @@ with no build step. This branch splits the lookup logic into a shared `lib/`
 so it can run either as a traditional always-on Node/Express server
 (`server.js`) or as Netlify Functions (`netlify/functions/`) with no logic
 duplicated between the two.
+
+## Disclaimer
+
+Licensed under Apache 2.0 (see [LICENSE](LICENSE)) - provided **as is, with
+no warranty**. A few things worth being deliberate about before you rely on
+this tool or point it at data that isn't your own:
+
+- **Data accuracy.** RDAP/WHOIS responses are only as current, complete, and
+  correctly-parsed as the upstream registry provides - fields can be
+  redacted, stale, or missing entirely (see the WHOIS parsing notes in
+  `lib/whois.js`). Don't treat the Opportunity/Risk scores, availability
+  state, or abuse contact as a substitute for your own verification before
+  acting on them, especially for anything with legal or financial
+  consequences.
+- **Intended use.** The typosquat/homoglyph generator and Certificate
+  Transparency search are meant for monitoring domains and brands you have
+  a legitimate interest in (your own brand, a client's, etc.) - the same
+  candidate-domain output that helps a defender monitor lookalikes is
+  equally a list of not-yet-registered lookalikes, so don't use this
+  against a brand you have no relationship to.
+- **Outreach and abuse-report drafts don't send anything automatically** -
+  both only build a `mailto:` link plus a copy-to-clipboard button; a human
+  reviews and sends each one. That said, using registrant contact data
+  pulled via WHOIS/RDAP for outreach is still subject to whatever
+  anti-spam (CAN-SPAM, CASL, PECR, etc.) and privacy law (GDPR, CCPA, etc.)
+  applies in your and the recipient's jurisdiction - that's on you to
+  comply with, not something this tool enforces for you.
+- **Registry/registrar terms of service.** Several registries' own WHOIS/
+  RDAP terms restrict automated bulk querying without a separate bulk-access
+  agreement. This tool's rate limiting (see below) protects against
+  accidental abuse, not against violating an individual registry's own
+  terms if you run large or frequent bulk scans against it.
+
+See [PRIVACY.md](PRIVACY.md) for how registrant data is handled and how to
+clear it (fill in your own contact details before sharing a deployment).
 
 ## Requirements
 

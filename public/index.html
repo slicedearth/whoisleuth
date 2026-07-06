@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>WHOIS &amp; RDAP Lookup</title>
+<title>WHOISleuth</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <div class="login-gate" id="login-gate">
   <form id="login-form" class="login-form">
-    <h1>WHOIS &amp; RDAP Lookup</h1>
+    <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth</h1>
     <p>Enter the shared password to continue.</p>
     <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
     <button type="submit">Enter</button>
@@ -19,7 +20,7 @@
 <div class="wrap" id="app-wrap" style="display:none;">
   <header>
     <div class="header-top">
-      <h1>WHOIS &amp; RDAP Lookup</h1>
+      <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth</h1>
       <button type="button" id="logout-btn" class="secondary">Log out</button>
     </div>
     <p>Domain, IP, and ASN lookups via the IANA RDAP bootstrap and live WHOIS (TCP/43) &mdash; single queries or bulk CSV scans with export.</p>
@@ -101,6 +102,7 @@
       <div class="bulk-actions" style="margin-top: 10px;">
         <button type="button" id="shortlist-rescan-btn" class="secondary">Load into query box</button>
         <button type="button" id="shortlist-export-btn" class="secondary">Export CSV</button>
+        <button type="button" id="shortlist-clear-btn" class="secondary">Clear all</button>
       </div>
       <div style="margin-top: 10px; overflow-x: auto;">
         <table class="bulk-results">
@@ -125,6 +127,7 @@
       </p>
       <div class="bulk-actions">
         <button type="button" id="watchlist-save-btn" class="secondary">Save current results as watchlist</button>
+        <button type="button" id="watchlist-clear-btn" class="secondary">Clear all</button>
       </div>
       <div style="margin-top: 10px; overflow-x: auto;">
         <table class="bulk-results">
