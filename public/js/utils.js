@@ -28,8 +28,18 @@ export function kv(label, value) {
   return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`;
 }
 
+// A leading =, +, -, or @ (or tab/CR) makes Excel/Sheets/LibreOffice
+// evaluate the cell as a formula instead of text - a real risk here since
+// several exported columns (registrant/registrar name, nameservers) come
+// straight from a domain's own WHOIS record, which its owner fully
+// controls. Prefixing with a single quote forces text interpretation
+// (spreadsheet apps hide the leading quote, so this doesn't change what's
+// visibly displayed for ordinary values).
+const CSV_FORMULA_TRIGGER_RE = /^[=+\-@\t\r]/;
+
 export function toCsvValue(v) {
-  const s = v === null || v === undefined ? '' : String(v);
+  let s = v === null || v === undefined ? '' : String(v);
+  if (CSV_FORMULA_TRIGGER_RE.test(s)) s = `'${s}`;
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
