@@ -14,6 +14,7 @@ export const whoisBadge = document.getElementById('whois-badge');
 export const availabilityCard = document.getElementById('availability-card');
 export const availabilityDomain = document.getElementById('availability-domain');
 export const availabilityPill = document.getElementById('availability-pill');
+export const availabilityScores = document.getElementById('availability-scores');
 export const availabilityDetail = document.getElementById('availability-detail');
 export const availabilityConfidence = document.getElementById('availability-confidence');
 export const availabilitySignals = document.getElementById('availability-signals');

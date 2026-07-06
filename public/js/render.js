@@ -3,13 +3,22 @@
 // shortlist.js (which only need PILL_LABELS for their own table rendering).
 
 import { escapeHtml, fmtDate, kv } from './utils.js';
-import { fmtAge, fmtExpiresIn, ACTIVITY_LABELS } from './scoring.js';
+import {
+  fmtAge,
+  fmtExpiresIn,
+  ACTIVITY_LABELS,
+  computeOpportunityScore,
+  scoreTone,
+  computeRiskScore,
+  riskTone,
+} from './scoring.js';
 import { outreachButtonHtml, outreachRegistrantByDomain } from './outreach.js';
 import { abuseButtonHtml, abuseRecordByDomain } from './abuse.js';
 import {
   availabilityCard,
   availabilityDomain,
   availabilityPill,
+  availabilityScores,
   availabilityDetail,
   availabilityConfidence,
   availabilitySignals,
@@ -202,6 +211,13 @@ export function renderAvailability(body) {
   availabilityPill.className = `status-pill ${state}`;
   availabilityPill.textContent = PILL_LABELS[state] || state;
   availabilityDetail.textContent = body.detail || '';
+
+  const score = computeOpportunityScore(body);
+  const risk = computeRiskScore(body);
+  const scoreChips = [];
+  if (score !== null) scoreChips.push(`<span class="signal-chip ${scoreTone(score)}" title="Opportunity score">Opportunity: ${score}</span>`);
+  if (risk !== null) scoreChips.push(`<span class="signal-chip ${riskTone(risk)}" title="Phishing-risk score">Risk: ${risk}</span>`);
+  availabilityScores.innerHTML = scoreChips.join(' ');
 
   availabilityConfidence.innerHTML = body.confidence
     ? `<span class="confidence-note">confidence: ${escapeHtml(body.confidence)}</span>`

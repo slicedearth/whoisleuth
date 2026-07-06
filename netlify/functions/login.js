@@ -1,4 +1,5 @@
 const { checkPassword, createSessionToken, buildSessionCookie } = require('../../lib/auth');
+const { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT } = require('../../lib/rate-limit');
 
 function json(statusCode, body, extraHeaders) {
   return {
@@ -11,6 +12,12 @@ function json(statusCode, body, extraHeaders) {
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
+  }
+
+  const ip = getClientIp(event.headers);
+  const { allowed, retryAfterSeconds } = checkRateLimit(`login:${ip}`, LOGIN_RATE_LIMIT);
+  if (!allowed) {
+    return json(429, { error: 'Too many requests. Please try again later.' }, { 'Retry-After': String(retryAfterSeconds) });
   }
 
   let body;

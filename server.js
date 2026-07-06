@@ -15,6 +15,7 @@ const {
   buildSessionCookie,
   buildClearCookie,
 } = require('./lib/auth');
+const { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT, API_RATE_LIMIT } = require('./lib/rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,7 +40,22 @@ function requireAuth(req, res, next) {
   next();
 }
 
-app.post('/api/login', (req, res) => {
+function rateLimit(scope, opts) {
+  return (req, res, next) => {
+    const key = `${scope}:${getClientIp(req.headers, req.socket && req.socket.remoteAddress)}`;
+    const { allowed, retryAfterSeconds } = checkRateLimit(key, opts);
+    if (!allowed) {
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+    }
+    next();
+  };
+}
+
+const loginRateLimit = rateLimit('login', LOGIN_RATE_LIMIT);
+const apiRateLimit = rateLimit('api', API_RATE_LIMIT);
+
+app.post('/api/login', loginRateLimit, (req, res) => {
   const password = (req.body && req.body.password) || '';
   if (!checkPassword(password)) {
     return res.status(401).json({ error: 'Incorrect password' });
@@ -58,7 +74,7 @@ app.get('/api/session', (req, res) => {
   res.json({ authenticated: isValidSessionToken(cookies[COOKIE_NAME]) });
 });
 
-app.get('/api/rdap', requireAuth, async (req, res) => {
+app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').toString().trim();
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
@@ -93,7 +109,7 @@ app.get('/api/rdap', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/whois', requireAuth, async (req, res) => {
+app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').toString().trim();
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
@@ -107,7 +123,7 @@ app.get('/api/whois', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/availability', requireAuth, async (req, res) => {
+app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').toString().trim();
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
@@ -125,7 +141,7 @@ app.get('/api/availability', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/ct-search', requireAuth, async (req, res) => {
+app.get('/api/ct-search', apiRateLimit, requireAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').toString().trim();
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });

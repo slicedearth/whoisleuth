@@ -3,7 +3,7 @@
 
 import { escapeHtml } from './utils.js';
 import { renderRdap, renderWhois, renderAvailability } from './render.js';
-import { rdapOutput, whoisOutput, rdapBadge, whoisBadge, availabilityCard, submitBtn } from './dom.js';
+import { rdapOutput, whoisOutput, rdapBadge, whoisBadge, availabilityCard, availabilityScores, submitBtn } from './dom.js';
 import { showGate } from './auth.js';
 
 function setLoading(el, badgeEl) {
@@ -70,5 +70,6 @@ export function clearSingleResults() {
   whoisOutput.innerHTML = '<span class="placeholder">WHOIS referral chain will appear here.</span>';
   rdapBadge.textContent = '';
   whoisBadge.textContent = '';
+  availabilityScores.innerHTML = '';
   availabilityCard.classList.remove('visible');
 }

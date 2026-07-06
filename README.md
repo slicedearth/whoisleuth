@@ -68,6 +68,28 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   gets a **Report abuse** draft — a prefilled takedown request referencing
   that domain's risk signals, with the same mailto-link-plus-copy-button
   pattern as the acquisition outreach draft.
+- A single-domain lookup's availability card shows the same **Opportunity**
+  and **Risk** score chips as the bulk results table, next to the status
+  pill.
+
+## Rate limiting
+
+All `/api/*` routes are rate-limited per client IP (`lib/rate-limit.js`),
+shared by `server.js` and the Netlify Functions:
+
+- `/api/login` — 10 attempts per 5 minutes, since the shared password is the
+  tool's only access control and the main thing worth throttling.
+- `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search` — 1000
+  requests per minute, generous enough to clear a full 2000-domain fast bulk
+  scan without breaking normal use, while still capping a scripted flood well
+  below what upstream registries would treat as abuse.
+
+Exceeding either limit returns `429` with a `Retry-After` header. The limiter
+is in-memory: on `server.js` (one long-lived process) it applies globally; on
+Netlify Functions each container has its own memory, so it only limits bursts
+within a single warm container rather than across the whole deployment — a
+cheap first line of defense, not a substitute for a shared store (e.g. Redis)
+under sustained distributed abuse.
 
 ## Deploying to Netlify
 
@@ -104,6 +126,7 @@ lib/                  Shared lookup logic, used by both server.js and netlify/fu
   ct-search.js           Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)
+  rate-limit.js          Per-IP rate limiting for login and lookup routes
 netlify/functions/    Netlify Functions (rdap, whois, availability, ct-search, login, logout, session)
 netlify.toml          Netlify build/redirect config
 public/
