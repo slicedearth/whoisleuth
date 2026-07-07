@@ -12,9 +12,10 @@
   <form id="login-form" class="login-form">
     <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth</h1>
     <p>Enter the shared password to continue.</p>
+    <label for="login-password" class="visually-hidden">Shared password</label>
     <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
     <button type="submit">Enter</button>
-    <div class="error-text" id="login-error"></div>
+    <div class="error-text" id="login-error" aria-live="polite"></div>
   </form>
 </div>
 <div class="wrap" id="app-wrap" style="display:none;">
@@ -28,6 +29,7 @@
 
   <form id="lookup-form">
     <div class="search-row">
+      <label for="query-input" class="visually-hidden">Domain, IP, ASN, or list of domains to look up</label>
       <textarea
         id="query-input"
         rows="1"
@@ -58,7 +60,7 @@
       </div>
       <div class="bulk-actions">
         <button type="button" id="generator-run-btn" class="secondary">Generate</button>
-        <span class="bulk-status" id="generator-status"></span>
+        <span class="bulk-status" id="generator-status" aria-live="polite"></span>
       </div>
     </details>
     <details class="generator">
@@ -75,7 +77,7 @@
       </div>
       <div class="bulk-actions">
         <button type="button" id="typo-run-btn" class="secondary">Generate typosquat variants</button>
-        <span class="bulk-status" id="typo-status"></span>
+        <span class="bulk-status" id="typo-status" aria-live="polite"></span>
       </div>
     </details>
     <details class="generator">
@@ -94,7 +96,7 @@
       </div>
       <div class="bulk-actions">
         <button type="button" id="ct-search-run-btn" class="secondary">Search crt.sh</button>
-        <span class="bulk-status" id="ct-search-status"></span>
+        <span class="bulk-status" id="ct-search-status" aria-live="polite"></span>
       </div>
     </details>
     <details class="generator">
@@ -102,16 +104,19 @@
       <div class="bulk-actions" style="margin-top: 10px;">
         <button type="button" id="shortlist-rescan-btn" class="secondary">Load into query box</button>
         <button type="button" id="shortlist-export-btn" class="secondary">Export CSV</button>
+        <button type="button" id="shortlist-export-json-btn" class="secondary">Export JSON</button>
+        <label for="shortlist-import-file" class="file-upload-label" title="Import a previously-exported shortlist JSON file - merges by domain, doesn't replace what's already saved">Import JSON</label>
+        <input type="file" id="shortlist-import-file" accept=".json,application/json" style="display:none;" />
         <button type="button" id="shortlist-clear-btn" class="secondary">Clear all</button>
       </div>
       <div style="margin-top: 10px; overflow-x: auto;">
         <table class="bulk-results">
           <thead>
             <tr>
-              <th>Domain</th>
-              <th>Score</th>
-              <th>Availability</th>
-              <th></th>
+              <th scope="col">Domain</th>
+              <th scope="col">Score</th>
+              <th scope="col">Availability</th>
+              <th scope="col"><span class="visually-hidden">Actions</span></th>
             </tr>
           </thead>
           <tbody id="shortlist-body"></tbody>
@@ -127,16 +132,19 @@
       </p>
       <div class="bulk-actions">
         <button type="button" id="watchlist-save-btn" class="secondary">Save current results as watchlist</button>
+        <button type="button" id="watchlist-export-json-btn" class="secondary">Export JSON</button>
+        <label for="watchlist-import-file" class="file-upload-label" title="Import a previously-exported watchlists JSON file - merges by name, doesn't replace what's already saved">Import JSON</label>
+        <input type="file" id="watchlist-import-file" accept=".json,application/json" style="display:none;" />
         <button type="button" id="watchlist-clear-btn" class="secondary">Clear all</button>
       </div>
       <div style="margin-top: 10px; overflow-x: auto;">
         <table class="bulk-results">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Domains</th>
-              <th>Last checked</th>
-              <th></th>
+              <th scope="col">Name</th>
+              <th scope="col">Domains</th>
+              <th scope="col">Last checked</th>
+              <th scope="col"><span class="visually-hidden">Actions</span></th>
             </tr>
           </thead>
           <tbody id="watchlist-body"></tbody>
@@ -147,7 +155,7 @@
       <button type="button" id="bulk-cancel-btn" class="secondary" style="display:none;">Cancel</button>
       <button type="button" id="bulk-deep-check-btn" class="secondary" disabled style="display:none;">Deep check selected</button>
       <button type="button" id="bulk-export-btn" class="secondary" disabled style="display:none;">Export CSV</button>
-      <span class="bulk-status" id="bulk-status"></span>
+      <span class="bulk-status" id="bulk-status" aria-live="polite"></span>
     </div>
   </form>
 
@@ -157,7 +165,7 @@
       <span class="status-pill" id="availability-pill"></span>
       <span id="availability-scores"></span>
     </div>
-    <div class="availability-detail" id="availability-detail"></div>
+    <div class="availability-detail" id="availability-detail" aria-live="polite"></div>
     <div id="availability-confidence"></div>
     <div class="badge-list" id="availability-signals" style="margin-top: 10px;"></div>
     <div id="availability-outreach" style="margin-top: 12px;"></div>
@@ -180,7 +188,7 @@
   </div>
 
   <div class="progress-wrap" id="bulk-progress-wrap">
-    <div class="progress-track"><div class="progress-fill" id="bulk-progress-fill"></div></div>
+    <div class="progress-track" id="bulk-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Bulk scan progress"><div class="progress-fill" id="bulk-progress-fill"></div></div>
     <div class="progress-label" id="bulk-progress-label"></div>
   </div>
 
@@ -188,20 +196,20 @@
     <table class="bulk-results">
       <thead>
         <tr>
-          <th><input type="checkbox" id="bulk-select-all" /></th>
-          <th>Domain</th>
-          <th id="bulk-sort-score" style="cursor: pointer;" title="Click to sort by opportunity score">Opportunity &#8645;</th>
-          <th id="bulk-sort-risk" style="cursor: pointer;" title="Click to sort by phishing-risk score">Risk &#8645;</th>
-          <th>Availability</th>
-          <th>Age</th>
-          <th>Expires in</th>
-          <th>Privacy</th>
-          <th>Activity</th>
-          <th>Registrar</th>
-          <th>Registrant</th>
-          <th>Nameservers</th>
-          <th>Outreach</th>
-          <th>Abuse Report</th>
+          <th scope="col"><label class="visually-hidden" for="bulk-select-all">Select all rows</label><input type="checkbox" id="bulk-select-all" /></th>
+          <th scope="col">Domain</th>
+          <th scope="col"><button type="button" id="bulk-sort-score" class="sort-header-btn" title="Click to sort by opportunity score">Opportunity <span aria-hidden="true">&#8645;</span></button></th>
+          <th scope="col"><button type="button" id="bulk-sort-risk" class="sort-header-btn" title="Click to sort by phishing-risk score">Risk <span aria-hidden="true">&#8645;</span></button></th>
+          <th scope="col">Availability</th>
+          <th scope="col">Age</th>
+          <th scope="col">Expires in</th>
+          <th scope="col">Privacy</th>
+          <th scope="col">Activity</th>
+          <th scope="col">Registrar</th>
+          <th scope="col">Registrant</th>
+          <th scope="col">Nameservers</th>
+          <th scope="col">Outreach</th>
+          <th scope="col">Abuse Report</th>
         </tr>
       </thead>
       <tbody id="bulk-results-body"></tbody>
@@ -214,6 +222,7 @@
     (TCP/43) and cross-origin RDAP requests are possible &mdash; browsers cannot make either of those calls directly.
     Most gTLD registries redact registrant contact details for privacy, so registrant fields are often blank &mdash;
     that reflects the registry's own privacy redaction, not a lookup failure.
+    <p>&copy; 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> &middot; <a href="privacy.html">Privacy Policy</a></p>
   </footer>
 </div>
 

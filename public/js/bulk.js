@@ -5,7 +5,7 @@
 // upload flow (which loads into the query box rather than tracking the
 // file separately until submit).
 
-import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText } from './utils.js';
+import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText, downloadBlob } from './utils.js';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -31,6 +31,7 @@ import {
   bulkExportBtn,
   bulkStatus,
   bulkProgressWrap,
+  bulkProgressTrack,
   bulkProgressFill,
   bulkProgressLabel,
   bulkResultsWrap,
@@ -98,6 +99,8 @@ function toBulkRecord(domain, body) {
     privacyProtected: body.privacyProtected ?? null,
     activityStatus: body.activityStatus || null,
     hasMx: body.hasMx ?? null,
+    hasSpf: body.hasSpf ?? null,
+    hasDmarc: body.hasDmarc ?? null,
     abuseEmail: body.abuse ? body.abuse.email : null,
   };
 }
@@ -141,6 +144,8 @@ function exportCsv(records, filename) {
     'Privacy Protected',
     'Activity Status',
     'MX Records',
+    'SPF Record',
+    'DMARC Record',
     'Abuse Email',
     'Registrar Name',
     'Registrar Email',
@@ -164,6 +169,8 @@ function exportCsv(records, filename) {
     formatPrivacyCell(r.privacyProtected),
     formatActivityCell(r.activityStatus),
     r.hasMx === true ? 'Yes' : r.hasMx === false ? 'No' : '',
+    r.hasSpf === true ? 'Yes' : r.hasSpf === false ? 'No' : '',
+    r.hasDmarc === true ? 'Yes' : r.hasDmarc === false ? 'No' : '',
     r.abuseEmail,
     r.registrarName,
     r.registrarEmail,
@@ -175,15 +182,7 @@ function exportCsv(records, filename) {
     r.nameservers,
   ]);
   const csv = [headers, ...rows].map((row) => row.map(toCsvValue).join(',')).join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadBlob(csv, filename, 'text/csv;charset=utf-8;');
 }
 
 function bulkRowCellsHtml(r) {
@@ -199,7 +198,7 @@ function bulkRowCellsHtml(r) {
   if (registrantObj) outreachRegistrantByDomain.set(r.domain, registrantObj);
   const mailto = buildOutreachMailto(r.domain, registrantObj);
   const outreachCell = mailto
-    ? `<a href="${escapeHtml(mailto)}" title="Draft email to ${escapeHtml(r.registrantEmail)}">&#9993;</a> <button type="button" class="secondary outreach-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
+    ? `<a href="${escapeHtml(mailto)}" title="Draft email to ${escapeHtml(r.registrantEmail)}" aria-label="Draft email to ${escapeHtml(r.registrantEmail)}">&#9993;</a> <button type="button" class="secondary outreach-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
     : '—';
 
   const abuseRecord = r.abuseEmail
@@ -208,11 +207,12 @@ function bulkRowCellsHtml(r) {
   if (abuseRecord) abuseRecordByDomain.set(r.domain, abuseRecord);
   const abuseMailto = buildAbuseMailto(r.domain, abuseRecord);
   const abuseCell = abuseMailto
-    ? `<a href="${escapeHtml(abuseMailto)}" title="Draft abuse report to ${escapeHtml(r.abuseEmail)}">&#9888;</a> <button type="button" class="secondary abuse-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
+    ? `<a href="${escapeHtml(abuseMailto)}" title="Draft abuse report to ${escapeHtml(r.abuseEmail)}" aria-label="Draft abuse report to ${escapeHtml(r.abuseEmail)}">&#9888;</a> <button type="button" class="secondary abuse-copy-btn" data-domain="${escapeHtml(r.domain)}" style="padding:2px 8px;font-size:0.72rem;">Copy</button>`
     : '—';
 
   const starred = isShortlisted(r.domain);
-  const star = `<button type="button" class="star-btn" data-domain="${escapeHtml(r.domain)}" title="${starred ? 'Remove from' : 'Add to'} shortlist" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 6px 0 0;font-size:0.95rem;">${starred ? '★' : '☆'}</button>`;
+  const starLabel = `${starred ? 'Remove from' : 'Add to'} shortlist`;
+  const star = `<button type="button" class="star-btn" data-domain="${escapeHtml(r.domain)}" title="${starLabel}" aria-label="${starLabel}" aria-pressed="${starred}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 6px 0 0;font-size:0.95rem;">${starred ? '★' : '☆'}</button>`;
 
   return `
     <td class="domain-cell">${star}${escapeHtml(r.domain)}</td>
@@ -222,7 +222,7 @@ function bulkRowCellsHtml(r) {
     <td>${escapeHtml(fmtAge(r.domainAgeDays) || '—')}</td>
     <td>${escapeHtml(fmtExpiresIn(r.expiresInDays) || '—')}</td>
     <td>${escapeHtml(formatPrivacyCell(r.privacyProtected))}</td>
-    <td>${escapeHtml(formatActivityCell(r.activityStatus, r.hasMx))}</td>
+    <td>${escapeHtml(formatActivityCell(r.activityStatus, r.hasMx, r.hasSpf, r.hasDmarc))}</td>
     <td>${escapeHtml(registrar)}</td>
     <td>${escapeHtml(registrant)}</td>
     <td>${escapeHtml(r.nameservers || '—')}</td>
@@ -250,7 +250,7 @@ function upsertBulkRow(r) {
 
   const existingTr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(r.domain)}"]`);
   if (existingTr) {
-    const checked = existingTr.querySelector('input[type="checkbox"]')?.checked;
+    const checked = /** @type {HTMLInputElement | null} */ (existingTr.querySelector('input[type="checkbox"]'))?.checked;
     existingTr.innerHTML = `<td><input type="checkbox" ${checked ? 'checked' : ''}/></td>${bulkRowCellsHtml(r)}`;
     wireBulkRowCheckbox(existingTr, r.domain);
     return;
@@ -277,9 +277,10 @@ export function clearBulkResults() {
 }
 
 bulkSelectAll.addEventListener('change', () => {
-  bulkResultsBody.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+  bulkResultsBody.querySelectorAll('input[type="checkbox"]').forEach((cbEl) => {
+    const cb = /** @type {HTMLInputElement} */ (cbEl);
     cb.checked = bulkSelectAll.checked;
-    const domain = cb.closest('tr')?.dataset.domain;
+    const domain = /** @type {HTMLElement | null} */ (cb.closest('tr'))?.dataset.domain;
     if (!domain) return;
     if (cb.checked) bulkSelected.add(domain);
     else bulkSelected.delete(domain);
@@ -291,25 +292,30 @@ bulkSelectAll.addEventListener('change', () => {
 // clicks from the shortlist panel table (which needs to revert that row's
 // star here if it's currently visible in the bulk results too).
 document.addEventListener('click', (e) => {
-  const starBtn = e.target.closest('.star-btn');
-  if (starBtn) {
+  const target = /** @type {HTMLElement} */ (e.target);
+  const starBtn = target.closest('.star-btn');
+  if (starBtn instanceof HTMLElement) {
     const record = bulkResults.find((r) => r.domain === starBtn.dataset.domain);
     if (record) {
       toggleShortlist(record);
       const nowStarred = isShortlisted(record.domain);
+      const label = `${nowStarred ? 'Remove from' : 'Add to'} shortlist`;
       starBtn.textContent = nowStarred ? '★' : '☆';
-      starBtn.title = `${nowStarred ? 'Remove from' : 'Add to'} shortlist`;
+      starBtn.title = label;
+      starBtn.setAttribute('aria-label', label);
+      starBtn.setAttribute('aria-pressed', String(nowStarred));
     }
     return;
   }
-  const removeBtn = e.target.closest('.shortlist-remove-btn');
-  if (removeBtn) {
-    toggleShortlist({ domain: removeBtn.dataset.domain });
+  const removeBtn = target.closest('.shortlist-remove-btn');
+  if (removeBtn instanceof HTMLElement) {
+    const removeDomain = removeBtn.dataset.domain;
+    toggleShortlist({ domain: removeDomain });
     // re-render any visible bulk row for this domain so its star reverts
-    const tr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(removeBtn.dataset.domain)}"]`);
-    const record = bulkResults.find((r) => r.domain === removeBtn.dataset.domain);
+    const tr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(removeDomain ?? '')}"]`);
+    const record = bulkResults.find((r) => r.domain === removeDomain);
     if (tr && record) {
-      const checked = tr.querySelector('input[type="checkbox"]')?.checked;
+      const checked = /** @type {HTMLInputElement | null} */ (tr.querySelector('input[type="checkbox"]'))?.checked;
       tr.innerHTML = `<td><input type="checkbox" ${checked ? 'checked' : ''}/></td>${bulkRowCellsHtml(record)}`;
       wireBulkRowCheckbox(tr, record.domain);
     }
@@ -322,10 +328,10 @@ function wireSortableColumn(headerEl, scoreFn) {
   let descending = true;
   headerEl.addEventListener('click', () => {
     const byDomain = new Map(bulkResults.map((r) => [r.domain, r]));
-    const rows = [...bulkResultsBody.querySelectorAll('tr[data-domain]')];
+    const rows = /** @type {HTMLElement[]} */ ([...bulkResultsBody.querySelectorAll('tr[data-domain]')]);
     rows.sort((a, b) => {
-      const scoreA = scoreFn(byDomain.get(a.dataset.domain) || {}) ?? -1;
-      const scoreB = scoreFn(byDomain.get(b.dataset.domain) || {}) ?? -1;
+      const scoreA = scoreFn(byDomain.get(a.dataset.domain ?? '') || {}) ?? -1;
+      const scoreB = scoreFn(byDomain.get(b.dataset.domain ?? '') || {}) ?? -1;
       return descending ? scoreB - scoreA : scoreA - scoreB;
     });
     rows.forEach((tr) => bulkResultsBody.appendChild(tr));
@@ -333,8 +339,8 @@ function wireSortableColumn(headerEl, scoreFn) {
   });
 }
 
-wireSortableColumn(document.getElementById('bulk-sort-score'), computeOpportunityScore);
-wireSortableColumn(document.getElementById('bulk-sort-risk'), computeRiskScore);
+wireSortableColumn(/** @type {HTMLElement} */ (document.getElementById('bulk-sort-score')), computeOpportunityScore);
+wireSortableColumn(/** @type {HTMLElement} */ (document.getElementById('bulk-sort-risk')), computeRiskScore);
 
 // fast: RDAP-only scan (default for a fresh run over a candidate list).
 // append: true means this is a deep-check follow-up on an existing table -
@@ -362,6 +368,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
   bulkExportBtn.style.display = 'inline-block';
   bulkProgressWrap.classList.add('visible');
   bulkProgressFill.style.width = '0%';
+  bulkProgressTrack.setAttribute('aria-valuenow', '0');
   bulkProgressLabel.textContent = `Processed 0 / ${uniqueDomains.length}`;
   submitBtn.disabled = true;
   bulkDeepCheckBtn.disabled = true;
@@ -394,8 +401,10 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     }
     processed += 1;
     upsertBulkRow(record);
+    const percent = Math.round((processed / total) * 100);
     bulkProgressLabel.textContent = `Processed ${processed} / ${total}`;
-    bulkProgressFill.style.width = `${Math.round((processed / total) * 100)}%`;
+    bulkProgressFill.style.width = `${percent}%`;
+    bulkProgressTrack.setAttribute('aria-valuenow', String(percent));
   });
 
   if (signal.aborted) {
@@ -417,7 +426,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
 // the shortlist) rather than being tracked separately until submit - so
 // there's exactly one place that decides what gets scanned.
 bulkFileInput.addEventListener('change', async () => {
-  const file = bulkFileInput.files[0];
+  const file = bulkFileInput.files?.[0];
   if (!file) return;
 
   let text;
@@ -458,6 +467,6 @@ bulkDeepCheckBtn.addEventListener('click', () => {
   runBulkLookup(truncated, { fast: false, append: true });
 });
 
-document.getElementById('shortlist-export-btn').addEventListener('click', () => {
+/** @type {HTMLButtonElement} */ (document.getElementById('shortlist-export-btn')).addEventListener('click', () => {
   exportCsv(loadShortlist(), `domain-shortlist-${Date.now()}.csv`);
 });

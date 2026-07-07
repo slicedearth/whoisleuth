@@ -227,7 +227,11 @@ function buildSignalChips(body) {
     chips.push(signalChip(ACTIVITY_LABELS[body.activityStatus], tone));
   }
 
-  if (body.hasMx) chips.push(signalChip('Mail configured', 'warn'));
+  const mailParts = [];
+  if (body.hasMx) mailParts.push('MX');
+  if (body.hasSpf) mailParts.push('SPF');
+  if (body.hasDmarc) mailParts.push('DMARC');
+  if (mailParts.length) chips.push(signalChip(`Mail: ${mailParts.join('+')}`, 'warn'));
 
   return chips.join('');
 }

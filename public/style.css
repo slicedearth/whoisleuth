@@ -12,6 +12,20 @@
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 * { box-sizing: border-box; }
+/* Screen-reader-only content - visually hidden but still announced, for
+   labels on inputs whose visible cue is a placeholder (which disappears on
+   input and isn't a reliable label substitute) or an icon-only column. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 body {
   margin: 0;
   background: var(--bg);
@@ -71,6 +85,7 @@ header p {
 }
 #query-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(94, 179, 255, 0.35);
 }
 .file-upload-label {
   display: inline-flex;
@@ -100,6 +115,7 @@ input[type="text"] {
 }
 input[type="text"]:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(94, 179, 255, 0.35);
 }
 details.generator {
   margin-top: 14px;
@@ -391,12 +407,25 @@ footer a { color: var(--accent); }
   align-items: center;
   flex-wrap: wrap;
 }
-button.secondary {
+button.secondary, a.secondary {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
 }
-button.secondary:hover { border-color: var(--accent); }
+button.secondary:hover, a.secondary:hover { border-color: var(--accent); }
+/* <a> doesn't inherit <button>'s box model/typography by default the way
+   a.secondary's color/border above assumes - only needed here since
+   privacy.html uses a .secondary link, not a button, for "Back to app". */
+a.secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  cursor: pointer;
+}
 .bulk-status { font-size: 0.85rem; color: var(--muted); }
 
 .progress-wrap {
@@ -450,6 +479,23 @@ table.bulk-results th {
   letter-spacing: 0.04em;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+}
+/* Makes the sortable column headers (Opportunity/Risk) real, keyboard-
+   operable <button>s instead of a click handler on a <th> only a mouse
+   could reach, while still looking like plain header text. */
+.sort-header-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.sort-header-btn:hover, .sort-header-btn:focus-visible {
+  color: var(--accent);
 }
 table.bulk-results td {
   padding: 8px 10px;
@@ -515,6 +561,33 @@ table.bulk-results tbody tr.released td { background: rgba(126, 224, 168, 0.08);
   margin-bottom: 12px;
   outline: none;
 }
-.login-form input[type="password"]:focus { border-color: var(--accent); }
+.login-form input[type="password"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94, 179, 255, 0.35); }
 .login-form button { width: 100%; padding: 10px; }
 .login-form .error-text { margin-top: 12px; font-size: 0.9rem; }
+
+/* privacy.html - reuses .wrap for the page container/header, adds its own
+   heading/paragraph rhythm since the rest of the app has no generic h2/p
+   styling (every other page's text lives inside specific component
+   classes like .kv-grid or .bulk-label, none of which fit a policy page). */
+.privacy-page h2 {
+  font-size: 1.05rem;
+  margin: 28px 0 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.privacy-page h2:first-of-type { border-top: none; padding-top: 0; margin-top: 20px; }
+.privacy-page p, .privacy-page li {
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+.privacy-page ul { padding-left: 20px; margin: 8px 0; }
+.privacy-page a { color: var(--accent); }
+.privacy-page code {
+  font-family: var(--mono);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}

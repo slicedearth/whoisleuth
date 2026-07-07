@@ -13,9 +13,10 @@ import './ct-search.js';
 import './auth.js';
 import './watchlist.js';
 
-document.querySelectorAll('.chip').forEach((chip) => {
+document.querySelectorAll('.chip').forEach((chipEl) => {
+  const chip = /** @type {HTMLElement} */ (chipEl);
   chip.addEventListener('click', () => {
-    queryInput.value = chip.dataset.example;
+    queryInput.value = chip.dataset.example ?? '';
     form.requestSubmit();
   });
 });

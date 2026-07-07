@@ -8,11 +8,12 @@ import { escapeHtml } from './utils.js';
 import { fillQueryInputWithCandidates } from './dom.js';
 import { showGate } from './auth.js';
 
-const runBtn = document.getElementById('ct-search-run-btn');
-const statusEl = document.getElementById('ct-search-status');
+const runBtn = /** @type {HTMLButtonElement} */ (document.getElementById('ct-search-run-btn'));
+const statusEl = /** @type {HTMLElement} */ (document.getElementById('ct-search-status'));
+const keywordInput = /** @type {HTMLInputElement} */ (document.getElementById('ct-search-keyword'));
 
 runBtn.addEventListener('click', async () => {
-  const keyword = document.getElementById('ct-search-keyword').value.trim();
+  const keyword = keywordInput.value.trim();
   if (!keyword) {
     statusEl.innerHTML = '<span class="error-text">Enter a brand/keyword to search for.</span>';
     return;

@@ -6,7 +6,8 @@
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p public/tsconfig.json"
   },
   "engines": {
     "node": ">=18"
@@ -14,5 +15,9 @@
   "dependencies": {
     "express": "^4.19.2",
     "undici": "^7.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3"
   }
 }

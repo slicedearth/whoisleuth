@@ -27,9 +27,13 @@ export function formatPrivacyCell(v) {
   return '—';
 }
 
-export function formatActivityCell(v, hasMx) {
+export function formatActivityCell(v, hasMx, hasSpf, hasDmarc) {
   const label = ACTIVITY_LABELS[v] || '—';
-  return hasMx ? `${label} · Mail configured` : label;
+  const mailParts = [];
+  if (hasMx) mailParts.push('MX');
+  if (hasSpf) mailParts.push('SPF');
+  if (hasDmarc) mailParts.push('DMARC');
+  return mailParts.length ? `${label} · ${mailParts.join('+')}` : label;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +153,13 @@ export function explainRiskScore(r) {
   if (r.hasMx) {
     factors.push({ label: 'Mail server configured', delta: 20 });
     score += 20;
+  }
+  if (r.hasSpf && r.hasDmarc) {
+    factors.push({ label: 'Outbound mail fully configured (SPF + DMARC)', delta: 15 });
+    score += 15;
+  } else if (r.hasSpf || r.hasDmarc) {
+    factors.push({ label: 'Partial outbound mail config (SPF or DMARC)', delta: 5 });
+    score += 5;
   }
   if (r.privacyProtected === true) {
     factors.push({ label: 'WHOIS privacy protected', delta: 10 });

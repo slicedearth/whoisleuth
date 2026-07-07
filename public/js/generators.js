@@ -54,10 +54,15 @@ function generateDomainCandidates(rawKeyword, tlds) {
   return candidates;
 }
 
-document.getElementById('generator-run-btn').addEventListener('click', () => {
-  const keyword = document.getElementById('generator-keyword').value;
-  const tlds = parseTldList(document.getElementById('generator-tlds').value);
-  const statusEl = document.getElementById('generator-status');
+const generatorRunBtn = /** @type {HTMLButtonElement} */ (document.getElementById('generator-run-btn'));
+const generatorKeywordInput = /** @type {HTMLInputElement} */ (document.getElementById('generator-keyword'));
+const generatorTldsInput = /** @type {HTMLInputElement} */ (document.getElementById('generator-tlds'));
+const generatorStatusEl = /** @type {HTMLElement} */ (document.getElementById('generator-status'));
+
+generatorRunBtn.addEventListener('click', () => {
+  const keyword = generatorKeywordInput.value;
+  const tlds = parseTldList(generatorTldsInput.value);
+  const statusEl = generatorStatusEl;
   const candidates = generateDomainCandidates(keyword, tlds);
 
   if (candidates.length === 0) {
@@ -218,10 +223,15 @@ function generateTyposquatVariants(rawInput, fallbackTlds) {
   return candidates;
 }
 
-document.getElementById('typo-run-btn').addEventListener('click', () => {
-  const keyword = document.getElementById('typo-keyword').value;
-  const tlds = parseTldList(document.getElementById('typo-tlds').value);
-  const statusEl = document.getElementById('typo-status');
+const typoRunBtn = /** @type {HTMLButtonElement} */ (document.getElementById('typo-run-btn'));
+const typoKeywordInput = /** @type {HTMLInputElement} */ (document.getElementById('typo-keyword'));
+const typoTldsInput = /** @type {HTMLInputElement} */ (document.getElementById('typo-tlds'));
+const typoStatusEl = /** @type {HTMLElement} */ (document.getElementById('typo-status'));
+
+typoRunBtn.addEventListener('click', () => {
+  const keyword = typoKeywordInput.value;
+  const tlds = parseTldList(typoTldsInput.value);
+  const statusEl = typoStatusEl;
   const candidates = generateTyposquatVariants(keyword, tlds);
 
   if (candidates.length === 0) {

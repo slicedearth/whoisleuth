@@ -51,8 +51,9 @@ export function toCsvValue(v) {
 // for that button's domain, or a falsy value if there's nothing to copy.
 export function wireCopyToClipboard(buttonClass, getText) {
   document.addEventListener('click', async (e) => {
-    const btn = e.target.closest(`.${buttonClass}`);
-    if (!btn) return;
+    const target = /** @type {HTMLElement} */ (e.target);
+    const btn = target.closest(`.${buttonClass}`);
+    if (!(btn instanceof HTMLElement)) return;
     const text = getText(btn.dataset.domain);
     if (!text) return;
     try {
@@ -66,6 +67,21 @@ export function wireCopyToClipboard(buttonClass, getText) {
       /* clipboard access denied - the mailto link above still works as a fallback */
     }
   });
+}
+
+// Shared by CSV export (bulk.js) and JSON export (shortlist.js/watchlist.js) -
+// only the content/filename/MIME type differ, the actual "trigger a browser
+// download" mechanics are identical.
+export function downloadBlob(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export function readFileAsText(file) {

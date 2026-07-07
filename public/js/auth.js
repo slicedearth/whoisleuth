@@ -3,12 +3,12 @@
 // HttpOnly (deliberately unreadable from JS) so this always asks the
 // server rather than inspecting document.cookie.
 
-const loginGate = document.getElementById('login-gate');
-const appWrap = document.getElementById('app-wrap');
-const loginForm = document.getElementById('login-form');
-const loginPassword = document.getElementById('login-password');
-const loginError = document.getElementById('login-error');
-const logoutBtn = document.getElementById('logout-btn');
+const loginGate = /** @type {HTMLElement} */ (document.getElementById('login-gate'));
+const appWrap = /** @type {HTMLElement} */ (document.getElementById('app-wrap'));
+const loginForm = /** @type {HTMLFormElement} */ (document.getElementById('login-form'));
+const loginPassword = /** @type {HTMLInputElement} */ (document.getElementById('login-password'));
+const loginError = /** @type {HTMLElement} */ (document.getElementById('login-error'));
+const logoutBtn = /** @type {HTMLButtonElement} */ (document.getElementById('logout-btn'));
 
 function showApp() {
   loginGate.style.display = 'none';

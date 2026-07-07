@@ -6,7 +6,7 @@
 // registration - gets flagged, and the reverse (a lapsed lookalike, a fresh
 // acquisition opportunity) is flagged too.
 
-import { escapeHtml } from './utils.js';
+import { escapeHtml, downloadBlob, readFileAsText } from './utils.js';
 import { fillQueryInputWithCandidates, bulkStatus } from './dom.js';
 import { runBulkLookup, getBulkResults, flagBulkRow } from './bulk.js';
 
@@ -57,6 +57,32 @@ export function clearAllWatchlists() {
   renderWatchlistPanel();
 }
 
+// Backup/restore for this browser's saved watchlists - same reasoning as
+// shortlist.js's export/import (localStorage-only, no server-side copy).
+// Import merges by name rather than replacing outright, so importing an
+// old backup can't silently wipe out watchlists saved since then.
+export function exportWatchlistsJson() {
+  downloadBlob(JSON.stringify(loadWatchlists(), null, 2), `domain-watchlists-${Date.now()}.json`, 'application/json;charset=utf-8;');
+}
+
+export function importWatchlistsJson(parsed) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Expected a JSON object mapping watchlist names to their saved results.');
+  }
+  const all = loadWatchlists();
+  let added = 0;
+  let updated = 0;
+  for (const [name, entry] of Object.entries(parsed)) {
+    if (!entry || !Array.isArray(entry.results)) continue;
+    if (all[name]) updated += 1;
+    else added += 1;
+    all[name] = entry;
+  }
+  saveWatchlists(all);
+  renderWatchlistPanel();
+  return { added, updated };
+}
+
 // Compares a previously-saved snapshot against a fresh scan and returns one
 // entry per domain whose state crossed the registered/open boundary in
 // either direction. Domains with no meaningful state change (including ones
@@ -87,10 +113,16 @@ function fmtCheckedDate(iso) {
   }
 }
 
+const watchlistBodyEl = /** @type {HTMLElement} */ (document.getElementById('watchlist-body'));
+const watchlistSaveBtn = /** @type {HTMLButtonElement} */ (document.getElementById('watchlist-save-btn'));
+const watchlistClearBtn = /** @type {HTMLButtonElement} */ (document.getElementById('watchlist-clear-btn'));
+const watchlistExportJsonBtn = /** @type {HTMLButtonElement} */ (document.getElementById('watchlist-export-json-btn'));
+const watchlistImportInput = /** @type {HTMLInputElement} */ (document.getElementById('watchlist-import-file'));
+
 export function renderWatchlistPanel() {
   const all = loadWatchlists();
   const names = Object.keys(all).sort();
-  document.getElementById('watchlist-body').innerHTML = names
+  watchlistBodyEl.innerHTML = names
     .map((name) => {
       const entry = all[name];
       return `
@@ -108,7 +140,7 @@ export function renderWatchlistPanel() {
     .join('');
 }
 
-document.getElementById('watchlist-save-btn').addEventListener('click', () => {
+watchlistSaveBtn.addEventListener('click', () => {
   const results = getBulkResults();
   if (results.length === 0) {
     bulkStatus.innerHTML = '<span class="error-text">Run a bulk scan first, then save its results as a watchlist.</span>';
@@ -120,16 +152,37 @@ document.getElementById('watchlist-save-btn').addEventListener('click', () => {
   bulkStatus.textContent = `Saved "${name}" as a watchlist (${results.length} domains).`;
 });
 
-document.getElementById('watchlist-clear-btn').addEventListener('click', () => {
+watchlistClearBtn.addEventListener('click', () => {
   if (Object.keys(loadWatchlists()).length === 0) return;
   if (!window.confirm('Delete every saved watchlist? This cannot be undone.')) return;
   clearAllWatchlists();
 });
 
+watchlistExportJsonBtn.addEventListener('click', () => {
+  if (Object.keys(loadWatchlists()).length === 0) return;
+  exportWatchlistsJson();
+});
+
+watchlistImportInput.addEventListener('change', async () => {
+  const file = watchlistImportInput.files?.[0];
+  if (!file) return;
+  try {
+    const parsed = JSON.parse(await readFileAsText(file));
+    const { added, updated } = importWatchlistsJson(parsed);
+    bulkStatus.textContent = `Imported ${file.name}: ${added} added, ${updated} updated watchlist${added + updated === 1 ? '' : 's'}.`;
+  } catch (err) {
+    bulkStatus.innerHTML = `<span class="error-text">Could not import watchlists: ${escapeHtml(err.message)}</span>`;
+  } finally {
+    watchlistImportInput.value = ''; // consumed - allow re-selecting the same file later
+  }
+});
+
 document.addEventListener('click', async (e) => {
-  const rescanBtn = e.target.closest('.watchlist-rescan-btn');
-  if (rescanBtn) {
+  const target = /** @type {HTMLElement} */ (e.target);
+  const rescanBtn = target.closest('.watchlist-rescan-btn');
+  if (rescanBtn instanceof HTMLElement) {
     const name = rescanBtn.dataset.name;
+    if (!name) return;
     const all = loadWatchlists();
     const entry = all[name];
     if (!entry) return;
@@ -151,8 +204,8 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  const deleteBtn = e.target.closest('.watchlist-delete-btn');
-  if (deleteBtn) {
+  const deleteBtn = target.closest('.watchlist-delete-btn');
+  if (deleteBtn instanceof HTMLElement) {
     deleteWatchlist(deleteBtn.dataset.name);
   }
 });
