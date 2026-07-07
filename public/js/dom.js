@@ -32,6 +32,7 @@ export const bulkFileInput = /** @type {HTMLInputElement} */ (document.getElemen
 export const bulkCancelBtn = /** @type {HTMLButtonElement} */ (document.getElementById('bulk-cancel-btn'));
 export const bulkDeepCheckBtn = /** @type {HTMLButtonElement} */ (document.getElementById('bulk-deep-check-btn'));
 export const bulkExportBtn = /** @type {HTMLButtonElement} */ (document.getElementById('bulk-export-btn'));
+export const bulkDensityBtn = /** @type {HTMLButtonElement} */ (document.getElementById('bulk-density-btn'));
 export const bulkStatus = /** @type {HTMLElement} */ (document.getElementById('bulk-status'));
 export const bulkProgressWrap = /** @type {HTMLElement} */ (document.getElementById('bulk-progress-wrap'));
 export const bulkProgressTrack = /** @type {HTMLElement} */ (document.getElementById('bulk-progress-track'));

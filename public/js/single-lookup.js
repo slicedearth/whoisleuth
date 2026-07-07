@@ -6,8 +6,16 @@ import { renderRdap, renderWhois, renderAvailability } from './render.js';
 import { panels, rdapOutput, whoisOutput, rdapBadge, whoisBadge, availabilityCard, availabilityScores, submitBtn } from './dom.js';
 import { showGate } from './auth.js';
 
+const EMPTY_STATE_ICON =
+  '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
+
+function emptyStateHtml(text) {
+  return `<div class="empty-state">${EMPTY_STATE_ICON}<span class="placeholder">${text}</span></div>`;
+}
+
 function setLoading(el, badgeEl) {
-  el.innerHTML = '<span class="placeholder">Looking up<span class="spinner"></span></span>';
+  el.innerHTML =
+    '<div class="skeleton-lines" aria-hidden="true"><div class="skeleton-line" style="width:35%;"></div><div class="skeleton-line" style="width:70%;"></div><div class="skeleton-line" style="width:55%;"></div><div class="skeleton-line" style="width:60%;"></div></div><span class="visually-hidden">Looking up…</span>';
   if (badgeEl) badgeEl.textContent = '';
 }
 
@@ -67,8 +75,8 @@ export async function runSingleLookup(q) {
 }
 
 export function clearSingleResults() {
-  rdapOutput.innerHTML = '<span class="placeholder">RDAP results will appear here.</span>';
-  whoisOutput.innerHTML = '<span class="placeholder">WHOIS referral chain will appear here.</span>';
+  rdapOutput.innerHTML = emptyStateHtml('RDAP results will appear here.');
+  whoisOutput.innerHTML = emptyStateHtml('WHOIS referral chain will appear here.');
   rdapBadge.textContent = '';
   whoisBadge.textContent = '';
   availabilityScores.innerHTML = '';

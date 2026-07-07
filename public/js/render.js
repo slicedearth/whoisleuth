@@ -246,6 +246,7 @@ export function renderAvailability(body) {
   availabilityDomain.textContent = body.domain || '';
 
   const state = body.state || 'unknown';
+  availabilityCard.dataset.state = state;
   availabilityPill.className = `status-pill ${state}`;
   availabilityPill.textContent = PILL_LABELS[state] || state;
   availabilityDetail.textContent = body.detail || '';

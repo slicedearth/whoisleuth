@@ -51,6 +51,8 @@ body {
 }
 header h1 {
   font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   margin: 0 0 4px;
 }
 .brand-logo {
@@ -82,6 +84,7 @@ header p {
   min-height: 48px;
   max-height: 220px;
   resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 #query-input:focus {
   border-color: var(--accent);
@@ -99,6 +102,7 @@ header p {
   font-size: 0.95rem;
   font-weight: 600;
   white-space: nowrap;
+  transition: border-color 0.15s ease;
 }
 .file-upload-label:hover {
   border-color: var(--accent);
@@ -112,6 +116,7 @@ input[type="text"] {
   border-radius: 8px;
   font-size: 0.9rem;
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 input[type="text"]:focus {
   border-color: var(--accent);
@@ -139,8 +144,10 @@ button {
   border-radius: 8px;
   cursor: pointer;
   font-size: 0.95rem;
+  transition: filter 0.15s ease, transform 0.1s ease;
 }
 button:hover { filter: brightness(1.08); }
+button:active:not(:disabled) { transform: scale(0.98); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .examples {
@@ -163,6 +170,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 0.8rem;
   text-decoration: none;
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 .chip:hover {
   border-color: var(--accent);
@@ -174,11 +182,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 24px;
   background: var(--panel);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
   border-radius: 10px;
   padding: 18px 20px;
   display: none;
 }
 .availability.visible { display: block; }
+/* Left-border accent ties the card's color straight to its status, the same
+   five states .status-pill/.mini-pill already use - a glance at the edge of
+   the card tells you the state before you've read the pill text. */
+.availability[data-state="available"] { border-left-color: var(--accent2); }
+.availability[data-state="registered"] { border-left-color: var(--accent); }
+.availability[data-state="for_sale"] { border-left-color: var(--amber); }
+.availability[data-state="expiring"] { border-left-color: var(--purple); }
 .availability-top {
   display: flex;
   align-items: center;
@@ -189,10 +205,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 14px;
+  padding: 6px 16px;
   border-radius: 999px;
-  font-weight: 700;
-  font-size: 0.85rem;
+  font-weight: 800;
+  font-size: 0.92rem;
   letter-spacing: 0.02em;
 }
 /* Shared availability-state colors - .status-pill (availability card) and
@@ -206,13 +222,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status-pill.unknown, .status-pill.error, .mini-pill.unknown, .mini-pill.error { background: rgba(139, 147, 167, 0.15); color: var(--muted); }
 .availability-domain {
   font-family: var(--mono);
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 .availability-detail {
   margin-top: 10px;
   color: var(--muted);
   font-size: 0.88rem;
+}
+/* Opportunity/Risk score chips are secondary to the status pill above them -
+   forcing them onto their own row (rather than competing for space in the
+   same flex line) and dialing down their size/weight keeps the state pill
+   as the one thing that reads first. */
+#availability-scores {
+  flex-basis: 100%;
+  margin-top: 2px;
+}
+#availability-scores .signal-chip {
+  font-size: 0.72rem;
+  padding: 2px 9px;
+  font-weight: 600;
 }
 .confidence-note {
   display: inline-block;
@@ -244,6 +273,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .panel h2 {
   font-size: 1rem;
+  font-weight: 700;
   margin: 0;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
@@ -274,6 +304,34 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .placeholder { color: var(--muted); font-family: inherit; }
 .error-text { color: var(--error); }
 
+/* Empty state (before a lookup) and skeleton loader (while one is in
+   flight) for the RDAP/WHOIS panels - replaces plain "results will appear
+   here" text with something that reads as "nothing to show yet" vs. "still
+   working" at a glance instead of identical muted text either way. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 0;
+  color: var(--muted);
+  text-align: center;
+}
+.empty-state svg { opacity: 0.45; }
+.skeleton-lines { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--border) 25%, rgba(255, 255, 255, 0.08) 37%, var(--border) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
 /* Readable key/value summary */
 .kv-grid {
   display: grid;
@@ -297,7 +355,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 18px 0 8px;
 }
 .section-title:first-child { margin-top: 0; }
-.badge-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge-list { display: flex; flex-wrap: wrap; gap: 5px 6px; }
 .status-chip {
   background: rgba(94, 179, 255, 0.12);
   color: var(--accent);
@@ -411,6 +469,7 @@ button.secondary, a.secondary {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 button.secondary:hover, a.secondary:hover { border-color: var(--accent); }
 /* <a> doesn't inherit <button>'s box model/typography by default the way
@@ -493,6 +552,7 @@ table.bulk-results th {
   text-transform: inherit;
   letter-spacing: inherit;
   cursor: pointer;
+  transition: color 0.15s ease;
 }
 .sort-header-btn:hover, .sort-header-btn:focus-visible {
   color: var(--accent);
@@ -503,8 +563,18 @@ table.bulk-results td {
   vertical-align: top;
   max-width: 220px;
   overflow-wrap: break-word;
+  transition: padding 0.15s ease;
 }
 table.bulk-results td.domain-cell { font-family: var(--mono); }
+/* Compact density toggle - a 2000-row scan fits far more above the fold
+   with tighter row padding, at the cost of some breathing room. */
+.bulk-results-wrap.compact table.bulk-results th,
+.bulk-results-wrap.compact table.bulk-results td {
+  padding: 3px 8px;
+}
+.bulk-results-wrap.compact table.bulk-results {
+  font-size: 0.72rem;
+}
 .mini-pill {
   display: inline-block;
   padding: 2px 8px;

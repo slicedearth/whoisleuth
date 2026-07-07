@@ -29,6 +29,7 @@ import {
   bulkCancelBtn,
   bulkDeepCheckBtn,
   bulkExportBtn,
+  bulkDensityBtn,
   bulkStatus,
   bulkProgressWrap,
   bulkProgressTrack,
@@ -274,7 +275,14 @@ export function clearBulkResults() {
   bulkExportBtn.disabled = true;
   bulkDeepCheckBtn.style.display = 'none';
   bulkExportBtn.style.display = 'none';
+  bulkDensityBtn.style.display = 'none';
 }
+
+bulkDensityBtn.addEventListener('click', () => {
+  const nowCompact = bulkResultsWrap.classList.toggle('compact');
+  bulkDensityBtn.textContent = nowCompact ? 'Comfortable rows' : 'Compact rows';
+  bulkDensityBtn.setAttribute('aria-pressed', String(nowCompact));
+});
 
 bulkSelectAll.addEventListener('change', () => {
   bulkResultsBody.querySelectorAll('input[type="checkbox"]').forEach((cbEl) => {
@@ -366,6 +374,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
   bulkExportBtn.disabled = true;
   bulkDeepCheckBtn.style.display = 'inline-block';
   bulkExportBtn.style.display = 'inline-block';
+  bulkDensityBtn.style.display = 'inline-block';
   bulkProgressWrap.classList.add('visible');
   bulkProgressFill.style.width = '0%';
   bulkProgressTrack.setAttribute('aria-valuenow', '0');
