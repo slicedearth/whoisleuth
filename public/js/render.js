@@ -76,6 +76,8 @@ export function renderRdap(type, parsed, rawData) {
 
     html += entityBlock('Registrar', parsed.registrar);
     html += entityBlock('Registrant', parsed.registrant);
+    html += entityBlock('Technical contact', parsed.technical);
+    html += entityBlock('Billing contact', parsed.billing);
     html += entityBlock('Abuse contact', parsed.abuse);
   } else if (type === 'ipv4' || type === 'ipv6') {
     html += `<dl class="kv-grid">${kv('Name', parsed.name)}${kv('Handle', parsed.handle)}${kv(
@@ -131,7 +133,15 @@ function hasParsedWhoisFields(parsed) {
       parsed.registrantEmail ||
       parsed.adminName ||
       parsed.adminOrg ||
-      parsed.adminEmail
+      parsed.adminEmail ||
+      parsed.techName ||
+      parsed.techOrg ||
+      parsed.techEmail ||
+      parsed.billingName ||
+      parsed.billingOrg ||
+      parsed.billingEmail ||
+      parsed.eligibilityType ||
+      parsed.eligibilityId
   );
 }
 
@@ -153,6 +163,8 @@ export function renderWhois(parsed, chain) {
     html += kv('Abuse email', parsed.abuseEmail);
     html += kv('Abuse phone', parsed.abusePhone);
     html += kv('DNSSEC', parsed.dnssec);
+    html += kv('Eligibility type', parsed.eligibilityType);
+    html += kv('Eligibility ID', parsed.eligibilityId);
     html += '</dl>';
 
     if (parsed.statuses && parsed.statuses.length) {
@@ -178,6 +190,19 @@ export function renderWhois(parsed, chain) {
       name: parsed.adminName,
       org: parsed.adminOrg,
       email: parsed.adminEmail,
+      phone: parsed.adminPhone,
+    });
+    html += entityBlock('Technical contact', {
+      name: parsed.techName,
+      org: parsed.techOrg,
+      email: parsed.techEmail,
+      phone: parsed.techPhone,
+    });
+    html += entityBlock('Billing contact', {
+      name: parsed.billingName,
+      org: parsed.billingOrg,
+      email: parsed.billingEmail,
+      phone: parsed.billingPhone,
     });
   }
 
