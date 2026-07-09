@@ -256,43 +256,52 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .panels {
   margin-top: 24px;
   display: none;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
 }
-.panels.visible { display: grid; }
-@media (max-width: 760px) {
-  .panels.visible { grid-template-columns: 1fr; }
+.panels.visible { display: block; }
+/* Summary/RDAP/WHOIS tab strip - Summary is the default view (a merged,
+   deduped read of both sources); RDAP and WHOIS stay exactly as they were,
+   just one click away instead of two permanently-visible, largely
+   duplicate panels. */
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-tab {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.88rem;
+  padding: 10px 16px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.panel-tab:hover { color: var(--text); }
+.panel-tab[aria-selected="true"] {
+  color: var(--text);
+  background: var(--panel);
 }
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0 10px 10px 10px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-.panel h2 {
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-.panel h2 span:first-child {
-  flex: 0 0 auto;
-}
-.panel h2 .badge {
+/* The native `hidden` attribute sets display:none via the browser's default
+   stylesheet, which the `display: flex` above - being an author rule -
+   otherwise overrides regardless of selector specificity. */
+.panel[hidden] { display: none; }
+.panel-source {
   font-size: 0.68rem;
   font-weight: 500;
   color: var(--muted);
   font-family: var(--mono);
-  text-align: right;
   word-break: break-all;
-  min-width: 0;
+  margin-bottom: 10px;
 }
 .panel-body {
   padding: 14px 16px;

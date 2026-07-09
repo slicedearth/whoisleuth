@@ -13,10 +13,18 @@ export const queryInput = /** @type {HTMLTextAreaElement} */ (document.getElemen
 export const submitBtn = /** @type {HTMLButtonElement} */ (document.getElementById('submit-btn'));
 
 export const panels = /** @type {HTMLElement} */ (document.querySelector('.panels'));
+export const summaryOutput = /** @type {HTMLElement} */ (document.getElementById('summary-output'));
 export const rdapOutput = /** @type {HTMLElement} */ (document.getElementById('rdap-output'));
 export const whoisOutput = /** @type {HTMLElement} */ (document.getElementById('whois-output'));
 export const rdapBadge = /** @type {HTMLElement} */ (document.getElementById('rdap-badge'));
 export const whoisBadge = /** @type {HTMLElement} */ (document.getElementById('whois-badge'));
+
+export const tabSummary = /** @type {HTMLButtonElement} */ (document.getElementById('tab-summary'));
+export const tabRdap = /** @type {HTMLButtonElement} */ (document.getElementById('tab-rdap'));
+export const tabWhois = /** @type {HTMLButtonElement} */ (document.getElementById('tab-whois'));
+export const panelSummary = /** @type {HTMLElement} */ (document.getElementById('panel-summary'));
+export const panelRdap = /** @type {HTMLElement} */ (document.getElementById('panel-rdap'));
+export const panelWhois = /** @type {HTMLElement} */ (document.getElementById('panel-whois'));
 
 export const availabilityCard = /** @type {HTMLElement} */ (document.getElementById('availability-card'));
 export const availabilityDomain = /** @type {HTMLElement} */ (document.getElementById('availability-domain'));

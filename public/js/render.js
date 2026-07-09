@@ -236,6 +236,103 @@ export function renderWhois(parsed, chain) {
   return html;
 }
 
+// ---------------------------------------------------------------------------
+// Summary tab: one merged view instead of two near-duplicate panels. RDAP is
+// preferred per field (it's structured/typed), falling back to WHOIS's flat
+// fields when RDAP didn't have that field or wasn't available at all (e.g.
+// .edu, which has no RDAP support and relies on WHOIS for everything). This
+// mirrors the same RDAP-then-WHOIS fallback lib/availability.js already uses
+// for scoring - just applied to display instead.
+//
+// This does NOT flag disagreements between the two sources (e.g. one
+// redacting a field the other doesn't) - it silently prefers RDAP. The RDAP
+// and WHOIS tabs remain exactly as before for anyone who wants to compare
+// the two raw parsed views directly.
+// ---------------------------------------------------------------------------
+
+function findEvent(events, action) {
+  return (events || []).find((e) => e.action === action) || null;
+}
+
+// Builds an entity object (matching the {name, org, email, phone, address}
+// shape entityBlock expects) from a WHOIS parsed result's flat
+// `${prefix}Name`/`${prefix}Org`/etc. fields - the counterpart to RDAP's
+// entities, which already come back in that shape via summarizeEntity() in
+// lib/rdap.js.
+function entityFromWhoisFields(whois, prefix) {
+  const entity = {
+    name: whois[`${prefix}Name`] || null,
+    org: whois[`${prefix}Org`] || null,
+    email: whois[`${prefix}Email`] || null,
+    phone: whois[`${prefix}Phone`] || null,
+    address: whois[`${prefix}Address`] || null,
+  };
+  return Object.values(entity).some(Boolean) ? entity : null;
+}
+
+function mergeRdapWhois(rdap, whois) {
+  const r = rdap || {};
+  const w = whois || {};
+
+  const events = r.events || [];
+  const created = (findEvent(events, 'registration') || {}).date || w.createdDate || null;
+  const expires = (findEvent(events, 'expiration') || {}).date || w.expiryDate || null;
+  const updated = (findEvent(events, 'last changed') || {}).date || w.updatedDate || null;
+
+  return {
+    domain: r.domain || w.domainName || null,
+    dnssec: r.dnssec || w.dnssec || null,
+    registrar: r.registrar || (w.registrar ? { name: w.registrar, org: null, email: null, phone: null, address: null } : null),
+    registrarUrl: w.registrarUrl || null,
+    registrant: r.registrant || entityFromWhoisFields(w, 'registrant'),
+    admin: entityFromWhoisFields(w, 'admin'), // RDAP has no equivalent role parsed - WHOIS-only
+    technical: r.technical || entityFromWhoisFields(w, 'tech'),
+    billing: r.billing || entityFromWhoisFields(w, 'billing'),
+    abuse: r.abuse || (w.abuseEmail || w.abusePhone ? { name: null, org: null, email: w.abuseEmail || null, phone: w.abusePhone || null, address: null } : null),
+    created,
+    expires,
+    updated,
+    statuses: r.statuses && r.statuses.length ? r.statuses : w.statuses || [],
+    nameservers: r.nameservers && r.nameservers.length ? r.nameservers : w.nameservers || [],
+    eligibilityType: w.eligibilityType || null, // .au-style eligibility - WHOIS-only, not modeled in RDAP
+    eligibilityId: w.eligibilityId || null,
+  };
+}
+
+export function renderSummary(rdapParsed, whoisParsed) {
+  if (!rdapParsed && !whoisParsed) {
+    return `<span class="placeholder">No summary available - see the RDAP/WHOIS tabs for raw responses.</span>`;
+  }
+
+  const merged = mergeRdapWhois(rdapParsed, whoisParsed);
+  let html = '';
+
+  if (!rdapParsed) {
+    html += `<p class="placeholder" style="margin: 0 0 14px;">RDAP has no data for this domain - showing WHOIS only.</p>`;
+  } else if (!whoisParsed) {
+    html += `<p class="placeholder" style="margin: 0 0 14px;">WHOIS returned no structured data for this domain - showing RDAP only.</p>`;
+  }
+
+  html += `<dl class="kv-grid">${kv('Domain', merged.domain)}${kv('Registrar URL', merged.registrarUrl)}${kv('Created', fmtDate(merged.created))}${kv('Expires', fmtDate(merged.expires))}${kv('Last updated', fmtDate(merged.updated))}${kv('DNSSEC', merged.dnssec)}${kv('Eligibility type', merged.eligibilityType)}${kv('Eligibility ID', merged.eligibilityId)}</dl>`;
+
+  html += statusBlock(merged.statuses);
+
+  if (merged.nameservers.length) {
+    html += `<div class="section-title">Name servers</div><ul class="ns-list">${merged.nameservers
+      .map((ns) => `<li>${escapeHtml(ns)}</li>`)
+      .join('')}</ul>`;
+  }
+
+  html += entityBlock('Registrar', merged.registrar);
+  html += entityBlock('Registrant', merged.registrant);
+  html += entityBlock('Admin contact', merged.admin);
+  html += entityBlock('Technical contact', merged.technical, { collapsed: true });
+  html += entityBlock('Billing contact', merged.billing, { collapsed: true });
+  html += entityBlock('Abuse contact', merged.abuse);
+
+  return html;
+}
+
 export const PILL_LABELS = {
   available: 'Available to register',
   registered: 'Registered (active)',

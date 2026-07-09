@@ -174,16 +174,30 @@
   </section>
 
   <div class="panels">
-    <section class="panel">
-      <h2><span>RDAP</span><span class="badge" id="rdap-badge"></span></h2>
-      <div class="panel-body" id="rdap-output">
-        <div class="empty-state"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span class="placeholder">RDAP results will appear here.</span></div>
+    <div class="panel-tabs" role="tablist" aria-label="Lookup result view">
+      <button type="button" class="panel-tab" id="tab-summary" role="tab" aria-selected="true" aria-controls="panel-summary">Summary</button>
+      <button type="button" class="panel-tab" id="tab-rdap" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-rdap">RDAP</button>
+      <button type="button" class="panel-tab" id="tab-whois" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-whois">WHOIS</button>
+    </div>
+    <section class="panel" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
+      <div class="panel-body" id="summary-output">
+        <div class="empty-state"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span class="placeholder">A merged RDAP/WHOIS summary will appear here.</span></div>
       </div>
     </section>
-    <section class="panel">
-      <h2><span>WHOIS</span><span class="badge" id="whois-badge"></span></h2>
-      <div class="panel-body" id="whois-output">
-        <div class="empty-state"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span class="placeholder">WHOIS referral chain will appear here.</span></div>
+    <section class="panel" id="panel-rdap" role="tabpanel" aria-labelledby="tab-rdap" hidden>
+      <div class="panel-body">
+        <div class="panel-source" id="rdap-badge"></div>
+        <div id="rdap-output">
+          <div class="empty-state"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span class="placeholder">RDAP results will appear here.</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="panel" id="panel-whois" role="tabpanel" aria-labelledby="tab-whois" hidden>
+      <div class="panel-body">
+        <div class="panel-source" id="whois-badge"></div>
+        <div id="whois-output">
+          <div class="empty-state"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span class="placeholder">WHOIS referral chain will appear here.</span></div>
+        </div>
       </div>
     </section>
   </div>
