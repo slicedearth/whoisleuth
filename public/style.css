@@ -355,6 +355,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 18px 0 8px;
 }
 .section-title:first-child { margin-top: 0; }
+/* Collapsed-by-default sections (technical/billing contacts, status codes) -
+   same rhythm/weight as .section-title, but as a clickable <summary> so
+   less-commonly-needed data doesn't force a long scroll on data-rich
+   domains. */
+details.section-toggle {
+  margin-top: 18px;
+}
+details.section-toggle:first-child { margin-top: 0; }
+details.section-toggle > summary {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+details.section-toggle > summary:hover { color: var(--text); }
+details.section-toggle > .kv-grid,
+details.section-toggle > .badge-list {
+  margin-top: 8px;
+}
 .badge-list { display: flex; flex-wrap: wrap; gap: 5px 6px; }
 .status-chip {
   background: rgba(94, 179, 255, 0.12);

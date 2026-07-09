@@ -27,7 +27,12 @@ import {
   availabilityAbuseReport,
 } from './dom.js';
 
-function entityBlock(title, entity) {
+// collapsed: renders as a closed <details> (title in the summary) instead of
+// a permanently-visible section - for entities that exist on some registries
+// but are rarely what someone's looking for (technical/billing contacts),
+// so a data-rich domain's panel doesn't force a long scroll past sections
+// most lookups don't need.
+function entityBlock(title, entity, { collapsed = false } = {}) {
   if (!entity) return '';
   const rows = [
     entity.name ? kv('Name', entity.name) : '',
@@ -38,7 +43,18 @@ function entityBlock(title, entity) {
     entity.handle ? kv('Handle', entity.handle) : '',
   ].join('');
   if (!rows) return '';
-  return `<div class="section-title">${escapeHtml(title)}</div><dl class="kv-grid">${rows}</dl>`;
+  const body = `<dl class="kv-grid">${rows}</dl>`;
+  if (!collapsed) return `<div class="section-title">${escapeHtml(title)}</div>${body}`;
+  return `<details class="section-toggle"><summary>${escapeHtml(title)}</summary>${body}</details>`;
+}
+
+// Status codes are dense, jargon-heavy ("client transfer prohibited") and
+// rarely what someone's looking for - collapsed by default, with the count
+// visible so it's clear there's something there without expanding.
+function statusBlock(statuses) {
+  if (!statuses || !statuses.length) return '';
+  const chips = statuses.map((s) => `<span class="status-chip">${escapeHtml(s)}</span>`).join('');
+  return `<details class="section-toggle"><summary>Status (${statuses.length})</summary><div class="badge-list">${chips}</div></details>`;
 }
 
 function rawBlock(rawData) {
@@ -57,11 +73,7 @@ export function renderRdap(type, parsed, rawData) {
   if (type === 'domain') {
     html += `<dl class="kv-grid">${kv('Domain', parsed.domain)}${kv('Handle', parsed.handle)}${kv('DNSSEC', parsed.dnssec)}</dl>`;
 
-    if (parsed.statuses && parsed.statuses.length) {
-      html += `<div class="section-title">Status</div><div class="badge-list">${parsed.statuses
-        .map((s) => `<span class="status-chip">${escapeHtml(s)}</span>`)
-        .join('')}</div>`;
-    }
+    html += statusBlock(parsed.statuses);
 
     if (parsed.events && parsed.events.length) {
       const rows = parsed.events.map((e) => kv(e.action, fmtDate(e.date))).join('');
@@ -76,8 +88,8 @@ export function renderRdap(type, parsed, rawData) {
 
     html += entityBlock('Registrar', parsed.registrar);
     html += entityBlock('Registrant', parsed.registrant);
-    html += entityBlock('Technical contact', parsed.technical);
-    html += entityBlock('Billing contact', parsed.billing);
+    html += entityBlock('Technical contact', parsed.technical, { collapsed: true });
+    html += entityBlock('Billing contact', parsed.billing, { collapsed: true });
     html += entityBlock('Abuse contact', parsed.abuse);
   } else if (type === 'ipv4' || type === 'ipv6') {
     html += `<dl class="kv-grid">${kv('Name', parsed.name)}${kv('Handle', parsed.handle)}${kv(
@@ -167,11 +179,7 @@ export function renderWhois(parsed, chain) {
     html += kv('Eligibility ID', parsed.eligibilityId);
     html += '</dl>';
 
-    if (parsed.statuses && parsed.statuses.length) {
-      html += `<div class="section-title">Status</div><div class="badge-list">${parsed.statuses
-        .map((s) => `<span class="status-chip">${escapeHtml(s)}</span>`)
-        .join('')}</div>`;
-    }
+    html += statusBlock(parsed.statuses);
 
     if (parsed.nameservers && parsed.nameservers.length) {
       html += `<div class="section-title">Name servers</div><ul class="ns-list">${parsed.nameservers
@@ -192,18 +200,26 @@ export function renderWhois(parsed, chain) {
       email: parsed.adminEmail,
       phone: parsed.adminPhone,
     });
-    html += entityBlock('Technical contact', {
-      name: parsed.techName,
-      org: parsed.techOrg,
-      email: parsed.techEmail,
-      phone: parsed.techPhone,
-    });
-    html += entityBlock('Billing contact', {
-      name: parsed.billingName,
-      org: parsed.billingOrg,
-      email: parsed.billingEmail,
-      phone: parsed.billingPhone,
-    });
+    html += entityBlock(
+      'Technical contact',
+      {
+        name: parsed.techName,
+        org: parsed.techOrg,
+        email: parsed.techEmail,
+        phone: parsed.techPhone,
+      },
+      { collapsed: true }
+    );
+    html += entityBlock(
+      'Billing contact',
+      {
+        name: parsed.billingName,
+        org: parsed.billingOrg,
+        email: parsed.billingEmail,
+        phone: parsed.billingPhone,
+      },
+      { collapsed: true }
+    );
   }
 
   const rawChain = (chain || [])
