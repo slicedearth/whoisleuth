@@ -93,7 +93,7 @@ app.post('/api/login', loginRateLimit, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', requireAuth, (req, res) => {
   if (!isTrustedOrigin(req.headers)) {
     return res.status(403).json({ error: 'Cross-site request blocked' });
   }
