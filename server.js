@@ -12,6 +12,7 @@ const {
   checkPassword,
   createSessionToken,
   isValidSessionToken,
+  isTrustedOrigin,
   parseCookies,
   buildSessionCookie,
   buildClearCookie,
@@ -93,6 +94,9 @@ app.post('/api/login', loginRateLimit, (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
+  if (!isTrustedOrigin(req.headers)) {
+    return res.status(403).json({ error: 'Cross-site request blocked' });
+  }
   res.setHeader('Set-Cookie', buildClearCookie({ secure: isHttps(req) }));
   res.json({ ok: true });
 });
@@ -103,11 +107,17 @@ app.get('/api/session', (req, res) => {
 });
 
 app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
-  try {
-    const q = (req.query.q || '').toString().trim();
-    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+  const q = (req.query.q || '').toString().trim();
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
-    const { type, value } = classifyQuery(q);
+  let type, value;
+  try {
+    ({ type, value } = classifyQuery(q));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  try {
     const record = await fetchRdapRecord(type, value);
     if (!record) {
       return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
@@ -120,13 +130,18 @@ app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
 });
 
 app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+  let type, value;
   try {
-    const q = (req.query.q || '').toString().trim();
-    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+    ({ type, value } = classifyQuery(q));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 
-    const { type, value } = classifyQuery(q);
+  try {
     const chain = await buildWhoisChain(value);
-
     res.json({ query: q, type, chain, parsed: parseWhoisChain(chain) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -134,15 +149,20 @@ app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
 });
 
 app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+  let type, value;
   try {
-    const q = (req.query.q || '').toString().trim();
-    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+    ({ type, value } = classifyQuery(q));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  if (type !== 'domain') {
+    return res.json({ applicable: false, type });
+  }
 
-    const { type, value } = classifyQuery(q);
-    if (type !== 'domain') {
-      return res.json({ applicable: false, type });
-    }
-
+  try {
     const fast = req.query.fast === '1' || req.query.fast === 'true';
     const result = await checkDomainAvailability(value, { fast });
     res.json({ applicable: true, domain: value, ...result });
@@ -164,13 +184,20 @@ app.get('/api/ct-search', apiRateLimit, requireAuth, async (req, res) => {
 });
 
 app.get('/api/domain-posture', apiRateLimit, requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+  let type, value;
   try {
-    const q = (req.query.q || '').toString().trim();
-    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
-    const { type, value } = classifyQuery(q);
-    if (type !== 'domain') return res.status(400).json({ error: 'Domain posture audits only support domain names.' });
-    const domain = normalizeAuditDomain(value);
-    if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
+    ({ type, value } = classifyQuery(q));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  if (type !== 'domain') return res.status(400).json({ error: 'Domain posture audits only support domain names.' });
+  const domain = normalizeAuditDomain(value);
+  if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
+
+  try {
     const selectors = normalizeDkimSelectors((req.query.selectors || '').toString().split(','));
     res.json(await checkDomainPosture(domain, { dkimSelectors: selectors }));
   } catch (err) {

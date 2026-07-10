@@ -18,12 +18,17 @@ exports.handler = async (event) => {
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
 
+  let type, value;
   try {
-    const { type, value } = classifyQuery(q);
-    if (type !== 'domain') {
-      return json(200, { applicable: false, type });
-    }
+    ({ type, value } = classifyQuery(q));
+  } catch (err) {
+    return json(400, { error: err.message });
+  }
+  if (type !== 'domain') {
+    return json(200, { applicable: false, type });
+  }
 
+  try {
     const params = event.queryStringParameters || {};
     const fast = params.fast === '1' || params.fast === 'true';
     const result = await checkDomainAvailability(value, { fast });

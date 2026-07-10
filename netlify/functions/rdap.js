@@ -18,8 +18,14 @@ exports.handler = async (event) => {
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
 
+  let type, value;
   try {
-    const { type, value } = classifyQuery(q);
+    ({ type, value } = classifyQuery(q));
+  } catch (err) {
+    return json(400, { error: err.message });
+  }
+
+  try {
     const record = await fetchRdapRecord(type, value);
     if (!record) {
       return json(404, { error: `No RDAP registry found for "${q}" via IANA bootstrap` });

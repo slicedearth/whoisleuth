@@ -17,11 +17,18 @@ exports.handler = async (event) => {
   const params = event.queryStringParameters || {};
   const q = (params.q || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
+
+  let type, value;
   try {
-    const { type, value } = classifyQuery(q);
-    if (type !== 'domain') return json(400, { error: 'Domain posture audits only support domain names.' });
-    const domain = normalizeAuditDomain(value);
-    if (!domain) return json(400, { error: 'Invalid domain name for posture audit.' });
+    ({ type, value } = classifyQuery(q));
+  } catch (err) {
+    return json(400, { error: err.message });
+  }
+  if (type !== 'domain') return json(400, { error: 'Domain posture audits only support domain names.' });
+  const domain = normalizeAuditDomain(value);
+  if (!domain) return json(400, { error: 'Invalid domain name for posture audit.' });
+
+  try {
     const selectors = normalizeDkimSelectors(String(params.selectors || '').split(','));
     return json(200, await checkDomainPosture(domain, { dkimSelectors: selectors }));
   } catch (err) {
