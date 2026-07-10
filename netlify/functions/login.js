@@ -1,13 +1,6 @@
 const { checkPassword, createSessionToken, buildSessionCookie } = require('../../lib/auth');
 const { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT } = require('../../lib/rate-limit');
-
-function json(statusCode, body, extraHeaders) {
-  return {
-    statusCode,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...extraHeaders },
-    body: JSON.stringify(body),
-  };
-}
+const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {

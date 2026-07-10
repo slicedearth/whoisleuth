@@ -1,20 +1,10 @@
 const { buildClearCookie } = require('../../lib/auth');
+const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    };
+    return json(405, { error: 'Method not allowed' });
   }
 
-  return {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Set-Cookie': buildClearCookie({ secure: true }),
-    },
-    body: JSON.stringify({ ok: true }),
-  };
+  return json(200, { ok: true }, { 'Set-Cookie': buildClearCookie({ secure: true }) });
 };

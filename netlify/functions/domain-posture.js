@@ -2,14 +2,7 @@ const { classifyQuery } = require('../../lib/classify');
 const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('../../lib/domain-posture');
 const { isAuthenticatedFromCookieHeader } = require('../../lib/auth');
 const { checkRateLimit, getClientIp, API_RATE_LIMIT } = require('../../lib/rate-limit');
-
-function json(statusCode, body, extraHeaders) {
-  return {
-    statusCode,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...extraHeaders },
-    body: JSON.stringify(body),
-  };
-}
+const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
   const ip = getClientIp(event.headers);
