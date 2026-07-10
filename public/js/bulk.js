@@ -86,6 +86,12 @@ async function fetchWithRateLimitRetry(url, signal) {
 }
 
 let bulkResults = [];
+// domain -> index into bulkResults, so upsertBulkRow (called once per
+// scanned domain, up to MAX_FAST_BULK_DOMAINS) doesn't need an
+// Array#findIndex scan for every row - that made a full scan O(n^2). Indices
+// stay valid since bulkResults is only ever appended to or updated in place,
+// never reordered/spliced. Kept in sync everywhere bulkResults is reset.
+let bulkResultsByDomain = new Map();
 let bulkAbortController = null;
 const bulkSelected = new Set();
 
@@ -383,13 +389,22 @@ function wireBulkRowCheckbox(tr, domain) {
   });
 }
 
+function getBulkResultByDomain(domain) {
+  const idx = bulkResultsByDomain.get(domain);
+  return idx === undefined ? undefined : bulkResults[idx];
+}
+
 // Used both for a fresh scan (every domain is new) and a deep-check
 // follow-up (updates the existing row for a domain in place instead of
 // adding a duplicate).
 function upsertBulkRow(r) {
-  const existingIdx = bulkResults.findIndex((existing) => existing.domain === r.domain);
-  if (existingIdx !== -1) bulkResults[existingIdx] = r;
-  else bulkResults.push(r);
+  const existingIdx = bulkResultsByDomain.get(r.domain);
+  if (existingIdx !== undefined) {
+    bulkResults[existingIdx] = r;
+  } else {
+    bulkResultsByDomain.set(r.domain, bulkResults.length);
+    bulkResults.push(r);
+  }
 
   const existingTr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(r.domain)}"]`);
   if (existingTr) {
@@ -409,6 +424,7 @@ function upsertBulkRow(r) {
 export function clearBulkResults() {
   bulkResultsBody.innerHTML = '';
   bulkResults = [];
+  bulkResultsByDomain.clear();
   bulkSelected.clear();
   bulkSelectAll.checked = false;
   updateDeepCheckButton();
@@ -455,7 +471,7 @@ document.addEventListener('click', (e) => {
   const target = /** @type {HTMLElement} */ (e.target);
   const starBtn = target.closest('.star-btn');
   if (starBtn instanceof HTMLElement) {
-    const record = bulkResults.find((r) => r.domain === starBtn.dataset.domain);
+    const record = getBulkResultByDomain(starBtn.dataset.domain);
     if (record) {
       toggleShortlist(record);
       const nowStarred = isShortlisted(record.domain);
@@ -473,7 +489,7 @@ document.addEventListener('click', (e) => {
     toggleShortlist({ domain: removeDomain });
     // re-render any visible bulk row for this domain so its star reverts
     const tr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(removeDomain ?? '')}"]`);
-    const record = bulkResults.find((r) => r.domain === removeDomain);
+    const record = getBulkResultByDomain(removeDomain);
     if (tr && record) {
       const checked = /** @type {HTMLInputElement | null} */ (tr.querySelector('input[type="checkbox"]'))?.checked;
       tr.innerHTML = `<td><input type="checkbox" ${checked ? 'checked' : ''}/></td>${bulkRowCellsHtml(record)}`;
@@ -515,6 +531,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
   if (!append) {
     bulkResultsBody.innerHTML = '';
     bulkResults = [];
+    bulkResultsByDomain.clear();
   }
 
   const seen = new Set();
