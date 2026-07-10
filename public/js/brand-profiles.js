@@ -46,7 +46,7 @@ function normalizeProfile(raw) {
   };
 }
 
-export function loadBrandProfiles() {
+function loadBrandProfiles() {
   try {
     return JSON.parse(localStorage.getItem(PROFILES_KEY) || '[]');
   } catch {
@@ -62,7 +62,7 @@ function saveBrandProfiles(list) {
   }
 }
 
-export function getActiveBrandProfileId() {
+function getActiveBrandProfileId() {
   try {
     return localStorage.getItem(ACTIVE_PROFILE_KEY) || '';
   } catch {
@@ -70,7 +70,7 @@ export function getActiveBrandProfileId() {
   }
 }
 
-export function setActiveBrandProfileId(id) {
+function setActiveBrandProfileId(id) {
   try {
     if (id) localStorage.setItem(ACTIVE_PROFILE_KEY, id);
     else localStorage.removeItem(ACTIVE_PROFILE_KEY);
@@ -120,7 +120,7 @@ export function isReusingOfficialAssets(externalAssetHosts) {
   return externalAssetHosts.some((h) => officialHosts.has(h.toLowerCase()));
 }
 
-export function upsertBrandProfile(profile) {
+function upsertBrandProfile(profile) {
   const list = loadBrandProfiles();
   const idx = list.findIndex((p) => p.id === profile.id);
   if (idx !== -1) list[idx] = profile;
@@ -129,12 +129,12 @@ export function upsertBrandProfile(profile) {
   return profile;
 }
 
-export function deleteBrandProfile(id) {
+function deleteBrandProfile(id) {
   saveBrandProfiles(loadBrandProfiles().filter((p) => p.id !== id));
   if (getActiveBrandProfileId() === id) setActiveBrandProfileId('');
 }
 
-export function exportBrandProfilesJson() {
+function exportBrandProfilesJson() {
   downloadBlob(JSON.stringify(loadBrandProfiles(), null, 2), `brand-profiles-${Date.now()}.json`, 'application/json;charset=utf-8;');
 }
 
@@ -142,7 +142,7 @@ export function exportBrandProfilesJson() {
 // meaningful within the browser that generated them - re-importing a
 // backup on a different machine should update an existing same-named
 // profile instead of creating a duplicate.
-export function importBrandProfilesJson(parsed) {
+function importBrandProfilesJson(parsed) {
   if (!Array.isArray(parsed)) throw new Error('Expected a JSON array of brand profiles.');
   const list = loadBrandProfiles();
   const byName = new Map(list.map((p) => [p.name.toLowerCase(), p]));
@@ -340,9 +340,15 @@ profileSelectEl.addEventListener('change', () => {
   clearPostureResults();
 });
 
-function postureStatusLabel(status) {
-  return { pass: 'Pass', warning: 'Review', danger: 'Action', info: 'Info' }[status] || status;
-}
+// One lookup for both the label and the chip tone a check status maps to,
+// rather than a label-only object lookup plus a separate inline ternary
+// chain deriving the tone from the same status right below it.
+const POSTURE_STATUS_PRESENTATION = {
+  pass: { label: 'Pass', tone: 'good' },
+  warning: { label: 'Review', tone: 'warn' },
+  danger: { label: 'Action', tone: 'danger' },
+  info: { label: 'Info', tone: 'neutral' },
+};
 
 function renderPostureReport(report) {
   const countParts = [
@@ -359,11 +365,12 @@ function renderPostureReport(report) {
     const remediation = item.remediation
       ? `<p class="posture-remediation"><strong>Next:</strong> ${escapeHtml(item.remediation)}</p>`
       : '';
+    const presentation = POSTURE_STATUS_PRESENTATION[item.status] || { label: item.status, tone: 'neutral' };
     return `
       <article class="posture-check ${escapeHtml(item.status)}">
         <div class="posture-check-heading">
           <h4>${escapeHtml(item.label)}</h4>
-          <span class="signal-chip ${item.status === 'pass' ? 'good' : item.status === 'danger' ? 'danger' : item.status === 'warning' ? 'warn' : 'neutral'}">${escapeHtml(postureStatusLabel(item.status))}</span>
+          <span class="signal-chip ${presentation.tone}">${escapeHtml(presentation.label)}</span>
         </div>
         <p class="posture-summary">${escapeHtml(item.summary)}</p>
         ${detail}${records}${remediation}
