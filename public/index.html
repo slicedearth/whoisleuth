@@ -66,8 +66,8 @@
       <summary>Brand Profiles (<span id="brand-profile-count">0 saved</span>)</summary>
       <p class="bulk-label" style="margin-top: 10px;">
         Save a brand's official domains, product names, approved partners, and allowlist so the
-        typosquat generator can prefill from it and bulk/watchlist results can tell "our own domain"
-        apart from an unrecognized lookalike.
+        typosquat generator can prefill from it, results can distinguish owned domains, and you can
+        audit the mail/DNS posture of each official domain.
       </p>
       <div class="bulk-inputs" style="margin-top: 10px;">
         <div>
@@ -81,11 +81,13 @@
         <button type="button" id="brand-profile-new-btn" class="secondary">New profile</button>
         <button type="button" id="brand-profile-edit-btn" class="secondary" disabled>Edit</button>
         <button type="button" id="brand-profile-delete-btn" class="secondary" disabled>Delete</button>
+        <button type="button" id="brand-profile-audit-btn" class="secondary" disabled>Audit official domains</button>
         <button type="button" id="brand-profile-export-json-btn" class="secondary">Export JSON</button>
         <label for="brand-profile-import-file" class="file-upload-label" title="Import a previously-exported brand profiles JSON file - merges by name, doesn't replace what's already saved">Import JSON</label>
         <input type="file" id="brand-profile-import-file" accept=".json,application/json" style="display:none;" />
         <span class="bulk-status" id="brand-profile-status" aria-live="polite"></span>
       </div>
+      <div id="brand-posture-results" class="brand-posture-results" role="region" aria-label="Official domain posture audit results" aria-live="polite" hidden></div>
       <div id="brand-profile-form" style="display:none; margin-top: 14px;">
         <div class="bulk-inputs">
           <div>
@@ -121,6 +123,10 @@
           <div>
             <label class="bulk-label" for="brand-profile-allowlist-registrars">Allowlisted registrars (comma-separated)</label>
             <input type="text" id="brand-profile-allowlist-registrars" placeholder="MarkMonitor, CSC Corporate Domains" />
+          </div>
+          <div>
+            <label class="bulk-label" for="brand-profile-dkim-selectors">DKIM selectors used by official senders (comma-separated)</label>
+            <input type="text" id="brand-profile-dkim-selectors" placeholder="selector1, selector2, google" />
           </div>
         </div>
         <div class="bulk-inputs" style="margin-top: 12px;">

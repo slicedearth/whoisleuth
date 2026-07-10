@@ -18,7 +18,9 @@ registries. Includes availability/opportunity scoring, a typosquat
 phishing-risk score, a Certificate Transparency search for lookalikes not yet
 in any generated candidate list, abuse-report drafting, keyword/typosquat
 candidate generators, a browser-local shortlist and watchlist, and CSV
-import/export for bulk runs.
+import/export for bulk runs. Brand Profiles can also audit their official
+domains' mail and DNS posture (SPF, DMARC, MX, DNSSEC, CAA, MTA-STS,
+TLS-RPT, BIMI, and explicitly configured DKIM selectors).
 
 Runs as a small Node backend (needed for raw WHOIS sockets and cross-origin
 RDAP requests, which browsers can't do directly) serving a static frontend
@@ -136,6 +138,11 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   from the active profile and drops candidates already in its allowlist, and
   bulk/watchlist results mark any domain in the allowlist instead of
   treating your own domain as a lookalike.
+- Run **Audit official domains** from a Brand Profile to check preventive
+  mail/DNS controls. Each finding retains its source records, explains why it
+  passed or needs review/action, and provides a concrete next step. DKIM is
+  checked only for selectors saved in the profile because selectors cannot be
+  discovered reliably from DNS; the audit never guesses them.
 - A brand profile can also fetch and save its official site's favicon hash
   (a plain SHA-256 of the raw `/favicon.ico` bytes, computed during any deep
   check). A registered lookalike serving that exact same favicon - a common
@@ -172,10 +179,11 @@ shared by `server.js` and the Netlify Functions:
 
 - `/api/login` - 10 attempts per 5 minutes, since the shared password is the
   tool's only access control and the main thing worth throttling.
-- `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search` - 1000
-  requests per minute, generous enough to clear a full 2000-domain fast bulk
-  scan without breaking normal use, while still capping a scripted flood well
-  below what upstream registries would treat as abuse.
+- `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search`,
+  `/api/domain-posture` - 1000 requests per minute, generous enough to clear a
+  full 2000-domain fast bulk scan without breaking normal use, while still
+  capping a scripted flood well below what upstream registries would treat as
+  abuse.
 
 Exceeding either limit returns `429` with a `Retry-After` header. The limiter
 is in-memory: on `server.js` (one long-lived process) it applies globally; on
@@ -187,8 +195,9 @@ under sustained distributed abuse.
 ## Deploying to Netlify
 
 This branch also ships `netlify/functions/rdap.js`, `whois.js`,
-`availability.js`, and `ct-search.js` - thin wrappers around the same `lib/`
-code `server.js` uses, so behavior is identical either way. To deploy:
+`availability.js`, `ct-search.js`, and `domain-posture.js` - thin wrappers
+around the same `lib/` code `server.js` uses, so behavior is identical either
+way. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).
@@ -212,20 +221,22 @@ bulk run.
 LICENSE                 Apache 2.0 license text
 NOTICE                  Copyright attribution notice
 PRIVACY.md              Template privacy notice - what data is processed, retention, deletion
-server.js               Express backend: RDAP/WHOIS/availability/auth routes
+server.js               Express backend: lookup/posture/auth routes
 lib/                    Shared lookup logic, used by both server.js and netlify/functions/
   classify.js           Query classification (domain/IPv4/IPv6/ASN)
   rdap.js               IANA bootstrap lookup + RDAP response parsing
   whois.js              WHOIS (TCP/43) referral chain + response parsing
   availability.js       Availability/opportunity signal derivation
   dns-mx.js             MX-record lookup (phishing-risk signal for deep checks)
+  domain-posture.js     Owned-domain DNS collection, assessment, and remediation
+  domain-posture-parsers.js  Pure SPF/DMARC/MTA-STS/TLS-RPT/BIMI/DKIM parsers
   favicon.js            Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
   html-signals.js       Homepage-HTML signals (title, password field, phishing language, asset hotlinking)
   ct-search.js          Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)
   rate-limit.js         Per-IP rate limiting for login and lookup routes
-netlify/functions/      Netlify Functions (rdap, whois, availability, ct-search, login, logout, session)
+netlify/functions/      Netlify Functions (lookups, posture audit, auth/session)
 netlify.toml            Netlify build/redirect config
 public/
   favicon.svg           App logo/favicon
@@ -242,7 +253,7 @@ public/
     abuse.js            Abuse-report draft + copy-to-clipboard
     generators.js       Keyword and typosquat candidate generators
     ct-search.js        Certificate Transparency search UI
-    brand-profiles.js   localStorage-backed brand profiles (allowlist, generator prefill)
+    brand-profiles.js   Brand profiles, allowlisting, generator prefill, posture-audit UI
     shortlist.js        localStorage-backed shortlist
     watchlist.js        localStorage-backed watchlist with re-scan diffing
     single-lookup.js    Single domain/IP/ASN lookup orchestration

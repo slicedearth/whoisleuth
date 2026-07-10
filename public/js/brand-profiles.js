@@ -37,6 +37,7 @@ function normalizeProfile(raw) {
     approvedPartnerDomains: Array.isArray(raw.approvedPartnerDomains) ? raw.approvedPartnerDomains : [],
     allowlistedDomains: Array.isArray(raw.allowlistedDomains) ? raw.allowlistedDomains : [],
     allowlistedRegistrars: Array.isArray(raw.allowlistedRegistrars) ? raw.allowlistedRegistrars : [],
+    dkimSelectors: Array.isArray(raw.dkimSelectors) ? raw.dkimSelectors : [],
     trademarkOwner: raw.trademarkOwner || '',
     trademarkRegistration: raw.trademarkRegistration || '',
     officialFaviconHash: raw.officialFaviconHash || '',
@@ -168,10 +169,12 @@ const profileCountEl = /** @type {HTMLElement} */ (document.getElementById('bran
 const profileSelectEl = /** @type {HTMLSelectElement} */ (document.getElementById('brand-profile-select'));
 const profileEditBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-edit-btn'));
 const profileDeleteBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-delete-btn'));
+const profileAuditBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-audit-btn'));
 const profileNewBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-new-btn'));
 const profileExportJsonBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-export-json-btn'));
 const profileImportInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-import-file'));
 const profileStatusEl = /** @type {HTMLElement} */ (document.getElementById('brand-profile-status'));
+const postureResultsEl = /** @type {HTMLElement} */ (document.getElementById('brand-posture-results'));
 
 const profileFormEl = /** @type {HTMLElement} */ (document.getElementById('brand-profile-form'));
 const profileSaveBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-save-btn'));
@@ -183,6 +186,7 @@ const productNamesInput = /** @type {HTMLInputElement} */ (document.getElementBy
 const partnerDomainsInput = /** @type {HTMLTextAreaElement} */ (document.getElementById('brand-profile-partner-domains'));
 const allowlistDomainsInput = /** @type {HTMLTextAreaElement} */ (document.getElementById('brand-profile-allowlist-domains'));
 const allowlistRegistrarsInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-allowlist-registrars'));
+const dkimSelectorsInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-dkim-selectors'));
 const trademarkOwnerInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-trademark-owner'));
 const trademarkRegInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-trademark-number'));
 const faviconHashInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-favicon-hash'));
@@ -190,6 +194,25 @@ const faviconHashDisplay = /** @type {HTMLElement} */ (document.getElementById('
 const faviconFetchBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-favicon-fetch-btn'));
 
 let editingId = null; // null = "New profile" mode, an id string = editing that profile
+const MAX_POSTURE_DOMAINS = 20;
+const POSTURE_CONCURRENCY = 3;
+
+function selectedProfile() {
+  return loadBrandProfiles().find((profile) => profile.id === profileSelectEl.value) || null;
+}
+
+function updateProfileActionState() {
+  const profile = selectedProfile();
+  const hasSelection = Boolean(profile);
+  profileEditBtn.disabled = !hasSelection;
+  profileDeleteBtn.disabled = !hasSelection;
+  profileAuditBtn.disabled = !profile || profile.officialDomains.length === 0;
+}
+
+function clearPostureResults() {
+  postureResultsEl.hidden = true;
+  postureResultsEl.innerHTML = '';
+}
 
 function renderBrandProfilesPanel() {
   const list = loadBrandProfiles();
@@ -203,9 +226,7 @@ function renderBrandProfilesPanel() {
     + list.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
   profileSelectEl.value = activeStillExists ? activeId : '';
 
-  const hasSelection = Boolean(profileSelectEl.value);
-  profileEditBtn.disabled = !hasSelection;
-  profileDeleteBtn.disabled = !hasSelection;
+  updateProfileActionState();
 }
 
 function showForm(profile) {
@@ -217,6 +238,7 @@ function showForm(profile) {
   partnerDomainsInput.value = (profile?.approvedPartnerDomains || []).join('\n');
   allowlistDomainsInput.value = (profile?.allowlistedDomains || []).join('\n');
   allowlistRegistrarsInput.value = (profile?.allowlistedRegistrars || []).join(', ');
+  dkimSelectorsInput.value = (profile?.dkimSelectors || []).join(', ');
   trademarkOwnerInput.value = profile?.trademarkOwner || '';
   trademarkRegInput.value = profile?.trademarkRegistration || '';
   faviconHashInput.value = profile?.officialFaviconHash || '';
@@ -277,6 +299,7 @@ profileDeleteBtn.addEventListener('click', () => {
   if (!window.confirm(`Delete the brand profile "${profile.name}"? This cannot be undone.`)) return;
   deleteBrandProfile(id);
   renderBrandProfilesPanel();
+  clearPostureResults();
   profileStatusEl.textContent = `Deleted "${profile.name}".`;
 });
 
@@ -296,6 +319,7 @@ profileSaveBtn.addEventListener('click', () => {
     approvedPartnerDomains: parseListInput(partnerDomainsInput.value).map((d) => d.toLowerCase()),
     allowlistedDomains: parseListInput(allowlistDomainsInput.value).map((d) => d.toLowerCase()),
     allowlistedRegistrars: parseListInput(allowlistRegistrarsInput.value),
+    dkimSelectors: parseListInput(dkimSelectorsInput.value).map((selector) => selector.toLowerCase()),
     trademarkOwner: trademarkOwnerInput.value.trim(),
     trademarkRegistration: trademarkRegInput.value.trim(),
     officialFaviconHash: faviconHashInput.value.trim(),
@@ -306,14 +330,114 @@ profileSaveBtn.addEventListener('click', () => {
   renderBrandProfilesPanel();
   profileSelectEl.value = profile.id;
   hideForm();
+  clearPostureResults();
   profileStatusEl.textContent = `Saved "${profile.name}" and set it as the active profile.`;
 });
 
 profileSelectEl.addEventListener('change', () => {
   setActiveBrandProfileId(profileSelectEl.value);
-  const hasSelection = Boolean(profileSelectEl.value);
-  profileEditBtn.disabled = !hasSelection;
-  profileDeleteBtn.disabled = !hasSelection;
+  updateProfileActionState();
+  clearPostureResults();
+});
+
+function postureStatusLabel(status) {
+  return { pass: 'Pass', warning: 'Review', danger: 'Action', info: 'Info' }[status] || status;
+}
+
+function renderPostureReport(report) {
+  const countParts = [
+    report.summary.danger ? `${report.summary.danger} action` : '',
+    report.summary.warning ? `${report.summary.warning} review` : '',
+    report.summary.pass ? `${report.summary.pass} pass` : '',
+    report.summary.info ? `${report.summary.info} info` : '',
+  ].filter(Boolean);
+  const checks = report.checks.map((item) => {
+    const records = item.records.length
+      ? `<details class="posture-records"><summary>Source records (${item.records.length})</summary><pre>${escapeHtml(item.records.join('\n'))}</pre></details>`
+      : '';
+    const detail = item.detail ? `<p class="posture-detail">${escapeHtml(item.detail)}</p>` : '';
+    const remediation = item.remediation
+      ? `<p class="posture-remediation"><strong>Next:</strong> ${escapeHtml(item.remediation)}</p>`
+      : '';
+    return `
+      <article class="posture-check ${escapeHtml(item.status)}">
+        <div class="posture-check-heading">
+          <h4>${escapeHtml(item.label)}</h4>
+          <span class="signal-chip ${item.status === 'pass' ? 'good' : item.status === 'danger' ? 'danger' : item.status === 'warning' ? 'warn' : 'neutral'}">${escapeHtml(postureStatusLabel(item.status))}</span>
+        </div>
+        <p class="posture-summary">${escapeHtml(item.summary)}</p>
+        ${detail}${records}${remediation}
+      </article>`;
+  }).join('');
+
+  return `
+    <section class="posture-domain-result">
+      <div class="posture-domain-heading">
+        <div><span class="section-title">Official domain posture</span><h3>${escapeHtml(report.domain)}</h3></div>
+        <span class="posture-counts">${escapeHtml(countParts.join(' · '))}</span>
+      </div>
+      <div class="posture-check-grid">${checks}</div>
+    </section>`;
+}
+
+async function fetchPostureReport(domain, selectors) {
+  const params = new URLSearchParams({ q: domain });
+  if (selectors.length) params.set('selectors', selectors.join(','));
+  const res = await fetch(`/api/domain-posture?${params.toString()}`);
+  if (res.status === 401) {
+    showGate();
+    throw new Error('Authentication required');
+  }
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || `Audit failed (${res.status})`);
+  return body;
+}
+
+async function auditProfileDomains(domains, selectors) {
+  const results = new Array(domains.length);
+  let next = 0;
+  const workers = new Array(Math.min(POSTURE_CONCURRENCY, domains.length)).fill(0).map(async () => {
+    while (next < domains.length) {
+      const index = next++;
+      const domain = domains[index];
+      try {
+        results[index] = { report: await fetchPostureReport(domain, selectors), error: null };
+      } catch (err) {
+        results[index] = { report: null, error: err.message || String(err), domain };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+profileAuditBtn.addEventListener('click', async () => {
+  const profile = selectedProfile();
+  if (!profile || profile.officialDomains.length === 0) return;
+  const domains = profile.officialDomains.slice(0, MAX_POSTURE_DOMAINS);
+  profileAuditBtn.disabled = true;
+  const originalText = profileAuditBtn.textContent;
+  profileAuditBtn.textContent = `Auditing ${domains.length}…`;
+  profileStatusEl.textContent = `Auditing ${domains.length} official domain${domains.length === 1 ? '' : 's'}…`;
+  postureResultsEl.hidden = false;
+  postureResultsEl.innerHTML = '<div class="posture-loading">Checking DNS, registry, and mail transport policies…</div>';
+  try {
+    const results = await auditProfileDomains(domains, profile.dkimSelectors || []);
+    // The profile selector remains usable while network checks run. If the
+    // user moved to another profile, do not paint the completed results under
+    // that different profile's controls.
+    if (profileSelectEl.value !== profile.id) return;
+    const completed = results.filter((result) => result.report).length;
+    const failures = results.length - completed;
+    postureResultsEl.innerHTML = results.map((result) => result.report
+      ? renderPostureReport(result.report)
+      : `<section class="posture-domain-result"><h3>${escapeHtml(result.domain)}</h3><p class="error-text">${escapeHtml(result.error)}</p></section>`).join('');
+    const truncated = profile.officialDomains.length - domains.length;
+    profileStatusEl.textContent = `Audited ${completed}/${domains.length} official domains${failures ? `; ${failures} failed` : ''}${truncated ? `; ${truncated} skipped (limit ${MAX_POSTURE_DOMAINS})` : ''}.`;
+  } finally {
+    profileAuditBtn.textContent = originalText;
+    updateProfileActionState();
+  }
 });
 
 profileExportJsonBtn.addEventListener('click', () => {
@@ -328,6 +452,7 @@ profileImportInput.addEventListener('change', async () => {
     const parsed = JSON.parse(await readFileAsText(file));
     const { added, updated } = importBrandProfilesJson(parsed);
     renderBrandProfilesPanel();
+    clearPostureResults();
     profileStatusEl.textContent = `Imported ${file.name}: ${added} added, ${updated} updated.`;
   } catch (err) {
     profileStatusEl.innerHTML = `<span class="error-text">Could not import brand profiles: ${escapeHtml(err.message)}</span>`;

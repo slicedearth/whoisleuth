@@ -20,12 +20,17 @@ at all.
 - **Single and bulk lookups**: proxied through the server per-request, held
   in memory only for the duration of that request, never written to a
   database or disk server-side.
-- **Shortlist / Watchlist**: saved in your own browser's `localStorage`,
-  not on the server - only visible to whoever is using that browser.
+- **Brand Profiles / Shortlist / Watchlist**: saved in your own browser's
+  `localStorage`, not on the server - only visible to whoever is using that browser.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
   button in either panel, or by clearing the browser's site data.
 - **CSV exports**: downloaded directly to your device. From that point on,
   the file is yours to manage - delete it once you no longer need it.
+- **Official-domain posture audits**: handled per request and discarded. The
+  server queries public DNS, the domain registry's RDAP service for DNSSEC
+  delegation status, and (only when advertised) the official domain's own
+  `mta-sts` HTTPS policy host. DKIM selector names saved in a Brand Profile
+  are included in the request so those exact public DNS records can be checked.
 - **Outreach / abuse-report drafts**: build a `mailto:` link and copy
   pre-filled text to your clipboard. Nothing is sent automatically; a
   human reviews and sends each one from their own mail client.
@@ -53,9 +58,10 @@ above for the latter. Direct any such request to: `[operator contact]`.
 - Netlify: request handling runs on Netlify's infrastructure. Check
   Netlify's own Data Processing Addendum if you're operating this beyond a
   personal/internal scale.
-- Upstream RDAP/WHOIS servers and `crt.sh` (Certificate Transparency search)
-  are queried live, on demand, per lookup - they're the data source, not a
-  sub-processor this tool shares stored data with.
+- Upstream RDAP/WHOIS servers, public DNS, `crt.sh` (Certificate Transparency
+  search), and an audited domain's own MTA-STS policy host are queried live,
+  on demand - they're the data sources, not sub-processors this tool shares
+  stored data with.
 
 ## Security measures
 

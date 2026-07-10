@@ -100,8 +100,18 @@ describe('buildPostureReport', () => {
     input.mx = query([{ priority: 0, exchange: '' }]);
     input.mtaStsDns = query([]);
     input.mtaStsPolicy = null;
+    input.tlsRpt = query([]);
     const report = buildPostureReport('example.com', input);
     assert.equal(byId(report, 'mx').status, 'pass');
     assert.equal(byId(report, 'mta_sts').status, 'info');
+    assert.equal(byId(report, 'tls_rpt').status, 'info');
+  });
+
+  test('keeps enforced DMARC actionable when aggregate reporting is absent', () => {
+    const input = strongInput();
+    input.dmarc = query(['v=DMARC1; p=reject; sp=reject; np=reject']);
+    const report = buildPostureReport('example.com', input);
+    assert.equal(byId(report, 'dmarc').status, 'warning');
+    assert.match(byId(report, 'dmarc').summary, /reporting is not configured/);
   });
 });
