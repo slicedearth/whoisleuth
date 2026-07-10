@@ -23,7 +23,7 @@ import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
 import { buildAbuseMailto, abuseRecordByDomain } from './abuse.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
-import { isDomainAllowlisted } from './brand-profiles.js';
+import { isDomainAllowlisted, isFaviconHashMatchingProfile } from './brand-profiles.js';
 import { showGate } from './auth.js';
 import {
   bulkFileInput,
@@ -84,8 +84,18 @@ function toBulkRecord(domain, body) {
       availabilityDetail: 'Not a domain name (bulk lookup only supports domains, not IPs/ASNs)',
     };
   }
+  const resolvedDomain = body.domain || domain;
+  // Computed once here (not live at render time, unlike the Allowlisted
+  // badge) so the risk score - read from this same record by scoring.js,
+  // both for the table and CSV export - always matches what's displayed.
+  // Never true for a domain the allowlist already covers - your own
+  // official site trivially "matches" its own favicon, which isn't a
+  // finding.
+  const faviconHash = body.faviconHash ?? null;
+  const faviconMatch = !isDomainAllowlisted(resolvedDomain) && isFaviconHashMatchingProfile(faviconHash);
+
   return {
-    domain: body.domain || domain,
+    domain: resolvedDomain,
     availability: body.state,
     availabilityDetail: body.detail,
     registrarName: body.registrar ? body.registrar.name || body.registrar.org : null,
@@ -101,9 +111,11 @@ function toBulkRecord(domain, body) {
     privacyProtected: body.privacyProtected ?? null,
     activityStatus: body.activityStatus || null,
     hasMx: body.hasMx ?? null,
+    hasNullMx: body.hasNullMx ?? null,
     hasSpf: body.hasSpf ?? null,
     hasDmarc: body.hasDmarc ?? null,
     abuseEmail: body.abuse ? body.abuse.email : null,
+    faviconMatch,
   };
 }
 
@@ -146,8 +158,10 @@ function exportCsv(records, filename) {
     'Privacy Protected',
     'Activity Status',
     'MX Records',
+    'Null MX',
     'SPF Record',
     'DMARC Record',
+    'Favicon Match',
     'Abuse Email',
     'Registrar Name',
     'Registrar Email',
@@ -171,8 +185,10 @@ function exportCsv(records, filename) {
     formatPrivacyCell(r.privacyProtected),
     formatActivityCell(r.activityStatus),
     r.hasMx === true ? 'Yes' : r.hasMx === false ? 'No' : '',
+    r.hasNullMx ? 'Yes' : '',
     r.hasSpf === true ? 'Yes' : r.hasSpf === false ? 'No' : '',
     r.hasDmarc === true ? 'Yes' : r.hasDmarc === false ? 'No' : '',
+    r.faviconMatch ? 'Yes' : '',
     r.abuseEmail,
     r.registrarName,
     r.registrarEmail,
@@ -219,9 +235,12 @@ function bulkRowCellsHtml(r) {
   const allowlistFlag = isDomainAllowlisted(r.domain)
     ? `<span class="watch-flag good" title="Matches the active brand profile's official/partner/allowlisted domains">Allowlisted</span>`
     : '';
+  const faviconFlag = r.faviconMatch
+    ? `<span class="watch-flag danger" title="Serves the exact same favicon as your official domain - a strong sign of a cloned phishing page">Favicon match</span>`
+    : '';
 
   return `
-    <td class="domain-cell">${star}${escapeHtml(r.domain)}${allowlistFlag}</td>
+    <td class="domain-cell">${star}${escapeHtml(r.domain)}${allowlistFlag}${faviconFlag}</td>
     <td>${oppExplain === null ? '—' : `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">${oppExplain.score}</span>`}</td>
     <td>${riskExplain === null ? '—' : `<span class="signal-chip ${riskTone(riskExplain.score)}" title="${escapeHtml(formatScoreBreakdown(riskExplain))}">${riskExplain.score}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>

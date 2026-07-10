@@ -129,8 +129,14 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
 
 - Save a **Brand Profile** (official domains, product names, TLDs, approved
   partner domains, and an allowlist) - the typosquat generator can prefill
-  from the active profile, and bulk/watchlist results mark any domain in its
-  allowlist instead of treating your own domain as a lookalike.
+  from the active profile and drops candidates already in its allowlist, and
+  bulk/watchlist results mark any domain in the allowlist instead of
+  treating your own domain as a lookalike.
+- A brand profile can also fetch and save its official site's favicon hash
+  (a plain SHA-256 of the raw `/favicon.ico` bytes, computed during any deep
+  check). A registered lookalike serving that exact same favicon - a common
+  tell for a cloned phishing kit - gets flagged in results and contributes
+  heavily to its Risk score.
 - Save a generated typosquat set as a **Watchlist** and re-scan it later -
   domains that moved from available/unknown to registered since the last
   check are flagged as new registrations (a fresh squatting attempt), and
@@ -198,6 +204,7 @@ lib/                    Shared lookup logic, used by both server.js and netlify/
   whois.js              WHOIS (TCP/43) referral chain + response parsing
   availability.js       Availability/opportunity signal derivation
   dns-mx.js             MX-record lookup (phishing-risk signal for deep checks)
+  favicon.js            Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
   ct-search.js          Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)

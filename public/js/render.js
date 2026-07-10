@@ -15,6 +15,7 @@ import {
 } from './scoring.js';
 import { outreachButtonHtml, outreachRegistrantByDomain } from './outreach.js';
 import { abuseButtonHtml, abuseRecordByDomain } from './abuse.js';
+import { isDomainAllowlisted, isFaviconHashMatchingProfile } from './brand-profiles.js';
 import {
   availabilityCard,
   availabilityPrompt,
@@ -363,6 +364,9 @@ function signalChip(label, tone) {
 function buildSignalChips(body) {
   const chips = [];
 
+  if (body.faviconMatch) chips.push(signalChip('Favicon match', 'danger'));
+  if (isDomainAllowlisted(body.domain)) chips.push(signalChip('Allowlisted', 'good'));
+
   const age = fmtAge(body.domainAgeDays);
   if (age) chips.push(signalChip(age, 'neutral'));
 
@@ -403,6 +407,11 @@ export function renderAvailability(body) {
   availabilityPill.className = `status-pill ${state}`;
   availabilityPill.textContent = PILL_LABELS[state] || state;
   availabilityDetail.textContent = body.detail || '';
+
+  // Same rule as bulk.js's toBulkRecord(): never true for a domain the
+  // allowlist already covers - your own official site "matches" its own
+  // favicon trivially, which isn't a finding.
+  body.faviconMatch = !isDomainAllowlisted(body.domain) && isFaviconHashMatchingProfile(body.faviconHash);
 
   const oppExplain = explainOpportunityScore(body);
   const riskExplain = explainRiskScore(body);

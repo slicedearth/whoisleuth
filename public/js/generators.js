@@ -13,7 +13,7 @@
 // cybersquatting/phishing targets), not idea-driven.
 
 import { fillQueryInputWithCandidates } from './dom.js';
-import { getActiveBrandProfile } from './brand-profiles.js';
+import { getActiveBrandProfile, isDomainAllowlisted } from './brand-profiles.js';
 
 function parseTldList(raw) {
   return [...new Set(
@@ -234,15 +234,26 @@ typoRunBtn.addEventListener('click', () => {
   const keyword = typoKeywordInput.value;
   const tlds = parseTldList(typoTldsInput.value);
   const statusEl = typoStatusEl;
-  const candidates = generateTyposquatVariants(keyword, tlds);
+  const rawCandidates = generateTyposquatVariants(keyword, tlds);
 
-  if (candidates.length === 0) {
+  if (rawCandidates.length === 0) {
     statusEl.innerHTML = '<span class="error-text">Enter a brand/domain name.</span>';
     return;
   }
 
+  // Drop anything already in the active brand profile's own allowlist
+  // (official/partner/allowlisted domains) - no point flagging your own
+  // domain as a candidate to scan for squatting.
+  const candidates = rawCandidates.filter((c) => !isDomainAllowlisted(c));
+  const excluded = rawCandidates.length - candidates.length;
+  if (candidates.length === 0) {
+    statusEl.innerHTML = '<span class="error-text">All generated variants are already in your active brand profile\'s allowlist.</span>';
+    return;
+  }
+
   fillQueryInputWithCandidates(candidates);
-  statusEl.textContent = `Generated ${candidates.length} typosquat variants - scrolled to the query box above so you can review them, then click Lookup to scan.`;
+  const excludedNote = excluded > 0 ? ` (${excluded} excluded - already allowlisted)` : '';
+  statusEl.textContent = `Generated ${candidates.length} typosquat variants${excludedNote} - scrolled to the query box above so you can review them, then click Lookup to scan.`;
 });
 
 typoFillProfileBtn.addEventListener('click', () => {

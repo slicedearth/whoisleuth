@@ -125,6 +125,16 @@
         </div>
         <div class="bulk-inputs" style="margin-top: 12px;">
           <div>
+            <label class="bulk-label" for="brand-profile-favicon-fetch-btn">Official favicon hash (optional - flags lookalikes serving your exact favicon)</label>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <button type="button" id="brand-profile-favicon-fetch-btn" class="secondary">Fetch from official domain</button>
+              <span id="brand-profile-favicon-hash-display" style="font-size:0.78rem; color: var(--muted);">Not fetched</span>
+            </div>
+            <input type="hidden" id="brand-profile-favicon-hash" />
+          </div>
+        </div>
+        <div class="bulk-inputs" style="margin-top: 12px;">
+          <div>
             <label class="bulk-label" for="brand-profile-trademark-owner">Trademark owner (optional, for report drafting)</label>
             <input type="text" id="brand-profile-trademark-owner" placeholder="Acme Corp." />
           </div>

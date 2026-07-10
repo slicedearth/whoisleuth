@@ -142,6 +142,15 @@ export function explainRiskScore(r) {
   const factors = [{ label: 'Base score (registered/for-sale/expiring)', delta: 40 }];
   let score = 40;
 
+  // Set by bulk.js/render.js from a brand profile's official-site favicon
+  // hash (see lib/favicon.js) - a much stronger phishing signal than any of
+  // the activity/mail signals below, since it means this domain is serving
+  // a byte-identical copy of the brand's own favicon, not just "some site."
+  if (r.faviconMatch) {
+    factors.push({ label: 'Favicon matches your brand profile\'s official site', delta: 30 });
+    score += 30;
+  }
+
   if (r.activityStatus === 'active') {
     factors.push({ label: 'Active site in use', delta: 25 });
     score += 25;
@@ -154,11 +163,15 @@ export function explainRiskScore(r) {
     factors.push({ label: 'Mail server configured', delta: 20 });
     score += 20;
   }
+  // Presence of these records isn't proof of a working, permissive outbound
+  // policy (SPF can end in ~all/-all, DMARC can be p=none) - the label only
+  // claims what's actually verified (the record exists), not how it's
+  // configured.
   if (r.hasSpf && r.hasDmarc) {
-    factors.push({ label: 'Outbound mail fully configured (SPF + DMARC)', delta: 15 });
+    factors.push({ label: 'SPF + DMARC records present', delta: 15 });
     score += 15;
   } else if (r.hasSpf || r.hasDmarc) {
-    factors.push({ label: 'Partial outbound mail config (SPF or DMARC)', delta: 5 });
+    factors.push({ label: 'SPF or DMARC record present', delta: 5 });
     score += 5;
   }
   if (r.privacyProtected === true) {

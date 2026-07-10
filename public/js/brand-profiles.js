@@ -6,6 +6,7 @@
 // export pattern as shortlist.js/watchlist.js - no backend, no database.
 
 import { escapeHtml, downloadBlob, readFileAsText } from './utils.js';
+import { showGate } from './auth.js';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -38,6 +39,7 @@ function normalizeProfile(raw) {
     allowlistedRegistrars: Array.isArray(raw.allowlistedRegistrars) ? raw.allowlistedRegistrars : [],
     trademarkOwner: raw.trademarkOwner || '',
     trademarkRegistration: raw.trademarkRegistration || '',
+    officialFaviconHash: raw.officialFaviconHash || '',
     createdAt: raw.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -92,6 +94,17 @@ export function isDomainAllowlisted(domain) {
   const target = domain.trim().toLowerCase();
   const all = [...profile.officialDomains, ...profile.approvedPartnerDomains, ...profile.allowlistedDomains];
   return all.some((d) => d.toLowerCase() === target);
+}
+
+// A registered lookalike domain serving the exact same favicon bytes as the
+// active profile's official site is a much stronger phishing signal than
+// merely being active (see lib/favicon.js) - deliberately not applied to a
+// domain already covered by isDomainAllowlisted() (your own official site
+// obviously "matches" its own favicon; that's not a finding).
+export function isFaviconHashMatchingProfile(hash) {
+  const profile = getActiveBrandProfile();
+  if (!profile || !hash || !profile.officialFaviconHash) return false;
+  return profile.officialFaviconHash === hash;
 }
 
 export function upsertBrandProfile(profile) {
@@ -160,6 +173,9 @@ const allowlistDomainsInput = /** @type {HTMLTextAreaElement} */ (document.getEl
 const allowlistRegistrarsInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-allowlist-registrars'));
 const trademarkOwnerInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-trademark-owner'));
 const trademarkRegInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-trademark-number'));
+const faviconHashInput = /** @type {HTMLInputElement} */ (document.getElementById('brand-profile-favicon-hash'));
+const faviconHashDisplay = /** @type {HTMLElement} */ (document.getElementById('brand-profile-favicon-hash-display'));
+const faviconFetchBtn = /** @type {HTMLButtonElement} */ (document.getElementById('brand-profile-favicon-fetch-btn'));
 
 let editingId = null; // null = "New profile" mode, an id string = editing that profile
 
@@ -191,6 +207,10 @@ function showForm(profile) {
   allowlistRegistrarsInput.value = (profile?.allowlistedRegistrars || []).join(', ');
   trademarkOwnerInput.value = profile?.trademarkOwner || '';
   trademarkRegInput.value = profile?.trademarkRegistration || '';
+  faviconHashInput.value = profile?.officialFaviconHash || '';
+  faviconHashDisplay.textContent = profile?.officialFaviconHash
+    ? `${profile.officialFaviconHash.slice(0, 16)}…`
+    : 'Not fetched';
   profileFormEl.style.display = 'block';
   nameInput.focus();
 }
@@ -199,6 +219,35 @@ function hideForm() {
   profileFormEl.style.display = 'none';
   editingId = null;
 }
+
+faviconFetchBtn.addEventListener('click', async () => {
+  const officialDomain = parseListInput(officialDomainsInput.value)[0];
+  if (!officialDomain) {
+    profileStatusEl.innerHTML = '<span class="error-text">Enter at least one official domain first.</span>';
+    return;
+  }
+  faviconFetchBtn.disabled = true;
+  faviconHashDisplay.textContent = 'Fetching…';
+  try {
+    const res = await fetch(`/api/availability?q=${encodeURIComponent(officialDomain)}`);
+    if (res.status === 401) {
+      showGate();
+      return;
+    }
+    const body = await res.json();
+    if (body.faviconHash) {
+      faviconHashInput.value = body.faviconHash;
+      faviconHashDisplay.textContent = `${body.faviconHash.slice(0, 16)}… (from ${officialDomain}/favicon.ico)`;
+    } else {
+      faviconHashInput.value = '';
+      faviconHashDisplay.textContent = `No favicon found at ${officialDomain}/favicon.ico`;
+    }
+  } catch {
+    faviconHashDisplay.textContent = 'Fetch failed - try again.';
+  } finally {
+    faviconFetchBtn.disabled = false;
+  }
+});
 
 profileNewBtn.addEventListener('click', () => showForm(null));
 
@@ -237,6 +286,7 @@ profileSaveBtn.addEventListener('click', () => {
     allowlistedRegistrars: parseListInput(allowlistRegistrarsInput.value),
     trademarkOwner: trademarkOwnerInput.value.trim(),
     trademarkRegistration: trademarkRegInput.value.trim(),
+    officialFaviconHash: faviconHashInput.value.trim(),
     createdAt: existing?.createdAt,
   });
   upsertBrandProfile(profile);
