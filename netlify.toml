@@ -55,3 +55,9 @@
   to = "/.netlify/functions/ct-search"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/api/domain-posture"
+  to = "/.netlify/functions/domain-posture"
+  status = 200
+  force = true

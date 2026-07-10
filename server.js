@@ -6,6 +6,7 @@ const { fetchRdapRecord } = require('./lib/rdap');
 const { buildWhoisChain, parseWhoisChain } = require('./lib/whois');
 const { checkDomainAvailability } = require('./lib/availability');
 const { searchCertificateTransparency } = require('./lib/ct-search');
+const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('./lib/domain-posture');
 const {
   COOKIE_NAME,
   checkPassword,
@@ -157,6 +158,21 @@ app.get('/api/ct-search', apiRateLimit, requireAuth, async (req, res) => {
 
     const result = await searchCertificateTransparency(q);
     res.json({ keyword: q, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/domain-posture', apiRateLimit, requireAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+    const { type, value } = classifyQuery(q);
+    if (type !== 'domain') return res.status(400).json({ error: 'Domain posture audits only support domain names.' });
+    const domain = normalizeAuditDomain(value);
+    if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
+    const selectors = normalizeDkimSelectors((req.query.selectors || '').toString().split(','));
+    res.json(await checkDomainPosture(domain, { dkimSelectors: selectors }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
