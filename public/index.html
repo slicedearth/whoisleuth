@@ -324,6 +324,7 @@
         <tr>
           <th scope="col"><label class="visually-hidden" for="bulk-select-all">Select all rows</label><input type="checkbox" id="bulk-select-all" /></th>
           <th scope="col">Domain</th>
+          <th scope="col">Mutation</th>
           <th scope="col"><button type="button" id="bulk-sort-score" class="sort-header-btn" title="Click to sort by opportunity score">Opportunity <span aria-hidden="true">&#8645;</span></button></th>
           <th scope="col"><button type="button" id="bulk-sort-risk" class="sort-header-btn" title="Click to sort by phishing-risk score">Risk <span aria-hidden="true">&#8645;</span></button></th>
           <th scope="col">Availability</th>
@@ -341,6 +342,31 @@
       <tbody id="bulk-results-body"></tbody>
     </table>
   </div>
+
+  <section class="coverage-panel" id="coverage-panel" aria-labelledby="coverage-heading" style="display:none;">
+    <div class="coverage-heading-row">
+      <div>
+        <div class="section-title" id="coverage-heading">Defensive registration coverage</div>
+        <p class="bulk-label">
+          Generated lookalikes grouped by mutation family and TLD. Protected means the active
+          profile allowlists the domain; registered and available domains remain review items.
+          Mutation groups can overlap when several techniques produce the same domain.
+        </p>
+      </div>
+      <button type="button" id="coverage-export-btn" class="secondary">Export coverage CSV</button>
+    </div>
+    <div class="coverage-summary" id="coverage-summary"></div>
+    <div class="coverage-tables">
+      <div>
+        <div class="section-title">By mutation family</div>
+        <div class="coverage-table-wrap"><table class="bulk-results coverage-table"><thead><tr><th>Group</th><th>Total</th><th>Protected</th><th>Registered</th><th>Available</th><th>Unknown</th><th>Coverage</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody id="coverage-mutation-body"></tbody></table></div>
+      </div>
+      <div>
+        <div class="section-title">By TLD</div>
+        <div class="coverage-table-wrap"><table class="bulk-results coverage-table"><thead><tr><th>Group</th><th>Total</th><th>Protected</th><th>Registered</th><th>Available</th><th>Unknown</th><th>Coverage</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody id="coverage-tld-body"></tbody></table></div>
+      </div>
+    </div>
+  </section>
 
   <div class="cluster-panel" id="cluster-panel" style="display:none;">
     <div class="section-title">Related infrastructure</div>

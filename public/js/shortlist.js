@@ -6,7 +6,7 @@
 import { escapeHtml, exportJsonFile, readFileAsText, createLocalStore } from './utils.js';
 import { explainOpportunityScore, scoreTone, formatScoreBreakdown } from './scoring.js';
 import { PILL_LABELS } from './render.js';
-import { queryInput, bulkStatus } from './dom.js';
+import { bulkStatus, fillQueryInputWithCandidates } from './dom.js';
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 const shortlistStore = createLocalStore(SHORTLIST_KEY, []);
@@ -95,7 +95,9 @@ function renderShortlistPanel() {
 shortlistRescanBtn.addEventListener('click', () => {
   const list = loadShortlist();
   if (list.length === 0) return;
-  queryInput.value = list.map((r) => r.domain).join('\n');
+  const domains = list.map((r) => r.domain);
+  const provenance = list.filter((r) => Array.isArray(r.mutationTypes) && r.mutationTypes.length > 0);
+  fillQueryInputWithCandidates(domains, provenance);
 });
 
 shortlistClearBtn.addEventListener('click', () => {

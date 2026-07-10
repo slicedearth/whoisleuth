@@ -856,6 +856,32 @@ a.secondary {
   border-radius: 10px;
   padding: 12px 16px;
 }
+.coverage-panel {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.coverage-heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.coverage-heading-row .bulk-label { margin: 4px 0 0; max-width: 720px; }
+.coverage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 16px;
+}
+.coverage-tables { display: grid; gap: 18px; }
+.coverage-table-wrap { margin-top: 8px; overflow-x: auto; }
+.coverage-table { min-width: 720px; }
+.coverage-table td:first-child { font-family: var(--mono); }
+.coverage-load-btn { padding: 2px 8px; font-size: 0.72rem; white-space: nowrap; }
 table.bulk-results {
   width: 100%;
   border-collapse: collapse;

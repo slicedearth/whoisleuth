@@ -186,7 +186,8 @@ document.addEventListener('click', async (e) => {
     if (!entry) return;
 
     const domains = entry.results.map((r) => r.domain);
-    fillQueryInputWithCandidates(domains);
+    const provenance = entry.results.filter((r) => Array.isArray(r.mutationTypes) && r.mutationTypes.length > 0);
+    fillQueryInputWithCandidates(domains, provenance);
     await runBulkLookup(domains, { fast: true, append: false });
 
     const newResults = getBulkResults();

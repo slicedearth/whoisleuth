@@ -8,6 +8,8 @@
 // place that assumption gets made, so every other module gets a properly
 // typed, non-null reference for free.
 
+import { setCandidateProvenance } from './candidate-provenance.js';
+
 export const form = /** @type {HTMLFormElement} */ (document.getElementById('lookup-form'));
 export const queryInput = /** @type {HTMLTextAreaElement} */ (document.getElementById('query-input'));
 export const submitBtn = /** @type {HTMLButtonElement} */ (document.getElementById('submit-btn'));
@@ -53,12 +55,21 @@ export const bulkSelectAll = /** @type {HTMLInputElement} */ (document.getElemen
 
 export const clusterPanel = /** @type {HTMLElement} */ (document.getElementById('cluster-panel'));
 export const clusterList = /** @type {HTMLElement} */ (document.getElementById('cluster-list'));
+export const coveragePanel = /** @type {HTMLElement} */ (document.getElementById('coverage-panel'));
+export const coverageSummary = /** @type {HTMLElement} */ (document.getElementById('coverage-summary'));
+export const coverageMutationBody = /** @type {HTMLElement} */ (document.getElementById('coverage-mutation-body'));
+export const coverageTldBody = /** @type {HTMLElement} */ (document.getElementById('coverage-tld-body'));
+export const coverageExportBtn = /** @type {HTMLButtonElement} */ (document.getElementById('coverage-export-btn'));
 
 // The query box these fill into sits ABOVE the generator panels on the
 // page, not below - scroll/focus it too so "where did my list go" isn't a
 // recurring question.
-/** @param {string[]} candidates */
-export function fillQueryInputWithCandidates(candidates) {
+/**
+ * @param {string[]} candidates
+ * @param {Array<{ domain: string, source?: string | null, sourceDomain?: string | null, tld?: string | null, candidateTld?: string | null, mutationTypes?: string[] }>} [provenance]
+ */
+export function fillQueryInputWithCandidates(candidates, provenance = []) {
+  setCandidateProvenance(provenance);
   queryInput.value = candidates.join('\n');
   queryInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
   queryInput.focus();

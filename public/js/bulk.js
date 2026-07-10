@@ -25,6 +25,9 @@ import { buildAbuseMailto, abuseRecordByDomain } from './abuse.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
 import { isDomainAllowlisted, isFaviconHashMatchingProfile, isReusingOfficialAssets } from './brand-profiles.js';
 import { showGate } from './auth.js';
+import { getCandidateProvenance, listCandidateProvenance } from './candidate-provenance.js';
+import { buildCoverageReport } from './coverage.js';
+import { MUTATION_LABELS } from './typosquat-generator.js';
 import {
   bulkFileInput,
   bulkCancelBtn,
@@ -41,6 +44,11 @@ import {
   bulkSelectAll,
   clusterPanel,
   clusterList,
+  coveragePanel,
+  coverageSummary,
+  coverageMutationBody,
+  coverageTldBody,
+  coverageExportBtn,
   submitBtn,
   fillQueryInputWithCandidates,
 } from './dom.js';
@@ -94,16 +102,28 @@ let bulkResults = [];
 let bulkResultsByDomain = new Map();
 let bulkAbortController = null;
 const bulkSelected = new Set();
+let lastCoverageReport = null;
+const coverageGroupDomains = new Map();
+
+function withCandidateProvenance(domain, record) {
+  const provenance = getCandidateProvenance(domain);
+  return {
+    ...record,
+    sourceDomain: provenance?.source || null,
+    candidateTld: provenance?.tld || domain.split('.').pop() || null,
+    mutationTypes: provenance?.mutationTypes || [],
+  };
+}
 
 // Maps a raw /api/availability response into the flat row shape the bulk
 // results table (and CSV export) expect.
 function toBulkRecord(domain, body) {
   if (!body.applicable) {
-    return {
+    return withCandidateProvenance(domain, {
       domain,
       availability: 'error',
       availabilityDetail: 'Not a domain name (bulk lookup only supports domains, not IPs/ASNs)',
-    };
+    });
   }
   const resolvedDomain = body.domain || domain;
   // Computed once here (not live at render time, unlike the Allowlisted
@@ -117,7 +137,7 @@ function toBulkRecord(domain, body) {
   const faviconMatch = notAllowlisted && isFaviconHashMatchingProfile(faviconHash);
   const reusesOfficialAssets = notAllowlisted && isReusingOfficialAssets(body.externalAssetHosts);
 
-  return {
+  return withCandidateProvenance(resolvedDomain, {
     domain: resolvedDomain,
     availability: body.state,
     availabilityDetail: body.detail,
@@ -144,7 +164,7 @@ function toBulkRecord(domain, body) {
     hasPasswordField: body.hasPasswordField ?? null,
     phishingLanguageMatch: body.phishingLanguageMatch ?? null,
     reusesOfficialAssets,
-  };
+  });
 }
 
 // Read-only accessor for the watchlist feature, which needs to snapshot/diff
@@ -246,6 +266,75 @@ function renderInfrastructureClusters() {
     .join('');
 }
 
+function coverageGroupRows(groups, dimension) {
+  return groups.map((group) => {
+    const groupId = `${dimension}:${group.key}`;
+    coverageGroupDomains.set(groupId, group.actionableDomains);
+    const disabled = group.actionableDomains.length === 0 ? ' disabled' : '';
+    return `
+      <tr>
+        <td>${escapeHtml(group.label)}</td>
+        <td>${group.total}</td>
+        <td>${group.protected}</td>
+        <td>${group.registered}</td>
+        <td>${group.available}</td>
+        <td>${group.unknown}</td>
+        <td>${group.coveragePercent}%</td>
+        <td><button type="button" class="secondary coverage-load-btn" data-coverage-group="${escapeHtml(groupId)}"${disabled}>Load gaps</button></td>
+      </tr>`;
+  }).join('');
+}
+
+function renderCoveragePlanner() {
+  const generated = listCandidateProvenance();
+  const allowlistedDomains = new Set(generated.filter((candidate) => isDomainAllowlisted(candidate.domain)).map((candidate) => candidate.domain));
+  const report = buildCoverageReport(bulkResults, generated, allowlistedDomains, MUTATION_LABELS);
+  lastCoverageReport = report;
+  coverageGroupDomains.clear();
+
+  if (report.summary.total === 0) {
+    coveragePanel.style.display = 'none';
+    coverageSummary.innerHTML = '';
+    coverageMutationBody.innerHTML = '';
+    coverageTldBody.innerHTML = '';
+    return;
+  }
+
+  const summary = report.summary;
+  coveragePanel.style.display = '';
+  coverageSummary.innerHTML = [
+    `<span class="signal-chip neutral">Generated: ${summary.total}</span>`,
+    `<span class="signal-chip good">Protected: ${summary.protected}</span>`,
+    `<span class="signal-chip danger">Registered: ${summary.registered}</span>`,
+    `<span class="signal-chip warn">Available: ${summary.available}</span>`,
+    `<span class="signal-chip neutral">Unknown: ${summary.unknown}</span>`,
+    `<span class="signal-chip ${summary.coveragePercent >= 75 ? 'good' : summary.coveragePercent >= 40 ? 'warn' : 'danger'}">Coverage: ${summary.coveragePercent}%</span>`,
+  ].join('');
+  coverageMutationBody.innerHTML = coverageGroupRows(report.mutationGroups, 'mutation');
+  coverageTldBody.innerHTML = coverageGroupRows(report.tldGroups, 'tld');
+}
+
+function exportCoverageCsv() {
+  if (!lastCoverageReport || lastCoverageReport.summary.total === 0) return;
+  const headers = ['Dimension', 'Group', 'Total', 'Protected', 'Registered', 'Available', 'Unknown', 'Coverage %'];
+  const groupRows = (dimension, groups) => groups.map((group) => [
+    dimension,
+    group.label,
+    group.total,
+    group.protected,
+    group.registered,
+    group.available,
+    group.unknown,
+    group.coveragePercent,
+  ]);
+  const rows = [
+    ...groupRows('Mutation family', lastCoverageReport.mutationGroups),
+    ...groupRows('TLD', lastCoverageReport.tldGroups),
+  ];
+  const csv = [headers, ...rows].map((row) => row.map(toCsvValue).join(',')).join('\r\n');
+  downloadBlob(csv, `defensive-registration-coverage-${Date.now()}.csv`, 'text/csv;charset=utf-8;');
+}
+
 function updateDeepCheckButton() {
   bulkDeepCheckBtn.disabled = bulkSelected.size === 0;
 }
@@ -254,6 +343,8 @@ function exportCsv(records, filename) {
   if (records.length === 0) return;
   const headers = [
     'Domain',
+    'Source Domain',
+    'Mutation Types',
     'Opportunity Score',
     'Opportunity Score Breakdown',
     'Risk Score',
@@ -285,6 +376,8 @@ function exportCsv(records, filename) {
   ];
   const rows = records.map((r) => [
     r.domain,
+    r.sourceDomain,
+    Array.isArray(r.mutationTypes) ? r.mutationTypes.map((type) => MUTATION_LABELS[type] || type).join('; ') : '',
     computeOpportunityScore(r),
     formatScoreBreakdown(explainOpportunityScore(r), '; '),
     computeRiskScore(r),
@@ -324,6 +417,12 @@ function bulkRowCellsHtml(r) {
   const registrant = [r.registrantName, r.registrantOrg].filter(Boolean).join(', ') || '—';
   const oppExplain = explainOpportunityScore(r);
   const riskExplain = explainRiskScore(r);
+  const mutationLabels = Array.isArray(r.mutationTypes)
+    ? r.mutationTypes.map((type) => MUTATION_LABELS[type] || type)
+    : [];
+  const mutationCell = mutationLabels.length
+    ? `<span class="signal-chip neutral" title="${escapeHtml(mutationLabels.join(', '))}">${escapeHtml(mutationLabels.length > 2 ? `${mutationLabels.slice(0, 2).join(', ')} +${mutationLabels.length - 2}` : mutationLabels.join(', '))}</span>`
+    : '—';
 
   const registrantObj = r.registrantEmail
     ? { name: r.registrantName, org: r.registrantOrg, email: r.registrantEmail }
@@ -365,6 +464,7 @@ function bulkRowCellsHtml(r) {
 
   return `
     <td class="domain-cell">${star}${escapeHtml(r.domain)}${allowlistFlag}${faviconFlag}${passwordFlag}${phishingLangFlag}${assetReuseFlag}</td>
+    <td>${mutationCell}</td>
     <td>${oppExplain === null ? '—' : `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">${oppExplain.score}</span>`}</td>
     <td>${riskExplain === null ? '—' : `<span class="signal-chip ${riskTone(riskExplain.score)}" title="${escapeHtml(formatScoreBreakdown(riskExplain))}">${riskExplain.score}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
@@ -436,6 +536,12 @@ export function clearBulkResults() {
   bulkDensityBtn.style.display = 'none';
   clusterPanel.style.display = 'none';
   clusterList.innerHTML = '';
+  coveragePanel.style.display = 'none';
+  coverageSummary.innerHTML = '';
+  coverageMutationBody.innerHTML = '';
+  coverageTldBody.innerHTML = '';
+  lastCoverageReport = null;
+  coverageGroupDomains.clear();
   // Registrant/abuse-contact data (WHOIS/RDAP personal data) pulled for
   // this table's rows - never cleared before, so it accumulated in memory
   // across every scan for the rest of the browser session. Safe to drop
@@ -500,7 +606,19 @@ document.addEventListener('click', (e) => {
   const clusterLoadBtn = target.closest('.cluster-load-btn');
   if (clusterLoadBtn instanceof HTMLElement) {
     const domains = (clusterLoadBtn.dataset.domains || '').split(',').filter(Boolean);
-    if (domains.length) fillQueryInputWithCandidates(domains);
+    if (domains.length) {
+      const provenance = domains.map((domain) => getBulkResultByDomain(domain)).filter((record) => record?.mutationTypes?.length);
+      fillQueryInputWithCandidates(domains, provenance);
+    }
+    return;
+  }
+  const coverageLoadBtn = target.closest('.coverage-load-btn');
+  if (coverageLoadBtn instanceof HTMLElement) {
+    const domains = coverageGroupDomains.get(coverageLoadBtn.dataset.coverageGroup || '') || [];
+    if (domains.length) {
+      const provenance = domains.map((domain) => getBulkResultByDomain(domain) || getCandidateProvenance(domain)).filter(Boolean);
+      fillQueryInputWithCandidates(domains, provenance);
+    }
   }
 });
 
@@ -532,6 +650,8 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     bulkResultsBody.innerHTML = '';
     bulkResults = [];
     bulkResultsByDomain.clear();
+    coveragePanel.style.display = 'none';
+    lastCoverageReport = null;
   }
 
   const seen = new Set();
@@ -581,7 +701,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
       record = toBulkRecord(domain, body);
     } catch (err) {
       if (signal.aborted) return; // cancelled - don't show a spurious error row
-      record = { domain, availability: 'error', availabilityDetail: err.message };
+      record = withCandidateProvenance(domain, { domain, availability: 'error', availabilityDetail: err.message });
     }
     processed += 1;
     upsertBulkRow(record);
@@ -597,6 +717,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     bulkExportBtn.disabled = bulkResults.length === 0;
     const verb = fast ? 'scanned' : 'deep-checked';
     bulkStatus.textContent = `Done - ${total} domain${total === 1 ? '' : 's'} ${verb}.`;
+    renderCoveragePlanner();
     renderInfrastructureClusters();
   }
 
@@ -639,6 +760,7 @@ bulkCancelBtn.addEventListener('click', () => {
 });
 
 bulkExportBtn.addEventListener('click', () => exportCsv(bulkResults, `domain-lookup-results-${Date.now()}.csv`));
+coverageExportBtn.addEventListener('click', exportCoverageCsv);
 
 bulkDeepCheckBtn.addEventListener('click', () => {
   const selected = [...bulkSelected];

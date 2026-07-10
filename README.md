@@ -101,6 +101,14 @@ The server listens on port 3000 by default. To use a different port:
 PORT=4000 SITE_PASSWORD=choose-a-password npm start
 ```
 
+Every push and pull request runs the locked install, test suite, and both
+JavaScript type checks in GitHub Actions. Run the same verification locally:
+
+```bash
+npm test
+npm run typecheck
+```
+
 ## Usage
 
 ### Looking up domains
@@ -159,6 +167,16 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   a one-click way to load the group back into the query box. Uses signals
   already collected by the scan - no extra lookups - and can surface a
   whole campaign even without a brand profile to compare against.
+- Typosquat candidates retain their **mutation provenance** (omission,
+  keyboard substitution, homoglyph, dictionary term, TLD typo, and the other
+  generator families) through bulk results, watchlists, and CSV export. When
+  several algorithms produce the same domain, every contributing family is
+  retained rather than silently discarded.
+- After a generated-list scan, **Defensive registration coverage** groups the
+  results by mutation family and TLD: protected/allowlisted domains,
+  registered exposures, available gaps, and unknown results. Groups can be
+  loaded back into the query box or exported as a coverage CSV, using scan
+  data already collected with no extra network calls.
 - Save a generated typosquat set as a **Watchlist** and re-scan it later -
   domains that moved from available/unknown to registered since the last
   check are flagged as new registrations (a fresh squatting attempt), and
@@ -251,7 +269,10 @@ public/
     render.js           RDAP/WHOIS/availability rendering
     outreach.js         Acquisition outreach draft + copy-to-clipboard
     abuse.js            Abuse-report draft + copy-to-clipboard
-    generators.js       Keyword and typosquat candidate generators
+    generators.js       Keyword and typosquat generator UI
+    typosquat-generator.js  Pure provenance-aware typosquat generation
+    candidate-provenance.js  Current generated-list metadata handoff
+    coverage.js         Defensive-registration coverage aggregation
     ct-search.js        Certificate Transparency search UI
     brand-profiles.js   Brand profiles, allowlisting, generator prefill, posture-audit UI
     shortlist.js        localStorage-backed shortlist
