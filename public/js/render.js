@@ -419,6 +419,16 @@ function signalChip(label, tone) {
   return `<span class="signal-chip ${tone}">${escapeHtml(label)}</span>`;
 }
 
+function scoreMeter(label, explained, tone) {
+  if (!explained) return '';
+  return `
+    <div class="score-meter ${tone}" title="${escapeHtml(formatScoreBreakdown(explained))}">
+      <span class="score-meter-label">${label}</span>
+      <span class="score-meter-value">${explained.score}</span>
+      <span class="score-meter-track" aria-hidden="true"><span class="score-meter-fill" style="width:${explained.score}%"></span></span>
+    </div>`;
+}
+
 function buildSignalChips(body) {
   const chips = [];
 
@@ -478,18 +488,10 @@ export function renderAvailability(body) {
 
   const oppExplain = explainOpportunityScore(body);
   const riskExplain = explainRiskScore(body);
-  const scoreChips = [];
-  if (oppExplain) {
-    scoreChips.push(
-      `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">Opportunity: ${oppExplain.score}</span>`
-    );
-  }
-  if (riskExplain) {
-    scoreChips.push(
-      `<span class="signal-chip ${riskTone(riskExplain.score)}" title="${escapeHtml(formatScoreBreakdown(riskExplain))}">Risk: ${riskExplain.score}</span>`
-    );
-  }
-  availabilityScores.innerHTML = scoreChips.join(' ');
+  availabilityScores.innerHTML = [
+    scoreMeter('Risk', riskExplain, riskTone(riskExplain?.score ?? null)),
+    scoreMeter('Opportunity', oppExplain, scoreTone(oppExplain?.score ?? null)),
+  ].join('');
 
   availabilityConfidence.innerHTML = body.confidence
     ? `<span class="confidence-note">confidence: ${escapeHtml(body.confidence)}</span>`

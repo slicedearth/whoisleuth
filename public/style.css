@@ -462,19 +462,37 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 0.88rem;
 }
 .availability-detail:not(:empty)::before { content: "\2502 "; color: var(--border); }
-/* Opportunity/Risk score chips are secondary to the status pill above them -
-   forcing them onto their own row (rather than competing for space in the
-   same flex line) and dialing down their size/weight keeps the state pill
-   as the one thing that reads first. */
+/* Scores stay numeric and readable, with the bar acting as a fast visual
+   comparison rather than a color-only replacement for the value. */
 #availability-scores {
   flex-basis: 100%;
-  margin-top: 2px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
 }
-#availability-scores .signal-chip {
+.score-meter {
+  display: grid;
+  grid-template-columns: auto auto minmax(72px, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--muted);
+  font-family: var(--mono);
   font-size: 0.72rem;
-  padding: 2px 9px;
-  font-weight: 600;
+  cursor: help;
 }
+.score-meter-label { font-weight: 700; color: var(--text); }
+.score-meter-value { min-width: 2ch; text-align: right; font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.score-meter-track { height: 6px; overflow: hidden; border-radius: 999px; background: var(--border); }
+.score-meter-fill { display: block; height: 100%; border-radius: inherit; background: var(--muted); }
+.score-meter.good .score-meter-fill { background: var(--accent2); }
+.score-meter.warn .score-meter-fill { background: var(--amber); }
+.score-meter.danger .score-meter-fill { background: var(--error); }
 .confidence-note {
   display: inline-block;
   margin-top: 8px;
@@ -838,6 +856,63 @@ a.secondary {
   color: var(--muted);
   font-family: var(--mono);
 }
+
+.bulk-triage {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.bulk-triage-heading,
+.bulk-triage-controls,
+.bulk-triage-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bulk-triage-heading { justify-content: space-between; gap: 12px; }
+.bulk-triage-heading .section-title { margin-bottom: 2px; }
+.bulk-triage-controls { margin-top: 12px; }
+.bulk-triage-group { gap: 6px; }
+.bulk-triage-filter,
+.bulk-triage-select-label {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+.bulk-triage-filter {
+  padding: 7px 10px;
+  font-weight: 600;
+}
+.bulk-triage-filter:hover { border-color: var(--accent); color: var(--text); }
+.bulk-triage-filter[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: rgba(94, 179, 255, 0.13);
+  color: var(--text);
+}
+.bulk-triage-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+}
+.bulk-triage-select-label select {
+  max-width: 190px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.bulk-triage-select-label option { background: var(--panel); color: var(--text); }
+.bulk-triage-clear { padding: 6px 10px; font-size: 0.72rem; }
 
 .bulk-results-wrap {
   margin-top: 20px;

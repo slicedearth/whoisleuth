@@ -131,10 +131,10 @@ npm run typecheck
   indicator (active site, configured mail server, hidden ownership, recent
   registration) distinct from the **Opportunity** score, which instead rates
   how approachable a domain is to acquire.
-- A single-domain lookup's availability card shows the same **Opportunity**
-  and **Risk** score chips as the bulk results table, next to the status
-  pill.
-- Hover any Opportunity/Risk score chip for a tooltip breaking down exactly
+- A single-domain lookup's availability card shows a compact, numbered
+  **Risk** and **Opportunity** meter beside the status: the bar speeds up
+  scanning but never replaces the score value.
+- Hover any Opportunity/Risk meter or bulk-table score for a tooltip breaking down exactly
   which signals contributed and by how much (e.g. "Base score for
   'registered' +40, Active site in use -20, ... Total 30"). The same
   breakdown is included as extra columns in CSV exports.
@@ -167,6 +167,10 @@ npm run typecheck
   a one-click way to load the group back into the query box. Uses signals
   already collected by the scan - no extra lookups - and can surface a
   whole campaign even without a brand profile to compare against.
+- **Bulk triage controls** keep large scans usable: filter by availability
+  family, high-risk score, error state, mutation family, and one or more
+  evidence signals. Counts update while the scan runs; filters change only
+  the visible rows, never the saved/exported scan data.
 - Typosquat candidates retain their **mutation provenance** (omission,
   keyboard substitution, homoglyph, dictionary term, TLD typo, and the other
   generator families) through bulk results, watchlists, and CSV export. When

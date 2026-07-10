@@ -3,7 +3,7 @@
 // feature modules that only need to run their own top-level wiring
 // (generators.js) rather than export anything main.js calls directly.
 
-import { form, queryInput } from './dom.js';
+import { form, queryInput, panels, bulkProgressWrap } from './dom.js';
 import { parseDomainsFromText, typeText } from './utils.js';
 import { runSingleLookup, clearSingleResults } from './single-lookup.js';
 import { clearBulkResults, runBulkLookup, MAX_FAST_BULK_DOMAINS } from './bulk.js';
@@ -13,6 +13,11 @@ import './generators.js';
 import './ct-search.js';
 import './auth.js';
 import './watchlist.js';
+
+function scrollToLookupResults(resultEl) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  resultEl.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
 
 // "Boot up" flavor on every page load - purely decorative and entirely
 // non-blocking (the form underneath is interactive immediately regardless
@@ -57,7 +62,9 @@ form.addEventListener('submit', async (e) => {
 
   if (entries.length === 1) {
     clearBulkResults();
-    await runSingleLookup(entries[0]);
+    const lookup = runSingleLookup(entries[0]);
+    scrollToLookupResults(panels);
+    await lookup;
     return;
   }
 
@@ -67,5 +74,7 @@ form.addEventListener('submit', async (e) => {
     bulkStatus.innerHTML = `<span class="error-text">Found ${entries.length} entries; only the first ${MAX_FAST_BULK_DOMAINS} will be scanned.</span>`;
   }
 
-  runBulkLookup(truncated, { fast: true, append: false });
+  const bulkLookup = runBulkLookup(truncated, { fast: true, append: false });
+  scrollToLookupResults(bulkProgressWrap);
+  void bulkLookup;
 });

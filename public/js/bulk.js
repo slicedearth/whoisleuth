@@ -28,6 +28,7 @@ import { showGate } from './auth.js';
 import { getCandidateProvenance, listCandidateProvenance } from './candidate-provenance.js';
 import { buildCoverageReport } from './coverage.js';
 import { MUTATION_LABELS } from './typosquat-generator.js';
+import { getBulkTriageBuckets, matchesBulkTriage, mutationTriageOptions } from './bulk-filters.js';
 import {
   bulkFileInput,
   bulkCancelBtn,
@@ -39,6 +40,12 @@ import {
   bulkProgressTrack,
   bulkProgressFill,
   bulkProgressLabel,
+  bulkTriage,
+  bulkTriageSummary,
+  bulkTriageStateButtons,
+  bulkTriageSignalButtons,
+  bulkTriageMutation,
+  bulkTriageClear,
   bulkResultsWrap,
   bulkResultsBody,
   bulkSelectAll,
@@ -104,6 +111,22 @@ let bulkAbortController = null;
 const bulkSelected = new Set();
 let lastCoverageReport = null;
 const coverageGroupDomains = new Map();
+let bulkTriageFilters = { state: 'all', mutation: '', signals: new Set() };
+let bulkTriageCounts = emptyBulkTriageCounts();
+const bulkMutationCounts = new Map();
+let visibleBulkRows = 0;
+
+const TRIAGE_STATE_LABELS = {
+  all: 'All',
+  available: 'Available',
+  registered: 'Registered',
+  high_risk: 'High risk',
+  errors: 'Errors',
+};
+
+function emptyBulkTriageCounts() {
+  return { all: 0, available: 0, registered: 0, high_risk: 0, errors: 0 };
+}
 
 function withCandidateProvenance(domain, record) {
   const provenance = getCandidateProvenance(domain);
@@ -113,6 +136,99 @@ function withCandidateProvenance(domain, record) {
     candidateTld: provenance?.tld || domain.split('.').pop() || null,
     mutationTypes: provenance?.mutationTypes || [],
   };
+}
+
+function resetBulkTriage() {
+  bulkTriageFilters = { state: 'all', mutation: '', signals: new Set() };
+  bulkTriageCounts = emptyBulkTriageCounts();
+  bulkMutationCounts.clear();
+  visibleBulkRows = 0;
+  bulkTriageMutation.innerHTML = '<option value="">All mutations</option>';
+  bulkTriageMutation.value = '';
+  bulkTriage.hidden = true;
+  bulkTriageSummary.textContent = '0 of 0 shown';
+  bulkTriageStateButtons.forEach((button) => {
+    const state = button.dataset.bulkState || 'all';
+    button.textContent = `${TRIAGE_STATE_LABELS[state] || state}: 0`;
+    button.setAttribute('aria-pressed', String(state === 'all'));
+  });
+  bulkTriageSignalButtons.forEach((button) => button.setAttribute('aria-pressed', 'false'));
+  bulkTriageClear.disabled = true;
+}
+
+function adjustBulkTriageCounts(record, direction) {
+  for (const bucket of getBulkTriageBuckets(record)) {
+    bulkTriageCounts[bucket] += direction;
+  }
+  const mutationTypes = new Set(Array.isArray(record.mutationTypes) ? record.mutationTypes : []);
+  let mutationOptionsChanged = false;
+  for (const mutationType of mutationTypes) {
+    const nextCount = (bulkMutationCounts.get(mutationType) || 0) + direction;
+    if (nextCount <= 0) {
+      bulkMutationCounts.delete(mutationType);
+      mutationOptionsChanged = true;
+    } else {
+      if (!bulkMutationCounts.has(mutationType)) mutationOptionsChanged = true;
+      bulkMutationCounts.set(mutationType, nextCount);
+    }
+  }
+  return mutationOptionsChanged;
+}
+
+function renderMutationTriageOptions() {
+  const selected = bulkTriageFilters.mutation;
+  const options = mutationTriageOptions(bulkMutationCounts, MUTATION_LABELS);
+  bulkTriageMutation.innerHTML = [
+    '<option value="">All mutations</option>',
+    ...options.map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)} (${option.count})</option>`),
+  ].join('');
+  bulkTriageMutation.value = options.some((option) => option.value === selected) ? selected : '';
+  bulkTriageFilters.mutation = bulkTriageMutation.value;
+}
+
+function renderBulkTriageControls({ mutationOptionsChanged = false } = {}) {
+  if (mutationOptionsChanged) renderMutationTriageOptions();
+  bulkTriageStateButtons.forEach((button) => {
+    const state = button.dataset.bulkState || 'all';
+    button.textContent = `${TRIAGE_STATE_LABELS[state] || state}: ${bulkTriageCounts[state] || 0}`;
+    button.setAttribute('aria-pressed', String(bulkTriageFilters.state === state));
+  });
+  bulkTriageSignalButtons.forEach((button) => {
+    const signal = button.dataset.bulkSignal || '';
+    button.setAttribute('aria-pressed', String(bulkTriageFilters.signals.has(signal)));
+  });
+  bulkTriageClear.disabled = bulkTriageFilters.state === 'all'
+    && !bulkTriageFilters.mutation
+    && bulkTriageFilters.signals.size === 0;
+  bulkTriageSummary.textContent = `${visibleBulkRows} of ${bulkTriageCounts.all} shown`;
+}
+
+function applyBulkTriageToAllRows() {
+  visibleBulkRows = 0;
+  /** @type {NodeListOf<HTMLTableRowElement>} */ (bulkResultsBody.querySelectorAll('tr[data-domain]')).forEach((tr) => {
+    const record = getBulkResultByDomain(tr.dataset.domain || '');
+    const visible = Boolean(record && matchesBulkTriage(record, bulkTriageFilters));
+    tr.hidden = !visible;
+    if (visible) visibleBulkRows += 1;
+  });
+  updateBulkSelectAllState();
+}
+
+function applyBulkTriageToRow(tr, record, isNew) {
+  const wasVisible = !isNew && !tr.hidden;
+  const visible = matchesBulkTriage(record, bulkTriageFilters);
+  tr.hidden = !visible;
+  if (isNew && visible) visibleBulkRows += 1;
+  else if (!isNew && visible !== wasVisible) visibleBulkRows += visible ? 1 : -1;
+}
+
+function updateBulkSelectAllState() {
+  const visibleCheckboxes = /** @type {HTMLInputElement[]} */ ([
+    .../** @type {NodeListOf<HTMLInputElement>} */ (bulkResultsBody.querySelectorAll('tr[data-domain]:not([hidden]) input[type="checkbox"]')),
+  ]);
+  const selectedCount = visibleCheckboxes.filter((checkbox) => checkbox.checked).length;
+  bulkSelectAll.checked = visibleCheckboxes.length > 0 && selectedCount === visibleCheckboxes.length;
+  bulkSelectAll.indeterminate = selectedCount > 0 && selectedCount < visibleCheckboxes.length;
 }
 
 // Maps a raw /api/availability response into the flat row shape the bulk
@@ -486,6 +602,7 @@ function wireBulkRowCheckbox(tr, domain) {
     if (checkbox.checked) bulkSelected.add(domain);
     else bulkSelected.delete(domain);
     updateDeepCheckButton();
+    updateBulkSelectAllState();
   });
 }
 
@@ -499,18 +616,24 @@ function getBulkResultByDomain(domain) {
 // adding a duplicate).
 function upsertBulkRow(r) {
   const existingIdx = bulkResultsByDomain.get(r.domain);
+  const previousRecord = existingIdx === undefined ? null : bulkResults[existingIdx];
+  let mutationOptionsChanged = false;
+  if (previousRecord) mutationOptionsChanged = adjustBulkTriageCounts(previousRecord, -1);
   if (existingIdx !== undefined) {
     bulkResults[existingIdx] = r;
   } else {
     bulkResultsByDomain.set(r.domain, bulkResults.length);
     bulkResults.push(r);
   }
+  mutationOptionsChanged = adjustBulkTriageCounts(r, 1) || mutationOptionsChanged;
 
   const existingTr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(r.domain)}"]`);
   if (existingTr) {
     const checked = /** @type {HTMLInputElement | null} */ (existingTr.querySelector('input[type="checkbox"]'))?.checked;
     existingTr.innerHTML = `<td><input type="checkbox" ${checked ? 'checked' : ''}/></td>${bulkRowCellsHtml(r)}`;
     wireBulkRowCheckbox(existingTr, r.domain);
+    applyBulkTriageToRow(existingTr, r, false);
+    renderBulkTriageControls({ mutationOptionsChanged });
     return;
   }
 
@@ -519,6 +642,8 @@ function upsertBulkRow(r) {
   tr.innerHTML = `<td><input type="checkbox" /></td>${bulkRowCellsHtml(r)}`;
   wireBulkRowCheckbox(tr, r.domain);
   bulkResultsBody.appendChild(tr);
+  applyBulkTriageToRow(tr, r, existingIdx === undefined);
+  renderBulkTriageControls({ mutationOptionsChanged });
 }
 
 export function clearBulkResults() {
@@ -527,6 +652,8 @@ export function clearBulkResults() {
   bulkResultsByDomain.clear();
   bulkSelected.clear();
   bulkSelectAll.checked = false;
+  bulkSelectAll.indeterminate = false;
+  resetBulkTriage();
   updateDeepCheckButton();
   bulkResultsWrap.classList.remove('visible');
   bulkProgressWrap.classList.remove('visible');
@@ -559,7 +686,7 @@ bulkDensityBtn.addEventListener('click', () => {
 });
 
 bulkSelectAll.addEventListener('change', () => {
-  bulkResultsBody.querySelectorAll('input[type="checkbox"]').forEach((cbEl) => {
+  bulkResultsBody.querySelectorAll('tr[data-domain]:not([hidden]) input[type="checkbox"]').forEach((cbEl) => {
     const cb = /** @type {HTMLInputElement} */ (cbEl);
     cb.checked = bulkSelectAll.checked;
     const domain = /** @type {HTMLElement | null} */ (cb.closest('tr'))?.dataset.domain;
@@ -568,6 +695,38 @@ bulkSelectAll.addEventListener('change', () => {
     else bulkSelected.delete(domain);
   });
   updateDeepCheckButton();
+  updateBulkSelectAllState();
+});
+
+bulkTriageStateButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    bulkTriageFilters.state = button.dataset.bulkState || 'all';
+    applyBulkTriageToAllRows();
+    renderBulkTriageControls();
+  });
+});
+
+bulkTriageSignalButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const signal = button.dataset.bulkSignal || '';
+    if (bulkTriageFilters.signals.has(signal)) bulkTriageFilters.signals.delete(signal);
+    else bulkTriageFilters.signals.add(signal);
+    applyBulkTriageToAllRows();
+    renderBulkTriageControls();
+  });
+});
+
+bulkTriageMutation.addEventListener('change', () => {
+  bulkTriageFilters.mutation = bulkTriageMutation.value;
+  applyBulkTriageToAllRows();
+  renderBulkTriageControls();
+});
+
+bulkTriageClear.addEventListener('click', () => {
+  bulkTriageFilters = { state: 'all', mutation: '', signals: new Set() };
+  bulkTriageMutation.value = '';
+  applyBulkTriageToAllRows();
+  renderBulkTriageControls();
 });
 
 // Star/unstar a bulk row (shortlist toggle), and remove-from-shortlist
@@ -650,6 +809,11 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     bulkResultsBody.innerHTML = '';
     bulkResults = [];
     bulkResultsByDomain.clear();
+    bulkSelected.clear();
+    bulkSelectAll.checked = false;
+    bulkSelectAll.indeterminate = false;
+    resetBulkTriage();
+    updateDeepCheckButton();
     coveragePanel.style.display = 'none';
     lastCoverageReport = null;
   }
@@ -666,6 +830,8 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
   }
 
   bulkResultsWrap.classList.add('visible');
+  bulkTriage.hidden = false;
+  renderBulkTriageControls();
   bulkExportBtn.disabled = true;
   bulkDeepCheckBtn.style.display = 'inline-block';
   bulkExportBtn.style.display = 'inline-block';

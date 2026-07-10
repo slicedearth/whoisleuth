@@ -275,7 +275,7 @@
     <div class="availability-top">
       <span class="availability-domain" id="availability-domain"></span>
       <span class="status-pill" id="availability-pill"></span>
-      <span id="availability-scores"></span>
+      <div id="availability-scores"></div>
     </div>
     <div class="availability-detail" id="availability-detail" aria-live="polite"></div>
     <div id="availability-confidence"></div>
@@ -317,6 +317,36 @@
     <div class="progress-track" id="bulk-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Bulk scan progress"><div class="progress-fill" id="bulk-progress-fill"></div></div>
     <div class="progress-label" id="bulk-progress-label"></div>
   </div>
+
+  <section class="bulk-triage" id="bulk-triage" aria-labelledby="bulk-triage-heading" hidden>
+    <div class="bulk-triage-heading">
+      <div>
+        <div class="section-title" id="bulk-triage-heading">Triage results</div>
+        <span class="bulk-label" id="bulk-triage-summary">0 of 0 shown</span>
+      </div>
+      <button type="button" class="secondary bulk-triage-clear" id="bulk-triage-clear" disabled>Clear filters</button>
+    </div>
+    <div class="bulk-triage-controls">
+      <div class="bulk-triage-group" role="group" aria-label="Filter by result status">
+        <button type="button" class="bulk-triage-filter" data-bulk-state="all" aria-pressed="true">All: 0</button>
+        <button type="button" class="bulk-triage-filter" data-bulk-state="available" aria-pressed="false">Available: 0</button>
+        <button type="button" class="bulk-triage-filter" data-bulk-state="registered" aria-pressed="false" title="Registered, for-sale, or expiring domains">Registered: 0</button>
+        <button type="button" class="bulk-triage-filter" data-bulk-state="high_risk" aria-pressed="false">High risk: 0</button>
+        <button type="button" class="bulk-triage-filter" data-bulk-state="errors" aria-pressed="false">Errors: 0</button>
+      </div>
+      <label class="bulk-triage-select-label" for="bulk-triage-mutation">Mutation
+        <select id="bulk-triage-mutation">
+          <option value="">All mutations</option>
+        </select>
+      </label>
+      <div class="bulk-triage-group" role="group" aria-label="Require evidence signals">
+        <button type="button" class="bulk-triage-filter" data-bulk-signal="favicon" aria-pressed="false">Favicon match</button>
+        <button type="button" class="bulk-triage-filter" data-bulk-signal="password" aria-pressed="false">Password form</button>
+        <button type="button" class="bulk-triage-filter" data-bulk-signal="phishing" aria-pressed="false">Phishing language</button>
+        <button type="button" class="bulk-triage-filter" data-bulk-signal="asset_reuse" aria-pressed="false">Official asset reuse</button>
+      </div>
+    </div>
+  </section>
 
   <div class="bulk-results-wrap" id="bulk-results-wrap">
     <table class="bulk-results">
