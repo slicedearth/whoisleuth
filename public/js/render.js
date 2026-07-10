@@ -15,7 +15,7 @@ import {
 } from './scoring.js';
 import { outreachButtonHtml, outreachRegistrantByDomain } from './outreach.js';
 import { abuseButtonHtml, abuseRecordByDomain } from './abuse.js';
-import { isDomainAllowlisted, isFaviconHashMatchingProfile, isReusingOfficialAssets } from './brand-profiles.js';
+import { isDomainAllowlisted, isFaviconHashMatchingProfile, isFaviconPerceptuallyMatchingProfile, isReusingOfficialAssets } from './brand-profiles.js';
 import { compareRegistrySources } from './registry-comparison.js';
 import {
   availabilityCard,
@@ -433,6 +433,7 @@ function buildSignalChips(body) {
   const chips = [];
 
   if (body.faviconMatch) chips.push(signalChip('Favicon match', 'danger'));
+  else if (body.faviconNearMatch) chips.push(signalChip('Favicon near-match', 'warn'));
   if (body.reusesOfficialAssets) chips.push(signalChip('Reuses official assets', 'danger'));
   if (body.phishingLanguageMatch) chips.push(signalChip('Phishing language', 'danger'));
   if (body.hasPasswordField) chips.push(signalChip('Password field', 'warn'));
@@ -484,6 +485,7 @@ export function renderAvailability(body) {
   // favicon (or its own assets) trivially, which isn't a finding.
   const notAllowlisted = !isDomainAllowlisted(body.domain);
   body.faviconMatch = notAllowlisted && isFaviconHashMatchingProfile(body.faviconHash);
+  body.faviconNearMatch = notAllowlisted && !body.faviconMatch && isFaviconPerceptuallyMatchingProfile(body.faviconPHash);
   body.reusesOfficialAssets = notAllowlisted && isReusingOfficialAssets(body.externalAssetHosts);
 
   const oppExplain = explainOpportunityScore(body);

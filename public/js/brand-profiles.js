@@ -42,6 +42,7 @@ function normalizeProfile(raw) {
     trademarkOwner: raw.trademarkOwner || '',
     trademarkRegistration: raw.trademarkRegistration || '',
     officialFaviconHash: raw.officialFaviconHash || '',
+    officialFaviconPHash: raw.officialFaviconPHash || '',
     createdAt: raw.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -99,6 +100,35 @@ export function isFaviconHashMatchingProfile(hash) {
   const profile = getActiveBrandProfile();
   if (!profile || !hash || !profile.officialFaviconHash) return false;
   return profile.officialFaviconHash === hash;
+}
+
+// Hamming distance between two 16-hex perceptual dHash strings (see
+// lib/perceptual-hash.js's hammingDistanceHex - reimplemented here because
+// public/js is a separate browser ESM bundle that can't import the CJS lib).
+function faviconHashDistance(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return null;
+  if (!/^[0-9a-f]{16}$/.test(a) || !/^[0-9a-f]{16}$/.test(b)) return null;
+  let distance = 0;
+  for (let i = 0; i < 16; i += 1) {
+    let diff = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+    while (diff) { distance += diff & 1; diff >>= 1; }
+  }
+  return distance;
+}
+
+// Deliberately conservative: a perceptual "near match" wrongly asserted would
+// brand an innocent domain as impersonating yours, so the threshold sits below
+// where genuine resized/recompressed copies land (a few bits) and well below
+// where visually different favicons do. Exact-match cases (distance 0) are
+// handled by isFaviconHashMatchingProfile above and excluded by callers, so
+// this only ever adds the *near-but-not-identical* tier.
+const FAVICON_PHASH_MAX_DISTANCE = 8;
+
+export function isFaviconPerceptuallyMatchingProfile(phash) {
+  const profile = getActiveBrandProfile();
+  if (!profile || !phash || !profile.officialFaviconPHash) return false;
+  const distance = faviconHashDistance(phash, profile.officialFaviconPHash);
+  return distance !== null && distance <= FAVICON_PHASH_MAX_DISTANCE;
 }
 
 // A registered lookalike whose page pulls a live resource (logo, CSS, JS -
@@ -235,6 +265,9 @@ function showForm(profile) {
   trademarkOwnerInput.value = profile?.trademarkOwner || '';
   trademarkRegInput.value = profile?.trademarkRegistration || '';
   faviconHashInput.value = profile?.officialFaviconHash || '';
+  // The perceptual hash travels alongside the exact one on a data attribute,
+  // so no extra form field is needed to round-trip it through edit/save.
+  faviconHashInput.dataset.phash = profile?.officialFaviconPHash || '';
   faviconHashDisplay.textContent = profile?.officialFaviconHash
     ? `${profile.officialFaviconHash.slice(0, 16)}…`
     : 'Not fetched';
@@ -264,9 +297,12 @@ faviconFetchBtn.addEventListener('click', async () => {
     const body = await res.json();
     if (body.faviconHash) {
       faviconHashInput.value = body.faviconHash;
-      faviconHashDisplay.textContent = `${body.faviconHash.slice(0, 16)}… (from ${officialDomain}/favicon.ico)`;
+      faviconHashInput.dataset.phash = body.faviconPHash || '';
+      const phashNote = body.faviconPHash ? '' : ' (exact-match only - favicon format not decodable for perceptual match)';
+      faviconHashDisplay.textContent = `${body.faviconHash.slice(0, 16)}… (from ${officialDomain}/favicon.ico)${phashNote}`;
     } else {
       faviconHashInput.value = '';
+      faviconHashInput.dataset.phash = '';
       faviconHashDisplay.textContent = `No favicon found at ${officialDomain}/favicon.ico`;
     }
   } catch {
@@ -316,6 +352,7 @@ profileSaveBtn.addEventListener('click', () => {
     trademarkOwner: trademarkOwnerInput.value.trim(),
     trademarkRegistration: trademarkRegInput.value.trim(),
     officialFaviconHash: faviconHashInput.value.trim(),
+    officialFaviconPHash: (faviconHashInput.dataset.phash || '').trim(),
     createdAt: existing?.createdAt,
   });
   upsertBrandProfile(profile);

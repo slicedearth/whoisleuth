@@ -158,6 +158,14 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true }), 70);
   });
 
+  test('a perceptual favicon near-match scores slightly below an exact match', () => {
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconNearMatch: true }), 62); // 40 base + 22
+  });
+
+  test('an exact favicon match takes precedence over a near-match (not double-counted)', () => {
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true, faviconNearMatch: true }), 70);
+  });
+
   test('an active site scores higher risk than a merely parked one', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'active' }), 65);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'parked' }), 45);

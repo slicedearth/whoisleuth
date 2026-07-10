@@ -149,6 +149,14 @@ export function explainRiskScore(r) {
   if (r.faviconMatch) {
     factors.push({ label: 'Favicon matches your brand profile\'s official site', delta: 30 });
     score += 30;
+  } else if (r.faviconNearMatch) {
+    // Perceptual (fuzzy) match: not byte-identical, but visually the same
+    // favicon resized/recompressed (see lib/perceptual-hash.js). Slightly
+    // weaker than an exact match since it's a similarity threshold rather
+    // than an equality, but still a strong copied-kit tell. Mutually
+    // exclusive with faviconMatch - the exact match already scored above.
+    factors.push({ label: 'Favicon closely resembles your official site (perceptual match)', delta: 22 });
+    score += 22;
   }
 
   // Cheap signals pulled from the homepage HTML already fetched for the

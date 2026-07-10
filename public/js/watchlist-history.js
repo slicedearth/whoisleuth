@@ -17,6 +17,7 @@ const DEEP_FIELDS = new Set([
   'pageTitle',
   'faviconHash',
   'faviconMatch',
+  'faviconNearMatch',
   'hasPasswordField',
   'phishingLanguageMatch',
   'reusesOfficialAssets',
@@ -37,6 +38,7 @@ const FIELD_LABELS = {
   pageTitle: 'Page title',
   faviconHash: 'Favicon',
   faviconMatch: 'Official favicon match',
+  faviconNearMatch: 'Official favicon near-match',
   hasPasswordField: 'Password form',
   phishingLanguageMatch: 'Phishing language',
   reusesOfficialAssets: 'Official asset reuse',
@@ -102,6 +104,7 @@ function compactRecord(record) {
     pageTitle: record.pageTitle ?? null,
     faviconHash: record.faviconHash || null,
     faviconMatch: typeof record.faviconMatch === 'boolean' ? record.faviconMatch : null,
+    faviconNearMatch: typeof record.faviconNearMatch === 'boolean' ? record.faviconNearMatch : null,
     hasPasswordField: typeof record.hasPasswordField === 'boolean' ? record.hasPasswordField : null,
     phishingLanguageMatch: record.phishingLanguageMatch ?? null,
     reusesOfficialAssets: typeof record.reusesOfficialAssets === 'boolean' ? record.reusesOfficialAssets : null,
@@ -143,7 +146,7 @@ function classifyChange(field, before, after) {
     }
     return { kind: 'availability_changed', tone: 'warn' };
   }
-  if (['faviconMatch', 'hasPasswordField', 'reusesOfficialAssets'].includes(field) && before === false && after === true) {
+  if (['faviconMatch', 'faviconNearMatch', 'hasPasswordField', 'reusesOfficialAssets'].includes(field) && before === false && after === true) {
     return { kind: 'risk_signal_added', tone: 'danger' };
   }
   if (field === 'phishingLanguageMatch' && !before && after) return { kind: 'risk_signal_added', tone: 'danger' };

@@ -23,7 +23,7 @@ import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
 import { buildAbuseMailto, abuseRecordByDomain } from './abuse.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
-import { isDomainAllowlisted, isFaviconHashMatchingProfile, isReusingOfficialAssets } from './brand-profiles.js';
+import { isDomainAllowlisted, isFaviconHashMatchingProfile, isFaviconPerceptuallyMatchingProfile, isReusingOfficialAssets } from './brand-profiles.js';
 import { showGate } from './auth.js';
 import { getCandidateProvenance, listCandidateProvenance } from './candidate-provenance.js';
 import { buildCoverageReport } from './coverage.js';
@@ -250,8 +250,12 @@ function toBulkRecord(domain, body, fast) {
   // official site trivially "matches" its own favicon, which isn't a
   // finding.
   const faviconHash = body.faviconHash ?? null;
+  const faviconPHash = body.faviconPHash ?? null;
   const notAllowlisted = !isDomainAllowlisted(resolvedDomain);
   const faviconMatch = notAllowlisted && isFaviconHashMatchingProfile(faviconHash);
+  // Perceptual near-match is only meaningful when it's *not* already an exact
+  // match (which scores higher) - keep the two mutually exclusive.
+  const faviconNearMatch = notAllowlisted && !faviconMatch && isFaviconPerceptuallyMatchingProfile(faviconPHash);
   const reusesOfficialAssets = notAllowlisted && isReusingOfficialAssets(body.externalAssetHosts);
 
   return withCandidateProvenance(resolvedDomain, {
@@ -277,7 +281,9 @@ function toBulkRecord(domain, body, fast) {
     hasDmarc: body.hasDmarc ?? null,
     abuseEmail: body.abuse ? body.abuse.email : null,
     faviconMatch,
+    faviconNearMatch,
     faviconHash,
+    faviconPHash,
     pageTitle: body.pageTitle ?? null,
     hasPasswordField: body.hasPasswordField ?? null,
     phishingLanguageMatch: body.phishingLanguageMatch ?? null,
