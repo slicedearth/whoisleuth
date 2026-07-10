@@ -151,6 +151,23 @@ export function explainRiskScore(r) {
     score += 30;
   }
 
+  // Cheap signals pulled from the homepage HTML already fetched for the
+  // for-sale check above (see lib/html-signals.js) - a login form and/or
+  // urgency-driven copy are the actual mechanics of a credential-harvesting
+  // page, not just circumstantial activity.
+  if (r.reusesOfficialAssets) {
+    factors.push({ label: 'Reuses assets from your official site', delta: 20 });
+    score += 20;
+  }
+  if (r.phishingLanguageMatch) {
+    factors.push({ label: 'Phishing/urgency language detected', delta: 15 });
+    score += 15;
+  }
+  if (r.hasPasswordField) {
+    factors.push({ label: 'Login/password form present', delta: 15 });
+    score += 15;
+  }
+
   if (r.activityStatus === 'active') {
     factors.push({ label: 'Active site in use', delta: 25 });
     score += 25;

@@ -107,6 +107,18 @@ export function isFaviconHashMatchingProfile(hash) {
   return profile.officialFaviconHash === hash;
 }
 
+// A registered lookalike whose page pulls a live resource (logo, CSS, JS -
+// see lib/html-signals.js) straight from the active profile's own official
+// domain is a common lazy-clone tell: it never bothered copying the asset,
+// just hotlinked it. Same allowlist exclusion reasoning as
+// isFaviconHashMatchingProfile() above.
+export function isReusingOfficialAssets(externalAssetHosts) {
+  const profile = getActiveBrandProfile();
+  if (!profile || !Array.isArray(externalAssetHosts) || externalAssetHosts.length === 0) return false;
+  const officialHosts = new Set(profile.officialDomains.map((d) => d.toLowerCase()));
+  return externalAssetHosts.some((h) => officialHosts.has(h.toLowerCase()));
+}
+
 export function upsertBrandProfile(profile) {
   const list = loadBrandProfiles();
   const idx = list.findIndex((p) => p.id === profile.id);

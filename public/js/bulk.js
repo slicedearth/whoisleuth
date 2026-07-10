@@ -23,7 +23,7 @@ import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
 import { buildAbuseMailto, abuseRecordByDomain } from './abuse.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
-import { isDomainAllowlisted, isFaviconHashMatchingProfile } from './brand-profiles.js';
+import { isDomainAllowlisted, isFaviconHashMatchingProfile, isReusingOfficialAssets } from './brand-profiles.js';
 import { showGate } from './auth.js';
 import {
   bulkFileInput,
@@ -94,7 +94,9 @@ function toBulkRecord(domain, body) {
   // official site trivially "matches" its own favicon, which isn't a
   // finding.
   const faviconHash = body.faviconHash ?? null;
-  const faviconMatch = !isDomainAllowlisted(resolvedDomain) && isFaviconHashMatchingProfile(faviconHash);
+  const notAllowlisted = !isDomainAllowlisted(resolvedDomain);
+  const faviconMatch = notAllowlisted && isFaviconHashMatchingProfile(faviconHash);
+  const reusesOfficialAssets = notAllowlisted && isReusingOfficialAssets(body.externalAssetHosts);
 
   return {
     domain: resolvedDomain,
@@ -119,6 +121,10 @@ function toBulkRecord(domain, body) {
     abuseEmail: body.abuse ? body.abuse.email : null,
     faviconMatch,
     faviconHash,
+    pageTitle: body.pageTitle ?? null,
+    hasPasswordField: body.hasPasswordField ?? null,
+    phishingLanguageMatch: body.phishingLanguageMatch ?? null,
+    reusesOfficialAssets,
   };
 }
 
@@ -244,6 +250,10 @@ function exportCsv(records, filename) {
     'SPF Record',
     'DMARC Record',
     'Favicon Match',
+    'Page Title',
+    'Password Field',
+    'Phishing Language Match',
+    'Reuses Official Assets',
     'Abuse Email',
     'Registrar Name',
     'Registrar Email',
@@ -271,6 +281,10 @@ function exportCsv(records, filename) {
     r.hasSpf === true ? 'Yes' : r.hasSpf === false ? 'No' : '',
     r.hasDmarc === true ? 'Yes' : r.hasDmarc === false ? 'No' : '',
     r.faviconMatch ? 'Yes' : '',
+    r.pageTitle,
+    r.hasPasswordField ? 'Yes' : '',
+    r.phishingLanguageMatch,
+    r.reusesOfficialAssets ? 'Yes' : '',
     r.abuseEmail,
     r.registrarName,
     r.registrarEmail,
@@ -320,9 +334,18 @@ function bulkRowCellsHtml(r) {
   const faviconFlag = r.faviconMatch
     ? `<span class="watch-flag danger" title="Serves the exact same favicon as your official domain - a strong sign of a cloned phishing page">Favicon match</span>`
     : '';
+  const passwordFlag = r.hasPasswordField
+    ? `<span class="watch-flag warn" title="Homepage HTML contains a password input field">Password field</span>`
+    : '';
+  const phishingLangFlag = r.phishingLanguageMatch
+    ? `<span class="watch-flag danger" title="Homepage text matched: &quot;${escapeHtml(r.phishingLanguageMatch)}&quot;">Phishing language</span>`
+    : '';
+  const assetReuseFlag = r.reusesOfficialAssets
+    ? `<span class="watch-flag danger" title="Loads an image, script, or stylesheet directly from your official domain">Reuses official assets</span>`
+    : '';
 
   return `
-    <td class="domain-cell">${star}${escapeHtml(r.domain)}${allowlistFlag}${faviconFlag}</td>
+    <td class="domain-cell">${star}${escapeHtml(r.domain)}${allowlistFlag}${faviconFlag}${passwordFlag}${phishingLangFlag}${assetReuseFlag}</td>
     <td>${oppExplain === null ? '—' : `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">${oppExplain.score}</span>`}</td>
     <td>${riskExplain === null ? '—' : `<span class="signal-chip ${riskTone(riskExplain.score)}" title="${escapeHtml(formatScoreBreakdown(riskExplain))}">${riskExplain.score}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>

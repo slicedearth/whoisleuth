@@ -137,6 +137,12 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   check). A registered lookalike serving that exact same favicon - a common
   tell for a cloned phishing kit - gets flagged in results and contributes
   heavily to its Risk score.
+- A deep check also pulls a few signals straight from the domain's homepage
+  HTML at no extra fetch cost: a login/password form, urgency-driven
+  phishing/social-engineering language ("verify your account", "security
+  alert", ...), the page title, and any image/script/stylesheet it loads
+  directly from your official domain instead of copying - a lazy
+  phishing-kit tell. All feed into the Risk score.
 - A bulk scan flags **Related infrastructure**: domains in the same scan
   that share an exact nameserver set or favicon hash with each other, with
   a one-click way to load the group back into the query box. Uses signals
@@ -210,6 +216,7 @@ lib/                    Shared lookup logic, used by both server.js and netlify/
   availability.js       Availability/opportunity signal derivation
   dns-mx.js             MX-record lookup (phishing-risk signal for deep checks)
   favicon.js            Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
+  html-signals.js       Homepage-HTML signals (title, password field, phishing language, asset hotlinking)
   ct-search.js          Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)
