@@ -11,8 +11,8 @@
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify Status" /></a>
 </p>
 
-A local WHOIS + RDAP lookup tool for checking domain, IP, and ASN records —
-single lookups or bulk scans of a domain list — backed by the official IANA
+A local WHOIS + RDAP lookup tool for checking domain, IP, and ASN records -
+single lookups or bulk scans of a domain list - backed by the official IANA
 RDAP bootstrap service and live WHOIS (TCP/43) queries to the relevant
 registries. Includes availability/opportunity scoring, a typosquat
 phishing-risk score, a Certificate Transparency search for lookalikes not yet
@@ -113,7 +113,7 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
 
 ### Opportunity & Risk scoring
 
-- A deep-checked (registered) result gets a **Risk** score — a phishing-risk
+- A deep-checked (registered) result gets a **Risk** score - a phishing-risk
   indicator (active site, configured mail server, hidden ownership, recent
   registration) distinct from the **Opportunity** score, which instead rates
   how approachable a domain is to acquire.
@@ -127,16 +127,20 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
 
 ### Brand protection & monitoring
 
-- Save a generated typosquat set as a **Watchlist** and re-scan it later —
+- Save a **Brand Profile** (official domains, product names, TLDs, approved
+  partner domains, and an allowlist) - the typosquat generator can prefill
+  from the active profile, and bulk/watchlist results mark any domain in its
+  allowlist instead of treating your own domain as a lookalike.
+- Save a generated typosquat set as a **Watchlist** and re-scan it later -
   domains that moved from available/unknown to registered since the last
   check are flagged as new registrations (a fresh squatting attempt), and
   any that lapsed back to available are flagged as released.
 - Use **Search Certificate Transparency logs** to find hostnames with a
-  publicly-issued TLS certificate matching a brand keyword — catches
+  publicly-issued TLS certificate matching a brand keyword - catches
   lookalikes the typosquat generator's fixed permutations would never guess,
   often before the domain shows up anywhere else.
 - A registered result with a published abuse contact (from RDAP or WHOIS)
-  gets a **Report abuse** draft — a prefilled takedown request referencing
+  gets a **Report abuse** draft - a prefilled takedown request referencing
   that domain's risk signals, with the same mailto-link-plus-copy-button
   pattern as the acquisition outreach draft.
 
@@ -145,9 +149,9 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
 All `/api/*` routes are rate-limited per client IP (`lib/rate-limit.js`),
 shared by `server.js` and the Netlify Functions:
 
-- `/api/login` — 10 attempts per 5 minutes, since the shared password is the
+- `/api/login` - 10 attempts per 5 minutes, since the shared password is the
   tool's only access control and the main thing worth throttling.
-- `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search` — 1000
+- `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search` - 1000
   requests per minute, generous enough to clear a full 2000-domain fast bulk
   scan without breaking normal use, while still capping a scripted flood well
   below what upstream registries would treat as abuse.
@@ -155,29 +159,29 @@ shared by `server.js` and the Netlify Functions:
 Exceeding either limit returns `429` with a `Retry-After` header. The limiter
 is in-memory: on `server.js` (one long-lived process) it applies globally; on
 Netlify Functions each container has its own memory, so it only limits bursts
-within a single warm container rather than across the whole deployment — a
+within a single warm container rather than across the whole deployment - a
 cheap first line of defense, not a substitute for a shared store (e.g. Redis)
 under sustained distributed abuse.
 
 ## Deploying to Netlify
 
 This branch also ships `netlify/functions/rdap.js`, `whois.js`,
-`availability.js`, and `ct-search.js` — thin wrappers around the same `lib/`
+`availability.js`, and `ct-search.js` - thin wrappers around the same `lib/`
 code `server.js` uses, so behavior is identical either way. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).
 2. Netlify reads `netlify.toml` to publish `public/` and build the functions
-   in `netlify/functions/` automatically — no extra build command needed.
+   in `netlify/functions/` automatically - no extra build command needed.
 3. In the Netlify dashboard, set a `SITE_PASSWORD` environment variable
-   (Site settings → Environment variables) before your first deploy — the
+   (Site settings → Environment variables) before your first deploy - the
    login/session functions read it the same way `server.js` does. Without
    it, `checkPassword`/`isValidSessionToken` fail closed and nobody (not even
    the correct password) can log in.
 
 Bulk scans run as one `/api/availability` call per domain with client-side
 concurrency (see `public/js/bulk.js`) rather than one long server-held
-request, since serverless functions have a per-invocation execution limit —
+request, since serverless functions have a per-invocation execution limit -
 this keeps each function call short regardless of how many domains are in a
 bulk run.
 
@@ -215,11 +219,12 @@ public/
     abuse.js            Abuse-report draft + copy-to-clipboard
     generators.js       Keyword and typosquat candidate generators
     ct-search.js        Certificate Transparency search UI
+    brand-profiles.js   localStorage-backed brand profiles (allowlist, generator prefill)
     shortlist.js        localStorage-backed shortlist
     watchlist.js        localStorage-backed watchlist with re-scan diffing
     single-lookup.js    Single domain/IP/ASN lookup orchestration
     bulk.js             Bulk scan/deep-check, sorting, CSV export
 ```
 
-No bundler or framework — the frontend loads native ES modules directly via
+No bundler or framework - the frontend loads native ES modules directly via
 `<script type="module">`.

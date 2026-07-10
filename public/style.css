@@ -184,7 +184,7 @@ header p {
 .file-upload-label:hover {
   border-color: var(--accent);
 }
-input[type="text"] {
+input[type="text"], textarea:not(#query-input), select {
   width: 100%;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -195,10 +195,11 @@ input[type="text"] {
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-input[type="text"]:focus {
+input[type="text"]:focus, textarea:not(#query-input):focus, select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(94, 179, 255, 0.35);
 }
+textarea:not(#query-input) { resize: vertical; min-height: 60px; font-family: inherit; }
 details.generator {
   margin-top: 14px;
   background: var(--panel);

@@ -8,6 +8,7 @@ import { parseDomainsFromText, typeText } from './utils.js';
 import { runSingleLookup, clearSingleResults } from './single-lookup.js';
 import { clearBulkResults, runBulkLookup, MAX_FAST_BULK_DOMAINS } from './bulk.js';
 import { bulkStatus } from './dom.js';
+import './brand-profiles.js';
 import './generators.js';
 import './ct-search.js';
 import './auth.js';

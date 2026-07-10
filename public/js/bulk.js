@@ -23,6 +23,7 @@ import { PILL_LABELS } from './render.js';
 import { buildOutreachMailto, outreachRegistrantByDomain } from './outreach.js';
 import { buildAbuseMailto, abuseRecordByDomain } from './abuse.js';
 import { isShortlisted, toggleShortlist, loadShortlist } from './shortlist.js';
+import { isDomainAllowlisted } from './brand-profiles.js';
 import { showGate } from './auth.js';
 import {
   bulkFileInput,
@@ -215,8 +216,12 @@ function bulkRowCellsHtml(r) {
   const starLabel = `${starred ? 'Remove from' : 'Add to'} shortlist`;
   const star = `<button type="button" class="star-btn" data-domain="${escapeHtml(r.domain)}" title="${starLabel}" aria-label="${starLabel}" aria-pressed="${starred}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 6px 0 0;font-size:0.95rem;">${starred ? '★' : '☆'}</button>`;
 
+  const allowlistFlag = isDomainAllowlisted(r.domain)
+    ? `<span class="watch-flag good" title="Matches the active brand profile's official/partner/allowlisted domains">Allowlisted</span>`
+    : '';
+
   return `
-    <td class="domain-cell">${star}${escapeHtml(r.domain)}</td>
+    <td class="domain-cell">${star}${escapeHtml(r.domain)}${allowlistFlag}</td>
     <td>${oppExplain === null ? '—' : `<span class="signal-chip ${scoreTone(oppExplain.score)}" title="${escapeHtml(formatScoreBreakdown(oppExplain))}">${oppExplain.score}</span>`}</td>
     <td>${riskExplain === null ? '—' : `<span class="signal-chip ${riskTone(riskExplain.score)}" title="${escapeHtml(formatScoreBreakdown(riskExplain))}">${riskExplain.score}</span>`}</td>
     <td><span class="mini-pill ${escapeHtml(r.availability)}">${escapeHtml(pillLabel)}</span></td>
@@ -421,7 +426,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
   } else {
     bulkExportBtn.disabled = bulkResults.length === 0;
     const verb = fast ? 'scanned' : 'deep-checked';
-    bulkStatus.textContent = `Done — ${total} domain${total === 1 ? '' : 's'} ${verb}.`;
+    bulkStatus.textContent = `Done - ${total} domain${total === 1 ? '' : 's'} ${verb}.`;
   }
 
   submitBtn.disabled = false;

@@ -32,14 +32,14 @@
       <span class="term-dot term-dot-red"></span>
       <span class="term-dot term-dot-amber"></span>
       <span class="term-dot term-dot-green"></span>
-      <span class="term-chrome-label">guest@whoisleuth &mdash; domain intelligence console</span>
+      <span class="term-chrome-label">guest@whoisleuth - domain intelligence console</span>
     </div>
     <div class="term-body">
       <div class="header-top">
         <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth<span class="term-cursor" aria-hidden="true"></span></h1>
         <button type="button" id="logout-btn" class="secondary">Log out</button>
       </div>
-      <p>Domain, IP, and ASN lookups via the IANA RDAP bootstrap and live WHOIS (TCP/43) &mdash; single queries or bulk CSV scans with export.</p>
+      <p>Domain, IP, and ASN lookups via the IANA RDAP bootstrap and live WHOIS (TCP/43) - single queries or bulk CSV scans with export.</p>
     </div>
   </header>
 
@@ -49,7 +49,7 @@
       <textarea
         id="query-input"
         rows="1"
-        placeholder="domain, IP, or ASN &mdash; or paste a list"
+        placeholder="domain, IP, or ASN - or paste a list"
       ></textarea>
       <label for="bulk-file" class="file-upload-label" title="Upload a CSV (a &quot;domain&quot; column, or one per line, up to 2000) - loads into the box above for a bulk scan">Upload CSV</label>
       <input type="file" id="bulk-file" accept=".csv,text/csv" style="display:none;" />
@@ -62,6 +62,83 @@
       <button type="button" class="chip" data-example="2606:4700:4700::1111">2606:4700:4700::1111</button>
       <button type="button" class="chip" data-example="AS15169">AS15169</button>
     </div>
+    <details class="generator">
+      <summary>Brand Profiles (<span id="brand-profile-count">0 saved</span>)</summary>
+      <p class="bulk-label" style="margin-top: 10px;">
+        Save a brand's official domains, product names, approved partners, and allowlist so the
+        typosquat generator can prefill from it and bulk/watchlist results can tell "our own domain"
+        apart from an unrecognized lookalike.
+      </p>
+      <div class="bulk-inputs" style="margin-top: 10px;">
+        <div>
+          <label class="bulk-label" for="brand-profile-select">Active profile</label>
+          <select id="brand-profile-select">
+            <option value="">None</option>
+          </select>
+        </div>
+      </div>
+      <div class="bulk-actions">
+        <button type="button" id="brand-profile-new-btn" class="secondary">New profile</button>
+        <button type="button" id="brand-profile-edit-btn" class="secondary" disabled>Edit</button>
+        <button type="button" id="brand-profile-delete-btn" class="secondary" disabled>Delete</button>
+        <button type="button" id="brand-profile-export-json-btn" class="secondary">Export JSON</button>
+        <label for="brand-profile-import-file" class="file-upload-label" title="Import a previously-exported brand profiles JSON file - merges by name, doesn't replace what's already saved">Import JSON</label>
+        <input type="file" id="brand-profile-import-file" accept=".json,application/json" style="display:none;" />
+        <span class="bulk-status" id="brand-profile-status" aria-live="polite"></span>
+      </div>
+      <div id="brand-profile-form" style="display:none; margin-top: 14px;">
+        <div class="bulk-inputs">
+          <div>
+            <label class="bulk-label" for="brand-profile-name">Brand name</label>
+            <input type="text" id="brand-profile-name" placeholder="Acme Rockets" />
+          </div>
+          <div>
+            <label class="bulk-label" for="brand-profile-tlds">TLDs to monitor (comma-separated)</label>
+            <input type="text" id="brand-profile-tlds" placeholder="com, net, org, io" />
+          </div>
+        </div>
+        <div class="bulk-inputs" style="margin-top: 12px;">
+          <div>
+            <label class="bulk-label" for="brand-profile-official-domains">Official domains (one per line)</label>
+            <textarea id="brand-profile-official-domains" rows="3" placeholder="acme.com&#10;acme.io"></textarea>
+          </div>
+          <div>
+            <label class="bulk-label" for="brand-profile-product-names">Product names/abbreviations (comma-separated)</label>
+            <input type="text" id="brand-profile-product-names" placeholder="AcmePay, AR" />
+          </div>
+        </div>
+        <div class="bulk-inputs" style="margin-top: 12px;">
+          <div>
+            <label class="bulk-label" for="brand-profile-partner-domains">Approved partner domains (one per line)</label>
+            <textarea id="brand-profile-partner-domains" rows="3" placeholder="partner-reseller.com"></textarea>
+          </div>
+          <div>
+            <label class="bulk-label" for="brand-profile-allowlist-domains">Other allowlisted domains (one per line)</label>
+            <textarea id="brand-profile-allowlist-domains" rows="3" placeholder="acme-sandbox-test.com"></textarea>
+          </div>
+        </div>
+        <div class="bulk-inputs" style="margin-top: 12px;">
+          <div>
+            <label class="bulk-label" for="brand-profile-allowlist-registrars">Allowlisted registrars (comma-separated)</label>
+            <input type="text" id="brand-profile-allowlist-registrars" placeholder="MarkMonitor, CSC Corporate Domains" />
+          </div>
+        </div>
+        <div class="bulk-inputs" style="margin-top: 12px;">
+          <div>
+            <label class="bulk-label" for="brand-profile-trademark-owner">Trademark owner (optional, for report drafting)</label>
+            <input type="text" id="brand-profile-trademark-owner" placeholder="Acme Corp." />
+          </div>
+          <div>
+            <label class="bulk-label" for="brand-profile-trademark-number">Registration number / jurisdiction</label>
+            <input type="text" id="brand-profile-trademark-number" placeholder="US Reg. No. 1234567" />
+          </div>
+        </div>
+        <div class="bulk-actions">
+          <button type="button" id="brand-profile-save-btn">Save profile</button>
+          <button type="button" id="brand-profile-cancel-btn" class="secondary">Cancel</button>
+        </div>
+      </div>
+    </details>
     <details class="generator">
       <summary>Generate candidates from a keyword</summary>
       <div class="bulk-inputs" style="margin-top: 10px;">
@@ -93,6 +170,7 @@
       </div>
       <div class="bulk-actions">
         <button type="button" id="typo-run-btn" class="secondary">Generate typosquat variants</button>
+        <button type="button" id="typo-fill-profile-btn" class="secondary">Fill from active profile</button>
         <span class="bulk-status" id="typo-status" aria-live="polite"></span>
       </div>
     </details>
@@ -251,8 +329,8 @@
   <footer>
     Data sourced directly from <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap service</a>
     and the referring registry's own RDAP/WHOIS servers. This tool runs a small local backend so real WHOIS
-    (TCP/43) and cross-origin RDAP requests are possible &mdash; browsers cannot make either of those calls directly.
-    Most gTLD registries redact registrant contact details for privacy, so registrant fields are often blank &mdash;
+    (TCP/43) and cross-origin RDAP requests are possible - browsers cannot make either of those calls directly.
+    Most gTLD registries redact registrant contact details for privacy, so registrant fields are often blank -
     that reflects the registry's own privacy redaction, not a lookup failure.
     <p>&copy; 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> &middot; <a href="privacy.html">Privacy Policy</a></p>
   </footer>

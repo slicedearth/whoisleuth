@@ -13,6 +13,7 @@
 // cybersquatting/phishing targets), not idea-driven.
 
 import { fillQueryInputWithCandidates } from './dom.js';
+import { getActiveBrandProfile } from './brand-profiles.js';
 
 function parseTldList(raw) {
   return [...new Set(
@@ -227,6 +228,7 @@ const typoRunBtn = /** @type {HTMLButtonElement} */ (document.getElementById('ty
 const typoKeywordInput = /** @type {HTMLInputElement} */ (document.getElementById('typo-keyword'));
 const typoTldsInput = /** @type {HTMLInputElement} */ (document.getElementById('typo-tlds'));
 const typoStatusEl = /** @type {HTMLElement} */ (document.getElementById('typo-status'));
+const typoFillProfileBtn = /** @type {HTMLButtonElement} */ (document.getElementById('typo-fill-profile-btn'));
 
 typoRunBtn.addEventListener('click', () => {
   const keyword = typoKeywordInput.value;
@@ -241,4 +243,15 @@ typoRunBtn.addEventListener('click', () => {
 
   fillQueryInputWithCandidates(candidates);
   statusEl.textContent = `Generated ${candidates.length} typosquat variants - scrolled to the query box above so you can review them, then click Lookup to scan.`;
+});
+
+typoFillProfileBtn.addEventListener('click', () => {
+  const profile = getActiveBrandProfile();
+  if (!profile) {
+    typoStatusEl.innerHTML = '<span class="error-text">No active brand profile selected - pick one in the Brand Profiles panel above.</span>';
+    return;
+  }
+  typoKeywordInput.value = profile.officialDomains[0] || profile.name;
+  if (profile.tlds.length > 0) typoTldsInput.value = profile.tlds.join(', ');
+  typoStatusEl.textContent = `Filled from brand profile "${profile.name}".`;
 });

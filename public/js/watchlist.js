@@ -9,6 +9,7 @@
 import { escapeHtml, downloadBlob, readFileAsText } from './utils.js';
 import { fillQueryInputWithCandidates, bulkStatus } from './dom.js';
 import { runBulkLookup, getBulkResults, flagBulkRow } from './bulk.js';
+import { isDomainAllowlisted } from './brand-profiles.js';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 
@@ -94,6 +95,10 @@ function diffWatchlist(previousResults, newResults) {
   for (const next of newResults) {
     const prev = previousByDomain.get(next.domain);
     if (!prev) continue;
+    // A domain in the active brand profile's own allowlist isn't a threat
+    // regardless of which way its state moved - skip it rather than flag
+    // your own domain as a "new registration."
+    if (isDomainAllowlisted(next.domain)) continue;
 
     if (OPEN_STATES.has(prev.availability) && REGISTERED_STATES.has(next.availability)) {
       changes.push({ domain: next.domain, label: 'New registration', tone: 'danger', rowClass: 'newly-registered' });
