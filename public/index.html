@@ -10,21 +10,37 @@
 <body>
 <div class="login-gate" id="login-gate">
   <form id="login-form" class="login-form">
-    <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth</h1>
-    <p>Enter the shared password to continue.</p>
-    <label for="login-password" class="visually-hidden">Shared password</label>
-    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
-    <button type="submit">Enter</button>
-    <div class="error-text" id="login-error" aria-live="polite"></div>
+    <div class="term-chrome" aria-hidden="true">
+      <span class="term-dot term-dot-red"></span>
+      <span class="term-dot term-dot-amber"></span>
+      <span class="term-dot term-dot-green"></span>
+      <span class="term-chrome-label">guest@whoisleuth</span>
+    </div>
+    <div class="term-body">
+      <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth<span class="term-cursor" aria-hidden="true"></span></h1>
+      <p>Enter the shared password to continue.</p>
+      <label for="login-password" class="visually-hidden">Shared password</label>
+      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
+      <button type="submit">Enter</button>
+      <div class="error-text" id="login-error" aria-live="polite"></div>
+    </div>
   </form>
 </div>
 <div class="wrap" id="app-wrap" style="display:none;">
-  <header>
-    <div class="header-top">
-      <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth</h1>
-      <button type="button" id="logout-btn" class="secondary">Log out</button>
+  <header class="term-window">
+    <div class="term-chrome" aria-hidden="true">
+      <span class="term-dot term-dot-red"></span>
+      <span class="term-dot term-dot-amber"></span>
+      <span class="term-dot term-dot-green"></span>
+      <span class="term-chrome-label">guest@whoisleuth &mdash; domain intelligence console</span>
     </div>
-    <p>Domain, IP, and ASN lookups via the IANA RDAP bootstrap and live WHOIS (TCP/43) &mdash; single queries or bulk CSV scans with export.</p>
+    <div class="term-body">
+      <div class="header-top">
+        <h1><img src="favicon.svg" class="brand-logo" alt="" />WHOISleuth<span class="term-cursor" aria-hidden="true"></span></h1>
+        <button type="button" id="logout-btn" class="secondary">Log out</button>
+      </div>
+      <p>Domain, IP, and ASN lookups via the IANA RDAP bootstrap and live WHOIS (TCP/43) &mdash; single queries or bulk CSV scans with export.</p>
+    </div>
   </header>
 
   <form id="lookup-form">
@@ -33,7 +49,7 @@
       <textarea
         id="query-input"
         rows="1"
-        placeholder="example.com, 8.8.8.8, AS15169... or paste a list for bulk"
+        placeholder="domain, IP, or ASN &mdash; or paste a list"
       ></textarea>
       <label for="bulk-file" class="file-upload-label" title="Upload a CSV (a &quot;domain&quot; column, or one per line, up to 2000) - loads into the box above for a bulk scan">Upload CSV</label>
       <input type="file" id="bulk-file" accept=".csv,text/csv" style="display:none;" />
@@ -161,6 +177,7 @@
   </form>
 
   <section class="availability" id="availability-card">
+    <div class="term-prompt" id="availability-prompt" aria-hidden="true"></div>
     <div class="availability-top">
       <span class="availability-domain" id="availability-domain"></span>
       <span class="status-pill" id="availability-pill"></span>

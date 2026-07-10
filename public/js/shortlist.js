@@ -53,11 +53,11 @@ export function clearShortlist() {
 // device without any server-side storage. Import merges by domain rather
 // than replacing outright, so re-importing an old backup can't silently
 // undo more recent shortlist changes.
-export function exportShortlistJson() {
+function exportShortlistJson() {
   downloadBlob(JSON.stringify(loadShortlist(), null, 2), `domain-shortlist-${Date.now()}.json`, 'application/json;charset=utf-8;');
 }
 
-export function importShortlistJson(parsed) {
+function importShortlistJson(parsed) {
   if (!Array.isArray(parsed)) throw new Error('Expected a JSON array of shortlist entries.');
   const byDomain = new Map(loadShortlist().map((r) => [r.domain, r]));
   let added = 0;
@@ -80,7 +80,7 @@ const shortlistClearBtn = /** @type {HTMLButtonElement} */ (document.getElementB
 const shortlistExportJsonBtn = /** @type {HTMLButtonElement} */ (document.getElementById('shortlist-export-json-btn'));
 const shortlistImportInput = /** @type {HTMLInputElement} */ (document.getElementById('shortlist-import-file'));
 
-export function renderShortlistPanel() {
+function renderShortlistPanel() {
   const list = loadShortlist();
   shortlistCountEl.textContent = `${list.length} domain${list.length === 1 ? '' : 's'}`;
   shortlistBodyEl.innerHTML = list

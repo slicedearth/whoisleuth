@@ -3,7 +3,7 @@
 // a deep check. A plain mailto: link plus a copy-to-clipboard fallback,
 // since not everyone has a desktop mail client configured to handle mailto.
 
-import { escapeHtml, wireCopyToClipboard } from './utils.js';
+import { escapeHtml, wireCopyToClipboard, isRedactionPlaceholder } from './utils.js';
 
 function buildOutreachDraftText(domain, registrant) {
   const greetingName = (registrant && (registrant.name || registrant.org)) || 'there';
@@ -21,7 +21,7 @@ function buildOutreachDraftText(domain, registrant) {
 }
 
 export function buildOutreachMailto(domain, registrant) {
-  if (!registrant || !registrant.email) return null;
+  if (!registrant || !registrant.email || isRedactionPlaceholder(registrant.email)) return null;
   const query = new URLSearchParams({
     subject: `Inquiry about ${domain}`,
     body: buildOutreachDraftText(domain, registrant),

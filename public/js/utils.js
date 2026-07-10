@@ -16,6 +16,32 @@ export function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// Some registries fill a redacted field with a literal placeholder string
+// (e.g. "REDACTED FOR PRIVACY") instead of omitting it - printed verbatim
+// that reads as if it were real data, and worse, a mailto: link built from
+// it would target that literal text as an email address. Same marker list
+// lib/availability.js uses server-side for the privacyProtected signal;
+// kept here too since render.js/outreach.js/abuse.js work from the raw
+// RDAP/WHOIS field values directly, not that derived signal.
+const REDACTION_MARKERS = [
+  /redacted for privacy/i,
+  /data protected/i,
+  /privacy\s*protect/i,
+  /whoisguard/i,
+  /domains by proxy/i,
+  /perfect privacy/i,
+  /contact privacy/i,
+  /private registration/i,
+  /identity protect/i,
+  /not disclosed/i,
+  /withheld for privacy/i,
+  /^redacted$/i,
+];
+
+export function isRedactionPlaceholder(value) {
+  return typeof value === 'string' && REDACTION_MARKERS.some((re) => re.test(value));
+}
+
 export function fmtDate(iso) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -82,6 +108,32 @@ export function downloadBlob(content, filename, mimeType) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Types `text` into el one character at a time - purely decorative (the
+// terminal-prompt-echo lines), so it respects prefers-reduced-motion by
+// just setting the text instantly instead. Cancels any run already in
+// progress on this element (a fast repeat lookup shouldn't leave two
+// competing timers racing to finish the same line).
+const typingTimers = new WeakMap();
+export function typeText(el, text, { speed = 18 } = {}) {
+  const pending = typingTimers.get(el);
+  if (pending) clearTimeout(pending);
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = text;
+    return;
+  }
+
+  el.textContent = '';
+  let i = 0;
+  const tick = () => {
+    i += 1;
+    el.textContent = text.slice(0, i);
+    if (i < text.length) typingTimers.set(el, setTimeout(tick, speed));
+    else typingTimers.delete(el);
+  };
+  tick();
 }
 
 export function readFileAsText(file) {

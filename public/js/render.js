@@ -2,7 +2,7 @@
 // Shared by single-lookup.js (which fetches the data) and by bulk.js/
 // shortlist.js (which only need PILL_LABELS for their own table rendering).
 
-import { escapeHtml, fmtDate, kv } from './utils.js';
+import { escapeHtml, fmtDate, kv, typeText, isRedactionPlaceholder } from './utils.js';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -17,6 +17,7 @@ import { outreachButtonHtml, outreachRegistrantByDomain } from './outreach.js';
 import { abuseButtonHtml, abuseRecordByDomain } from './abuse.js';
 import {
   availabilityCard,
+  availabilityPrompt,
   availabilityDomain,
   availabilityPill,
   availabilityScores,
@@ -27,6 +28,19 @@ import {
   availabilityAbuseReport,
 } from './dom.js';
 
+// Same shape as kv() (utils.js), but a field whose value is itself a
+// redaction placeholder renders as a visual blackout bar instead of the
+// placeholder text - the same information a censored document would give:
+// "something was here, you don't get to see it" rather than a sentence
+// that reads like real data at a glance.
+function kvOrRedacted(label, value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (isRedactionPlaceholder(value)) {
+    return `<dt>${escapeHtml(label)}</dt><dd><span class="redacted-bar"><span class="visually-hidden">Redacted for privacy</span></span></dd>`;
+  }
+  return kv(label, value);
+}
+
 // collapsed: renders as a closed <details> (title in the summary) instead of
 // a permanently-visible section - for entities that exist on some registries
 // but are rarely what someone's looking for (technical/billing contacts),
@@ -35,12 +49,12 @@ import {
 function entityBlock(title, entity, { collapsed = false } = {}) {
   if (!entity) return '';
   const rows = [
-    entity.name ? kv('Name', entity.name) : '',
-    entity.org ? kv('Organisation', entity.org) : '',
-    entity.email ? kv('Email', entity.email) : '',
-    entity.phone ? kv('Phone', entity.phone) : '',
-    entity.address ? kv('Address', entity.address) : '',
-    entity.handle ? kv('Handle', entity.handle) : '',
+    kvOrRedacted('Name', entity.name),
+    kvOrRedacted('Organisation', entity.org),
+    kvOrRedacted('Email', entity.email),
+    kvOrRedacted('Phone', entity.phone),
+    kvOrRedacted('Address', entity.address),
+    kvOrRedacted('Handle', entity.handle),
   ].join('');
   if (!rows) return '';
   const body = `<dl class="kv-grid">${rows}</dl>`;
@@ -381,6 +395,7 @@ export function renderAvailability(body) {
   }
 
   availabilityCard.classList.add('visible');
+  typeText(availabilityPrompt, `$ whois ${body.domain || ''}`);
   availabilityDomain.textContent = body.domain || '';
 
   const state = body.state || 'unknown';

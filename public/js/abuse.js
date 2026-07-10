@@ -5,7 +5,7 @@
 // copy-to-clipboard pattern, but targets a different recipient and purpose
 // (reporting abuse, not making an acquisition offer).
 
-import { escapeHtml, wireCopyToClipboard } from './utils.js';
+import { escapeHtml, wireCopyToClipboard, isRedactionPlaceholder } from './utils.js';
 import { fmtAge } from './scoring.js';
 
 function buildAbuseDraftText(domain, record) {
@@ -32,7 +32,7 @@ function buildAbuseDraftText(domain, record) {
 }
 
 export function buildAbuseMailto(domain, record) {
-  if (!record || !record.abuseEmail) return null;
+  if (!record || !record.abuseEmail || isRedactionPlaceholder(record.abuseEmail)) return null;
   const query = new URLSearchParams({
     subject: `Abuse report - suspected typosquat/phishing domain: ${domain}`,
     body: buildAbuseDraftText(domain, record),

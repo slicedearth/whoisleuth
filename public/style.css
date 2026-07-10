@@ -12,6 +12,20 @@
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 * { box-sizing: border-box; }
+textarea, input[type="text"], input[type="password"] { caret-color: var(--accent2); }
+/* Dark-themed scrollbars - the default light-gray browser scrollbar is
+   jarring against this palette, especially inside the textarea and
+   scrollable panels/tables. */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 /* Screen-reader-only content - visually hidden but still announced, for
    labels on inputs whose visible cue is a placeholder (which disappears on
    input and isn't a reliable label substitute) or an icon-only column. */
@@ -28,7 +42,19 @@
 }
 body {
   margin: 0;
-  background: var(--bg);
+  /* Ambient green glow anchored near the top of the page (not the
+     viewport, so it doesn't visibly slide as a long results page scrolls)
+     plus very faint horizontal scanlines - a CRT/terminal texture cue,
+     kept subtle enough to read as ambience rather than a distraction. */
+  background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.015) 0px,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse 900px 500px at 50% 0, rgba(126, 224, 168, 0.05), transparent 65%),
+    var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   min-height: 100vh;
@@ -38,10 +64,59 @@ body {
   margin: 0 auto;
   padding: 40px 20px 80px;
 }
+/* Terminal window chrome - a title bar (window-control dots + a path-style
+   label) sitting above a padded content area. Used on both the login card
+   and the main header, so the very first thing anyone sees establishes the
+   "console" identity rather than looking like a generic SaaS card. */
+header.term-window {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
+  margin-bottom: 24px;
+}
+.term-chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border);
+}
+/* Flat, static, equal weight - a macOS window-control impression (red/amber/
+   green = close/minimize/maximize), not a status light. Glow/pulse is
+   reserved for things that are actually part of the terminal "readout"
+   (cursor, prompts, chevrons) - giving just the green dot that treatment
+   mixed two different metaphors for no real reason. */
+.term-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.term-dot-red { background: #ff6b6b; }
+.term-dot-amber { background: #f2b84b; }
+.term-dot-green { background: #7ee0a8; }
+.term-chrome-label {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-body { padding: 22px 24px; }
+.term-cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 0.15em;
+  background: var(--accent2);
+  vertical-align: -0.15em;
+  box-shadow: 0 0 8px rgba(126, 224, 168, 0.65);
+}
 .header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .header-top .secondary {
@@ -50,10 +125,11 @@ body {
   flex: 0 0 auto;
 }
 header h1 {
-  font-size: 1.6rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-family: var(--mono);
+  font-size: 1.5rem;
+  font-weight: 700;
   margin: 0 0 4px;
+  white-space: nowrap;
 }
 .brand-logo {
   width: 1.1em;
@@ -63,7 +139,7 @@ header h1 {
 }
 header p {
   color: var(--muted);
-  margin: 0 0 28px;
+  margin: 0;
   font-size: 0.95rem;
 }
 .search-row {
@@ -99,8 +175,9 @@ header p {
   color: var(--text);
   background: transparent;
   cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 700;
   white-space: nowrap;
   transition: border-color 0.15s ease;
 }
@@ -129,6 +206,29 @@ details.generator {
   border-radius: 10px;
   padding: 12px 16px;
 }
+/* Custom disclosure marker (a terminal-prompt-style chevron, replacing the
+   native triangle) shared by every <details> in the app - generators, raw
+   JSON/WHOIS toggles, and the collapsed technical/billing/status sections
+   all read as one consistent "expand this" affordance instead of relying
+   on each browser's own default marker glyph/positioning. */
+/* ::before (not display:flex on the whole summary) so mixed text+inline-
+   element content - e.g. "Shortlist (<span>0 domains</span>) - saved..." -
+   still wraps and flows normally instead of every text node/span becoming
+   its own flex item with a gap forced between them. */
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: "\276F";
+  display: inline-block;
+  color: var(--accent2);
+  font-size: 0.8em;
+  margin-right: 8px;
+  text-shadow: 0 0 6px rgba(126, 224, 168, 0.5);
+  transition: transform 0.15s ease;
+}
+details[open] > summary::before { transform: rotate(90deg); }
 details.generator summary {
   cursor: pointer;
   font-size: 0.88rem;
@@ -139,11 +239,12 @@ button {
   background: var(--accent);
   color: #08131f;
   border: none;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-weight: 700;
   padding: 12px 20px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   transition: filter 0.15s ease, transform 0.1s ease;
 }
 button:hover { filter: brightness(1.08); }
@@ -164,10 +265,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border: 1px solid var(--border);
   color: var(--muted);
   padding: 4px 10px;
+  font-family: var(--mono);
   font-weight: 400;
   border-radius: 999px;
   margin: 6px 6px 0 0;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   text-decoration: none;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease;
@@ -186,8 +288,31 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 10px;
   padding: 18px 20px;
   display: none;
+  position: relative;
 }
 .availability.visible { display: block; }
+/* HUD-style corner brackets on the top/bottom-right (the left edge already
+   carries the state-color accent bar below) - a deliberately un-rounded-
+   rectangle accent on the one card that's the actual point of a lookup. */
+.availability::before, .availability::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--accent2);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.availability::before { top: -1px; border-width: 2px 2px 0 0; border-radius: 0 9px 0 0; }
+.availability::after { bottom: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 9px 0; }
+.term-prompt {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--accent2);
+  margin-bottom: 10px;
+  text-shadow: 0 0 6px rgba(126, 224, 168, 0.4);
+}
 /* Left-border accent ties the card's color straight to its status, the same
    five states .status-pill/.mini-pill already use - a glance at the edge of
    the card tells you the state before you've read the pill text. */
@@ -205,12 +330,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 16px;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 0.92rem;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.85rem;
   letter-spacing: 0.02em;
 }
+/* Terminal status-code look ([ REGISTERED ]) rather than a plain pill -
+   just bracket glyphs around the existing text, the tinted background/color
+   per state is untouched (shared with .mini-pill below). */
+.status-pill::before { content: "["; margin-right: 1px; opacity: 0.55; text-shadow: 0 0 4px currentColor; }
+.status-pill::after { content: "]"; margin-left: 1px; opacity: 0.55; text-shadow: 0 0 4px currentColor; }
 /* Shared availability-state colors - .status-pill (availability card) and
    .mini-pill (bulk results table) are different shapes/sizes for the same
    five states, so their colors are declared together here rather than
@@ -230,6 +361,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--muted);
   font-size: 0.88rem;
 }
+.availability-detail:not(:empty)::before { content: "\2502 "; color: var(--border); }
 /* Opportunity/Risk score chips are secondary to the status pill above them -
    forcing them onto their own row (rather than competing for space in the
    same flex line) and dialing down their size/weight keeps the state pill
@@ -271,8 +403,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: transparent;
   border: none;
   color: var(--muted);
-  font-weight: 600;
-  font-size: 0.88rem;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.82rem;
   padding: 10px 16px;
   border-radius: 8px 8px 0 0;
   cursor: pointer;
@@ -327,12 +460,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--muted);
   text-align: center;
 }
-.empty-state svg { opacity: 0.45; }
+.empty-state svg { opacity: 0.5; color: var(--accent2); }
 .skeleton-lines { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
 .skeleton-line {
   height: 12px;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--border) 25%, rgba(255, 255, 255, 0.08) 37%, var(--border) 63%);
+  background: linear-gradient(90deg, var(--border) 25%, rgba(126, 224, 168, 0.12) 37%, var(--border) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease infinite;
 }
@@ -356,7 +489,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 0;
   word-break: break-word;
 }
+/* A censored-document blackout bar for fields the registry filled with a
+   placeholder ("REDACTED FOR PRIVACY") instead of omitting - see
+   isRedactionPlaceholder() in render.js. */
+.redacted-bar {
+  display: inline-block;
+  width: 110px;
+  max-width: 100%;
+  height: 0.85em;
+  background: #000;
+  border-radius: 2px;
+  vertical-align: -0.1em;
+}
+.section-title::before { content: "\2500\2500 "; color: var(--border); }
 .section-title {
+  font-family: var(--mono);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -373,6 +520,7 @@ details.section-toggle {
 }
 details.section-toggle:first-child { margin-top: 0; }
 details.section-toggle > summary {
+  font-family: var(--mono);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -454,18 +602,10 @@ details.raw pre {
   font-family: var(--mono);
   font-size: 0.75rem;
 }
-.spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  vertical-align: middle;
-  margin-left: 8px;
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  .term-cursor { animation: blink 1s steps(1) infinite; }
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 footer {
   margin-top: 30px;
@@ -487,6 +627,17 @@ footer a { color: var(--accent); }
   font-size: 0.78rem;
   color: var(--muted);
   margin-bottom: 6px;
+}
+/* Only field labels (not the longer description paragraphs that also reuse
+   .bulk-label for prose, e.g. the CT search/watchlist blurbs) get the
+   prompt-style prefix - a chevron before a full paragraph would read oddly. */
+label.bulk-label::before {
+  content: "\276F";
+  display: inline-block;
+  color: var(--accent2);
+  font-family: var(--mono);
+  margin-right: 5px;
+  text-shadow: 0 0 6px rgba(126, 224, 168, 0.5);
 }
 .bulk-actions {
   margin-top: 14px;
@@ -515,7 +666,8 @@ a.secondary {
   text-decoration: none;
   cursor: pointer;
 }
-.bulk-status { font-size: 0.85rem; color: var(--muted); }
+.bulk-status { font-size: 0.85rem; color: var(--muted); font-family: var(--mono); }
+.bulk-status:not(:empty)::before { content: "$ "; color: var(--accent2); text-shadow: 0 0 6px rgba(126, 224, 168, 0.5); }
 
 .progress-wrap {
   margin-top: 16px;
@@ -563,7 +715,8 @@ table.bulk-results th {
   text-align: left;
   padding: 8px 10px;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-bottom: 1px solid var(--border);
@@ -596,6 +749,10 @@ table.bulk-results td {
   transition: padding 0.15s ease;
 }
 table.bulk-results td.domain-cell { font-family: var(--mono); }
+/* filter (not background) so it layers on top of the newly-registered/
+   released row tinting below instead of needing to reconcile with it. */
+table.bulk-results tbody tr:hover { filter: brightness(1.12); }
+table.bulk-results tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--accent2); }
 /* Compact density toggle - a 2000-row scan fits far more above the fold
    with tighter row padding, at the cost of some breathing room. */
 .bulk-results-wrap.compact table.bulk-results th,
@@ -636,14 +793,20 @@ table.bulk-results tbody tr.released td { background: rgba(126, 224, 168, 0.08);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 32px;
+  overflow: hidden;
   width: 100%;
   max-width: 360px;
   text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
 }
+.login-form .term-chrome { text-align: left; }
+.login-form .term-body { padding: 28px 32px 32px; }
 .login-form h1 {
-  font-size: 1.3rem;
+  font-family: var(--mono);
+  font-size: 1.25rem;
+  font-weight: 700;
   margin: 0 0 8px;
+  white-space: nowrap;
 }
 .login-form p {
   color: var(--muted);

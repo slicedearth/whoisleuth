@@ -20,7 +20,7 @@ const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
 // change.
 const OPEN_STATES = new Set(['available']);
 
-export function loadWatchlists() {
+function loadWatchlists() {
   try {
     return JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '{}');
   } catch {
@@ -36,14 +36,14 @@ function saveWatchlists(all) {
   }
 }
 
-export function saveWatchlistSnapshot(name, results) {
+function saveWatchlistSnapshot(name, results) {
   const all = loadWatchlists();
   all[name] = { updatedAt: new Date().toISOString(), results };
   saveWatchlists(all);
   renderWatchlistPanel();
 }
 
-export function deleteWatchlist(name) {
+function deleteWatchlist(name) {
   const all = loadWatchlists();
   delete all[name];
   saveWatchlists(all);
@@ -52,7 +52,7 @@ export function deleteWatchlist(name) {
 
 // Bulk erasure alongside the existing per-watchlist Delete button - see
 // shortlist.js's clearShortlist() for why this matters beyond tidying up.
-export function clearAllWatchlists() {
+function clearAllWatchlists() {
   saveWatchlists({});
   renderWatchlistPanel();
 }
@@ -61,11 +61,11 @@ export function clearAllWatchlists() {
 // shortlist.js's export/import (localStorage-only, no server-side copy).
 // Import merges by name rather than replacing outright, so importing an
 // old backup can't silently wipe out watchlists saved since then.
-export function exportWatchlistsJson() {
+function exportWatchlistsJson() {
   downloadBlob(JSON.stringify(loadWatchlists(), null, 2), `domain-watchlists-${Date.now()}.json`, 'application/json;charset=utf-8;');
 }
 
-export function importWatchlistsJson(parsed) {
+function importWatchlistsJson(parsed) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Expected a JSON object mapping watchlist names to their saved results.');
   }
@@ -87,7 +87,7 @@ export function importWatchlistsJson(parsed) {
 // entry per domain whose state crossed the registered/open boundary in
 // either direction. Domains with no meaningful state change (including ones
 // that simply weren't in the previous snapshot) are left alone.
-export function diffWatchlist(previousResults, newResults) {
+function diffWatchlist(previousResults, newResults) {
   const previousByDomain = new Map(previousResults.map((r) => [r.domain, r]));
   const changes = [];
 
@@ -119,7 +119,7 @@ const watchlistClearBtn = /** @type {HTMLButtonElement} */ (document.getElementB
 const watchlistExportJsonBtn = /** @type {HTMLButtonElement} */ (document.getElementById('watchlist-export-json-btn'));
 const watchlistImportInput = /** @type {HTMLInputElement} */ (document.getElementById('watchlist-import-file'));
 
-export function renderWatchlistPanel() {
+function renderWatchlistPanel() {
   const all = loadWatchlists();
   const names = Object.keys(all).sort();
   watchlistBodyEl.innerHTML = names

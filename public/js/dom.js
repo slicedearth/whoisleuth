@@ -27,6 +27,7 @@ export const panelRdap = /** @type {HTMLElement} */ (document.getElementById('pa
 export const panelWhois = /** @type {HTMLElement} */ (document.getElementById('panel-whois'));
 
 export const availabilityCard = /** @type {HTMLElement} */ (document.getElementById('availability-card'));
+export const availabilityPrompt = /** @type {HTMLElement} */ (document.getElementById('availability-prompt'));
 export const availabilityDomain = /** @type {HTMLElement} */ (document.getElementById('availability-domain'));
 export const availabilityPill = /** @type {HTMLElement} */ (document.getElementById('availability-pill'));
 export const availabilityScores = /** @type {HTMLElement} */ (document.getElementById('availability-scores'));

@@ -4,7 +4,7 @@
 // (generators.js) rather than export anything main.js calls directly.
 
 import { form, queryInput } from './dom.js';
-import { parseDomainsFromText } from './utils.js';
+import { parseDomainsFromText, typeText } from './utils.js';
 import { runSingleLookup, clearSingleResults } from './single-lookup.js';
 import { clearBulkResults, runBulkLookup, MAX_FAST_BULK_DOMAINS } from './bulk.js';
 import { bulkStatus } from './dom.js';
@@ -12,6 +12,15 @@ import './generators.js';
 import './ct-search.js';
 import './auth.js';
 import './watchlist.js';
+
+// "Boot up" flavor on every page load - purely decorative and entirely
+// non-blocking (the form underneath is interactive immediately regardless
+// of whether this has finished), so it can never add friction to actually
+// logging in or using the tool.
+document.querySelectorAll('.term-chrome-label').forEach((labelEl) => {
+  const text = labelEl.textContent || '';
+  typeText(labelEl, text, { speed: 12 });
+});
 
 document.querySelectorAll('.chip').forEach((chipEl) => {
   const chip = /** @type {HTMLElement} */ (chipEl);

@@ -42,7 +42,7 @@ import {
   fillQueryInputWithCandidates,
 } from './dom.js';
 
-export const MAX_BULK_DOMAINS = 200;
+const MAX_BULK_DOMAINS = 200;
 export const MAX_FAST_BULK_DOMAINS = 2000;
 const BULK_CONCURRENCY = 6;
 // Fast scans (RDAP-only, no WHOIS/homepage fetch) are cheap enough on both
