@@ -5,7 +5,7 @@
 // upload flow (which loads into the query box rather than tracking the
 // file separately until submit).
 
-import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText, downloadBlob, runPool } from './utils.js';
+import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText, downloadBlob, runPool, groupBySimilarFavicon } from './utils.js';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -315,12 +315,17 @@ export function flagBulkRow(domain, { label, tone, rowClass }) {
 // hosting campaign, using signals a scan already collects - no extra
 // network calls. Nameserver matching requires the exact full nameserver
 // set (not just one shared nameserver, which large registrars hand out to
-// millions of unrelated domains and would be pure noise); a shared favicon
-// hash between two *different* domains is a much stronger, rarer signal on
-// its own, and catches a phishing ring even without a brand profile's
-// official hash to compare against. A domain the active brand profile
+// millions of unrelated domains and would be pure noise); a shared or
+// visually-similar favicon between two *different* domains is a much
+// stronger, rarer signal on its own, and catches a phishing ring even
+// without a brand profile's official hash to compare against. Favicon
+// grouping connects both byte-identical icons and perceptual near-duplicates
+// (a ring that resized/recompressed one favicon across its domains), so a
+// slightly-varied clone still clusters. A domain the active brand profile
 // already allowlists is excluded - two of a brand's own legitimate domains
 // sharing infrastructure isn't a finding.
+const FAVICON_CLUSTER_MAX_DISTANCE = 6;
+
 function computeInfrastructureClusters(results) {
   const candidates = results.filter((r) => !isDomainAllowlisted(r.domain));
   const clusters = [];
@@ -336,14 +341,8 @@ function computeInfrastructureClusters(results) {
     if (domains.length >= 2) clusters.push({ type: 'Shared nameservers', domains });
   }
 
-  const byFavicon = new Map();
-  for (const r of candidates) {
-    if (!r.faviconHash) continue;
-    if (!byFavicon.has(r.faviconHash)) byFavicon.set(r.faviconHash, []);
-    byFavicon.get(r.faviconHash).push(r.domain);
-  }
-  for (const domains of byFavicon.values()) {
-    if (domains.length >= 2) clusters.push({ type: 'Shared favicon', domains });
+  for (const domains of groupBySimilarFavicon(candidates, FAVICON_CLUSTER_MAX_DISTANCE)) {
+    clusters.push({ type: 'Similar favicon', domains });
   }
 
   return clusters;

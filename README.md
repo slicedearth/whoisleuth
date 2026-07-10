@@ -11,23 +11,28 @@
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify Status" /></a>
 </p>
 
-A local WHOIS + RDAP lookup tool for checking domain, IP, and ASN records -
-single lookups or bulk scans of a domain list - backed by the official IANA
-RDAP bootstrap service and live WHOIS (TCP/43) queries to the relevant
-registries. Includes availability/opportunity scoring, a typosquat
-phishing-risk score, a Certificate Transparency search for lookalikes not yet
-in any generated candidate list, abuse-report drafting, keyword/typosquat
-candidate generators, a browser-local shortlist and watchlist, and CSV
-import/export for bulk runs. Brand Profiles can also audit their official
-domains' mail and DNS posture (SPF, DMARC, MX, DNSSEC, CAA, MTA-STS,
-TLS-RPT, BIMI, and explicitly configured DKIM selectors).
+A local domain intelligence and brand-protection console, built on WHOIS +
+RDAP. At its core it checks domain, IP, and ASN records - single lookups or
+bulk scans of a domain list - backed by the official IANA RDAP bootstrap
+service and live WHOIS (TCP/43) queries to the relevant registries. On top of
+that it adds the pieces for hunting typosquats and lookalikes: keyword and
+typosquat candidate generators, a Certificate Transparency search for
+lookalikes no generated list would guess, availability/opportunity scoring, a
+typosquat phishing-risk score, and brand-asset cloning detection (exact and
+perceptual favicon matching against a Brand Profile's official site).
+Findings can be triaged, drafted into abuse reports, kept in a browser-local
+shortlist, and monitored over time with a watchlist that records a bounded
+timeline of material changes - all with CSV/JSON import/export. Brand Profiles
+can also audit their official domains' mail and DNS posture (SPF, DMARC, MX,
+DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly configured DKIM
+selectors).
 
 Runs as a small Node backend (needed for raw WHOIS sockets and cross-origin
 RDAP requests, which browsers can't do directly) serving a static frontend
-with no build step. This branch splits the lookup logic into a shared `lib/`
-so it can run either as a traditional always-on Node/Express server
-(`server.js`) or as Netlify Functions (`netlify/functions/`) with no logic
-duplicated between the two.
+with no build step. The lookup logic lives in a shared `lib/` so it can run
+either as a traditional always-on Node/Express server (`server.js`) or as
+Netlify Functions (`netlify/functions/`) with no logic duplicated between the
+two.
 
 ## Contents
 

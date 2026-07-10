@@ -5,7 +5,7 @@
 // "this is an unrecognized lookalike." Same localStorage + JSON import/
 // export pattern as shortlist.js/watchlist.js - no backend, no database.
 
-import { escapeHtml, exportJsonFile, readFileAsText, runPool, createLocalStore } from './utils.js';
+import { escapeHtml, exportJsonFile, readFileAsText, runPool, createLocalStore, hammingDistanceHex } from './utils.js';
 import { showGate } from './auth.js';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -102,20 +102,6 @@ export function isFaviconHashMatchingProfile(hash) {
   return profile.officialFaviconHash === hash;
 }
 
-// Hamming distance between two 16-hex perceptual dHash strings (see
-// lib/perceptual-hash.js's hammingDistanceHex - reimplemented here because
-// public/js is a separate browser ESM bundle that can't import the CJS lib).
-function faviconHashDistance(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return null;
-  if (!/^[0-9a-f]{16}$/.test(a) || !/^[0-9a-f]{16}$/.test(b)) return null;
-  let distance = 0;
-  for (let i = 0; i < 16; i += 1) {
-    let diff = parseInt(a[i], 16) ^ parseInt(b[i], 16);
-    while (diff) { distance += diff & 1; diff >>= 1; }
-  }
-  return distance;
-}
-
 // Deliberately conservative: a perceptual "near match" wrongly asserted would
 // brand an innocent domain as impersonating yours, so the threshold sits below
 // where genuine resized/recompressed copies land (a few bits) and well below
@@ -127,7 +113,7 @@ const FAVICON_PHASH_MAX_DISTANCE = 8;
 export function isFaviconPerceptuallyMatchingProfile(phash) {
   const profile = getActiveBrandProfile();
   if (!profile || !phash || !profile.officialFaviconPHash) return false;
-  const distance = faviconHashDistance(phash, profile.officialFaviconPHash);
+  const distance = hammingDistanceHex(phash, profile.officialFaviconPHash);
   return distance !== null && distance <= FAVICON_PHASH_MAX_DISTANCE;
 }
 

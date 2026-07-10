@@ -55,6 +55,73 @@ export function isValidEmailAddress(value) {
   return typeof value === 'string' && SIMPLE_EMAIL_RE.test(value.trim());
 }
 
+// Hamming distance (0-64) between two 16-hex perceptual dHash strings (see
+// lib/perceptual-hash.js), or null if either isn't a well-formed hash. Smaller
+// = more visually similar. Shared by the brand-profile near-match check and
+// bulk favicon clustering; mirrors the backend's hammingDistanceHex (the two
+// can't share code - one is a CJS lib, the other a browser ESM module).
+const HEX_HASH_RE = /^[0-9a-f]{16}$/;
+
+export function hammingDistanceHex(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return null;
+  if (!HEX_HASH_RE.test(a) || !HEX_HASH_RE.test(b)) return null;
+  let distance = 0;
+  for (let i = 0; i < 16; i += 1) {
+    let diff = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+    while (diff) { distance += diff & 1; diff >>= 1; }
+  }
+  return distance;
+}
+
+// Groups records that share a favicon, connecting two whenever their exact
+// hashes match OR their perceptual hashes are within maxDistance. Returns the
+// domain lists of every group of 2+ (singletons dropped). Exact-hash matching
+// still covers favicons that can't be perceptually decoded (GIF/JPEG/SVG ->
+// null phash), while the perceptual pass additionally catches resized or
+// recompressed near-duplicates the exact hash alone would miss - so a phishing
+// ring that varied one favicon slightly across its domains still clusters.
+// Union-find gives transitive grouping (A~B, B~C => one group); the pairwise
+// perceptual pass is O(n^2) but only over records that carry a favicon at all
+// (deep-scanned domains, capped well below the fast-scan ceiling).
+export function groupBySimilarFavicon(records, maxDistance) {
+  const items = (records || []).filter((r) => r
+    && (r.faviconHash || (typeof r.faviconPHash === 'string' && HEX_HASH_RE.test(r.faviconPHash))));
+  const parent = items.map((_, i) => i);
+  const find = (x) => {
+    let root = x;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[x] !== root) { const next = parent[x]; parent[x] = root; x = next; }
+    return root;
+  };
+  const union = (a, b) => { const ra = find(a); const rb = find(b); if (ra !== rb) parent[ra] = rb; };
+
+  // Exact-hash buckets first (cheap, and the only signal for undecodable icons).
+  const firstByHash = new Map();
+  items.forEach((r, i) => {
+    if (!r.faviconHash) return;
+    if (firstByHash.has(r.faviconHash)) union(i, firstByHash.get(r.faviconHash));
+    else firstByHash.set(r.faviconHash, i);
+  });
+
+  // Perceptual near-matches among records that have a valid phash.
+  const withPhash = [];
+  items.forEach((r, i) => { if (typeof r.faviconPHash === 'string' && HEX_HASH_RE.test(r.faviconPHash)) withPhash.push({ i, phash: r.faviconPHash }); });
+  for (let a = 0; a < withPhash.length; a += 1) {
+    for (let b = a + 1; b < withPhash.length; b += 1) {
+      const distance = hammingDistanceHex(withPhash[a].phash, withPhash[b].phash);
+      if (distance !== null && distance <= maxDistance) union(withPhash[a].i, withPhash[b].i);
+    }
+  }
+
+  const groups = new Map();
+  items.forEach((r, i) => {
+    const root = find(i);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(r.domain);
+  });
+  return [...groups.values()].filter((domains) => domains.length >= 2);
+}
+
 export function fmtDate(iso) {
   if (!iso) return null;
   const d = new Date(iso);
