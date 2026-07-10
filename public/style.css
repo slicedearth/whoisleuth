@@ -957,6 +957,91 @@ a.secondary {
 .coverage-table { min-width: 720px; }
 .coverage-table td:first-child { font-family: var(--mono); }
 .coverage-load-btn { padding: 2px 8px; font-size: 0.72rem; white-space: nowrap; }
+.watchlist-actions-cell { min-width: 300px; }
+.watchlist-actions-cell .secondary { padding: 4px 8px; font-size: 0.7rem; margin: 2px 0; }
+.watchlist-name-input {
+  width: min(240px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  outline: none;
+}
+.watchlist-name-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94, 179, 255, 0.25); }
+.watchlist-history-panel {
+  margin-top: 18px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.watchlist-history-heading,
+.watchlist-history-actions,
+.watchlist-history-event-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.watchlist-history-heading { justify-content: space-between; gap: 12px; }
+.watchlist-history-heading .section-title { margin-bottom: 3px; }
+.watchlist-history-actions .secondary { padding: 6px 10px; font-size: 0.72rem; }
+.watchlist-history-actions [aria-pressed="true"] {
+  border-color: var(--accent);
+  background: rgba(94, 179, 255, 0.13);
+}
+.watchlist-timeline {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.watchlist-history-event {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.015);
+}
+.watchlist-history-event[data-has-changes="true"] { border-left-color: var(--amber); }
+.watchlist-history-event-heading time,
+.watchlist-history-result-count,
+.watchlist-change-domain,
+.watchlist-change-field {
+  font-family: var(--mono);
+}
+.watchlist-history-event-heading time { color: var(--text); font-size: 0.78rem; font-weight: 700; }
+.watchlist-history-result-count { color: var(--muted); font-size: 0.68rem; }
+.watchlist-change-list {
+  display: grid;
+  gap: 5px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+.watchlist-change {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(120px, 0.7fr) minmax(180px, 1.5fr);
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 5px;
+  background: rgba(139, 147, 167, 0.06);
+  font-size: 0.75rem;
+}
+.watchlist-change.danger { background: rgba(255, 107, 107, 0.09); }
+.watchlist-change.warn { background: rgba(242, 184, 75, 0.09); }
+.watchlist-change.good { background: rgba(126, 224, 168, 0.08); }
+.watchlist-change-domain { color: var(--text); font-weight: 700; overflow-wrap: anywhere; }
+.watchlist-change-field { color: var(--muted); }
+.watchlist-change-values { color: var(--text); overflow-wrap: anywhere; }
+.watchlist-no-change,
+.watchlist-history-note { margin: 10px 0 0; color: var(--muted); font-size: 0.75rem; }
+.watchlist-history-note { color: var(--amber); }
+@media (max-width: 640px) {
+  .watchlist-change { grid-template-columns: 1fr; gap: 4px; }
+}
 table.bulk-results {
   width: 100%;
   border-collapse: collapse;
@@ -1025,6 +1110,8 @@ table.bulk-results tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 var
 }
 table.bulk-results tbody tr.newly-registered td { background: rgba(255, 107, 107, 0.08); }
 table.bulk-results tbody tr.released td { background: rgba(126, 224, 168, 0.08); }
+table.bulk-results tbody tr.new-risk-signal td { background: rgba(255, 107, 107, 0.06); }
+table.bulk-results tbody tr.watchlist-changed td { background: rgba(242, 184, 75, 0.05); }
 .watch-flag {
   display: inline-block;
   margin-left: 6px;
@@ -1036,6 +1123,7 @@ table.bulk-results tbody tr.released td { background: rgba(126, 224, 168, 0.08);
 }
 .watch-flag.danger { background: rgba(255, 107, 107, 0.15); color: var(--error); }
 .watch-flag.good { background: rgba(126, 224, 168, 0.15); color: var(--accent2); }
+.watch-flag.warn { background: rgba(242, 184, 75, 0.15); color: var(--amber); }
 .login-gate {
   min-height: 100vh;
   display: flex;

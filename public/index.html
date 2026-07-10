@@ -236,11 +236,13 @@
     <details class="generator">
       <summary>Watchlist (brand monitoring) - saved in this browser</summary>
       <p class="bulk-label" style="margin-top: 10px;">
-        Save the current results table as a named watchlist, then re-scan it later - domains
-        that moved from available/unknown to registered since the last check are flagged as
-        new registrations, and any that dropped back to available are flagged as released.
+        Save the current results table as a named watchlist, then re-scan it later. A bounded,
+        browser-local history records material registration, infrastructure, mail, website,
+        and risk changes without sending the history to a server.
       </p>
       <div class="bulk-actions">
+        <label for="watchlist-name-input" class="visually-hidden">Watchlist name</label>
+        <input type="text" id="watchlist-name-input" class="watchlist-name-input" placeholder="Watchlist name" autocomplete="off" />
         <button type="button" id="watchlist-save-btn" class="secondary">Save current results as watchlist</button>
         <button type="button" id="watchlist-export-json-btn" class="secondary">Export JSON</button>
         <label for="watchlist-import-file" class="file-upload-label" title="Import a previously-exported watchlists JSON file - merges by name, doesn't replace what's already saved">Import JSON</label>
@@ -253,6 +255,8 @@
             <tr>
               <th scope="col">Name</th>
               <th scope="col">Domains</th>
+              <th scope="col">History</th>
+              <th scope="col">Latest changes</th>
               <th scope="col">Last checked</th>
               <th scope="col"><span class="visually-hidden">Actions</span></th>
             </tr>
@@ -260,6 +264,19 @@
           <tbody id="watchlist-body"></tbody>
         </table>
       </div>
+      <section class="watchlist-history-panel" id="watchlist-history-panel" aria-labelledby="watchlist-history-heading" hidden>
+        <div class="watchlist-history-heading">
+          <div>
+            <div class="section-title" id="watchlist-history-heading">Watchlist history</div>
+            <div class="bulk-label" id="watchlist-history-summary"></div>
+          </div>
+          <div class="watchlist-history-actions">
+            <button type="button" class="secondary" id="watchlist-history-changed-only" aria-pressed="false">Changes only</button>
+            <button type="button" class="secondary" id="watchlist-history-close">Close</button>
+          </div>
+        </div>
+        <div class="watchlist-timeline" id="watchlist-history-list"></div>
+      </section>
     </details>
     <div class="bulk-actions">
       <button type="button" id="bulk-cancel-btn" class="secondary" style="display:none;">Cancel</button>

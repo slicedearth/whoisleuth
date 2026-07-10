@@ -22,6 +22,8 @@ at all.
   database or disk server-side.
 - **Brand Profiles / Shortlist / Watchlist**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
+  Watchlists retain a bounded timeline of material scan changes alongside
+  their latest results; older timeline events are automatically discarded.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
   button in either panel, or by clearing the browser's site data.
 - **CSV exports**: downloaded directly to your device. From that point on,
@@ -48,7 +50,7 @@ mailto-link pattern), and honor any request to stop being contacted.
 
 Since there's no server-side account or database, a request from a
 registrant to access/delete their data is fulfilled by deleting whatever
-you personally exported (CSV files) or saved (shortlist/watchlist entries)
+you personally exported (CSV/JSON files) or saved (shortlist/watchlist entries and history)
 about them, and not re-querying afterward - use the **Clear all** buttons
 above for the latter. Direct any such request to: `[operator contact]`.
 

@@ -181,10 +181,15 @@ npm run typecheck
   registered exposures, available gaps, and unknown results. Groups can be
   loaded back into the query box or exported as a coverage CSV, using scan
   data already collected with no extra network calls.
-- Save a generated typosquat set as a **Watchlist** and re-scan it later -
-  domains that moved from available/unknown to registered since the last
-  check are flagged as new registrations (a fresh squatting attempt), and
-  any that lapsed back to available are flagged as released.
+- Save a generated typosquat set as a **Watchlist** and re-scan it later.
+  Each watchlist retains a bounded, browser-local timeline of material
+  availability, registrar, nameserver, date, mail, website, and Risk-score
+  changes. Fast rescans update registration data without erasing last-known
+  deep-scan evidence; an explicit deep re-scan refreshes page/mail signals.
+  Deep watchlist rescans keep the same 200-domain safety limit as other deep
+  checks; larger watchlists remain available for fast registration monitoring.
+  Timeline entries can be filtered to changed checks only and are included
+  in the existing JSON backup/export.
 - Use **Search Certificate Transparency logs** to find hostnames with a
   publicly-issued TLS certificate matching a brand keyword - catches
   lookalikes the typosquat generator's fixed permutations would never guess,
@@ -280,7 +285,8 @@ public/
     ct-search.js        Certificate Transparency search UI
     brand-profiles.js   Brand profiles, allowlisting, generator prefill, posture-audit UI
     shortlist.js        localStorage-backed shortlist
-    watchlist.js        localStorage-backed watchlist with re-scan diffing
+    watchlist.js        Watchlist persistence, rescan workflow, and timeline UI
+    watchlist-history.js  Pure bounded history, baseline, and material-diff logic
     single-lookup.js    Single domain/IP/ASN lookup orchestration
     bulk.js             Bulk scan/deep-check, sorting, CSV export
 ```

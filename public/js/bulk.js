@@ -60,7 +60,7 @@ import {
   fillQueryInputWithCandidates,
 } from './dom.js';
 
-const MAX_BULK_DOMAINS = 200;
+export const MAX_DEEP_BULK_DOMAINS = 200;
 export const MAX_FAST_BULK_DOMAINS = 2000;
 const BULK_CONCURRENCY = 6;
 // Fast scans (RDAP-only, no WHOIS/homepage fetch) are cheap enough on both
@@ -233,10 +233,11 @@ function updateBulkSelectAllState() {
 
 // Maps a raw /api/availability response into the flat row shape the bulk
 // results table (and CSV export) expect.
-function toBulkRecord(domain, body) {
+function toBulkRecord(domain, body, fast) {
   if (!body.applicable) {
     return withCandidateProvenance(domain, {
       domain,
+      scanDepth: fast ? 'fast' : 'deep',
       availability: 'error',
       availabilityDetail: 'Not a domain name (bulk lookup only supports domains, not IPs/ASNs)',
     });
@@ -255,6 +256,7 @@ function toBulkRecord(domain, body) {
 
   return withCandidateProvenance(resolvedDomain, {
     domain: resolvedDomain,
+    scanDepth: fast ? 'fast' : 'deep',
     availability: body.state,
     availabilityDetail: body.detail,
     registrarName: body.registrar ? body.registrar.name || body.registrar.org : null,
@@ -291,15 +293,15 @@ export function getBulkResults() {
 }
 
 // Appends a small badge to an already-rendered row's domain cell - used by
-// the watchlist feature to flag rows whose state changed since a previous
-// scan, without bulk.js needing to know anything about watchlists.
+// watchlist history to flag state, infrastructure, or risk-signal changes
+// without bulk.js needing to know how those comparisons are calculated.
 export function flagBulkRow(domain, { label, tone, rowClass }) {
   const tr = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(domain)}"]`);
   if (!tr) return;
   if (rowClass) tr.classList.add(rowClass);
   const cell = tr.querySelector('td.domain-cell');
-  if (cell && !cell.querySelector('.watch-flag')) {
-    cell.insertAdjacentHTML('beforeend', `<span class="watch-flag ${escapeHtml(tone)}">${escapeHtml(label)}</span>`);
+  if (cell && !cell.querySelector('.watch-change-flag')) {
+    cell.insertAdjacentHTML('beforeend', `<span class="watch-flag watch-change-flag ${escapeHtml(tone)}">${escapeHtml(label)}</span>`);
   }
 }
 
@@ -864,10 +866,15 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
       }
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `Lookup failed (${res.status})`);
-      record = toBulkRecord(domain, body);
+      record = toBulkRecord(domain, body, fast);
     } catch (err) {
       if (signal.aborted) return; // cancelled - don't show a spurious error row
-      record = withCandidateProvenance(domain, { domain, availability: 'error', availabilityDetail: err.message });
+      record = withCandidateProvenance(domain, {
+        domain,
+        scanDepth: fast ? 'fast' : 'deep',
+        availability: 'error',
+        availabilityDetail: err.message,
+      });
     }
     processed += 1;
     upsertBulkRow(record);
@@ -932,9 +939,9 @@ bulkDeepCheckBtn.addEventListener('click', () => {
   const selected = [...bulkSelected];
   if (selected.length === 0) return;
 
-  const truncated = selected.slice(0, MAX_BULK_DOMAINS);
-  if (selected.length > MAX_BULK_DOMAINS) {
-    bulkStatus.innerHTML = `<span class="error-text">Selected ${selected.length} domains; only the first ${MAX_BULK_DOMAINS} will be deep-checked.</span>`;
+  const truncated = selected.slice(0, MAX_DEEP_BULK_DOMAINS);
+  if (selected.length > MAX_DEEP_BULK_DOMAINS) {
+    bulkStatus.innerHTML = `<span class="error-text">Selected ${selected.length} domains; only the first ${MAX_DEEP_BULK_DOMAINS} will be deep-checked.</span>`;
   }
 
   runBulkLookup(truncated, { fast: false, append: true });
