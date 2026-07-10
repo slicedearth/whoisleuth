@@ -785,17 +785,6 @@ footer a { color: var(--accent); }
   color: var(--muted);
   margin-bottom: 6px;
 }
-/* Only field labels (not the longer description paragraphs that also reuse
-   .bulk-label for prose, e.g. the CT search/watchlist blurbs) get the
-   prompt-style prefix - a chevron before a full paragraph would read oddly. */
-label.bulk-label::before {
-  content: "\276F";
-  display: inline-block;
-  color: var(--accent2);
-  font-family: var(--mono);
-  margin-right: 5px;
-  text-shadow: 0 0 6px rgba(126, 224, 168, 0.5);
-}
 .bulk-actions {
   margin-top: 14px;
   display: flex;
