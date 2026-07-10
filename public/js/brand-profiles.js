@@ -5,11 +5,12 @@
 // "this is an unrecognized lookalike." Same localStorage + JSON import/
 // export pattern as shortlist.js/watchlist.js - no backend, no database.
 
-import { escapeHtml, downloadBlob, readFileAsText, runPool } from './utils.js';
+import { escapeHtml, exportJsonFile, readFileAsText, runPool, createLocalStore } from './utils.js';
 import { showGate } from './auth.js';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
+const profilesStore = createLocalStore(PROFILES_KEY, []);
 
 function makeId() {
   return crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -47,19 +48,11 @@ function normalizeProfile(raw) {
 }
 
 function loadBrandProfiles() {
-  try {
-    return JSON.parse(localStorage.getItem(PROFILES_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return profilesStore.load();
 }
 
 function saveBrandProfiles(list) {
-  try {
-    localStorage.setItem(PROFILES_KEY, JSON.stringify(list));
-  } catch {
-    /* storage full/unavailable - profiles just won't persist this time */
-  }
+  profilesStore.save(list);
 }
 
 function getActiveBrandProfileId() {
@@ -135,7 +128,7 @@ function deleteBrandProfile(id) {
 }
 
 function exportBrandProfilesJson() {
-  downloadBlob(JSON.stringify(loadBrandProfiles(), null, 2), `brand-profiles-${Date.now()}.json`, 'application/json;charset=utf-8;');
+  exportJsonFile(loadBrandProfiles(), 'brand-profiles');
 }
 
 // Merges by name (case-insensitive) rather than id, since ids are only

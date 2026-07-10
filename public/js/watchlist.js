@@ -6,12 +6,13 @@
 // registration - gets flagged, and the reverse (a lapsed lookalike, a fresh
 // acquisition opportunity) is flagged too.
 
-import { escapeHtml, downloadBlob, readFileAsText } from './utils.js';
+import { escapeHtml, exportJsonFile, readFileAsText, createLocalStore } from './utils.js';
 import { fillQueryInputWithCandidates, bulkStatus } from './dom.js';
 import { runBulkLookup, getBulkResults, flagBulkRow } from './bulk.js';
 import { isDomainAllowlisted } from './brand-profiles.js';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
+const watchlistStore = createLocalStore(WATCHLIST_KEY, {});
 
 const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
 // Deliberately excludes 'unknown'/'error' - those mean "the lookup was
@@ -22,19 +23,11 @@ const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
 const OPEN_STATES = new Set(['available']);
 
 function loadWatchlists() {
-  try {
-    return JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '{}');
-  } catch {
-    return {};
-  }
+  return watchlistStore.load();
 }
 
 function saveWatchlists(all) {
-  try {
-    localStorage.setItem(WATCHLIST_KEY, JSON.stringify(all));
-  } catch {
-    /* storage full/unavailable - watchlist just won't persist this time */
-  }
+  watchlistStore.save(all);
 }
 
 function saveWatchlistSnapshot(name, results) {
@@ -63,7 +56,7 @@ function clearAllWatchlists() {
 // Import merges by name rather than replacing outright, so importing an
 // old backup can't silently wipe out watchlists saved since then.
 function exportWatchlistsJson() {
-  downloadBlob(JSON.stringify(loadWatchlists(), null, 2), `domain-watchlists-${Date.now()}.json`, 'application/json;charset=utf-8;');
+  exportJsonFile(loadWatchlists(), 'domain-watchlists');
 }
 
 function importWatchlistsJson(parsed) {

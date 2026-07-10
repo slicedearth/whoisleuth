@@ -108,6 +108,40 @@ export function wireCopyToClipboard(buttonClass, getText) {
   });
 }
 
+// Wraps a single localStorage key as JSON, with parse/stringify and a
+// try/catch on both read and write - shortlist.js, watchlist.js, and
+// brand-profiles.js each kept their own copy of this exact pattern (only the
+// key and default value differed). `load()` always returns a value parsed
+// fresh from `defaultValue`'s own JSON (whether that's because the key is
+// missing or storage/JSON access failed), matching what the original
+// per-feature copies did - never the same object instance handed back
+// twice, so a caller mutating one loaded copy can't affect another.
+export function createLocalStore(key, defaultValue) {
+  const defaultJson = JSON.stringify(defaultValue);
+  return {
+    load() {
+      try {
+        return JSON.parse(localStorage.getItem(key) ?? defaultJson);
+      } catch {
+        return JSON.parse(defaultJson);
+      }
+    },
+    save(value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch {
+        /* storage full/unavailable - value just won't persist this time */
+      }
+    },
+  };
+}
+
+// Shared by shortlist.js/watchlist.js/brand-profiles.js's "export to a JSON
+// file" buttons - only the data and filename prefix differ.
+export function exportJsonFile(data, filenamePrefix) {
+  downloadBlob(JSON.stringify(data, null, 2), `${filenamePrefix}-${Date.now()}.json`, 'application/json;charset=utf-8;');
+}
+
 // Shared by CSV export (bulk.js) and JSON export (shortlist.js/watchlist.js) -
 // only the content/filename/MIME type differ, the actual "trigger a browser
 // download" mechanics are identical.

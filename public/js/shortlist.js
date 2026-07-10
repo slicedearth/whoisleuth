@@ -3,27 +3,20 @@
 // promising finds from active sourcing sessions, not to track/manage an
 // owned domain portfolio.
 
-import { escapeHtml, downloadBlob, readFileAsText } from './utils.js';
+import { escapeHtml, exportJsonFile, readFileAsText, createLocalStore } from './utils.js';
 import { explainOpportunityScore, scoreTone, formatScoreBreakdown } from './scoring.js';
 import { PILL_LABELS } from './render.js';
 import { queryInput, bulkStatus } from './dom.js';
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
+const shortlistStore = createLocalStore(SHORTLIST_KEY, []);
 
 export function loadShortlist() {
-  try {
-    return JSON.parse(localStorage.getItem(SHORTLIST_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return shortlistStore.load();
 }
 
 function saveShortlist(list) {
-  try {
-    localStorage.setItem(SHORTLIST_KEY, JSON.stringify(list));
-  } catch {
-    /* storage full/unavailable - shortlist just won't persist this time */
-  }
+  shortlistStore.save(list);
 }
 
 export function isShortlisted(domain) {
@@ -54,7 +47,7 @@ export function clearShortlist() {
 // than replacing outright, so re-importing an old backup can't silently
 // undo more recent shortlist changes.
 function exportShortlistJson() {
-  downloadBlob(JSON.stringify(loadShortlist(), null, 2), `domain-shortlist-${Date.now()}.json`, 'application/json;charset=utf-8;');
+  exportJsonFile(loadShortlist(), 'domain-shortlist');
 }
 
 function importShortlistJson(parsed) {
