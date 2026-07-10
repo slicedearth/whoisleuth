@@ -39,6 +39,8 @@ import {
   bulkResultsWrap,
   bulkResultsBody,
   bulkSelectAll,
+  clusterPanel,
+  clusterList,
   submitBtn,
   fillQueryInputWithCandidates,
 } from './dom.js';
@@ -116,6 +118,7 @@ function toBulkRecord(domain, body) {
     hasDmarc: body.hasDmarc ?? null,
     abuseEmail: body.abuse ? body.abuse.email : null,
     faviconMatch,
+    faviconHash,
   };
 }
 
@@ -137,6 +140,85 @@ export function flagBulkRow(domain, { label, tone, rowClass }) {
   if (cell && !cell.querySelector('.watch-flag')) {
     cell.insertAdjacentHTML('beforeend', `<span class="watch-flag ${escapeHtml(tone)}">${escapeHtml(label)}</span>`);
   }
+}
+
+// Groups scanned domains that likely belong to the same registration/
+// hosting campaign, using signals a scan already collects - no extra
+// network calls. Nameserver matching requires the exact full nameserver
+// set (not just one shared nameserver, which large registrars hand out to
+// millions of unrelated domains and would be pure noise); a shared favicon
+// hash between two *different* domains is a much stronger, rarer signal on
+// its own, and catches a phishing ring even without a brand profile's
+// official hash to compare against. A domain the active brand profile
+// already allowlists is excluded - two of a brand's own legitimate domains
+// sharing infrastructure isn't a finding.
+function computeInfrastructureClusters(results) {
+  const candidates = results.filter((r) => !isDomainAllowlisted(r.domain));
+  const clusters = [];
+
+  const byNameservers = new Map();
+  for (const r of candidates) {
+    if (!r.nameservers) continue;
+    const key = r.nameservers.toLowerCase();
+    if (!byNameservers.has(key)) byNameservers.set(key, []);
+    byNameservers.get(key).push(r.domain);
+  }
+  for (const domains of byNameservers.values()) {
+    if (domains.length >= 2) clusters.push({ type: 'Shared nameservers', domains });
+  }
+
+  const byFavicon = new Map();
+  for (const r of candidates) {
+    if (!r.faviconHash) continue;
+    if (!byFavicon.has(r.faviconHash)) byFavicon.set(r.faviconHash, []);
+    byFavicon.get(r.faviconHash).push(r.domain);
+  }
+  for (const domains of byFavicon.values()) {
+    if (domains.length >= 2) clusters.push({ type: 'Shared favicon', domains });
+  }
+
+  return clusters;
+}
+
+// Rebuilt from scratch on every call (not appended) so a deep check that
+// changes clustering - e.g. reveals a shared favicon fast mode couldn't see -
+// doesn't leave stale badges from an earlier pass behind.
+function injectClusterBadges(clusters) {
+  bulkResultsBody.querySelectorAll('.cluster-flag').forEach((el) => el.remove());
+  for (const cluster of clusters) {
+    const siblingCount = cluster.domains.length - 1;
+    const title = `${cluster.type} with ${siblingCount} other domain${siblingCount === 1 ? '' : 's'} in this scan`;
+    for (const domain of cluster.domains) {
+      const cell = bulkResultsBody.querySelector(`tr[data-domain="${CSS.escape(domain)}"] td.domain-cell`);
+      if (!cell) continue;
+      cell.insertAdjacentHTML(
+        'beforeend',
+        `<span class="watch-flag warn cluster-flag" title="${escapeHtml(title)}">${escapeHtml(cluster.type)}</span>`
+      );
+    }
+  }
+}
+
+function renderInfrastructureClusters() {
+  const clusters = computeInfrastructureClusters(bulkResults);
+  injectClusterBadges(clusters);
+
+  if (clusters.length === 0) {
+    clusterPanel.style.display = 'none';
+    clusterList.innerHTML = '';
+    return;
+  }
+
+  clusterPanel.style.display = '';
+  clusterList.innerHTML = clusters
+    .map((cluster) => `
+      <div style="margin-top: 10px;">
+        <span class="signal-chip warn">${escapeHtml(cluster.type)}</span>
+        <span class="bulk-label" style="display:inline; margin-left: 6px;">${cluster.domains.length} domains: ${escapeHtml(cluster.domains.join(', '))}</span>
+        <button type="button" class="secondary cluster-load-btn" data-domains="${escapeHtml(cluster.domains.join(','))}" style="margin-left:8px; padding:2px 8px; font-size:0.72rem;">Load into query box</button>
+      </div>
+    `)
+    .join('');
 }
 
 function updateDeepCheckButton() {
@@ -300,6 +382,8 @@ export function clearBulkResults() {
   bulkDeepCheckBtn.style.display = 'none';
   bulkExportBtn.style.display = 'none';
   bulkDensityBtn.style.display = 'none';
+  clusterPanel.style.display = 'none';
+  clusterList.innerHTML = '';
 }
 
 bulkDensityBtn.addEventListener('click', () => {
@@ -351,6 +435,12 @@ document.addEventListener('click', (e) => {
       tr.innerHTML = `<td><input type="checkbox" ${checked ? 'checked' : ''}/></td>${bulkRowCellsHtml(record)}`;
       wireBulkRowCheckbox(tr, record.domain);
     }
+    return;
+  }
+  const clusterLoadBtn = target.closest('.cluster-load-btn');
+  if (clusterLoadBtn instanceof HTMLElement) {
+    const domains = (clusterLoadBtn.dataset.domains || '').split(',').filter(Boolean);
+    if (domains.length) fillQueryInputWithCandidates(domains);
   }
 });
 
@@ -446,6 +536,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     bulkExportBtn.disabled = bulkResults.length === 0;
     const verb = fast ? 'scanned' : 'deep-checked';
     bulkStatus.textContent = `Done - ${total} domain${total === 1 ? '' : 's'} ${verb}.`;
+    renderInfrastructureClusters();
   }
 
   submitBtn.disabled = false;

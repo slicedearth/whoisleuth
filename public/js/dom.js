@@ -51,6 +51,9 @@ export const bulkResultsWrap = /** @type {HTMLElement} */ (document.getElementBy
 export const bulkResultsBody = /** @type {HTMLElement} */ (document.getElementById('bulk-results-body'));
 export const bulkSelectAll = /** @type {HTMLInputElement} */ (document.getElementById('bulk-select-all'));
 
+export const clusterPanel = /** @type {HTMLElement} */ (document.getElementById('cluster-panel'));
+export const clusterList = /** @type {HTMLElement} */ (document.getElementById('cluster-list'));
+
 // The query box these fill into sits ABOVE the generator panels on the
 // page, not below - scroll/focus it too so "where did my list go" isn't a
 // recurring question.

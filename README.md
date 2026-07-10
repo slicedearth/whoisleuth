@@ -137,6 +137,11 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
   check). A registered lookalike serving that exact same favicon - a common
   tell for a cloned phishing kit - gets flagged in results and contributes
   heavily to its Risk score.
+- A bulk scan flags **Related infrastructure**: domains in the same scan
+  that share an exact nameserver set or favicon hash with each other, with
+  a one-click way to load the group back into the query box. Uses signals
+  already collected by the scan - no extra lookups - and can surface a
+  whole campaign even without a brand profile to compare against.
 - Save a generated typosquat set as a **Watchlist** and re-scan it later -
   domains that moved from available/unknown to registered since the last
   check are flagged as new registrations (a fresh squatting attempt), and

@@ -704,6 +704,13 @@ a.secondary {
   max-height: 480px;
 }
 .bulk-results-wrap.visible { display: block; }
+.cluster-panel {
+  margin-top: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
 table.bulk-results {
   width: 100%;
   border-collapse: collapse;
