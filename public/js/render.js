@@ -16,6 +16,7 @@ import {
 import { outreachButtonHtml, outreachRegistrantByDomain } from './outreach.js';
 import { abuseButtonHtml, abuseRecordByDomain } from './abuse.js';
 import { isDomainAllowlisted, isFaviconHashMatchingProfile, isReusingOfficialAssets } from './brand-profiles.js';
+import { compareRegistrySources } from './registry-comparison.js';
 import {
   availabilityCard,
   availabilityPrompt,
@@ -314,7 +315,50 @@ function mergeRdapWhois(rdap, whois) {
   };
 }
 
-export function renderSummary(rdapParsed, whoisParsed) {
+function comparisonAssessment(field) {
+  if (field.status === 'equivalent') return { label: 'Equivalent', tone: 'good' };
+  if (field.status === 'conflict') return { label: 'Conflict', tone: 'danger' };
+  if (field.rdapState === 'value' && field.whoisState === 'absent') return { label: 'RDAP only', tone: 'neutral' };
+  if (field.whoisState === 'value' && field.rdapState === 'absent') return { label: 'WHOIS only', tone: 'neutral' };
+  if (field.rdapState === 'redacted') return { label: 'RDAP redacted', tone: 'neutral' };
+  if (field.whoisState === 'redacted') return { label: 'WHOIS redacted', tone: 'neutral' };
+  return { label: 'One source only', tone: 'neutral' };
+}
+
+function registryComparisonHtml(rdapParsed, whoisParsed) {
+  const comparison = compareRegistrySources(rdapParsed, whoisParsed);
+  if (comparison.fields.length === 0) return '';
+
+  const summaryParts = [];
+  if (comparison.counts.conflict) summaryParts.push(`${comparison.counts.conflict} conflict${comparison.counts.conflict === 1 ? '' : 's'}`);
+  if (comparison.counts.source_only) summaryParts.push(`${comparison.counts.source_only} source-only`);
+  if (comparison.counts.equivalent) summaryParts.push(`${comparison.counts.equivalent} equivalent`);
+
+  const rows = comparison.fields.map((field) => {
+    const assessment = comparisonAssessment(field);
+    return `
+      <tr class="registry-comparison-${escapeHtml(field.status)}">
+        <th scope="row">${escapeHtml(field.label)}</th>
+        <td>${escapeHtml(field.rdapDisplay)}</td>
+        <td>${escapeHtml(field.whoisDisplay)}</td>
+        <td><span class="signal-chip ${assessment.tone}">${escapeHtml(assessment.label)}</span></td>
+      </tr>`;
+  }).join('');
+
+  const open = comparison.counts.conflict > 0 ? ' open' : '';
+  return `
+    <details class="registry-comparison"${open}>
+      <summary>RDAP / WHOIS comparison (${escapeHtml(summaryParts.join(', '))})</summary>
+      <div class="registry-comparison-scroll">
+        <table class="registry-comparison-table">
+          <thead><tr><th>Field</th><th>RDAP</th><th>WHOIS</th><th>Assessment</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </details>`;
+}
+
+export function renderSummary(rdapParsed, whoisParsed, { comparisonReady = false, lookupType = null } = {}) {
   if (!rdapParsed && !whoisParsed) {
     return `<span class="placeholder">No summary available - see the RDAP/WHOIS tabs for raw responses.</span>`;
   }
@@ -344,6 +388,13 @@ export function renderSummary(rdapParsed, whoisParsed) {
   html += entityBlock('Technical contact', merged.technical, { collapsed: true });
   html += entityBlock('Billing contact', merged.billing, { collapsed: true });
   html += entityBlock('Abuse contact', merged.abuse);
+
+  // Only domain records share enough lifecycle fields for a meaningful
+  // protocol comparison. Waiting for both requests prevents a slow source
+  // from being mislabeled as missing while it is still in flight.
+  if (comparisonReady && lookupType === 'domain') {
+    html += registryComparisonHtml(rdapParsed, whoisParsed);
+  }
 
   return html;
 }

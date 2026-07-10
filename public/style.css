@@ -567,6 +567,63 @@ details.section-toggle > .badge-list {
 .ns-list { margin: 0; padding-left: 18px; font-family: var(--mono); font-size: 0.8rem; }
 .ns-list li { margin-bottom: 2px; }
 
+details.registry-comparison {
+  margin-top: 22px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.015);
+}
+details.registry-comparison > summary {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  cursor: pointer;
+  user-select: none;
+}
+details.registry-comparison[open] > summary { border-bottom: 1px solid var(--border); }
+.registry-comparison-scroll { overflow-x: auto; }
+.registry-comparison-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.registry-comparison-table th,
+.registry-comparison-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+.registry-comparison-table thead th {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.registry-comparison-table tbody th {
+  min-width: 105px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.registry-comparison-table tbody td:nth-child(2),
+.registry-comparison-table tbody td:nth-child(3) {
+  min-width: 170px;
+  font-family: var(--mono);
+}
+.registry-comparison-table th:last-child,
+.registry-comparison-table td:last-child {
+  min-width: 120px;
+  white-space: nowrap;
+}
+.registry-comparison-table tr:last-child th,
+.registry-comparison-table tr:last-child td { border-bottom: 0; }
+.registry-comparison-conflict { background: rgba(255, 107, 107, 0.045); }
+
 details.raw {
   margin-top: 16px;
 }

@@ -28,9 +28,15 @@ import { showGate } from './auth.js';
 // WHOIS panels already do.
 let lastRdapParsed = null;
 let lastWhoisParsed = null;
+let rdapSettled = false;
+let whoisSettled = false;
+let lastLookupType = null;
 
 function updateSummary() {
-  summaryOutput.innerHTML = renderSummary(lastRdapParsed, lastWhoisParsed);
+  summaryOutput.innerHTML = renderSummary(lastRdapParsed, lastWhoisParsed, {
+    comparisonReady: rdapSettled && whoisSettled,
+    lookupType: lastLookupType,
+  });
 }
 
 const TAB_IDS = ['summary', 'rdap', 'whois'];
@@ -86,16 +92,17 @@ async function runRdap(q) {
     if (!res.ok) {
       rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'RDAP lookup failed')}</span>`;
       lastRdapParsed = null;
-      updateSummary();
       return;
     }
+    lastLookupType = body.type || lastLookupType;
     rdapBadge.textContent = body.rdapServer || '';
     rdapOutput.innerHTML = renderRdap(body.type, body.parsed, body.data);
     lastRdapParsed = body.parsed;
-    updateSummary();
   } catch (err) {
     rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
     lastRdapParsed = null;
+  } finally {
+    rdapSettled = true;
     updateSummary();
   }
 }
@@ -109,17 +116,18 @@ async function runWhois(q) {
     if (!res.ok) {
       whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'WHOIS lookup failed')}</span>`;
       lastWhoisParsed = null;
-      updateSummary();
       return;
     }
+    lastLookupType = body.type || lastLookupType;
     const chain = body.chain || [];
     whoisBadge.textContent = chain.map((h) => h.server).join(' → ');
     whoisOutput.innerHTML = renderWhois(body.parsed, chain);
     lastWhoisParsed = body.parsed;
-    updateSummary();
   } catch (err) {
     whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
     lastWhoisParsed = null;
+  } finally {
+    whoisSettled = true;
     updateSummary();
   }
 }
@@ -143,6 +151,9 @@ export async function runSingleLookup(q) {
   selectTab('summary');
   lastRdapParsed = null;
   lastWhoisParsed = null;
+  rdapSettled = false;
+  whoisSettled = false;
+  lastLookupType = null;
   setLoading(summaryOutput, null);
   await Promise.allSettled([runRdap(q), runWhois(q), runAvailability(q)]);
   submitBtn.disabled = false;
@@ -151,6 +162,9 @@ export async function runSingleLookup(q) {
 export function clearSingleResults() {
   lastRdapParsed = null;
   lastWhoisParsed = null;
+  rdapSettled = false;
+  whoisSettled = false;
+  lastLookupType = null;
   summaryOutput.innerHTML = emptyStateHtml('A merged RDAP/WHOIS summary will appear here.');
   rdapOutput.innerHTML = emptyStateHtml('RDAP results will appear here.');
   whoisOutput.innerHTML = emptyStateHtml('WHOIS referral chain will appear here.');

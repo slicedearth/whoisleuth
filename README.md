@@ -105,6 +105,10 @@ PORT=4000 SITE_PASSWORD=choose-a-password npm start
 
 - Enter a single domain, IPv4/IPv6 address, or ASN in the search box for a
   full RDAP + WHOIS + availability lookup.
+- For domain lookups, the Summary compares overlapping RDAP and WHOIS fields
+  after both sources finish. Equivalent values are normalized for harmless
+  formatting differences, while source-only values and material conflicts
+  retain both original source values for review.
 - Paste or upload a CSV/list of multiple domains to run a bulk scan instead.
 - Use the keyword or typosquat generators to populate the search box with
   candidate domains, then click **Lookup**.
