@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License: Apache 2.0" />
-  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node >= 18" />
+  <img src="https://img.shields.io/badge/node-%3E%3D20.18-brightgreen" alt="Node >= 20.18" />
   <img src="https://img.shields.io/badge/build-no%20bundler-lightgrey" alt="No bundler" />
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify Status" /></a>
 </p>
@@ -76,7 +76,7 @@ clear it (fill in your own contact details before sharing a deployment).
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) 18 or later (uses the built-in `fetch` API)
+- [Node.js](https://nodejs.org/) 20.18.1 or later (the pinned `undici` version requires it)
 - npm (bundled with Node)
 
 ## Install & run

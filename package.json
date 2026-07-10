@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p public/tsconfig.json"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.18.1"
   },
   "dependencies": {
     "express": "^4.19.2",

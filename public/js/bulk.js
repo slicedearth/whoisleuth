@@ -54,6 +54,37 @@ const BULK_CONCURRENCY = 6;
 // deep (default) mode reserved for a shortlist.
 const FAST_BULK_CONCURRENCY = 20;
 
+// The documented max fast scan (2000 domains) legitimately exceeds the
+// shared API rate limit (1000 requests/minute - lib/rate-limit.js) if it
+// completes within one window, which it usually does at
+// FAST_BULK_CONCURRENCY. Without this, the back half of a full-size scan
+// used to just turn into permanent "Too many requests" error rows with no
+// way to recover short of re-running the whole scan. Retrying instead of
+// giving up keeps the documented maximum actually usable.
+const MAX_429_RETRIES = 5;
+
+function delay(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new DOMException('The operation was aborted.', 'AbortError'));
+    }, { once: true });
+  });
+}
+
+async function fetchWithRateLimitRetry(url, signal) {
+  let res = await fetch(url, { signal });
+  for (let attempt = 0; res.status === 429 && attempt < MAX_429_RETRIES; attempt += 1) {
+    const retryAfterSeconds = Number(res.headers.get('Retry-After'));
+    const waitMs = (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds : 2) * 1000
+      + Math.random() * 500; // spreads out concurrent workers that all hit the limit in the same window
+    await delay(waitMs, signal);
+    res = await fetch(url, { signal });
+  }
+  return res;
+}
+
 let bulkResults = [];
 let bulkAbortController = null;
 const bulkSelected = new Set();
@@ -389,6 +420,14 @@ export function clearBulkResults() {
   bulkDensityBtn.style.display = 'none';
   clusterPanel.style.display = 'none';
   clusterList.innerHTML = '';
+  // Registrant/abuse-contact data (WHOIS/RDAP personal data) pulled for
+  // this table's rows - never cleared before, so it accumulated in memory
+  // across every scan for the rest of the browser session. Safe to drop
+  // here: the only caller of clearBulkResults() (main.js, right before a
+  // single lookup) immediately repopulates its own single entry once that
+  // lookup's own registrant/abuse data arrives.
+  outreachRegistrantByDomain.clear();
+  abuseRecordByDomain.clear();
 }
 
 bulkDensityBtn.addEventListener('click', () => {
@@ -512,7 +551,7 @@ export async function runBulkLookup(domains, { fast = true, append = false } = {
     if (signal.aborted) return;
     let record;
     try {
-      const res = await fetch(`/api/availability?q=${encodeURIComponent(domain)}${fast ? '&fast=1' : ''}`, { signal });
+      const res = await fetchWithRateLimitRetry(`/api/availability?q=${encodeURIComponent(domain)}${fast ? '&fast=1' : ''}`, signal);
       if (res.status === 401) {
         if (!signal.aborted) {
           bulkAbortController.abort();
