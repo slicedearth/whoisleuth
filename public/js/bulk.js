@@ -5,7 +5,7 @@
 // upload flow (which loads into the query box rather than tracking the
 // file separately until submit).
 
-import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText, downloadBlob } from './utils.js';
+import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText, downloadBlob, runPool } from './utils.js';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -57,24 +57,6 @@ const FAST_BULK_CONCURRENCY = 20;
 let bulkResults = [];
 let bulkAbortController = null;
 const bulkSelected = new Set();
-
-// Runs `worker` over `items` with up to `concurrency` in flight at once.
-// Concurrency lives here (client-side) rather than in a single long-lived
-// server request/stream, so a bulk scan is just N independent
-// /api/availability calls - the same shape whether the backend is a
-// long-running Express server or a short-lived serverless function, which
-// only ever handles one domain per invocation.
-async function runPool(items, concurrency, worker) {
-  let idx = 0;
-  const size = Math.min(concurrency, items.length) || 1;
-  const runners = new Array(size).fill(0).map(async () => {
-    while (idx < items.length) {
-      const current = idx++;
-      await worker(items[current]);
-    }
-  });
-  await Promise.allSettled(runners);
-}
 
 // Maps a raw /api/availability response into the flat row shape the bulk
 // results table (and CSV export) expect.

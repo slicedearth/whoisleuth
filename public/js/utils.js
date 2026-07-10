@@ -136,6 +136,28 @@ export function typeText(el, text, { speed = 18 } = {}) {
   tick();
 }
 
+// Runs `worker` over `items` with up to `concurrency` in flight at once,
+// passing each item's original index alongside it so a caller that needs to
+// write results into a pre-sized array (to preserve order despite
+// out-of-order completion) can do so. Concurrency lives here (client-side)
+// rather than in a single long-lived server request/stream, so a bulk scan
+// or audit is just N independent /api/... calls - the same shape whether
+// the backend is a long-running Express server or a short-lived serverless
+// function, which only ever handles one request per invocation. Shared by
+// bulk.js (scanning candidate domains) and brand-profiles.js (auditing a
+// profile's official domains).
+export async function runPool(items, concurrency, worker) {
+  let idx = 0;
+  const size = Math.min(concurrency, items.length) || 1;
+  const runners = new Array(size).fill(0).map(async () => {
+    while (idx < items.length) {
+      const current = idx++;
+      await worker(items[current], current);
+    }
+  });
+  await Promise.allSettled(runners);
+}
+
 export function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

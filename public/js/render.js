@@ -315,27 +315,34 @@ function mergeRdapWhois(rdap, whois) {
   };
 }
 
-function comparisonAssessment(field) {
-  if (field.status === 'equivalent') return { label: 'Equivalent', tone: 'good' };
-  if (field.status === 'conflict') return { label: 'Conflict', tone: 'danger' };
-  if (field.rdapState === 'value' && field.whoisState === 'absent') return { label: 'RDAP only', tone: 'neutral' };
-  if (field.whoisState === 'value' && field.rdapState === 'absent') return { label: 'WHOIS only', tone: 'neutral' };
-  if (field.rdapState === 'redacted') return { label: 'RDAP redacted', tone: 'neutral' };
-  if (field.whoisState === 'redacted') return { label: 'WHOIS redacted', tone: 'neutral' };
-  return { label: 'One source only', tone: 'neutral' };
-}
+// Precise labeling for each status classifyFieldStatus() (registry-
+// comparison.js) can produce - a lookup, not derived logic, since the
+// comparison module already decided what each field's status means.
+const FIELD_STATUS_PRESENTATION = {
+  equivalent: { label: 'Equivalent', tone: 'good' },
+  conflict: { label: 'Conflict', tone: 'danger' },
+  rdap_only: { label: 'RDAP only', tone: 'neutral' },
+  whois_only: { label: 'WHOIS only', tone: 'neutral' },
+  rdap_redacted: { label: 'RDAP redacted', tone: 'neutral' },
+  whois_redacted: { label: 'WHOIS redacted', tone: 'neutral' },
+};
 
 function registryComparisonHtml(rdapParsed, whoisParsed) {
   const comparison = compareRegistrySources(rdapParsed, whoisParsed);
   if (comparison.fields.length === 0) return '';
 
+  // The header only needs "present in one source, for whatever reason" as
+  // one number - the per-row Assessment column (via FIELD_STATUS_PRESENTATION)
+  // already shows the precise reason (RDAP only vs. WHOIS redacted, etc.).
+  const sourceOnly = comparison.counts.rdap_only + comparison.counts.whois_only
+    + comparison.counts.rdap_redacted + comparison.counts.whois_redacted;
   const summaryParts = [];
   if (comparison.counts.conflict) summaryParts.push(`${comparison.counts.conflict} conflict${comparison.counts.conflict === 1 ? '' : 's'}`);
-  if (comparison.counts.source_only) summaryParts.push(`${comparison.counts.source_only} source-only`);
+  if (sourceOnly) summaryParts.push(`${sourceOnly} source-only`);
   if (comparison.counts.equivalent) summaryParts.push(`${comparison.counts.equivalent} equivalent`);
 
   const rows = comparison.fields.map((field) => {
-    const assessment = comparisonAssessment(field);
+    const assessment = FIELD_STATUS_PRESENTATION[field.status];
     return `
       <tr class="registry-comparison-${escapeHtml(field.status)}">
         <th scope="row">${escapeHtml(field.label)}</th>

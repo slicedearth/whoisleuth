@@ -104,21 +104,32 @@ function findRdapEvent(rdap, action) {
   return event?.date || null;
 }
 
+// Classifies every reachable (rdapState, whoisState) pair other than
+// absent/absent (filtered out by the caller before this runs). Conflict and
+// equivalent need both sides to actually hold a comparable value; every
+// other combination is classified by which side is redacted or missing,
+// since "redacted" and "absent" are different reasons a comparison can't be
+// made and the UI (and the field counts below) should be able to tell them
+// apart rather than lumping every non-conflicting case into one bucket.
+function classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, normalize) {
+  if (rdapState === 'value' && whoisState === 'value') {
+    return sameNormalizedValue(normalize(rdapValue), normalize(whoisValue)) ? 'equivalent' : 'conflict';
+  }
+  if (rdapState === 'redacted' && whoisState === 'redacted') return 'equivalent';
+  if (rdapState === 'value' && whoisState === 'absent') return 'rdap_only';
+  if (whoisState === 'value' && rdapState === 'absent') return 'whois_only';
+  if (rdapState === 'redacted') return 'rdap_redacted';
+  return 'whois_redacted';
+}
+
 function compareField(label, rdapValue, whoisValue, normalize) {
   const rdapState = sourceState(rdapValue);
   const whoisState = sourceState(whoisValue);
   if (rdapState === 'absent' && whoisState === 'absent') return null;
 
-  let status = 'source_only';
-  if (rdapState === 'value' && whoisState === 'value') {
-    status = sameNormalizedValue(normalize(rdapValue), normalize(whoisValue)) ? 'equivalent' : 'conflict';
-  } else if (rdapState === 'redacted' && whoisState === 'redacted') {
-    status = 'equivalent';
-  }
-
   return {
     label,
-    status,
+    status: classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, normalize),
     rdapState,
     whoisState,
     rdapDisplay: displayValue(rdapValue),
@@ -140,7 +151,7 @@ export function compareRegistrySources(rdapParsed, whoisParsed) {
     compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver)),
   ].filter((field) => field !== null);
 
-  const counts = { equivalent: 0, source_only: 0, conflict: 0 };
+  const counts = { equivalent: 0, conflict: 0, rdap_only: 0, whois_only: 0, rdap_redacted: 0, whois_redacted: 0 };
   for (const field of fields) counts[field.status] += 1;
   return { fields, counts };
 }

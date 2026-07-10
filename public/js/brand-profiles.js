@@ -5,7 +5,7 @@
 // "this is an unrecognized lookalike." Same localStorage + JSON import/
 // export pattern as shortlist.js/watchlist.js - no backend, no database.
 
-import { escapeHtml, downloadBlob, readFileAsText } from './utils.js';
+import { escapeHtml, downloadBlob, readFileAsText, runPool } from './utils.js';
 import { showGate } from './auth.js';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -395,19 +395,13 @@ async function fetchPostureReport(domain, selectors) {
 
 async function auditProfileDomains(domains, selectors) {
   const results = new Array(domains.length);
-  let next = 0;
-  const workers = new Array(Math.min(POSTURE_CONCURRENCY, domains.length)).fill(0).map(async () => {
-    while (next < domains.length) {
-      const index = next++;
-      const domain = domains[index];
-      try {
-        results[index] = { report: await fetchPostureReport(domain, selectors), error: null };
-      } catch (err) {
-        results[index] = { report: null, error: err.message || String(err), domain };
-      }
+  await runPool(domains, POSTURE_CONCURRENCY, async (domain, index) => {
+    try {
+      results[index] = { report: await fetchPostureReport(domain, selectors), error: null };
+    } catch (err) {
+      results[index] = { report: null, error: err.message || String(err), domain };
     }
   });
-  await Promise.all(workers);
   return results;
 }
 
