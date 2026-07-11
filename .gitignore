@@ -3,3 +3,7 @@ frontend/.svelte-kit/
 frontend/build/
 *.log
 .DS_Store
+playwright-report/
+playwright/.auth/
+test-results/
+blob-report/

@@ -117,15 +117,32 @@ PORT=4000 SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-rando
 ```
 
 Every push and pull request runs the locked install, test suite, JavaScript
-type checks, Svelte checks, and production frontend build in GitHub Actions.
-Run the same verification locally:
+type checks, Svelte checks, production frontend build, and browser end-to-end
+suite in GitHub Actions. Run the same verification locally:
 
 ```bash
 npm test
 npm run typecheck
 npm run check
 npm run build
+npm run test:e2e:install   # one-time: downloads the Chromium browser Playwright drives
+npm run test:e2e
 ```
+
+### Browser end-to-end tests
+
+The `e2e/` directory holds a [Playwright](https://playwright.dev/) smoke
+suite (Chromium only) covering authentication, mobile navigation, the Lookup
+input, and Bulk analysis. It builds and runs its own local production-style
+server on port 4173 with a test-only `SITE_PASSWORD`/`SESSION_SECRET`
+(configured in `playwright.config.ts`, not your shell) and never queries
+live WHOIS, RDAP, DNS, CT, or website data - tests that need submission
+behavior use domain values the backend rejects locally before any upstream
+request. First run `npm run test:e2e:install` to download the Chromium
+build Playwright drives (a one-time step, separate from `npm install`), then
+`npm run test:e2e` to run the suite headlessly. A `playwright-report/`
+directory (traces/screenshots for failed tests only) is written to the repo
+root and is gitignored.
 
 ## Usage
 

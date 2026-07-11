@@ -5,14 +5,18 @@
   "license": "Apache-2.0",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
   "main": "server.js",
-  "workspaces": ["frontend"],
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
     "start": "npm run build && node server.js",
     "test": "node --test",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
     "dev": "npm run dev --workspace=frontend",
     "build": "npm run build --workspace=frontend",
-    "check": "npm run check --workspace=frontend"
+    "check": "npm run check --workspace=frontend",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install --with-deps chromium"
   },
   "engines": {
     "node": ">=20.19.0"
@@ -23,6 +27,7 @@
     "undici": "^7.28.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3"
   }
