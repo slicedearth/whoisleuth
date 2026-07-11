@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { activeProfile, profileDomainKind, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { buildLookupEvidence, evidenceFilename } from '../../../../public/js/evidence-export.js';
   import { compareRegistrySources } from '../../../../public/js/registry-comparison.js';
@@ -14,7 +14,6 @@
     riskTone,
     scoreTone
   } from '../../../../public/js/scoring.js';
-  import { hammingDistanceHex, isInformativeFaviconHash } from '../../../../public/js/utils.js';
 
   type JsonRecord = Record<string, any>;
   type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null };
@@ -38,14 +37,7 @@
   const diagnostics=$derived(rec(result?.diagnostics));
   const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0}});
   const profileSignals=$derived.by(()=>{
-    const trusted=profileDomainKind(String(availability.domain||result?.registrableDomain||''),profile);
-    if(!profile||trusted)return{trusted,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false};
-    const exact=Boolean(availability.faviconHash&&profile.officialFaviconHash&&availability.faviconHash===profile.officialFaviconHash);
-    const left=availability.faviconPHash,right=profile.officialFaviconPHash;
-    const distance=isInformativeFaviconHash(left)&&isInformativeFaviconHash(right)?hammingDistanceHex(left,right):null;
-    const official=new Set(profile.officialDomains.map(value=>value.toLowerCase().replace(/\.$/,'')));
-    const reused=Array.isArray(availability.externalAssetHosts)&&availability.externalAssetHosts.some((host:string)=>official.has(String(host).toLowerCase().replace(/\.$/,'')));
-    return{trusted:null,faviconMatch:exact,faviconNearMatch:!exact&&distance!==null&&distance<=8,reusesOfficialAssets:reused};
+    return matchProfileSignals(String(availability.domain||result?.registrableDomain||''),availability,profile);
   });
   const scoredAvailability=$derived({...availability,...profileSignals});
   const opportunity=$derived(explainOpportunityScore(scoredAvailability) as ScoreExplanation);

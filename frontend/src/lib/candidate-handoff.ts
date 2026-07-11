@@ -9,12 +9,13 @@ export interface CandidateHandoff {
   createdAt: string;
   source: 'typosquat' | 'keyword' | 'certificate-transparency' | 'watchlist' | 'manual';
   candidates: Candidate[];
+  generatedCandidates?: Candidate[];
 }
 
 const KEY = 'whoisleuth:candidate-handoff:v1';
 
-export function saveCandidateHandoff(source: CandidateHandoff['source'], candidates: Candidate[]) {
-  const value: CandidateHandoff = { version: 1, createdAt: new Date().toISOString(), source, candidates };
+export function saveCandidateHandoff(source: CandidateHandoff['source'], candidates: Candidate[], generatedCandidates?:Candidate[]) {
+  const value: CandidateHandoff = { version: 1, createdAt: new Date().toISOString(), source, candidates, ...(generatedCandidates?{generatedCandidates}: {}) };
   sessionStorage.setItem(KEY, JSON.stringify(value));
 }
 

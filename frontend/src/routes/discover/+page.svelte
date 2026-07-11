@@ -10,6 +10,7 @@
   let seed = $state('');
   let tldText = $state('com, net, org');
   let candidates = $state<Candidate[]>([]);
+  let generatedContext = $state<Candidate[]>([]);
   let selected = $state<Set<string>>(new Set());
   let status = $state('');
   let error = $state('');
@@ -35,8 +36,9 @@
     return [...bases].flatMap((base) => tlds().map((tld) => ({ domain: `${base}.${tld}`, source: seed.trim(), mutationTypes: ['keyword'] })));
   }
 
-  function setResults(next: Candidate[], message: string) {
+  function setResults(next: Candidate[], message: string, context:Candidate[]=next) {
     candidates = next;
+    generatedContext = context;
     selected = new Set(next.map((c) => c.domain));
     status = message;
     error = '';
@@ -60,13 +62,14 @@
     if (!seed.trim()) { error = 'Enter a brand, domain, or keyword.'; return; }
     if (!tlds().length && !seed.includes('.')) { error = 'Enter at least one valid TLD.'; return; }
     if (mode === 'keyword') {
-      const { filtered, excluded } = withoutAllowlisted(generateKeywordCandidates());
-      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.`);
+      const generated=generateKeywordCandidates();
+      const { filtered, excluded } = withoutAllowlisted(generated);
+      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.`, generated);
       return;
     }
     const generated = generateTyposquatCandidates(seed, tlds()) as Array<{domain:string;source:string;mutationTypes:string[]}>;
     const { filtered, excluded } = withoutAllowlisted(generated);
-    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.`);
+    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.`, generated);
   }
 
   async function searchCt() {
@@ -78,7 +81,7 @@
       if (!response.ok) throw new Error(body.error || `Search failed (${response.status})`);
       const next = (body.domains || []).map((domain) => ({ domain, source: seed.trim(), mutationTypes: ['certificate_transparency'] }));
       const { filtered, excluded } = withoutAllowlisted(next);
-      setResults(filtered, `Found ${filtered.length} untrusted hostnames from ${body.certCount || 0} certificates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${body.truncated ? ' (result cap reached)' : ''}.`);
+      setResults(filtered, `Found ${filtered.length} untrusted hostnames from ${body.certCount || 0} certificates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${body.truncated ? ' (result cap reached)' : ''}.`, next);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Certificate search failed'; status = '';
     } finally { searching = false; }
@@ -98,7 +101,7 @@
 
   async function sendToBulk() {
     if (!selectedCandidates.length) return;
-    saveCandidateHandoff(mode, selectedCandidates);
+    saveCandidateHandoff(mode, selectedCandidates, generatedContext);
     await goto('/bulk?source=discover');
   }
 </script>
