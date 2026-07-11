@@ -1,0 +1,273 @@
+'use strict';
+
+// Anonymized synthetic responses model the layouts used by representative
+// WHOIS registries without retaining third-party registration data. Keeping
+// them as referral chains exercises both field parsing and existence authority.
+
+const rootHop = (tld, referral) => ({
+  server: 'whois.iana.org',
+  response: `domain: ${tld}\norganisation: Example registry\nrefer: ${referral}\n`,
+});
+
+const registryHop = (server, lines) => ({ server, response: lines.join('\n') });
+
+module.exports = [
+  {
+    name: 'generic thin gTLD referral chain',
+    chain: [
+      rootHop('TEST', 'whois.registry.invalid'),
+      registryHop('whois.registry.invalid', [
+        'Domain Name: EXAMPLE.TEST',
+        'Registrar: Example Registrar LLC',
+        'Registrar WHOIS Server: whois.registrar.invalid',
+        'Creation Date: 2020-01-02T03:04:05Z',
+        'Registry Expiry Date: 2030-01-02T03:04:05Z',
+        'Domain Status: clientTransferProhibited',
+        'Name Server: NS1.EXAMPLE.INVALID',
+        'Name Server: NS2.EXAMPLE.INVALID',
+      ]),
+      registryHop('whois.registrar.invalid', [
+        'Domain Name: EXAMPLE.TEST',
+        'Registrant Name: Example Registrant',
+        'Registrant Organization: Example Organisation',
+        'Registrant Email: registrant@example.invalid',
+        'Registrar Abuse Contact Email: abuse@registrar.invalid',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      chainStatus: 'complete',
+      domainName: 'EXAMPLE.TEST',
+      registrar: 'Example Registrar LLC',
+      registrantName: 'Example Registrant',
+      registrantOrg: 'Example Organisation',
+      abuseEmail: 'abuse@registrar.invalid',
+      nameservers: ['NS1.EXAMPLE.INVALID', 'NS2.EXAMPLE.INVALID'],
+      statuses: ['clientTransferProhibited'],
+    },
+  },
+  {
+    name: 'legacy education registry with indented contacts',
+    chain: [
+      rootHop('EDU', 'whois.education.invalid'),
+      registryHop('whois.education.invalid', [
+        'Domain Name: UNIVERSITY.EDU',
+        'Domain record activated: 01-Jan-1999',
+        'Domain expires: 31-Jul-2030',
+        '',
+        'Registrant:',
+        '  Example University',
+        '  Technology Services',
+        '  1 Example Way',
+        '  Exampleville, EX 00000',
+        '  +1.5555550100',
+        '  hostmaster@university.invalid',
+        '',
+        'Administrative Contact:',
+        '  Jane Example',
+        '  Example University',
+        '  +1.5555550101',
+        '  jane@university.invalid',
+        '',
+        'Name Server: NS1.UNIVERSITY.INVALID',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      createdDate: '01-Jan-1999',
+      expiryDate: '31-Jul-2030',
+      registrantOrg: 'Example University',
+      registrantEmail: 'hostmaster@university.invalid',
+      adminName: 'Jane Example',
+      adminEmail: 'jane@university.invalid',
+    },
+  },
+  {
+    name: 'FRED registry with contact handle indirection',
+    chain: [
+      rootHop('CZ', 'whois.fred.invalid'),
+      registryHop('whois.fred.invalid', [
+        'domain:       example.cz',
+        'registrant:   CONTACT-123',
+        'registered:   02.01.2020 03:04:05',
+        'expire:       02.01.2030',
+        'nserver:      ns1.example.invalid',
+        'nserver:      ns2.example.invalid',
+        '',
+        'contact:      CONTACT-123',
+        'org:          Example Organisation s.r.o.',
+        'name:         Alex Example',
+        'address:      1 Example Street',
+        'address:      Example City',
+        'e-mail:       alex@example.invalid',
+        'phone:        +420.123456789',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'example.cz',
+      registrantName: 'Alex Example',
+      registrantOrg: 'Example Organisation s.r.o.',
+      registrantEmail: 'alex@example.invalid',
+      registrantAddress: '1 Example Street, Example City',
+      nameservers: ['ns1.example.invalid', 'ns2.example.invalid'],
+    },
+  },
+  {
+    name: 'dot-leader registry with host-name nameservers',
+    chain: [
+      rootHop('KR', 'whois.kr.invalid'),
+      registryHop('whois.kr.invalid', [
+        'Domain Name................: example.kr',
+        'Registrant.................: Example Corporation',
+        'Registered Date............: 2020. 01. 02.',
+        'Last Updated Date..........: 2024. 05. 06.',
+        'Expiration Date............: 2030. 01. 02.',
+        'Host Name..................: ns1.example.invalid',
+        'Host Name..................: ns2.example.invalid',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'example.kr',
+      registrantName: 'Example Corporation',
+      createdDate: '2020. 01. 02.',
+      updatedDate: '2024. 05. 06.',
+      expiryDate: '2030. 01. 02.',
+      nameservers: ['ns1.example.invalid', 'ns2.example.invalid'],
+    },
+  },
+  {
+    name: 'prefixed dot-leader registry with bare server section',
+    chain: [
+      rootHop('TR', 'whois.tr.invalid'),
+      registryHop('whois.tr.invalid', [
+        '** Domain Name: example.tr',
+        '** Registrant: Example Limited',
+        '** Created on..............: 2020-Jan-02.',
+        '** Expires on..............: 2030-Jan-01.',
+        '',
+        '** Domain Servers:',
+        'ns1.example.invalid',
+        'ns2.example.invalid',
+        '',
+        '** Additional Info:',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'example.tr',
+      registrantName: 'Example Limited',
+      createdDate: '2020-Jan-02.',
+      expiryDate: '2030-Jan-01.',
+      nameservers: ['ns1.example.invalid', 'ns2.example.invalid'],
+    },
+  },
+  {
+    name: 'alternate domain labels with a bare nameserver section',
+    chain: [
+      rootHop('IT', 'whois.it.invalid'),
+      registryHop('whois.it.invalid', [
+        'Domain:             example.it',
+        'Status:             ok',
+        'Signed:             no',
+        'Created:            2020-01-02 03:04:05',
+        'Last Update:        2024-05-06 07:08:09',
+        'Expire Date:        2030-01-02',
+        '',
+        'Nameservers',
+        '  ns1.example.invalid',
+        '  ns2.example.invalid',
+        '',
+        'Registrant',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'example.it',
+      createdDate: '2020-01-02 03:04:05',
+      updatedDate: '2024-05-06 07:08:09',
+      expiryDate: '2030-01-02',
+      dnssec: 'no',
+      nameservers: ['ns1.example.invalid', 'ns2.example.invalid'],
+      statuses: ['ok'],
+    },
+  },
+  {
+    name: 'eligibility-based registry contact data',
+    chain: [
+      rootHop('AU', 'whois.au.invalid'),
+      registryHop('whois.au.invalid', [
+        'Domain Name: EXAMPLE.COM.AU',
+        'Registrar Name: Example Registrar Pty Ltd',
+        'Registrant: Example Corporation Pty Ltd',
+        'Registrant Contact Name: Domain Administrator',
+        'Registrant Contact Email: domains@example.invalid',
+        'Eligibility Type: Company',
+        'Eligibility ID: ABN 00 000 000 000',
+        'Name Server: NS1.EXAMPLE.INVALID',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'EXAMPLE.COM.AU',
+      registrantName: 'Example Corporation Pty Ltd',
+      registrantEmail: 'domains@example.invalid',
+      eligibilityType: 'Company',
+      eligibilityId: 'ABN 00 000 000 000',
+    },
+  },
+  {
+    name: 'bracketed registry response',
+    chain: [
+      rootHop('JP', 'whois.jp.invalid'),
+      registryHop('whois.jp.invalid', [
+        '[Domain Name]                   EXAMPLE.JP',
+        '[Registrant]                    Example Organisation',
+        '[登録年月日]                    2020/01/02',
+        '[有効期限]                      2030/01/31',
+        '[状態]                          Active',
+        '[Name Server]                   ns1.example.invalid',
+        '[Name Server]                   ns2.example.invalid',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'EXAMPLE.JP',
+      registrantName: 'Example Organisation',
+      createdDate: '2020/01/02',
+      expiryDate: '2030/01/31',
+      nameservers: ['ns1.example.invalid', 'ns2.example.invalid'],
+      statuses: ['Active'],
+    },
+  },
+  {
+    name: 'authoritative unregistered response',
+    chain: [
+      rootHop('TEST', 'whois.registry.invalid'),
+      registryHop('whois.registry.invalid', ['No entries found for this query.']),
+    ],
+    expected: {
+      registrationStatus: 'not_found',
+      notFound: true,
+      notFoundSource: 'whois.registry.invalid',
+      chainStatus: 'complete',
+    },
+  },
+  {
+    name: 'registry throttling remains inconclusive',
+    chain: [
+      rootHop('TEST', 'whois.registry.invalid'),
+      registryHop('whois.registry.invalid', [
+        'Domain Name: EXAMPLE.TEST',
+        'Query limit exceeded. Please try again later.',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'inconclusive',
+      notFound: false,
+      failedHop: 'whois.registry.invalid',
+      chainStatus: 'partial',
+    },
+  },
+];
