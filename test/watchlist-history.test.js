@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 let history;
 before(async () => {
-  history = await import('../public/js/watchlist-history.js');
+  history = await import('../frontend/src/lib/analysis/watchlist-history.js');
 });
 
 describe('watchlist history', () => {

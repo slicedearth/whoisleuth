@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 let filters;
 before(async () => {
-  filters = await import('../public/js/bulk-filters.js');
+  filters = await import('../frontend/src/lib/analysis/bulk-filters.js');
 });
 
 const records = [

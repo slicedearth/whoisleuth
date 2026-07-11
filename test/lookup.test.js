@@ -103,4 +103,23 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.availability.status, 'error');
     assert.equal(result.diagnostics.availability.errorCode, 'AVAILABILITY_CHECK_FAILED');
   });
+
+  test('returns an availability-only payload for compact bulk lookups', async () => {
+    const result = await runUnifiedLookup(classifiedDomain, {
+      compact: true,
+      fetchRdapRecord: async () => ({
+        rdapServer: 'https://rdap.example/domain/example.com',
+        upstreamStatus: 200,
+        data: { large: 'raw RDAP body' },
+        parsed: { domain: 'EXAMPLE.COM' },
+      }),
+      buildWhoisChain: async () => [{ server: 'whois.example', response: 'large raw WHOIS body' }],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high', registrar: 'Example Registrar' }),
+    });
+
+    assert.deepEqual(result.availability.registrar, 'Example Registrar');
+    assert.equal(result.diagnostics.rdap.status, 'success');
+    assert.equal(Object.hasOwn(result, 'rdap'), false);
+    assert.equal(Object.hasOwn(result, 'whois'), false);
+  });
 });

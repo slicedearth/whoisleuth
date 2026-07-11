@@ -25,32 +25,26 @@ const PORT = process.env.PORT || 3000;
 
 app.disable('x-powered-by');
 
-// The frontend uses inline `style="..."` attributes throughout (no inline
-// scripts or event handlers) - style-src needs 'unsafe-inline' for those to
-// keep working, but script-src stays strict since nothing here needs it.
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join('; ');
-
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve the prerendered Svelte workspace. `npm start` builds it first;
+// `extensions` lets routes such as /lookup resolve lookup.html without a
+// catch-all SPA rewrite, so unknown paths still return a real 404.
+const svelteBuildDir = path.join(__dirname, 'frontend', 'build');
+app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'immutable'), {
+  immutable: true,
+  maxAge: '1y',
+}));
+app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
+app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/', '/privacy/'], (req, res) => {
+  res.redirect(308, req.path.slice(0, -1));
+});
 app.use(express.json({ limit: '1mb' }));
 
 // True when the request actually arrived over HTTPS - directly, or via a
@@ -120,7 +114,8 @@ app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
 
   try {
     const fast = req.query.fast === '1' || req.query.fast === 'true';
-    const result = await runUnifiedLookup(classified, { fast });
+    const compact = req.query.compact === '1' || req.query.compact === 'true';
+    const result = await runUnifiedLookup(classified, { fast, compact });
     res.json({
       query: q,
       type: classified.type,

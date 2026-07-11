@@ -5,13 +5,17 @@
   "license": "Apache-2.0",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
   "main": "server.js",
+  "workspaces": ["frontend"],
   "scripts": {
-    "start": "node server.js",
+    "start": "npm run build && node server.js",
     "test": "node --test",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p public/tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json",
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "check": "npm run check --workspace=frontend"
   },
   "engines": {
-    "node": ">=20.18.1"
+    "node": ">=20.19.0"
   },
   "dependencies": {
     "express": "^4.19.2",

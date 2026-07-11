@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 let evidence;
 before(async () => {
-  evidence = await import('../public/js/evidence-export.js');
+  evidence = await import('../frontend/src/lib/analysis/evidence-export.js');
 });
 
 function fixtureResponse() {

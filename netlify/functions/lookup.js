@@ -28,7 +28,8 @@ exports.handler = async (event) => {
 
   try {
     const fast = params.fast === '1' || params.fast === 'true';
-    const result = await runUnifiedLookup(classified, { fast });
+    const compact = params.compact === '1' || params.compact === 'true';
+    const result = await runUnifiedLookup(classified, { fast, compact });
     return json(200, {
       query: q,
       type: classified.type,

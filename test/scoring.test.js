@@ -1,16 +1,13 @@
-// Covers public/js/scoring.js: the opportunity/risk score formulas and
-// their supporting formatters. scoring.js is a browser ES module (no
-// bundler, loaded via <script type="module">), so it's imported here with
-// a dynamic import() rather than require() - public/js/package.json scopes
-// that directory to "type": "module" so Node resolves the export/import
-// syntax correctly.
+// Covers the frontend's framework-neutral opportunity/risk score formulas
+// and supporting formatters. The analysis modules are ESM through the
+// frontend workspace, so tests load them with dynamic import().
 
 const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
 
 let scoring;
 before(async () => {
-  scoring = await import('../public/js/scoring.js');
+  scoring = await import('../frontend/src/lib/analysis/scoring.js');
 });
 
 describe('fmtAge', () => {

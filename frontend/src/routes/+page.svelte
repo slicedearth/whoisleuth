@@ -1,0 +1,5 @@
+<script lang="ts">import { workspaces } from '$lib/workspaces';</script>
+<svelte:head><title>WHOISleuth · Domain intelligence</title></svelte:head>
+<section class="heading"><div><p class="eyebrow">Domain intelligence console</p><h1>Investigate domains. Protect brands.</h1><p>Combine RDAP, WHOIS, DNS, website signals, and certificate data to discover, assess, monitor, and respond to suspicious domains.</p></div></section>
+<div class="grid">{#each workspaces as item,i}<a class="card" href={item.href}><span>0{i+1}</span><h2>{item.label}</h2><p>{item.detail}</p><strong>Open →</strong></a>{/each}</div>
+<style>.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.grid a{min-height:210px;padding:25px;position:relative}.grid a:first-child{grid-column:span 2}.grid span{color:var(--accent);font-size:.72rem}.grid h2{margin:32px 0 8px}.grid p{color:var(--muted)}.grid a strong{position:absolute;bottom:23px;font-size:.76rem}@media(max-width:650px){.grid{grid-template-columns:1fr}.grid a:first-child{grid-column:auto}}</style>
