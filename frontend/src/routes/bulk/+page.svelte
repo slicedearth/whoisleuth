@@ -1,15 +1,52 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { loadCandidateHandoff, type CandidateHandoff } from '$lib/candidate-handoff';
-  let handoff = $state<CandidateHandoff | null>(null);
-  onMount(() => { handoff = loadCandidateHandoff(); });
+  import { loadCandidateHandoff, type Candidate, type CandidateHandoff } from '$lib/candidate-handoff';
+  import { computeOpportunityScore, computeRiskScore, formatActivityCell } from '../../../../public/js/scoring.js';
+
+  type ScanMode = 'fast' | 'deep';
+  type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'errors';
+  interface ScanResult {
+    domain: string; status: 'complete'|'error'; availability: string; confidence: string;
+    registrar: string; activity: string; risk: number|null; opportunity: number|null;
+    mutationTypes: string[]; error: string; raw: Record<string, any>|null;
+  }
+
+  let handoff = $state<CandidateHandoff|null>(null);
+  let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
+  let completed = $state(0); let total = $state(0); let results = $state<ScanResult[]>([]); let filter = $state<Filter>('all');
+  let status = $state(''); let controller: AbortController|null = null; let pauseResolvers: Array<()=>void> = [];
+  const filtered = $derived(results.filter(matchesFilter));
+  const counts = $derived({all:results.length,available:results.filter(r=>r.availability==='available').length,registered:results.filter(r=>['registered','for_sale','expiring'].includes(r.availability)).length,high_risk:results.filter(r=>(r.risk??-1)>=70).length,errors:results.filter(r=>r.status==='error').length});
+
+  onMount(()=>{handoff=loadCandidateHandoff();if(handoff)input=handoff.candidates.map(c=>c.domain).join('\n');});
+  function parseDomains(){return [...new Set(input.split(/[\s,;]+/).map(v=>v.trim().toLowerCase()).filter(Boolean))];}
+  function provenance(domain:string):Candidate|undefined{return handoff?.candidates.find(c=>c.domain===domain);}
+  function value(v:any):string {if(!v)return '—';if(typeof v==='object')return value(v.name||v.org||v.handle);return String(v);}
+  function matchesFilter(r:ScanResult){if(filter==='available')return r.availability==='available';if(filter==='registered')return ['registered','for_sale','expiring'].includes(r.availability);if(filter==='high_risk')return (r.risk??-1)>=70;if(filter==='errors')return r.status==='error';return true;}
+  async function waitWhilePaused(){if(!paused)return;await new Promise<void>(resolve=>pauseResolvers.push(resolve));}
+  function resume(){paused=false;for(const resolve of pauseResolvers.splice(0))resolve();}
+  function togglePause(){if(paused)resume();else paused=true;}
+  function cancel(){resume();controller?.abort();status=`Cancelled after ${completed} of ${total} lookups.`;}
+  async function fetchLookup(domain:string,signal:AbortSignal){let response=await fetch(`/api/lookup?q=${encodeURIComponent(domain)}&fast=${mode==='fast'?'1':'0'}`,{signal});for(let attempt=0;response.status===429&&attempt<3;attempt++){const seconds=Number(response.headers.get('Retry-After'))||2;await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,seconds*1000);signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Aborted','AbortError'));},{once:true});});response=await fetch(`/api/lookup?q=${encodeURIComponent(domain)}&fast=${mode==='fast'?'1':'0'}`,{signal});}const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);return body;}
+  function normalize(domain:string,body:Record<string,any>):ScanResult {const av=body.availability||{};const candidate=provenance(domain);const scoring={...av,availability:av.state,mutationTypes:candidate?.mutationTypes||[]};return{domain,status:'complete',availability:av.state||'unknown',confidence:av.confidence||'low',registrar:value(av.registrar),activity:formatActivityCell(av.activityStatus,av.hasMx,av.hasSpf,av.hasDmarc),risk:computeRiskScore(scoring),opportunity:computeOpportunityScore(scoring),mutationTypes:candidate?.mutationTypes||[],error:'',raw:body};}
+  async function run(domains:string[],replace=true){const limit=mode==='fast'?2000:200;if(!domains.length){status='Enter at least one domain.';return;}if(domains.length>limit){status=`${mode==='fast'?'Fast':'Deep'} scans are limited to ${limit} domains.`;return;}const scanController=new AbortController();controller=scanController;running=true;paused=false;completed=0;total=domains.length;if(replace)results=[];status=`Scanning ${total} domains…`;let cursor=0;const concurrency=mode==='fast'?12:4;const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted)break;const domain=domains[cursor++];try{const body=await fetchLookup(domain,scanController.signal);results=[...results,normalize(domain,body)];}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;const candidate=provenance(domain);results=[...results,{domain,status:'error',availability:'error',confidence:'low',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes:candidate?.mutationTypes||[],error:cause instanceof Error?cause.message:'Lookup failed',raw:null}];}completed+=1;}};await Promise.all(Array.from({length:Math.min(concurrency,domains.length)},worker));running=false;if(scanController.signal.aborted)return;status=`Completed ${completed} of ${total} lookups.`;}
+  async function start(){await run(parseDomains(),true);}
+  async function retryErrors(){const domains=results.filter(r=>r.status==='error').map(r=>r.domain);results=results.filter(r=>r.status!=='error');await run(domains,false);}
+  function exportCsv(){const header=['domain','availability','confidence','registrar','activity','risk','opportunity','mutations','error'];const rows=results.map(r=>[r.domain,r.availability,r.confidence,r.registrar,r.activity,r.risk??'',r.opportunity??'',r.mutationTypes.join('|'),r.error]);const csv=[header,...rows].map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-bulk-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
 </script>
 
 <svelte:head><title>Bulk analysis · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Assess</p><h1>Bulk analysis</h1><p>Scan, filter, cluster, shortlist, and export candidate domains.</p></div></section>
-{#if handoff}
-  <section class="handoff card"><p class="eyebrow">Discovery handoff</p><h2>{handoff.candidates.length} candidates ready</h2><p>Received from {handoff.source.replaceAll('-',' ')}. The scanning queue and triage table are the next migration slice.</p><div>{#each handoff.candidates.slice(0,12) as candidate}<span>{candidate.domain}</span>{/each}{#if handoff.candidates.length>12}<span>+{handoff.candidates.length-12} more</span>{/if}</div></section>
-{:else}
-  <section class="empty card"><h2>No candidate set loaded</h2><p>Generate candidates in Discover, or wait for direct paste and CSV import in the next migration slice.</p><a href="/discover">Open Discover →</a></section>
+<section class="heading"><div><p class="eyebrow">Assess</p><h1>Bulk analysis</h1><p>Run bounded concurrent scans, triage risk, and retry inconclusive candidates.</p></div></section>
+<section class="queue card">
+  {#if handoff}<p class="handoff">Loaded {handoff.candidates.length} candidates from {handoff.source.replaceAll('-',' ')}.</p>{/if}
+  <label for="domains">Domains</label><textarea id="domains" bind:value={input} disabled={running} placeholder="example.com&#10;example.net"></textarea>
+  <div class="queue-actions"><label>Scan mode<select bind:value={mode} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · web and mail signals</option></select></label><button class="primary" onclick={start} disabled={running||!input.trim()}>Scan {parseDomains().length||''} domains</button>{#if running}<button onclick={togglePause}>{paused?'Resume':'Pause'}</button><button class="danger" onclick={cancel}>Cancel</button>{/if}</div>
+  {#if running||total}<div class="progress"><span style:width={`${total?completed/total*100:0}%`}></span></div>{/if}<p class="status">{status}</p>
+</section>
+
+{#if results.length}
+  <section class="triage card"><div class="triage-head"><div class="filters">{#each ['all','available','registered','high_risk','errors'] as key}<button class:active={filter===key} onclick={()=>filter=key as Filter}>{key.replace('_',' ')} <span>{counts[key as keyof typeof counts]}</span></button>{/each}</div><div>{#if counts.errors}<button onclick={retryErrors} disabled={running}>Retry errors</button>{/if}<button onclick={exportCsv}>Export CSV</button></div></div><p>{filtered.length} of {results.length} results shown</p>
+  <div class="table-wrap"><table><thead><tr><th>Domain</th><th>State</th><th>Risk</th><th>Opportunity</th><th>Activity</th><th>Registrar</th><th>Mutation</th></tr></thead><tbody>{#each filtered as row}<tr class:error-row={row.status==='error'}><td><strong>{row.domain}</strong>{#if row.error}<small>{row.error}</small>{/if}</td><td><span class="state">{row.availability.replace('_',' ')}</span></td><td class:high={(row.risk??-1)>=70}>{row.risk??'—'}</td><td>{row.opportunity??'—'}</td><td>{row.activity}</td><td>{row.registrar}</td><td>{row.mutationTypes.map(v=>v.replaceAll('_',' ')).join(', ')||'—'}</td></tr>{/each}</tbody></table></div></section>
 {/if}
-<style>.handoff,.empty{padding:28px}.handoff h2,.empty h2{margin:0}.handoff>p:not(.eyebrow),.empty p{color:var(--muted)}.handoff div{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px}.handoff span{padding:7px 9px;border:1px solid var(--border);border-radius:999px;color:#bfd0e1;background:#0a1624;font-size:.68rem}.empty{min-height:300px;display:grid;place-content:center;text-align:center}.empty a{color:var(--accent);font-weight:700}</style>
+
+<style>.queue,.triage{padding:22px}.handoff{margin-top:0;color:var(--accent);font-size:.76rem}.queue>label{display:block;margin-bottom:7px;font-size:.74rem;font-weight:700}textarea{width:100%;min-height:150px;padding:12px;border:1px solid var(--border);border-radius:11px;background:#050e19bf;resize:vertical}.queue-actions{display:flex;gap:9px;align-items:end;margin-top:12px}.queue-actions label{margin-right:auto;color:var(--muted);font-size:.68rem}.queue-actions select{display:block;min-height:42px;margin-top:5px;padding:0 10px;border:1px solid var(--border);border-radius:9px;background:#0a1624}.queue-actions>button,.triage button{min-height:38px;padding:0 12px;border:1px solid var(--border);border-radius:9px;background:#101d2f}.danger{color:var(--danger)}.progress{height:6px;margin-top:16px;overflow:hidden;border-radius:99px;background:#1b2d42}.progress span{display:block;height:100%;background:var(--accent);transition:width .15s}.status{margin-bottom:0;color:var(--muted);font-size:.74rem}.triage{margin-top:16px}.triage-head{display:flex;justify-content:space-between;gap:14px}.filters,.triage-head>div{display:flex;flex-wrap:wrap;gap:6px}.filters button{text-transform:capitalize}.filters button.active{color:var(--accent);border-color:#4c8d8a}.filters span{color:var(--muted)}.triage>p{color:var(--muted);font-size:.7rem}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.72rem}th,td{padding:11px 9px;border-top:1px solid var(--border);text-align:left;vertical-align:top}th{color:var(--muted);font-size:.64rem;text-transform:uppercase;letter-spacing:.06em}td strong,td small{display:block;max-width:280px;overflow-wrap:anywhere}td small{margin-top:4px;color:var(--danger)}.state{color:var(--accent);text-transform:capitalize}.high{color:var(--danger);font-weight:800}.error-row{background:#ff8d9208}@media(max-width:700px){.queue-actions,.triage-head{align-items:stretch;flex-direction:column}.queue-actions label{margin:0}.queue-actions select{width:100%}.table-wrap{margin-inline:-22px;padding-inline:22px}}</style>
