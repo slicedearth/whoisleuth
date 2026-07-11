@@ -102,14 +102,18 @@
     data removes the saved profiles and lists. Watchlists retain a bounded
     timeline of material scan changes locally; older timeline events are
     automatically discarded.</p>
+  <p>CSV and JSON exports are generated and downloaded directly in your
+    browser. A single-lookup evidence JSON contains the raw RDAP and WHOIS
+    responses and may therefore include contact data the registry published.
+    Exporting does not upload or retain another copy on the server.</p>
 
   <h2>7. Data Retention</h2>
   <p>Lookup and posture-audit results are not retained server-side at all -
     each request is handled and discarded. Brand Profile, Shortlist, and
     Watchlist data persists in your browser's local storage until you remove
     it yourself or clear your browser's site data. If you export a CSV/JSON
-    file, that file is yours to manage from that point on - delete it once you
-    no longer need it.</p>
+    file, that file is yours to secure and manage from that point on - delete
+    it once you no longer need it.</p>
 
   <h2>8. Data Security</h2>
   <p>Technical measures in place include a shared-password session gate with

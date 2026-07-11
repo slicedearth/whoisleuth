@@ -49,6 +49,10 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
+    assert.equal(result.diagnostics.version, 1);
+    assert.equal(result.diagnostics.rdap.status, 'success');
+    assert.equal(result.diagnostics.whois.status, 'complete');
+    assert.equal(result.diagnostics.availability.status, 'complete');
   });
 
   test('keeps a usable WHOIS result when RDAP fails', async () => {
@@ -68,6 +72,9 @@ describe('runUnifiedLookup', () => {
     assert.match(result.rdap.error, /timed out/);
     assert.equal(result.whois.parsed.registrationStatus, 'not_found');
     assert.equal(result.availability.state, 'available');
+    assert.equal(result.diagnostics.rdap.status, 'error');
+    assert.equal(result.diagnostics.rdap.errorCode, 'RDAP_UPSTREAM_FAILED');
+    assert.equal(result.diagnostics.whois.status, 'complete');
   });
 
   test('does not run domain availability for IP lookups', async () => {
@@ -80,5 +87,20 @@ describe('runUnifiedLookup', () => {
 
     assert.equal(availabilityCalls, 0);
     assert.deepEqual(result.availability, { applicable: false, type: 'ipv4' });
+    assert.equal(result.diagnostics.rdap.status, 'unsupported');
+    assert.equal(result.diagnostics.rdap.errorCode, 'RDAP_UNSUPPORTED');
+    assert.equal(result.diagnostics.availability.status, 'not_applicable');
+  });
+
+  test('reports availability execution failures separately from an unknown result', async () => {
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => { throw new Error('enrichment failed'); },
+    });
+
+    assert.equal(result.availability.state, 'unknown');
+    assert.equal(result.diagnostics.availability.status, 'error');
+    assert.equal(result.diagnostics.availability.errorCode, 'AVAILABILITY_CHECK_FAILED');
   });
 });

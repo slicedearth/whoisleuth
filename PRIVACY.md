@@ -26,8 +26,11 @@ at all.
   their latest results; older timeline events are automatically discarded.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
   button in either panel, or by clearing the browser's site data.
-- **CSV exports**: downloaded directly to your device. From that point on,
-  the file is yours to manage - delete it once you no longer need it.
+- **CSV/JSON exports**: downloaded directly to your device. Single-lookup
+  evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
+  registry-published contact data. Nothing is uploaded or retained by the
+  server when you export. From that point on, the file is yours to manage -
+  store it appropriately and delete it once you no longer need it.
 - **Official-domain posture audits**: handled per request and discarded. The
   server queries public DNS, the domain registry's RDAP service for DNSSEC
   delegation status, and (only when advertised) the official domain's own

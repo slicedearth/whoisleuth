@@ -562,11 +562,22 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    deduped read of both sources); RDAP and WHOIS stay exactly as they were,
    just one click away instead of two permanently-visible, largely
    duplicate panels. */
-.panel-tabs {
+.panel-toolbar {
   display: flex;
-  gap: 4px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid var(--border);
 }
+.panel-tabs { display: flex; gap: 4px; min-width: 0; }
+.lookup-export-btn {
+  flex: 0 0 auto;
+  margin: 0 6px 5px 0;
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.lookup-export-btn[hidden] { display: none; }
 .panel-tab {
   background: transparent;
   border: none;
@@ -583,6 +594,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .panel-tab[aria-selected="true"] {
   color: var(--text);
   background: var(--panel);
+}
+@media (max-width: 430px) {
+  .panel-tab { padding-inline: 11px; }
+  .lookup-export-btn { padding-inline: 8px; }
 }
 .panel {
   background: var(--panel);

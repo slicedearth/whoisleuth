@@ -309,10 +309,13 @@
   </section>
 
   <div class="panels">
-    <div class="panel-tabs" role="tablist" aria-label="Lookup result view">
-      <button type="button" class="panel-tab" id="tab-summary" role="tab" aria-selected="true" aria-controls="panel-summary">Summary</button>
-      <button type="button" class="panel-tab" id="tab-rdap" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-rdap">RDAP</button>
-      <button type="button" class="panel-tab" id="tab-whois" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-whois">WHOIS</button>
+    <div class="panel-toolbar">
+      <div class="panel-tabs" role="tablist" aria-label="Lookup result view">
+        <button type="button" class="panel-tab" id="tab-summary" role="tab" aria-selected="true" aria-controls="panel-summary">Summary</button>
+        <button type="button" class="panel-tab" id="tab-rdap" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-rdap">RDAP</button>
+        <button type="button" class="panel-tab" id="tab-whois" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-whois">WHOIS</button>
+      </div>
+      <button type="button" class="secondary lookup-export-btn" id="lookup-export-btn" title="Download this lookup locally as JSON. The file may contain registry contact data." hidden>Export JSON</button>
     </div>
     <section class="panel" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
       <div class="panel-body" id="summary-output">

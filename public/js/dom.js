@@ -30,6 +30,7 @@ export const tabWhois = /** @type {HTMLButtonElement} */ (document.getElementByI
 export const panelSummary = /** @type {HTMLElement} */ (document.getElementById('panel-summary'));
 export const panelRdap = /** @type {HTMLElement} */ (document.getElementById('panel-rdap'));
 export const panelWhois = /** @type {HTMLElement} */ (document.getElementById('panel-whois'));
+export const lookupExportBtn = /** @type {HTMLButtonElement} */ (document.getElementById('lookup-export-btn'));
 
 export const availabilityCard = /** @type {HTMLElement} */ (document.getElementById('availability-card'));
 export const availabilityPrompt = /** @type {HTMLElement} */ (document.getElementById('availability-prompt'));

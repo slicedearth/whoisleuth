@@ -124,6 +124,17 @@ npm run typecheck
   after both sources finish. Equivalent values are normalized for harmless
   formatting differences, while source-only values and material conflicts
   retain both original source values for review.
+- After a successful single lookup, **Export JSON** downloads a versioned
+  evidence package containing the submitted/registrable-domain context,
+  normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
+  discrepancy analysis, and availability/web/mail findings. The download is
+  created locally and may contain contact data published by the registry.
+- The unified `/api/lookup` response includes a versioned `diagnostics`
+  object with independent RDAP, WHOIS, and availability statuses, source
+  provenance, and stable source error codes. HTTP errors retain the existing
+  human-readable `error` and add a machine-readable `errorCode` such as
+  `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
+  clients do not need to match message text.
 - Paste or upload a CSV/list of multiple domains to run a bulk scan instead.
 - Use the keyword or typosquat generators to populate the search box with
   candidate domains, then click **Lookup**.
@@ -293,6 +304,7 @@ public/
     watchlist.js        Watchlist persistence, rescan workflow, and timeline UI
     watchlist-history.js  Pure bounded history, baseline, and material-diff logic
     single-lookup.js    Single domain/IP/ASN lookup orchestration
+    evidence-export.js  Versioned single-lookup evidence package builder
     bulk.js             Bulk scan/deep-check, sorting, CSV export
 ```
 

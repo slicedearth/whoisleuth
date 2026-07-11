@@ -1,7 +1,8 @@
 // Orchestrates a single domain/IP/ASN lookup through the unified backend and
 // renders its RDAP, WHOIS, and availability sections into their panels/cards.
 
-import { escapeHtml } from './utils.js';
+import { downloadBlob, escapeHtml } from './utils.js';
+import { buildLookupEvidence, evidenceFilename } from './evidence-export.js';
 import { renderRdap, renderWhois, renderSummary, renderAvailability } from './render.js';
 import {
   lookupScopeNote,
@@ -19,6 +20,7 @@ import {
   panelWhois,
   availabilityCard,
   availabilityScores,
+  lookupExportBtn,
   submitBtn,
 } from './dom.js';
 import { showGate } from './auth.js';
@@ -29,6 +31,17 @@ let lastWhoisParsed = null;
 let rdapSettled = false;
 let whoisSettled = false;
 let lastLookupType = null;
+let lastLookupResponse = null;
+
+lookupExportBtn.addEventListener('click', () => {
+  if (!lastLookupResponse) return;
+  const evidence = buildLookupEvidence(lastLookupResponse);
+  downloadBlob(
+    JSON.stringify(evidence, null, 2),
+    evidenceFilename(lastLookupResponse),
+    'application/json;charset=utf-8'
+  );
+});
 
 function updateSummary() {
   summaryOutput.innerHTML = renderSummary(lastRdapParsed, lastWhoisParsed, {
@@ -124,6 +137,8 @@ export async function runSingleLookup(q) {
   rdapSettled = false;
   whoisSettled = false;
   lastLookupType = null;
+  lastLookupResponse = null;
+  lookupExportBtn.hidden = true;
   setLoading(summaryOutput, null);
   setLoading(rdapOutput, rdapBadge);
   setLoading(whoisOutput, whoisBadge);
@@ -175,6 +190,8 @@ export async function runSingleLookup(q) {
     }
 
     renderAvailability(body.availability);
+    lastLookupResponse = body;
+    lookupExportBtn.hidden = false;
   } catch (err) {
     const message = escapeHtml(err.message || 'Lookup failed');
     rdapOutput.innerHTML = `<span class="error-text">${message}</span>`;
@@ -193,6 +210,8 @@ export function clearSingleResults() {
   rdapSettled = false;
   whoisSettled = false;
   lastLookupType = null;
+  lastLookupResponse = null;
+  lookupExportBtn.hidden = true;
   summaryOutput.innerHTML = emptyStateHtml('A merged RDAP/WHOIS summary will appear here.');
   rdapOutput.innerHTML = emptyStateHtml('RDAP results will appear here.');
   whoisOutput.innerHTML = emptyStateHtml('WHOIS referral chain will appear here.');

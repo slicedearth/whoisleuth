@@ -5,7 +5,7 @@ const { classifyQuery } = require('./lib/classify');
 const { fetchRdapRecord } = require('./lib/rdap');
 const { buildWhoisChain, parseWhoisChain } = require('./lib/whois');
 const { checkDomainAvailability } = require('./lib/availability');
-const { runUnifiedLookup } = require('./lib/lookup');
+const { runUnifiedLookup, LOOKUP_ERROR_CODES } = require('./lib/lookup');
 const { searchCertificateTransparency } = require('./lib/ct-search');
 const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('./lib/domain-posture');
 const {
@@ -65,7 +65,7 @@ function isHttps(req) {
 function requireAuth(req, res, next) {
   const cookies = parseCookies(req.headers.cookie);
   if (!isValidSessionToken(cookies[COOKIE_NAME])) {
-    return res.status(401).json({ error: 'Authentication required' });
+    return res.status(401).json({ error: 'Authentication required', errorCode: LOOKUP_ERROR_CODES.AUTH_REQUIRED });
   }
   next();
 }
@@ -76,7 +76,7 @@ function rateLimit(scope, opts) {
     const { allowed, retryAfterSeconds } = checkRateLimit(key, opts);
     if (!allowed) {
       res.setHeader('Retry-After', String(retryAfterSeconds));
-      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+      return res.status(429).json({ error: 'Too many requests. Please try again later.', errorCode: LOOKUP_ERROR_CODES.RATE_LIMITED });
     }
     next();
   };
@@ -109,13 +109,13 @@ app.get('/api/session', (req, res) => {
 
 app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim();
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
 
   let classified;
   try {
     classified = classifyQuery(q);
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: err.message, errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
   }
 
   try {
@@ -130,7 +130,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
       ...result,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, errorCode: LOOKUP_ERROR_CODES.LOOKUP_FAILED });
   }
 });
 

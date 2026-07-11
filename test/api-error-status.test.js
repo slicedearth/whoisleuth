@@ -33,7 +33,9 @@ describe('invalid query returns 400, not 500', () => {
     const { handler } = require('../netlify/functions/lookup');
     const res = await handler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
+    const body = JSON.parse(res.body);
+    assert.match(body.error, /not a valid domain, IP, or ASN/);
+    assert.equal(body.errorCode, 'INVALID_QUERY');
   });
 
   test('rdap', async () => {
@@ -62,5 +64,21 @@ describe('invalid query returns 400, not 500', () => {
     const res = await handler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
     assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
+  });
+});
+
+describe('unified lookup error codes', () => {
+  test('reports missing authentication with a stable code', async () => {
+    const { handler } = require('../netlify/functions/lookup');
+    const res = await handler({ headers: {}, queryStringParameters: { q: 'example.com' } });
+    assert.equal(res.statusCode, 401);
+    assert.equal(JSON.parse(res.body).errorCode, 'AUTH_REQUIRED');
+  });
+
+  test('reports a missing query with a stable code', async () => {
+    const { handler } = require('../netlify/functions/lookup');
+    const res = await handler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
+    assert.equal(res.statusCode, 400);
+    assert.equal(JSON.parse(res.body).errorCode, 'MISSING_QUERY');
   });
 });

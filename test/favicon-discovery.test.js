@@ -5,7 +5,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { extractIconUrls } = require('../lib/favicon');
+const { extractIconUrls, buildFaviconCandidates } = require('../lib/favicon');
 
 const BASE = 'https://example.com/';
 
@@ -60,5 +60,16 @@ describe('extractIconUrls', () => {
 
   test('returns an empty list for HTML with no link tags', () => {
     assert.deepEqual(extractIconUrls('<html><body>no links</body></html>', BASE), []);
+  });
+});
+
+describe('buildFaviconCandidates', () => {
+  test('falls back to both conventional ICO and SVG paths', () => {
+    assert.deepEqual(buildFaviconCandidates('example.com'), [
+      'https://example.com/favicon.ico',
+      'https://example.com/favicon.svg',
+      'http://example.com/favicon.ico',
+      'http://example.com/favicon.svg',
+    ]);
   });
 });
