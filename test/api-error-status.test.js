@@ -29,6 +29,13 @@ function authedEvent(query) {
 }
 
 describe('invalid query returns 400, not 500', () => {
+  test('unified lookup', async () => {
+    const { handler } = require('../netlify/functions/lookup');
+    const res = await handler(authedEvent(INVALID_QUERY));
+    assert.equal(res.statusCode, 400);
+    assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
+  });
+
   test('rdap', async () => {
     const { handler } = require('../netlify/functions/rdap');
     const res = await handler(authedEvent(INVALID_QUERY));

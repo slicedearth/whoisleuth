@@ -1,9 +1,10 @@
-// Orchestrates a single domain/IP/ASN lookup: fetches RDAP, WHOIS, and
-// availability in parallel and renders each into its panel/card.
+// Orchestrates a single domain/IP/ASN lookup through the unified backend and
+// renders its RDAP, WHOIS, and availability sections into their panels/cards.
 
 import { escapeHtml } from './utils.js';
 import { renderRdap, renderWhois, renderSummary, renderAvailability } from './render.js';
 import {
+  lookupScopeNote,
   panels,
   summaryOutput,
   rdapOutput,
@@ -22,10 +23,7 @@ import {
 } from './dom.js';
 import { showGate } from './auth.js';
 
-// Summary is derived from whichever of RDAP/WHOIS has come back so far, not
-// its own fetch - each of runRdap/runWhois updates its own slot here and
-// re-renders Summary, so it fills in progressively the same way the RDAP/
-// WHOIS panels already do.
+// Summary is derived from the RDAP/WHOIS sections in the unified response.
 let lastRdapParsed = null;
 let lastWhoisParsed = null;
 let rdapSettled = false;
@@ -37,6 +35,26 @@ function updateSummary() {
     comparisonReady: rdapSettled && whoisSettled,
     lookupType: lastLookupType,
   });
+}
+
+// A subdomain query is resolved to its registrable domain for RDAP/WHOIS (a
+// registry has no record for an arbitrary subdomain - see lib/classify.js).
+// Surface that plainly so the user isn't confused about why they searched
+// login.example.com but the panels show example.com.
+function updateScopeNote(body) {
+  if (!body || !body.inputHostname || !body.registrableDomain
+    || body.inputHostname === body.registrableDomain) {
+    return;
+  }
+  lookupScopeNote.innerHTML =
+    `Showing results for the registrable domain <strong>${escapeHtml(body.registrableDomain)}</strong> `
+    + `— you searched <strong>${escapeHtml(body.inputHostname)}</strong>, and registries publish records at the registrable-domain level.`;
+  lookupScopeNote.hidden = false;
+}
+
+function clearScopeNote() {
+  lookupScopeNote.hidden = true;
+  lookupScopeNote.innerHTML = '';
 }
 
 const TAB_IDS = ['summary', 'rdap', 'whois'];
@@ -83,80 +101,65 @@ function setLoading(el, badgeEl) {
   if (badgeEl) badgeEl.textContent = '';
 }
 
-async function runRdap(q) {
-  setLoading(rdapOutput, rdapBadge);
-  try {
-    const res = await fetch(`/api/rdap?q=${encodeURIComponent(q)}`);
-    const body = await res.json();
-    if (res.status === 401) return showGate();
-    if (!res.ok) {
-      rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'RDAP lookup failed')}</span>`;
-      lastRdapParsed = null;
-      return;
-    }
-    lastLookupType = body.type || lastLookupType;
-    rdapBadge.textContent = body.rdapServer || '';
-    rdapOutput.innerHTML = renderRdap(body.type, body.parsed, body.data);
-    lastRdapParsed = body.parsed;
-  } catch (err) {
-    rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
-    lastRdapParsed = null;
-  } finally {
-    rdapSettled = true;
-    updateSummary();
-  }
-}
-
-async function runWhois(q) {
-  setLoading(whoisOutput, whoisBadge);
-  try {
-    const res = await fetch(`/api/whois?q=${encodeURIComponent(q)}`);
-    const body = await res.json();
-    if (res.status === 401) return showGate();
-    if (!res.ok) {
-      whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(body.error || 'WHOIS lookup failed')}</span>`;
-      lastWhoisParsed = null;
-      return;
-    }
-    lastLookupType = body.type || lastLookupType;
-    const chain = body.chain || [];
-    whoisBadge.textContent = chain.map((h) => h.server).join(' → ');
-    whoisOutput.innerHTML = renderWhois(body.parsed, chain);
-    lastWhoisParsed = body.parsed;
-  } catch (err) {
-    whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(err.message)}</span>`;
-    lastWhoisParsed = null;
-  } finally {
-    whoisSettled = true;
-    updateSummary();
-  }
-}
-
-async function runAvailability(q) {
-  availabilityCard.classList.remove('visible');
-  try {
-    const res = await fetch(`/api/availability?q=${encodeURIComponent(q)}`);
-    if (res.status === 401) return showGate();
-    const body = await res.json();
-    if (!res.ok) return;
-    renderAvailability(body);
-  } catch {
-    /* availability is best-effort; silently skip on failure */
-  }
-}
-
 export async function runSingleLookup(q) {
   submitBtn.disabled = true;
   panels.classList.add('visible');
   selectTab('summary');
+  clearScopeNote();
   lastRdapParsed = null;
   lastWhoisParsed = null;
   rdapSettled = false;
   whoisSettled = false;
   lastLookupType = null;
   setLoading(summaryOutput, null);
-  await Promise.allSettled([runRdap(q), runWhois(q), runAvailability(q)]);
-  submitBtn.disabled = false;
+  setLoading(rdapOutput, rdapBadge);
+  setLoading(whoisOutput, whoisBadge);
+  availabilityCard.classList.remove('visible');
+
+  try {
+    const res = await fetch(`/api/lookup?q=${encodeURIComponent(q)}`);
+    const body = await res.json();
+    if (res.status === 401) return showGate();
+    if (!res.ok) {
+      const message = escapeHtml(body.error || 'Lookup failed');
+      rdapOutput.innerHTML = `<span class="error-text">${message}</span>`;
+      whoisOutput.innerHTML = `<span class="error-text">${message}</span>`;
+      return;
+    }
+
+    lastLookupType = body.type || null;
+    updateScopeNote(body);
+
+    const rdap = body.rdap || {};
+    if (rdap.error) {
+      rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(rdap.error)}</span>`;
+    } else {
+      rdapBadge.textContent = rdap.rdapServer || '';
+      rdapOutput.innerHTML = renderRdap(body.type, rdap.parsed, rdap.data);
+      lastRdapParsed = rdap.parsed || null;
+    }
+
+    const whois = body.whois || {};
+    if (whois.error) {
+      whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(whois.error)}</span>`;
+    } else {
+      const chain = whois.chain || [];
+      whoisBadge.textContent = chain.map((hop) => hop.server).join(' → ');
+      whoisOutput.innerHTML = renderWhois(whois.parsed, chain);
+      lastWhoisParsed = whois.parsed || null;
+    }
+
+    renderAvailability(body.availability);
+  } catch (err) {
+    const message = escapeHtml(err.message || 'Lookup failed');
+    rdapOutput.innerHTML = `<span class="error-text">${message}</span>`;
+    whoisOutput.innerHTML = `<span class="error-text">${message}</span>`;
+  } finally {
+    rdapSettled = true;
+    whoisSettled = true;
+    updateSummary();
+    submitBtn.disabled = false;
+  }
 }
 
 export function clearSingleResults() {
@@ -170,6 +173,7 @@ export function clearSingleResults() {
   whoisOutput.innerHTML = emptyStateHtml('WHOIS referral chain will appear here.');
   rdapBadge.textContent = '';
   whoisBadge.textContent = '';
+  clearScopeNote();
   selectTab('summary');
   availabilityScores.innerHTML = '';
   availabilityCard.classList.remove('visible');

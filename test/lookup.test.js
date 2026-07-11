@@ -1,0 +1,84 @@
+const { describe, test } = require('node:test');
+const assert = require('node:assert/strict');
+
+const { runUnifiedLookup } = require('../lib/lookup');
+
+const classifiedDomain = {
+  type: 'domain',
+  value: 'example.com',
+  inputHostname: 'login.example.com',
+  registrableDomain: 'example.com',
+  isSubdomain: true,
+};
+
+describe('runUnifiedLookup', () => {
+  test('fetches RDAP and WHOIS once and reuses both for availability', async () => {
+    const rdapRecord = {
+      rdapServer: 'https://rdap.example/domain/example.com',
+      upstreamStatus: 200,
+      data: { ldhName: 'EXAMPLE.COM' },
+      parsed: { domain: 'EXAMPLE.COM', statuses: [], nameservers: [], events: [] },
+    };
+    const whoisChain = [
+      { server: 'whois.iana.org', response: 'refer: whois.example\n' },
+      {
+        server: 'whois.example',
+        response: 'Domain Name: EXAMPLE.COM\nRegistrar: Example Registrar\n',
+      },
+    ];
+    let rdapCalls = 0;
+    let whoisCalls = 0;
+    let availabilityCalls = 0;
+
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => { rdapCalls += 1; return rdapRecord; },
+      buildWhoisChain: async () => { whoisCalls += 1; return whoisChain; },
+      checkDomainAvailability: async (domain, options) => {
+        availabilityCalls += 1;
+        assert.equal(domain, 'example.com');
+        assert.equal(await options.rdapRecordPromise, rdapRecord);
+        assert.equal(await options.whoisChainPromise, whoisChain);
+        return { state: 'registered', confidence: 'high' };
+      },
+    });
+
+    assert.equal(rdapCalls, 1);
+    assert.equal(whoisCalls, 1);
+    assert.equal(availabilityCalls, 1);
+    assert.equal(result.rdap.parsed.domain, 'EXAMPLE.COM');
+    assert.equal(result.whois.parsed.registrationStatus, 'registered');
+    assert.equal(result.availability.domain, 'example.com');
+    assert.equal(result.availability.inputHostname, 'login.example.com');
+  });
+
+  test('keeps a usable WHOIS result when RDAP fails', async () => {
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => { throw new Error('RDAP timed out'); },
+      buildWhoisChain: async () => [
+        { server: 'whois.iana.org', response: 'refer: whois.example\n' },
+        { server: 'whois.example', response: 'No match for EXAMPLE.COM' },
+      ],
+      checkDomainAvailability: async (_domain, options) => {
+        await assert.rejects(options.rdapRecordPromise, /timed out/);
+        assert.ok(Array.isArray(await options.whoisChainPromise));
+        return { state: 'available', confidence: 'medium' };
+      },
+    });
+
+    assert.match(result.rdap.error, /timed out/);
+    assert.equal(result.whois.parsed.registrationStatus, 'not_found');
+    assert.equal(result.availability.state, 'available');
+  });
+
+  test('does not run domain availability for IP lookups', async () => {
+    let availabilityCalls = 0;
+    const result = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => { availabilityCalls += 1; },
+    });
+
+    assert.equal(availabilityCalls, 0);
+    assert.deepEqual(result.availability, { applicable: false, type: 'ipv4' });
+  });
+});

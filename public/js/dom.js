@@ -14,6 +14,7 @@ export const form = /** @type {HTMLFormElement} */ (document.getElementById('loo
 export const queryInput = /** @type {HTMLTextAreaElement} */ (document.getElementById('query-input'));
 export const submitBtn = /** @type {HTMLButtonElement} */ (document.getElementById('submit-btn'));
 
+export const lookupScopeNote = /** @type {HTMLElement} */ (document.getElementById('lookup-scope-note'));
 export const panels = /** @type {HTMLElement} */ (document.querySelector('.panels'));
 export const summaryOutput = /** @type {HTMLElement} */ (document.getElementById('summary-output'));
 export const rdapOutput = /** @type {HTMLElement} */ (document.getElementById('rdap-output'));

@@ -380,6 +380,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 /* Availability card */
+.lookup-scope-note {
+  margin-top: 20px;
+  padding: 10px 14px;
+  background: rgba(94, 179, 255, 0.08);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.lookup-scope-note strong { font-family: var(--mono); color: var(--accent); font-weight: 600; }
 .availability {
   margin-top: 24px;
   background: var(--panel);

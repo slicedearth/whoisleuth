@@ -130,4 +130,9 @@ describe('registrable-domain safety (eliminating false availability)', () => {
     assert.equal(classifyQuery('example.com.').value, 'example.com');
     assert.equal(classifyQuery('example.com.').inputHostname, 'example.com');
   });
+
+  test('rejects more than one terminal dot', () => {
+    assert.throws(() => classifyQuery('example.com..'), /more than one terminal dot/);
+    assert.throws(() => classifyQuery('example.com...'), /more than one terminal dot/);
+  });
 });

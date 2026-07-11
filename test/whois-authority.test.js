@@ -66,6 +66,8 @@ describe('analyzeWhoisChainAuthority', () => {
     const a = analyzeWhoisChainAuthority([ianaHop, registryPositive, registrarNoMatch]);
     assert.equal(a.notFound, false); // positive registry evidence wins
     assert.equal(a.authoritativeHop, REGISTRY);
+    assert.equal(a.conflictingHop, REGISTRAR);
+    assert.equal(a.chainStatus, 'partial');
   });
 
   test('a rate-limited registrar hop is not read as "available"', () => {
@@ -94,13 +96,62 @@ describe('analyzeWhoisChainAuthority', () => {
     assert.equal(a.notFound, false);
     assert.equal(a.authoritativeHop, null);
   });
+
+  test('root referral + registry positive (no registrar hop) reads as registered', () => {
+    const a = analyzeWhoisChainAuthority([ianaHop, registryPositive]);
+    assert.equal(a.notFound, false);
+    assert.equal(a.authoritativeHop, REGISTRY);
+    assert.equal(a.chainStatus, 'complete');
+  });
+
+  test('an echoed domain followed by Status: available is authoritative not-found', () => {
+    const hop = { server: REGISTRY, response: 'Domain Name: FREE-NAME.COM\nStatus: available\n' };
+    const a = analyzeWhoisChainAuthority([ianaHop, hop]);
+    assert.equal(a.registrationStatus, 'not_found');
+    assert.equal(a.notFound, true);
+    assert.equal(a.authoritativeHop, REGISTRY);
+  });
+
+  test('Registered: no is negative even when the response echoes the domain', () => {
+    const hop = { server: REGISTRY, response: 'Domain Name: FREE-NAME.COM\nRegistered: no\n' };
+    const a = analyzeWhoisChainAuthority([ianaHop, hop]);
+    assert.equal(a.registrationStatus, 'not_found');
+    assert.equal(a.notFound, true);
+    const parsed = parseWhoisChain([ianaHop, hop]);
+    assert.equal(parsed.createdDate, undefined);
+  });
+
+  test('the first authoritative decision wins over a contradictory later hop', () => {
+    const a = analyzeWhoisChainAuthority([ianaHop, registryNoMatch, registrarThick]);
+    assert.equal(a.registrationStatus, 'not_found');
+    assert.equal(a.notFound, true);
+    assert.equal(a.authoritativeHop, REGISTRY);
+    assert.equal(a.conflictingHop, REGISTRAR);
+    assert.equal(a.chainStatus, 'partial');
+  });
+
+  test('a domain-only authoritative response is registered, not inconclusive', () => {
+    const hop = { server: REGISTRY, response: 'Domain Name: MINIMAL-RECORD.COM\n' };
+    const a = analyzeWhoisChainAuthority([ianaHop, hop]);
+    assert.equal(a.registrationStatus, 'registered');
+    assert.equal(a.notFound, false);
+  });
+
+  test('a rate-limit response that echoes Domain Name remains inconclusive', () => {
+    const hop = { server: REGISTRY, response: 'Domain Name: EXAMPLE.COM\nQuery limit exceeded. Try again later.\n' };
+    const a = analyzeWhoisChainAuthority([ianaHop, hop]);
+    assert.equal(a.registrationStatus, 'inconclusive');
+    assert.equal(a.notFound, false);
+    assert.equal(a.failedHop, REGISTRY);
+  });
 });
 
 describe('parseWhoisChain wires the authority result through', () => {
   test('positive registry + "no match" registrar: notFound stays false and fields populate', () => {
     const parsed = parseWhoisChain([ianaHop, registryPositive, registrarNoMatch]);
     assert.equal(parsed.notFound, false);
-    assert.equal(parsed.chainStatus, 'complete');
+    assert.equal(parsed.chainStatus, 'partial');
+    assert.equal(parsed.conflictingHop, 'whois.exampleregistrar.com');
     assert.ok(parsed.nameservers.length >= 1);
     assert.match(parsed.registrar, /Example Registrar/);
   });

@@ -5,6 +5,7 @@ const { classifyQuery } = require('./lib/classify');
 const { fetchRdapRecord } = require('./lib/rdap');
 const { buildWhoisChain, parseWhoisChain } = require('./lib/whois');
 const { checkDomainAvailability } = require('./lib/availability');
+const { runUnifiedLookup } = require('./lib/lookup');
 const { searchCertificateTransparency } = require('./lib/ct-search');
 const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('./lib/domain-posture');
 const {
@@ -104,6 +105,33 @@ app.post('/api/logout', requireAuth, (req, res) => {
 app.get('/api/session', (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   res.json({ authenticated: isValidSessionToken(cookies[COOKIE_NAME]) });
+});
+
+app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+
+  let classified;
+  try {
+    classified = classifyQuery(q);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  try {
+    const fast = req.query.fast === '1' || req.query.fast === 'true';
+    const result = await runUnifiedLookup(classified, { fast });
+    res.json({
+      query: q,
+      type: classified.type,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      isSubdomain: classified.isSubdomain,
+      ...result,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
