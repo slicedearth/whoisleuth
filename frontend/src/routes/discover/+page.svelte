@@ -58,6 +58,9 @@
     status = `Loaded discovery defaults from ${profile.name}.`;
   }
 
+  function selectMode(next:Mode){mode=next;candidates=[];generatedContext=[];selected=new Set();status='';error='';}
+  function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;event.preventDefault();selectMode(order[index]);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
+
   function generate() {
     if (!seed.trim()) { error = 'Enter a brand, domain, or keyword.'; return; }
     if (!tlds().length && !seed.includes('.')) { error = 'Enter at least one valid TLD.'; return; }
@@ -112,16 +115,16 @@
 <section class="controls card">
   {#if profile}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button onclick={useProfile}>Use profile defaults</button></div>{/if}
   <div class="modes" role="tablist" aria-label="Discovery method">
-    <button class:active={mode==='typosquat'} onclick={()=>{mode='typosquat';candidates=[]}}>Lookalikes</button>
-    <button class:active={mode==='keyword'} onclick={()=>{mode='keyword';candidates=[]}}>Name ideas</button>
-    <button class:active={mode==='certificate-transparency'} onclick={()=>{mode='certificate-transparency';candidates=[]}}>Certificates</button>
+    <button role="tab" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
+    <button role="tab" aria-selected={mode==='keyword'} tabindex={mode==='keyword'?0:-1} class:active={mode==='keyword'} onclick={()=>selectMode('keyword')} onkeydown={tabKeydown}>Name ideas</button>
+    <button role="tab" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
   </div>
   <div class="fields">
     <label>{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Brand or certificate keyword' : 'Brand or domain'}<input bind:value={seed} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
     {#if mode!=='certificate-transparency'}<label>TLDs<input bind:value={tldText} placeholder="com, net, org"></label>{/if}
     <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
   </div>
-  {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status">{status}</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
 </section>
 
 {#if candidates.length}

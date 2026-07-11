@@ -16,7 +16,7 @@
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
 <section class="heading"><div><p class="eyebrow">Monitor</p><h1>Watchlists and history</h1><p>Review browser-local monitoring sets, material changes, and bounded investigation timelines.</p></div><div class="top-actions"><button onclick={exportWatchlists} disabled={!names.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label><button class="danger" onclick={clearAll} disabled={!names.length}>Clear all</button></div></section>
-{#if message}<p class="message">{message}</p>{/if}
+{#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
 {#if names.length}
   <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each names as name}{@const item=watchlists[name]}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount||0)>0}>{latest?.changeCount||0}</span></td><td>{date(item.updatedAt)}</td><td><div class="actions"><button onclick={()=>rescan(name)}>Load for re-scan</button><button onclick={()=>{selected=name;changedOnly=false}}>History</button><button class="danger" onclick={()=>remove(name)}>Delete</button></div></td></tr>{/each}</tbody></table></div></section>
