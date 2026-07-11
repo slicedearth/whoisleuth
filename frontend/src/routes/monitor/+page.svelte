@@ -1,0 +1,1 @@
+<script lang="ts">import Placeholder from '$lib/Placeholder.svelte';</script><Placeholder eyebrow="Monitor" title="Watchlists and history" description="Track domain state, infrastructure, and risk-signal changes over time."/>

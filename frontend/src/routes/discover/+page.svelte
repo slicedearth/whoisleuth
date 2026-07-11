@@ -1,0 +1,1 @@
+<script lang="ts">import Placeholder from '$lib/Placeholder.svelte';</script><Placeholder eyebrow="Discover" title="Candidate discovery" description="Generate explainable lookalikes and correlate Certificate Transparency discoveries."/>

@@ -1,0 +1,5 @@
+<script lang="ts">import { workspaces } from '$lib/workspaces';</script>
+<svelte:head><title>Workspace · WHOISleuth</title></svelte:head>
+<section class="heading"><div><p class="eyebrow">Investigation workspace</p><h1>Follow a signal from discovery to response.</h1><p>The new interface separates each stage while preserving the existing lookup engine, evidence model, and privacy-first local state.</p></div></section>
+<div class="grid">{#each workspaces as item,i}<a class="card" href={item.href}><span>0{i+1}</span><h2>{item.label}</h2><p>{item.detail}</p><strong>Open workspace →</strong></a>{/each}</div>
+<style>.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.grid a{min-height:210px;padding:25px;position:relative}.grid a:first-child{grid-column:span 2}.grid span{color:var(--accent);font-size:.72rem}.grid h2{margin:32px 0 8px}.grid p{color:var(--muted)}.grid a strong{position:absolute;bottom:23px;font-size:.76rem}@media(max-width:650px){.grid{grid-template-columns:1fr}.grid a:first-child{grid-column:auto}}</style>

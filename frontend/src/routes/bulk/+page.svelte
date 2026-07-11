@@ -1,0 +1,1 @@
+<script lang="ts">import Placeholder from '$lib/Placeholder.svelte';</script><Placeholder eyebrow="Assess" title="Bulk analysis" description="Scan, filter, cluster, shortlist, and export candidate domains."/>
