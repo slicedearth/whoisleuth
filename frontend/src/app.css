@@ -128,3 +128,76 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   .login { padding: 26px 20px; }
   .login::before { margin: -26px -20px 24px; }
 }
+
+/* Bulk's local neutral-button rule is intentionally broad. Keep its primary
+   scan action on the high-contrast blue treatment once the action is ready. */
+.queue .queue-actions > button.primary:not(:disabled) {
+  border-color: #78bdff;
+  color: #06111d;
+  background: linear-gradient(135deg,#75c2ff,#4a9ff3);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), 0 0 18px rgba(74,159,243,.16);
+  font-weight: 800;
+}
+
+@media (max-width: 700px) {
+  /* Results become self-contained records on narrow screens. This avoids
+     forcing eight table columns into a phone-width horizontal scroller. */
+  .triage .results-table { margin-inline: 0; padding-inline: 0; overflow: visible; }
+  .results-table table, .results-table tbody { display: block; }
+  .results-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .results-table tbody { display: grid; gap: 10px; }
+  .results-table tr {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    padding: 13px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+  .results-table tr.error-row { background: rgba(255,107,107,.035); }
+  .results-table tr.trusted-row { background: rgba(126,224,168,.035); }
+  .results-table td {
+    display: block;
+    min-width: 0;
+    padding: 8px 7px;
+    border: 0;
+  }
+  .results-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: .56rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .results-table td:first-child {
+    grid-column: 1 / -1;
+    padding: 0 0 12px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .results-table td:first-child::before { display: none; }
+  .results-table td:nth-child(2),
+  .results-table td:nth-child(3),
+  .results-table td:nth-child(4) { white-space: nowrap; }
+  .results-table td:nth-child(n+5) {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 82px minmax(0,1fr);
+    gap: 8px;
+    align-items: start;
+  }
+  .results-table td:nth-child(n+5)::before { margin: 0; }
+  .results-table .domain > span { min-width: 0; }
+  .results-table .draft-actions { width: 100%; }
+}
