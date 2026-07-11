@@ -88,7 +88,7 @@ clear it (fill in your own contact details before sharing a deployment).
 
 ```bash
 npm install
-SITE_PASSWORD=choose-a-password npm start
+SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret npm start
 ```
 
 Then open **http://localhost:3000** in a browser and enter that password.
@@ -100,6 +100,12 @@ login, just one password shared with whoever you want to have access; anyone
 without it sees only the password prompt. Pick something you're comfortable
 sharing with those people, not a password reused elsewhere.
 
+`SESSION_SECRET` should be a separate random value (for example, 32 random
+bytes encoded as hex). It signs session cookies without turning a captured
+cookie into an offline verifier for `SITE_PASSWORD`. For compatibility,
+deployments that omit it derive a slower signing key from `SITE_PASSWORD`,
+but setting the independent secret is recommended.
+
 `npm start` builds the prerendered multi-page frontend and starts the shared
 Express/API process. The generated `frontend/build/` directory is the only
 frontend served by the Node deployment.
@@ -107,7 +113,7 @@ frontend served by the Node deployment.
 The server listens on port 3000 by default. To use a different port:
 
 ```bash
-PORT=4000 SITE_PASSWORD=choose-a-password npm start
+PORT=4000 SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret npm start
 ```
 
 Every push and pull request runs the locked install, test suite, JavaScript
@@ -142,6 +148,10 @@ npm run build
   human-readable `error` and add a machine-readable `errorCode` such as
   `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
   clients do not need to match message text.
+- Clients that only need the derived assessment can add `compact=1` to
+  `/api/lookup`. This retains `availability` and `diagnostics` while omitting
+  raw RDAP and WHOIS payloads; Bulk uses this mode to bound browser memory and
+  transfer size.
 - Paste multiple domains into Lookup to hand them to Bulk, or paste/upload a
   CSV or text list directly in Bulk. Named domain columns, quoted CSV fields,
   comma/semicolon/tab delimiters, and case-insensitive deduplication are
@@ -232,7 +242,7 @@ shared by `server.js` and the Netlify Functions:
 
 - `/api/login` - 10 attempts per 5 minutes, since the shared password is the
   tool's only access control and the main thing worth throttling.
-- `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search`,
+- `/api/lookup`, `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search`,
   `/api/domain-posture` - 1000 requests per minute, generous enough to clear a
   full 2000-domain fast bulk scan without breaking normal use, while still
   capping a scripted flood well below what upstream registries would treat as
@@ -243,7 +253,11 @@ is in-memory: on `server.js` (one long-lived process) it applies globally; on
 Netlify Functions each container has its own memory, so it only limits bursts
 within a single warm container rather than across the whole deployment - a
 cheap first line of defense, not a substitute for a shared store (e.g. Redis)
-under sustained distributed abuse.
+under sustained distributed abuse. Netlify deployments additionally apply
+its edge-enforced, per-IP rate limiting to the canonical `/api/login` and
+`/api/lookup` paths. Those two rules use the code-based allowance available
+on all Netlify plans and protect the password gate and the main high-volume
+scan path before a function container is invoked.
 
 ## Deploying to Netlify
 
@@ -259,11 +273,11 @@ way. To deploy:
    `netlify/functions/`. Direct routes such as `/lookup`, `/bulk`, and
    `/monitor` resolve to independent static HTML entries rather than relying
    on a catch-all client-side rewrite.
-3. In the Netlify dashboard, set a `SITE_PASSWORD` environment variable
+3. In the Netlify dashboard, set `SITE_PASSWORD` and a separate random
+   `SESSION_SECRET` environment variable
    (Site settings → Environment variables) before your first deploy - the
-   login/session functions read it the same way `server.js` does. Without
-   it, `checkPassword`/`isValidSessionToken` fail closed and nobody (not even
-   the correct password) can log in.
+   login/session functions read them the same way `server.js` does. Without
+   `SITE_PASSWORD`, authentication fails closed and nobody can log in.
 
 Bulk scans run as one `/api/lookup` call per domain with client-side
 concurrency (see `frontend/src/routes/bulk/+page.svelte`) rather than one long server-held

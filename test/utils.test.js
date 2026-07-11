@@ -1,15 +1,6 @@
-// Covers frontend/src/lib/analysis/utils.js's isValidEmailAddress - the guard outreach.js
-// and abuse.js use before dropping a WHOIS/RDAP-sourced email into a
-// mailto: URI - and createLocalStore, the localStorage wrapper shared by
-// shortlist.js/watchlist.js/brand-profiles.js. utils.js has no DOM
-// dependency at import time (unlike outreach.js/abuse.js, which call
-// document.addEventListener when loaded), so it can be imported directly
-// here the same way scoring.test.js does. createLocalStore does touch
-// `localStorage` at call time (not import time), so a minimal in-memory
-// stand-in is installed on `global.localStorage` before those tests run -
-// Node's test environment has no browser storage API otherwise.
+// Covers the browser-safe analysis helpers consumed by the Svelte workspaces.
 
-const { test, describe, before, beforeEach } = require('node:test');
+const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
 
 let utils;
@@ -47,15 +38,15 @@ describe('isValidEmailAddress', () => {
 
 describe('parseDomainInput', () => {
   test('accepts newline, comma, semicolon, and tab-separated query lists', () => {
-    assert.deepEqual(utils.parseDomainsFromText('one.example\ntwo.example'), ['one.example', 'two.example']);
-    assert.deepEqual(utils.parseDomainsFromText('one.example, two.example'), ['one.example', 'two.example']);
-    assert.deepEqual(utils.parseDomainsFromText('one.example; two.example'), ['one.example', 'two.example']);
-    assert.deepEqual(utils.parseDomainsFromText('one.example\ttwo.example'), ['one.example', 'two.example']);
+    assert.deepEqual(utils.parseDomainInput('one.example\ntwo.example').entries, ['one.example', 'two.example']);
+    assert.deepEqual(utils.parseDomainInput('one.example, two.example').entries, ['one.example', 'two.example']);
+    assert.deepEqual(utils.parseDomainInput('one.example; two.example').entries, ['one.example', 'two.example']);
+    assert.deepEqual(utils.parseDomainInput('one.example\ttwo.example').entries, ['one.example', 'two.example']);
   });
 
   test('reads a named domain column from comma, semicolon, or tabular CSV', () => {
     assert.deepEqual(
-      utils.parseDomainsFromText('label,domain,notes\nFirst,one.example,"a, quoted note"\nSecond,two.example,ok'),
+      utils.parseDomainInput('label,domain,notes\nFirst,one.example,"a, quoted note"\nSecond,two.example,ok').entries,
       ['one.example', 'two.example']
     );
     const parsed = utils.parseDomainInput('\uFEFFdomain;owner\none.example;Alice\ntwo.example;Bob');
@@ -65,14 +56,14 @@ describe('parseDomainInput', () => {
 
   test('keeps column zero for a headerless domain-and-notes CSV', () => {
     assert.deepEqual(
-      utils.parseDomainsFromText('one.example,customer one\ntwo.example,customer two'),
+      utils.parseDomainInput('one.example,customer one\ntwo.example,customer two').entries,
       ['one.example', 'two.example']
     );
   });
 
   test('retains invalid cells in a one-line pasted list so the scan can report them', () => {
     assert.deepEqual(
-      utils.parseDomainsFromText('one.example,not a domain,two.example'),
+      utils.parseDomainInput('one.example,not a domain,two.example').entries,
       ['one.example', 'not a domain', 'two.example']
     );
   });
@@ -84,54 +75,20 @@ describe('parseDomainInput', () => {
   });
 });
 
-function makeFakeLocalStorage() {
-  const backing = new Map();
-  return {
-    getItem: (key) => (backing.has(key) ? backing.get(key) : null),
-    setItem: (key, value) => backing.set(key, String(value)),
-    removeItem: (key) => backing.delete(key),
-    _backing: backing,
-  };
-}
-
-describe('createLocalStore', () => {
-  beforeEach(() => {
-    global.localStorage = makeFakeLocalStorage();
+describe('rowsToCsv', () => {
+  test('neutralizes spreadsheet formulas in every exported cell', () => {
+    assert.equal(
+      utils.rowsToCsv([
+        ['domain', 'registrar'],
+        ['example.com', '=HYPERLINK("https://evil.example")'],
+        ['example.net', '  @SUM(1,2)'],
+      ]),
+      'domain,registrar\nexample.com,"\'=HYPERLINK(""https://evil.example"")"\nexample.net,"\'  @SUM(1,2)"'
+    );
   });
 
-  test('load() returns the default value (a fresh copy) when the key is unset', () => {
-    const store = utils.createLocalStore('test-key', []);
-    const a = store.load();
-    const b = store.load();
-    assert.deepEqual(a, []);
-    assert.notEqual(a, b); // distinct instances - mutating one must not affect the other
-  });
-
-  test('save() then load() round-trips a value', () => {
-    const store = utils.createLocalStore('test-key', []);
-    store.save([{ domain: 'example.com' }]);
-    assert.deepEqual(store.load(), [{ domain: 'example.com' }]);
-  });
-
-  test('an object default (watchlist.js\'s shape) round-trips correctly', () => {
-    const store = utils.createLocalStore('test-key', {});
-    assert.deepEqual(store.load(), {});
-    store.save({ myWatchlist: { updatedAt: '2026-01-01', results: [] } });
-    assert.deepEqual(store.load(), { myWatchlist: { updatedAt: '2026-01-01', results: [] } });
-  });
-
-  test('load() falls back to the default when the stored value is corrupted JSON', () => {
-    global.localStorage.setItem('test-key', '{not valid json');
-    const store = utils.createLocalStore('test-key', []);
-    assert.deepEqual(store.load(), []);
-  });
-
-  test('separate keys do not collide', () => {
-    const storeA = utils.createLocalStore('key-a', []);
-    const storeB = utils.createLocalStore('key-b', []);
-    storeA.save(['a']);
-    assert.deepEqual(storeA.load(), ['a']);
-    assert.deepEqual(storeB.load(), []);
+  test('quotes delimiters and preserves ordinary scalar values', () => {
+    assert.equal(utils.rowsToCsv([['one,two', 3, null]]), '"one,two",3,');
   });
 });
 

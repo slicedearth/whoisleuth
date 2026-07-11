@@ -1,46 +1,4 @@
-// Generic helpers with no dependency on any particular feature - string/HTML
-// escaping, date formatting, and CSV/file parsing shared across single
-// lookup, bulk lookup, and the generators.
-
-// Escapes " and ' too, not just the three HTML-syntax characters - this is
-// used to build attribute values (title="...", data-domain="...") all over
-// the app, and an unescaped double quote in the source text (e.g. a literal
-// "registered" in a tooltip label) would otherwise close the attribute
-// early and truncate/corrupt the rendered element.
-export function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-// Some registries fill a redacted field with a literal placeholder string
-// (e.g. "REDACTED FOR PRIVACY") instead of omitting it - printed verbatim
-// that reads as if it were real data, and worse, a mailto: link built from
-// it would target that literal text as an email address. Same marker list
-// lib/availability.js uses server-side for the privacyProtected signal;
-// kept here too since render.js/outreach.js/abuse.js work from the raw
-// RDAP/WHOIS field values directly, not that derived signal.
-const REDACTION_MARKERS = [
-  /redacted for privacy/i,
-  /data protected/i,
-  /privacy\s*protect/i,
-  /whoisguard/i,
-  /domains by proxy/i,
-  /perfect privacy/i,
-  /contact privacy/i,
-  /private registration/i,
-  /identity protect/i,
-  /not disclosed/i,
-  /withheld for privacy/i,
-  /^redacted$/i,
-];
-
-export function isRedactionPlaceholder(value) {
-  return typeof value === 'string' && REDACTION_MARKERS.some((re) => re.test(value));
-}
+// Browser-safe analysis helpers shared by the Svelte workspaces.
 
 // Deliberately conservative (no +tags, no comments, no quoted local parts) -
 // this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a
@@ -143,18 +101,6 @@ export function groupBySimilarFavicon(records, maxDistance) {
   return [...groups.values()].filter((domains) => domains.length >= 2);
 }
 
-export function fmtDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-export function kv(label, value) {
-  if (value === null || value === undefined || value === '') return '';
-  return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`;
-}
-
 // A leading =, +, -, or @ (or tab/CR) makes Excel/Sheets/LibreOffice
 // evaluate the cell as a formula instead of text - a real risk here since
 // several exported columns (registrant/registrar name, nameservers) come
@@ -162,7 +108,7 @@ export function kv(label, value) {
 // controls. Prefixing with a single quote forces text interpretation
 // (spreadsheet apps hide the leading quote, so this doesn't change what's
 // visibly displayed for ordinary values).
-const CSV_FORMULA_TRIGGER_RE = /^[=+\-@\t\r]/;
+const CSV_FORMULA_TRIGGER_RE = /^(?:[\t\r\n ]*[=+\-@]|[\t\r\n])/;
 
 export function toCsvValue(v) {
   let s = v === null || v === undefined ? '' : String(v);
@@ -171,135 +117,8 @@ export function toCsvValue(v) {
   return s;
 }
 
-// Wires a delegated click handler for a "Copy draft" button that appears
-// next to a mailto: link (outreach.js and abuse.js both use this same
-// pattern - a domain-keyed draft plus clipboard fallback for anyone without
-// a desktop mail client). `getText(domain)` should return the draft text
-// for that button's domain, or a falsy value if there's nothing to copy.
-export function wireCopyToClipboard(buttonClass, getText) {
-  document.addEventListener('click', async (e) => {
-    const target = /** @type {HTMLElement} */ (e.target);
-    const btn = target.closest(`.${buttonClass}`);
-    if (!(btn instanceof HTMLElement)) return;
-    const text = getText(btn.dataset.domain);
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      const original = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => {
-        btn.textContent = original;
-      }, 1500);
-    } catch {
-      /* clipboard access denied - the mailto link above still works as a fallback */
-    }
-  });
-}
-
-// Wraps a single localStorage key as JSON, with parse/stringify and a
-// try/catch on both read and write - shortlist.js, watchlist.js, and
-// brand-profiles.js each kept their own copy of this exact pattern (only the
-// key and default value differed). `load()` always returns a value parsed
-// fresh from `defaultValue`'s own JSON (whether that's because the key is
-// missing or storage/JSON access failed), matching what the original
-// per-feature copies did - never the same object instance handed back
-// twice, so a caller mutating one loaded copy can't affect another.
-export function createLocalStore(key, defaultValue) {
-  const defaultJson = JSON.stringify(defaultValue);
-  return {
-    load() {
-      try {
-        return JSON.parse(localStorage.getItem(key) ?? defaultJson);
-      } catch {
-        return JSON.parse(defaultJson);
-      }
-    },
-    save(value) {
-      try {
-        localStorage.setItem(key, JSON.stringify(value));
-      } catch {
-        /* storage full/unavailable - value just won't persist this time */
-      }
-    },
-  };
-}
-
-// Shared by shortlist.js/watchlist.js/brand-profiles.js's "export to a JSON
-// file" buttons - only the data and filename prefix differ.
-export function exportJsonFile(data, filenamePrefix) {
-  downloadBlob(JSON.stringify(data, null, 2), `${filenamePrefix}-${Date.now()}.json`, 'application/json;charset=utf-8;');
-}
-
-// Shared by CSV export (bulk.js) and JSON export (shortlist.js/watchlist.js) -
-// only the content/filename/MIME type differ, the actual "trigger a browser
-// download" mechanics are identical.
-export function downloadBlob(content, filename, mimeType) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// Types `text` into el one character at a time - purely decorative (the
-// terminal-prompt-echo lines), so it respects prefers-reduced-motion by
-// just setting the text instantly instead. Cancels any run already in
-// progress on this element (a fast repeat lookup shouldn't leave two
-// competing timers racing to finish the same line).
-const typingTimers = new WeakMap();
-export function typeText(el, text, { speed = 18 } = {}) {
-  const pending = typingTimers.get(el);
-  if (pending) clearTimeout(pending);
-
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    el.textContent = text;
-    return;
-  }
-
-  el.textContent = '';
-  let i = 0;
-  const tick = () => {
-    i += 1;
-    el.textContent = text.slice(0, i);
-    if (i < text.length) typingTimers.set(el, setTimeout(tick, speed));
-    else typingTimers.delete(el);
-  };
-  tick();
-}
-
-// Runs `worker` over `items` with up to `concurrency` in flight at once,
-// passing each item's original index alongside it so a caller that needs to
-// write results into a pre-sized array (to preserve order despite
-// out-of-order completion) can do so. Concurrency lives here (client-side)
-// rather than in a single long-lived server request/stream, so a bulk scan
-// or audit is just N independent /api/... calls - the same shape whether
-// the backend is a long-running Express server or a short-lived serverless
-// function, which only ever handles one request per invocation. Shared by
-// bulk.js (scanning candidate domains) and brand-profiles.js (auditing a
-// profile's official domains).
-export async function runPool(items, concurrency, worker) {
-  let idx = 0;
-  const size = Math.min(concurrency, items.length) || 1;
-  const runners = new Array(size).fill(0).map(async () => {
-    while (idx < items.length) {
-      const current = idx++;
-      await worker(items[current], current);
-    }
-  });
-  await Promise.allSettled(runners);
-}
-
-export function readFileAsText(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error || new Error('Could not read file'));
-    reader.readAsText(file);
-  });
+export function rowsToCsv(rows) {
+  return rows.map((row) => row.map(toCsvValue).join(',')).join('\n');
 }
 
 function splitDelimitedLine(line, delimiter = ',') {
@@ -405,8 +224,4 @@ export function parseDomainInput(text) {
   }
 
   return { entries, duplicates, usedHeader };
-}
-
-export function parseDomainsFromText(text) {
-  return parseDomainInput(text).entries;
 }

@@ -114,7 +114,8 @@ app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
 
   try {
     const fast = req.query.fast === '1' || req.query.fast === 'true';
-    const result = await runUnifiedLookup(classified, { fast });
+    const compact = req.query.compact === '1' || req.query.compact === 'true';
+    const result = await runUnifiedLookup(classified, { fast, compact });
     res.json({
       query: q,
       type: classified.type,

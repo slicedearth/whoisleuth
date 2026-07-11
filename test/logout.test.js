@@ -25,8 +25,9 @@ const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { createSessionToken, buildSessionCookie, sign } = require('../lib/auth');
+const { createSessionToken, buildSessionCookie } = require('../lib/auth');
 const { handler } = require('../netlify/functions/logout');
 
 let cookie;
@@ -59,8 +60,14 @@ describe('logout handler', () => {
   });
 
   test('rejects a POST with an expired session cookie', async () => {
-    const expiredPayload = String(Date.now() - 1000); // already in the past
-    const expiredToken = `${expiredPayload}.${sign(expiredPayload, process.env.SITE_PASSWORD)}`;
+    const actualNow = Date.now;
+    let expiredToken;
+    try {
+      Date.now = () => actualNow() - (31 * 24 * 60 * 60 * 1000);
+      expiredToken = createSessionToken();
+    } finally {
+      Date.now = actualNow;
+    }
     const res = await handler({
       httpMethod: 'POST',
       headers: { origin: 'https://example.com', host: 'example.com', cookie: `wrt_session=${expiredToken}` },

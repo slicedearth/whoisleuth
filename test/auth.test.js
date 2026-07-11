@@ -4,7 +4,12 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { isTrustedOrigin } = require('../lib/auth');
+const {
+  createSessionToken,
+  isTrustedOrigin,
+  isValidSessionToken,
+  parseCookies,
+} = require('../lib/auth');
 
 describe('isTrustedOrigin', () => {
   test('accepts a matching Origin/Host pair', () => {
@@ -44,5 +49,46 @@ describe('isTrustedOrigin', () => {
   test('fails closed when headers is null/undefined', () => {
     assert.equal(isTrustedOrigin(null), false);
     assert.equal(isTrustedOrigin(undefined), false);
+  });
+});
+
+describe('parseCookies', () => {
+  test('ignores malformed percent-encoded values instead of throwing', () => {
+    assert.deepEqual(parseCookies('wrt_session=%; theme=dark'), { theme: 'dark' });
+  });
+});
+
+describe('session signing', () => {
+  test('uses an independent SESSION_SECRET when configured', () => {
+    const previousPassword = process.env.SITE_PASSWORD;
+    const previousSessionSecret = process.env.SESSION_SECRET;
+    try {
+      process.env.SITE_PASSWORD = 'test-password';
+      process.env.SESSION_SECRET = 'first-independent-signing-secret';
+      const token = createSessionToken();
+      assert.equal(isValidSessionToken(token), true);
+      process.env.SESSION_SECRET = 'different-independent-signing-secret';
+      assert.equal(isValidSessionToken(token), false);
+    } finally {
+      if (previousPassword === undefined) delete process.env.SITE_PASSWORD;
+      else process.env.SITE_PASSWORD = previousPassword;
+      if (previousSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = previousSessionSecret;
+    }
+  });
+
+  test('derives a compatible signing key when SESSION_SECRET is absent', () => {
+    const previousPassword = process.env.SITE_PASSWORD;
+    const previousSessionSecret = process.env.SESSION_SECRET;
+    try {
+      process.env.SITE_PASSWORD = 'fallback-test-password';
+      delete process.env.SESSION_SECRET;
+      assert.equal(isValidSessionToken(createSessionToken()), true);
+    } finally {
+      if (previousPassword === undefined) delete process.env.SITE_PASSWORD;
+      else process.env.SITE_PASSWORD = previousPassword;
+      if (previousSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = previousSessionSecret;
+    }
   });
 });

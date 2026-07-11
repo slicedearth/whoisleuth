@@ -24,6 +24,10 @@
   to = "/.netlify/functions/lookup"
   status = 200
   force = true
+  [redirects.rate_limit]
+    window_limit = 1000
+    window_size = 60
+    aggregate_by = ["ip", "domain"]
 
 [[redirects]]
   from = "/api/rdap"
@@ -48,6 +52,10 @@
   to = "/.netlify/functions/login"
   status = 200
   force = true
+  [redirects.rate_limit]
+    window_limit = 10
+    window_size = 180
+    aggregate_by = ["ip", "domain"]
 
 [[redirects]]
   from = "/api/logout"
