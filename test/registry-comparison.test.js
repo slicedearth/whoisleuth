@@ -1,12 +1,12 @@
 // The comparison module is a browser ES module, loaded dynamically for the
-// same reason as public/js/scoring.js in scoring.test.js.
+// Loaded dynamically because the frontend analysis workspace is ESM.
 
 const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
 
 let comparison;
 before(async () => {
-  comparison = await import('../public/js/registry-comparison.js');
+  comparison = await import('../frontend/src/lib/analysis/registry-comparison.js');
 });
 function field(result, label) {
   return result.fields.find((item) => item.label === label);

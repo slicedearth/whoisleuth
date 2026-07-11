@@ -1,11 +1,11 @@
 [build]
-  command = "npm run build:svelte"
+  command = "npm run build"
   publish = "frontend/build"
   functions = "netlify/functions"
 
-# Mirrors the security headers server.js sets for self-hosted deployments -
-# applies to every response, static files and /api/* redirects alike, since
-# Netlify serves public/ directly rather than through server.js.
+# Mirrors the response security headers server.js sets for self-hosted
+# deployments. SvelteKit emits a hash-restricted CSP meta tag in every
+# prerendered page.
 [[headers]]
   for = "/*"
   [headers.values]
@@ -13,7 +13,6 @@
     X-Frame-Options = "DENY"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 [[headers]]
   for = "/_app/immutable/*"

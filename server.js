@@ -1,6 +1,5 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 
 const { classifyQuery } = require('./lib/classify');
 const { fetchRdapRecord } = require('./lib/rdap');
@@ -26,51 +25,26 @@ const PORT = process.env.PORT || 3000;
 
 app.disable('x-powered-by');
 
-// The frontend uses inline `style="..."` attributes throughout (no inline
-// scripts or event handlers) - style-src needs 'unsafe-inline' for those to
-// keep working, but script-src stays strict since nothing here needs it.
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join('; ');
-
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
   next();
 });
 
-// Prefer the prerendered Svelte workspace after `npm run build:svelte`, while
-// keeping the legacy static directory as a safe fallback for a fresh checkout
-// that has not built the migration frontend yet. `extensions` lets direct
-// requests such as /lookup resolve the generated lookup.html entry without a
+// Serve the prerendered Svelte workspace. `npm start` builds it first;
+// `extensions` lets routes such as /lookup resolve lookup.html without a
 // catch-all SPA rewrite, so unknown paths still return a real 404.
 const svelteBuildDir = path.join(__dirname, 'frontend', 'build');
-const legacyPublicDir = path.join(__dirname, 'public');
-const frontendDir = fs.existsSync(path.join(svelteBuildDir, 'index.html')) ? svelteBuildDir : legacyPublicDir;
-if (frontendDir === svelteBuildDir) {
-  app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'immutable'), {
-    immutable: true,
-    maxAge: '1y',
-  }));
-}
-app.use(express.static(frontendDir, { extensions: ['html'] }));
-if (frontendDir === svelteBuildDir) {
-  app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/'], (req, res) => {
-    res.redirect(308, req.path.slice(0, -1));
-  });
-}
+app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'immutable'), {
+  immutable: true,
+  maxAge: '1y',
+}));
+app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
+app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/', '/privacy/'], (req, res) => {
+  res.redirect(308, req.path.slice(0, -1));
+});
 app.use(express.json({ limit: '1mb' }));
 
 // True when the request actually arrived over HTTPS - directly, or via a

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/favicon.svg" width="72" height="72" alt="WHOISleuth logo" />
+  <img src="frontend/static/favicon.svg" width="72" height="72" alt="WHOISleuth logo" />
 </p>
 
 <h1 align="center">WHOISleuth</h1>
@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License: Apache 2.0" />
   <img src="https://img.shields.io/badge/node-%3E%3D20.18-brightgreen" alt="Node >= 20.18" />
-  <img src="https://img.shields.io/badge/build-no%20bundler-lightgrey" alt="No bundler" />
+  <img src="https://img.shields.io/badge/frontend-SvelteKit%20%2B%20Vite-ff3e00" alt="SvelteKit and Vite" />
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify Status" /></a>
 </p>
 
@@ -28,11 +28,11 @@ DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly configured DKIM
 selectors).
 
 Runs as a small Node backend (needed for raw WHOIS sockets and cross-origin
-RDAP requests, which browsers can't do directly) serving a static frontend
-with no build step. The lookup logic lives in a shared `lib/` so it can run
-either as a traditional always-on Node/Express server (`server.js`) or as
-Netlify Functions (`netlify/functions/`) with no logic duplicated between the
-two.
+RDAP requests, which browsers can't do directly) serving a prerendered
+SvelteKit frontend built with Vite. The lookup logic lives in a shared `lib/`
+so it can run either as a traditional always-on Node/Express server
+(`server.js`) or as Netlify Functions (`netlify/functions/`) with no logic
+duplicated between the two.
 
 ## Contents
 
@@ -88,7 +88,7 @@ clear it (fill in your own contact details before sharing a deployment).
 
 ```bash
 npm install
-SITE_PASSWORD=choose-a-password npm run start:svelte
+SITE_PASSWORD=choose-a-password npm start
 ```
 
 Then open **http://localhost:3000** in a browser and enter that password.
@@ -100,23 +100,25 @@ login, just one password shared with whoever you want to have access; anyone
 without it sees only the password prompt. Pick something you're comfortable
 sharing with those people, not a password reused elsewhere.
 
-`start:svelte` builds the prerendered multi-page frontend and starts the shared
-Express/API process. `npm start` starts the same server without rebuilding; it
-serves `frontend/build/` when present and safely falls back to the legacy
-`public/` frontend in a fresh checkout.
+`npm start` builds the prerendered multi-page frontend and starts the shared
+Express/API process. The generated `frontend/build/` directory is the only
+frontend served by the Node deployment.
 
 The server listens on port 3000 by default. To use a different port:
 
 ```bash
-PORT=4000 SITE_PASSWORD=choose-a-password npm run start:svelte
+PORT=4000 SITE_PASSWORD=choose-a-password npm start
 ```
 
-Every push and pull request runs the locked install, test suite, and both
-JavaScript type checks in GitHub Actions. Run the same verification locally:
+Every push and pull request runs the locked install, test suite, JavaScript
+type checks, Svelte checks, and production frontend build in GitHub Actions.
+Run the same verification locally:
 
 ```bash
 npm test
 npm run typecheck
+npm run check
+npm run build
 ```
 
 ## Usage
@@ -140,9 +142,12 @@ npm run typecheck
   human-readable `error` and add a machine-readable `errorCode` such as
   `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
   clients do not need to match message text.
-- Paste or upload a CSV/list of multiple domains to run a bulk scan instead.
-- Use the keyword or typosquat generators to populate the search box with
-  candidate domains, then click **Lookup**.
+- Paste multiple domains into Lookup to hand them to Bulk, or paste/upload a
+  CSV or text list directly in Bulk. Named domain columns, quoted CSV fields,
+  comma/semicolon/tab delimiters, and case-insensitive deduplication are
+  supported.
+- Use the keyword, typosquat, or Certificate Transparency discovery tools to
+  select candidate domains and send them directly to Bulk.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
 
@@ -249,7 +254,7 @@ way. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).
-2. Netlify reads `netlify.toml`, runs `npm run build:svelte`, publishes the
+2. Netlify reads `netlify.toml`, runs `npm run build`, publishes the
    prerendered `frontend/build/` workspace, and builds the functions in
    `netlify/functions/`. Direct routes such as `/lookup`, `/bulk`, and
    `/monitor` resolve to independent static HTML entries rather than relying
@@ -274,9 +279,11 @@ NOTICE                  Copyright attribution notice
 PRIVACY.md              Template privacy notice - what data is processed, retention, deletion
 server.js               Express backend: lookup/posture/auth routes
 frontend/               SvelteKit multi-page frontend workspace
-  src/routes/           Lookup, Discover, Bulk, Monitor, and Brands pages
-  src/lib/              Browser-local profiles, watchlists, shortlist, drafts, and handoffs
-  build/                Generated static output (ignored; created by build:svelte)
+  src/routes/           Lookup, Discover, Bulk, Monitor, Brands, and Privacy pages
+  src/lib/              Browser state, workflow helpers, and analysis modules
+    analysis/           Framework-neutral scoring, comparison, generation, and history logic
+  static/               Frontend-owned static assets
+  build/                Generated static output (ignored; created by npm run build)
 lib/                    Shared lookup logic, used by both server.js and netlify/functions/
   classify.js           Query classification (domain/IPv4/IPv6/ASN)
   rdap.js               IANA bootstrap lookup + RDAP response parsing
@@ -293,32 +300,8 @@ lib/                    Shared lookup logic, used by both server.js and netlify/
   rate-limit.js         Per-IP rate limiting for login and lookup routes
 netlify/functions/      Netlify Functions (lookups, posture audit, auth/session)
 netlify.toml            Netlify build/redirect config
-public/
-  favicon.svg           App logo/favicon source
-  index.html            Legacy frontend fallback for an unbuilt local checkout
-  style.css             Legacy frontend styles
-  js/
-    main.js             Entry point: form submit, wiring
-    auth.js             Shared-password login gate
-    dom.js              Shared DOM element references
-    utils.js            Parsing/formatting helpers
-    scoring.js          Opportunity scoring, activity/privacy formatting
-    render.js           RDAP/WHOIS/availability rendering
-    outreach.js         Acquisition outreach draft + copy-to-clipboard
-    abuse.js            Abuse-report draft + copy-to-clipboard
-    generators.js       Keyword and typosquat generator UI
-    typosquat-generator.js  Pure provenance-aware typosquat generation
-    candidate-provenance.js  Current generated-list metadata handoff
-    coverage.js         Defensive-registration coverage aggregation
-    ct-search.js        Certificate Transparency search UI
-    brand-profiles.js   Brand profiles, allowlisting, generator prefill, posture-audit UI
-    shortlist.js        localStorage-backed shortlist
-    watchlist.js        Watchlist persistence, rescan workflow, and timeline UI
-    watchlist-history.js  Pure bounded history, baseline, and material-diff logic
-    single-lookup.js    Single domain/IP/ASN lookup orchestration
-    evidence-export.js  Versioned single-lookup evidence package builder
-    bulk.js             Bulk scan/deep-check, sorting, CSV export
 ```
 
-No bundler or framework - the frontend loads native ES modules directly via
-`<script type="module">`.
+The frontend is a prerendered SvelteKit multi-page app built with Vite. The
+Node server and Netlify both serve the same generated `frontend/build/`
+output.

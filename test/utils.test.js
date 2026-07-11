@@ -1,4 +1,4 @@
-// Covers public/js/utils.js's isValidEmailAddress - the guard outreach.js
+// Covers frontend/src/lib/analysis/utils.js's isValidEmailAddress - the guard outreach.js
 // and abuse.js use before dropping a WHOIS/RDAP-sourced email into a
 // mailto: URI - and createLocalStore, the localStorage wrapper shared by
 // shortlist.js/watchlist.js/brand-profiles.js. utils.js has no DOM
@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 
 let utils;
 before(async () => {
-  utils = await import('../public/js/utils.js');
+  utils = await import('../frontend/src/lib/analysis/utils.js');
 });
 
 describe('isValidEmailAddress', () => {

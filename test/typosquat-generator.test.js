@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 let generator;
 before(async () => {
-  generator = await import('../public/js/typosquat-generator.js');
+  generator = await import('../frontend/src/lib/analysis/typosquat-generator.js');
 });
 
 describe('provenance-aware typosquat generation', () => {

@@ -24,3 +24,7 @@ jobs:
         run: npm test
       - name: Run type checks
         run: npm run typecheck
+      - name: Check Svelte frontend
+        run: npm run check
+      - name: Build Svelte frontend
+        run: npm run build

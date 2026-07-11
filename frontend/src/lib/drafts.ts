@@ -1,4 +1,4 @@
-import { isValidEmailAddress } from '../../../public/js/utils.js';
+import { isValidEmailAddress } from './analysis/utils.js';
 
 export interface Contact{name?:string|null;org?:string|null;email?:string|null;[key:string]:unknown}
 export interface AbuseEvidence{abuseEmail?:string|null;hasMx?:boolean|null;activityStatus?:string|null;privacyProtected?:boolean|null;domainAgeDays?:number|null}

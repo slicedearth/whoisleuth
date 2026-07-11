@@ -1,4 +1,4 @@
-import { appendWatchlistScan, normalizeWatchlistEntry } from '../../../public/js/watchlist-history.js';
+import { appendWatchlistScan, normalizeWatchlistEntry } from './analysis/watchlist-history.js';
 
 export const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 export const MAX_WATCHLIST_IMPORT_BYTES = 2 * 1024 * 1024;
