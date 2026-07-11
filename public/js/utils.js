@@ -73,6 +73,25 @@ export function hammingDistanceHex(a, b) {
   return distance;
 }
 
+// A dHash carries usable structure only when its set-bit count is away from
+// the degenerate extremes - a near-all-zero (or near-all-one) hash comes from
+// a solid/monotonic icon and collides with every other such icon (see
+// lib/perceptual-hash.js's MIN_INFORMATIVE_BITS, mirrored here). Generation
+// already rejects these, but this is re-checked at every comparison so a
+// degenerate hash saved into a Brand Profile before that guard existed can't
+// keep producing false near-matches.
+const MIN_INFORMATIVE_HASH_BITS = 10;
+
+export function isInformativeFaviconHash(hex) {
+  if (typeof hex !== 'string' || !HEX_HASH_RE.test(hex)) return false;
+  let bits = 0;
+  for (let i = 0; i < 16; i += 1) {
+    let n = parseInt(hex[i], 16);
+    while (n) { bits += n & 1; n >>= 1; }
+  }
+  return bits >= MIN_INFORMATIVE_HASH_BITS && bits <= 64 - MIN_INFORMATIVE_HASH_BITS;
+}
+
 // Groups records that share a favicon, connecting two whenever their exact
 // hashes match OR their perceptual hashes are within maxDistance. Returns the
 // domain lists of every group of 2+ (singletons dropped). Exact-hash matching
@@ -103,9 +122,11 @@ export function groupBySimilarFavicon(records, maxDistance) {
     else firstByHash.set(r.faviconHash, i);
   });
 
-  // Perceptual near-matches among records that have a valid phash.
+  // Perceptual near-matches among records with an *informative* phash -
+  // degenerate hashes (solid/monotonic icons) are skipped so they don't all
+  // cluster together; they can still group via an exact-hash match above.
   const withPhash = [];
-  items.forEach((r, i) => { if (typeof r.faviconPHash === 'string' && HEX_HASH_RE.test(r.faviconPHash)) withPhash.push({ i, phash: r.faviconPHash }); });
+  items.forEach((r, i) => { if (isInformativeFaviconHash(r.faviconPHash)) withPhash.push({ i, phash: r.faviconPHash }); });
   for (let a = 0; a < withPhash.length; a += 1) {
     for (let b = a + 1; b < withPhash.length; b += 1) {
       const distance = hammingDistanceHex(withPhash[a].phash, withPhash[b].phash);

@@ -65,6 +65,7 @@ describe('formatActivityCell', () => {
 
   test('omits the mail suffix when nothing is configured', () => {
     assert.equal(scoring.formatActivityCell('active', false, false, false), 'Active site');
+    assert.equal(scoring.formatActivityCell('unreachable', false, false, false), 'Website probe inconclusive');
   });
 
   test('falls back to an em-dash for an unrecognized/missing status', () => {
@@ -93,6 +94,7 @@ describe('explainOpportunityScore / computeOpportunityScore', () => {
   test('activity status shifts the score in the acquisition-friendly direction', () => {
     assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'parked' }), 55);
     assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'no_site' }), 45);
+    assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'unreachable' }), 40);
     assert.equal(scoring.computeOpportunityScore({ availability: 'registered', activityStatus: 'active' }), 20);
   });
 

@@ -110,6 +110,24 @@ describe('hammingDistanceHex', () => {
   });
 });
 
+describe('isInformativeFaviconHash', () => {
+  test('accepts hashes with a balanced bit population', () => {
+    assert.equal(utils.isInformativeFaviconHash('f0e08e86868ccce8'), true); // 28 bits
+    assert.equal(utils.isInformativeFaviconHash('0010387068706000'), true); // 15 bits
+  });
+
+  test('rejects degenerate (near-all-zero / near-all-one) hashes', () => {
+    assert.equal(utils.isInformativeFaviconHash('0000000000000000'), false);
+    assert.equal(utils.isInformativeFaviconHash('ffffffffffffffff'), false);
+    assert.equal(utils.isInformativeFaviconHash('0000000000000007'), false); // 3 bits
+  });
+
+  test('rejects malformed input', () => {
+    assert.equal(utils.isInformativeFaviconHash('nothex'), false);
+    assert.equal(utils.isInformativeFaviconHash(null), false);
+  });
+});
+
 describe('groupBySimilarFavicon', () => {
   const near = 'f0e08e86868ccce8';
   const near2 = 'f0e08e86868cccea'; // 1 bit from `near`
@@ -151,6 +169,17 @@ describe('groupBySimilarFavicon', () => {
       { domain: 'a.example', faviconPHash: near },
       { domain: 'lonely.example', faviconPHash: far },
       { domain: 'nofavicon.example' },
+    ], 6);
+    assert.deepEqual(groups, []);
+  });
+
+  test('does not cluster on degenerate (all-zero) perceptual hashes', () => {
+    // Two unrelated solid/monotonic favicons both hash to all-zeros. With
+    // different exact hashes they must NOT be grouped - this guards stored
+    // degenerate hashes from earlier scans.
+    const groups = utils.groupBySimilarFavicon([
+      { domain: 'a.example', faviconHash: 'exact-a', faviconPHash: '0000000000000000' },
+      { domain: 'b.example', faviconHash: 'exact-b', faviconPHash: '0000000000000000' },
     ], 6);
     assert.deepEqual(groups, []);
   });

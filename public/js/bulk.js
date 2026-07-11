@@ -275,6 +275,8 @@ function toBulkRecord(domain, body, fast) {
     expiresInDays: body.expiresInDays ?? null,
     privacyProtected: body.privacyProtected ?? null,
     activityStatus: body.activityStatus || null,
+    websiteProbeStatus: body.websiteProbeStatus || null,
+    websiteProbeDetail: body.websiteProbeDetail || null,
     hasMx: body.hasMx ?? null,
     hasNullMx: body.hasNullMx ?? null,
     hasSpf: body.hasSpf ?? null,
@@ -594,7 +596,7 @@ function bulkRowCellsHtml(r) {
     <td>${escapeHtml(fmtAge(r.domainAgeDays) || '—')}</td>
     <td>${escapeHtml(fmtExpiresIn(r.expiresInDays) || '—')}</td>
     <td>${escapeHtml(formatPrivacyCell(r.privacyProtected))}</td>
-    <td>${escapeHtml(formatActivityCell(r.activityStatus, r.hasMx, r.hasSpf, r.hasDmarc))}</td>
+    <td${r.websiteProbeDetail ? ` title="${escapeHtml(r.websiteProbeDetail)}"` : ''}>${escapeHtml(formatActivityCell(r.activityStatus, r.hasMx, r.hasSpf, r.hasDmarc))}</td>
     <td>${escapeHtml(registrar)}</td>
     <td>${escapeHtml(registrant)}</td>
     <td>${escapeHtml(r.nameservers || '—')}</td>

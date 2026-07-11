@@ -57,7 +57,8 @@ const AVAILABILITY_LABELS = {
 const ACTIVITY_LABELS = {
   active: 'Active site',
   parked: 'Parked',
-  no_site: 'No site',
+  unreachable: 'Website probe inconclusive',
+  no_site: 'No site reported (legacy)',
 };
 
 function inferredScanDepth(record) {
@@ -178,19 +179,24 @@ export function diffWatchlistBaseline(baseline, current, ignoredDomains = new Se
   return changes;
 }
 
+// Rebuilds the last-known baseline from the current snapshot's membership,
+// carrying each retained domain's prior deep-scan fields forward (so a fast
+// rescan doesn't erase evidence a fast scan can't re-observe). Domains absent
+// from the new snapshot are dropped rather than accumulated - otherwise
+// reusing a watchlist name with a changing candidate set would grow the
+// baseline without bound and compare reintroduced domains against stale state.
 /** @param {object[]} baseline @param {object[]} current */
 export function mergeWatchlistBaseline(baseline, current) {
-  const merged = new Map(baseline.map((record) => [record.domain, { ...record }]));
-  for (const next of current) {
-    const previous = merged.get(next.domain) || { domain: next.domain };
+  const previousByDomain = new Map(baseline.map((record) => [record.domain, record]));
+  return current.map((next) => {
+    const previous = previousByDomain.get(next.domain) || {};
     const updated = { ...previous, domain: next.domain };
     updated.scanDepth = previous.scanDepth === 'deep' || next.scanDepth === 'deep' ? 'deep' : 'fast';
     for (const field of Object.keys(FIELD_LABELS)) {
       if (isComparable(field, next[field], next)) updated[field] = next[field];
     }
-    merged.set(next.domain, updated);
-  }
-  return [...merged.values()];
+    return updated;
+  });
 }
 
 function sanitizeStoredChange(change) {

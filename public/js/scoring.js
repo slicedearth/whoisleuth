@@ -18,7 +18,10 @@ export function fmtExpiresIn(days) {
 export const ACTIVITY_LABELS = {
   active: 'Active site',
   parked: 'Parked / for-sale page',
-  no_site: 'No site (inactive)',
+  unreachable: 'Website probe inconclusive',
+  // Kept only so older saved watchlist snapshots remain readable. New scans
+  // use `unreachable`, because a fetch failure never proves that no site exists.
+  no_site: 'No site reported (legacy)',
 };
 
 export function formatPrivacyCell(v) {

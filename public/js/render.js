@@ -408,15 +408,16 @@ export function renderSummary(rdapParsed, whoisParsed, { comparisonReady = false
 
 export const PILL_LABELS = {
   available: 'Available to register',
-  registered: 'Registered (active)',
+  registered: 'Registered',
   for_sale: 'For sale',
   expiring: 'Expiring / pending delete',
   unknown: 'Status unknown',
   error: 'Lookup failed',
 };
 
-function signalChip(label, tone) {
-  return `<span class="signal-chip ${tone}">${escapeHtml(label)}</span>`;
+function signalChip(label, tone, title = '') {
+  const titleAttribute = title ? ` title="${escapeHtml(title)}"` : '';
+  return `<span class="signal-chip ${tone}"${titleAttribute}>${escapeHtml(label)}</span>`;
 }
 
 function scoreMeter(label, explained, tone) {
@@ -452,7 +453,7 @@ function buildSignalChips(body) {
 
   if (body.activityStatus && ACTIVITY_LABELS[body.activityStatus]) {
     const tone = body.activityStatus === 'active' ? 'good' : body.activityStatus === 'parked' ? 'warn' : 'neutral';
-    chips.push(signalChip(ACTIVITY_LABELS[body.activityStatus], tone));
+    chips.push(signalChip(ACTIVITY_LABELS[body.activityStatus], tone, body.websiteProbeDetail || ''));
   }
 
   const mailParts = [];

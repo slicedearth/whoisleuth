@@ -5,7 +5,7 @@
 // "this is an unrecognized lookalike." Same localStorage + JSON import/
 // export pattern as shortlist.js/watchlist.js - no backend, no database.
 
-import { escapeHtml, exportJsonFile, readFileAsText, runPool, createLocalStore, hammingDistanceHex } from './utils.js';
+import { escapeHtml, exportJsonFile, readFileAsText, runPool, createLocalStore, hammingDistanceHex, isInformativeFaviconHash } from './utils.js';
 import { showGate } from './auth.js';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -113,6 +113,10 @@ const FAVICON_PHASH_MAX_DISTANCE = 8;
 export function isFaviconPerceptuallyMatchingProfile(phash) {
   const profile = getActiveBrandProfile();
   if (!profile || !phash || !profile.officialFaviconPHash) return false;
+  // Reject degenerate hashes on either side - a Brand Profile saved before the
+  // informativeness guard existed may hold an all-zero hash that would match
+  // every solid/monotonic favicon.
+  if (!isInformativeFaviconHash(phash) || !isInformativeFaviconHash(profile.officialFaviconPHash)) return false;
   const distance = hammingDistanceHex(phash, profile.officialFaviconPHash);
   return distance !== null && distance <= FAVICON_PHASH_MAX_DISTANCE;
 }

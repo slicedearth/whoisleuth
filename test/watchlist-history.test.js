@@ -71,6 +71,19 @@ describe('watchlist history', () => {
     assert.ok(nextDeep.changes.some((change) => change.field === 'pageTitle'));
   });
 
+  test('prunes domains absent from a replacement snapshot (no unbounded baseline growth)', () => {
+    const first = history.appendWatchlistScan(null, [
+      { domain: 'a.example', availability: 'registered', scanDepth: 'fast' },
+      { domain: 'b.example', availability: 'registered', scanDepth: 'fast' },
+    ], { mode: 'fast' }).entry;
+    // Reuse the same watchlist with a different candidate set {b, c}.
+    const second = history.appendWatchlistScan(first, [
+      { domain: 'b.example', availability: 'registered', scanDepth: 'fast' },
+      { domain: 'c.example', availability: 'registered', scanDepth: 'fast' },
+    ], { mode: 'fast' }).entry;
+    assert.deepEqual(second.baseline.map((r) => r.domain).sort(), ['b.example', 'c.example']);
+  });
+
   test('bounds retained events while keeping the latest checks', () => {
     let entry = null;
     for (let index = 0; index < history.MAX_WATCHLIST_HISTORY_EVENTS + 3; index += 1) {

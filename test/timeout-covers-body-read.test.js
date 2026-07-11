@@ -1,4 +1,4 @@
-// Covers the fix applied to lib/availability.js's fetchHomepageText() and
+// Covers the fix applied to lib/availability.js's fetchHomepage() and
 // lib/favicon.js's fetchFaviconHash(): both used to clear their abort
 // timeout as soon as response headers arrived, before reading the body,
 // which left an unbounded (no-timeout) read for the rest of the response -
