@@ -110,20 +110,26 @@ app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
-  let type, value;
+  let classified;
   try {
-    ({ type, value } = classifyQuery(q));
+    classified = classifyQuery(q);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
 
   try {
-    const record = await fetchRdapRecord(type, value);
+    const record = await fetchRdapRecord(classified.type, classified.value);
     if (!record) {
       return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
     }
 
-    res.status(200).json({ query: q, type, ...record });
+    res.status(200).json({
+      query: q,
+      type: classified.type,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      ...record,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -133,16 +139,23 @@ app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
-  let type, value;
+  let classified;
   try {
-    ({ type, value } = classifyQuery(q));
+    classified = classifyQuery(q);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
 
   try {
-    const chain = await buildWhoisChain(value);
-    res.json({ query: q, type, chain, parsed: parseWhoisChain(chain) });
+    const chain = await buildWhoisChain(classified.value);
+    res.json({
+      query: q,
+      type: classified.type,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      chain,
+      parsed: parseWhoisChain(chain),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -152,20 +165,31 @@ app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
-  let type, value;
+  let classified;
   try {
-    ({ type, value } = classifyQuery(q));
+    classified = classifyQuery(q);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
-  if (type !== 'domain') {
-    return res.json({ applicable: false, type });
+  if (classified.type !== 'domain') {
+    return res.json({ applicable: false, type: classified.type });
   }
 
   try {
     const fast = req.query.fast === '1' || req.query.fast === 'true';
-    const result = await checkDomainAvailability(value, { fast });
-    res.json({ applicable: true, domain: value, ...result });
+    const result = await checkDomainAvailability(classified.value, { fast });
+    // domain is the registrable domain actually looked up; inputHostname
+    // preserves what the user typed so the UI can note when a subdomain query
+    // was resolved to its registrable domain (and never call the subdomain
+    // itself "available").
+    res.json({
+      applicable: true,
+      domain: classified.value,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      isSubdomain: classified.isSubdomain,
+      ...result,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

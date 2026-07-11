@@ -18,16 +18,23 @@ exports.handler = async (event) => {
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
 
-  let type, value;
+  let classified;
   try {
-    ({ type, value } = classifyQuery(q));
+    classified = classifyQuery(q);
   } catch (err) {
     return json(400, { error: err.message });
   }
 
   try {
-    const chain = await buildWhoisChain(value);
-    return json(200, { query: q, type, chain, parsed: parseWhoisChain(chain) });
+    const chain = await buildWhoisChain(classified.value);
+    return json(200, {
+      query: q,
+      type: classified.type,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      chain,
+      parsed: parseWhoisChain(chain),
+    });
   } catch (err) {
     return json(500, { error: err.message });
   }

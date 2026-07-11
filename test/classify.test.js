@@ -46,23 +46,42 @@ describe('IP/ASN classification', () => {
     assert.deepEqual(classifyQuery('AS15169'), { type: 'asn', value: 'AS15169' });
     assert.deepEqual(classifyQuery('15169'), { type: 'asn', value: 'AS15169' });
   });
+
+  test('accepts the boundary ASNs and rejects one past the 32-bit ceiling', () => {
+    assert.equal(classifyQuery('AS0').value, 'AS0');
+    assert.equal(classifyQuery('AS4294967295').value, 'AS4294967295');
+    assert.throws(() => classifyQuery('AS4294967296'), /not a valid ASN/);
+    assert.throws(() => classifyQuery('4294967296'), /not a valid ASN/);
+  });
 });
 
 describe('domain classification', () => {
-  test('lowercases and strips a protocol/www prefix and path', () => {
-    assert.deepEqual(classifyQuery('HTTPS://WWW.Example.COM/path?x=1'), { type: 'domain', value: 'example.com' });
+  test('lowercases and strips a protocol/www prefix and path, keeping input + registrable domain', () => {
+    assert.deepEqual(classifyQuery('HTTPS://WWW.Example.COM/path?x=1'), {
+      type: 'domain',
+      value: 'example.com',
+      inputHostname: 'www.example.com',
+      registrableDomain: 'example.com',
+      isSubdomain: true,
+    });
   });
 
   test('trims surrounding whitespace', () => {
-    assert.deepEqual(classifyQuery('   example.com   '), { type: 'domain', value: 'example.com' });
+    assert.equal(classifyQuery('   example.com   ').value, 'example.com');
   });
 
   test('strips a stray port suffix rather than treating it as part of the hostname', () => {
-    assert.deepEqual(classifyQuery('example.com:8080'), { type: 'domain', value: 'example.com' });
+    assert.equal(classifyQuery('example.com:8080').value, 'example.com');
   });
 
   test('punycode-encodes an internationalized domain name', () => {
-    assert.deepEqual(classifyQuery('münchen.de'), { type: 'domain', value: 'xn--mnchen-3ya.de' });
+    assert.equal(classifyQuery('münchen.de').value, 'xn--mnchen-3ya.de');
+  });
+
+  test('resolves a multi-level public suffix to the registrable domain', () => {
+    const r = classifyQuery('shop.example.co.uk');
+    assert.equal(r.value, 'example.co.uk');
+    assert.equal(r.registrableDomain, 'example.co.uk');
   });
 
   test('rejects an embedded space', () => {
@@ -71,5 +90,44 @@ describe('domain classification', () => {
 
   test('rejects a bare, dot-less string', () => {
     assert.throws(() => classifyQuery('notadomain'), /not a valid domain, IP, or ASN/);
+  });
+
+  test('rejects a bare public suffix (no registrable domain)', () => {
+    assert.throws(() => classifyQuery('co.uk'), /not a registrable domain/);
+    assert.throws(() => classifyQuery('com'), /not a valid domain, IP, or ASN/);
+  });
+});
+
+// Priority-1 correctness: never let an arbitrary subdomain's RDAP 404 read as
+// "available", and reject registration-domain labels that can't exist.
+describe('registrable-domain safety (eliminating false availability)', () => {
+  test('a subdomain resolves to its registrable domain, so it cannot be reported available', () => {
+    const r = classifyQuery('login.example.com');
+    // The lookup value is the registrable domain (example.com) - an RDAP 404
+    // on `login.example.com` is never produced, because we never query it.
+    assert.equal(r.value, 'example.com');
+    assert.equal(r.registrableDomain, 'example.com');
+    assert.equal(r.inputHostname, 'login.example.com');
+    assert.equal(r.isSubdomain, true);
+  });
+
+  test('rejects underscores in the registration domain (foo_bar.com)', () => {
+    assert.throws(() => classifyQuery('foo_bar.com'), /invalid domain label/);
+  });
+
+  test('rejects empty and hyphen-edged labels (a..com, -bad.com, bad-.com)', () => {
+    assert.throws(() => classifyQuery('a..com'), /not a registrable domain|invalid domain label/);
+    assert.throws(() => classifyQuery('-bad.com'), /not a registrable domain|invalid domain label/);
+    assert.throws(() => classifyQuery('bad-.com'), /not a registrable domain|invalid domain label/);
+  });
+
+  test('rejects a label over 63 characters', () => {
+    const longLabel = 'a'.repeat(64);
+    assert.throws(() => classifyQuery(`${longLabel}.com`), /not a registrable domain|invalid domain label/);
+  });
+
+  test('normalizes a single terminal root dot', () => {
+    assert.equal(classifyQuery('example.com.').value, 'example.com');
+    assert.equal(classifyQuery('example.com.').inputHostname, 'example.com');
   });
 });

@@ -18,21 +18,28 @@ exports.handler = async (event) => {
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
 
-  let type, value;
+  let classified;
   try {
-    ({ type, value } = classifyQuery(q));
+    classified = classifyQuery(q);
   } catch (err) {
     return json(400, { error: err.message });
   }
-  if (type !== 'domain') {
-    return json(200, { applicable: false, type });
+  if (classified.type !== 'domain') {
+    return json(200, { applicable: false, type: classified.type });
   }
 
   try {
     const params = event.queryStringParameters || {};
     const fast = params.fast === '1' || params.fast === 'true';
-    const result = await checkDomainAvailability(value, { fast });
-    return json(200, { applicable: true, domain: value, ...result });
+    const result = await checkDomainAvailability(classified.value, { fast });
+    return json(200, {
+      applicable: true,
+      domain: classified.value,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      isSubdomain: classified.isSubdomain,
+      ...result,
+    });
   } catch (err) {
     return json(500, { error: err.message });
   }
