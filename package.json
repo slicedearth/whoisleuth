@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p public/tsconfig.json",
     "dev:svelte": "npm run dev --workspace=frontend",
     "build:svelte": "npm run build --workspace=frontend",
-    "check:svelte": "npm run check --workspace=frontend"
+    "check:svelte": "npm run check --workspace=frontend",
+    "start:svelte": "npm run build:svelte && node server.js"
   },
   "engines": {
     "node": ">=20.18.1"

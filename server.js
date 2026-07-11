@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 const { classifyQuery } = require('./lib/classify');
 const { fetchRdapRecord } = require('./lib/rdap');
@@ -50,7 +51,26 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Prefer the prerendered Svelte workspace after `npm run build:svelte`, while
+// keeping the legacy static directory as a safe fallback for a fresh checkout
+// that has not built the migration frontend yet. `extensions` lets direct
+// requests such as /lookup resolve the generated lookup.html entry without a
+// catch-all SPA rewrite, so unknown paths still return a real 404.
+const svelteBuildDir = path.join(__dirname, 'frontend', 'build');
+const legacyPublicDir = path.join(__dirname, 'public');
+const frontendDir = fs.existsSync(path.join(svelteBuildDir, 'index.html')) ? svelteBuildDir : legacyPublicDir;
+if (frontendDir === svelteBuildDir) {
+  app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'immutable'), {
+    immutable: true,
+    maxAge: '1y',
+  }));
+}
+app.use(express.static(frontendDir, { extensions: ['html'] }));
+if (frontendDir === svelteBuildDir) {
+  app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/'], (req, res) => {
+    res.redirect(308, req.path.slice(0, -1));
+  });
+}
 app.use(express.json({ limit: '1mb' }));
 
 // True when the request actually arrived over HTTPS - directly, or via a

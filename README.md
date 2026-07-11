@@ -88,7 +88,7 @@ clear it (fill in your own contact details before sharing a deployment).
 
 ```bash
 npm install
-SITE_PASSWORD=choose-a-password npm start
+SITE_PASSWORD=choose-a-password npm run start:svelte
 ```
 
 Then open **http://localhost:3000** in a browser and enter that password.
@@ -100,10 +100,15 @@ login, just one password shared with whoever you want to have access; anyone
 without it sees only the password prompt. Pick something you're comfortable
 sharing with those people, not a password reused elsewhere.
 
+`start:svelte` builds the prerendered multi-page frontend and starts the shared
+Express/API process. `npm start` starts the same server without rebuilding; it
+serves `frontend/build/` when present and safely falls back to the legacy
+`public/` frontend in a fresh checkout.
+
 The server listens on port 3000 by default. To use a different port:
 
 ```bash
-PORT=4000 SITE_PASSWORD=choose-a-password npm start
+PORT=4000 SITE_PASSWORD=choose-a-password npm run start:svelte
 ```
 
 Every push and pull request runs the locked install, test suite, and both
@@ -244,16 +249,19 @@ way. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).
-2. Netlify reads `netlify.toml` to publish `public/` and build the functions
-   in `netlify/functions/` automatically - no extra build command needed.
+2. Netlify reads `netlify.toml`, runs `npm run build:svelte`, publishes the
+   prerendered `frontend/build/` workspace, and builds the functions in
+   `netlify/functions/`. Direct routes such as `/lookup`, `/bulk`, and
+   `/monitor` resolve to independent static HTML entries rather than relying
+   on a catch-all client-side rewrite.
 3. In the Netlify dashboard, set a `SITE_PASSWORD` environment variable
    (Site settings → Environment variables) before your first deploy - the
    login/session functions read it the same way `server.js` does. Without
    it, `checkPassword`/`isValidSessionToken` fail closed and nobody (not even
    the correct password) can log in.
 
-Bulk scans run as one `/api/availability` call per domain with client-side
-concurrency (see `public/js/bulk.js`) rather than one long server-held
+Bulk scans run as one `/api/lookup` call per domain with client-side
+concurrency (see `frontend/src/routes/bulk/+page.svelte`) rather than one long server-held
 request, since serverless functions have a per-invocation execution limit -
 this keeps each function call short regardless of how many domains are in a
 bulk run.
@@ -265,6 +273,10 @@ LICENSE                 Apache 2.0 license text
 NOTICE                  Copyright attribution notice
 PRIVACY.md              Template privacy notice - what data is processed, retention, deletion
 server.js               Express backend: lookup/posture/auth routes
+frontend/               SvelteKit multi-page frontend workspace
+  src/routes/           Lookup, Discover, Bulk, Monitor, and Brands pages
+  src/lib/              Browser-local profiles, watchlists, shortlist, drafts, and handoffs
+  build/                Generated static output (ignored; created by build:svelte)
 lib/                    Shared lookup logic, used by both server.js and netlify/functions/
   classify.js           Query classification (domain/IPv4/IPv6/ASN)
   rdap.js               IANA bootstrap lookup + RDAP response parsing
@@ -282,9 +294,9 @@ lib/                    Shared lookup logic, used by both server.js and netlify/
 netlify/functions/      Netlify Functions (lookups, posture audit, auth/session)
 netlify.toml            Netlify build/redirect config
 public/
-  favicon.svg           App logo/favicon
-  index.html            Page markup
-  style.css             Styles
+  favicon.svg           App logo/favicon source
+  index.html            Legacy frontend fallback for an unbuilt local checkout
+  style.css             Legacy frontend styles
   js/
     main.js             Entry point: form submit, wiring
     auth.js             Shared-password login gate
