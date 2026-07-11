@@ -15,7 +15,7 @@
     "check": "npm run check --workspace=frontend"
   },
   "engines": {
-    "node": ">=20.18.1"
+    "node": ">=20.19.0"
   },
   "dependencies": {
     "express": "^4.19.2",
