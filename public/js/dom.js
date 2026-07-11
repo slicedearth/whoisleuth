@@ -13,6 +13,8 @@ import { setCandidateProvenance } from './candidate-provenance.js';
 export const form = /** @type {HTMLFormElement} */ (document.getElementById('lookup-form'));
 export const queryInput = /** @type {HTMLTextAreaElement} */ (document.getElementById('query-input'));
 export const submitBtn = /** @type {HTMLButtonElement} */ (document.getElementById('submit-btn'));
+export const inputSummary = /** @type {HTMLElement} */ (document.getElementById('input-summary'));
+export const queryClearBtn = /** @type {HTMLButtonElement} */ (document.getElementById('query-clear-btn'));
 
 export const lookupScopeNote = /** @type {HTMLElement} */ (document.getElementById('lookup-scope-note'));
 export const panels = /** @type {HTMLElement} */ (document.querySelector('.panels'));
@@ -78,6 +80,14 @@ export const coverageExportBtn = /** @type {HTMLButtonElement} */ (document.getE
 export function fillQueryInputWithCandidates(candidates, provenance = []) {
   setCandidateProvenance(provenance);
   queryInput.value = candidates.join('\n');
+  queryInput.dispatchEvent(new Event('input'));
   queryInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  queryInput.focus();
+}
+
+export function clearQueryInput() {
+  setCandidateProvenance([]);
+  queryInput.value = '';
+  queryInput.dispatchEvent(new Event('input'));
   queryInput.focus();
 }

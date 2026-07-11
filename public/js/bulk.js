@@ -5,7 +5,7 @@
 // upload flow (which loads into the query box rather than tracking the
 // file separately until submit).
 
-import { escapeHtml, toCsvValue, readFileAsText, parseDomainsFromText, downloadBlob, runPool, groupBySimilarFavicon } from './utils.js';
+import { escapeHtml, toCsvValue, readFileAsText, parseDomainInput, downloadBlob, runPool, groupBySimilarFavicon } from './utils.js';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -915,6 +915,13 @@ bulkFileInput.addEventListener('change', async () => {
   const file = bulkFileInput.files?.[0];
   if (!file) return;
 
+  const maxImportBytes = 2 * 1024 * 1024;
+  if (file.size > maxImportBytes) {
+    bulkStatus.innerHTML = '<span class="error-text">That file is larger than 2 MB. Split it into smaller CSV files before importing.</span>';
+    bulkFileInput.value = '';
+    return;
+  }
+
   let text;
   try {
     text = await readFileAsText(file);
@@ -924,15 +931,22 @@ bulkFileInput.addEventListener('change', async () => {
     return;
   }
 
-  const entries = parseDomainsFromText(text);
+  const parsed = parseDomainInput(text);
+  const entries = parsed.entries;
   bulkFileInput.value = ''; // consumed - avoid re-reading it on a later submit
   if (entries.length === 0) {
     bulkStatus.innerHTML = '<span class="error-text">No domains found in that file.</span>';
     return;
   }
 
-  fillQueryInputWithCandidates(entries);
-  bulkStatus.textContent = `Loaded ${entries.length} domain${entries.length === 1 ? '' : 's'} from ${file.name} - click Lookup to scan.`;
+  const loaded = entries.slice(0, MAX_FAST_BULK_DOMAINS);
+  fillQueryInputWithCandidates(loaded);
+  const notes = [];
+  if (parsed.duplicates) notes.push(`${parsed.duplicates} duplicate${parsed.duplicates === 1 ? '' : 's'} removed`);
+  if (entries.length > loaded.length) notes.push(`${entries.length - loaded.length} beyond the ${MAX_FAST_BULK_DOMAINS}-domain limit ignored`);
+  if (parsed.usedHeader) notes.push('domain column detected');
+  const note = notes.length ? ` (${notes.join('; ')})` : '';
+  bulkStatus.textContent = `Loaded ${loaded.length} unique domain${loaded.length === 1 ? '' : 's'} from ${file.name}${note} - review, then click Scan.`;
 });
 
 bulkCancelBtn.addEventListener('click', () => {

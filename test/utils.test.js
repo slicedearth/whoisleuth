@@ -45,6 +45,45 @@ describe('isValidEmailAddress', () => {
   });
 });
 
+describe('parseDomainInput', () => {
+  test('accepts newline, comma, semicolon, and tab-separated query lists', () => {
+    assert.deepEqual(utils.parseDomainsFromText('one.example\ntwo.example'), ['one.example', 'two.example']);
+    assert.deepEqual(utils.parseDomainsFromText('one.example, two.example'), ['one.example', 'two.example']);
+    assert.deepEqual(utils.parseDomainsFromText('one.example; two.example'), ['one.example', 'two.example']);
+    assert.deepEqual(utils.parseDomainsFromText('one.example\ttwo.example'), ['one.example', 'two.example']);
+  });
+
+  test('reads a named domain column from comma, semicolon, or tabular CSV', () => {
+    assert.deepEqual(
+      utils.parseDomainsFromText('label,domain,notes\nFirst,one.example,"a, quoted note"\nSecond,two.example,ok'),
+      ['one.example', 'two.example']
+    );
+    const parsed = utils.parseDomainInput('\uFEFFdomain;owner\none.example;Alice\ntwo.example;Bob');
+    assert.deepEqual(parsed.entries, ['one.example', 'two.example']);
+    assert.equal(parsed.usedHeader, true);
+  });
+
+  test('keeps column zero for a headerless domain-and-notes CSV', () => {
+    assert.deepEqual(
+      utils.parseDomainsFromText('one.example,customer one\ntwo.example,customer two'),
+      ['one.example', 'two.example']
+    );
+  });
+
+  test('retains invalid cells in a one-line pasted list so the scan can report them', () => {
+    assert.deepEqual(
+      utils.parseDomainsFromText('one.example,not a domain,two.example'),
+      ['one.example', 'not a domain', 'two.example']
+    );
+  });
+
+  test('deduplicates case-insensitively and reports the removed count', () => {
+    const parsed = utils.parseDomainInput('One.Example\none.example\ntwo.example');
+    assert.deepEqual(parsed.entries, ['One.Example', 'two.example']);
+    assert.equal(parsed.duplicates, 1);
+  });
+});
+
 function makeFakeLocalStorage() {
   const backing = new Map();
   return {

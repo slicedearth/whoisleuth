@@ -46,15 +46,20 @@
   <form id="lookup-form">
     <div class="search-row">
       <label for="query-input" class="visually-hidden">Domain, IP, ASN, or list of domains to look up</label>
-      <textarea
-        id="query-input"
-        rows="1"
-        placeholder="domain, IP, or ASN - or paste a list"
-      ></textarea>
-      <label for="bulk-file" class="file-upload-label" title="Upload a CSV (a &quot;domain&quot; column, or one per line, up to 2000) - loads into the box above for a bulk scan">Upload CSV</label>
-      <input type="file" id="bulk-file" accept=".csv,text/csv" style="display:none;" />
+      <div class="query-input-wrap">
+        <textarea
+          id="query-input"
+          rows="2"
+          aria-describedby="input-summary"
+          placeholder="domain, IP, or ASN - or enter multiple domains separated by lines or commas"
+        ></textarea>
+        <button type="button" id="query-clear-btn" class="query-clear" aria-label="Clear input" title="Clear input" hidden>&times;</button>
+      </div>
+      <label for="bulk-file" class="file-upload-label" title="Upload a CSV/TSV with a domain, hostname, or name column, or a plain one-domain-per-line file (up to 2000)">Upload CSV</label>
+      <input type="file" id="bulk-file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" style="display:none;" />
       <button type="submit" id="submit-btn">Lookup</button>
     </div>
+    <div class="input-summary" id="input-summary" aria-live="polite">Enter adds a new line. Press Ctrl/⌘+Enter or click Lookup to run.</div>
     <div class="examples">
       Try:
       <button type="button" class="chip" data-example="example.com">example.com</button>

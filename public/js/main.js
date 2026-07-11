@@ -3,8 +3,8 @@
 // feature modules that only need to run their own top-level wiring
 // (generators.js) rather than export anything main.js calls directly.
 
-import { form, queryInput, panels, bulkProgressWrap } from './dom.js';
-import { parseDomainsFromText, typeText } from './utils.js';
+import { form, queryInput, inputSummary, queryClearBtn, clearQueryInput, submitBtn, panels, bulkProgressWrap } from './dom.js';
+import { parseDomainInput, parseDomainsFromText, typeText } from './utils.js';
 import { runSingleLookup, clearSingleResults } from './single-lookup.js';
 import { clearBulkResults, runBulkLookup, MAX_FAST_BULK_DOMAINS } from './bulk.js';
 import { bulkStatus } from './dom.js';
@@ -36,15 +36,33 @@ document.querySelectorAll('.chip').forEach((chipEl) => {
   });
 });
 
-// query-input is a textarea (so pasting/uploading a multi-domain list
-// works) - Enter alone still submits like a single-line search box;
-// Shift+Enter inserts a newline for manually typing more than one query.
+function updateInputSummary() {
+  const { entries, duplicates } = parseDomainInput(queryInput.value);
+  queryClearBtn.hidden = queryInput.value.length === 0;
+  submitBtn.textContent = entries.length > 1 ? `Scan ${entries.length} domains` : 'Lookup';
+  if (entries.length === 0) {
+    inputSummary.textContent = 'Enter adds a new line. Press Ctrl/⌘+Enter or click Lookup to run.';
+  } else if (entries.length === 1) {
+    inputSummary.textContent = '1 entry detected. Enter adds a new line; Ctrl/⌘+Enter runs the lookup.';
+  } else {
+    const duplicateNote = duplicates ? ` · ${duplicates} duplicate${duplicates === 1 ? '' : 's'} removed` : '';
+    inputSummary.textContent = `${entries.length} unique domains detected${duplicateNote} · Ctrl/⌘+Enter to scan.`;
+  }
+}
+
+queryInput.addEventListener('input', updateInputSummary);
+queryClearBtn.addEventListener('click', clearQueryInput);
+
+// Enter behaves like a normal textarea and adds a domain on the next line.
+// Ctrl/Command+Enter remains a fast keyboard route to submit the list.
 queryInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
     form.requestSubmit();
   }
 });
+
+updateInputSummary();
 
 // Single form for both modes: the text box runs a full single-domain/IP/ASN
 // lookup for exactly one entry, and a bulk run for more than one - however

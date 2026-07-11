@@ -302,7 +302,7 @@ export function readFileAsText(file) {
   });
 }
 
-function splitCsvLine(line) {
+function splitDelimitedLine(line, delimiter = ',') {
   const result = [];
   let cur = '';
   let inQuotes = false;
@@ -315,7 +315,7 @@ function splitCsvLine(line) {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (ch === ',' && !inQuotes) {
+    } else if (ch === delimiter && !inQuotes) {
       result.push(cur);
       cur = '';
     } else {
@@ -328,22 +328,85 @@ function splitCsvLine(line) {
 
 const DOMAIN_HEADER_NAMES = ['domain', 'domain_name', 'domain name', 'hostname', 'name'];
 
-export function parseDomainsFromText(text) {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) return [];
+function detectDelimiter(line) {
+  const candidates = [',', ';', '\t'];
+  let best = null;
+  let bestCount = 0;
+  for (const delimiter of candidates) {
+    const count = splitDelimitedLine(line, delimiter).length - 1;
+    if (count > bestCount) {
+      best = delimiter;
+      bestCount = count;
+    }
+  }
+  return best;
+}
 
-  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
-  const domainColIdx = header.findIndex((h) => DOMAIN_HEADER_NAMES.includes(h));
+// Used only to distinguish a pasted delimiter-separated query list from a
+// headerless multi-column CSV. Server-side classifyQuery remains the
+// authoritative validator when the scan runs.
+function looksLikeLookupToken(value) {
+  const token = String(value || '').trim();
+  if (!token || /\s/.test(token)) return false;
+  if (/^AS\d+$/i.test(token) || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(token) || token.includes(':')) return true;
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(token) ? token : `https://${token}`);
+    return url.hostname.includes('.');
+  } catch {
+    return false;
+  }
+}
 
-  let dataLines = lines;
-  let colIdx = 0;
-  if (domainColIdx !== -1) {
-    dataLines = lines.slice(1);
-    colIdx = domainColIdx;
+export function parseDomainInput(text) {
+  const normalized = String(text || '').replace(/^\uFEFF/, '');
+  const lines = normalized.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return { entries: [], duplicates: 0, usedHeader: false };
+
+  const delimiter = detectDelimiter(lines[0]);
+  const firstCells = delimiter ? splitDelimitedLine(lines[0], delimiter) : [lines[0]];
+  const header = firstCells.map((cell) => cell.toLowerCase());
+  const domainColIdx = header.findIndex((cell) => DOMAIN_HEADER_NAMES.includes(cell));
+  const usedHeader = domainColIdx !== -1;
+
+  let candidates;
+  if (usedHeader) {
+    candidates = lines.slice(1).map((line) => {
+      const rowDelimiter = delimiter || detectDelimiter(line);
+      const cells = rowDelimiter ? splitDelimitedLine(line, rowDelimiter) : [line];
+      return cells[domainColIdx] || '';
+    });
+  } else {
+    const rows = lines.map((line) => {
+      const rowDelimiter = detectDelimiter(line);
+      return rowDelimiter ? splitDelimitedLine(line, rowDelimiter) : [line];
+    });
+    const flattened = rows.flat().map((cell) => cell.trim()).filter(Boolean);
+    // If every cell looks like a query, this is a pasted comma/semicolon list
+    // (possibly wrapped over several lines). Otherwise retain column zero so
+    // a headerless "domain,notes" CSV does not scan its notes as domains.
+    candidates = lines.length === 1 || (flattened.length > 0 && flattened.every(looksLikeLookupToken))
+      ? flattened
+      : rows.map((cells) => cells[0] || '');
   }
 
-  return dataLines
-    .map((line) => splitCsvLine(line)[colIdx] || '')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const entries = [];
+  const seen = new Set();
+  let duplicates = 0;
+  for (const candidate of candidates) {
+    const value = String(candidate || '').trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) {
+      duplicates += 1;
+      continue;
+    }
+    seen.add(key);
+    entries.push(value);
+  }
+
+  return { entries, duplicates, usedHeader };
+}
+
+export function parseDomainsFromText(text) {
+  return parseDomainInput(text).entries;
 }
