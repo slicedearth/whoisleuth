@@ -101,6 +101,19 @@ function setLoading(el, badgeEl) {
   if (badgeEl) badgeEl.textContent = '';
 }
 
+function formatSourceTime(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-AU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export async function runSingleLookup(q) {
   submitBtn.disabled = true;
   panels.classList.add('visible');
@@ -134,7 +147,13 @@ export async function runSingleLookup(q) {
     if (rdap.error) {
       rdapOutput.innerHTML = `<span class="error-text">${escapeHtml(rdap.error)}</span>`;
     } else {
-      rdapBadge.textContent = rdap.rdapServer || '';
+      const fetchedAt = formatSourceTime(rdap.fetchedAt);
+      const rdapMeta = [
+        rdap.rdapServer,
+        rdap.upstreamStatus ? `HTTP ${rdap.upstreamStatus}` : null,
+        fetchedAt ? `fetched ${fetchedAt}` : null,
+      ].filter(Boolean);
+      rdapBadge.textContent = rdapMeta.join(' · ');
       rdapOutput.innerHTML = renderRdap(body.type, rdap.parsed, rdap.data);
       lastRdapParsed = rdap.parsed || null;
     }
@@ -144,7 +163,13 @@ export async function runSingleLookup(q) {
       whoisOutput.innerHTML = `<span class="error-text">${escapeHtml(whois.error)}</span>`;
     } else {
       const chain = whois.chain || [];
-      whoisBadge.textContent = chain.map((hop) => hop.server).join(' → ');
+      const queriedAt = formatSourceTime(chain[0] && chain[0].queriedAt);
+      const whoisMeta = [
+        chain.map((hop) => hop.server).join(' → '),
+        whois.parsed && whois.parsed.chainStatus ? `${whois.parsed.chainStatus} chain` : null,
+        queriedAt ? `queried ${queriedAt}` : null,
+      ].filter(Boolean);
+      whoisBadge.textContent = whoisMeta.join(' · ');
       whoisOutput.innerHTML = renderWhois(whois.parsed, chain);
       lastWhoisParsed = whois.parsed || null;
     }

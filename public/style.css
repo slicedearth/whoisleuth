@@ -641,6 +641,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 18px 0 8px;
 }
 .section-title:first-child { margin-top: 0; }
+.ns-addresses {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin-left: 6px;
+  overflow-wrap: anywhere;
+}
 /* Collapsed-by-default sections (technical/billing contacts, status codes) -
    same rhythm/weight as .section-title, but as a clickable <summary> so
    less-commonly-needed data doesn't force a long scroll on data-rich

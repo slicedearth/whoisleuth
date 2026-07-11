@@ -73,6 +73,28 @@ function statusBlock(statuses) {
   return `<details class="section-toggle"><summary>Status (${statuses.length})</summary><div class="badge-list">${chips}</div></details>`;
 }
 
+function textBlocks(title, blocks) {
+  if (!blocks || !blocks.length) return '';
+  const rows = blocks.map((block) => kv(
+    block.title || 'Notice',
+    (block.descriptions || []).join(' ')
+  )).join('');
+  if (!rows) return '';
+  return `<details class="section-toggle"><summary>${escapeHtml(title)} (${blocks.length})</summary><dl class="kv-grid">${rows}</dl></details>`;
+}
+
+function dnssecDetailsBlock(parsed) {
+  const records = parsed.dsData || [];
+  if (!records.length) return '';
+  const rows = records.map((record, index) => [
+    kv(`DS ${index + 1} key tag`, record.keyTag),
+    kv('Algorithm', record.algorithm),
+    kv('Digest type', record.digestType),
+    kv('Digest', record.digest),
+  ].join('')).join('');
+  return `<details class="section-toggle"><summary>DNSSEC delegation (${records.length} DS record${records.length === 1 ? '' : 's'})</summary><dl class="kv-grid">${rows}</dl></details>`;
+}
+
 function rawBlock(rawData) {
   return `<details class="raw"><summary>Show raw RDAP JSON</summary><pre>${escapeHtml(
     JSON.stringify(rawData, null, 2)
@@ -87,9 +109,10 @@ export function renderRdap(type, parsed, rawData) {
   let html = '';
 
   if (type === 'domain') {
-    html += `<dl class="kv-grid">${kv('Domain', parsed.domain)}${kv('Handle', parsed.handle)}${kv('DNSSEC', parsed.dnssec)}</dl>`;
+    html += `<dl class="kv-grid">${kv('Domain', parsed.domain)}${kv('Unicode domain', parsed.unicodeDomain)}${kv('Handle', parsed.handle)}${kv('DNSSEC', parsed.dnssec)}${kv('Registrar IANA ID', parsed.registrarIanaId)}${kv('WHOIS server', parsed.port43)}</dl>`;
 
     html += statusBlock(parsed.statuses);
+    html += dnssecDetailsBlock(parsed);
 
     if (parsed.events && parsed.events.length) {
       const rows = parsed.events.map((e) => kv(e.action, fmtDate(e.date))).join('');
@@ -97,8 +120,15 @@ export function renderRdap(type, parsed, rawData) {
     }
 
     if (parsed.nameservers && parsed.nameservers.length) {
+      const details = new Map((parsed.nameserverDetails || []).map((ns) => [String(ns.name).toLowerCase(), ns]));
       html += `<div class="section-title">Name servers</div><ul class="ns-list">${parsed.nameservers
-        .map((ns) => `<li>${escapeHtml(ns)}</li>`)
+        .map((ns) => {
+          const addresses = details.get(String(ns).toLowerCase())?.addresses || [];
+          const glue = addresses.length
+            ? ` <span class="ns-addresses">${escapeHtml(addresses.join(', '))}</span>`
+            : '';
+          return `<li>${escapeHtml(ns)}${glue}</li>`;
+        })
         .join('')}</ul>`;
     }
 
@@ -111,7 +141,7 @@ export function renderRdap(type, parsed, rawData) {
     html += `<dl class="kv-grid">${kv('Name', parsed.name)}${kv('Handle', parsed.handle)}${kv(
       'Range',
       parsed.startAddress && parsed.endAddress ? `${parsed.startAddress} – ${parsed.endAddress}` : null
-    )}${kv('CIDR', (parsed.cidrs || []).join(', '))}${kv('Country', parsed.country)}${kv('Type', parsed.networkType)}</dl>`;
+    )}${kv('CIDR', (parsed.cidrs || []).join(', '))}${kv('Country', parsed.country)}${kv('Type', parsed.networkType)}${kv('Parent handle', parsed.parentHandle)}${kv('WHOIS server', parsed.port43)}</dl>`;
 
     if (parsed.events && parsed.events.length) {
       const rows = parsed.events.map((e) => kv(e.action, fmtDate(e.date))).join('');
@@ -124,7 +154,7 @@ export function renderRdap(type, parsed, rawData) {
     html += `<dl class="kv-grid">${kv('Name', parsed.name)}${kv('Handle', parsed.handle)}${kv(
       'Range',
       parsed.startAutnum != null ? `AS${parsed.startAutnum} – AS${parsed.endAutnum}` : null
-    )}${kv('Country', parsed.country)}${kv('Type', parsed.autnumType)}</dl>`;
+    )}${kv('Country', parsed.country)}${kv('Type', parsed.autnumType)}${kv('Parent handle', parsed.parentHandle)}${kv('WHOIS server', parsed.port43)}</dl>`;
 
     if (parsed.events && parsed.events.length) {
       const rows = parsed.events.map((e) => kv(e.action, fmtDate(e.date))).join('');
@@ -134,6 +164,9 @@ export function renderRdap(type, parsed, rawData) {
     html += entityBlock('Organisation', parsed.org);
     html += entityBlock('Abuse contact', parsed.abuse);
   }
+
+  html += textBlocks('RDAP remarks', parsed.remarks);
+  html += textBlocks('RDAP notices', parsed.notices);
 
   return html + rawBlock(rawData);
 }
