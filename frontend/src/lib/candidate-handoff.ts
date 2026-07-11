@@ -7,7 +7,7 @@ export interface Candidate {
 export interface CandidateHandoff {
   version: 1;
   createdAt: string;
-  source: 'typosquat' | 'keyword' | 'certificate-transparency';
+  source: 'typosquat' | 'keyword' | 'certificate-transparency' | 'watchlist';
   candidates: Candidate[];
 }
 
