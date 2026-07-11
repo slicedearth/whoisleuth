@@ -252,6 +252,43 @@ root and is gitignored.
   that domain's risk signals, with the same mailto-link-plus-copy-button
   pattern as the acquisition outreach draft.
 
+### Analyst cases
+
+Move a finding from discovery into a documented investigation. From a **Lookup**
+result or a **Bulk** row you can open a **case** for a domain; **Monitor** is the
+full case workspace (a `Cases` tab alongside `Watchlists`).
+
+- Each case carries an analyst **status** (New, Reviewing, Monitoring,
+  Escalated, Resolved), a **disposition** (Unreviewed, Suspicious, Confirmed
+  abuse, False positive, Expected, Closed without action), free-text **tags**,
+  timestamped **notes**, its **source** (Lookup, Bulk, Monitor), and a small
+  **evidence snapshot** (availability, risk score, registrar, website activity)
+  captured from the result at the time - never the raw registry response.
+- Monitor lets you filter by status and disposition, search by domain or tag,
+  sort by recent activity, edit a case inline, and delete one with a
+  confirmation. A case links back to a fresh **Look up** of its domain, and
+  Lookup/Bulk link forward into the matching Monitor record.
+- **Cases live only in the current browser.** They are held in `localStorage`
+  under `whois-rdap-cases-v1` and are never sent to any server. Clearing your
+  browser storage (or using a different browser or device) removes them unless
+  you exported them first.
+- **Export** writes a portable JSON file that includes the schema version and an
+  export timestamp. **Import** merges a file into your existing cases by domain.
+  Tags and notes are unioned, and a scalar field (status, disposition, source,
+  evidence) is only replaced when the imported record is both valid and more
+  recently updated than your local copy - a record with a missing or invalid
+  timestamp is treated as older than any local case, and a field absent from an
+  imported record never overwrites your local value. So importing can add
+  context but cannot silently reset a local status, disposition, or decision.
+  Imports are capped at 2 MB and validated field by field; unknown or malformed
+  records are skipped rather than trusted.
+- Storage is bounded to keep it safe and predictable: up to 500 cases, 50 notes
+  per case (2000 characters each), and 20 tags per case (40 characters each).
+  Old or malformed stored data is repaired on load rather than crashing the app.
+- **Notes may contain sensitive investigation detail** (analyst identities,
+  victim data, internal decisions). Treat an exported case file as sensitive:
+  store it somewhere access-controlled and share it deliberately.
+
 ## Rate limiting
 
 All `/api/*` routes are rate-limited per client IP (`lib/rate-limit.js`),
@@ -312,7 +349,8 @@ server.js               Express backend: lookup/posture/auth routes
 frontend/               SvelteKit multi-page frontend workspace
   src/routes/           Lookup, Discover, Bulk, Monitor, Brands, and Privacy pages
   src/lib/              Browser state, workflow helpers, and analysis modules
-    analysis/           Framework-neutral scoring, comparison, generation, and history logic
+    cases.ts            Browser-local analyst case store (localStorage wrapper)
+    analysis/           Framework-neutral scoring, comparison, generation, history, and case logic
   static/               Frontend-owned static assets
   build/                Generated static output (ignored; created by npm run build)
 lib/                    Shared lookup logic, used by both server.js and netlify/functions/
