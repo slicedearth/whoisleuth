@@ -15,6 +15,10 @@ describe('login handler origin enforcement', () => {
     const response = await request({ origin: 'https://example.com', host: 'example.com' });
     assert.equal(response.statusCode, 200);
     assert.match(response.headers['Set-Cookie'], /wrt_session=/);
+    assert.equal(response.headers['X-Content-Type-Options'], 'nosniff');
+    assert.equal(response.headers['X-Frame-Options'], 'DENY');
+    assert.equal(response.headers['Referrer-Policy'], 'strict-origin-when-cross-origin');
+    assert.equal(response.headers['Permissions-Policy'], 'camera=(), microphone=(), geolocation=()');
     assert.equal(response.headers['Strict-Transport-Security'], 'max-age=31536000');
   });
 
