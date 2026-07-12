@@ -1,7 +1,8 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { fetchHomepage, deriveWebsiteActivity } = require('../lib/availability');
+const { checkDomainAvailability, fetchHomepage, deriveWebsiteActivity, forSaleRedirectSignal } = require('../lib/availability');
+const { networkFeaturePolicy } = require('../lib/feature-policy');
 
 describe('website activity classification', () => {
   test('any HTTP response proves that a web service is active', async () => {
@@ -96,5 +97,40 @@ describe('website activity classification', () => {
 
   test('parking evidence remains stronger than generic HTTP activity', () => {
     assert.equal(deriveWebsiteActivity('fetched', true, true), 'parked');
+  });
+
+  test('recognizes an explicit for-sale landing path in bounded redirect provenance', () => {
+    assert.match(forSaleRedirectSignal({
+      finalUrl: 'https://market.example/premium-domains-for-sale',
+      redirects: [],
+    }), /for-sale landing-page redirect/i);
+    assert.equal(forSaleRedirectSignal({
+      finalUrl: 'https://market.example/account',
+      redirects: [],
+    }), null);
+  });
+
+  test('a sale landing redirect remains usable when the terminal page cannot be inspected', async () => {
+    const result = await checkDomainAvailability('example.test', {
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+      rdapRecord: {
+        upstreamStatus: 200,
+        parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
+      },
+      fetchHomepage: async () => ({
+        text: null,
+        status: 'responded',
+        detail: 'Web server responded, but the homepage could not be inspected.',
+        http: {
+          finalUrl: 'https://market.example/premium-domains-for-sale',
+          redirects: [{ from: 'https://example.test/', to: 'https://market.example/premium-domains-for-sale' }],
+        },
+      }),
+      fetchFaviconHash: async () => null,
+    });
+
+    assert.equal(result.state, 'for_sale');
+    assert.equal(result.activityStatus, 'parked');
+    assert.match(result.detail, /for-sale landing-page redirect/i);
   });
 });
