@@ -1,0 +1,127 @@
+const { describe, test, before } = require('node:test');
+const assert = require('node:assert/strict');
+const { domainToASCII } = require('url');
+
+let idn;
+before(async () => {
+  idn = await import('../frontend/src/lib/analysis/idn-confusables.js');
+});
+
+describe('punycode decoding and dual domain representation', () => {
+  test('decodes a known internationalized label without a runtime dependency', () => {
+    assert.equal(idn.decodePunycodeLabel('mnchen-3ya'), 'münchen');
+    assert.equal(idn.unicodeDomainFromAscii('xn--mnchen-3ya.de'), 'münchen.de');
+  });
+
+  test('matches the platform IDNA conversion for representative non-Latin labels', () => {
+    for (const unicode of ['中国.cn', 'пример.рф', '日本語.jp', 'παράδειγμα.test']) {
+      const ascii = domainToASCII(unicode);
+      assert.ok(ascii);
+      assert.equal(idn.unicodeDomainFromAscii(ascii), unicode.normalize('NFC'));
+    }
+  });
+
+  test('preserves ordinary ASCII labels around an internationalized label', () => {
+    assert.equal(idn.unicodeDomainFromAscii('login.xn--bcher-kva.example'), 'login.bücher.example');
+  });
+
+  test('normalizes Unicode and ACE input to the same analysis identity', () => {
+    const fromUnicode = idn.analyzeDomainIdn('BÜCHER.example.');
+    const fromAscii = idn.analyzeDomainIdn('xn--bcher-kva.example');
+    assert.equal(fromUnicode.asciiDomain, fromAscii.asciiDomain);
+    assert.equal(fromUnicode.unicodeDomain, fromAscii.unicodeDomain);
+    assert.equal(fromUnicode.skeleton, fromAscii.skeleton);
+  });
+
+  test('rejects malformed, oversized, and unsafe inputs', () => {
+    assert.equal(idn.decodePunycodeLabel(''), null);
+    assert.equal(idn.decodePunycodeLabel('bad!value'), null);
+    assert.equal(idn.unicodeDomainFromAscii('not a domain'), null);
+    assert.equal(idn.analyzeDomainIdn('localhost'), null);
+    assert.equal(idn.analyzeDomainIdn(`a${'b'.repeat(64)}.example`), null);
+  });
+});
+
+describe('script analysis', () => {
+  test('detects a Latin and Cyrillic mixture within one label', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('раypal.com'));
+    assert.equal(result.hasIdn, true);
+    assert.equal(result.mixedScript, true);
+    assert.deepEqual(result.labels[0].scripts, ['Cyrillic', 'Latin']);
+    assert.ok(result.findings.some((finding) => finding.id === 'mixed_script_label'));
+  });
+
+  test('does not flag a legitimate same-script accented label as mixed', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('café.example'));
+    assert.equal(result.hasIdn, true);
+    assert.equal(result.mixedScript, false);
+    assert.deepEqual(result.labels[0].scripts, ['Latin']);
+  });
+
+  test('does not flag a single-script Cyrillic label as mixed', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('пример.example'));
+    assert.equal(result.mixedScript, false);
+    assert.deepEqual(result.labels[0].scripts, ['Cyrillic']);
+  });
+
+  test('treats Han, Hiragana, and Katakana as a compatible Japanese label', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('日本ごカナ.jp'));
+    assert.equal(result.mixedScript, false);
+    assert.deepEqual(result.labels[0].scripts, ['Han', 'Hiragana', 'Katakana']);
+  });
+
+  test('does not confuse scripts used by different labels with mixed-script labels', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('日本語.example'));
+    assert.deepEqual(result.scripts, ['Han', 'Latin']);
+    assert.equal(result.mixedScript, false);
+  });
+});
+
+describe('versioned visual skeleton comparison', () => {
+  test('matches a mixed-script lookalike to an official ASCII domain', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('раypal.com'), ['paypal.com']);
+    assert.equal(result.version, 1);
+    assert.equal(result.mappingVersion, 'tr39-curated-ascii-v1');
+    assert.equal(result.skeleton, 'paypal.com');
+    assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['paypal.com']);
+    assert.ok(result.findings.some((finding) => finding.id === 'official_skeleton_match'));
+  });
+
+  test('supports same-script accent folding while retaining a cautious finding', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('café.example'), ['cafe.example']);
+    assert.equal(result.mixedScript, false);
+    assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['cafe.example']);
+    assert.match(result.findings.at(-1).detail, /similarity evidence, not proof/i);
+  });
+
+  test('does not match an unrelated official domain', () => {
+    const result = idn.analyzeDomainIdn(domainToASCII('bücher.example'), ['library.example']);
+    assert.deepEqual(result.referenceMatches, []);
+  });
+
+  test('normalizes full-width presentation forms before skeleton comparison', () => {
+    assert.equal(idn.unicodeSkeleton('ｐａｙｐａｌ.com'), 'paypal.com');
+  });
+
+  test('bounds reference processing and reports truncation', () => {
+    const references = Array.from({ length: 60 }, (_, index) => `unrelated-${index}.example`);
+    const result = idn.analyzeDomainIdn(domainToASCII('café.example'), references);
+    assert.equal(result.truncated, true);
+    assert.deepEqual(result.referenceMatches, []);
+  });
+
+  test('does not mutate the reference array', () => {
+    const references = ['paypal.com'];
+    const before = structuredClone(references);
+    idn.analyzeDomainIdn(domainToASCII('раypal.com'), references);
+    assert.deepEqual(references, before);
+  });
+});
+
+describe('shared candidate-generation mapping', () => {
+  test('provides a bounded deterministic set for supported ASCII characters', () => {
+    assert.deepEqual(idn.confusableCharactersForAscii('A'), ['а', 'α', 'ɑ']);
+    assert.deepEqual(idn.confusableCharactersForAscii('?'), []);
+    assert.ok(idn.confusableCharactersForAscii('o').length <= 8);
+  });
+});

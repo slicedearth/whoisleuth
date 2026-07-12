@@ -202,10 +202,12 @@ publication difference.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `3`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `4`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. It is intentionally rich and may contain public registry
+registry comparison. Version 4 additionally retains the bounded, versioned
+browser-side IDN/script/confusable analysis supplied by Lookup. It is
+intentionally rich and may contain public registry
 contact data. The file is generated locally and is the user's responsibility
 after download.
 

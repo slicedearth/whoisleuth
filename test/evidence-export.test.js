@@ -62,7 +62,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 3);
+    assert.equal(result.schemaVersion, 4);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -75,8 +75,26 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
     assert.equal(result.analysis.availability.hasMx, true);
+    assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
     assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
+  });
+
+  test('retains an explicitly supplied bounded IDN analysis without reading browser state', () => {
+    const result = evidence.buildLookupEvidence(fixtureResponse(), {
+      idnAnalysis: {
+        version: 1,
+        mappingVersion: 'tr39-curated-ascii-v1',
+        asciiDomain: 'xn--example.test',
+        unicodeDomain: 'éxample.test',
+        mixedScript: false,
+        referenceMatches: [],
+      },
+    });
+
+    assert.equal(result.schemaVersion, 4);
+    assert.equal(result.analysis.idn.version, 1);
+    assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });
 
   test('retains partial source failures without failing the export', () => {

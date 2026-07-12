@@ -1,7 +1,7 @@
 import { compareRegistrySources } from './registry-comparison.js';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 3;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 4;
 
 function cloneJson(value) {
   if (value === undefined) return null;
@@ -42,7 +42,12 @@ function whoisSource(whois) {
   };
 }
 
-export function buildLookupEvidence(response, { generatedAt = new Date().toISOString() } = {}) {
+/**
+ * @param {any} response
+ * @param {{ generatedAt?: string, idnAnalysis?: any }} [options]
+ */
+export function buildLookupEvidence(response, options = {}) {
+  const { generatedAt = new Date().toISOString(), idnAnalysis = null } = options;
   const body = response || {};
   const rdapParsed = body.rdap && !body.rdap.error ? body.rdap.parsed : null;
   const whoisParsed = body.whois && !body.whois.error ? body.whois.parsed : null;
@@ -65,6 +70,7 @@ export function buildLookupEvidence(response, { generatedAt = new Date().toISOSt
     },
     analysis: {
       availability: cloneJson(body.availability),
+      idn: cloneJson(idnAnalysis),
       registryComparison: compareRegistrySources(rdapParsed, whoisParsed, {
         rdapStatus: body.diagnostics?.rdap?.status,
         whoisStatus: body.diagnostics?.whois?.status,

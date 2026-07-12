@@ -258,6 +258,15 @@ compact-storage boundary, and lookup evidence schema are documented in the
   from the active profile and drops candidates already in its allowlist, and
   bulk/watchlist results mark any domain in the allowlist instead of
   treating your own domain as a lookalike.
+- Lookup and Bulk analyze internationalized domains locally in the browser.
+  Unicode and DNS-safe ASCII forms are shown together, per-label writing
+  scripts are identified, and a bounded, versioned visual skeleton can be
+  compared with official domains in the active Brand Profile. These findings
+  are contextual review indicators, never a maliciousness verdict, and do not
+  change the Risk score. The typosquat generator uses the same curated mapping
+  so generated confusable candidates and result explanations stay consistent.
+  Lookup evidence schema version 4 retains the analysis supplied to the
+  export; Bulk CSV exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
   passed or needs review/action, and provides a concrete next step. DKIM is

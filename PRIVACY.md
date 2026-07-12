@@ -25,6 +25,11 @@ at all.
   roles. Bulk, watchlist, and case data retain only the existing compact
   primary-contact fields; these expanded contact inventories are not copied
   into browser-local investigation stores.
+- **IDN/confusable review**: performed locally in the browser from the domain
+  already being displayed and, when present, the active Brand Profile's
+  bounded official-domain list. It makes no additional network request and is
+  not added to watchlists or analyst cases. Deliberate Lookup evidence and
+  Bulk CSV exports can include the displayed analysis.
 - **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside

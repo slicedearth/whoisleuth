@@ -2,6 +2,8 @@
 // objects so a later scan can explain why each domain was generated; callers
 // that only need the historical string list can use the compatibility wrapper.
 
+import { confusableCharactersForAscii } from './idn-confusables.js';
+
 const QWERTY_ADJACENT = {
   q: 'wa', w: 'qeas', e: 'wrds', r: 'etdf', t: 'ryfg', y: 'tugh', u: 'yihj', i: 'uojk', o: 'iplk', p: 'ol',
   a: 'qwsz', s: 'awedxz', d: 'serfcx', f: 'drtgvc', g: 'ftyhbv', h: 'gyujnb', j: 'huikmn', k: 'jiolm', l: 'kop',
@@ -11,10 +13,6 @@ const QWERTY_ADJACENT = {
 const HOMOGLYPH_SWAPS = [
   ['rn', 'm'], ['m', 'rn'], ['o', '0'], ['0', 'o'], ['l', '1'], ['1', 'l'], ['i', '1'], ['vv', 'w'], ['w', 'vv'],
 ];
-
-const UNICODE_HOMOGLYPHS = {
-  a: ['а'], c: ['с'], e: ['е'], i: ['і'], o: ['о'], p: ['р'], s: ['ѕ'], x: ['х'], y: ['у'],
-};
 
 const VOWELS = 'aeiou';
 const PHISHING_DICTIONARY = ['login', 'secure', 'verify', 'account', 'support', 'security', 'update', 'confirm', 'portal', 'admin'];
@@ -112,7 +110,7 @@ export function generateTyposquatCandidates(rawInput, fallbackTlds) {
     if (name.includes(from)) addVariant(nameVariants, name.split(from).join(to), 'ascii_homoglyph');
   }
   for (let i = 0; i < name.length; i += 1) {
-    const substitutions = UNICODE_HOMOGLYPHS[name[i]];
+    const substitutions = confusableCharactersForAscii(name[i]);
     if (!substitutions) continue;
     for (const substitution of substitutions) {
       const ascii = toAsciiLabel(name.slice(0, i) + substitution + name.slice(i + 1));

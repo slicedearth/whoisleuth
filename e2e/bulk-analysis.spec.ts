@@ -107,3 +107,40 @@ test('a 101-result scan paginates 100 then 1, and Previous/Next update the page'
   await expect(page.locator('.results-table tbody tr')).toHaveCount(100);
   await expect(pagination).toContainText('Page 1 of 2');
 });
+
+test('IDN evidence renders and filters without changing the risk score', async ({ page }) => {
+  await page.evaluate(() => {
+    const profile = {
+      id: 'idn-profile', name: 'Example Brand', officialDomains: ['paypal.com'], productNames: [], tlds: ['com'],
+      approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
+      createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
+    localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
+  });
+  await page.reload();
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      availability: {
+        domain: 'xn--ypal-43d9g.com', state: 'registered', confidence: 'high',
+        nameservers: [], privacyProtected: null, activityStatus: null,
+      },
+      diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }),
+  }));
+
+  await runBulkScan(page, ['xn--ypal-43d9g.com']);
+  const row = page.locator('.results-table tbody tr');
+  await expect(row.getByText('Unicode: раypal.com', { exact: true })).toBeVisible();
+  await expect(row.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
+  await expect(row.getByText('Official-domain skeleton match', { exact: true })).toBeVisible();
+  await expect(row.locator('td[data-label="Risk"]')).toHaveText('40');
+
+  await page.getByRole('button', { name: 'IDN / confusable' }).click();
+  await expect(row).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
