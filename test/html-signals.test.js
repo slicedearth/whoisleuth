@@ -19,6 +19,13 @@ describe('pageTitle', () => {
     assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, 'Acme Bank Login');
   });
 
+  test('strips C0 and DEL controls before retaining a title', () => {
+    const html = '<title>Account\x00\x07 review\x7f centre</title>';
+    const title = extractHtmlSignals(html, 'example.com').pageTitle;
+    assert.equal(title, 'Account review centre');
+    assert.equal(/[\x00-\x1f\x7f]/.test(title), false);
+  });
+
   test('is null when there is no title tag', () => {
     const html = '<html><body>no title here</body></html>';
     assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, null);
@@ -62,6 +69,12 @@ describe('phishingLanguageMatch', () => {
     const html = '<body>Welcome to our site. Browse our products below.</body>';
     assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, null);
   });
+
+  test('retained phrase text cannot contain control characters', () => {
+    const match = extractHtmlSignals('<body>security alert\x07</body>', 'example.com').phishingLanguageMatch;
+    assert.equal(match, 'security alert');
+    assert.equal(/[\x00-\x1f\x7f]/.test(match), false);
+  });
 });
 
 describe('externalAssetHosts', () => {
@@ -88,5 +101,10 @@ describe('externalAssetHosts', () => {
   test('only looks at img/script/link tags, not ordinary <a href> links', () => {
     const html = '<a href="https://example.com/real-site">Visit the real site</a>';
     assert.deepEqual(extractHtmlSignals(html, 'lookalike.test').externalAssetHosts, []);
+  });
+
+  test('rejects control-bearing external asset hosts', () => {
+    const html = '<img src="https://evil\x07.example/logo.png"><img src="https://safe.example/logo.png">';
+    assert.deepEqual(extractHtmlSignals(html, 'lookalike.test').externalAssetHosts, ['safe.example']);
   });
 });
