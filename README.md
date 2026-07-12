@@ -208,6 +208,13 @@ compact-storage boundary, and lookup evidence schema are documented in the
   Capped contact, redaction, and variant inventories are labelled rather than
   presented as complete; the raw upstream response remains available only in
   the single-lookup view and its deliberate evidence export.
+- Deep domain scans collect a bounded point-in-time DNS observation for A,
+  AAAA, CNAME, NS, MX, SPF, DMARC, and CAA alongside registry-derived DNSSEC.
+  Per-record diagnostics distinguish authoritative absence from resolver
+  failure, malformed neighbours are discarded, and caps are disclosed. Lookup
+  displays the evidence; deliberate JSON and Bulk CSV exports retain it. Shared
+  infrastructure is relationship context, not proof of ownership or abuse,
+  and the richer observation is not copied into watchlists or analyst cases.
 - IPv4, IPv6, and ASN RDAP results retain their bounded status and lifecycle
   metadata instead of treating those fields as domain-only. Published CIDR0
   prefixes are accepted only for the requested address family and malformed

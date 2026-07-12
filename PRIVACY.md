@@ -30,6 +30,12 @@ at all.
   bounded official-domain list. It makes no additional network request and is
   not added to watchlists or analyst cases. Deliberate Lookup evidence and
   Bulk CSV exports can include the displayed analysis.
+- **Deep DNS intelligence**: the server performs bounded public A, AAAA,
+  CNAME, NS, MX, SPF, DMARC, and CAA queries for a registered domain. Only SPF
+  and DMARC policy TXT records are retained; unrelated TXT records are
+  discarded. Full Lookup and deliberate exports can contain these point-in-time
+  records, while watchlists and analyst cases keep only their existing compact
+  mail and nameserver fields.
 - **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside

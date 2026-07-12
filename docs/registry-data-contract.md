@@ -35,6 +35,24 @@ never treated as availability because registered domains may be undelegated.
 The WHOIS diagnostic status remains `skipped`; this is not a WHOIS failure or
 an observation that WHOIS data is absent.
 
+Deep registered-domain assessments additionally expose a bounded
+`availability.dns` observation. The collector runs A, AAAA, CNAME, NS, MX,
+SPF, DMARC, and CAA queries in parallel, reusing the existing mail-policy
+queries rather than running a second mail scan. Each record family has an
+independent `success`/`not_found`/`error` diagnostic, malformed neighbours are
+counted and discarded, and capped inventories set their truncation flag.
+Resolver failure produces `null` for the compatible `hasMx`, `hasSpf`, or
+`hasDmarc` signal; authoritative absence produces `false`. DNSSEC remains
+registry-derived because recursive-resolver validation is not equivalent to
+delegation data.
+
+The observation is point-in-time context. CNAME targets are not followed
+recursively, unrelated TXT records are not retained, and shared DNS
+infrastructure is not proof of common ownership or maliciousness. Full Lookup
+and deliberate evidence exports retain the bounded observation. Compact Bulk
+responses may display or export it, but watchlists and analyst cases continue
+to store only their existing compact compatibility fields.
+
 ## Diagnostics version 2
 
 `diagnostics.version` is `2`. The source objects use explicit status values:

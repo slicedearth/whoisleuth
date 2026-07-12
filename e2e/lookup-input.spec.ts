@@ -245,6 +245,42 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await expectNoHorizontalOverflow(page);
 });
 
+test('deep DNS evidence distinguishes observed records from partial resolver failure', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'dns-evidence.test', type: 'domain', registrableDomain: 'dns-evidence.test',
+      availability: {
+        state: 'registered', confidence: 'high', domain: 'dns-evidence.test', dnssec: 'signed',
+        dns: {
+          status: 'partial', source: 'dns', scanMode: 'deep', complete: false, truncated: false,
+          records: {
+            a: ['192.0.2.10'], aaaa: ['2001:db8::10'], cname: [], ns: ['ns1.example'],
+            mx: [{ priority: 10, exchange: 'mail.example' }], spf: ['v=spf1 -all'],
+            dmarc: ['v=DMARC1; p=reject'], caa: [{ critical: 0, tag: 'issue', value: 'ca.example' }],
+          },
+          diagnostics: { a: { status: 'success' }, aaaa: { status: 'success' }, cname: { status: 'error', error: 'resolver timed out' } },
+        },
+      },
+      rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+    }),
+  }));
+
+  await page.locator('#query').fill('dns-evidence.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const card = page.locator('.dns-card');
+  await expect(card.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
+  await expect(card.getByText('192.0.2.10', { exact: true })).toBeVisible();
+  await expect(card.getByText('0 issue ca.example', { exact: true })).toBeVisible();
+  await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
+  await expect(card.getByText(/does not prove common ownership or maliciousness/i)).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('IP results use network-specific RDAP labels instead of domain fields', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

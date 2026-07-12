@@ -97,6 +97,18 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });
 
+  test('retains bounded DNS provenance already present in the availability assessment', () => {
+    const response = fixtureResponse();
+    response.availability.dns = {
+      status: 'partial', source: 'dns', complete: false, truncated: false,
+      records: { a: ['192.0.2.1'], caa: [{ critical: 0, tag: 'issue', value: 'ca.example' }] },
+      diagnostics: { a: { status: 'success' }, caa: { status: 'error', error: 'resolver timed out' } },
+    };
+    const result = evidence.buildLookupEvidence(response);
+    assert.deepEqual(result.analysis.availability.dns.records.a, ['192.0.2.1']);
+    assert.equal(result.analysis.availability.dns.diagnostics.caa.status, 'error');
+  });
+
   test('retains partial source failures without failing the export', () => {
     const response = fixtureResponse();
     response.rdap = { error: 'RDAP timed out', attempts: [{ outcome: 'timeout' }] };
