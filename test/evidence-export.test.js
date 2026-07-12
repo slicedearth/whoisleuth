@@ -26,6 +26,8 @@ function fixtureResponse() {
         domain: 'EXAMPLE.COM',
         registrar: { name: 'Example Registrar' },
         nameservers: ['NS1.EXAMPLE'],
+        linksTruncated: true,
+        noticesTruncated: false,
         events: [{ action: 'registration', date: '2020-01-01T00:00:00Z' }],
       },
       data: { objectClassName: 'domain', ldhName: 'EXAMPLE.COM' },
@@ -67,6 +69,8 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.rdap.endpoint, 'https://rdap.example/domain/example.com');
     assert.equal(result.sources.rdap.transportSecurity, 'https');
     assert.equal(result.sources.rdap.raw.ldhName, 'EXAMPLE.COM');
+    assert.equal(result.sources.rdap.parsed.linksTruncated, true);
+    assert.equal(result.sources.rdap.parsed.noticesTruncated, false);
     assert.equal(result.sources.rdap.attempts[0].outcome, 'success');
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');

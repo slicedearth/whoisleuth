@@ -163,6 +163,10 @@ root and is gitignored.
 
 ### Looking up domains
 
+The normalized source shapes, source-health states, limits, truncation fields,
+compact-storage boundary, and lookup evidence schema are documented in the
+[registry data contract](docs/registry-data-contract.md).
+
 - Enter a single domain, IPv4/IPv6 address, or ASN in the search box for a
   full RDAP + WHOIS + availability lookup.
 - For domain lookups, the Summary compares overlapping RDAP and WHOIS fields
@@ -185,7 +189,10 @@ root and is gitignored.
   endpoint; diagnostics and evidence exports retain the outcome of each attempt.
 - Structured domain results retain registry object IDs, registrar IANA IDs,
   registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
-  are RDAP-only; full Lookup and deep scans retain the WHOIS referral chain.
+  remain WHOIS-free: they use RDAP first and may use a bounded authoritative
+  DNS-delegation check to positively confirm registration for TLDs without
+  usable RDAP. A missing DNS delegation never means that a domain is available.
+  Full Lookup and deep scans retain the WHOIS referral chain.
 - Full Lookup normalizes WHOIS creation, expiration, and update dates alongside
   bounded registrant, administrative, technical, billing, and registrar-abuse
   contacts when those roles are published. Existing scalar WHOIS fields remain

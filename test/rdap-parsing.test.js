@@ -21,12 +21,19 @@ describe('structured RDAP metadata', () => {
       }],
       nameservers: [{
         ldhName: 'NS1.EXAMPLE',
-        ipAddresses: { v4: ['192.0.2.10'], v6: ['2001:db8::10'] },
+        ipAddresses: {
+          v4: ['192.0.2.10', 'not-an-address', '2001:db8::20'],
+          v6: ['2001:db8::10', '192.0.2.20'],
+        },
       }],
       secureDNS: {
         zoneSigned: true,
         delegationSigned: true,
-        dsData: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }],
+        dsData: [
+          { keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' },
+          { keyTag: 12346, algorithm: 13, digestType: 2, digest: 'not-hex' },
+          { keyTag: 12347, algorithm: 13, digestType: 2 },
+        ],
       },
       notices: [{ title: 'Terms', description: ['Use subject to registry terms.'] }],
       remarks: [{ title: 'Status', description: ['Data redacted by policy.'] }],
@@ -37,6 +44,7 @@ describe('structured RDAP metadata', () => {
     assert.equal(parsed.registrarIanaId, '9999');
     assert.equal(parsed.registrar.address, '1 Registry Way, Melbourne, VIC, 3000, AU');
     assert.deepEqual(parsed.nameserverDetails[0].addresses, ['192.0.2.10', '2001:db8::10']);
+    assert.equal(parsed.dsData.length, 1);
     assert.deepEqual(parsed.dsData[0], { keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' });
     assert.equal(parsed.notices[0].title, 'Terms');
     assert.equal(parsed.remarks[0].descriptions[0], 'Data redacted by policy.');
@@ -56,8 +64,49 @@ describe('structured RDAP metadata', () => {
 
     assert.equal(parsed.notices.length, 12);
     assert.equal(parsed.notices[0].descriptions[0].length, 800);
+    assert.equal(parsed.noticesTruncated, true);
     assert.equal(parsed.parentHandle, 'PARENT-AS-BLOCK');
     assert.equal(parsed.port43, 'whois.rir.example');
+  });
+
+  test('discloses caps for common metadata and domain DNS inventories', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      rdapConformance: Array.from({ length: 51 }, (_, index) => `extension_${index}`),
+      links: Array.from({ length: 21 }, (_, index) => ({
+        rel: 'related', href: `https://rdap.example/record/${index}`,
+      })),
+      notices: Array.from({ length: 13 }, (_, index) => ({ title: `Notice ${index}`, description: ['Terms'] })),
+      remarks: [{ title: 'x'.repeat(161), description: ['y'.repeat(801)] }],
+      nameservers: Array.from({ length: 201 }, (_, index) => ({
+        ldhName: `NS${index}.EXAMPLE.COM`,
+        ipAddresses: index === 0
+          ? { v4: Array.from({ length: 21 }, (__, address) => `192.0.2.${address}`) }
+          : {},
+      })),
+      secureDNS: {
+        dsData: Array.from({ length: 51 }, (_, index) => ({
+          keyTag: index, algorithm: 13, digestType: 2,
+          digest: `AB${index.toString(16).padStart(2, '0')}`,
+        })),
+      },
+    });
+
+    assert.equal(parsed.conformance.length, 50);
+    assert.equal(parsed.conformanceTruncated, true);
+    assert.equal(parsed.links.length, 20);
+    assert.equal(parsed.linksTruncated, true);
+    assert.equal(parsed.notices.length, 12);
+    assert.equal(parsed.noticesTruncated, true);
+    assert.equal(parsed.remarks[0].title.length, 160);
+    assert.equal(parsed.remarks[0].descriptions[0].length, 800);
+    assert.equal(parsed.remarksTruncated, true);
+    assert.equal(parsed.nameservers.length, 200);
+    assert.equal(parsed.nameserversTruncated, true);
+    assert.equal(parsed.nameserverDetails[0].addresses.length, 20);
+    assert.equal(parsed.nameserverAddressesTruncated, true);
+    assert.equal(parsed.dsData.length, 50);
+    assert.equal(parsed.dsDataTruncated, true);
   });
 
   test('normalizes and deterministically summarizes shuffled lifecycle events', () => {
