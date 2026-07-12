@@ -267,9 +267,12 @@ full case workspace (a `Cases` tab alongside `Watchlists`).
   and website signals) captured from results over time - never the raw registry,
   RDAP, DNS, HTML, or screenshot data. Re-capturing materially identical
   evidence advances the latest snapshot's timestamp rather than adding a
-  duplicate entry; only a material change opens a new snapshot. Monitor shows the
-  most recent snapshot; the full timeline and change-report views build on this
-  history.
+  duplicate entry; only a material change opens a new snapshot. Monitor exposes
+  the full evidence timeline for every case: newest-to-oldest observations with
+  capture source, scan depth, repeat-detection, and depth-aware field-level
+  change reports. When capture depths differ enough to prevent reliable
+  comparison, the timeline explains why rather than falsely reporting a change or
+  a removal.
 - Monitor lets you filter by status and disposition, search by domain or tag,
   sort by recent activity, edit a case inline, and delete one with a
   confirmation. A case links back to a fresh **Look up** of its domain, and

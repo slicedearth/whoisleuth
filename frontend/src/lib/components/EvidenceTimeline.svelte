@@ -1,0 +1,127 @@
+<script lang="ts">
+  import type { CaseRecord } from '$lib/cases';
+  import {
+    currentEvidenceSummary,
+    deriveTimeline,
+    evidenceSourceLabel,
+    filterChangedOnly,
+    formatChangeEntry,
+    formatSnapshotValue,
+    scanDepthLabel,
+    snapshotFieldGroups
+  } from '$lib/analysis/evidence-display.js';
+
+  let { record }: { record: CaseRecord } = $props();
+  let timelineExpanded = $state(true);
+  let changedOnly = $state(false);
+  let expandedSnapshots = $state(new Set<string>());
+
+  const summary = $derived(currentEvidenceSummary(record.evidenceHistory));
+  const timeline = $derived(deriveTimeline(record.evidenceHistory));
+  const visibleTimeline = $derived(changedOnly ? filterChangedOnly(timeline) : timeline);
+  const filteredIncomparable = $derived(changedOnly && timeline.some(entry => entry.hasIncomparableChange && !visibleTimeline.includes(entry)));
+
+  function date(value: string | null) {
+    if (!value) return 'Not observed';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  }
+
+  function toggleSnapshot(id: string) {
+    const next = new Set(expandedSnapshots);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedSnapshots = next;
+  }
+</script>
+
+{#if summary}
+  <dl class="evidence">
+    <dt>Availability</dt><dd>{summary.availability ?? '—'}</dd>
+    <dt>Risk</dt><dd>{summary.riskScore ?? '—'}</dd>
+    <dt>Registrar</dt><dd>{summary.registrar ?? '—'}</dd>
+    <dt>Website</dt><dd>{summary.activityStatus ?? '—'}</dd>
+    <dt>Captured</dt><dd>{date(summary.capturedAt)}</dd>
+  </dl>
+{/if}
+
+<section class="timeline" aria-labelledby={`timeline-heading-${record.id}`}>
+  <div class="timeline-header">
+    <h3 id={`timeline-heading-${record.id}`}>Evidence timeline <small>{timeline.length} snapshot{timeline.length===1?'':'s'}</small></h3>
+    {#if timeline.length}
+      <div class="timeline-controls">
+        <button aria-expanded={timelineExpanded} aria-controls={`timeline-list-${record.id}`} onclick={()=>timelineExpanded=!timelineExpanded}>{timelineExpanded?'Collapse all':'Expand all'}</button>
+        <button aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Changed only</button>
+      </div>
+    {/if}
+  </div>
+
+  {#if !timeline.length}
+    <p class="timeline-empty">No evidence captured yet. Open this case from a Lookup or Bulk result to record the first observation.</p>
+  {:else if timelineExpanded}
+    <ol id={`timeline-list-${record.id}`} class="timeline-list" aria-labelledby={`timeline-heading-${record.id}`}>
+      {#each visibleTimeline as entry (entry.snapshot.id)}
+        {@const snapId=`snap-${record.id}-${entry.snapshot.id}`}
+        {@const bodyId=`snap-body-${record.id}-${entry.snapshot.id}`}
+        {@const isExpanded=expandedSnapshots.has(entry.snapshot.id)}
+        <li class="timeline-entry">
+          <div class="timeline-entry-head">
+            <button id={snapId} class="timeline-toggle" aria-expanded={isExpanded} aria-controls={bodyId} onclick={()=>toggleSnapshot(entry.snapshot.id)}>
+              <span class="timeline-index">#{entry.displayIndex}</span>
+              <time datetime={entry.snapshot.capturedAt}>{entry.hasRepeatedObservation?'Last observed ':'Captured '}{date(entry.snapshot.capturedAt)}</time>
+            </button>
+            <span class="timeline-badges">
+              {#if entry.hasRepeatedObservation}<span class="timeline-badge timeline-repeat">First observed {date(entry.snapshot.firstCapturedAt)}</span>{/if}
+              <span class="timeline-badge">{evidenceSourceLabel(entry.snapshot.source)}</span>
+              <span class="timeline-badge">{scanDepthLabel(entry.snapshot.scanDepth)}</span>
+              {#if entry.isBaseline}
+                <span class="timeline-badge timeline-baseline">Baseline</span>
+              {:else if entry.changes?.length}
+                <span class="timeline-badge timeline-changed">{entry.changes.length} change{entry.changes.length===1?'':'s'}</span>
+              {:else if entry.hasIncomparableChange}
+                <span class="timeline-badge timeline-incomparable">Depth prevents comparison</span>
+              {/if}
+            </span>
+          </div>
+
+          {#if entry.changes?.length}
+            <ul class="timeline-changes" aria-label="Material changes from previous snapshot">
+              {#each entry.changes as change}
+                {@const formatted=formatChangeEntry(change)}
+                <li class="timeline-change" class:tone-danger={formatted.tone==='danger'} class:tone-warn={formatted.tone==='warn'} class:tone-good={formatted.tone==='good'}>
+                  <strong>{formatted.label}</strong><span class="change-kind">{formatted.kind}</span>
+                  <span class="change-values"><span>{formatted.beforeText}</span><span class="change-arrow" aria-hidden="true">→</span><span>{formatted.afterText}</span></span>
+                </li>
+              {/each}
+            </ul>
+          {:else if entry.hasIncomparableChange}
+            <p class="timeline-incomparable-note">This observation is materially distinct from the previous one, but the capture depths differ enough that no reliable field-level comparison is available.</p>
+          {/if}
+
+          {#if isExpanded}
+            <div class="timeline-detail" id={bodyId} role="region" aria-labelledby={snapId}>
+              {#each snapshotFieldGroups(entry.snapshot) as group}
+                <section class="timeline-group">
+                  <h4>{group.name}</h4>
+                  <dl>{#each group.rows as row}<dt>{row.label}</dt><dd>{formatSnapshotValue(row.field,row.value)}</dd>{/each}</dl>
+                </section>
+              {/each}
+            </div>
+          {/if}
+        </li>
+      {/each}
+    </ol>
+    {#if changedOnly && visibleTimeline.length===1 && timeline.length>1}
+      <p class="timeline-filter-note">{filteredIncomparable?'No reliable comparable changes matched — some observations differ materially but their capture depths prevent field-level comparison.':'No reliable comparable changes matched.'}</p>
+    {/if}
+  {/if}
+</section>
+
+<style>
+  .evidence{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:0;padding:12px;border:1px solid var(--border);border-radius:9px;font-size:.68rem}.evidence dt{color:var(--muted)}.evidence dd{margin:0;overflow-wrap:anywhere}
+  .timeline{margin-top:4px}.timeline-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.timeline-header h3{margin:0;font-size:.78rem}.timeline-header small{margin-left:8px;color:var(--muted);font-size:.64rem;font-weight:400}.timeline-controls{display:flex;flex-wrap:wrap;gap:7px}.timeline-controls button,.timeline-toggle{min-height:32px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--panel-raised);font-size:.66rem}.timeline-controls button[aria-pressed="true"]{color:var(--accent);border-color:#7ee0a8}.timeline-empty,.timeline-filter-note,.timeline-incomparable-note{color:var(--muted);font-size:.68rem}.timeline-empty{padding:12px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}
+  .timeline-list,.timeline-changes{display:grid;gap:10px;margin:0;padding:0;list-style:none}.timeline-entry{padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--panel-raised)}.timeline-entry-head,.timeline-badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.timeline-toggle{display:flex;gap:6px;align-items:center;background:var(--panel);cursor:pointer}.timeline-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.timeline-index{color:var(--muted);font-size:.6rem;font-weight:700}.timeline-badge{padding:3px 7px;border:1px solid var(--border);border-radius:99px;font-size:.6rem}.timeline-baseline{color:var(--accent2)}.timeline-changed{color:var(--danger)}.timeline-incomparable{color:#f2b84b}.timeline-repeat{color:var(--muted)}
+  .timeline-changes{gap:5px;margin-top:10px}.timeline-change{display:grid;grid-template-columns:minmax(100px,1fr) 70px minmax(0,1fr);gap:8px;padding:6px 8px;border-left:3px solid var(--border);font-size:.66rem}.timeline-change.tone-danger{border-color:var(--danger)}.timeline-change.tone-warn{border-color:#f2b84b}.timeline-change.tone-good{border-color:var(--accent)}.change-kind{color:var(--muted);font-size:.6rem;text-transform:capitalize}.change-values{display:flex;flex-wrap:wrap;gap:4px;min-width:0}.change-values span{overflow-wrap:anywhere;word-break:break-word}.change-arrow{color:var(--muted)}
+  .timeline-detail{margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}.timeline-group:not(:last-child){margin-bottom:10px}.timeline-group h4{margin:0 0 6px;color:var(--muted);font-size:.66rem;text-transform:uppercase}.timeline-group dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:.66rem}.timeline-group dt{color:var(--muted)}.timeline-group dd{margin:0;overflow-wrap:anywhere;word-break:break-word}.timeline-filter-note{margin-top:10px}
+  @media(max-width:800px){.timeline-change,.timeline-group dl{grid-template-columns:1fr}.timeline-entry-head{align-items:flex-start;flex-direction:column}.timeline-toggle{width:100%;justify-content:flex-start}.change-values{display:grid;grid-template-columns:1fr}}
+</style>
