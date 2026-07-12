@@ -82,9 +82,11 @@ nav a.active strong { color: var(--accent); }
 .session a:hover { color: var(--accent); }
 .session button { padding: 0; border: 0; color: var(--text); background: none; }
 
-.site-footer { display: flex; gap: 18px; align-items: center; margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font: .68rem var(--mono); }
-.site-footer span { margin-right: auto; }
-.site-footer a:hover { color: var(--accent); }
+.site-footer { margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font: .68rem var(--mono); }
+.site-footer p { margin: 0; max-width: 78ch; line-height: 1.65; }
+.site-footer .credit { margin-top: 10px; }
+.site-footer a { color: var(--accent); }
+.site-footer a:hover { color: var(--text); }
 
 main { width: min(1180px,100%); margin: auto; padding: 46px clamp(24px,4vw,58px) 80px; }
 .public-content { width: min(960px,100%); }
@@ -133,8 +135,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   .heading { display: block; }
   .login { padding: 26px 20px; }
   .login::before { margin: -26px -20px 24px; }
-  .site-footer { align-items: flex-start; flex-direction: column; gap: 10px; }
-  .site-footer span { margin-right: 0; }
 }
 
 /* Bulk's local neutral-button rule is intentionally broad. Keep its primary

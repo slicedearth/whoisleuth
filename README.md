@@ -252,6 +252,20 @@ root and is gitignored.
   timestamps, and counts distinct certificates. CT timestamps are public-log
   observation metadata — they do not prove that a site is active, malicious,
   or registered at a particular time.
+- Discover presents these structured results as **one selectable candidate per
+  registrable domain**, sorted by most recent CT observation. Each candidate's
+  observed certificate hostnames stay visible as provenance (filtering matches
+  both the canonical domain and its hostnames), and only the canonical
+  registrable domains are sent on to Bulk. The bounded CT provenance (observed
+  hostnames, first/last observation timestamps, distinct certificate count)
+  rides along through the browser-session handoff and is shown compactly in
+  Bulk beside each scanned row and in the CSV export (`ct_first_observed`,
+  `ct_last_observed`, `ct_certificate_count`, `ct_hostnames`). CT observation
+  timestamps and certificate counts are provenance only — they never feed the
+  Risk or Opportunity scores. An older backend that returns only the legacy
+  hostname list still works: Discover falls back to hostname-only candidates,
+  notes that detailed CT provenance was unavailable, and hands them off
+  without manufacturing timestamps or counts.
 - A registered result with a published abuse contact (from RDAP or WHOIS)
   gets a **Report abuse** draft - a prefilled takedown request referencing
   that domain's risk signals, with the same mailto-link-plus-copy-button
