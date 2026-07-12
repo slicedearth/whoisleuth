@@ -57,7 +57,7 @@ describe('safe fetch redirect provenance', () => {
     assert.equal(result.redirected, true);
     assert.equal(result.redirectCount, 2);
     assert.equal(result.redirectLimitReached, false);
-    assert.equal(fixture.closedDispatchers.length, 2);
+    assert.equal(fixture.closedDispatchers.length, 3);
     assert.deepEqual(fixture.resolved, ['example.com', 'example.com', 'cdn.example.net']);
     assert.deepEqual(result.hops.map(({ url, status, location }) => ({ url, status, location })), [
       { url: 'https://example.com/start', status: 301, location: 'https://example.com/next?token=public' },
@@ -80,7 +80,7 @@ describe('safe fetch redirect provenance', () => {
     assert.equal(result.redirectLimitReached, true);
     assert.equal(result.hops.length, 2);
     assert.equal(fixture.requests.length, 2);
-    assert.equal(fixture.closedDispatchers.length, 1);
+    assert.equal(fixture.closedDispatchers.length, 2);
   });
 
   test('rejects unsafe URL forms before issuing a request', async () => {
@@ -110,6 +110,39 @@ describe('safe fetch redirect provenance', () => {
     );
     assert.equal(fixture.requests.length, 1);
     assert.equal(fixture.closedDispatchers.length, 1);
+  });
+
+  test('closes a dispatcher when fetch fails before returning a response', async () => {
+    const fixture = fixtureDependencies([], {
+      fetch: async () => { throw new Error('connection failed'); },
+    });
+
+    await assert.rejects(
+      () => safeFetchDetailed('https://example.com/', {}, fixture.dependencies),
+      /connection failed/
+    );
+    assert.equal(fixture.closedDispatchers.length, 1);
+  });
+
+  test('starts graceful final cleanup without blocking response consumption', async () => {
+    let closeStarted = 0;
+    let finishClose;
+    const closeFinished = new Promise((resolve) => { finishClose = resolve; });
+    const terminal = new Response('stream remains readable', { status: 200 });
+    const fixture = fixtureDependencies([terminal], {
+      pinnedDispatcher: () => ({
+        close: () => {
+          closeStarted += 1;
+          return closeFinished;
+        },
+      }),
+    });
+
+    const result = await safeFetchDetailed('https://example.com/', {}, fixture.dependencies);
+    assert.equal(closeStarted, 1);
+    assert.equal(await result.response.text(), 'stream remains readable');
+    finishClose();
+    await closeFinished;
   });
 
 });

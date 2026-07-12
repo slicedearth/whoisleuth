@@ -81,6 +81,12 @@ describe('IPv6', () => {
     assert.equal(isPrivateAddress('64:ff9b::6440:1'), true);
   });
 
+  test('rejects the entire RFC 8215 local-use NAT64 prefix', () => {
+    assert.equal(isPrivateAddress('64:ff9b:1::a00:1'), true);
+    assert.equal(isPrivateAddress('64:ff9b:1:ffff::808:808'), true);
+    assert.equal(isPrivateAddress('64:ff9b:2::1'), false);
+  });
+
   test('flags a 6to4 address embedding a loopback IPv4 payload', () => {
     assert.equal(isPrivateAddress('2002:7f00:0001::'), true);
   });
