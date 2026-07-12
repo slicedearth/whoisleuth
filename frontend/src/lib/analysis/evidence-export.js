@@ -14,6 +14,7 @@ function rdapSource(rdap) {
   return {
     status: source.upstreamStatus === 404 ? 'not_found' : 'success',
     endpoint: source.rdapServer || null,
+    transportSecurity: source.transportSecurity || null,
     httpStatus: source.upstreamStatus ?? null,
     fetchedAt: source.fetchedAt || null,
     parsed: cloneJson(source.parsed),

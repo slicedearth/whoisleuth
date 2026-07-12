@@ -103,4 +103,111 @@ describe('structured RDAP metadata', () => {
     assert.deepEqual(parsed.events[2], { action: 'last changed', date: '2025-01-01', actor: null });
     assert.equal(parsed.lifecycle.updatedDate, '2025-01-01');
   });
+
+  test('retains multiple nested contacts per recognized role and preserves primary compatibility fields', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      entities: [{
+        handle: 'REGISTRY-PARENT',
+        roles: ['registrar'],
+        vcardArray: ['vcard', [
+          ['fn', {}, 'text', 'Primary Registrar'],
+          ['email', {}, 'text', 'FIRST@EXAMPLE.COM'],
+          ['email', {}, 'text', 'second@example.com'],
+          ['tel', {}, 'text', '+61 1'],
+          ['tel', {}, 'text', '+61 2'],
+          ['adr', {}, 'text', ['', '', '1 Main St', 'Melbourne', 'VIC', '3000', 'AU']],
+          ['adr', {}, 'text', ['', '', '2 Branch St', 'Sydney', 'NSW', '2000', 'AU']],
+        ]],
+        entities: [
+          { handle: 'ABUSE-1', roles: ['abuse'], vcardArray: ['vcard', [['email', {}, 'text', 'abuse@example.com']]] },
+          { handle: 'ABUSE-2', roles: ['abuse'], vcardArray: ['vcard', [['email', {}, 'text', 'security@example.com']]] },
+        ],
+      }],
+    });
+
+    assert.equal(parsed.registrar.name, 'Primary Registrar');
+    assert.equal(parsed.registrar.email, 'first@example.com');
+    assert.deepEqual(parsed.registrar.emails, ['first@example.com', 'second@example.com']);
+    assert.deepEqual(parsed.registrar.phones, ['+61 1', '+61 2']);
+    assert.equal(parsed.registrar.address, '1 Main St, Melbourne, VIC, 3000, AU');
+    assert.equal(parsed.registrar.addresses.length, 2);
+    assert.deepEqual(parsed.entitiesByRole.abuse.map((entity) => entity.handle), ['ABUSE-1', 'ABUSE-2']);
+    assert.equal(parsed.abuse.handle, 'ABUSE-1');
+  });
+
+  test('bounds contacts per role, repeated vCard values, public IDs, and links', () => {
+    const entities = Array.from({ length: 8 }, (_, index) => ({
+      handle: `CONTACT-${index}`,
+      roles: ['technical'],
+      publicIds: Array.from({ length: 25 }, (__, id) => ({ type: `Type ${id}`, identifier: `ID-${id}` })),
+      links: Array.from({ length: 15 }, (__, link) => ({ href: `https://example.com/${link}`, rel: 'related' })),
+      vcardArray: ['vcard', Array.from({ length: 12 }, (__, email) => ['email', {}, 'text', `user${email}@example.com`])],
+    }));
+    const parsed = parseRdap('domain', { ldhName: 'EXAMPLE.COM', entities });
+
+    assert.equal(parsed.entitiesByRole.technical.length, 5);
+    assert.equal(parsed.technical.emails.length, 8);
+    assert.equal(parsed.technical.publicIds.length, 20);
+    assert.equal(parsed.technical.links.length, 10);
+    assert.equal(parsed.technical.truncated, true);
+    assert.equal(parsed.entitiesTruncated, true);
+    assert.deepEqual(parsed.truncatedEntityRoles, ['technical']);
+  });
+
+  test('rejects malformed contact values and unsafe links without discarding valid neighbours', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      links: [
+        { href: 'javascript:alert(1)', rel: 'self' },
+        { href: 'https://rdap.example/domain/example.com', rel: 'self', title: 'Record' },
+      ],
+      entities: [{
+        handle: 'CONTACT\nFORGED',
+        roles: ['registrant', 'unrecognized-role'],
+        vcardArray: ['vcard', [
+          ['fn', {}, 'text', 'Valid Name'],
+          ['email', {}, 'text', 'bad\n@example.com'],
+          ['email', {}, 'text', 'valid@example.com'],
+          ['tel', {}, 'text', { unexpected: true }],
+        ]],
+        links: [{ href: 'data:text/plain,secret' }, { href: 'http://example.com/contact' }],
+      }],
+    });
+
+    assert.equal(parsed.links.length, 1);
+    assert.equal(parsed.links[0].href, 'https://rdap.example/domain/example.com');
+    assert.equal(parsed.registrant.handle, null);
+    assert.deepEqual(parsed.registrant.emails, ['valid@example.com']);
+    assert.equal(parsed.registrant.links.length, 1);
+    assert.equal(parsed.entitiesByRole['unrecognized-role'], undefined);
+  });
+
+  test('caps recursive entity traversal by depth and tolerates cyclic fixture objects', () => {
+    const roles = ['registrar', 'registrant', 'administrative', 'technical', 'billing', 'abuse', 'noc', 'registrant'];
+    const root = { handle: 'LEVEL-0', roles: [roles[0]], entities: [] };
+    let cursor = root;
+    for (let depth = 1; depth < roles.length; depth += 1) {
+      const child = { handle: `LEVEL-${depth}`, roles: [roles[depth]], entities: [] };
+      cursor.entities.push(child);
+      cursor = child;
+    }
+    cursor.entities.push(root);
+
+    const parsed = parseRdap('domain', { ldhName: 'EXAMPLE.COM', entities: [root] });
+    assert.equal(parsed.entitiesByRole.registrar[0].handle, 'LEVEL-0');
+    assert.equal(parsed.entitiesByRole.noc[0].handle, 'LEVEL-6');
+    assert.deepEqual(parsed.entitiesByRole.registrant.map((entity) => entity.handle), ['LEVEL-1']);
+  });
+
+  test('renders type-appropriate bounded network and ASN metadata', () => {
+    const network = parseRdap('ipv4', {
+      handle: 'NET-1', name: 'Example Network', startAddress: '192.0.2.0', endAddress: '192.0.2.255',
+      cidr0_cidrs: [{ v4prefix: '192.0.2.0', length: 24 }, null, { v4prefix: 'bad', length: 99 }],
+    });
+    const asn = parseRdap('asn', { handle: 'AS64496', startAutnum: 64496, endAutnum: 64497 });
+    assert.deepEqual(network.cidrs, ['192.0.2.0/24']);
+    assert.equal(asn.startAutnum, 64496);
+    assert.equal(asn.endAutnum, 64497);
+  });
 });

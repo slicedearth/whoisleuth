@@ -15,6 +15,7 @@ function fixtureResponse() {
     isSubdomain: true,
     rdap: {
       rdapServer: 'https://rdap.example/domain/example.com',
+      transportSecurity: 'https',
       upstreamStatus: 200,
       fetchedAt: '2026-07-11T01:02:03.000Z',
       parsed: {
@@ -60,6 +61,7 @@ describe('lookup evidence export', () => {
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.sources.rdap.endpoint, 'https://rdap.example/domain/example.com');
+    assert.equal(result.sources.rdap.transportSecurity, 'https');
     assert.equal(result.sources.rdap.raw.ldhName, 'EXAMPLE.COM');
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
