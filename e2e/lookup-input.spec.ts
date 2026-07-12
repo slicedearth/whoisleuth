@@ -212,7 +212,9 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
       availability: { applicable: false, type: 'ipv4' },
       rdap: { upstreamStatus: 200, parsed: {
         handle: 'NET-1', name: 'Example Network', startAddress: '192.0.2.0', endAddress: '192.0.2.255',
-        cidrs: ['192.0.2.0/24'], country: 'AU', networkType: 'DIRECT ALLOCATION', entitiesByRole: {},
+        cidrs: ['192.0.2.0/24'], country: 'AU', networkType: 'DIRECT ALLOCATION', statuses: ['active'],
+        lifecycle: { createdDate: '2001-02-03T04:05:06Z', updatedDate: '2025-06-07T08:09:10Z' },
+        events: [{ action: 'registration', date: '2001-02-03T04:05:06Z' }], entitiesByRole: {},
       } },
       whois: { parsed: {}, chain: [] },
       diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'not_applicable' } },
@@ -225,5 +227,38 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await expect(rdapSection.getByText('Example Network', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('192.0.2.0 – 192.0.2.255', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('CIDRs')).toBeVisible();
+  await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
+  await expect(rdapSection.getByText(/2001.*3:05:06/i).first()).toBeVisible();
   await expect(rdapSection.getByText('Domain', { exact: true })).toHaveCount(0);
+});
+
+test('ASN results retain allocation status and lifecycle metadata at narrow widths', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'AS64496', type: 'asn',
+      availability: { applicable: false, type: 'asn' },
+      rdap: { upstreamStatus: 200, parsed: {
+        handle: 'AS64496', name: 'Example Autonomous System', startAutnum: 64496, endAutnum: 64500,
+        country: 'AU', autnumType: 'DIRECT ALLOCATION', statuses: ['active'],
+        lifecycle: { createdDate: '2003-04-05T06:07:08Z', updatedDate: '2024-05-06T07:08:09Z' },
+        events: [{ action: 'registration', date: '2003-04-05T06:07:08Z' }], entitiesByRole: {},
+      } },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'not_applicable' } },
+    }),
+  }));
+
+  await page.locator('#query').fill('AS64496');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const rdapSection = page.locator('.sources > details').first();
+  await expect(rdapSection.getByText('Example Autonomous System', { exact: true })).toBeVisible();
+  await expect(rdapSection.getByText('64496 – 64500', { exact: true })).toBeVisible();
+  await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
+  await expect(rdapSection.getByText(/2003/).first()).toBeVisible();
+  await expect(rdapSection.getByText(/2024/).first()).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
 });

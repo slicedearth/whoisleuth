@@ -211,6 +211,56 @@ describe('structured RDAP metadata', () => {
     assert.equal(asn.endAutnum, 64497);
   });
 
+  test('retains shared status and lifecycle metadata for domain, network, and ASN objects', () => {
+    for (const type of ['domain', 'ipv4', 'ipv6', 'asn']) {
+      const parsed = parseRdap(type, {
+        status: ['active'],
+        events: [
+          { eventAction: 'registration', eventDate: '2020-01-02T03:04:05Z' },
+          { eventAction: 'last changed', eventDate: '2026-06-07T08:09:10Z' },
+        ],
+      });
+      assert.deepEqual(parsed.statuses, ['active'], type);
+      assert.equal(parsed.lifecycle.createdDate, '2020-01-02T03:04:05Z', type);
+      assert.equal(parsed.lifecycle.updatedDate, '2026-06-07T08:09:10Z', type);
+    }
+  });
+
+  test('discloses common status/event and network CIDR caps', () => {
+    const parsed = parseRdap('ipv4', {
+      status: Array.from({ length: 101 }, (_, index) => `status-${index}`),
+      events: Array.from({ length: 101 }, (_, index) => ({
+        eventAction: 'last changed', eventDate: `2026-01-${String((index % 28) + 1).padStart(2, '0')}`,
+      })),
+      cidr0_cidrs: Array.from({ length: 201 }, () => ({ v4prefix: '192.0.2.0', length: 24 })),
+    });
+    assert.equal(parsed.statuses.length, 100);
+    assert.equal(parsed.statusesTruncated, true);
+    assert.equal(parsed.events.length, 100);
+    assert.equal(parsed.eventsTruncated, true);
+    assert.equal(parsed.cidrs.length, 200);
+    assert.equal(parsed.cidrsTruncated, true);
+  });
+
+  test('rejects malformed and cross-family CIDR extension entries without losing valid neighbours', () => {
+    const ipv4 = parseRdap('ipv4', {
+      cidr0_cidrs: [
+        { v4prefix: '192.0.2.0', length: 24 },
+        { v4prefix: 'not-an-address', length: 24 },
+        { v6prefix: '2001:db8::', length: 32 },
+      ],
+    });
+    const ipv6 = parseRdap('ipv6', {
+      cidr0_cidrs: [
+        { v6prefix: '2001:db8::', length: 32 },
+        { v6prefix: 'not-an-address', length: 32 },
+        { v4prefix: '192.0.2.0', length: 24 },
+      ],
+    });
+    assert.deepEqual(ipv4.cidrs, ['192.0.2.0/24']);
+    assert.deepEqual(ipv6.cidrs, ['2001:db8::/32']);
+  });
+
   test('normalizes conformance, language, and explicit redaction provenance', () => {
     const parsed = parseRdap('domain', {
       objectClassName: 'DOMAIN',

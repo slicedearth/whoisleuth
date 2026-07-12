@@ -78,6 +78,27 @@ describe('RDAP endpoint failover', () => {
     assert.equal(record.attempts[0].selected, true);
   });
 
+  test('treats authoritative no-object responses consistently across query types', async () => {
+    for (const [type, value] of [
+      ['domain', 'free.example'],
+      ['ipv4', '192.0.2.1'],
+      ['ipv6', '2001:db8::1'],
+      ['asn', 'AS64496'],
+    ]) {
+      let calls = 0;
+      const record = await fetchRdapFromBases(type, value, [
+        'https://first.example/rdap', 'https://second.example/rdap',
+      ], async () => {
+        calls += 1;
+        return { status: 404, ok: false, text: JSON.stringify({ errorCode: 404 }) };
+      });
+      assert.equal(calls, 1, type);
+      assert.equal(record.upstreamStatus, 404, type);
+      assert.equal(record.parsed, null, type);
+      assert.equal(record.attempts[0].outcome, 'not_found', type);
+    }
+  });
+
   test('rejects service failures rather than returning them as object data', async () => {
     await assert.rejects(
       fetchRdapFromBases('domain', 'example.com', ['https://only.example/rdap'], async () => ({

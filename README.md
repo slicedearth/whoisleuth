@@ -201,6 +201,11 @@ root and is gitignored.
   Capped contact, redaction, and variant inventories are labelled rather than
   presented as complete; the raw upstream response remains available only in
   the single-lookup view and its deliberate evidence export.
+- IPv4, IPv6, and ASN RDAP results retain their bounded status and lifecycle
+  metadata instead of treating those fields as domain-only. Published CIDR0
+  prefixes are accepted only for the requested address family and malformed
+  neighbouring entries are discarded; status, event, and CIDR caps are
+  disclosed in normalized results and the Lookup view.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
