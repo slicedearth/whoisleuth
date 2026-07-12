@@ -241,6 +241,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   supported.
 - Use the keyword, typosquat, or Certificate Transparency discovery tools to
   select candidate domains and send them directly to Bulk.
+- New network evidence uses an additive, versioned observation envelope for
+  source health, timestamp, duration, completeness, truncation, limitations,
+  and bounded diagnostics. DNS and Certificate Transparency are the first
+  adopters; their established response fields remain unchanged, and older
+  records without an envelope remain valid.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
 
@@ -272,7 +277,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   are contextual review indicators, never a maliciousness verdict, and do not
   change the Risk score. The typosquat generator uses the same curated mapping
   so generated confusable candidates and result explanations stay consistent.
-  Lookup evidence schema version 4 retains the analysis supplied to the
+  Lookup evidence schema version 5 retains the analysis supplied to the
   export; Bulk CSV exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it

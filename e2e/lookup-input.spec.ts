@@ -306,7 +306,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await expect(rdapSection.getByText('192.0.2.0 – 192.0.2.255', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('CIDRs')).toBeVisible();
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
-  await expect(rdapSection.getByText(/2001.*3:05:06/i).first()).toBeVisible();
+  await expect(rdapSection.locator('time[datetime="2001-02-03T04:05:06.000Z"]')).toBeVisible();
   await expect(rdapSection.getByText('Domain', { exact: true })).toHaveCount(0);
 });
 
@@ -334,8 +334,8 @@ test('ASN results retain allocation status and lifecycle metadata at narrow widt
   await expect(rdapSection.getByText('Example Autonomous System', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('64496 – 64500', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
-  await expect(rdapSection.getByText(/2003/).first()).toBeVisible();
-  await expect(rdapSection.getByText(/2024/).first()).toBeVisible();
+  await expect(rdapSection.locator('time[datetime="2003-04-05T06:07:08.000Z"]')).toBeVisible();
+  await expect(rdapSection.locator('time[datetime="2024-05-06T07:08:09.000Z"]')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

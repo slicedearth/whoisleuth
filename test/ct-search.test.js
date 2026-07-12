@@ -156,12 +156,12 @@ describe('searchCertificateTransparency', () => {
 
     const result = await searchCertificateTransparency('   ');
 
-    assert.deepStrictEqual(result, {
-      domains: [],
-      certCount: 0,
-      truncated: false,
-      matches: [],
+    assert.deepStrictEqual({ domains: result.domains, certCount: result.certCount, truncated: result.truncated, matches: result.matches }, {
+      domains: [], certCount: 0, truncated: false, matches: [],
     });
+    assert.equal(result.observation.version, 1);
+    assert.equal(result.observation.status, 'success');
+    assert.equal(result.observation.source, 'certificate_transparency');
     assert.equal(called, false);
   });
 
@@ -180,6 +180,8 @@ describe('searchCertificateTransparency', () => {
     assert.equal(result.matches.length, 1);
     assert.equal(result.matches[0].domain, 'example.com');
     assert.equal(result.matches[0].certificateCount, 1);
+    assert.equal(result.observation.complete, true);
+    assert.equal(result.observation.diagnostics.certificateRows, 2);
   });
 
   test('rejects a non-array upstream JSON response cleanly', async (t) => {

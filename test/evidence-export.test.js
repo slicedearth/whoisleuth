@@ -62,7 +62,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 4);
+    assert.equal(result.schemaVersion, 5);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -92,7 +92,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 4);
+    assert.equal(result.schemaVersion, 5);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });
@@ -100,12 +100,13 @@ describe('lookup evidence export', () => {
   test('retains bounded DNS provenance already present in the availability assessment', () => {
     const response = fixtureResponse();
     response.availability.dns = {
-      status: 'partial', source: 'dns', complete: false, truncated: false,
+      version: 1, status: 'partial', source: 'dns', complete: false, truncated: false,
       records: { a: ['192.0.2.1'], caa: [{ critical: 0, tag: 'issue', value: 'ca.example' }] },
       diagnostics: { a: { status: 'success' }, caa: { status: 'error', error: 'resolver timed out' } },
     };
     const result = evidence.buildLookupEvidence(response);
     assert.deepEqual(result.analysis.availability.dns.records.a, ['192.0.2.1']);
+    assert.equal(result.analysis.availability.dns.version, 1);
     assert.equal(result.analysis.availability.dns.diagnostics.caa.status, 'error');
   });
 

@@ -53,6 +53,28 @@ and deliberate evidence exports retain the bounded observation. Compact Bulk
 responses may display or export it, but watchlists and analyst cases continue
 to store only their existing compact compatibility fields.
 
+## Shared observation envelope
+
+New network-derived evidence can add a version-1 `observation` envelope (or,
+for DNS compatibility, expose the same envelope fields on
+`availability.dns`) with:
+
+- Established source status: `success`, `partial`, `not_found`, `skipped`,
+  `error`, `unsupported`, or `not_applicable`.
+- Canonical `observedAt`, optional measured `durationMs`, and `source`.
+- `scanMode` only when the existing `fast` or `deep` mode applies; otherwise
+  it is `null` rather than an invented profile.
+- Explicit `complete` and `truncated` booleans.
+- Bounded, control-safe `limitations` and shallow source diagnostics.
+
+The envelope is additive and never replaces a source's existing payload or
+compatibility fields. Readers distinguish absent envelopes (legacy data),
+supported version 1, malformed values, and unsupported future versions. An
+absent envelope must not cause an otherwise valid legacy record to be rejected
+or rewritten. DNS and Certificate Transparency are the first adopters; other
+registry diagnostics retain their existing versioned contract until an
+additive migration provides material value.
+
 ## Diagnostics version 2
 
 `diagnostics.version` is `2`. The source objects use explicit status values:
@@ -220,11 +242,12 @@ publication difference.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `4`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `5`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 4 additionally retains the bounded, versioned
-browser-side IDN/script/confusable analysis supplied by Lookup. It is
+registry comparison. Version 5 retains the bounded, versioned browser-side
+IDN/script/confusable analysis introduced in version 4 and the additive
+network-observation provenance supplied by deep Lookup. It is
 intentionally rich and may contain public registry
 contact data. The file is generated locally and is the user's responsibility
 after download.
