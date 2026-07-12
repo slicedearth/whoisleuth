@@ -8,6 +8,23 @@ before(async () => {
 
 const ISO = '2026-05-01T00:00:00.000Z';
 const LATER = '2026-06-01T00:00:00.000Z';
+const LATEST = '2026-07-01T00:00:00.000Z';
+const NOW = '2026-07-12T00:00:00.000Z';
+const SAFE = /^[A-Za-z0-9_-]{1,64}$/;
+
+// A material deep capture (explicit depth + deep-scan signals) used across the
+// comparison and dedup suites.
+function deepEvidence(overrides = {}) {
+  return {
+    scanDepth: 'deep',
+    availability: 'registered',
+    riskScore: 40,
+    registrar: 'Example Registrar',
+    activityStatus: 'active',
+    hasMx: true,
+    ...overrides,
+  };
+}
 
 describe('domain normalization', () => {
   test('lowercases, trims, and strips a single terminal root dot', () => {
@@ -95,6 +112,7 @@ describe('case creation and updates', () => {
     assert.equal(record.notes[0].body, 'first note');
     assert.equal(record.createdAt, ISO);
     assert.equal(record.updatedAt, ISO);
+    assert.deepEqual(record.evidenceHistory, []);
   });
 
   test('createCase rejects an invalid domain', () => {
@@ -139,8 +157,6 @@ describe('duplicate-domain handling', () => {
 });
 
 describe('case ids are unique, stable, and safe', () => {
-  const SAFE = /^[A-Za-z0-9_-]{1,64}$/;
-
   test('repairs unsafe ids into the safe format', () => {
     const store = model.normalizeCaseStore([
       { domain: 'a.example', id: 'has spaces and !@#', updatedAt: ISO },
@@ -200,7 +216,7 @@ describe('imports cannot reset local analyst decisions', () => {
         status: 'escalated',
         disposition: 'confirmed_abuse',
         source: 'bulk',
-        evidence: { availability: 'registered', riskScore: 90 },
+        evidence: { availability: 'registered', riskScore: 90, capturedAt: LATER },
         tags: ['local'],
         notes: [{ id: 'ln', body: 'local note', createdAt: LATER }],
         createdAt: ISO,
@@ -215,7 +231,8 @@ describe('imports cannot reset local analyst decisions', () => {
     assert.equal(merged.status, 'escalated');
     assert.equal(merged.disposition, 'confirmed_abuse');
     assert.equal(merged.source, 'bulk');
-    assert.equal(merged.evidence.availability, 'registered');
+    assert.equal(model.latestCaseEvidence(merged).availability, 'registered');
+    assert.equal(merged.evidenceHistory.length, 1);
     assert.equal(result.updated, 1);
   });
 
@@ -227,11 +244,11 @@ describe('imports cannot reset local analyst decisions', () => {
     assert.equal(merged.status, 'escalated');
     assert.equal(merged.disposition, 'confirmed_abuse');
     assert.equal(merged.source, 'bulk');
-    assert.equal(merged.evidence.availability, 'registered');
+    assert.equal(model.latestCaseEvidence(merged).availability, 'registered');
+    assert.equal(merged.evidenceHistory.length, 1);
   });
 
   test('a partial import that is newer but omits a field cannot blank that field', () => {
-    // Newer timestamp, but no status -> local escalated must survive.
     const result = model.mergeCases(localCase(), [
       { domain: 'shared.example', disposition: 'false_positive', updatedAt: '2026-07-01T00:00:00.000Z' },
     ]);
@@ -306,33 +323,611 @@ describe('note and tag limits', () => {
   });
 });
 
-describe('evidence snapshot stays bounded', () => {
-  test('keeps a small scalar set and ignores everything else', () => {
-    const record = model.normalizeCase(
-      {
-        domain: 'bad.example',
-        evidence: {
-          availability: 'registered',
-          riskScore: 88.6,
-          registrar: 'Example Registrar',
-          activityStatus: 'active',
-          rawWhois: 'x'.repeat(100000),
-          nameservers: ['a', 'b'],
-        },
-      },
-      undefined,
-      ISO,
-    );
-    assert.deepEqual(Object.keys(record.evidence).sort(), ['activityStatus', 'availability', 'capturedAt', 'registrar', 'riskScore']);
-    assert.equal(record.evidence.riskScore, 89);
-    assert.ok(record.evidence.registrar.length <= model.MAX_EVIDENCE_STRING_LENGTH);
+describe('evidence migration (v1 -> v2)', () => {
+  function v1Case(evidence, extra = {}) {
+    return { domain: 'mig.example', source: 'lookup', createdAt: ISO, updatedAt: LATER, evidence, ...extra };
+  }
+
+  test('a v1 evidence object migrates into a one-entry history', () => {
+    const record = model.normalizeCase(v1Case({ availability: 'registered', riskScore: 80, registrar: 'Reg', activityStatus: 'active', capturedAt: ISO }), undefined, NOW);
+    assert.equal(record.evidenceHistory.length, 1);
+    const snap = record.evidenceHistory[0];
+    assert.equal(snap.availability, 'registered');
+    assert.equal(snap.riskScore, 80);
+    assert.equal(snap.registrar, 'Reg');
+    assert.equal(snap.capturedAt, ISO);
+    assert.equal(snap.firstCapturedAt, ISO);
+    assert.equal(snap.source, 'lookup'); // inferred from the case source
+    assert.equal(snap.scanDepth, 'unknown'); // legacy evidence has no trustworthy depth
   });
 
-  test('clamps risk score and drops empty evidence entirely', () => {
-    const clamped = model.normalizeCase({ domain: 'bad.example', evidence: { riskScore: 5000 } }, undefined, ISO);
-    assert.equal(clamped.evidence.riskScore, 100);
-    const empty = model.normalizeCase({ domain: 'bad.example', evidence: { availability: '', registrar: null } }, undefined, ISO);
-    assert.equal(empty.evidence, null);
+  test('all analyst-authored fields survive the migration', () => {
+    const record = model.normalizeCase(
+      v1Case({ availability: 'registered' }, {
+        status: 'escalated', disposition: 'confirmed_abuse', tags: ['keep'],
+        notes: [{ id: 'n1', body: 'analyst note', createdAt: ISO }], id: 'stable-1',
+      }),
+      undefined,
+      NOW,
+    );
+    assert.equal(record.id, 'stable-1');
+    assert.equal(record.domain, 'mig.example');
+    assert.equal(record.status, 'escalated');
+    assert.equal(record.disposition, 'confirmed_abuse');
+    assert.deepEqual(record.tags, ['keep']);
+    assert.equal(record.notes[0].body, 'analyst note');
+    assert.equal(record.source, 'lookup');
+    assert.equal(record.createdAt, ISO);
+    assert.equal(record.updatedAt, LATER);
+  });
+
+  test('a valid capturedAt survives; an invalid one falls back deterministically to updatedAt', () => {
+    const good = model.normalizeCase(v1Case({ availability: 'registered', capturedAt: ISO }), undefined, NOW);
+    assert.equal(good.evidenceHistory[0].capturedAt, ISO);
+    const bad = model.normalizeCase(v1Case({ availability: 'registered', capturedAt: 'not-a-date' }), undefined, NOW);
+    assert.equal(bad.evidenceHistory[0].capturedAt, LATER); // case updatedAt
+  });
+
+  test('migration is idempotent and does not duplicate history on a second load', () => {
+    const once = model.normalizeCase(v1Case({ availability: 'registered', riskScore: 55, capturedAt: ISO }), undefined, NOW);
+    const twice = model.normalizeCase(once, undefined, NOW);
+    assert.equal(twice.evidenceHistory.length, 1);
+    assert.deepEqual(twice.evidenceHistory, once.evidenceHistory);
+  });
+
+  test('a v2 record normalizes without inventing extra snapshots', () => {
+    const v2 = model.normalizeCase(v1Case({ availability: 'registered', capturedAt: ISO }), undefined, NOW);
+    // Re-feed the same v2 record but with a duplicate-material snapshot appended.
+    const dupInput = { ...v2, evidenceHistory: [v2.evidenceHistory[0], { ...v2.evidenceHistory[0], capturedAt: LATER }] };
+    const renorm = model.normalizeCase(dupInput, undefined, NOW);
+    assert.equal(renorm.evidenceHistory.length, 1);
+    assert.equal(renorm.evidenceHistory[0].firstCapturedAt, ISO);
+    assert.equal(renorm.evidenceHistory[0].capturedAt, LATER);
+  });
+
+  test('the legacy `evidence` field is absent from normalized v2 output', () => {
+    const record = model.normalizeCase(v1Case({ availability: 'registered' }), undefined, NOW);
+    assert.equal('evidence' in record, false);
+    assert.ok(Array.isArray(record.evidenceHistory));
+  });
+});
+
+describe('snapshot normalization', () => {
+  test('bounds scalars, arrays, and factor families', () => {
+    const snap = model.normalizeSnapshot(
+      {
+        availability: 'registered',
+        registrar: 'r'.repeat(500),
+        pageTitle: 't'.repeat(500),
+        websiteProbeDetail: 'd'.repeat(500),
+        nameservers: Array.from({ length: 30 }, (_, i) => `ns${i}.example`),
+        mutationTypes: Array.from({ length: 40 }, (_, i) => `mut-${i}`),
+        riskFactors: Array.from({ length: 40 }, (_, i) => ({ label: `f${i}`, points: i })),
+        opportunityFactors: Array.from({ length: 40 }, (_, i) => ({ label: `o${i}`, delta: -i })),
+      },
+      { fallback: ISO },
+    );
+    assert.ok(snap.registrar.length <= model.MAX_EVIDENCE_STRING_LENGTH);
+    assert.ok(snap.pageTitle.length <= model.MAX_EVIDENCE_TITLE_LENGTH);
+    assert.ok(snap.websiteProbeDetail.length <= model.MAX_EVIDENCE_DETAIL_LENGTH);
+    assert.equal(snap.nameservers.length, model.MAX_EVIDENCE_NAMESERVERS);
+    assert.equal(snap.mutationTypes.length, model.MAX_EVIDENCE_MUTATIONS);
+    assert.equal(snap.riskFactors.length, model.MAX_EVIDENCE_FACTORS);
+    assert.equal(snap.opportunityFactors.length, model.MAX_EVIDENCE_FACTORS);
+    // The scoring module's `delta` is accepted and stored as `points`.
+    assert.equal(snap.opportunityFactors[0].points, 0);
+  });
+
+  test('clamps scores to 0-100', () => {
+    const high = model.normalizeSnapshot({ riskScore: 5000, opportunityScore: 250.7 }, { fallback: ISO });
+    assert.equal(high.riskScore, 100);
+    assert.equal(high.opportunityScore, 100);
+    const low = model.normalizeSnapshot({ riskScore: -20 }, { fallback: ISO });
+    assert.equal(low.riskScore, 0);
+  });
+
+  test('preserves null vs false for booleans', () => {
+    const snap = model.normalizeSnapshot({ availability: 'registered', hasMx: false, hasSpf: true }, { fallback: ISO });
+    assert.equal(snap.hasMx, false); // an observed "no MX", not missing data
+    assert.equal(snap.hasSpf, true);
+    assert.equal(snap.hasDmarc, null); // absent -> null, never coerced to false
+  });
+
+  test('normalizes nameservers case-insensitively, strips terminal dots, dedups, and sorts', () => {
+    const snap = model.normalizeSnapshot({ nameservers: ['B.NS.example.', 'a.ns.example', 'A.NS.example', 'a.ns.example.'] }, { fallback: ISO });
+    assert.deepEqual(snap.nameservers, ['a.ns.example', 'b.ns.example']);
+  });
+
+  test('drops a snapshot that carries no material evidence', () => {
+    assert.equal(model.normalizeSnapshot({}, { fallback: ISO }), null);
+    assert.equal(model.normalizeSnapshot({ availability: 'unknown' }, { fallback: ISO }), null);
+    assert.equal(model.normalizeSnapshot({ confidence: 'high' }, { fallback: ISO }), null);
+    assert.notEqual(model.normalizeSnapshot({ availability: 'registered' }, { fallback: ISO }), null);
+    // Material, but no placeable time and no fallback -> skipped.
+    assert.equal(model.normalizeSnapshot({ availability: 'registered' }, {}), null);
+  });
+
+  test('discards unknown properties', () => {
+    const snap = model.normalizeSnapshot({ availability: 'registered', rawWhois: 'x'.repeat(9999), cookies: 'y', foo: 1 }, { fallback: ISO });
+    assert.equal('rawWhois' in snap, false);
+    assert.equal('cookies' in snap, false);
+    assert.equal('foo' in snap, false);
+  });
+
+  test('produces stable, DOM-safe ids and fingerprints', () => {
+    const a = model.normalizeSnapshot(deepEvidence(), { fallback: ISO });
+    const b = model.normalizeSnapshot(deepEvidence(), { fallback: LATER, source: 'bulk' });
+    assert.equal(a.fingerprint, b.fingerprint); // identity ignores time and source
+    assert.equal(a.id, b.id);
+    assert.match(a.id, SAFE);
+  });
+
+  test('validates scanDepth as a machine enum and defaults to unknown', () => {
+    assert.equal(model.normalizeSnapshot({ availability: 'registered', scanDepth: 'deep' }, { fallback: ISO }).scanDepth, 'deep');
+    assert.equal(model.normalizeSnapshot({ availability: 'registered', scanDepth: 'fast' }, { fallback: ISO }).scanDepth, 'fast');
+    assert.equal(model.normalizeSnapshot({ availability: 'registered', scanDepth: 'turbo' }, { fallback: ISO }).scanDepth, 'unknown');
+    assert.equal(model.normalizeSnapshot({ availability: 'registered' }, { fallback: ISO }).scanDepth, 'unknown');
+  });
+
+  test('a fast capture stores unevaluated deep signals as null, not false', () => {
+    // A profile default of `false` for a fast scan is unevaluated, not observed.
+    const fast = model.normalizeSnapshot(
+      { scanDepth: 'fast', availability: 'registered', riskScore: 20, faviconMatch: false, hasMx: false, hasPasswordField: false },
+      { fallback: ISO },
+    );
+    assert.equal(fast.faviconMatch, null);
+    assert.equal(fast.hasMx, null);
+    assert.equal(fast.hasPasswordField, null);
+    assert.equal(fast.riskScore, 20); // a fast risk score is still kept
+    // An unknown-depth capture is trusted: an observed false stays false.
+    const unknown = model.normalizeSnapshot({ availability: 'registered', hasMx: false }, { fallback: ISO });
+    assert.equal(unknown.hasMx, false);
+  });
+
+  test('captures of different depth are not confused (distinct fingerprints)', () => {
+    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered' }, { fallback: ISO });
+    const deep = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered' }, { fallback: ISO });
+    assert.notEqual(fast.fingerprint, deep.fingerprint);
+  });
+
+  test('factor pairs are deduplicated and sorted so input order cannot shift the fingerprint', () => {
+    const a = model.normalizeSnapshot({ availability: 'registered', riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }, { label: 'A', points: 40 }] }, { fallback: ISO });
+    const b = model.normalizeSnapshot({ availability: 'registered', riskFactors: [{ label: 'B', points: 30 }, { label: 'A', points: 40 }] }, { fallback: ISO });
+    assert.deepEqual(a.riskFactors, [{ label: 'A', points: 40 }, { label: 'B', points: 30 }]); // deduped + sorted (points desc)
+    assert.equal(a.fingerprint, b.fingerprint); // order-independent
+  });
+});
+
+describe('snapshot deduplication and timeline advance', () => {
+  test('re-capturing identical evidence does not append a new entry', () => {
+    let cases = model.openOrCreateCase([], { domain: 'dedup.example', source: 'lookup', evidence: deepEvidence() }, ISO).cases;
+    cases = model.updateCase(cases, cases[0].id, { evidence: deepEvidence() }, LATER).cases;
+    assert.equal(cases[0].evidenceHistory.length, 1);
+  });
+
+  test('a later identical capture advances capturedAt but keeps firstCapturedAt', () => {
+    let cases = model.openOrCreateCase([], { domain: 'dedup.example', source: 'lookup', evidence: deepEvidence() }, ISO).cases;
+    cases = model.updateCase(cases, cases[0].id, { evidence: deepEvidence() }, LATER).cases;
+    const snap = cases[0].evidenceHistory[0];
+    assert.equal(snap.firstCapturedAt, ISO);
+    assert.equal(snap.capturedAt, LATER);
+  });
+
+  test('an older identical observation cannot move capturedAt backwards', () => {
+    const history = model.normalizeEvidenceHistory(
+      [
+        { ...deepEvidence(), capturedAt: LATER },
+        { ...deepEvidence(), capturedAt: ISO },
+      ],
+      { source: 'lookup' },
+    );
+    assert.equal(history.length, 1);
+    assert.equal(history[0].firstCapturedAt, ISO);
+    assert.equal(history[0].capturedAt, LATER);
+  });
+
+  test('materially different evidence creates a second snapshot', () => {
+    let cases = model.openOrCreateCase([], { domain: 'dedup.example', source: 'lookup', evidence: deepEvidence({ riskScore: 40 }) }, ISO).cases;
+    cases = model.updateCase(cases, cases[0].id, { evidence: deepEvidence({ riskScore: 85 }) }, LATER).cases;
+    assert.equal(cases[0].evidenceHistory.length, 2);
+  });
+
+  test('dedup compares full material, so a near-identical capture stays distinct', () => {
+    const history = model.normalizeEvidenceHistory(
+      [
+        { ...deepEvidence(), nameservers: ['a.ns.example'], capturedAt: ISO },
+        { ...deepEvidence(), nameservers: ['b.ns.example'], capturedAt: LATER },
+      ],
+      { source: 'lookup' },
+    );
+    assert.equal(history.length, 2);
+    assert.notEqual(history[0].fingerprint, history[1].fingerprint);
+  });
+
+  test('a more informative source wins when identical evidence is re-seen', () => {
+    const history = model.normalizeEvidenceHistory(
+      [
+        { ...deepEvidence(), capturedAt: ISO, source: 'import' },
+        { ...deepEvidence(), capturedAt: LATER, source: 'lookup' },
+      ],
+      { source: 'unknown' },
+    );
+    assert.equal(history.length, 1);
+    assert.equal(history[0].source, 'lookup');
+  });
+
+  test('a rank tie resolves deterministically regardless of input order', () => {
+    // lookup and bulk share a rank; the later observation wins, independent of order.
+    const forward = model.normalizeEvidenceHistory(
+      [{ ...deepEvidence(), capturedAt: ISO, source: 'bulk' }, { ...deepEvidence(), capturedAt: LATER, source: 'lookup' }],
+      { source: 'unknown' },
+    );
+    const reversed = model.normalizeEvidenceHistory(
+      [{ ...deepEvidence(), capturedAt: LATER, source: 'lookup' }, { ...deepEvidence(), capturedAt: ISO, source: 'bulk' }],
+      { source: 'unknown' },
+    );
+    assert.equal(forward[0].source, 'lookup');
+    assert.equal(reversed[0].source, 'lookup');
+    assert.equal(forward[0].source, reversed[0].source);
+  });
+
+  test('a rank-and-time tie falls back to a stable lexical source', () => {
+    const forward = model.normalizeEvidenceHistory(
+      [{ ...deepEvidence(), capturedAt: ISO, source: 'lookup' }, { ...deepEvidence(), capturedAt: ISO, source: 'bulk' }],
+      { source: 'unknown' },
+    );
+    const reversed = model.normalizeEvidenceHistory(
+      [{ ...deepEvidence(), capturedAt: ISO, source: 'bulk' }, { ...deepEvidence(), capturedAt: ISO, source: 'lookup' }],
+      { source: 'unknown' },
+    );
+    assert.equal(forward[0].source, 'bulk'); // 'bulk' < 'lookup'
+    assert.equal(reversed[0].source, 'bulk');
+  });
+
+  test('identical factor sets in different order deduplicate to one entry', () => {
+    const history = model.normalizeEvidenceHistory(
+      [
+        { ...deepEvidence(), riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }], capturedAt: ISO },
+        { ...deepEvidence(), riskFactors: [{ label: 'B', points: 30 }, { label: 'A', points: 40 }], capturedAt: LATER },
+      ],
+      { source: 'lookup' },
+    );
+    assert.equal(history.length, 1);
+  });
+});
+
+describe('evidence history retention', () => {
+  test('history never exceeds the per-case bound and keeps the newest', () => {
+    const raws = Array.from({ length: model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE + 10 }, (_, i) => ({
+      availability: 'registered',
+      riskScore: i, // distinct material each time
+      capturedAt: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+    }));
+    const history = model.normalizeEvidenceHistory(raws, { source: 'lookup' });
+    assert.equal(history.length, model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE);
+    // Newest survive: the retained window ends at the newest capture.
+    assert.equal(history.at(-1).capturedAt, raws.at(-1).capturedAt);
+    assert.equal(history.at(-1).riskScore, raws.at(-1).riskScore);
+  });
+
+  test('retention is deterministic across repeated normalization', () => {
+    const raws = Array.from({ length: 40 }, (_, i) => ({
+      availability: 'registered',
+      riskScore: i,
+      capturedAt: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+    }));
+    const once = model.normalizeEvidenceHistory(raws, { source: 'lookup' });
+    const twice = model.normalizeEvidenceHistory(once, { source: 'lookup' });
+    assert.deepEqual(twice, once);
+  });
+});
+
+describe('importing evidence history', () => {
+  test('a v1 export imports its evidence as one snapshot without stamping it "now"', () => {
+    const payload = {
+      version: 1,
+      cases: [{ domain: 'v1.example', source: 'lookup', evidence: { availability: 'registered', riskScore: 70 }, createdAt: ISO, updatedAt: ISO }],
+    };
+    const result = model.mergeCases([], payload);
+    const record = result.cases[0];
+    assert.equal(record.evidenceHistory.length, 1);
+    // No capturedAt in the evidence -> falls back to the imported (older) timestamp, not "now".
+    assert.equal(record.evidenceHistory[0].capturedAt, ISO);
+    assert.equal(record.evidenceHistory[0].source, 'import');
+  });
+
+  test('a v2 export round-trips its history and re-imports idempotently', () => {
+    const source = model.openOrCreateCase([], { domain: 'rt.example', source: 'lookup', evidence: deepEvidence() }, ISO).cases;
+    const withSecond = model.updateCase(source, source[0].id, { evidence: deepEvidence({ riskScore: 90 }) }, LATER).cases;
+    const payload = model.buildCaseExport(withSecond, LATEST);
+    assert.equal(payload.version, model.CASE_SCHEMA_VERSION);
+
+    const first = model.mergeCases([], payload);
+    assert.equal(first.cases[0].evidenceHistory.length, 2);
+    const second = model.mergeCases(first.cases, payload);
+    assert.equal(second.cases[0].evidenceHistory.length, 2);
+    assert.deepEqual(second.cases[0].evidenceHistory, first.cases[0].evidenceHistory);
+  });
+
+  test('the same material with a different snapshot id deduplicates on import', () => {
+    const local = model.normalizeCaseStore([
+      { domain: 'shared.example', evidenceHistory: [{ ...deepEvidence(), id: 'ev-local', capturedAt: ISO }], updatedAt: ISO },
+    ]).cases;
+    const imported = [{ domain: 'shared.example', evidenceHistory: [{ ...deepEvidence(), id: 'ev-imported', capturedAt: LATER }], updatedAt: LATER }];
+    const merged = model.mergeCases(local, imported).cases[0];
+    assert.equal(merged.evidenceHistory.length, 1);
+    assert.equal(merged.evidenceHistory[0].firstCapturedAt, ISO);
+    assert.equal(merged.evidenceHistory[0].capturedAt, LATER);
+  });
+
+  test('distinct imported evidence merges additively', () => {
+    const local = model.normalizeCaseStore([
+      { domain: 'shared.example', evidenceHistory: [{ ...deepEvidence({ riskScore: 20 }), capturedAt: ISO }], updatedAt: ISO },
+    ]).cases;
+    const imported = [{ domain: 'shared.example', evidenceHistory: [{ ...deepEvidence({ riskScore: 88 }), capturedAt: LATER }], updatedAt: LATER }];
+    const merged = model.mergeCases(local, imported).cases[0];
+    assert.equal(merged.evidenceHistory.length, 2);
+  });
+
+  test('malformed snapshots are skipped and never create empty timeline entries', () => {
+    const local = model.normalizeCaseStore([{ domain: 'shared.example', updatedAt: ISO }]).cases;
+    const imported = [{ domain: 'shared.example', evidenceHistory: [null, 'garbage', {}, { availability: 'unknown' }, { rawWhois: 'x' }], updatedAt: LATER }];
+    const merged = model.mergeCases(local, imported).cases[0];
+    assert.deepEqual(merged.evidenceHistory, []);
+  });
+
+  test('a missing imported timestamp does not become the newest observation', () => {
+    const local = model.normalizeCaseStore([
+      { domain: 'shared.example', evidenceHistory: [{ ...deepEvidence({ riskScore: 30 }), capturedAt: LATEST }], updatedAt: LATEST },
+    ]).cases;
+    // Imported snapshot has no capturedAt; the imported record is older (ISO).
+    const imported = [{ domain: 'shared.example', evidenceHistory: [{ ...deepEvidence({ riskScore: 95 }) }], createdAt: ISO, updatedAt: ISO }];
+    const merged = model.mergeCases(local, imported).cases[0];
+    assert.equal(merged.evidenceHistory.length, 2);
+    // The local capture (LATEST) is still the latest; the timestamp-less import fell back to ISO.
+    assert.equal(model.latestCaseEvidence(merged).riskScore, 30);
+    assert.equal(model.latestCaseEvidence(merged).capturedAt, LATEST);
+  });
+
+  test('re-importing the same payload is idempotent and keeps the local case id', () => {
+    const local = model.normalizeCaseStore([
+      { domain: 'shared.example', id: 'local-1', evidenceHistory: [{ ...deepEvidence(), capturedAt: ISO }], updatedAt: ISO },
+    ]).cases;
+    const payload = model.buildCaseExport(local, LATER);
+    const once = model.mergeCases(local, payload).cases[0];
+    const twice = model.mergeCases([once], payload).cases[0];
+    assert.equal(once.id, 'local-1');
+    assert.equal(twice.id, 'local-1');
+    assert.equal(twice.evidenceHistory.length, 1);
+  });
+});
+
+describe('compareCaseEvidence', () => {
+  const snap = (overrides, at = ISO) => model.normalizeSnapshot(deepEvidence(overrides), { fallback: at });
+  const find = (changes, field) => changes.find((c) => c.field === field);
+
+  test('reports a risk-score increase with a danger tone', () => {
+    const changes = model.compareCaseEvidence(snap({ riskScore: 40 }), snap({ riskScore: 85 }));
+    const change = find(changes, 'riskScore');
+    assert.ok(change);
+    assert.equal(change.before, 40);
+    assert.equal(change.after, 85);
+    assert.equal(change.tone, 'danger');
+  });
+
+  test('reports an availability transition into a registered-like state', () => {
+    const changes = model.compareCaseEvidence(snap({ availability: 'available' }), snap({ availability: 'registered' }));
+    const change = find(changes, 'availability');
+    assert.ok(change);
+    assert.equal(change.tone, 'danger');
+  });
+
+  test('reports mail and web signal changes', () => {
+    const changes = model.compareCaseEvidence(snap({ hasMx: false, hasPasswordField: false }), snap({ hasMx: true, hasPasswordField: true }));
+    assert.equal(find(changes, 'hasMx').tone, 'warn');
+    assert.equal(find(changes, 'hasPasswordField').tone, 'danger');
+  });
+
+  test('treats nameservers as a set and reports genuine set changes', () => {
+    const changes = model.compareCaseEvidence(
+      snap({ nameservers: ['a.ns.example', 'b.ns.example'] }),
+      snap({ nameservers: ['c.ns.example', 'b.ns.example'] }),
+    );
+    assert.ok(find(changes, 'nameservers'));
+  });
+
+  test('ignores casing-only and order-only differences', () => {
+    const changes = model.compareCaseEvidence(
+      snap({ registrar: 'GoDaddy', nameservers: ['A.NS.example', 'b.ns.example'] }),
+      snap({ registrar: 'godaddy', nameservers: ['b.ns.example.', 'a.ns.example'] }),
+    );
+    assert.equal(changes.length, 0);
+  });
+
+  test('does not report a favicon removal when the newer capture is a fast scan (regression)', () => {
+    // Reproduces the exact failure: a deep capture saw an official favicon
+    // match; a later FAST capture carries the profile's default `false`. That
+    // must not be read as the favicon match being removed.
+    const previous = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', faviconMatch: true, activityStatus: 'active' }, { fallback: ISO });
+    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', faviconMatch: false }, { fallback: LATER });
+    assert.equal(fast.faviconMatch, null); // coerced away as unevaluated
+    const changes = model.compareCaseEvidence(previous, fast);
+    assert.equal(find(changes, 'faviconMatch'), undefined);
+    assert.equal(find(changes, 'hasMx'), undefined);
+  });
+
+  test('reports a meaningful fast->fast risk-score change', () => {
+    const a = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskScore: 20 }, { fallback: ISO });
+    const b = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskScore: 65 }, { fallback: LATER });
+    const change = find(model.compareCaseEvidence(a, b), 'riskScore');
+    assert.ok(change);
+    assert.equal(change.before, 20);
+    assert.equal(change.after, 65);
+  });
+
+  test('does not report a risk change caused solely by fast vs deep depth', () => {
+    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskScore: 20 }, { fallback: ISO });
+    const deep = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskScore: 80, activityStatus: 'active', hasMx: true }, { fallback: LATER });
+    assert.equal(find(model.compareCaseEvidence(fast, deep), 'riskScore'), undefined);
+  });
+
+  test('reports a deep->deep signal removal', () => {
+    const before = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: true }, { fallback: ISO });
+    const after = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: false }, { fallback: LATER });
+    const change = find(model.compareCaseEvidence(before, after), 'faviconMatch');
+    assert.ok(change);
+    assert.equal(change.before, true);
+    assert.equal(change.after, false);
+    assert.equal(change.tone, 'good');
+  });
+
+  test('reports a factor change even when the total score is unchanged', () => {
+    const before = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }, { fallback: ISO });
+    const after = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }, { fallback: LATER });
+    const changes = model.compareCaseEvidence(before, after);
+    assert.equal(find(changes, 'riskScore'), undefined); // total unchanged
+    assert.ok(find(changes, 'riskFactors')); // composition changed -> explainable material change
+  });
+
+  test('uses stable field ordering and stays bounded', () => {
+    const before = snap({ availability: 'available', riskScore: 10, hasMx: false });
+    const after = snap({ availability: 'registered', riskScore: 90, hasMx: true });
+    const changes = model.compareCaseEvidence(before, after);
+    const order = changes.map((c) => c.field);
+    assert.deepEqual(order, [...order].sort((a, b) => order.indexOf(a) - order.indexOf(b))); // already in emission order
+    assert.equal(order.indexOf('availability') < order.indexOf('riskScore'), true);
+    assert.ok(changes.length <= model.MAX_EVIDENCE_CHANGES);
+  });
+
+  test('returns nothing for two null/absent snapshots', () => {
+    assert.deepEqual(model.compareCaseEvidence(null, snap({})), []);
+    assert.deepEqual(model.compareCaseEvidence(snap({}), null), []);
+  });
+});
+
+describe('serialized store byte budget', () => {
+  function notesCase(index, noteCount) {
+    const bigText = 'x'.repeat(model.MAX_NOTE_LENGTH);
+    return {
+      domain: `notes-${index}.example`,
+      updatedAt: ISO,
+      notes: Array.from({ length: noteCount }, (_, n) => ({ id: `n-${index}-${n}`, body: bigText, createdAt: ISO })),
+    };
+  }
+
+  function fatSnapshot(index, position) {
+    return {
+      availability: 'registered',
+      riskScore: position, // distinct material per position
+      registrar: 'r'.repeat(model.MAX_EVIDENCE_STRING_LENGTH),
+      pageTitle: 't'.repeat(model.MAX_EVIDENCE_TITLE_LENGTH),
+      websiteProbeDetail: 'd'.repeat(model.MAX_EVIDENCE_DETAIL_LENGTH),
+      phishingLanguageMatch: 'p'.repeat(model.MAX_EVIDENCE_STRING_LENGTH),
+      nameservers: Array.from({ length: model.MAX_EVIDENCE_NAMESERVERS }, (_, i) => `ns${i}-${'z'.repeat(30)}.example`),
+      mutationTypes: Array.from({ length: model.MAX_EVIDENCE_MUTATIONS }, (_, i) => `mutation-${i}-${'m'.repeat(20)}`),
+      capturedAt: new Date(Date.UTC(2026, 0, 1, 0, position)).toISOString(),
+      hasMx: true,
+    };
+  }
+
+  test('a normal store is under budget and prunes nothing', () => {
+    const cases = model.normalizeCaseStore([{ domain: 'a.example', updatedAt: ISO }]).cases;
+    const result = model.enforceStoreBudget(cases);
+    assert.equal(result.pruned, 0);
+    assert.ok(new TextEncoder().encode(model.serializeCaseStore(result.cases)).length <= model.MAX_CASE_STORE_BYTES);
+    // The returned cases are exactly what a persist would serialize.
+    assert.deepEqual(result.cases, JSON.parse(model.serializeCaseStore(result.cases)).cases);
+  });
+
+  test('fails with a friendly error when analyst notes alone exceed the budget', () => {
+    // ~4.4 MB of notes, no evidence to prune.
+    const cases = Array.from({ length: 44 }, (_, i) => notesCase(i, model.MAX_NOTES_PER_CASE));
+    assert.throws(() => model.enforceStoreBudget(cases), /storage budget/i);
+  });
+
+  test('prunes oldest snapshots to fit and reports the count, without touching notes', () => {
+    // A note base safely under budget, plus enough fat evidence to push over it.
+    const base = Array.from({ length: 30 }, (_, i) => notesCase(i, 40));
+    const withEvidence = Array.from({ length: 40 }, (_, i) => ({
+      domain: `ev-${i}.example`,
+      updatedAt: ISO,
+      notes: [{ id: `keep-${i}`, body: 'analyst decision', createdAt: ISO }],
+      evidenceHistory: Array.from({ length: model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE }, (_, p) => fatSnapshot(i, p)),
+    }));
+    const cases = model.normalizeCaseStore([...base, ...withEvidence]).cases;
+    assert.ok(new TextEncoder().encode(model.serializeCaseStore(cases)).length > model.MAX_CASE_STORE_BYTES);
+
+    const snapshotsBefore = cases.reduce((sum, c) => sum + c.evidenceHistory.length, 0);
+    const result = model.enforceStoreBudget(cases);
+    assert.ok(result.pruned > 0);
+    assert.ok(new TextEncoder().encode(model.serializeCaseStore(result.cases)).length <= model.MAX_CASE_STORE_BYTES);
+    // Analyst-authored notes are all still present.
+    const keptNotes = result.cases.reduce((sum, c) => sum + c.notes.length, 0);
+    const originalNotes = cases.reduce((sum, c) => sum + c.notes.length, 0);
+    assert.equal(keptNotes, originalNotes);
+    // Evidence, not notes, absorbed the pruning: the returned data is post-prune.
+    const snapshotsAfter = result.cases.reduce((sum, c) => sum + c.evidenceHistory.length, 0);
+    assert.ok(snapshotsAfter < snapshotsBefore);
+    assert.equal(snapshotsBefore - snapshotsAfter, result.pruned);
+    // At least one evidence case still retains its newest snapshot.
+    assert.ok(result.cases.some((c) => c.domain.startsWith('ev-') && c.evidenceHistory.length >= 1));
+    // A returned record equals its serialized-persisted form (no pre-prune copy).
+    const sample = result.cases.find((c) => c.domain.startsWith('ev-'));
+    const persisted = JSON.parse(model.serializeCaseStore(result.cases)).cases.find((c) => c.id === sample.id);
+    assert.deepEqual(sample, persisted);
+  });
+});
+
+describe('rejects unsupported future-schema imports', () => {
+  function localCases() {
+    return model.normalizeCaseStore([{ domain: 'keep.example', status: 'escalated', disposition: 'confirmed_abuse', updatedAt: LATER }]).cases;
+  }
+
+  test('a version greater than the supported schema is rejected before merging', () => {
+    const local = localCases();
+    assert.throws(
+      () => model.mergeCases(local, { version: 999, cases: [{ domain: 'new.example' }] }),
+      /newer version of WHOISleuth/i,
+    );
+    // Local cases are untouched (nothing merged, nothing reset).
+    assert.equal(local.length, 1);
+    assert.equal(local[0].status, 'escalated');
+    assert.equal(local[0].disposition, 'confirmed_abuse');
+  });
+
+  test('bare arrays and supported versions remain importable', () => {
+    const local = localCases();
+    assert.equal(model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]).added, 1);
+    assert.equal(model.mergeCases(local, { version: 1, cases: [{ domain: 'v1.example', updatedAt: ISO }] }).added, 1);
+    assert.equal(model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }).added, 1);
+  });
+});
+
+describe('imported note normalization is deterministic', () => {
+  test('a timestamp-less, id-less imported note uses the record timestamp, not "now", and is idempotent', () => {
+    const payload = {
+      version: 1,
+      cases: [{ domain: 'notes.example', createdAt: ISO, updatedAt: ISO, notes: [{ body: 'a timeless observation' }] }],
+    };
+    const once = model.mergeCases([], payload).cases[0];
+    assert.equal(once.notes.length, 1);
+    assert.equal(once.notes[0].createdAt, ISO); // record fallback, never the current time
+
+    // Re-importing the same payload must not create a duplicate or a newer note.
+    const twice = model.mergeCases([once], payload).cases[0];
+    assert.equal(twice.notes.length, 1);
+    assert.deepEqual(twice.notes, once.notes);
+  });
+
+  test('an imported note with no placeable timestamp at all is skipped, not stamped', () => {
+    const payload = { cases: [{ domain: 'notes.example', notes: [{ body: 'unplaceable' }] }] };
+    const merged = model.mergeCases([], payload).cases[0];
+    assert.deepEqual(merged.notes, []);
+  });
+
+  test('locally-created notes still use the genuine current time', () => {
+    const record = model.createCase({ domain: 'local.example', note: 'fresh note' }, NOW);
+    assert.equal(record.notes[0].createdAt, NOW);
   });
 });
 
@@ -346,7 +941,14 @@ describe('store loading and corruption recovery', () => {
     const fromEnvelope = model.normalizeCaseStore({ version: 1, cases: [{ domain: 'bad.example' }] });
     assert.equal(fromArray.cases.length, 1);
     assert.equal(fromEnvelope.cases.length, 1);
-    assert.equal(fromEnvelope.version, 1);
+    assert.equal(fromEnvelope.version, model.CASE_SCHEMA_VERSION);
+  });
+
+  test('parseStoreVersion reads the declared version or null', () => {
+    assert.equal(model.parseStoreVersion({ version: 2, cases: [] }), 2);
+    assert.equal(model.parseStoreVersion({ version: 99 }), 99);
+    assert.equal(model.parseStoreVersion([]), null);
+    assert.equal(model.parseStoreVersion(null), null);
   });
 
   test('drops malformed records but keeps valid neighbours', () => {

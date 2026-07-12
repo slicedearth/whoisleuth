@@ -261,9 +261,15 @@ full case workspace (a `Cases` tab alongside `Watchlists`).
 - Each case carries an analyst **status** (New, Reviewing, Monitoring,
   Escalated, Resolved), a **disposition** (Unreviewed, Suspicious, Confirmed
   abuse, False positive, Expected, Closed without action), free-text **tags**,
-  timestamped **notes**, its **source** (Lookup, Bulk, Monitor), and a small
-  **evidence snapshot** (availability, risk score, registrar, website activity)
-  captured from the result at the time - never the raw registry response.
+  timestamped **notes**, its **source** (Lookup, Bulk, Monitor), and a bounded,
+  chronological **evidence history**: a small set of normalized snapshots
+  (availability, risk/opportunity scores, registrar, dates, nameservers, mail
+  and website signals) captured from results over time - never the raw registry,
+  RDAP, DNS, HTML, or screenshot data. Re-capturing materially identical
+  evidence advances the latest snapshot's timestamp rather than adding a
+  duplicate entry; only a material change opens a new snapshot. Monitor shows the
+  most recent snapshot; the full timeline and change-report views build on this
+  history.
 - Monitor lets you filter by status and disposition, search by domain or tag,
   sort by recent activity, edit a case inline, and delete one with a
   confirmation. A case links back to a fresh **Look up** of its domain, and
@@ -271,20 +277,28 @@ full case workspace (a `Cases` tab alongside `Watchlists`).
 - **Cases live only in the current browser.** They are held in `localStorage`
   under `whois-rdap-cases-v1` and are never sent to any server. Clearing your
   browser storage (or using a different browser or device) removes them unless
-  you exported them first.
+  you exported them first. The store is at schema version 2; a version-1 store
+  (single evidence snapshot) is discovered under the same key and migrated to an
+  evidence history on load, and a store written by a newer, unsupported version
+  is never overwritten.
 - **Export** writes a portable JSON file that includes the schema version and an
   export timestamp. **Import** merges a file into your existing cases by domain.
-  Tags and notes are unioned, and a scalar field (status, disposition, source,
-  evidence) is only replaced when the imported record is both valid and more
-  recently updated than your local copy - a record with a missing or invalid
-  timestamp is treated as older than any local case, and a field absent from an
-  imported record never overwrites your local value. So importing can add
-  context but cannot silently reset a local status, disposition, or decision.
-  Imports are capped at 2 MB and validated field by field; unknown or malformed
-  records are skipped rather than trusted.
+  Tags, notes, and evidence snapshots are unioned (identical snapshots
+  deduplicate, and an older import can never move an observation backwards),
+  while a scalar field (status, disposition, source) is only replaced when the
+  imported record is both valid and more recently updated than your local copy -
+  a record with a missing or invalid timestamp is treated as older than any
+  local case, and a field absent from an imported record never overwrites your
+  local value. So importing can add context but cannot silently reset a local
+  status, disposition, or decision. Imports are capped at 2 MB and validated
+  field by field; unknown or malformed records are skipped rather than trusted.
 - Storage is bounded to keep it safe and predictable: up to 500 cases, 50 notes
-  per case (2000 characters each), and 20 tags per case (40 characters each).
-  Old or malformed stored data is repaired on load rather than crashing the app.
+  per case (2000 characters each), 20 tags per case (40 characters each), and 25
+  evidence snapshots per case. The whole store is held to a serialized byte
+  budget: if evidence history would push it over, the oldest snapshots are
+  pruned first, and analyst-authored notes, tags, status, and decisions are
+  never discarded to make room. Old or malformed stored data is repaired on load
+  rather than crashing the app.
 - **Notes may contain sensitive investigation detail** (analyst identities,
   victim data, internal decisions). Treat an exported case file as sensitive:
   store it somewhere access-controlled and share it deliberately.

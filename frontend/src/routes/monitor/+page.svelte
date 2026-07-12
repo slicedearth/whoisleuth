@@ -6,7 +6,7 @@
   import { deleteWatchlist, exportWatchlists, fieldLabels, formatValue, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
-    importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase, sourceLabel, statusLabel, type CaseRecord
+    importCases, latestCaseEvidence, loadCases, MAX_CASE_IMPORT_BYTES, openCase, sourceLabel, statusLabel, type CaseRecord
   } from '$lib/cases';
 
   type View = 'watchlists' | 'cases';
@@ -42,14 +42,16 @@
   });
   function refreshCases(){cases=loadCases();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
-  function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created}=openCase({domain,source:'monitor'});refreshCases();newDomain='';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
-  function setStatus(record:CaseRecord,value:string){try{editCase(record.id,{status:value});refreshCases();caseMessage=`Set ${record.domain} to ${statusLabel(value)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
-  function setDisposition(record:CaseRecord,value:string){try{editCase(record.id,{disposition:value});refreshCases();caseMessage=`Marked ${record.domain} as ${dispositionLabel(value)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
-  function saveTags(record:CaseRecord){try{editCase(record.id,{tags:tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean)});refreshCases();caseMessage=`Updated tags for ${record.domain}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
-  function addNote(record:CaseRecord){const body=noteDraft.trim();if(!body){caseMessage='A note cannot be empty.';return;}try{addCaseNote(record.id,body);refreshCases();noteDraft='';caseMessage=`Added a note to ${record.domain}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';}}
+  function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
+  function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=openCase({domain,source:'monitor'});refreshCases();newDomain='';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
+  function setStatus(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{status:value});refreshCases();caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
+  function setDisposition(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{disposition:value});refreshCases();caseMessage=`Marked ${record.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
+  function saveTags(record:CaseRecord){try{const{pruned}=editCase(record.id,{tags:tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean)});refreshCases();caseMessage=`Updated tags for ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
+  function addNote(record:CaseRecord){const body=noteDraft.trim();if(!body){caseMessage='A note cannot be empty.';return;}try{const{pruned}=addCaseNote(record.id,body);refreshCases();noteDraft='';caseMessage=`Added a note to ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';}}
+  function downloadCases(){try{exportCases();}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export cases.';}}
   function removeCase(record:CaseRecord){if(!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))return;try{deleteCase(record.id);if(expandedId===record.id)expandedId='';refreshCases();caseMessage=`Deleted the case for ${record.domain}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the case.';}}
   function clearCaseFilters(){statusFilter='';dispositionFilter='';caseSearch='';}
-  async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=importCases(JSON.parse(await file.text()));refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} over the ${cases.length}-case limit`:''}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
+  async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=importCases(JSON.parse(await file.text()));refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{
     refresh();refreshCases();
@@ -74,7 +76,7 @@
       <label for="new-case">Track a domain</label>
       <div><input id="new-case" bind:value={newDomain} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!newDomain.trim()}>Open case</button></div>
     </form>
-    <div class="top-actions"><button onclick={exportCases} disabled={!cases.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label></div>
+    <div class="top-actions"><button onclick={downloadCases} disabled={!cases.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label></div>
   </section>
   {#if caseMessage}<p class="message" role="status" aria-live="polite">{caseMessage}</p>{/if}
 
@@ -98,6 +100,7 @@
           </button>
           {#if record.tags.length}<div class="tag-row">{#each record.tags as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
           {#if expandedId===record.id}
+            {@const evidence=latestCaseEvidence(record)}
             <div class="case-body" id={`case-body-${record.id}`}>
               <div class="field-grid">
                 <label>Status<select value={record.status} onchange={(event)=>setStatus(record,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
@@ -113,7 +116,7 @@
                 <button type="submit" disabled={!noteDraft.trim()}>Add note</button>
               </form>
               {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{date(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
-              {#if record.evidence}<dl class="evidence"><dt>Availability</dt><dd>{record.evidence.availability??'—'}</dd><dt>Risk</dt><dd>{record.evidence.riskScore??'—'}</dd><dt>Registrar</dt><dd>{record.evidence.registrar??'—'}</dd><dt>Website</dt><dd>{record.evidence.activityStatus??'—'}</dd><dt>Captured</dt><dd>{date(record.evidence.capturedAt)}</dd></dl>{/if}
+              {#if evidence}<dl class="evidence"><dt>Availability</dt><dd>{evidence.availability??'—'}</dd><dt>Risk</dt><dd>{evidence.riskScore??'—'}</dd><dt>Registrar</dt><dd>{evidence.registrar??'—'}</dd><dt>Website</dt><dd>{evidence.activityStatus??'—'}</dd><dt>Captured</dt><dd>{date(evidence.capturedAt)}</dd></dl>{/if}
               <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {date(record.createdAt)}</span></div>
               <div class="case-actions"><a href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button class="danger" onclick={()=>removeCase(record)}>Delete case</button></div>
             </div>

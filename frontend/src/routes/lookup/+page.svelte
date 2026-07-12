@@ -54,11 +54,31 @@
   const abuse=$derived(profileSignals.trusted?null:abuseAction(String(availability.domain||result?.registrableDomain||''),availability.abuse?.email?{abuseEmail:String(availability.abuse.email),hasMx:availability.hasMx??null,activityStatus:availability.activityStatus||null,privacyProtected:availability.privacyProtected??null,domainAgeDays:availability.domainAgeDays??null} as AbuseEvidence:null));
   const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only+comparison.counts.rdap_redacted+comparison.counts.whois_redacted);
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
-  const caseEvidence=$derived({availability:String(availability.state||''),riskScore:risk?risk.score:null,registrar:String(availability.registrar||rdapParsed.registrar||whoisParsed.registrar||''),activityStatus:availability.activityStatus?String(availability.activityStatus):null});
+  const caseEvidence=$derived({
+    availability:String(availability.state||''),
+    confidence:availability.confidence?String(availability.confidence):null,
+    riskScore:risk?risk.score:null,
+    opportunityScore:opportunity?opportunity.score:null,
+    riskFactors:risk?risk.factors.map((f)=>({label:f.label,points:f.delta})):[],
+    opportunityFactors:opportunity?opportunity.factors.map((f)=>({label:f.label,points:f.delta})):[],
+    registrar:String(availability.registrar||rdapParsed.registrar||whoisParsed.registrar||''),
+    createdDate:created()||null,
+    expiryDate:expires()||null,
+    nameservers:Array.isArray(availability.nameservers)?availability.nameservers:[],
+    hasMx:availability.hasMx??null,hasSpf:availability.hasSpf??null,hasDmarc:availability.hasDmarc??null,
+    activityStatus:availability.activityStatus?String(availability.activityStatus):null,
+    websiteProbeDetail:availability.websiteProbeDetail?String(availability.websiteProbeDetail):null,
+    pageTitle:availability.pageTitle??null,
+    faviconMatch:profileSignals.faviconMatch??null,faviconNearMatch:profileSignals.faviconNearMatch??null,
+    reusesOfficialAssets:profileSignals.reusesOfficialAssets??null,hasPasswordField:availability.hasPasswordField??null,
+    phishingLanguageMatch:availability.phishingLanguageMatch??null,
+    mutationTypes:[]
+  });
 
   function refreshCase(){caseRecord=caseDomain?getCaseByDomain(caseDomain):null;}
-  function openLookupCase(){if(!caseDomain)return;try{const{record,created}=openCase({domain:caseDomain,source:'lookup',evidence:caseEvidence});caseRecord=record;caseStatus=created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
-  function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{caseRecord=addCaseNote(caseRecord.id,body);caseNote='';caseStatus='Added a note to the case.';}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
+  function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
+  function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:'deep'}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
+  function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{const{record,pruned}=addCaseNote(caseRecord.id,body);caseRecord=record;caseNote='';caseStatus=`Added a note to the case.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
   onMount(()=>{const q=page.url.searchParams.get('q');if(q)query=q;});
 
   function eventDate(action:string){return rdapParsed.events?.find((item:JsonRecord)=>item.action===action)?.date||null;}
