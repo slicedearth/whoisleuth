@@ -14,6 +14,7 @@ const {
   checkPassword,
   createSessionToken,
   isValidSessionToken,
+  sessionFingerprintFromCookieHeader,
   isTrustedOrigin,
   parseCookies,
   buildSessionCookie,
@@ -21,6 +22,11 @@ const {
   isTrustedLoginOrigin,
 } = require('./lib/auth');
 const { checkRateLimit, getClientIp, getForwardedProtocol, LOGIN_RATE_LIMIT, API_RATE_LIMIT } = require('./lib/rate-limit');
+const {
+  defaultOperationBudget,
+  operationBudgetError,
+  operationClassFor,
+} = require('./lib/operation-budget');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -90,6 +96,23 @@ function rateLimit(scope, opts) {
 const loginRateLimit = rateLimit('login', LOGIN_RATE_LIMIT);
 const apiRateLimit = rateLimit('api', API_RATE_LIMIT);
 
+async function withExpressOperationBudget(req, res, operationClass, callback) {
+  const sessionKey = sessionFingerprintFromCookieHeader(req.headers.cookie);
+  if (!sessionKey) {
+    return res.status(401).json({ error: 'Authentication required', errorCode: LOOKUP_ERROR_CODES.AUTH_REQUIRED });
+  }
+  const lease = defaultOperationBudget.acquire(operationClass, sessionKey);
+  if (!lease.allowed) {
+    res.setHeader('Retry-After', String(lease.retryAfterSeconds));
+    return res.status(429).json(operationBudgetError(lease));
+  }
+  try {
+    return await callback();
+  } finally {
+    lease.release?.();
+  }
+}
+
 app.post('/api/login', (req, res, next) => {
   if (!isTrustedLoginOrigin(req.headers)) return res.status(403).json({ error: 'Cross-site request blocked' });
   next();
@@ -130,21 +153,23 @@ app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
     return res.status(400).json({ error: err.message, errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
   }
 
-  try {
-    const fast = req.query.fast === '1' || req.query.fast === 'true';
-    const compact = req.query.compact === '1' || req.query.compact === 'true';
-    const result = await runUnifiedLookup(classified, { fast, compact });
-    res.json({
-      query: q,
-      type: classified.type,
-      inputHostname: classified.inputHostname,
-      registrableDomain: classified.registrableDomain,
-      isSubdomain: classified.isSubdomain,
-      ...result,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message, errorCode: LOOKUP_ERROR_CODES.LOOKUP_FAILED });
-  }
+  const fast = req.query.fast === '1' || req.query.fast === 'true';
+  return withExpressOperationBudget(req, res, operationClassFor('lookup', { fast }), async () => {
+    try {
+      const compact = req.query.compact === '1' || req.query.compact === 'true';
+      const result = await runUnifiedLookup(classified, { fast, compact });
+      res.json({
+        query: q,
+        type: classified.type,
+        inputHostname: classified.inputHostname,
+        registrableDomain: classified.registrableDomain,
+        isSubdomain: classified.isSubdomain,
+        ...result,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message, errorCode: LOOKUP_ERROR_CODES.LOOKUP_FAILED });
+    }
+  });
 });
 
 app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
@@ -158,22 +183,24 @@ app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
     return res.status(400).json({ error: err.message });
   }
 
-  try {
-    const record = await fetchRdapRecord(classified.type, classified.value);
-    if (!record) {
-      return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
-    }
+  return withExpressOperationBudget(req, res, operationClassFor('rdap'), async () => {
+    try {
+      const record = await fetchRdapRecord(classified.type, classified.value);
+      if (!record) {
+        return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
+      }
 
-    res.status(200).json({
-      query: q,
-      type: classified.type,
-      inputHostname: classified.inputHostname,
-      registrableDomain: classified.registrableDomain,
-      ...record,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+      res.status(200).json({
+        query: q,
+        type: classified.type,
+        inputHostname: classified.inputHostname,
+        registrableDomain: classified.registrableDomain,
+        ...record,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
@@ -187,19 +214,21 @@ app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
     return res.status(400).json({ error: err.message });
   }
 
-  try {
-    const chain = await buildWhoisChain(classified.value);
-    res.json({
-      query: q,
-      type: classified.type,
-      inputHostname: classified.inputHostname,
-      registrableDomain: classified.registrableDomain,
-      chain,
-      parsed: parseWhoisChain(chain),
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  return withExpressOperationBudget(req, res, operationClassFor('whois'), async () => {
+    try {
+      const chain = await buildWhoisChain(classified.value);
+      res.json({
+        query: q,
+        type: classified.type,
+        inputHostname: classified.inputHostname,
+        registrableDomain: classified.registrableDomain,
+        chain,
+        parsed: parseWhoisChain(chain),
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
@@ -216,36 +245,40 @@ app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
     return res.json({ applicable: false, type: classified.type });
   }
 
-  try {
-    const fast = req.query.fast === '1' || req.query.fast === 'true';
-    const result = await checkDomainAvailability(classified.value, { fast });
-    // domain is the registrable domain actually looked up; inputHostname
-    // preserves what the user typed so the UI can note when a subdomain query
-    // was resolved to its registrable domain (and never call the subdomain
-    // itself "available").
-    res.json({
-      applicable: true,
-      domain: classified.value,
-      inputHostname: classified.inputHostname,
-      registrableDomain: classified.registrableDomain,
-      isSubdomain: classified.isSubdomain,
-      ...result,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const fast = req.query.fast === '1' || req.query.fast === 'true';
+  return withExpressOperationBudget(req, res, operationClassFor('availability', { fast }), async () => {
+    try {
+      const result = await checkDomainAvailability(classified.value, { fast });
+      // domain is the registrable domain actually looked up; inputHostname
+      // preserves what the user typed so the UI can note when a subdomain query
+      // was resolved to its registrable domain (and never call the subdomain
+      // itself "available").
+      res.json({
+        applicable: true,
+        domain: classified.value,
+        inputHostname: classified.inputHostname,
+        registrableDomain: classified.registrableDomain,
+        isSubdomain: classified.isSubdomain,
+        ...result,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 app.get('/api/ct-search', apiRateLimit, requireAuth, async (req, res) => {
-  try {
-    const q = (req.query.q || '').toString().trim();
-    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+  const q = (req.query.q || '').toString().trim();
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
-    const result = await searchCertificateTransparency(q);
-    res.json({ keyword: q, ...result });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  return withExpressOperationBudget(req, res, operationClassFor('certificate_transparency'), async () => {
+    try {
+      const result = await searchCertificateTransparency(q);
+      res.json({ keyword: q, ...result });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 app.get('/api/domain-posture', apiRateLimit, requireAuth, async (req, res) => {
@@ -262,12 +295,14 @@ app.get('/api/domain-posture', apiRateLimit, requireAuth, async (req, res) => {
   const domain = normalizeAuditDomain(value);
   if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
 
-  try {
-    const selectors = normalizeDkimSelectors((req.query.selectors || '').toString().split(','));
-    res.json(await checkDomainPosture(domain, { dkimSelectors: selectors }));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const selectors = normalizeDkimSelectors((req.query.selectors || '').toString().split(','));
+  return withExpressOperationBudget(req, res, operationClassFor('domain_posture'), async () => {
+    try {
+      res.json(await checkDomainPosture(domain, { dkimSelectors: selectors }));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 app.listen(PORT, () => {

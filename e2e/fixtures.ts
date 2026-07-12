@@ -18,7 +18,7 @@ export function isAllowedRequestOrigin(url: string, allowedOrigin: string = ALLO
 
 // Exact origin + exact pathname, not a string prefix - `/api/lookup` as a
 // prefix would also match `/api/lookup-other` or `/api/lookup/whatever`.
-function isBulkLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
+function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
   try {
     const parsed = new URL(url);
     return parsed.origin === allowedOrigin && parsed.pathname === '/api/lookup';
@@ -32,10 +32,11 @@ function isBulkLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_OR
 // network-stack/DevTools level, regardless of whether application code
 // already caught and handled it. Deliberately scoped to exactly 400 (not
 // \d+) and to /api/lookup specifically (checked against the message's own
-// location().url via isBulkLookupEndpointUrl below, not just "some request
+// location().url via isLookupEndpointUrl below, not just "some request
 // happened") - a 404/500, or a 400 from any other endpoint, is still a real
 // signal and must still fail.
 const CHROME_HTTP_400_NOISE_RE = /^Failed to load resource: the server responded with a status of 400\b/;
+const CHROME_HTTP_429_NOISE_RE = /^Failed to load resource: the server responded with a status of 429\b/;
 
 // Installs an active request interceptor on a BrowserContext: every request
 // is either passed through (allowed origin) or aborted client-side before it
@@ -70,6 +71,10 @@ type Options = {
   // 400-response console noise as expected, handled behavior. Every other
   // spec keeps the guard fully strict.
   allowExpectedBulkLookup400Noise: boolean;
+  // Opt-in for the one circuit-breaker UI test that deliberately fulfills an
+  // exact local /api/lookup request with 429. Other 429s and endpoints remain
+  // console failures.
+  allowExpectedLookup429Noise: boolean;
 };
 
 type Fixtures = {
@@ -85,9 +90,10 @@ type Fixtures = {
 // input values is necessary but not sufficient without this backstop.
 export const test = base.extend<Options & Fixtures>({
   allowExpectedBulkLookup400Noise: [false, { option: true }],
+  allowExpectedLookup429Noise: [false, { option: true }],
 
   networkAndConsoleGuard: [
-    async ({ page, context, allowExpectedBulkLookup400Noise }, use) => {
+    async ({ page, context, allowExpectedBulkLookup400Noise, allowExpectedLookup429Noise }, use) => {
       const guard = await installNetworkGuard(context);
       const consoleIssues: string[] = [];
 
@@ -97,9 +103,9 @@ export const test = base.extend<Options & Fixtures>({
         const text = message.text();
         if (
           type === 'error' &&
-          allowExpectedBulkLookup400Noise &&
-          CHROME_HTTP_400_NOISE_RE.test(text) &&
-          isBulkLookupEndpointUrl(message.location().url)
+          isLookupEndpointUrl(message.location().url) &&
+          ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
+            || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text)))
         ) {
           return;
         }

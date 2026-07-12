@@ -1,19 +1,12 @@
 const { classifyQuery } = require('../../lib/classify');
 const { buildWhoisChain, parseWhoisChain } = require('../../lib/whois');
-const { isAuthenticatedFromCookieHeader } = require('../../lib/auth');
-const { checkRateLimit, getClientIp, API_RATE_LIMIT } = require('../../lib/rate-limit');
+const { operationClassFor } = require('../../lib/operation-budget');
+const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
 const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
-  const ip = getClientIp(event.headers);
-  const { allowed, retryAfterSeconds } = checkRateLimit(`api:${ip}`, API_RATE_LIMIT);
-  if (!allowed) {
-    return json(429, { error: 'Too many requests. Please try again later.' }, { 'Retry-After': String(retryAfterSeconds) });
-  }
-
-  if (!isAuthenticatedFromCookieHeader(event.headers && event.headers.cookie)) {
-    return json(401, { error: 'Authentication required' });
-  }
+  const guard = guardNetlifyNetworkRequest(event);
+  if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
@@ -25,17 +18,19 @@ exports.handler = async (event) => {
     return json(400, { error: err.message });
   }
 
-  try {
-    const chain = await buildWhoisChain(classified.value);
-    return json(200, {
-      query: q,
-      type: classified.type,
-      inputHostname: classified.inputHostname,
-      registrableDomain: classified.registrableDomain,
-      chain,
-      parsed: parseWhoisChain(chain),
-    });
-  } catch (err) {
-    return json(500, { error: err.message });
-  }
+  return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('whois'), async () => {
+    try {
+      const chain = await buildWhoisChain(classified.value);
+      return json(200, {
+        query: q,
+        type: classified.type,
+        inputHostname: classified.inputHostname,
+        registrableDomain: classified.registrableDomain,
+        chain,
+        parsed: parseWhoisChain(chain),
+      });
+    } catch (err) {
+      return json(500, { error: err.message });
+    }
+  });
 };

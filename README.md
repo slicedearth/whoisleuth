@@ -250,7 +250,8 @@ compact-storage boundary, and lookup evidence schema are documented in the
   report so browser, CLI, and worker consumers can distinguish hosted support,
   local-only analysis, disabled features, and unavailable integrations. The
   report is server-authoritative, identifies runtime-local enforcement limits,
-  and does not claim unimplemented scheduled or distributed capabilities.
+  reports the active in-memory concurrency classes, and does not claim
+  unimplemented scheduled or distributed capabilities.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
 
@@ -436,8 +437,9 @@ full case workspace (a `Cases` tab alongside `Watchlists`).
 
 ## Rate limiting
 
-All `/api/*` routes are rate-limited per client IP (`lib/rate-limit.js`),
-shared by `server.js` and the Netlify Functions:
+Authentication attempts and network-heavy API routes are rate-limited per
+client IP (`lib/rate-limit.js`), shared by `server.js` and the Netlify
+Functions:
 
 - `/api/login` - 10 attempts per 5 minutes, since the shared password is the
   tool's only access control and the main thing worth throttling.
@@ -461,6 +463,29 @@ Requests made directly to `/.netlify/functions/*` do not pass through those
 path-specific edge rules. The function-level limiter still applies, but it is
 container-local; deployments that need durable protection against distributed
 abuse should add a shared rate-limit store or platform-level traffic controls.
+
+Network-heavy authenticated work also uses immediate in-memory concurrency
+leases. These are cost classes rather than provider quotas:
+
+| Operation class | Included work | Per session | Per runtime instance |
+| --- | --- | ---: | ---: |
+| `registry_light` | fast Lookup, RDAP, fast availability | 12 | 36 |
+| `registry_deep` | deep Lookup, WHOIS, deep availability | 4 | 12 |
+| `certificate_search` | Certificate Transparency search | 2 | 4 |
+| `posture_audit` | domain-posture audit | 3 | 8 |
+
+An exhausted lease returns `429`, `Retry-After: 1`, and the stable
+`NETWORK_CONCURRENCY_LIMITED` error code. The lease is always released when
+the request succeeds or fails. Session keys are irreversible hashes of valid
+session tokens; bearer tokens are not retained in the budget maps.
+
+These concurrency ceilings have the same local-only boundary as the fixed
+window limiter. Express enforces them across one process. Netlify enforces
+them only inside one warm function instance, with state reset on cold starts;
+they are neither distributed provider accounting nor a guarantee that another
+instance cannot start equivalent work. Direct function paths still perform
+function-level authentication, rate limiting, and concurrency checks even
+when they bypass canonical-path edge rules.
 
 ## Deploying to Netlify
 

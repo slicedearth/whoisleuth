@@ -1,19 +1,12 @@
 const { classifyQuery } = require('../../lib/classify');
 const { checkDomainAvailability } = require('../../lib/availability');
-const { isAuthenticatedFromCookieHeader } = require('../../lib/auth');
-const { checkRateLimit, getClientIp, API_RATE_LIMIT } = require('../../lib/rate-limit');
+const { operationClassFor } = require('../../lib/operation-budget');
+const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
 const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
-  const ip = getClientIp(event.headers);
-  const { allowed, retryAfterSeconds } = checkRateLimit(`api:${ip}`, API_RATE_LIMIT);
-  if (!allowed) {
-    return json(429, { error: 'Too many requests. Please try again later.' }, { 'Retry-After': String(retryAfterSeconds) });
-  }
-
-  if (!isAuthenticatedFromCookieHeader(event.headers && event.headers.cookie)) {
-    return json(401, { error: 'Authentication required' });
-  }
+  const guard = guardNetlifyNetworkRequest(event);
+  if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
   if (!q) return json(400, { error: 'Missing query parameter "q"' });
@@ -28,19 +21,21 @@ exports.handler = async (event) => {
     return json(200, { applicable: false, type: classified.type });
   }
 
-  try {
-    const params = event.queryStringParameters || {};
-    const fast = params.fast === '1' || params.fast === 'true';
-    const result = await checkDomainAvailability(classified.value, { fast });
-    return json(200, {
-      applicable: true,
-      domain: classified.value,
-      inputHostname: classified.inputHostname,
-      registrableDomain: classified.registrableDomain,
-      isSubdomain: classified.isSubdomain,
-      ...result,
-    });
-  } catch (err) {
-    return json(500, { error: err.message });
-  }
+  const params = event.queryStringParameters || {};
+  const fast = params.fast === '1' || params.fast === 'true';
+  return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('availability', { fast }), async () => {
+    try {
+      const result = await checkDomainAvailability(classified.value, { fast });
+      return json(200, {
+        applicable: true,
+        domain: classified.value,
+        inputHostname: classified.inputHostname,
+        registrableDomain: classified.registrableDomain,
+        isSubdomain: classified.isSubdomain,
+        ...result,
+      });
+    } catch (err) {
+      return json(500, { error: err.message });
+    }
+  });
 };

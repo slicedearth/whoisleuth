@@ -10,6 +10,7 @@ const {
   isTrustedOrigin,
   isValidSessionToken,
   parseCookies,
+  sessionFingerprintFromCookieHeader,
 } = require('../lib/auth');
 
 describe('isTrustedOrigin', () => {
@@ -72,6 +73,15 @@ describe('parseCookies', () => {
 });
 
 describe('session signing', () => {
+  test('derives an opaque stable concurrency key without retaining the bearer token', () => {
+    const cookie = 'theme=dark; wrt_session=12345.signature';
+    const fingerprint = sessionFingerprintFromCookieHeader(cookie);
+    assert.equal(fingerprint, sessionFingerprintFromCookieHeader(cookie));
+    assert.match(fingerprint, /^[a-f0-9]{64}$/);
+    assert.equal(fingerprint.includes('12345'), false);
+    assert.equal(sessionFingerprintFromCookieHeader('theme=dark'), null);
+  });
+
   test('uses an independent SESSION_SECRET when configured', () => {
     const previousPassword = process.env.SITE_PASSWORD;
     const previousSessionSecret = process.env.SESSION_SECRET;

@@ -84,11 +84,24 @@ its execution location and only the existing `fast`/`deep` modes it actually
 supports. The report deliberately marks scheduled monitoring and distributed
 budgets unavailable until those services exist.
 
+The optional version-1 `controls.concurrency` object reports the active
+in-memory operation classes and their per-session and per-runtime-instance
+ceilings. Its `distributed` field is `false`. `scope: process` describes one
+Express process; `scope: serverless_instance` describes one warm function
+instance and must not be interpreted as deployment-wide or provider billing
+state. Older version-1 reports without `controls` remain valid.
+
 Consumers must reject malformed or unsupported future reports conservatively;
 the browser labels capability status unavailable without hiding otherwise
 usable local workflows. Runtime limitations distinguish process-local Express
 state from per-instance serverless state and must not be presented as globally
 enforced usage accounting.
+
+When local concurrency is exhausted, network endpoints return HTTP `429`, a
+short `Retry-After` value, and `errorCode: NETWORK_CONCURRENCY_LIMITED` with a
+bounded operation class and `session` or `runtime` scope. This is a temporary
+local circuit response, not an upstream registry result and not evidence about
+the queried domain.
 
 ## Diagnostics version 2
 

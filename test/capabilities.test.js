@@ -13,6 +13,10 @@ test('capability report is deterministic, provider-neutral, and honest about exe
   assert.equal(report.features.find((feature) => feature.id === 'lookup').status, 'supported');
   assert.equal(report.features.find((feature) => feature.id === 'idn_confusables').status, 'local_only');
   assert.equal(report.features.find((feature) => feature.id === 'scheduled_monitoring').status, 'unavailable');
+  assert.equal(report.controls.concurrency.mode, 'in_memory');
+  assert.equal(report.controls.concurrency.scope, 'serverless_instance');
+  assert.equal(report.controls.concurrency.distributed, false);
+  assert.ok(report.controls.concurrency.classes.every((entry) => entry.runtimeLimit >= entry.sessionLimit));
   assert.match(report.limitations[0], /per serverless instance/i);
   assert.deepEqual(capabilityReport('netlify'), report);
 });
@@ -21,6 +25,7 @@ test('unknown runtimes fail to a bounded generic report without changing feature
   const report = capabilityReport('unexpected');
   assert.equal(report.runtime, 'unknown');
   assert.equal(report.features.length, capabilityReport('express').features.length);
+  assert.match(report.limitations[0], /runtime instance/i);
 });
 
 test('direct serverless capability path requires authentication', async () => {
