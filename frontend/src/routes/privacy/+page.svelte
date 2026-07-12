@@ -5,7 +5,7 @@
 </section>
 
 <article class="policy card">
-  <p><em>Last updated: 11 July 2026</em></p>
+  <p><em>Last updated: 12 July 2026</em></p>
 
   <h2>1. Introduction</h2>
   <p>This policy explains what WHOISleuth processes when you use it, why, and what choices you have. It applies to this deployment. By using the service, you agree to the practices described here.</p>
@@ -27,7 +27,7 @@
 
   <h2>6. Cookies and browser storage</h2>
   <p>The service sets one signed session cookie, <code>wrt_session</code>, for up to 30 days. It is HttpOnly, SameSite=Lax, and Secure over HTTPS. It is required for authentication and is not used for tracking.</p>
-  <p>Brand Profiles, Shortlist, and Watchlist data stays in your browser's local storage. A posture audit sends only the selected official domain and configured DKIM selectors to this deployment. Clearing site data removes saved browser-local state.</p>
+  <p>Brand Profiles, Shortlist, Watchlist data, analyst cases, and bounded Certificate Transparency search baselines stay in your browser's local storage. The CT baselines retain normalized search keywords, observed public domains, timestamps, and result counts so later searches can identify new observations; they can be deleted individually or cleared from Discover. A posture audit sends only the selected official domain and configured DKIM selectors to this deployment. Clearing site data removes all saved browser-local state.</p>
   <p>CSV and JSON exports are generated in your browser. Evidence exports may contain contact data published in raw RDAP or WHOIS responses.</p>
 
   <h2>7. Retention</h2>

@@ -20,12 +20,17 @@ at all.
 - **Single and bulk lookups**: proxied through the server per-request, held
   in memory only for the duration of that request, never written to a
   database or disk server-side.
-- **Brand Profiles / Shortlist / Watchlist**: saved in your own browser's
+- **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
+  Structured Certificate Transparency searches retain bounded per-keyword
+  domain baselines and check summaries so Discover can identify domains that
+  are new since the previous complete search. Capped or legacy results never
+  replace a complete baseline.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
-  button in either panel, or by clearing the browser's site data.
+  button in either panel, the deletion controls under **Previous certificate
+  searches**, or by clearing the browser's site data.
 - **CSV/JSON exports**: downloaded directly to your device. Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
   registry-published contact data. Nothing is uploaded or retained by the

@@ -39,6 +39,13 @@ const legacyResponse = {
   truncated: false,
 };
 
+const initialBaselineResponse = {
+  ...structuredResponse,
+  certCount: 4,
+  matches: [structuredResponse.matches[0]],
+  domains: ['a.example.invalid', 'login.example.invalid'],
+};
+
 async function mockCtSearch(page: Page, body: unknown, status = 200) {
   await page.route('**/api/ct-search**', (route) =>
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }),
@@ -111,6 +118,14 @@ test('an allowlisted canonical domain is excluded when a profile is active', asy
     };
     localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
     localStorage.setItem('whois-rdap-active-brand-profile-v1', 'p1');
+    localStorage.setItem('whoisleuth:ct-search-history:v1', JSON.stringify({
+      version: 1,
+      entries: [{
+        query: 'example', baselineAt: '2026-05-01T00:00:00.000Z', updatedAt: '2026-05-01T00:00:00.000Z',
+        domains: ['other.invalid'],
+        history: [{ checkedAt: '2026-05-01T00:00:00.000Z', resultCount: 1, certificateCount: 1, newCount: 0, newDomains: [], truncated: false }],
+      }],
+    }));
   });
   await page.goto('/discover');
   await mockCtSearch(page, structuredResponse);
@@ -119,6 +134,9 @@ test('an allowlisted canonical domain is excluded when a profile is active', asy
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.candidate strong')).toHaveText(['other.invalid']);
   await expect(page.locator('.status')).toContainText('excluded 1 trusted profile domain');
+  await expect(page.locator('.status')).toContainText('0 new since the previous complete search');
+  await expect(page.getByRole('button', { name: 'New only · 0' })).toBeVisible();
+  await expect(page.locator('.ct-new')).toHaveCount(0);
 });
 
 test('Continue to Bulk loads canonical domains and CT provenance survives the handoff', async ({ page }) => {
@@ -172,6 +190,118 @@ test('a legacy domains-only response renders and hands off safely', async ({ pag
   await page.getByRole('button', { name: 'Continue to Bulk' }).click();
   await expect(page).toHaveURL(/\/bulk/);
   await expect(page.locator('#domains')).toHaveValue(/a\.example\.invalid/);
+});
+
+test('a complete CT baseline persists across reload and labels newly observed domains', async ({ page }) => {
+  let requestCount = 0;
+  await page.route('**/api/ct-search**', (route) => {
+    requestCount += 1;
+    const body = requestCount === 1 ? initialBaselineResponse : structuredResponse;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+
+  await runCtSearch(page);
+  await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
+  await expect(page.locator('.ct-new')).toHaveCount(0);
+
+  await page.reload();
+  await runCtSearch(page);
+  await expect(page.locator('.status')).toContainText('1 new since the previous complete search');
+  await expect(page.locator('.ct-new')).toHaveCount(1);
+  await expect(page.locator('.candidate', { has: page.locator('.ct-new') }).locator('strong')).toHaveText('other.invalid');
+
+  const newOnly = page.getByRole('button', { name: 'New only · 1' });
+  await newOnly.click();
+  await expect(newOnly).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.candidate')).toHaveCount(1);
+  await expect(page.locator('.candidate strong')).toHaveText(['other.invalid']);
+});
+
+test('previous certificate searches can be reused and deleted', async ({ page }) => {
+  await mockCtSearch(page, initialBaselineResponse);
+  await runCtSearch(page, 'Example Brand');
+
+  const history = page.locator('details.ct-history');
+  const historySummary = history.locator(':scope > summary');
+  await expect(historySummary).toContainText('Previous certificate searches · 1');
+  await historySummary.click();
+  await expect(history).toContainText('example brand');
+  await expect(history).toContainText('1 retained check');
+  await history.locator('.ct-checks > summary', { hasText: 'View check history' }).click();
+  await expect(history.locator('.ct-checks')).toContainText('1 result · 0 new');
+
+  await page.locator('.fields input').first().fill('different');
+  await history.getByRole('button', { name: 'Use example brand certificate search' }).click();
+  await expect(page.locator('.fields input').first()).toHaveValue('example brand');
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await history.getByRole('button', { name: 'Delete example brand certificate history' }).click();
+  await expect(page.locator('details.ct-history')).toHaveCount(0);
+});
+
+test('a capped search does not replace the previous complete baseline', async ({ page }) => {
+  let requestCount = 0;
+  await page.route('**/api/ct-search**', (route) => {
+    requestCount += 1;
+    const body = requestCount === 2
+      ? { ...structuredResponse, truncated: true }
+      : initialBaselineResponse;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+
+  await runCtSearch(page);
+  await runCtSearch(page);
+  await expect(page.locator('.status')).toContainText('Capped results did not replace that baseline');
+  await expect(page.locator('.ct-new')).toHaveCount(1);
+
+  // The third complete response matches the original baseline. If the capped
+  // response had replaced it, the original domain would be mislabelled new.
+  await runCtSearch(page);
+  await expect(page.locator('.status')).toContainText('0 new since the previous complete search');
+  await expect(page.locator('.ct-new')).toHaveCount(0);
+});
+
+test('corrupt local CT history is recovered without losing search results', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('whoisleuth:ct-search-history:v1', '{broken-json'));
+  await mockCtSearch(page, initialBaselineResponse);
+  await runCtSearch(page);
+
+  await expect(page.locator('.candidate')).toHaveCount(1);
+  await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:ct-search-history:v1') || 'null'));
+  expect(stored.version).toBe(1);
+  expect(stored.entries).toHaveLength(1);
+});
+
+test('a browser storage write failure does not hide valid CT search results', async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'whoisleuth:ct-search-history:v1') {
+        throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+      }
+      return originalSetItem.call(this, key, value);
+    };
+  });
+  await page.reload();
+  await mockCtSearch(page, initialBaselineResponse);
+  await runCtSearch(page);
+
+  await expect(page.locator('.candidate')).toHaveCount(1);
+  await expect(page.locator('.candidate strong')).toHaveText(['example.invalid']);
+  await expect(page.locator('.status')).toContainText('Found 1 registrable domain from 4 certificates');
+  await expect(page.locator('.ct-history-notice')).toContainText('Browser storage may be full or unavailable');
+});
+
+test('a future CT history schema is never overwritten by an older app', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('whoisleuth:ct-search-history:v1', JSON.stringify({ version: 2, entries: [{ future: true }] })));
+  await mockCtSearch(page, initialBaselineResponse);
+  await runCtSearch(page);
+
+  await expect(page.locator('.candidate')).toHaveCount(1);
+  await expect(page.locator('.ct-history-notice')).toContainText('newer app version');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:ct-search-history:v1') || 'null'));
+  expect(stored).toEqual({ version: 2, entries: [{ future: true }] });
 });
 
 test('switching tabs during an in-flight CT request does not leave the UI stuck', async ({ page }) => {

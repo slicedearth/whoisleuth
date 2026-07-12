@@ -266,6 +266,16 @@ root and is gitignored.
   hostname list still works: Discover falls back to hostname-only candidates,
   notes that detailed CT provenance was unavailable, and hands them off
   without manufacturing timestamps or counts.
+- Complete structured certificate searches also maintain a bounded,
+  browser-local baseline for each normalized keyword. A later search labels
+  canonical domains that were absent from the previous complete result and
+  can filter the list to those new observations. Capped and legacy responses
+  are retained in the local check summary but never replace a complete
+  baseline, avoiding false "new" labels after a partial result. Discover's
+  **Previous certificate searches** panel can reuse or delete individual
+  searches, or clear all CT history. This history stays in `localStorage`, is
+  limited to 30 searches and 20 checks per search, and can be removed without
+  affecting watchlists, cases, or Brand Profiles.
 - A registered result with a published abuse contact (from RDAP or WHOIS)
   gets a **Report abuse** draft - a prefilled takedown request referencing
   that domain's risk signals, with the same mailto-link-plus-copy-button
