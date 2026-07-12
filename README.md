@@ -246,7 +246,12 @@ root and is gitignored.
 - Use **Search Certificate Transparency logs** to find hostnames with a
   publicly-issued TLS certificate matching a brand keyword - catches
   lookalikes the typosquat generator's fixed permutations would never guess,
-  often before the domain shows up anywhere else.
+  often before the domain shows up anywhere else. Results now retain
+  structured provenance: each match groups observed hostnames by canonical
+  registrable domain, records the earliest and latest CT observation
+  timestamps, and counts distinct certificates. CT timestamps are public-log
+  observation metadata — they do not prove that a site is active, malicious,
+  or registered at a particular time.
 - A registered result with a published abuse contact (from RDAP or WHOIS)
   gets a **Report abuse** draft - a prefilled takedown request referencing
   that domain's risk signals, with the same mailto-link-plus-copy-button
