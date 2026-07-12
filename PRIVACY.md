@@ -45,6 +45,11 @@ at all.
   pre-filled text to your clipboard. Nothing is sent automatically; a
   human reviews and sends each one from their own mail client.
 
+The signed session cookie is stateless and valid for up to 30 days. Signing
+out removes it from that browser but does not revoke a captured copy; the
+operator must rotate `SESSION_SECRET` (or the shared password when it is also
+used for signing) to invalidate all outstanding sessions before expiry.
+
 ## Legal basis for processing
 
 Using this tool to monitor domains/brands you have a legitimate interest in

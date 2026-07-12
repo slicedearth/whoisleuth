@@ -116,6 +116,21 @@ The server listens on port 3000 by default. To use a different port:
 PORT=4000 SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret npm start
 ```
 
+When self-hosting behind a reverse proxy such as nginx, Caddy, or a managed
+load balancer, set `TRUST_PROXY=1` only if that proxy overwrites forwarded
+headers and clients cannot connect directly to the Node process. This lets
+per-IP rate limits use the proxy-supplied client address and lets proxied
+HTTPS requests receive HSTS. Secure cookies continue to fail closed when a
+proxy reports HTTPS even without this setting. Other forwarded client and
+scheme data is ignored; all proxied users will otherwise share the proxy
+socket's rate-limit bucket. Do not enable it on a directly
+internet-facing Node process, where clients could forge those headers.
+
+Sessions are stateless and valid for up to 30 days. Signing out clears the
+cookie from that browser but cannot revoke a copied token before it expires.
+Rotate `SESSION_SECRET` (or `SITE_PASSWORD` when no independent session secret
+is configured) to invalidate every outstanding session immediately.
+
 Every push and pull request runs the locked install, test suite, JavaScript
 type checks, Svelte checks, production frontend build, and browser end-to-end
 suite in GitHub Actions. Run the same verification locally:
@@ -159,6 +174,9 @@ root and is gitignored.
   lifecycle events are normalized into deterministic creation, expiration,
   update, transfer, deletion, and reinstantiation dates without discarding the
   bounded source event list.
+- HTTPS registry endpoints are preferred. A small number of current IANA
+  bootstrap entries expose only HTTP; those remain usable for lookup coverage,
+  and source diagnostics explicitly identify the cleartext transport.
 - Structured domain results retain registry object IDs, registrar IANA IDs,
   registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
   are RDAP-only; full Lookup and deep scans retain the WHOIS referral chain.
@@ -380,6 +398,10 @@ its edge-enforced, per-IP rate limiting to the canonical `/api/login` and
 `/api/lookup` paths. Those two rules use the code-based allowance available
 on all Netlify plans and protect the password gate and the main high-volume
 scan path before a function container is invoked.
+Requests made directly to `/.netlify/functions/*` do not pass through those
+path-specific edge rules. The function-level limiter still applies, but it is
+container-local; deployments that need durable protection against distributed
+abuse should add a shared rate-limit store or platform-level traffic controls.
 
 ## Deploying to Netlify
 

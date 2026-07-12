@@ -17,8 +17,9 @@ const {
   parseCookies,
   buildSessionCookie,
   buildClearCookie,
+  isTrustedLoginOrigin,
 } = require('./lib/auth');
-const { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT, API_RATE_LIMIT } = require('./lib/rate-limit');
+const { checkRateLimit, getClientIp, getForwardedProtocol, LOGIN_RATE_LIMIT, API_RATE_LIMIT } = require('./lib/rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +31,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (isHttps(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   next();
 });
 
@@ -53,7 +55,15 @@ app.use(express.json({ limit: '1mb' }));
 // A plain `npm start` on localhost is http, so this must stay conditional
 // rather than always true.
 function isHttps(req) {
-  return req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https';
+  return req.protocol === 'https' || getForwardedProtocol(req.headers) === 'https';
+}
+
+// Preserve secure-cookie detection for existing reverse-proxy deployments
+// that have not opted into trusting forwarded client identity. A forged
+// value can only add Secure (fail closed); it cannot remove the attribute.
+function usesSecureCookies(req) {
+  const forwarded = req.headers['x-forwarded-proto'];
+  return isHttps(req) || (typeof forwarded === 'string' && forwarded.toLowerCase() === 'https');
 }
 
 function requireAuth(req, res, next) {
@@ -79,12 +89,15 @@ function rateLimit(scope, opts) {
 const loginRateLimit = rateLimit('login', LOGIN_RATE_LIMIT);
 const apiRateLimit = rateLimit('api', API_RATE_LIMIT);
 
-app.post('/api/login', loginRateLimit, (req, res) => {
+app.post('/api/login', (req, res, next) => {
+  if (!isTrustedLoginOrigin(req.headers)) return res.status(403).json({ error: 'Cross-site request blocked' });
+  next();
+}, loginRateLimit, (req, res) => {
   const password = (req.body && req.body.password) || '';
   if (!checkPassword(password)) {
     return res.status(401).json({ error: 'Incorrect password' });
   }
-  res.setHeader('Set-Cookie', buildSessionCookie(createSessionToken(), { secure: isHttps(req) }));
+  res.setHeader('Set-Cookie', buildSessionCookie(createSessionToken(), { secure: usesSecureCookies(req) }));
   res.json({ ok: true });
 });
 

@@ -6,6 +6,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   createSessionToken,
+  isTrustedLoginOrigin,
   isTrustedOrigin,
   isValidSessionToken,
   parseCookies,
@@ -49,6 +50,18 @@ describe('isTrustedOrigin', () => {
   test('fails closed when headers is null/undefined', () => {
     assert.equal(isTrustedOrigin(null), false);
     assert.equal(isTrustedOrigin(undefined), false);
+  });
+});
+
+describe('isTrustedLoginOrigin', () => {
+  test('rejects a present cross-site Origin', () => {
+    assert.equal(isTrustedLoginOrigin({ origin: 'https://attacker.example', host: 'example.com' }), false);
+  });
+
+  test('accepts a matching browser Origin and an omitted non-browser Origin', () => {
+    assert.equal(isTrustedLoginOrigin({ origin: 'https://example.com', host: 'example.com' }), true);
+    assert.equal(isTrustedLoginOrigin({ host: 'example.com' }), true);
+    assert.equal(isTrustedLoginOrigin(undefined), true);
   });
 });
 

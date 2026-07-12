@@ -19,6 +19,7 @@ setup('authenticate', async ({ request }) => {
   // silently following it and asserting on the wrong URL.
   const response = await request.post('/api/login', {
     data: { password: TEST_SITE_PASSWORD },
+    headers: { Origin: BASE_URL },
     maxRedirects: 0,
   });
   expect(response.ok()).toBeTruthy();

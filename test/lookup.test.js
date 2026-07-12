@@ -15,6 +15,7 @@ describe('runUnifiedLookup', () => {
   test('fetches RDAP and WHOIS once and reuses both for availability', async () => {
     const rdapRecord = {
       rdapServer: 'https://rdap.example/domain/example.com',
+      transportSecurity: 'https',
       upstreamStatus: 200,
       data: { ldhName: 'EXAMPLE.COM' },
       parsed: { domain: 'EXAMPLE.COM', statuses: [], nameservers: [], events: [] },
@@ -51,6 +52,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.availability.inputHostname, 'login.example.com');
     assert.equal(result.diagnostics.version, 1);
     assert.equal(result.diagnostics.rdap.status, 'success');
+    assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.equal(result.diagnostics.whois.status, 'complete');
     assert.equal(result.diagnostics.availability.status, 'complete');
   });

@@ -15,6 +15,26 @@ describe('RDAP endpoint failover', () => {
     ]);
   });
 
+  test('retains an HTTP-only service and reports its transport', async () => {
+    const record = await fetchRdapFromBases('domain', 'example.kg', [
+      'http://rdap.example/rdap',
+    ], async () => ({
+      status: 200,
+      ok: true,
+      text: JSON.stringify({ ldhName: 'EXAMPLE.KG' }),
+    }));
+
+    assert.equal(record.transportSecurity, 'http');
+    assert.match(record.rdapServer, /^http:/);
+  });
+
+  test('classifies the URL scheme case-insensitively', async () => {
+    const record = await fetchRdapFromBases('domain', 'example.com', [
+      'HTTPS://rdap.example/rdap',
+    ], async () => ({ status: 404, ok: false, text: '{}' }));
+    assert.equal(record.transportSecurity, 'https');
+  });
+
   test('falls through a rate-limited endpoint to the next service', async () => {
     const calls = [];
     const record = await fetchRdapFromBases('domain', 'example.com', [

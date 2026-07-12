@@ -1,10 +1,13 @@
-const { checkPassword, createSessionToken, buildSessionCookie } = require('../../lib/auth');
+const { checkPassword, createSessionToken, buildSessionCookie, isTrustedLoginOrigin } = require('../../lib/auth');
 const { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT } = require('../../lib/rate-limit');
 const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
+  }
+  if (!isTrustedLoginOrigin(event.headers)) {
+    return json(403, { error: 'Cross-site request blocked' });
   }
 
   const ip = getClientIp(event.headers);
