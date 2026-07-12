@@ -8,9 +8,30 @@
 // would silently add a second recipient to the outreach/abuse draft the user
 // opens - rejecting anything outside a single plain address closes that off.
 const SIMPLE_EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const MAX_ENTITY_DISPLAY_LENGTH = 300;
 
 export function isValidEmailAddress(value) {
   return typeof value === 'string' && SIMPLE_EMAIL_RE.test(value.trim());
+}
+
+// RDAP and compact availability results represent a registrar as an entity,
+// while some WHOIS paths retain the historical string field. Normalize both
+// forms before they reach UI summaries or browser-local evidence; blindly
+// calling String() on an entity would persist "[object Object]" and hide real
+// registrar changes. The backend already bounds these values, but this client
+// boundary revalidates the API response before retaining it.
+export function entityDisplayName(value) {
+  let candidate = value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    candidate = value.name || value.org || value.handle;
+  }
+  if (typeof candidate !== 'string' && typeof candidate !== 'number') return null;
+  const normalized = String(candidate)
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_ENTITY_DISPLAY_LENGTH);
+  return normalized || null;
 }
 
 // Hamming distance (0-64) between two 16-hex perceptual dHash strings (see

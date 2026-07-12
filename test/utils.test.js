@@ -36,6 +36,22 @@ describe('isValidEmailAddress', () => {
   });
 });
 
+describe('entityDisplayName', () => {
+  test('normalizes registrar strings and structured entities consistently', () => {
+    assert.equal(utils.entityDisplayName(' Example Registrar LLC '), 'Example Registrar LLC');
+    assert.equal(utils.entityDisplayName({ name: 'Example Registrar LLC', org: 'Fallback Org', handle: 'REG-1' }), 'Example Registrar LLC');
+    assert.equal(utils.entityDisplayName({ name: '', org: 'Fallback Org', handle: 'REG-1' }), 'Fallback Org');
+    assert.equal(utils.entityDisplayName({ name: '', org: '', handle: 'REG-1' }), 'REG-1');
+  });
+
+  test('bounds and sanitizes display values without stringifying arbitrary objects', () => {
+    assert.equal(utils.entityDisplayName({ name: 'Example\u0000 Registrar\n LLC' }), 'Example Registrar LLC');
+    assert.equal(utils.entityDisplayName({ unknown: 'value' }), null);
+    assert.equal(utils.entityDisplayName([]), null);
+    assert.equal(utils.entityDisplayName('x'.repeat(400)).length, 300);
+  });
+});
+
 describe('parseDomainInput', () => {
   test('accepts newline, comma, semicolon, and tab-separated query lists', () => {
     assert.deepEqual(utils.parseDomainInput('one.example\ntwo.example').entries, ['one.example', 'two.example']);

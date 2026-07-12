@@ -155,6 +155,35 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expectNoHorizontalOverflow(page);
 });
 
+test('a Lookup case stores the registrar name rather than stringifying its entity', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'example.com', type: 'domain', registrableDomain: 'example.com',
+      availability: {
+        state: 'registered', confidence: 'high', domain: 'example.com', deepScanComplete: true,
+        registrar: { handle: 'REG-1', name: 'Example Registrar LLC', org: 'Example Registrar Group' },
+      },
+      rdap: { parsed: { registrar: { name: 'RDAP Fallback Registrar' } } },
+      whois: { parsed: { registrar: 'WHOIS Fallback Registrar' }, chain: [] },
+      diagnostics: {
+        rdap: { status: 'success' }, whois: { status: 'success' }, availability: { status: 'complete' },
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('example.com');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await page.getByRole('button', { name: 'Create case' }).click();
+
+  const registrar = await page.evaluate(() => {
+    const stored = JSON.parse(localStorage.getItem('whois-rdap-cases-v1') || '{}');
+    return stored.cases?.[0]?.evidenceHistory?.[0]?.registrar;
+  });
+  expect(registrar).toBe('Example Registrar LLC');
+});
+
 test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

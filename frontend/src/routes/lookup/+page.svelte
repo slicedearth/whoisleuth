@@ -9,7 +9,7 @@
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compareRegistrySources } from '$lib/analysis/registry-comparison.js';
-  import { parseDomainInput } from '$lib/analysis/utils.js';
+  import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import {
     explainOpportunityScore,
@@ -79,7 +79,7 @@
     opportunityScore:opportunity?opportunity.score:null,
     riskFactors:risk?risk.factors.map((f)=>({label:f.label,points:f.delta})):[],
     opportunityFactors:opportunity?opportunity.factors.map((f)=>({label:f.label,points:f.delta})):[],
-    registrar:String(availability.registrar||rdapParsed.registrar||whoisParsed.registrar||''),
+    registrar:entityDisplayName(availability.registrar)||entityDisplayName(rdapParsed.registrar)||entityDisplayName(whoisParsed.registrar),
     createdDate:created()||null,
     expiryDate:expires()||null,
     nameservers:Array.isArray(availability.nameservers)?availability.nameservers:[],
