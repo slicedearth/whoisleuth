@@ -8,6 +8,7 @@ const { checkDomainAvailability } = require('./lib/availability');
 const { runUnifiedLookup, LOOKUP_ERROR_CODES } = require('./lib/lookup');
 const { searchCertificateTransparency } = require('./lib/ct-search');
 const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('./lib/domain-posture');
+const { capabilityReport } = require('./lib/capabilities');
 const {
   COOKIE_NAME,
   checkPassword,
@@ -112,6 +113,10 @@ app.post('/api/logout', requireAuth, (req, res) => {
 app.get('/api/session', (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   res.json({ authenticated: isValidSessionToken(cookies[COOKIE_NAME]) });
+});
+
+app.get('/api/capabilities', requireAuth, (req, res) => {
+  res.json(capabilityReport('express'));
 });
 
 app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {

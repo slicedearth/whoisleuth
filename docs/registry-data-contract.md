@@ -75,6 +75,21 @@ or rewritten. DNS and Certificate Transparency are the first adopters; other
 registry diagnostics retain their existing versioned contract until an
 additive migration provides material value.
 
+## Capability discovery
+
+Authenticated clients can request `GET /api/capabilities`. Version 1 returns a
+server-authoritative runtime identifier and a bounded feature list using
+`supported`, `disabled`, `unavailable`, or `local_only`. Each entry identifies
+its execution location and only the existing `fast`/`deep` modes it actually
+supports. The report deliberately marks scheduled monitoring and distributed
+budgets unavailable until those services exist.
+
+Consumers must reject malformed or unsupported future reports conservatively;
+the browser labels capability status unavailable without hiding otherwise
+usable local workflows. Runtime limitations distinguish process-local Express
+state from per-instance serverless state and must not be presented as globally
+enforced usage accounting.
+
 ## Diagnostics version 2
 
 `diagnostics.version` is `2`. The source objects use explicit status values:

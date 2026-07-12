@@ -71,6 +71,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/capabilities"
+  to = "/.netlify/functions/capabilities"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/ct-search"
   to = "/.netlify/functions/ct-search"
   status = 200

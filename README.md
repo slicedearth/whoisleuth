@@ -246,6 +246,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   and bounded diagnostics. DNS and Certificate Transparency are the first
   adopters; their established response fields remain unchanged, and older
   records without an envelope remain valid.
+- Authenticated deployments expose a provider-neutral `/api/capabilities`
+  report so browser, CLI, and worker consumers can distinguish hosted support,
+  local-only analysis, disabled features, and unavailable integrations. The
+  report is server-authoritative, identifies runtime-local enforcement limits,
+  and does not claim unimplemented scheduled or distributed capabilities.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
 
