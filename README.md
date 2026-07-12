@@ -302,9 +302,23 @@ full case workspace (a `Cases` tab alongside `Watchlists`).
   pruned first, and analyst-authored notes, tags, status, and decisions are
   never discarded to make room. Old or malformed stored data is repaired on load
   rather than crashing the app.
+- **Single-case evidence reports** are available inside each expanded case in
+  Monitor. You can export a _structured JSON_ or _readable Markdown_ package
+  containing the case summary, current assessment, full evidence timeline
+  (chronological, with depth-aware change reports), and an explicit
+  `notesIncluded` indicator. The **Include analyst notes** checkbox defaults to
+  **off** — enable it only when you need the notes in the report. These reports
+  are generated locally in the browser, never uploaded or sent automatically,
+  and are **not** import files (they are read-only evidence packages, distinct
+  from the whole-store backup/import JSON described above). Reports include a
+  limitations statement confirming that they contain normalized observations,
+  not raw registry/web responses, and that snapshot fingerprints are
+  deduplication identifiers rather than cryptographic evidence hashes.
 - **Notes may contain sensitive investigation detail** (analyst identities,
   victim data, internal decisions). Treat an exported case file as sensitive:
-  store it somewhere access-controlled and share it deliberately.
+  store it somewhere access-controlled and share it deliberately. Review every
+  report before sharing it — Markdown reports in particular should be checked
+  for escaped content that an analyst or import may have stored.
 
 ## Rate limiting
 

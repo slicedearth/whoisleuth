@@ -70,6 +70,7 @@ interface CaseOverrides {
   evidenceHistory?: ReturnType<typeof snapshot>[];
   createdAt?: string;
   updatedAt?: string;
+  notes?: Array<{ createdAt: string; body: string }>;
 }
 
 function caseRecord(overrides: CaseOverrides = {}) {
@@ -79,7 +80,7 @@ function caseRecord(overrides: CaseOverrides = {}) {
     status: overrides.status ?? 'new',
     disposition: overrides.disposition ?? 'unreviewed',
     tags: [],
-    notes: [],
+    notes: overrides.notes ?? [],
     source: overrides.source ?? 'lookup',
     evidenceHistory: overrides.evidenceHistory ?? [],
     createdAt: overrides.createdAt ?? '2026-06-01T00:00:00.000Z',
@@ -526,6 +527,174 @@ test.describe('evidence timeline', () => {
     // Expand the snapshot detail.
     await page.locator('.timeline-toggle').first().click();
     await expect(page.locator('.timeline-detail').first()).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
+test.describe('case report export', () => {
+  test('export JSON for a case with correct filename and content', async ({ page }) => {
+    await openSeededTimelineCase(page, 'export-json.invalid', [
+      caseRecord({
+        id: 'export-json',
+        domain: 'export-json.invalid',
+        source: 'lookup',
+        evidenceHistory: [
+          snapshot({
+            id: 'ev-1', fingerprint: 'fp1', capturedAt: '2026-06-01T00:00:00.000Z',
+            riskScore: 20, availability: 'registered', registrar: 'TestReg',
+          }),
+          snapshot({
+            id: 'ev-2', fingerprint: 'fp2', firstCapturedAt: '2026-07-01T00:00:00.000Z',
+            capturedAt: '2026-07-01T00:00:00.000Z', riskScore: 85,
+            availability: 'registered', registrar: 'TestReg',
+          }),
+        ],
+      }),
+    ]);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(/^whoisleuth-case-export-json\.invalid-.*\.json$/);
+    expect(download.suggestedFilename()).not.toContain('/');
+
+    const body = await (await download.createReadStream()).toArray();
+    const text = Buffer.concat(body).toString('utf-8');
+    const parsed = JSON.parse(text);
+
+    expect(parsed.schema).toBe('whoisleuth.case-report');
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.case.domain).toBe('export-json.invalid');
+    expect(parsed.case.notesIncluded).toBe(false);
+    expect(parsed.evidenceTimeline.length).toBe(2);
+    expect(parsed.evidenceTimeline[1].changes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'riskScore', before: 20, after: 85 })]),
+    );
+  });
+
+  test('export Markdown for a case with correct filename and content', async ({ page }) => {
+    await openSeededTimelineCase(page, 'export-md.invalid', [
+      caseRecord({
+        id: 'export-md',
+        domain: 'export-md.invalid',
+        source: 'lookup',
+        evidenceHistory: [
+          snapshot({ id: 'ev-1', fingerprint: 'fp1', riskScore: 40 }),
+        ],
+      }),
+    ]);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export Markdown' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(/^whoisleuth-case-export-md\.invalid-.*\.md$/);
+
+    const body = await (await download.createReadStream()).toArray();
+    const text = Buffer.concat(body).toString('utf-8');
+
+    expect(text).toContain('# Case Report: export-md.invalid');
+    expect(text).toContain('## Evidence Timeline');
+    expect(text).toContain('## Limitations & Provenance');
+  });
+
+  test('notes absent by default in export', async ({ page }) => {
+    await openSeededTimelineCase(page, 'no-notes.invalid', [
+      caseRecord({
+        id: 'no-notes',
+        domain: 'no-notes.invalid',
+        notes: [{ createdAt: '2026-06-01T00:00:00.000Z', body: 'Secret note.' }],
+        source: 'lookup',
+        evidenceHistory: [snapshot({ id: 'ev-1', fingerprint: 'fp1' })],
+      }),
+    ]);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
+    const download = await downloadPromise;
+
+    const body = await (await download.createReadStream()).toArray();
+    const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
+
+    expect(parsed.case.notesIncluded).toBe(false);
+    expect('notes' in parsed.case).toBe(false);
+  });
+
+  test('notes included after explicit opt-in', async ({ page }) => {
+    await openSeededTimelineCase(page, 'with-notes.invalid', [
+      caseRecord({
+        id: 'with-notes',
+        domain: 'with-notes.invalid',
+        notes: [{ createdAt: '2026-06-01T00:00:00.000Z', body: 'Investigation detail.' }],
+        source: 'lookup',
+        evidenceHistory: [snapshot({ id: 'ev-1', fingerprint: 'fp1' })],
+      }),
+    ]);
+
+    // Check the "Include analyst notes" checkbox.
+    await page.locator('.export-notes input[type="checkbox"]').check();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
+    const download = await downloadPromise;
+
+    const body = await (await download.createReadStream()).toArray();
+    const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
+
+    expect(parsed.case.notesIncluded).toBe(true);
+    expect(parsed.case.notes.length).toBe(1);
+    expect(parsed.case.notes[0].body).toBe('Investigation detail.');
+  });
+
+  test('note opt-in resets when switching cases', async ({ page }) => {
+    await openSeededTimelineCase(page, 'first-export.invalid', [
+      caseRecord({ id: 'first-export', domain: 'first-export.invalid' }),
+      caseRecord({ id: 'second-export', domain: 'second-export.invalid' }),
+    ]);
+
+    await page.locator('.export-notes input[type="checkbox"]').check();
+    await page.locator('.case-head', { hasText: 'second-export.invalid' }).click();
+
+    await expect(page.locator('.export-notes input[type="checkbox"]')).not.toBeChecked();
+  });
+
+  test('whole-store backup remains available and distinct', async ({ page }) => {
+    await openSeededTimelineCase(page, 'backup-test.invalid', [
+      caseRecord({
+        id: 'backup-test',
+        domain: 'backup-test.invalid',
+        source: 'lookup',
+        evidenceHistory: [snapshot({ id: 'ev-1', fingerprint: 'fp1' })],
+      }),
+    ]);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('.case-toolbar .top-actions button', { hasText: 'Export JSON' }).click();
+    const download = await downloadPromise;
+    const body = await (await download.createReadStream()).toArray();
+    const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
+
+    expect(download.suggestedFilename()).toMatch(/^whoisleuth-cases-.*\.json$/);
+    expect(parsed.version).toBe(2);
+    expect(parsed.cases).toEqual(expect.arrayContaining([
+      expect.objectContaining({ domain: 'backup-test.invalid' }),
+    ]));
+    expect(parsed.schema).toBeUndefined();
+  });
+
+  test('mobile controls remain usable without horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    await openSeededTimelineCase(page, 'mobile-export.invalid', [
+      caseRecord({
+        id: 'mobile-export',
+        domain: 'mobile-export.invalid',
+        source: 'lookup',
+        evidenceHistory: [snapshot({ id: 'ev-1', fingerprint: 'fp1' })],
+      }),
+    ]);
+
+    await expect(page.locator('.export-controls')).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });
