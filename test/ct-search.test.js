@@ -145,16 +145,14 @@ describe('empty and invalid input', () => {
 // ---------------------------------------------------------------------------
 
 describe('searchCertificateTransparency', () => {
-  test('empty query returns the additive empty contract without fetching', async (t) => {
-    const originalFetch = global.fetch;
+  test('empty query returns the additive empty contract without fetching', async () => {
     let called = false;
-    global.fetch = async () => {
+    const fetcher = async () => {
       called = true;
       throw new Error('fetch should not run');
     };
-    t.after(() => { global.fetch = originalFetch; });
 
-    const result = await searchCertificateTransparency('   ');
+    const result = await searchCertificateTransparency('   ', { fetcher });
 
     assert.deepStrictEqual({ domains: result.domains, certCount: result.certCount, truncated: result.truncated, matches: result.matches }, {
       domains: [], certCount: 0, truncated: false, matches: [],
@@ -165,15 +163,13 @@ describe('searchCertificateTransparency', () => {
     assert.equal(called, false);
   });
 
-  test('preserves raw-row certCount while attaching structured provenance', async (t) => {
-    const originalFetch = global.fetch;
-    global.fetch = async () => new Response(JSON.stringify([
+  test('preserves raw-row certCount while attaching structured provenance', async () => {
+    const fetcher = async () => new Response(JSON.stringify([
       row({ id: 1, name_value: 'a.example.com', common_name: '' }),
       row({ id: 1, name_value: 'b.example.com', common_name: '' }),
     ]), { status: 200, headers: { 'content-type': 'application/json' } });
-    t.after(() => { global.fetch = originalFetch; });
 
-    const result = await searchCertificateTransparency('example');
+    const result = await searchCertificateTransparency('example', { fetcher });
 
     assert.equal(result.certCount, 2);
     assert.deepStrictEqual(result.domains, ['a.example.com', 'b.example.com']);
@@ -184,18 +180,64 @@ describe('searchCertificateTransparency', () => {
     assert.equal(result.observation.diagnostics.certificateRows, 2);
   });
 
-  test('rejects a non-array upstream JSON response cleanly', async (t) => {
-    const originalFetch = global.fetch;
-    global.fetch = async () => new Response(JSON.stringify({ unexpected: true }), {
+  test('rejects a non-array upstream JSON response cleanly', async () => {
+    const fetcher = async () => new Response(JSON.stringify({ unexpected: true }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
-    t.after(() => { global.fetch = originalFetch; });
 
     await assert.rejects(
-      searchCertificateTransparency('example'),
+      searchCertificateTransparency('example', { fetcher }),
       /unexpected response format \(expected a JSON array\)/,
     );
+  });
+
+  test('uses the injected safe request boundary and propagates its redirect rejection', async () => {
+    const calls = [];
+    const fetcher = async (url, options) => {
+      calls.push({ url, options });
+      throw new Error('Refusing to fetch redirect target: resolves to a private/reserved address');
+    };
+
+    await assert.rejects(
+      searchCertificateTransparency('example', { fetcher }),
+      /private\/reserved address/,
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://crt.sh/?q=example&output=json');
+    assert.equal(calls[0].options.headers.Accept, 'application/json');
+    assert.ok(calls[0].options.signal instanceof AbortSignal);
+  });
+
+  test('preserves bounded status retry behavior through the safe request boundary', async () => {
+    const responses = [
+      new Response('', { status: 503 }),
+      new Response(JSON.stringify([row()]), { status: 200 }),
+    ];
+    const waits = [];
+    let calls = 0;
+    const result = await searchCertificateTransparency('example', {
+      fetcher: async () => { calls += 1; return responses.shift(); },
+      delay: async (ms) => { waits.push(ms); },
+    });
+
+    assert.equal(calls, 2);
+    assert.deepStrictEqual(waits, [1500]);
+    assert.equal(result.certCount, 1);
+  });
+
+  test('preserves the single timeout retry through the safe request boundary', async () => {
+    let calls = 0;
+    const result = await searchCertificateTransparency('example', {
+      fetcher: async () => {
+        calls += 1;
+        if (calls === 1) throw new DOMException('timed out', 'AbortError');
+        return new Response(JSON.stringify([row()]), { status: 200 });
+      },
+    });
+
+    assert.equal(calls, 2);
+    assert.equal(result.certCount, 1);
   });
 });
 
