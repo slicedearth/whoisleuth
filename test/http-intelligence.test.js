@@ -62,6 +62,7 @@ describe('buildHttpObservation', () => {
       observedAt: OBSERVED_AT,
       capturedBodyBytes: 22,
       bodyInspected: true,
+      bodySha256: 'A'.repeat(64),
     });
 
     assert.equal(result.version, 1);
@@ -75,6 +76,12 @@ describe('buildHttpObservation', () => {
     assert.equal(result.response.status, 200);
     assert.equal(result.response.declaredContentLength, 22);
     assert.equal(result.response.capturedBodyBytes, 22);
+    assert.deepEqual(result.response.bodyHash, {
+      algorithm: 'sha256',
+      value: 'a'.repeat(64),
+      scope: 'complete-body',
+      bytes: 22,
+    });
     assert.equal(result.response.securityHeaders.xFrameOptions, 'DENY');
     assert.match(result.limitations.join(' '), /query strings were omitted/i);
     assert.equal(JSON.stringify(result).includes('secret'), false);
@@ -93,6 +100,7 @@ describe('buildHttpObservation', () => {
       capturedBodyBytes: 300000,
       bodyInspected: true,
       bodyTruncated: true,
+      bodySha256: 'b'.repeat(64),
     });
 
     assert.equal(result.status, 'partial');
@@ -101,6 +109,8 @@ describe('buildHttpObservation', () => {
     assert.equal(result.redirectLimitReached, true);
     assert.equal(result.httpsDowngrade, true);
     assert.equal(result.response.bodyTruncated, true);
+    assert.equal(result.response.bodyHash.scope, 'captured-prefix');
+    assert.equal(result.response.bodyHash.bytes, 300000);
     assert.equal(result.limitations.length, 2);
   });
 
@@ -124,6 +134,24 @@ describe('buildHttpObservation', () => {
     assert.ok(result.response.server.length <= 200);
     assert.ok(result.response.securityHeaders.contentSecurityPolicy.length <= 1024);
     assert.equal(result.response.capturedBodyBytes, 5 * 1024 * 1024);
+    assert.equal(result.response.bodyHash, null);
+  });
+
+  test('rejects malformed hashes and hashes for uninspected bodies', () => {
+    const detail = {
+      response: new Response('', { status: 200 }),
+      requestedUrl: 'https://example.com/',
+      finalUrl: 'https://example.com/',
+      hops: [],
+    };
+    assert.equal(buildHttpObservation(detail, {
+      bodyInspected: true,
+      bodySha256: 'not-a-hash',
+    }).response.bodyHash, null);
+    assert.equal(buildHttpObservation(detail, {
+      bodyInspected: false,
+      bodySha256: 'a'.repeat(64),
+    }).response.bodyHash, null);
   });
 });
 

@@ -170,4 +170,16 @@ describe('capped body readers', () => {
     assert.equal(result.bytesRead, 4);
     assert.equal(result.truncated, false);
   });
+
+  test('optional SHA-256 covers only the exact bytes retained by the cap', async () => {
+    const result = await readTextCapped(new Response('abcdef'), 4, { includeSha256: true });
+    assert.equal(result.text, 'abcd');
+    assert.equal(result.truncated, true);
+    assert.equal(result.sha256, '88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589');
+  });
+
+  test('does not compute a body digest unless the caller opts in', async () => {
+    const result = await readTextCapped(new Response('abcd'), 4);
+    assert.equal(Object.hasOwn(result, 'sha256'), false);
+  });
 });

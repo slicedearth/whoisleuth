@@ -340,8 +340,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   phishing-kit tell. All feed into the Risk score.
 - The same bounded homepage request now retains an HTTP observation with the
   final response, a validated redirect chain, transport, selected response and
-  security headers, declared versus captured body size, and explicit timeout,
-  truncation, or redirect-limit states. URL query strings are omitted from
+  security headers, declared versus captured body size, and a SHA-256 over the
+  captured response bytes. The hash scope explicitly distinguishes a complete
+  captured body from a capped prefix; a prefix hash is not presented as a hash
+  of the complete upstream response. URL query strings are omitted from
   retained provenance. Missing security headers and cross-origin redirects are
   contextual evidence, not maliciousness verdicts, and do not change scoring.
 - A bulk scan flags **Related infrastructure**: domains in the same scan

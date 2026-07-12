@@ -83,6 +83,10 @@ describe('website activity classification', () => {
     assert.equal(result.http.status, 'partial');
     assert.equal(result.http.response.capturedBodyBytes, 300000);
     assert.equal(result.http.response.bodyTruncated, true);
+    assert.equal(result.http.response.bodyHash.algorithm, 'sha256');
+    assert.equal(result.http.response.bodyHash.value, '12e1b9b179b29a4f7e5889b185d7ac71bff0ad1f49a7b391d0911b737a0f5381');
+    assert.equal(result.http.response.bodyHash.scope, 'captured-prefix');
+    assert.equal(result.http.response.bodyHash.bytes, 300000);
   });
 
   test('a fetched favicon resolves an otherwise inconclusive homepage probe', () => {

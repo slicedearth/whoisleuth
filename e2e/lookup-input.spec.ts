@@ -328,6 +328,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           response: {
             status: 200, contentType: 'text/html; charset=utf-8', contentLanguage: 'en', server: 'Example Server',
             declaredContentLength: 4096, capturedBodyBytes: 2048, bodyInspected: true, bodyTruncated: false,
+            bodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 2048 },
             securityHeaders: { strictTransportSecurity: 'max-age=31536000', contentSecurityPolicy: "default-src 'self'", xFrameOptions: 'DENY', xContentTypeOptions: 'nosniff', referrerPolicy: 'no-referrer' },
           },
         },
@@ -345,8 +346,10 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(card.getByText('Cross-origin redirect', { exact: true })).toBeVisible();
   await card.getByText('Redirect chain · 1 hop', { exact: true }).click();
   await expect(card.getByText('→ https://login.example.test/final', { exact: true })).toBeVisible();
-  await card.getByText('Selected response headers', { exact: true }).click();
+  await card.getByText('Selected response metadata', { exact: true }).click();
   await expect(card.getByText('max-age=31536000', { exact: true })).toBeVisible();
+  await expect(card.getByText('a'.repeat(64), { exact: true })).toBeVisible();
+  await expect(card.getByText('Complete captured body (2.0 KiB)', { exact: true })).toBeVisible();
   await expect(card).not.toContainText('secret');
   await expect(card.getByText(/missing security headers do not establish maliciousness/i)).toBeVisible();
 
