@@ -103,6 +103,9 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
         rdapServer: 'https://rdap.example/domain/example.com',
         parsed: {
           domain: 'EXAMPLE.COM', handle: 'DOMAIN-1', statuses: ['active'], nameservers: ['NS1.EXAMPLE.COM'],
+          objectClassName: 'domain', language: 'en', conformance: ['rdap_level_0', 'redacted_0'],
+          redactions: [{ name: 'Registrant Email', method: 'removal', reason: 'Server Policy', prePath: '$.entities[0]' }],
+          variants: [{ relation: ['registered'], idnTable: 'Example table', variantNames: [{ unicodeName: 'éxample.com' }] }],
           entitiesByRole: {
             registrant: [{
               handle: 'CONTACT-1', name: 'Example Contact', organizations: ['Example Org'],
@@ -124,6 +127,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await page.locator('#query').fill('example.com');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await page.getByText('Published contacts · 2 roles').click();
+  const rdapSection = page.locator('.sources > details').first();
+  await expect(rdapSection.getByText('rdap_level_0, redacted_0', { exact: true })).toBeVisible();
+  await expect(rdapSection.getByText(/Registrant Email · removal · Server Policy/)).toBeVisible();
+  await expect(rdapSection.getByText(/registered, Example table: éxample.com/)).toBeVisible();
   await expect(page.getByText('Email: first@example.com, second@example.com')).toBeVisible();
   await expect(page.getByText('Phone: +61 1, +61 2')).toBeVisible();
   await expect(page.getByText('Email: abuse@example.com')).toBeVisible();

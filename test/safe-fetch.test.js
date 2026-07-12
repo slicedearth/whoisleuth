@@ -93,11 +93,30 @@ describe('IPv6', () => {
     assert.equal(isPrivateAddress('fe80::1'), true);
     assert.equal(isPrivateAddress('fc00::1'), true);
     assert.equal(isPrivateAddress('fd12:3456:789a::1'), true);
+    assert.equal(isPrivateAddress('fec0::1'), true); // deprecated site-local
+  });
+
+  test('flags multicast and other non-routable special-purpose ranges', () => {
+    assert.equal(isPrivateAddress('ff02::1'), true); // link-local multicast
+    assert.equal(isPrivateAddress('ff0e::1'), true); // global-scope multicast is still not a unicast fetch target
+    assert.equal(isPrivateAddress('100::1'), true); // discard-only
+    assert.equal(isPrivateAddress('2001:db8::1'), true); // documentation
+    assert.equal(isPrivateAddress('2001:2::1'), true); // benchmarking
+    assert.equal(isPrivateAddress('2001:10::1'), true); // ORCHID
+    assert.equal(isPrivateAddress('2001:20::1'), true); // ORCHIDv2
+  });
+
+  test('decodes private IPv4 targets embedded in Teredo addresses', () => {
+    // Server 8.8.8.8, client 127.0.0.1 (client groups are bitwise-obfuscated).
+    assert.equal(isPrivateAddress('2001:0000:0808:0808:0000:ffff:80ff:fffe'), true);
+    // Private Teredo server with an otherwise public embedded client.
+    assert.equal(isPrivateAddress('2001:0000:7f00:0001:0000:ffff:f7f7:f7f7'), true);
+    // Both embedded IPv4 values are public.
+    assert.equal(isPrivateAddress('2001:0000:0808:0808:0000:ffff:f7f7:f7f7'), false);
   });
 
   test('does not flag an ordinary public IPv6 address', () => {
     assert.equal(isPrivateAddress('2606:4700:4700::1111'), false);
-    assert.equal(isPrivateAddress('2001:db8::1'), false);
   });
 });
 

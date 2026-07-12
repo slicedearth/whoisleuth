@@ -210,4 +210,65 @@ describe('structured RDAP metadata', () => {
     assert.equal(asn.startAutnum, 64496);
     assert.equal(asn.endAutnum, 64497);
   });
+
+  test('normalizes conformance, language, and explicit redaction provenance', () => {
+    const parsed = parseRdap('domain', {
+      objectClassName: 'DOMAIN',
+      ldhName: 'EXAMPLE.COM',
+      lang: 'EN-AU',
+      rdapConformance: ['rdap_level_0', 'RDAP_LEVEL_0', 'redacted_0'],
+      redacted: [{
+        name: { type: 'Registry Domain ID' },
+        reason: { type: 'Server Policy' },
+        method: 'Removal',
+        pathLang: 'jsonpath',
+        prePath: '$.handle',
+      }, null, { name: 'Registrant Email', method: 'emptyValue', postPath: '$.entities[0]' }],
+    });
+
+    assert.equal(parsed.objectClassName, 'domain');
+    assert.equal(parsed.language, 'en-au');
+    assert.deepEqual(parsed.conformance, ['rdap_level_0', 'redacted_0']);
+    assert.deepEqual(parsed.redactions[0], {
+      name: 'Registry Domain ID', reason: 'Server Policy', method: 'removal',
+      pathLanguage: 'jsonpath', prePath: '$.handle', postPath: null, replacementPath: null,
+    });
+    assert.equal(parsed.redactions[1].name, 'Registrant Email');
+    assert.equal(parsed.redactionsTruncated, false);
+  });
+
+  test('bounds redaction entries and reports truncation accurately', () => {
+    const exact = parseRdap('asn', {
+      redacted: Array.from({ length: 100 }, (_, index) => ({ name: `Field ${index}` })),
+    });
+    const oversized = parseRdap('asn', {
+      redacted: Array.from({ length: 101 }, (_, index) => ({ name: `Field ${index}` })),
+    });
+    assert.equal(exact.redactions.length, 100);
+    assert.equal(exact.redactionsTruncated, false);
+    assert.equal(oversized.redactions.length, 100);
+    assert.equal(oversized.redactionsTruncated, true);
+  });
+
+  test('normalizes and bounds IDN variant groups', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'XN--BCHER-KVA.EXAMPLE',
+      variants: [{
+        relation: ['REGISTERED', 'conjoined'],
+        idnTable: 'German',
+        variantNames: [
+          { ldhName: 'XN--BCHER-KVA.EXAMPLE', unicodeName: 'bücher.example' },
+          { ldhName: 'XN--BUCHER-2ZA.EXAMPLE', unicodeName: 'büchér.example' },
+          null,
+        ],
+      }, ...Array.from({ length: 20 }, (_, index) => ({
+        relation: ['unregistered'], variantNames: [{ ldhName: `VARIANT-${index}.EXAMPLE` }],
+      }))],
+    });
+
+    assert.equal(parsed.variants.length, 20);
+    assert.deepEqual(parsed.variants[0].relation, ['registered', 'conjoined']);
+    assert.equal(parsed.variants[0].variantNames[0].unicodeName, 'bücher.example');
+    assert.equal(parsed.variantsTruncated, true);
+  });
 });

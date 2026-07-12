@@ -185,6 +185,11 @@ root and is gitignored.
   postal addresses, public identifiers, and HTTP(S) references. Bulk,
   watchlists, and analyst cases continue using the compact primary-contact
   shape so richer contact arrays do not expand browser-local stores implicitly.
+- Lookup also retains bounded RDAP conformance identifiers, response language,
+  explicit RFC-style redaction metadata, and published IDN variant groups.
+  Capped contact, redaction, and variant inventories are labelled rather than
+  presented as complete; the raw upstream response remains available only in
+  the single-lookup view and its deliberate evidence export.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
