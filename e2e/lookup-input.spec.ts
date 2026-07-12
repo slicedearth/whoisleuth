@@ -281,6 +281,50 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expectNoHorizontalOverflow(page);
 });
 
+test('HTTP intelligence presents bounded redirect provenance and response metadata', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'http-evidence.test', type: 'domain', registrableDomain: 'http-evidence.test',
+      availability: {
+        state: 'registered', confidence: 'high', domain: 'http-evidence.test',
+        http: {
+          version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'http',
+          durationMs: 125, complete: true, truncated: false, limitations: ['URL query strings were omitted from retained provenance.'], diagnostics: {},
+          requestUrl: 'https://http-evidence.test/', finalUrl: 'https://login.example.test/final', transportSecurity: 'https',
+          redirectCount: 1, redirectLimitReached: false, crossOriginRedirect: true, httpsDowngrade: false,
+          redirects: [{ from: 'https://http-evidence.test/', to: 'https://login.example.test/final', status: 302, durationMs: 20, queryOmitted: true }],
+          attempts: [{ url: 'https://http-evidence.test/', outcome: 'response', httpStatus: 200, error: null }],
+          response: {
+            status: 200, contentType: 'text/html; charset=utf-8', contentLanguage: 'en', server: 'Example Server',
+            declaredContentLength: 4096, capturedBodyBytes: 2048, bodyInspected: true, bodyTruncated: false,
+            securityHeaders: { strictTransportSecurity: 'max-age=31536000', contentSecurityPolicy: "default-src 'self'", xFrameOptions: 'DENY', xContentTypeOptions: 'nosniff', referrerPolicy: 'no-referrer' },
+          },
+        },
+      },
+      rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+    }),
+  }));
+
+  await page.locator('#query').fill('http-evidence.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const card = page.locator('.http-card');
+  await expect(card.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
+  await expect(card.getByText('https://login.example.test/final', { exact: true })).toBeVisible();
+  await expect(card.getByText('Cross-origin redirect', { exact: true })).toBeVisible();
+  await card.getByText('Redirect chain · 1 hop', { exact: true }).click();
+  await expect(card.getByText('→ https://login.example.test/final', { exact: true })).toBeVisible();
+  await card.getByText('Selected response headers', { exact: true }).click();
+  await expect(card.getByText('max-age=31536000', { exact: true })).toBeVisible();
+  await expect(card).not.toContainText('secret');
+  await expect(card.getByText(/missing security headers do not establish maliciousness/i)).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('IP results use network-specific RDAP labels instead of domain fields', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

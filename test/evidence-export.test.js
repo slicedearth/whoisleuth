@@ -46,7 +46,21 @@ function fixtureResponse() {
         { server: 'whois.registry.example', queriedAt: '2026-07-11T01:02:04.000Z', response: 'Domain Name: EXAMPLE.COM' },
       ],
     },
-    availability: { applicable: true, domain: 'example.com', state: 'registered', hasMx: true },
+    availability: {
+      applicable: true,
+      domain: 'example.com',
+      state: 'registered',
+      hasMx: true,
+      http: {
+        version: 1,
+        status: 'success',
+        source: 'http',
+        observedAt: '2026-07-11T01:02:05.000Z',
+        finalUrl: 'https://example.com/',
+        redirectCount: 0,
+        response: { status: 200, contentType: 'text/html' },
+      },
+    },
     diagnostics: {
       version: 2,
       rdap: { status: 'success', errorCode: null, attempts: [] },
@@ -62,7 +76,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 5);
+    assert.equal(result.schemaVersion, 6);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -75,6 +89,7 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
     assert.equal(result.analysis.availability.hasMx, true);
+    assert.equal(result.analysis.availability.http.response.status, 200);
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
     assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
@@ -92,7 +107,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 5);
+    assert.equal(result.schemaVersion, 6);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });

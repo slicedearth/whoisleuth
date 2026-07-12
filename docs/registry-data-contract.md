@@ -288,14 +288,38 @@ status and the derived `complete`, `incomplete`, or `unavailable` condition.
 Source unavailability is not counted as a registry conflict or a source-only
 publication difference.
 
+## HTTP observation provenance
+
+Deep availability analysis reuses its existing SSRF-protected homepage request
+to publish a bounded `availability.http` object. The shared request engine
+validates and pins every redirect hop; HTTP provenance does not trigger another
+request. Its version-1 observation envelope distinguishes successful, partial,
+error, and policy-skipped collection.
+
+The type-specific payload includes the sanitized request and final URLs, up to
+five redirects, response status, HTTPS or cleartext transport, selected bounded
+headers, declared content length, captured body bytes, and whether the retained
+body prefix was capped. It also records cross-origin redirects and HTTPS-to-HTTP
+downgrades as context. Query strings and fragments are not retained, response
+bodies are never included, and overlong paths fall back to bounded origin-only
+provenance. Failed HTTPS/HTTP attempts remain distinct from proof that no site
+exists.
+
+Selected security headers are observations only. Their absence is not a
+maliciousness verdict and does not contribute to Risk scoring. A response can
+still establish web-service activity when its body is unavailable for HTML
+inspection.
+
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `5`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `6`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 5 retains the bounded, versioned browser-side
-IDN/script/confusable analysis introduced in version 4 and the additive
-network-observation provenance supplied by deep Lookup. It is
+registry comparison. Version 6 retains the bounded, versioned browser-side
+IDN/script/confusable analysis introduced in version 4, the additive
+network-observation provenance supplied by deep Lookup, and bounded HTTP
+response/redirect provenance derived from the already-fetched homepage. URL
+query strings are deliberately omitted from retained HTTP provenance. It is
 intentionally rich and may contain public registry
 contact data. The file is generated locally and is the user's responsibility
 after download.

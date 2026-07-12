@@ -320,7 +320,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   are contextual review indicators, never a maliciousness verdict, and do not
   change the Risk score. The typosquat generator uses the same curated mapping
   so generated confusable candidates and result explanations stay consistent.
-  Lookup evidence schema version 5 retains the analysis supplied to the
+  Lookup evidence schema version 6 retains the analysis supplied to the
   export; Bulk CSV exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
@@ -338,6 +338,12 @@ compact-storage boundary, and lookup evidence schema are documented in the
   alert", ...), the page title, and any image/script/stylesheet it loads
   directly from your official domain instead of copying - a lazy
   phishing-kit tell. All feed into the Risk score.
+- The same bounded homepage request now retains an HTTP observation with the
+  final response, a validated redirect chain, transport, selected response and
+  security headers, declared versus captured body size, and explicit timeout,
+  truncation, or redirect-limit states. URL query strings are omitted from
+  retained provenance. Missing security headers and cross-origin redirects are
+  contextual evidence, not maliciousness verdicts, and do not change scoring.
 - A bulk scan flags **Related infrastructure**: domains in the same scan
   that share an exact nameserver set or favicon hash with each other, with
   a one-click way to load the group back into the query box. Uses signals

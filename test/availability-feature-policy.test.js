@@ -42,6 +42,7 @@ test('disabled DNS and website probes produce skipped unknown evidence without n
   assert.equal(result.state, 'registered');
   assert.equal(result.activityStatus, 'unknown');
   assert.equal(result.websiteProbeStatus, 'skipped');
+  assert.equal(result.http.status, 'skipped');
   assert.equal(result.deepScanComplete, false);
   assert.match(result.websiteProbeDetail, /disabled by deployment policy/i);
   assert.equal(result.dns.status, 'skipped');
