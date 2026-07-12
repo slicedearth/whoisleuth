@@ -2,6 +2,30 @@ import { expect, test } from './fixtures';
 
 test.use({ allowExpectedLookup429Noise: true });
 
+function disabledCapabilityReport(features: string[]) {
+  return {
+    version: 1,
+    runtime: 'express',
+    authoritative: true,
+    features: features.map((id) => ({
+      id,
+      status: 'disabled',
+      execution: 'hosted',
+      scanModes: id === 'lookup' ? ['fast', 'deep'] : [],
+      reason: `${id.replaceAll('_', ' ')} is disabled by deployment policy.`,
+    })),
+    limitations: [],
+  };
+}
+
+async function mockCapabilities(page: import('@playwright/test').Page, features: string[]) {
+  await page.route('**/api/capabilities', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(disabledCapabilityReport(features)),
+  }));
+}
+
 test('a concurrency circuit response degrades Lookup with a retryable message', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 429,
@@ -37,4 +61,69 @@ test('the capability endpoint reports honest in-memory concurrency scope', async
       ]),
     },
   });
+});
+
+test('a disabled Lookup capability prevents single and Bulk submissions', async ({ page }) => {
+  await mockCapabilities(page, ['lookup']);
+  await page.goto('/lookup');
+  await page.getByLabel('Domain, IP address, ASN, or domain list').fill('example.invalid');
+  await expect(page.getByText('lookup is disabled by deployment policy.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run lookup' })).toBeDisabled();
+
+  await page.goto('/bulk');
+  await page.getByLabel('Domains').fill('example.invalid');
+  await expect(page.getByRole('button', { name: 'Scan 1 domains' })).toBeDisabled();
+});
+
+test('disabled certificate and website capabilities degrade their own controls only', async ({ page }) => {
+  await mockCapabilities(page, ['certificate_transparency', 'website_probe']);
+  await page.goto('/discover');
+  await page.getByRole('tab', { name: 'Certificates' }).click();
+  await expect(page.getByRole('button', { name: 'Search certificates' })).toBeDisabled();
+  await expect(page.getByText('certificate transparency is disabled by deployment policy.', { exact: true })).toBeVisible();
+
+  await page.goto('/brands');
+  await page.getByRole('button', { name: 'New profile' }).click();
+  await expect(page.getByRole('button', { name: 'Fetch from official domain' })).toBeDisabled();
+  await expect(page.getByText('website probe is disabled by deployment policy.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save profile' })).toBeEnabled();
+});
+
+test('an incomplete deep scan is stored conservatively so skipped probes cannot erase prior evidence', async ({ page }) => {
+  await mockCapabilities(page, ['dns_intelligence', 'website_probe']);
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      availability: {
+        domain: 'example.invalid',
+        state: 'registered',
+        confidence: 'high',
+        deepScanComplete: false,
+        activityStatus: 'unknown',
+        websiteProbeStatus: 'skipped',
+        dns: { status: 'skipped', records: {}, hasMx: null, hasSpf: null, hasDmarc: null },
+      },
+      diagnostics: {
+        version: 3,
+        rdap: { status: 'success' },
+        whois: { status: 'complete' },
+        availability: { status: 'complete', resultState: 'registered' },
+      },
+    }),
+  }));
+
+  await page.goto('/bulk');
+  await page.getByLabel('Domains').fill('example.invalid');
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await page.getByRole('button', { name: 'Scan 1 domains' }).click();
+  await expect(page.getByRole('status').first()).toHaveText('Completed 1 of 1 lookups.');
+  await page.getByLabel('Watchlist name').fill('Policy-safe baseline');
+  await page.getByRole('button', { name: 'Save to Monitor' }).click();
+
+  const storedDepth = await page.evaluate(() => {
+    const store = JSON.parse(localStorage.getItem('whois-rdap-watchlist-v1') || '{}');
+    return store['Policy-safe baseline']?.results?.[0]?.scanDepth;
+  });
+  expect(storedDepth).toBe('fast');
 });

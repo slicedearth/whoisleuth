@@ -26,7 +26,7 @@ function publishedState(value) {
 
 function sourceCondition(status) {
   if (status === 'partial') return 'incomplete';
-  if (['error', 'unsupported', 'not_found', 'skipped'].includes(status)) return 'unavailable';
+  if (['error', 'unsupported', 'not_found', 'skipped', 'disabled'].includes(status)) return 'unavailable';
   return 'complete';
 }
 
@@ -110,6 +110,7 @@ function displayValue(value, state, status) {
     if (status === 'unsupported') return 'Unsupported by source';
     if (status === 'not_found') return 'No matching registry object';
     if (status === 'skipped') return 'Source skipped';
+    if (status === 'disabled') return 'Disabled by deployment policy';
     return 'Source unavailable';
   }
   if (Array.isArray(value)) return value.join(', ');

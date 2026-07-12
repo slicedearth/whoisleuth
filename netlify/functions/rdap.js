@@ -5,7 +5,7 @@ const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../.
 const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
-  const guard = guardNetlifyNetworkRequest(event);
+  const guard = guardNetlifyNetworkRequest(event, 'rdap');
   if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();

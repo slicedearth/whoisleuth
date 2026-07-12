@@ -28,6 +28,21 @@ test('unknown runtimes fail to a bounded generic report without changing feature
   assert.match(report.limitations[0], /runtime instance/i);
 });
 
+test('emergency switches are reflected by the server-authoritative feature report', () => {
+  const report = capabilityReport('express', {
+    WHOISLEUTH_DISABLE_RDAP: '1',
+    WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: 'true',
+  });
+  const rdap = report.features.find((feature) => feature.id === 'rdap');
+  const dns = report.features.find((feature) => feature.id === 'dns_intelligence');
+  const posture = report.features.find((feature) => feature.id === 'domain_posture');
+  assert.equal(rdap.status, 'disabled');
+  assert.equal(dns.status, 'disabled');
+  assert.equal(posture.status, 'disabled');
+  assert.match(posture.reason, /DNS intelligence is disabled/i);
+  assert.equal(report.features.find((feature) => feature.id === 'lookup').status, 'supported');
+});
+
 test('direct serverless capability path requires authentication', async () => {
   const previousPassword = process.env.SITE_PASSWORD;
   const previousSecret = process.env.SESSION_SECRET;

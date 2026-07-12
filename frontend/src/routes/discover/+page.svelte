@@ -1,11 +1,12 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { getContext, onMount } from 'svelte';
   import { generateTyposquatCandidates, MUTATION_LABELS } from '$lib/analysis/typosquat-generator.js';
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.js';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
+  import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   let mode = $state<Mode>('typosquat');
@@ -27,6 +28,8 @@
   let ctPreviousCheckedAt = $state<string|null>(null);
   let ctNewOnly = $state(false);
   let ctHistoryNotice = $state('');
+  const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
+  const ctDisabled=$derived(disabledCapability(capabilityReport?.()||null,'certificate_transparency'));
   // Monotonic request token: a slower, older CT response can never overwrite a
   // newer completed search (or a mode switch that invalidated it).
   let searchToken = 0;
@@ -115,6 +118,7 @@
   }
 
   async function searchCt() {
+    if (ctDisabled) { error = ctDisabled.reason || 'Certificate Transparency search is disabled by deployment policy.'; return; }
     if (!seed.trim()) { error = 'Enter a brand or keyword to search.'; return; }
     // Supersede and abort any earlier in-flight search before starting.
     cancelCtSearch();
@@ -217,6 +221,7 @@
 <section class="heading"><div><p class="eyebrow">Discover</p><h1>Candidate discovery</h1><p>Generate explainable lookalikes, brainstorm defensive registrations, or search public certificate logs.</p></div></section>
 
 <section class="controls card">
+  {#if mode==='certificate-transparency'&&ctDisabled}<p class="feature-disabled" role="note">{ctDisabled.reason||'Certificate Transparency search is disabled by deployment policy.'}</p>{/if}
   {#if profile}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button onclick={useProfile}>Use profile defaults</button></div>{/if}
   <div class="modes" role="tablist" aria-label="Discovery method">
     <button role="tab" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
@@ -226,7 +231,7 @@
   <div class="fields">
     <label>{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Brand or certificate keyword' : 'Brand or domain'}<input bind:value={seed} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
     {#if mode!=='certificate-transparency'}<label>TLDs<input bind:value={tldText} placeholder="com, net, org"></label>{/if}
-    <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
+    <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
   </div>
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
   {#if ctHistoryNotice}<p class="ct-history-notice" role="status">{ctHistoryNotice}</p>{/if}

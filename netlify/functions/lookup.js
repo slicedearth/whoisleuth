@@ -5,7 +5,7 @@ const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../.
 const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
-  const guard = guardNetlifyNetworkRequest(event);
+  const guard = guardNetlifyNetworkRequest(event, 'lookup');
   if (guard.response) return guard.response;
 
   const params = event.queryStringParameters || {};
@@ -23,7 +23,7 @@ exports.handler = async (event) => {
   return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('lookup', { fast }), async () => {
     try {
       const compact = params.compact === '1' || params.compact === 'true';
-      const result = await runUnifiedLookup(classified, { fast, compact });
+      const result = await runUnifiedLookup(classified, { fast, compact, featurePolicy: guard.featurePolicy });
       return json(200, {
         query: q,
         type: classified.type,

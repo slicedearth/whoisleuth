@@ -5,7 +5,7 @@ const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../.
 const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
-  const guard = guardNetlifyNetworkRequest(event);
+  const guard = guardNetlifyNetworkRequest(event, 'domain_posture');
   if (guard.response) return guard.response;
 
   const params = event.queryStringParameters || {};

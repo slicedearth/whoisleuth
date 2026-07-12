@@ -5,7 +5,7 @@ const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../.
 const { json } = require('../../lib/http');
 
 exports.handler = async (event) => {
-  const guard = guardNetlifyNetworkRequest(event);
+  const guard = guardNetlifyNetworkRequest(event, 'availability');
   if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
@@ -25,7 +25,7 @@ exports.handler = async (event) => {
   const fast = params.fast === '1' || params.fast === 'true';
   return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('availability', { fast }), async () => {
     try {
-      const result = await checkDomainAvailability(classified.value, { fast });
+      const result = await checkDomainAvailability(classified.value, { fast, featurePolicy: guard.featurePolicy });
       return json(200, {
         applicable: true,
         domain: classified.value,

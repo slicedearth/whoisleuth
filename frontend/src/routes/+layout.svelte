@@ -1,13 +1,14 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { onMount } from 'svelte';
+  import { onMount, setContext } from 'svelte';
   import { workspaces } from '$lib/workspaces';
-  import { fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
+  import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import '../app.css';
   let { children } = $props();
   let session = $state<'checking'|'authenticated'|'anonymous'|'unavailable'>('checking');
   let password = $state(''); let error = $state(''); let busy = $state(false); let navOpen = $state(false);
   let capabilities=$state<CapabilityReport|null>(null);let capabilitiesChecked=$state(false);
+  setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => void checkSession());
   async function loadCapabilityReport(){capabilitiesChecked=false;capabilities=await fetchCapabilities();capabilitiesChecked=true;}
   async function checkSession(){ session='checking'; try{const r=await fetch('/api/session'); if(!r.ok) throw new Error(); session=(await r.json()).authenticated?'authenticated':'anonymous';if(session==='authenticated')await loadCapabilityReport();}catch{session='unavailable';}}

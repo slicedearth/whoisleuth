@@ -2,6 +2,7 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
 const { runUnifiedLookup } = require('../lib/lookup');
+const { networkFeaturePolicy } = require('../lib/feature-policy');
 
 const classifiedDomain = {
   type: 'domain',
@@ -54,7 +55,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 2);
+    assert.equal(result.diagnostics.version, 3);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
@@ -171,5 +172,47 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.whois.status, 'skipped');
     assert.equal(result.diagnostics.whois.errorCode, null);
     assert.deepEqual(result.whois, { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' });
+  });
+
+  test('disabled RDAP and WHOIS sources are never called and remain explicit in diagnostics', async () => {
+    let rdapCalls = 0;
+    let whoisCalls = 0;
+    const policy = networkFeaturePolicy({
+      WHOISLEUTH_DISABLE_RDAP: '1',
+      WHOISLEUTH_DISABLE_WHOIS: 'true',
+    });
+    const result = await runUnifiedLookup(classifiedDomain, {
+      featurePolicy: policy,
+      fetchRdapRecord: async () => { rdapCalls += 1; throw new Error('must not run'); },
+      buildWhoisChain: async () => { whoisCalls += 1; throw new Error('must not run'); },
+      checkDomainAvailability: async (_domain, options) => {
+        assert.equal(options.featurePolicy, policy);
+        assert.equal(await options.rdapRecordPromise, null);
+        assert.equal(await options.whoisChainPromise, null);
+        return { state: 'unknown', confidence: 'low' };
+      },
+    });
+    assert.equal(rdapCalls, 0);
+    assert.equal(whoisCalls, 0);
+    assert.equal(result.diagnostics.rdap.status, 'disabled');
+    assert.equal(result.diagnostics.whois.status, 'disabled');
+    assert.equal(result.diagnostics.rdap.errorCode, 'FEATURE_DISABLED');
+    assert.match(result.rdap.detail, /disabled by deployment policy/i);
+    assert.match(result.whois.detail, /disabled by deployment policy/i);
+  });
+
+  test('disabled availability analysis is not invoked or presented as an observed result', async () => {
+    let availabilityCalls = 0;
+    const result = await runUnifiedLookup(classifiedDomain, {
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_AVAILABILITY: 'on' }),
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => { availabilityCalls += 1; },
+    });
+    assert.equal(availabilityCalls, 0);
+    assert.equal(result.availability.disabled, true);
+    assert.equal(result.availability.state, 'unknown');
+    assert.equal(result.diagnostics.availability.status, 'disabled');
+    assert.equal(result.diagnostics.availability.errorCode, 'FEATURE_DISABLED');
   });
 });

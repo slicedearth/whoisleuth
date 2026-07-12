@@ -95,6 +95,7 @@ header { display: none; }
 .heading .eyebrow::before { content: "// "; color: var(--muted); }
 .heading h1 { margin: 0; font: 700 clamp(1.8rem,3.6vw,2.8rem) var(--mono); letter-spacing: -.045em; }
 .heading p:not(.eyebrow), .muted { color: var(--muted); line-height: 1.55; }
+.feature-disabled { margin: 0 0 12px; padding: 9px 11px; border-left: 3px solid #f2b84b; background: rgba(242,184,75,.04); color: var(--muted); font-size: .68rem; }
 .card { border: 1px solid var(--border); border-radius: 10px; background: rgba(23,26,33,.96); box-shadow: 0 6px 24px rgba(0,0,0,.22); }
 a.card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
 a.card:hover, a.card:focus-visible { border-color: rgba(94,179,255,.65); box-shadow: 0 8px 28px rgba(0,0,0,.3), inset 0 1px rgba(126,224,168,.08); transform: translateY(-2px); }

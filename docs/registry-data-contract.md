@@ -84,6 +84,14 @@ its execution location and only the existing `fast`/`deep` modes it actually
 supports. The report deliberately marks scheduled monitoring and distributed
 budgets unavailable until those services exist.
 
+Hosted feature status is derived from the same environment policy enforced by
+Express and each direct Netlify Function. A disabled top-level network feature
+returns HTTP `503` with `errorCode: FEATURE_DISABLED`, the requested `feature`,
+and the effective `disabledBy` feature. Dependency shutdown is explicit: for
+example, disabling DNS intelligence also disables the DNS-dependent posture
+audit. Frontend controls are advisory reflections of this report, not the
+enforcement boundary.
+
 The optional version-1 `controls.concurrency` object reports the active
 in-memory operation classes and their per-session and per-runtime-instance
 ceilings. Its `distributed` field is `false`. `scope: process` describes one
@@ -103,13 +111,17 @@ bounded operation class and `session` or `runtime` scope. This is a temporary
 local circuit response, not an upstream registry result and not evidence about
 the queried domain.
 
-## Diagnostics version 2
+## Diagnostics version 3
 
-`diagnostics.version` is `2`. The source objects use explicit status values:
+`diagnostics.version` is `3`. Version 3 retains the version-2 source fields and
+adds the explicit `disabled` state and `FEATURE_DISABLED` code; consumers that
+do not recognize version 3 must fail conservatively rather than reinterpret a
+disabled source as an upstream failure or absence. The source objects use
+explicit status values:
 
-- RDAP: `success`, `not_found`, `unsupported`, or `error`.
-- WHOIS: `complete`, `partial`, `skipped`, or `error`.
-- Availability: `complete`, `not_applicable`, or `error`.
+- RDAP: `success`, `not_found`, `unsupported`, `disabled`, or `error`.
+- WHOIS: `complete`, `partial`, `skipped`, `disabled`, or `error`.
+- Availability: `complete`, `not_applicable`, `disabled`, or `error`.
 
 RDAP diagnostics may include the selected endpoint, transport (`https` or
 `http`), upstream HTTP status, fetch time, and up to three bounded endpoint
@@ -122,7 +134,15 @@ field comparison uses those values but does not treat a missing field in a
 partial chain as proof that WHOIS omitted it.
 
 Stable source error codes include `RDAP_UPSTREAM_FAILED`, `RDAP_UNSUPPORTED`,
-`WHOIS_UPSTREAM_FAILED`, and `AVAILABILITY_CHECK_FAILED`.
+`WHOIS_UPSTREAM_FAILED`, `AVAILABILITY_CHECK_FAILED`, and `FEATURE_DISABLED`.
+A disabled source was deliberately not queried and must not be interpreted as
+upstream absence, failure, redaction, or evidence about the domain.
+
+Deep domain availability includes `deepScanComplete: false` when deployment
+policy skipped RDAP, WHOIS, DNS intelligence, or website probing. The live
+response may still contain useful enabled-source evidence, but browser-local
+watchlist and case baselines conservatively treat that capture as non-deep so
+skipped values cannot erase or contradict an earlier complete deep snapshot.
 
 ## Normalized RDAP data
 

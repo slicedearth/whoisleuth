@@ -27,6 +27,7 @@ const {
   operationBudgetError,
   operationClassFor,
 } = require('./lib/operation-budget');
+const { featureDisabledError, networkFeaturePolicy } = require('./lib/feature-policy');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -96,6 +97,16 @@ function rateLimit(scope, opts) {
 const loginRateLimit = rateLimit('login', LOGIN_RATE_LIMIT);
 const apiRateLimit = rateLimit('api', API_RATE_LIMIT);
 
+function requireFeature(feature) {
+  return (req, res, next) => {
+    const policy = networkFeaturePolicy();
+    const disabled = featureDisabledError(feature, policy);
+    if (disabled) return res.status(503).json(disabled);
+    req.networkFeaturePolicy = policy;
+    next();
+  };
+}
+
 async function withExpressOperationBudget(req, res, operationClass, callback) {
   const sessionKey = sessionFingerprintFromCookieHeader(req.headers.cookie);
   if (!sessionKey) {
@@ -142,7 +153,7 @@ app.get('/api/capabilities', requireAuth, (req, res) => {
   res.json(capabilityReport('express'));
 });
 
-app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
+app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
 
@@ -157,7 +168,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
   return withExpressOperationBudget(req, res, operationClassFor('lookup', { fast }), async () => {
     try {
       const compact = req.query.compact === '1' || req.query.compact === 'true';
-      const result = await runUnifiedLookup(classified, { fast, compact });
+      const result = await runUnifiedLookup(classified, { fast, compact, featurePolicy: req.networkFeaturePolicy });
       res.json({
         query: q,
         type: classified.type,
@@ -172,7 +183,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, async (req, res) => {
   });
 });
 
-app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
+app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -203,7 +214,7 @@ app.get('/api/rdap', apiRateLimit, requireAuth, async (req, res) => {
   });
 });
 
-app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
+app.get('/api/whois', apiRateLimit, requireAuth, requireFeature('whois'), async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -231,7 +242,7 @@ app.get('/api/whois', apiRateLimit, requireAuth, async (req, res) => {
   });
 });
 
-app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
+app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availability'), async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -248,7 +259,10 @@ app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
   const fast = req.query.fast === '1' || req.query.fast === 'true';
   return withExpressOperationBudget(req, res, operationClassFor('availability', { fast }), async () => {
     try {
-      const result = await checkDomainAvailability(classified.value, { fast });
+      const result = await checkDomainAvailability(classified.value, {
+        fast,
+        featurePolicy: req.networkFeaturePolicy,
+      });
       // domain is the registrable domain actually looked up; inputHostname
       // preserves what the user typed so the UI can note when a subdomain query
       // was resolved to its registrable domain (and never call the subdomain
@@ -267,7 +281,7 @@ app.get('/api/availability', apiRateLimit, requireAuth, async (req, res) => {
   });
 });
 
-app.get('/api/ct-search', apiRateLimit, requireAuth, async (req, res) => {
+app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate_transparency'), async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -281,7 +295,7 @@ app.get('/api/ct-search', apiRateLimit, requireAuth, async (req, res) => {
   });
 });
 
-app.get('/api/domain-posture', apiRateLimit, requireAuth, async (req, res) => {
+app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain_posture'), async (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 

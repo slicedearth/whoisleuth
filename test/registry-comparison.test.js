@@ -146,6 +146,17 @@ describe('compareRegistrySources', () => {
     assert.equal(field(result, 'Registrar').status, 'equivalent');
   });
 
+  test('treats a disabled source as unavailable rather than unpublished', () => {
+    const result = comparison.compareRegistrySources(
+      {},
+      { registrar: 'Example Registrar' },
+      { rdapStatus: 'disabled', whoisStatus: 'complete' }
+    );
+    const registrar = field(result, 'Registrar');
+    assert.equal(registrar.status, 'rdap_unavailable');
+    assert.equal(registrar.rdapDisplay, 'Disabled by deployment policy');
+  });
+
   test('identifies redaction rather than displaying it as ordinary data', () => {
     const result = comparison.compareRegistrySources(
       { registrar: { name: 'Example Registrar' } },

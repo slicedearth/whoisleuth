@@ -21,6 +21,8 @@ export type CapabilityReport = {
   controls: { concurrency: ConcurrencyControls } | null;
   limitations: string[];
 };
+export type CapabilityGetter = () => CapabilityReport | null;
+export const CAPABILITY_CONTEXT = Symbol('capability-report');
 
 const statuses = new Set<CapabilityStatus>(['supported', 'disabled', 'unavailable', 'local_only']);
 const modes = new Set(['fast', 'deep']);
@@ -121,4 +123,15 @@ export async function fetchCapabilities(fetcher: typeof fetch = fetch): Promise<
 
 export function featureCapability(report: CapabilityReport | null, id: string): Capability | null {
   return report?.features.find((feature) => feature.id === id) || null;
+}
+
+export function disabledCapability(report: CapabilityReport | null, id: string): Capability | null {
+  const capability = featureCapability(report, id);
+  return capability?.status === 'disabled' ? capability : null;
+}
+
+export function disabledCapabilities(report: CapabilityReport | null, ids: string[]): Capability[] {
+  return ids
+    .map((id) => disabledCapability(report, id))
+    .filter((capability): capability is Capability => capability !== null);
 }

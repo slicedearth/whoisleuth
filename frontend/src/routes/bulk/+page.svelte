@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { getContext, onMount } from 'svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
   import { abuseAction, outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
@@ -12,6 +12,7 @@
   import { groupBySimilarFavicon, parseDomainInput, rowsToCsv } from '$lib/analysis/utils.js';
   import { ctCsvFields } from '$lib/analysis/bulk-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
+  import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
 
   type ScanMode = 'fast' | 'deep';
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
@@ -39,6 +40,9 @@
   let profile = $state<BrandProfile|null>(null);
   let shortlist=$state<ShortlistRecord[]>([]);let shortlistStatus=$state('');let draftStatus=$state('');
   let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');
+  const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
+  const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
+  const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe']));
   const caseByDomain=$derived(new Map(cases.map(record=>[record.domain,record])));
   const mutationLabels=MUTATION_LABELS as Record<string,string>;
   const mutationOptions=$derived([...new Set(results.flatMap(row=>row.mutationTypes))].sort((a,b)=>(mutationLabels[a]||a).localeCompare(mutationLabels[b]||b)));
@@ -97,13 +101,13 @@
     if(replace)results=[];
     status=`Scanning ${total} domains…`;
     const concurrency=mode==='fast'?12:4;
-    const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted)break;const index=cursor++,domain=domains[index];try{pendingResults[index]=normalize(domain,await fetchLookup(domain,scanController.signal));}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;pendingResults[index]=failedResult(domain,cause instanceof Error?cause.message:'Lookup failed');}completed+=1;schedulePublish();}};
+    const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted)break;const index=cursor++,domain=domains[index];try{const body=await fetchLookup(domain,scanController.signal);const row=normalize(domain,body);if(mode==='deep'&&body.availability?.deepScanComplete===false)row.saved.scanDepth='fast';pendingResults[index]=row;}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;pendingResults[index]=failedResult(domain,cause instanceof Error?cause.message:'Lookup failed');}completed+=1;schedulePublish();}};
     await Promise.all(Array.from({length:Math.min(concurrency,domains.length)},worker));
     publish();running=false;controller=null;
     if(scanController.signal.aborted)return;
     status=`Completed ${completed} of ${total} lookups.`;
   }
-  async function start(){await run(parseDomains(),true);}
+  async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}await run(parseDomains(),true);}
   async function retryErrors(){const domains=results.filter(r=>r.status==='error').map(r=>r.domain);results=results.filter(r=>r.status!=='error');await run(domains,false);}
   function exportCsv(){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_status','registrar','activity','risk','opportunity','mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=results.map(r=>[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',r.idn?.referenceMatches?.map((match:Record<string,any>)=>match.asciiDomain).join('|')||'',r.availability,r.confidence,r.trusted||'',r.registrar,r.activity,r.risk??'',r.opportunity??'',r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records?.a?.join('|')||'',r.dns?.records?.aaaa?.join('|')||'',r.dns?.records?.cname?.join('|')||'',r.dns?.records?.caa?.map((item:Record<string,any>)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',...ctCsvFields(r.ct)]);const url=URL.createObjectURL(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-bulk-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
   function saveResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}const findings=results.filter(row=>!row.trusted);if(!findings.length){saveStatus='Every result is trusted by the active profile; nothing was added to Monitor.';return;}try{const changes=saveWatchlist(name,findings.map(r=>r.saved),mode);const excluded=results.length-findings.length;saveStatus=changes.length?`Updated ${name} and recorded ${changes.length} material changes${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`:`Saved ${findings.length} results to ${name}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save watchlist.';}}
@@ -112,11 +116,13 @@
 <svelte:head><title>Bulk analysis · WHOISleuth</title></svelte:head>
 <section class="heading"><div><p class="eyebrow">Assess</p><h1>Bulk analysis</h1><p>Run bounded concurrent scans, triage risk, and retry inconclusive candidates.</p></div></section>
 <section class="queue card">
+  {#if lookupDisabled}<p class="feature-disabled" role="note">{lookupDisabled.reason||'Lookup is disabled by deployment policy.'}</p>{/if}
+  {#if !lookupDisabled&&scanLimitations.length}<p class="feature-disabled" role="note">Some {mode} scan sources are disabled by deployment policy: {scanLimitations.map((item)=>item.id.replaceAll('_',' ')).join(', ')}. {mode==='deep'?'Saved evidence will not claim a complete deep scan.':'Results will identify unevaluated evidence.'}</p>{/if}
   {#if profile}<p class="profile-context">Active profile: <strong>{profile.name}</strong>. Official, partner, and allowlisted domains remain visible but are excluded from high-risk triage and Monitor saves.</p>{/if}
   {#if handoff}<p class="handoff">Loaded {handoff.candidates.length} candidates from {handoff.source.replaceAll('-',' ')}.</p>{/if}
   <div class="queue-label"><label for="domains">Domains</label><label class="file-action">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div><textarea id="domains" bind:value={input} disabled={running} placeholder="example.com&#10;example.net"></textarea>
   <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column.{#if parsedInput.duplicates} {parsedInput.duplicates} duplicate{parsedInput.duplicates===1?'':'s'} removed.{/if}</p>
-  <div class="queue-actions"><label>Scan mode<select bind:value={mode} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · web and mail signals</option></select></label><button class="primary" onclick={start} disabled={running||!input.trim()}>Scan {parsedInput.entries.length||''} domains</button>{#if running}<button onclick={togglePause}>{paused?'Resume':'Pause'}</button><button class="danger" onclick={cancel}>Cancel</button>{/if}</div>
+  <div class="queue-actions"><label>Scan mode<select bind:value={mode} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · web and mail signals</option></select></label><button class="primary" onclick={start} disabled={running||!input.trim()||Boolean(lookupDisabled)}>Scan {parsedInput.entries.length||''} domains</button>{#if running}<button onclick={togglePause}>{paused?'Resume':'Pause'}</button><button class="danger" onclick={cancel}>Cancel</button>{/if}</div>
   {#if running||total}<div class="progress" role="progressbar" aria-label="Bulk scan progress" aria-valuemin="0" aria-valuemax={total} aria-valuenow={completed}><span style:width={`${total?completed/total*100:0}%`}></span></div>{/if}<p class="status" role="status" aria-live="polite">{status}</p>
 </section>
 

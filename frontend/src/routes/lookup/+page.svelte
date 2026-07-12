@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { getContext, onMount } from 'svelte';
   import { page } from '$app/state';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
@@ -10,6 +10,7 @@
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compareRegistrySources } from '$lib/analysis/registry-comparison.js';
   import { parseDomainInput } from '$lib/analysis/utils.js';
+  import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import {
     explainOpportunityScore,
     explainRiskScore,
@@ -33,12 +34,16 @@
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
+  const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
+  const lookupLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,['rdap','whois','availability','dns_intelligence','website_probe']));
 
   const rec=(value:any):JsonRecord=>value&&typeof value==='object'?value:{};
   const show=(value:any):string=>value==null||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='object'?show(value.name||value.org||value.handle||value.domain):String(value);
   const parsedInput=$derived(parseDomainInput(query));
   const entries=$derived(parsedInput.entries);
   const availability=$derived(rec(result?.availability));
+  const lookupEvidenceDepth=$derived(availability.deepScanComplete===false?'fast':'deep');
   const rdap=$derived(rec(result?.rdap));
   const whois=$derived(rec(result?.whois));
   const rdapParsed=$derived(rec(rdap.parsed));
@@ -87,7 +92,7 @@
 
   function refreshCase(){caseRecord=caseDomain?getCaseByDomain(caseDomain):null;}
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
-  function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:'deep'}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
+  function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:lookupEvidenceDepth}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
   function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{const{record,pruned}=addCaseNote(caseRecord.id,body);caseRecord=record;caseNote='';caseStatus=`Added a note to the case.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
   onMount(()=>{const q=page.url.searchParams.get('q');if(q)query=q;});
 
@@ -123,18 +128,21 @@
     return [[...(group.relation||[]),group.idnTable].filter(Boolean).join(', '),names.join(', ')].filter(Boolean).join(': ');
   }).filter(Boolean).join(' · '):'';}
   function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:String(record)).join(' · ');}
+  function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}
   function dnsQueryFailures(){return Object.entries(rec(dnsEvidence.diagnostics)).filter(([,item])=>rec(item).status==='error').map(([name,item])=>`${name.toUpperCase()}: ${rec(item).error||'query failed'}`).join(' · ');}
   function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField)values.push({label:'Password field',tone:'warn'});if(availability.phishingLanguageMatch)values.push({label:'Phishing language',tone:'danger',detail:availability.phishingLanguageMatch});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active Brand Profile.'});const age=fmtAge(availability.domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiry=fmtExpiresIn(availability.expiresInDays);if(expiry)values.push({label:expiry,tone:availability.expiresInDays<=60?'warn':'neutral'});if(availability.privacyProtected!==null&&availability.privacyProtected!==undefined)values.push({label:formatPrivacyCell(availability.privacyProtected),tone:availability.privacyProtected?'warn':'good'});if(availability.activityStatus)values.push({label:formatActivityCell(availability.activityStatus,availability.hasMx,availability.hasSpf,availability.hasDmarc),tone:availability.activityStatus==='active'?'good':availability.activityStatus==='parked'?'warn':'neutral',detail:availability.websiteProbeDetail});return values;}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
-  async function submit(event:SubmitEvent){event.preventDefault();if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=activeProfile();try{const response=await fetch(`/api/lookup?q=${encodeURIComponent(entries[0])}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
+  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=activeProfile();try{const response=await fetch(`/api/lookup?q=${encodeURIComponent(entries[0])}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
 <section class="heading"><div><p class="eyebrow">Investigate</p><h1>Lookup</h1><p>Resolve a domain, IP address, or ASN through the unified RDAP and WHOIS API.</p></div></section>
 <form class="search card" onsubmit={submit}>
+  {#if lookupDisabled}<p class="feature-disabled" role="note">{lookupDisabled.reason||'Lookup is disabled by deployment policy.'}</p>{/if}
+  {#if !lookupDisabled&&lookupLimitations.length}<p class="feature-disabled" role="note">Some lookup sources are disabled by deployment policy: {lookupLimitations.map((item)=>item.id.replaceAll('_',' ')).join(', ')}. Results will identify unevaluated evidence.</p>{/if}
   <label for="query">Domain, IP address, ASN, or domain list</label>
-  <div class="input-row"><div class="query-field"><textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2"></textarea>{#if query}<button type="button" class="clear" aria-label="Clear query" onclick={()=>query=''}>×</button>{/if}</div><button class="primary" disabled={loading||!entries.length}>{loading?'Looking up…':entries.length>1?`Open ${Math.min(entries.length,2000)} in Bulk`:'Run lookup'}</button></div>
+  <div class="input-row"><div class="query-field"><textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2"></textarea>{#if query}<button type="button" class="clear" aria-label="Clear query" onclick={()=>query=''}>×</button>{/if}</div><button class="primary" disabled={loading||!entries.length||Boolean(lookupDisabled)}>{loading?'Looking up…':entries.length>1?`Open ${Math.min(entries.length,2000)} in Bulk`:'Run lookup'}</button></div>
   <p class="input-help">{entries.length>1?`${entries.length} unique entries detected. Multiple entries continue in Bulk${parsedInput.duplicates?`; ${parsedInput.duplicates} duplicate${parsedInput.duplicates===1?'':'s'} removed`:''}.`:'Separate multiple domains with commas, semicolons, tabs, or new lines.'}</p>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 </form>
@@ -144,7 +152,7 @@
     <div class="result-head"><div><p class="eyebrow">Result</p><h2>{show(result.registrableDomain||result.query)}</h2>{#if result.isSubdomain}<p>Showing registry data for {result.registrableDomain}; submitted hostname: {result.inputHostname}.</p>{/if}</div><div class="result-actions"><span>{show(availability.state)}</span><button onclick={downloadEvidence}>Export evidence JSON</button></div></div>
 
     <div class="diagnostics" aria-label="Source diagnostics">
-      {#each ['rdap','whois','availability'] as source}{@const item=rec(diagnostics[source]) as SourceStatus}<article class="card"><small>{source}</small><strong class:error-state={item.status==='error'}>{diagnosticLabel(item)}</strong><p>{diagnosticDetail(item)}</p></article>{/each}
+      {#each ['rdap','whois','availability'] as source}{@const item=rec(diagnostics[source]) as SourceStatus}<article class="card"><small>{source}</small><strong class:error-state={item.status==='error'} class:limited-state={item.status==='disabled'}>{diagnosticLabel(item)}</strong><p>{diagnosticDetail(item)}</p></article>{/each}
     </div>
 
     {#if availability.applicable!==false}
@@ -169,7 +177,7 @@
       <section class="dns-card card" aria-labelledby="dns-title">
         <header><div><p class="eyebrow">Deep-scan evidence</p><h3 id="dns-title">DNS intelligence</h3></div><span class:partial={!dnsEvidence.complete}>{dnsEvidence.status}</span></header>
         <div class="dns-grid">
-          <article><small>DNSSEC</small><strong>{show(availability.dnssec)}</strong></article><article><small>A</small><strong>{dnsValues('a')||'Not observed'}</strong></article><article><small>AAAA</small><strong>{dnsValues('aaaa')||'Not observed'}</strong></article><article><small>CNAME</small><strong>{dnsValues('cname')||'Not observed'}</strong></article><article><small>Nameservers</small><strong>{dnsValues('ns')||'Not observed'}</strong></article><article><small>MX</small><strong>{dnsValues('mx')||'Not observed'}</strong></article><article><small>SPF</small><strong>{dnsValues('spf')||'Not observed'}</strong></article><article><small>DMARC</small><strong>{dnsValues('dmarc')||'Not observed'}</strong></article><article><small>CAA</small><strong>{dnsValues('caa')||'Not observed'}</strong></article>
+          <article><small>DNSSEC</small><strong>{show(availability.dnssec)}</strong></article><article><small>A</small><strong>{dnsDisplay('a')}</strong></article><article><small>AAAA</small><strong>{dnsDisplay('aaaa')}</strong></article><article><small>CNAME</small><strong>{dnsDisplay('cname')}</strong></article><article><small>Nameservers</small><strong>{dnsDisplay('ns')}</strong></article><article><small>MX</small><strong>{dnsDisplay('mx')}</strong></article><article><small>SPF</small><strong>{dnsDisplay('spf')}</strong></article><article><small>DMARC</small><strong>{dnsDisplay('dmarc')}</strong></article><article><small>CAA</small><strong>{dnsDisplay('caa')}</strong></article>
         </div>
         {#if dnsQueryFailures()}<p class="dns-warning">Partial observation: {dnsQueryFailures()}. A resolver failure is not evidence that a record is absent.</p>{/if}
         <p>Point-in-time resolver evidence. Shared DNS infrastructure can connect investigations but does not prove common ownership or maliciousness.{dnsEvidence.truncated?' Some record inventories were capped.':''}</p>
@@ -238,6 +246,7 @@
   .idn-card{margin-bottom:12px;padding:20px}.idn-card header{display:flex;justify-content:space-between;gap:12px}.idn-card h3{margin:0}.idn-card header>span{color:var(--muted);font-size:.62rem}.idn-forms{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.idn-forms article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.idn-forms small,.idn-forms strong{display:block}.idn-forms small{color:var(--muted);font-size:.61rem;text-transform:uppercase}.idn-forms strong{margin-top:5px;overflow-wrap:anywhere}.idn-card ul{display:grid;gap:7px;margin:12px 0 0;padding:0;list-style:none}.idn-card li{padding:9px 11px;border-left:3px solid var(--accent);background:rgba(126,224,168,.04)}.idn-card li.warning{border-color:#f2b84b;background:rgba(242,184,75,.04)}.idn-card li strong,.idn-card li span{display:block}.idn-card li span,.idn-card>p{margin-top:4px;color:var(--muted);font-size:.66rem}.idn-card>p{margin-bottom:0}
   .dns-card{margin-bottom:12px;padding:20px}.dns-card header{display:flex;justify-content:space-between;gap:12px}.dns-card h3{margin:0}.dns-card header>span{color:var(--accent);font-size:.64rem;text-transform:uppercase}.dns-card header>span.partial{color:#f2b84b}.dns-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.dns-grid article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.dns-grid small,.dns-grid strong{display:block}.dns-grid small{color:var(--muted);font-size:.61rem;text-transform:uppercase}.dns-grid strong{margin-top:5px;font-size:.7rem;overflow-wrap:anywhere}.dns-card>p{margin:11px 0 0;color:var(--muted);font-size:.66rem}.dns-card .dns-warning{padding:9px 11px;border-left:3px solid #f2b84b;background:rgba(242,184,75,.04);color:var(--text)}
   .case-card{margin:12px 0;padding:20px}.case-card h3{margin:0}.case-intro{display:flex;justify-content:space-between;gap:14px;align-items:start}.case-badges{display:flex;flex-wrap:wrap;gap:6px}.badge{padding:4px 9px;border:1px solid var(--border);border-radius:99px;font-size:.62rem;white-space:nowrap}.badge.status-escalated,.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}.badge.status-resolved,.badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}.badge.disposition-suspicious{color:#f2b84b}.case-body{margin-top:12px}.note-edit label{display:block;color:var(--muted);font-size:.66rem;margin-bottom:5px}.note-edit textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel);resize:vertical}.case-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.case-actions button{min-height:36px;padding:8px 13px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised);font-size:.68rem}.case-body>.primary{margin-top:4px}.case-actions a{color:var(--accent);font-size:.68rem}.case-hint,.case-status{margin:8px 0 0;color:var(--muted);font-size:.66rem}.case-status{color:var(--accent)}
+  .diagnostics .limited-state{color:#f2b84b}
   @media(max-width:900px){.summaries{grid-template-columns:repeat(2,1fr)}.diagnostics{grid-template-columns:1fr}.availability header{display:block}.scores{margin-top:12px}}
   @media(max-width:650px){.input-row,.summaries,.sources,.score-details,.response-actions,.idn-forms,.dns-grid{grid-template-columns:1fr}.input-row .primary{min-height:44px}.result-head{align-items:flex-start;flex-direction:column}.result-actions{width:100%;flex-wrap:wrap}.scores{display:grid;grid-template-columns:1fr 1fr}.score{width:auto}}
 </style>

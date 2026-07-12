@@ -37,6 +37,25 @@ const networkHandlers = [
   ['certificate search', require('../netlify/functions/ct-search').handler],
   ['domain posture', require('../netlify/functions/domain-posture').handler],
 ];
+const disabledNetworkHandlers = [
+  ['lookup', 'WHOISLEUTH_DISABLE_LOOKUP', require('../netlify/functions/lookup').handler],
+  ['rdap', 'WHOISLEUTH_DISABLE_RDAP', require('../netlify/functions/rdap').handler],
+  ['whois', 'WHOISLEUTH_DISABLE_WHOIS', require('../netlify/functions/whois').handler],
+  ['availability', 'WHOISLEUTH_DISABLE_AVAILABILITY', require('../netlify/functions/availability').handler],
+  ['certificate_transparency', 'WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY', require('../netlify/functions/ct-search').handler],
+  ['domain_posture', 'WHOISLEUTH_DISABLE_DOMAIN_POSTURE', require('../netlify/functions/domain-posture').handler],
+];
+
+async function withEnvironment(name, value, callback) {
+  const previous = process.env[name];
+  process.env[name] = value;
+  try {
+    return await callback();
+  } finally {
+    if (previous === undefined) delete process.env[name];
+    else process.env[name] = previous;
+  }
+}
 
 describe('direct serverless network paths', () => {
   for (const [name, handler] of networkHandlers) {
@@ -84,5 +103,46 @@ describe('direct serverless network paths', () => {
     const afterFailure = defaultOperationBudget.status()
       .find((entry) => entry.id === OPERATION_CLASSES.REGISTRY_DEEP).active;
     assert.equal(afterFailure, before);
+  });
+
+  for (const [feature, environmentName, handler] of disabledNetworkHandlers) {
+    test(`blocks disabled ${feature} before any upstream work can begin`, async () => {
+      await withEnvironment(environmentName, '1', async () => {
+        const response = await handler({
+          headers: { cookie },
+          queryStringParameters: { q: 'example.com' },
+        });
+        assert.equal(response.statusCode, 503);
+        const body = JSON.parse(response.body);
+        assert.equal(body.errorCode, 'FEATURE_DISABLED');
+        assert.equal(body.feature, feature);
+        assert.equal(body.disabledBy, feature);
+      });
+    });
+  }
+
+  test('enforces dependency shutdown for direct posture audits', async () => {
+    await withEnvironment('WHOISLEUTH_DISABLE_DNS_INTELLIGENCE', 'true', async () => {
+      const response = await require('../netlify/functions/domain-posture').handler({
+        headers: { cookie },
+        queryStringParameters: { q: 'example.com' },
+      });
+      assert.equal(response.statusCode, 503);
+      const body = JSON.parse(response.body);
+      assert.equal(body.errorCode, 'FEATURE_DISABLED');
+      assert.equal(body.feature, 'domain_posture');
+      assert.equal(body.disabledBy, 'dns_intelligence');
+    });
+  });
+
+  test('does not disclose disabled feature state to an unauthenticated caller', async () => {
+    await withEnvironment('WHOISLEUTH_DISABLE_RDAP', '1', async () => {
+      const response = await require('../netlify/functions/rdap').handler({
+        headers: {},
+        queryStringParameters: { q: 'example.com' },
+      });
+      assert.equal(response.statusCode, 401);
+      assert.equal(JSON.parse(response.body).errorCode, 'AUTH_REQUIRED');
+    });
   });
 });

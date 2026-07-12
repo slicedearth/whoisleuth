@@ -94,8 +94,10 @@ SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret n
 Then open **http://localhost:3000** in a browser and enter that password.
 
 The whole tool sits behind a shared-password gate - `SITE_PASSWORD` is
-required, and every `/api/*` route rejects requests without a valid session
-regardless of whether the frontend gate is showing. There's no per-user
+required, and every investigation API route rejects requests without a valid
+session regardless of whether the frontend gate is showing. Login and session
+status remain the narrow unauthenticated exceptions needed to enter the tool.
+There's no per-user
 login, just one password shared with whoever you want to have access; anyone
 without it sees only the password prompt. Pick something you're comfortable
 sharing with those people, not a password reused elsewhere.
@@ -130,6 +132,41 @@ Sessions are stateless and valid for up to 30 days. Signing out clears the
 cookie from that browser but cannot revoke a copied token before it expires.
 Rotate `SESSION_SECRET` (or `SITE_PASSWORD` when no independent session secret
 is configured) to invalidate every outstanding session immediately.
+
+### Emergency feature switches
+
+Operators can stop individual hosted network features without changing or
+redeploying the frontend. Set any switch to `1`, `true`, `yes`, or `on`:
+
+| Environment variable | Enforced effect |
+| --- | --- |
+| `WHOISLEUTH_DISABLE_LOOKUP` | Blocks unified Lookup and Bulk submissions. |
+| `WHOISLEUTH_DISABLE_RDAP` | Blocks direct RDAP and omits RDAP inside unified Lookup/availability. |
+| `WHOISLEUTH_DISABLE_WHOIS` | Blocks direct WHOIS and omits WHOIS inside deep Lookup/availability. |
+| `WHOISLEUTH_DISABLE_AVAILABILITY` | Blocks direct availability and omits availability analysis inside unified Lookup. |
+| `WHOISLEUTH_DISABLE_DNS_INTELLIGENCE` | Stops evidence/delegation DNS queries and also disables the DNS-dependent posture audit. Transport DNS needed to reach an otherwise-enabled RDAP, WHOIS, or website endpoint is not evidence collection and remains available. |
+| `WHOISLEUTH_DISABLE_WEBSITE_PROBE` | Stops homepage and favicon requests while retaining registry analysis. |
+| `WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY` | Blocks Certificate Transparency search. |
+| `WHOISLEUTH_DISABLE_DOMAIN_POSTURE` | Blocks owned-domain posture audits. |
+
+The authenticated capability report is generated from the same policy that
+the Express routes and direct Netlify Functions enforce. A disabled top-level
+endpoint returns HTTP `503` with `errorCode: FEATURE_DISABLED`, `feature`, and
+`disabledBy`. Unified Lookup degrades optional disabled sources explicitly
+instead of treating them as absent or failed evidence. Browser controls mirror
+the report for clarity, but hiding or disabling a control is never the security
+boundary. Existing local candidate generation, cases, watchlists, profiles,
+exports, and saved evidence remain usable.
+
+When RDAP, WHOIS, DNS intelligence, or website probing is disabled, a requested
+deep scan is marked incomplete for persistence purposes. Its enabled evidence
+is still shown, while watchlists and analyst cases retain prior deep-only
+evidence instead of recording skipped sources as removals.
+
+Express reads the environment for each request. Hosting platforms may require
+an environment update or new function instance before a changed value takes
+effect. Removing the variable or setting any value other than the four values
+above re-enables the feature.
 
 Every push and pull request runs the locked install, test suite, JavaScript
 type checks, Svelte checks, production frontend build, and browser end-to-end
