@@ -95,6 +95,57 @@ describe('compareRegistrySources', () => {
     assert.equal(dnssec.rdapDisplay, 'Not published');
   });
 
+  test('does not report RDAP-only publication when WHOIS failed', () => {
+    const result = comparison.compareRegistrySources(
+      { domain: 'example.com', registrar: { name: 'Example Registrar' } },
+      {},
+      { rdapStatus: 'success', whoisStatus: 'error' }
+    );
+    const registrar = field(result, 'Registrar');
+    assert.equal(registrar.status, 'whois_unavailable');
+    assert.equal(registrar.whoisState, 'unavailable');
+    assert.equal(registrar.whoisDisplay, 'Source unavailable');
+    assert.equal(result.counts.rdap_only, 0);
+    assert.equal(result.counts.whois_unavailable, 2);
+  });
+
+  test('distinguishes unsupported and not-found RDAP from unpublished fields', () => {
+    const unsupported = comparison.compareRegistrySources(
+      {}, { domainName: 'example.com' },
+      { rdapStatus: 'unsupported', whoisStatus: 'complete' }
+    );
+    assert.equal(field(unsupported, 'Domain').status, 'rdap_unavailable');
+    assert.equal(field(unsupported, 'Domain').rdapDisplay, 'Unsupported by source');
+
+    const notFound = comparison.compareRegistrySources(
+      {}, { domainName: 'example.com' },
+      { rdapStatus: 'not_found', whoisStatus: 'complete' }
+    );
+    assert.equal(field(notFound, 'Domain').status, 'rdap_unavailable');
+    assert.equal(field(notFound, 'Domain').rdapDisplay, 'No matching registry object');
+  });
+
+  test('marks fields absent from a partial WHOIS chain as incomplete', () => {
+    const result = comparison.compareRegistrySources(
+      { domain: 'example.com', registrar: { name: 'Example Registrar' } },
+      { domainName: 'EXAMPLE.COM' },
+      { rdapStatus: 'success', whoisStatus: 'partial' }
+    );
+    assert.equal(field(result, 'Domain').status, 'equivalent');
+    assert.equal(field(result, 'Registrar').status, 'whois_incomplete');
+    assert.equal(field(result, 'Registrar').whoisDisplay, 'Not observed (partial source)');
+    assert.equal(result.counts.whois_incomplete, 1);
+  });
+
+  test('compares values that are present even when the containing WHOIS chain is partial', () => {
+    const result = comparison.compareRegistrySources(
+      { registrar: { name: 'Example Registrar' } },
+      { registrar: 'Example Registrar' },
+      { rdapStatus: 'success', whoisStatus: 'partial' }
+    );
+    assert.equal(field(result, 'Registrar').status, 'equivalent');
+  });
+
   test('identifies redaction rather than displaying it as ordinary data', () => {
     const result = comparison.compareRegistrySources(
       { registrar: { name: 'Example Registrar' } },
@@ -129,6 +180,11 @@ describe('compareRegistrySources', () => {
     assert.deepEqual(result.fields, []);
     assert.deepEqual(result.counts, {
       equivalent: 0, conflict: 0, rdap_only: 0, whois_only: 0, rdap_redacted: 0, whois_redacted: 0,
+      rdap_unavailable: 0, whois_unavailable: 0, rdap_incomplete: 0, whois_incomplete: 0,
+    });
+    assert.deepEqual(result.sourceHealth, {
+      rdap: { status: null, condition: 'complete' },
+      whois: { status: null, condition: 'complete' },
     });
   });
 });

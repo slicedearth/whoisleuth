@@ -168,7 +168,9 @@ root and is gitignored.
 - For domain lookups, the Summary compares overlapping RDAP and WHOIS fields
   after both sources finish. Equivalent values are normalized for harmless
   formatting differences, while source-only values and material conflicts
-  retain both original source values for review.
+  retain both original source values for review. A failed, unsupported,
+  skipped, not-found, or partial source is kept distinct from an unpublished
+  field, so incomplete collection is not presented as a registry discrepancy.
 - RDAP bootstrap data is validated, shared across concurrent requests, and
   retained as a bounded stale fallback during a temporary IANA outage. Domain
   lifecycle events are normalized into deterministic creation, expiration,

@@ -17,11 +17,22 @@ function isRedacted(value) {
   return REDACTION_MARKERS.some((re) => re.test(value));
 }
 
-function sourceState(value) {
+function publishedState(value) {
   if (value === null || value === undefined || value === '') return 'absent';
   if (Array.isArray(value) && value.length === 0) return 'absent';
   if (isRedacted(value)) return 'redacted';
   return 'value';
+}
+
+function sourceCondition(status) {
+  if (status === 'partial') return 'incomplete';
+  if (['error', 'unsupported', 'not_found', 'skipped'].includes(status)) return 'unavailable';
+  return 'complete';
+}
+
+function fieldState(value, condition) {
+  const state = publishedState(value);
+  return state === 'absent' && condition !== 'complete' ? condition : state;
 }
 
 function registrarValue(value) {
@@ -91,10 +102,16 @@ function sameNormalizedValue(left, right) {
   return left === right;
 }
 
-function displayValue(value) {
-  const state = sourceState(value);
+function displayValue(value, state, status) {
   if (state === 'absent') return 'Not published';
   if (state === 'redacted') return 'Redacted by source';
+  if (state === 'incomplete') return 'Not observed (partial source)';
+  if (state === 'unavailable') {
+    if (status === 'unsupported') return 'Unsupported by source';
+    if (status === 'not_found') return 'No matching registry object';
+    if (status === 'skipped') return 'Source skipped';
+    return 'Source unavailable';
+  }
   if (Array.isArray(value)) return value.join(', ');
   return String(value);
 }
@@ -109,56 +126,78 @@ function rdapLifecycleDate(rdap, field, fallbackAction) {
   return typeof value === 'string' && value ? value : findRdapEvent(rdap, fallbackAction);
 }
 
-// Classifies every reachable (rdapState, whoisState) pair other than
-// absent/absent (filtered out by the caller before this runs). Conflict and
-// equivalent need both sides to actually hold a comparable value; every
-// other combination is classified by which side is redacted or missing,
-// since "redacted" and "absent" are different reasons a comparison can't be
-// made and the UI (and the field counts below) should be able to tell them
-// apart rather than lumping every non-conflicting case into one bucket.
+// Conflict and equivalence require values from both sources. Missing fields
+// in a failed, unsupported, skipped, not-found, or partial source are not
+// publication differences: preserving that source health prevents a lookup
+// failure from being presented as an RDAP/WHOIS disagreement.
 function classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, normalize) {
   if (rdapState === 'value' && whoisState === 'value') {
     return sameNormalizedValue(normalize(rdapValue), normalize(whoisValue)) ? 'equivalent' : 'conflict';
   }
   if (rdapState === 'redacted' && whoisState === 'redacted') return 'equivalent';
+  if (rdapState === 'unavailable') return 'rdap_unavailable';
+  if (whoisState === 'unavailable') return 'whois_unavailable';
+  if (rdapState === 'incomplete') return 'rdap_incomplete';
+  if (whoisState === 'incomplete') return 'whois_incomplete';
   if (rdapState === 'value' && whoisState === 'absent') return 'rdap_only';
   if (whoisState === 'value' && rdapState === 'absent') return 'whois_only';
   if (rdapState === 'redacted') return 'rdap_redacted';
   return 'whois_redacted';
 }
 
-function compareField(label, rdapValue, whoisValue, normalize) {
-  const rdapState = sourceState(rdapValue);
-  const whoisState = sourceState(whoisValue);
-  if (rdapState === 'absent' && whoisState === 'absent') return null;
+function compareField(label, rdapValue, whoisValue, normalize, sourceHealth) {
+  const rdapPublishedState = publishedState(rdapValue);
+  const whoisPublishedState = publishedState(whoisValue);
+  if (rdapPublishedState === 'absent' && whoisPublishedState === 'absent') return null;
+
+  const rdapState = fieldState(rdapValue, sourceHealth.rdapCondition);
+  const whoisState = fieldState(whoisValue, sourceHealth.whoisCondition);
 
   return {
     label,
     status: classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, normalize),
     rdapState,
     whoisState,
-    rdapDisplay: displayValue(rdapValue),
-    whoisDisplay: displayValue(whoisValue),
+    rdapDisplay: displayValue(rdapValue, rdapState, sourceHealth.rdapStatus),
+    whoisDisplay: displayValue(whoisValue, whoisState, sourceHealth.whoisStatus),
   };
 }
 
-export function compareRegistrySources(rdapParsed, whoisParsed) {
+export function compareRegistrySources(rdapParsed, whoisParsed, options = {}) {
   const rdap = rdapParsed || {};
   const whois = whoisParsed || {};
+  const sourceHealth = {
+    rdapStatus: options.rdapStatus || null,
+    whoisStatus: options.whoisStatus || null,
+    rdapCondition: sourceCondition(options.rdapStatus),
+    whoisCondition: sourceCondition(options.whoisStatus),
+  };
   const fields = [
-    compareField('Domain', rdap.domain, whois.domainName, normalizeDomain),
-    compareField('Registry object ID', rdap.handle, whois.registryDomainId, normalizeText),
-    compareField('Registrar', registrarValue(rdap.registrar), whois.registrar, normalizeText),
-    compareField('Registrar IANA ID', rdap.registrarIanaId, whois.registrarIanaId, normalizeText),
-    compareField('Created', rdapLifecycleDate(rdap, 'createdDate', 'registration'), whois.createdDate, normalizeDate),
-    compareField('Expires', rdapLifecycleDate(rdap, 'expiryDate', 'expiration'), whois.expiryDate, normalizeDate),
-    compareField('Last updated', rdapLifecycleDate(rdap, 'updatedDate', 'last changed'), whois.updatedDate, normalizeDate),
-    compareField('DNSSEC', rdap.dnssec, whois.dnssec, normalizeDnssec),
-    compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, normalizeStatus)),
-    compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver)),
+    compareField('Domain', rdap.domain, whois.domainName, normalizeDomain, sourceHealth),
+    compareField('Registry object ID', rdap.handle, whois.registryDomainId, normalizeText, sourceHealth),
+    compareField('Registrar', registrarValue(rdap.registrar), whois.registrar, normalizeText, sourceHealth),
+    compareField('Registrar IANA ID', rdap.registrarIanaId, whois.registrarIanaId, normalizeText, sourceHealth),
+    compareField('Created', rdapLifecycleDate(rdap, 'createdDate', 'registration'), whois.createdDate, normalizeDate, sourceHealth),
+    compareField('Expires', rdapLifecycleDate(rdap, 'expiryDate', 'expiration'), whois.expiryDate, normalizeDate, sourceHealth),
+    compareField('Last updated', rdapLifecycleDate(rdap, 'updatedDate', 'last changed'), whois.updatedDate, normalizeDate, sourceHealth),
+    compareField('DNSSEC', rdap.dnssec, whois.dnssec, normalizeDnssec, sourceHealth),
+    compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, normalizeStatus), sourceHealth),
+    compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver), sourceHealth),
   ].filter((field) => field !== null);
 
-  const counts = { equivalent: 0, conflict: 0, rdap_only: 0, whois_only: 0, rdap_redacted: 0, whois_redacted: 0 };
+  const counts = {
+    equivalent: 0, conflict: 0, rdap_only: 0, whois_only: 0,
+    rdap_redacted: 0, whois_redacted: 0,
+    rdap_unavailable: 0, whois_unavailable: 0,
+    rdap_incomplete: 0, whois_incomplete: 0,
+  };
   for (const field of fields) counts[field.status] += 1;
-  return { fields, counts };
+  return {
+    fields,
+    counts,
+    sourceHealth: {
+      rdap: { status: sourceHealth.rdapStatus, condition: sourceHealth.rdapCondition },
+      whois: { status: sourceHealth.whoisStatus, condition: sourceHealth.whoisCondition },
+    },
+  };
 }

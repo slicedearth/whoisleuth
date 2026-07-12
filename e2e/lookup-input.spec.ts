@@ -142,6 +142,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expect(page.getByText('Phone: +61 1, +61 2')).toBeVisible();
   await expect(page.getByText('Email: abuse@example.com')).toBeVisible();
   await expect(page.getByText(/attempts: rate limited → success/)).toBeVisible();
+  const comparison = page.locator('.comparison');
+  await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
+  await comparison.locator('summary').click();
+  await expect(comparison.getByText('WHOIS incomplete').first()).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

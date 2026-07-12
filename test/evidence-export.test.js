@@ -60,7 +60,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 2);
+    assert.equal(result.schemaVersion, 3);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -80,6 +80,8 @@ describe('lookup evidence export', () => {
     response.rdap = { error: 'RDAP timed out', attempts: [{ outcome: 'timeout' }] };
     response.whois.parsed.chainStatus = 'partial';
     response.whois.parsed.failedHop = 'whois.registrar.example';
+    response.diagnostics.rdap.status = 'error';
+    response.diagnostics.whois.status = 'partial';
     const result = evidence.buildLookupEvidence(response);
 
     assert.deepEqual(result.sources.rdap, {
@@ -87,6 +89,10 @@ describe('lookup evidence export', () => {
     });
     assert.equal(result.sources.whois.status, 'partial');
     assert.equal(result.sources.whois.failedHop, 'whois.registrar.example');
+    assert.equal(result.analysis.registryComparison.counts.rdap_unavailable, 4);
+    assert.equal(result.analysis.registryComparison.counts.whois_only, 0);
+    assert.equal(result.analysis.registryComparison.sourceHealth.rdap.condition, 'unavailable');
+    assert.equal(result.analysis.registryComparison.sourceHealth.whois.condition, 'incomplete');
   });
 
   test('creates a bounded, filesystem-safe filename', () => {
