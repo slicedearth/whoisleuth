@@ -18,6 +18,10 @@ function fixtureResponse() {
       transportSecurity: 'https',
       upstreamStatus: 200,
       fetchedAt: '2026-07-11T01:02:03.000Z',
+      attempts: [{
+        endpoint: 'https://rdap.example/domain/example.com', transportSecurity: 'https',
+        status: 200, outcome: 'success', detail: 'The endpoint returned the requested RDAP object.', selected: true,
+      }],
       parsed: {
         domain: 'EXAMPLE.COM',
         registrar: { name: 'Example Registrar' },
@@ -42,8 +46,8 @@ function fixtureResponse() {
     },
     availability: { applicable: true, domain: 'example.com', state: 'registered', hasMx: true },
     diagnostics: {
-      version: 1,
-      rdap: { status: 'success', errorCode: null },
+      version: 2,
+      rdap: { status: 'success', errorCode: null, attempts: [] },
       whois: { status: 'complete', errorCode: null },
       availability: { status: 'complete', errorCode: null, resultState: 'registered' },
     },
@@ -56,13 +60,14 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 1);
+    assert.equal(result.schemaVersion, 2);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.sources.rdap.endpoint, 'https://rdap.example/domain/example.com');
     assert.equal(result.sources.rdap.transportSecurity, 'https');
     assert.equal(result.sources.rdap.raw.ldhName, 'EXAMPLE.COM');
+    assert.equal(result.sources.rdap.attempts[0].outcome, 'success');
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
     assert.equal(result.analysis.availability.hasMx, true);
@@ -72,12 +77,14 @@ describe('lookup evidence export', () => {
 
   test('retains partial source failures without failing the export', () => {
     const response = fixtureResponse();
-    response.rdap = { error: 'RDAP timed out' };
+    response.rdap = { error: 'RDAP timed out', attempts: [{ outcome: 'timeout' }] };
     response.whois.parsed.chainStatus = 'partial';
     response.whois.parsed.failedHop = 'whois.registrar.example';
     const result = evidence.buildLookupEvidence(response);
 
-    assert.deepEqual(result.sources.rdap, { status: 'error', error: 'RDAP timed out' });
+    assert.deepEqual(result.sources.rdap, {
+      status: 'error', error: 'RDAP timed out', attempts: [{ outcome: 'timeout' }],
+    });
     assert.equal(result.sources.whois.status, 'partial');
     assert.equal(result.sources.whois.failedHop, 'whois.registrar.example');
   });

@@ -19,6 +19,10 @@ describe('runUnifiedLookup', () => {
       upstreamStatus: 200,
       data: { ldhName: 'EXAMPLE.COM' },
       parsed: { domain: 'EXAMPLE.COM', statuses: [], nameservers: [], events: [] },
+      attempts: [
+        { endpoint: 'https://first.example/domain/example.com', outcome: 'rate_limited', selected: false },
+        { endpoint: 'https://rdap.example/domain/example.com', outcome: 'success', selected: true },
+      ],
     };
     const whoisChain = [
       { server: 'whois.iana.org', response: 'refer: whois.example\n' },
@@ -50,9 +54,10 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 1);
+    assert.equal(result.diagnostics.version, 2);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
+    assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
     assert.equal(result.diagnostics.whois.status, 'complete');
     assert.equal(result.diagnostics.availability.status, 'complete');
   });
@@ -77,6 +82,26 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.rdap.status, 'error');
     assert.equal(result.diagnostics.rdap.errorCode, 'RDAP_UPSTREAM_FAILED');
     assert.equal(result.diagnostics.whois.status, 'complete');
+  });
+
+  test('retains bounded RDAP attempt provenance when every endpoint fails', async () => {
+    const attempts = [{
+      endpoint: 'https://rdap.example/domain/example.com',
+      transportSecurity: 'https', status: null, outcome: 'timeout', detail: 'request timed out', selected: false,
+    }];
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => {
+        throw Object.assign(new Error('RDAP endpoints failed'), { attempts });
+      },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async (_domain, options) => {
+        await assert.rejects(options.rdapRecordPromise, /endpoints failed/);
+        return { state: 'unknown', confidence: 'low' };
+      },
+    });
+
+    assert.deepEqual(result.rdap.attempts, attempts);
+    assert.deepEqual(result.diagnostics.rdap.attempts, attempts);
   });
 
   test('does not run domain availability for IP lookups', async () => {

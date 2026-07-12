@@ -177,6 +177,10 @@ root and is gitignored.
 - HTTPS registry endpoints are preferred. A small number of current IANA
   bootstrap entries expose only HTTP; those remain usable for lookup coverage,
   and source diagnostics explicitly identify the cleartext transport.
+- A successful RDAP response is accepted only when its object type and domain,
+  IP range, or ASN range match the requested object. Empty, mismatched, and
+  malformed successful responses fall through to the next bounded bootstrap
+  endpoint; diagnostics and evidence exports retain the outcome of each attempt.
 - Structured domain results retain registry object IDs, registrar IANA IDs,
   registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
   are RDAP-only; full Lookup and deep scans retain the WHOIS referral chain.

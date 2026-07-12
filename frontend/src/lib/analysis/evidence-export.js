@@ -1,7 +1,7 @@
 import { compareRegistrySources } from './registry-comparison.js';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 1;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 2;
 
 function cloneJson(value) {
   if (value === undefined) return null;
@@ -10,13 +10,18 @@ function cloneJson(value) {
 
 function rdapSource(rdap) {
   const source = rdap || {};
-  if (source.error) return { status: 'error', error: String(source.error) };
+  if (source.error) return {
+    status: 'error',
+    error: String(source.error),
+    attempts: cloneJson(source.attempts || []),
+  };
   return {
     status: source.upstreamStatus === 404 ? 'not_found' : 'success',
     endpoint: source.rdapServer || null,
     transportSecurity: source.transportSecurity || null,
     httpStatus: source.upstreamStatus ?? null,
     fetchedAt: source.fetchedAt || null,
+    attempts: cloneJson(source.attempts || []),
     parsed: cloneJson(source.parsed),
     raw: cloneJson(source.data),
   };

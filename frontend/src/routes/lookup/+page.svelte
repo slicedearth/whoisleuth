@@ -21,7 +21,7 @@
   } from '$lib/analysis/scoring.js';
 
   type JsonRecord = Record<string, any>;
-  type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; transportSecurity?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null };
+  type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; transportSecurity?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null; attempts?:Array<{outcome?:string}> };
   type ScoreExplanation = { score:number; factors:Array<{label:string;delta:number}> }|null;
   type ComparisonField = { label:string; status:string; rdapDisplay:string; whoisDisplay:string };
 
@@ -93,7 +93,8 @@
   function statusLabel(value:string){return value.replaceAll('_',' ');}
   function assessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',rdap_only:'RDAP only',whois_only:'WHOIS only',rdap_redacted:'RDAP redacted',whois_redacted:'WHOIS redacted'} as Record<string,string>)[status]||status;}
   function diagnosticLabel(source:SourceStatus){return source.status?source.status.replaceAll('_',' '):'unknown';}
-  function diagnosticDetail(source:SourceStatus){return[source.endpoint,source.transportSecurity==='http'?'transport: cleartext HTTP':null,source.httpStatus?`HTTP ${source.httpStatus}`:null,source.resultState?`result: ${source.resultState}`:null,source.errorCode,source.authoritativeHop?`authoritative: ${show(source.authoritativeHop)}`:null,source.failedHop?`failed: ${show(source.failedHop)}`:null,source.fetchedAt?`fetched ${formatDate(source.fetchedAt)}`:null,source.queriedAt?`queried ${formatDate(source.queriedAt)}`:null].filter(Boolean).join(' · ')||'No additional source detail';}
+  function attemptSummary(source:SourceStatus){return Array.isArray(source.attempts)&&source.attempts.length?`attempts: ${source.attempts.map((item)=>String(item.outcome||'unknown').replaceAll('_',' ')).join(' → ')}`:null;}
+  function diagnosticDetail(source:SourceStatus){return[source.endpoint,source.transportSecurity==='http'?'transport: cleartext HTTP':null,source.httpStatus?`HTTP ${source.httpStatus}`:null,attemptSummary(source),source.resultState?`result: ${source.resultState}`:null,source.errorCode,source.authoritativeHop?`authoritative: ${show(source.authoritativeHop)}`:null,source.failedHop?`failed: ${show(source.failedHop)}`:null,source.fetchedAt?`fetched ${formatDate(source.fetchedAt)}`:null,source.queriedAt?`queried ${formatDate(source.queriedAt)}`:null].filter(Boolean).join(' · ')||'No additional source detail';}
   function contactIdentity(contact:JsonRecord){return show(contact.name||contact.org||contact.handle);}
   function contactDetails(contact:JsonRecord){return[
     Array.isArray(contact.organizations)&&contact.organizations.length?`Organizations: ${contact.organizations.join(', ')}`:null,

@@ -101,6 +101,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
       rdap: {
         upstreamStatus: 200,
         rdapServer: 'https://rdap.example/domain/example.com',
+        attempts: [
+          { outcome: 'rate_limited', selected: false },
+          { outcome: 'success', selected: true },
+        ],
         parsed: {
           domain: 'EXAMPLE.COM', handle: 'DOMAIN-1', statuses: ['active'], nameservers: ['NS1.EXAMPLE.COM'],
           objectClassName: 'domain', language: 'en', conformance: ['rdap_level_0', 'redacted_0'],
@@ -120,7 +124,10 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
         },
       },
       whois: { parsed: {}, chain: [] },
-      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+      diagnostics: {
+        rdap: { status: 'success', attempts: [{ outcome: 'rate_limited' }, { outcome: 'success' }] },
+        whois: { status: 'partial' }, availability: { status: 'complete' },
+      },
     }),
   }));
 
@@ -134,6 +141,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expect(page.getByText('Email: first@example.com, second@example.com')).toBeVisible();
   await expect(page.getByText('Phone: +61 1, +61 2')).toBeVisible();
   await expect(page.getByText('Email: abuse@example.com')).toBeVisible();
+  await expect(page.getByText(/attempts: rate limited → success/)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
