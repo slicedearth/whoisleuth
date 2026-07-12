@@ -21,12 +21,32 @@ describe('compareRegistrySources', () => {
     assert.equal(field(result, 'Registrar').status, 'equivalent');
   });
 
+  test('compares registry and registrar identifiers independently of display names', () => {
+    const result = comparison.compareRegistrySources(
+      { handle: '12345_DOMAIN_COM-VRSN', registrarIanaId: '9999' },
+      { registryDomainId: '12345 domain com vrsn', registrarIanaId: '9999' }
+    );
+    assert.equal(field(result, 'Registry object ID').status, 'equivalent');
+    assert.equal(field(result, 'Registrar IANA ID').status, 'equivalent');
+  });
+
   test('compares lifecycle dates without false conflicts from timestamp precision', () => {
     const result = comparison.compareRegistrySources(
       { events: [{ action: 'registration', date: '2025-04-03T00:00:00.000Z' }] },
       { createdDate: '2025-04-03' }
     );
     assert.equal(field(result, 'Created').status, 'equivalent');
+  });
+
+  test('prefers deterministic RDAP lifecycle summaries over upstream event order', () => {
+    const result = comparison.compareRegistrySources(
+      {
+        lifecycle: { expiryDate: '2028-01-01T00:00:00Z' },
+        events: [{ action: 'expiration', date: '2027-01-01T00:00:00Z' }],
+      },
+      { expiryDate: '2028-01-01' }
+    );
+    assert.equal(field(result, 'Expires').status, 'equivalent');
   });
 
   test('compares nameservers as a case-insensitive, order-independent set', () => {

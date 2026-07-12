@@ -154,6 +154,14 @@ root and is gitignored.
   after both sources finish. Equivalent values are normalized for harmless
   formatting differences, while source-only values and material conflicts
   retain both original source values for review.
+- RDAP bootstrap data is validated, shared across concurrent requests, and
+  retained as a bounded stale fallback during a temporary IANA outage. Domain
+  lifecycle events are normalized into deterministic creation, expiration,
+  update, transfer, deletion, and reinstantiation dates without discarding the
+  bounded source event list.
+- Structured domain results retain registry object IDs, registrar IANA IDs,
+  registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
+  are RDAP-only; full Lookup and deep scans retain the WHOIS referral chain.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,

@@ -122,4 +122,27 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result, 'rdap'), false);
     assert.equal(Object.hasOwn(result, 'whois'), false);
   });
+
+  test('fast lookups skip WHOIS while reusing RDAP for availability', async () => {
+    const rdapRecord = {
+      rdapServer: 'https://rdap.example/domain/example.com',
+      upstreamStatus: 200,
+      parsed: { domain: 'EXAMPLE.COM' },
+    };
+    let whoisCalls = 0;
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fast: true,
+      fetchRdapRecord: async () => rdapRecord,
+      buildWhoisChain: async () => { whoisCalls += 1; return []; },
+      checkDomainAvailability: async (_domain, options) => {
+        assert.equal(await options.rdapRecordPromise, rdapRecord);
+        assert.equal(await options.whoisChainPromise, null);
+        return { state: 'registered', confidence: 'high' };
+      },
+    });
+    assert.equal(whoisCalls, 0);
+    assert.equal(result.diagnostics.whois.status, 'skipped');
+    assert.equal(result.diagnostics.whois.errorCode, null);
+    assert.deepEqual(result.whois, { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' });
+  });
 });

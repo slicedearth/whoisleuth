@@ -161,4 +161,28 @@ describe('parseWhoisChain wires the authority result through', () => {
     assert.equal(parsed.notFound, true);
     assert.equal(parsed.notFoundSource, REGISTRY);
   });
+
+  test('preserves registry and registrar identifiers, endpoint, reseller, and registrar expiration label', () => {
+    const parsed = parseWhoisChain([
+      ianaHop,
+      {
+        server: REGISTRY,
+        response: [
+          'Domain Name: EXAMPLE.COM',
+          'Registry Domain ID: 12345_DOMAIN_COM-VRSN',
+          'Registrar: Example Registrar, LLC',
+          'Registrar IANA ID: 9999',
+          'Registrar WHOIS Server: whois.exampleregistrar.com',
+          'Registrar URL: https://registrar.example',
+          'Reseller: Example Reseller',
+          'Registrar Registration Expiration Date: 2028-04-03T00:00:00Z',
+        ].join('\n'),
+      },
+    ]);
+    assert.equal(parsed.registryDomainId, '12345_DOMAIN_COM-VRSN');
+    assert.equal(parsed.registrarIanaId, '9999');
+    assert.equal(parsed.registrarWhoisServer, 'whois.exampleregistrar.com');
+    assert.equal(parsed.reseller, 'Example Reseller');
+    assert.equal(parsed.expiryDate, '2028-04-03T00:00:00Z');
+  });
 });

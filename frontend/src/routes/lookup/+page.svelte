@@ -82,9 +82,9 @@
   onMount(()=>{const q=page.url.searchParams.get('q');if(q)query=q;});
 
   function eventDate(action:string){return rdapParsed.events?.find((item:JsonRecord)=>item.action===action)?.date||null;}
-  function created(){return availability.createdDate||eventDate('registration')||whoisParsed.createdDate;}
-  function expires(){return availability.expiryDate||eventDate('expiration')||whoisParsed.expiryDate;}
-  function updated(){return eventDate('last changed')||whoisParsed.updatedDate;}
+  function created(){return availability.createdDate||rdapParsed.lifecycle?.createdDate||eventDate('registration')||whoisParsed.createdDate;}
+  function expires(){return availability.expiryDate||rdapParsed.lifecycle?.expiryDate||eventDate('expiration')||whoisParsed.expiryDate;}
+  function updated(){return rdapParsed.lifecycle?.updatedDate||eventDate('last changed')||whoisParsed.updatedDate;}
   function formatDate(value:any){if(!value)return'—';const parsed=new Date(value);return Number.isNaN(parsed.getTime())?String(value):parsed.toLocaleString();}
   function statusLabel(value:string){return value.replaceAll('_',' ');}
   function assessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',rdap_only:'RDAP only',whois_only:'WHOIS only',rdap_redacted:'RDAP redacted',whois_redacted:'WHOIS redacted'} as Record<string,string>)[status]||status;}
@@ -160,8 +160,8 @@
     {/if}
 
     <div class="sources">
-      <details class="card" open><summary>RDAP structured data</summary>{#if rdap.error}<p class="error source-error">{rdap.error}</p>{:else}<dl><dt>Domain</dt><dd>{show(rdapParsed.domain)}</dd><dt>Registrar</dt><dd>{show(rdapParsed.registrar)}</dd><dt>DNSSEC</dt><dd>{show(rdapParsed.dnssec)}</dd><dt>Status</dt><dd>{show(rdapParsed.statuses)}</dd><dt>Nameservers</dt><dd>{show(rdapParsed.nameservers)}</dd><dt>Registrant</dt><dd>{show(rdapParsed.registrant)}</dd><dt>Technical</dt><dd>{show(rdapParsed.technical)}</dd><dt>Abuse</dt><dd>{show(rdapParsed.abuse)}</dd></dl>{/if}</details>
-      <details class="card" open><summary>WHOIS structured data</summary>{#if whois.error}<p class="error source-error">{whois.error}</p>{:else}<dl><dt>Domain</dt><dd>{show(whoisParsed.domainName)}</dd><dt>Registrar</dt><dd>{show(whoisParsed.registrar)}</dd><dt>DNSSEC</dt><dd>{show(whoisParsed.dnssec)}</dd><dt>Status</dt><dd>{show(whoisParsed.statuses)}</dd><dt>Nameservers</dt><dd>{show(whoisParsed.nameservers)}</dd><dt>Registrant</dt><dd>{show(whoisParsed.registrantName||whoisParsed.registrantOrg)}</dd><dt>Abuse</dt><dd>{show(whoisParsed.abuseEmail||whoisParsed.abusePhone)}</dd><dt>Chain</dt><dd>{show(whoisParsed.chainStatus)}</dd></dl>{/if}</details>
+      <details class="card" open><summary>RDAP structured data</summary>{#if rdap.error}<p class="error source-error">{rdap.error}</p>{:else}<dl><dt>Domain</dt><dd>{show(rdapParsed.domain)}</dd><dt>Registry ID</dt><dd>{show(rdapParsed.handle)}</dd><dt>Registrar</dt><dd>{show(rdapParsed.registrar)}</dd><dt>Registrar ID</dt><dd>{show(rdapParsed.registrarIanaId)}</dd><dt>DNSSEC</dt><dd>{show(rdapParsed.dnssec)}</dd><dt>Status</dt><dd>{show(rdapParsed.statuses)}</dd><dt>Nameservers</dt><dd>{show(rdapParsed.nameservers)}</dd><dt>Registrant</dt><dd>{show(rdapParsed.registrant)}</dd><dt>Technical</dt><dd>{show(rdapParsed.technical)}</dd><dt>Abuse</dt><dd>{show(rdapParsed.abuse)}</dd></dl>{/if}</details>
+      <details class="card" open><summary>WHOIS structured data</summary>{#if whois.error}<p class="error source-error">{whois.error}</p>{:else}<dl><dt>Domain</dt><dd>{show(whoisParsed.domainName)}</dd><dt>Registry ID</dt><dd>{show(whoisParsed.registryDomainId)}</dd><dt>Registrar</dt><dd>{show(whoisParsed.registrar)}</dd><dt>Registrar ID</dt><dd>{show(whoisParsed.registrarIanaId)}</dd><dt>Registrar WHOIS</dt><dd>{show(whoisParsed.registrarWhoisServer)}</dd><dt>Reseller</dt><dd>{show(whoisParsed.reseller)}</dd><dt>DNSSEC</dt><dd>{show(whoisParsed.dnssec)}</dd><dt>Status</dt><dd>{show(whoisParsed.statuses)}</dd><dt>Nameservers</dt><dd>{show(whoisParsed.nameservers)}</dd><dt>Registrant</dt><dd>{show(whoisParsed.registrantName||whoisParsed.registrantOrg)}</dd><dt>Abuse</dt><dd>{show(whoisParsed.abuseEmail||whoisParsed.abusePhone)}</dd><dt>Chain</dt><dd>{show(whoisParsed.chainStatus)}</dd></dl>{/if}</details>
     </div>
     <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
   </section>

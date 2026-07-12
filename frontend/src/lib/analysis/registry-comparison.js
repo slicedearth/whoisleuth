@@ -104,6 +104,11 @@ function findRdapEvent(rdap, action) {
   return event?.date || null;
 }
 
+function rdapLifecycleDate(rdap, field, fallbackAction) {
+  const value = rdap?.lifecycle?.[field];
+  return typeof value === 'string' && value ? value : findRdapEvent(rdap, fallbackAction);
+}
+
 // Classifies every reachable (rdapState, whoisState) pair other than
 // absent/absent (filtered out by the caller before this runs). Conflict and
 // equivalent need both sides to actually hold a comparable value; every
@@ -142,10 +147,12 @@ export function compareRegistrySources(rdapParsed, whoisParsed) {
   const whois = whoisParsed || {};
   const fields = [
     compareField('Domain', rdap.domain, whois.domainName, normalizeDomain),
+    compareField('Registry object ID', rdap.handle, whois.registryDomainId, normalizeText),
     compareField('Registrar', registrarValue(rdap.registrar), whois.registrar, normalizeText),
-    compareField('Created', findRdapEvent(rdap, 'registration'), whois.createdDate, normalizeDate),
-    compareField('Expires', findRdapEvent(rdap, 'expiration'), whois.expiryDate, normalizeDate),
-    compareField('Last updated', findRdapEvent(rdap, 'last changed'), whois.updatedDate, normalizeDate),
+    compareField('Registrar IANA ID', rdap.registrarIanaId, whois.registrarIanaId, normalizeText),
+    compareField('Created', rdapLifecycleDate(rdap, 'createdDate', 'registration'), whois.createdDate, normalizeDate),
+    compareField('Expires', rdapLifecycleDate(rdap, 'expiryDate', 'expiration'), whois.expiryDate, normalizeDate),
+    compareField('Last updated', rdapLifecycleDate(rdap, 'updatedDate', 'last changed'), whois.updatedDate, normalizeDate),
     compareField('DNSSEC', rdap.dnssec, whois.dnssec, normalizeDnssec),
     compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, normalizeStatus)),
     compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver)),

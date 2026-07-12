@@ -59,4 +59,48 @@ describe('structured RDAP metadata', () => {
     assert.equal(parsed.parentHandle, 'PARENT-AS-BLOCK');
     assert.equal(parsed.port43, 'whois.rir.example');
   });
+
+  test('normalizes and deterministically summarizes shuffled lifecycle events', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      events: [
+        { eventAction: ' Expiration ', eventDate: '2027-01-01T00:00:00Z' },
+        { eventAction: 'registration', eventDate: '2020-06-01T00:00:00Z' },
+        { eventAction: 'REGISTRATION', eventDate: '2020-01-01T00:00:00Z', eventActor: 'Registry' },
+        { eventAction: 'expiration', eventDate: '2028-01-01T00:00:00Z' },
+        { eventAction: 'last   changed', eventDate: '2025-01-01T00:00:00Z' },
+        { eventAction: 'last changed', eventDate: 'not-a-date' },
+        { eventAction: 'transfer', eventDate: '2024-02-03T00:00:00Z' },
+      ],
+    });
+
+    assert.equal(parsed.events[2].action, 'registration');
+    assert.equal(parsed.events[2].actor, 'Registry');
+    assert.deepEqual(parsed.lifecycle, {
+      createdDate: '2020-01-01T00:00:00Z',
+      reregistrationDate: null,
+      expiryDate: '2028-01-01T00:00:00Z',
+      updatedDate: '2025-01-01T00:00:00Z',
+      transferDate: '2024-02-03T00:00:00Z',
+      deletionDate: null,
+      reinstantiationDate: null,
+    });
+  });
+
+  test('bounds malformed event data without losing valid neighbours', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      events: [
+        null,
+        { eventAction: 'registration\nforged', eventDate: '2020-01-01' },
+        { eventAction: 'expiration', eventDate: 'x'.repeat(65) },
+        { eventAction: 'last changed', eventDate: '2025-01-01', eventActor: 'x'.repeat(161) },
+      ],
+    });
+    assert.equal(parsed.events.length, 3);
+    assert.deepEqual(parsed.events[0], { action: null, date: '2020-01-01', actor: null });
+    assert.deepEqual(parsed.events[1], { action: 'expiration', date: null, actor: null });
+    assert.deepEqual(parsed.events[2], { action: 'last changed', date: '2025-01-01', actor: null });
+    assert.equal(parsed.lifecycle.updatedDate, '2025-01-01');
+  });
 });
