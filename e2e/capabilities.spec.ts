@@ -41,6 +41,6 @@ test('malformed or unsupported capability reports degrade conservatively', async
     body: JSON.stringify({ version: 99, authoritative: true, features: [{ id: 'lookup', status: 'supported' }] }),
   }));
   await page.goto('/');
-  await expect(page.getByText('Capability status unavailable', { exact: true })).toBeVisible();
+  await expect(page.getByText('Backend unavailable', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Investigate domains. Protect brands.' })).toBeVisible();
 });

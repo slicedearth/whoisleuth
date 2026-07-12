@@ -78,7 +78,7 @@ nav a:hover, nav a.active { border-color: var(--border); background: rgba(94,179
 nav a.active { border-left-color: var(--accent2); }
 nav a.active strong { color: var(--accent); }
 .session { display: flex; gap: 12px; align-items: center; margin: auto 18px 18px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font: .7rem var(--mono); }
-.session span { margin-right: auto; }
+.session span { min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session a:hover { color: var(--accent); }
 .session button { padding: 0; border: 0; color: var(--text); background: none; }
 

@@ -31,7 +31,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.locator('.shell')).toBeVisible();
   await expect(loginForm).not.toBeVisible();
   await expect(page.getByRole('heading', { name: 'Investigate domains. Protect brands.' })).toBeVisible();
-  await expect(page.getByText('Hosted probes reported · express', { exact: true })).toBeVisible();
+  const backendStatus = page.getByText('Backend · Express', { exact: true });
+  await expect(backendStatus).toBeVisible();
+  await expect(backendStatus).toHaveCSS('white-space', 'nowrap');
 
   const signOutButton = page.getByRole('button', { name: 'Sign out' });
   await expect(signOutButton).toBeVisible();
