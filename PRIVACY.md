@@ -20,9 +20,11 @@ at all.
 - **Single and bulk lookups**: proxied through the server per-request, held
   in memory only for the duration of that request, never written to a
   database or disk server-side. Single Lookup can display multiple bounded
-  registry-published contacts per RDAP role. Bulk, watchlist, and case data
-  retain only the existing compact primary-contact fields; the expanded
-  contact inventory is not copied into browser-local investigation stores.
+  registry-published contacts per RDAP role and bounded normalized WHOIS
+  contacts for registrant, administrative, technical, billing, and abuse
+  roles. Bulk, watchlist, and case data retain only the existing compact
+  primary-contact fields; these expanded contact inventories are not copied
+  into browser-local investigation stores.
 - **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside

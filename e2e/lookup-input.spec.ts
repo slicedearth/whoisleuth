@@ -139,6 +139,58 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expectNoHorizontalOverflow(page);
 });
 
+test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'example.com', type: 'domain', registrableDomain: 'example.com',
+      availability: { state: 'registered', confidence: 'high', domain: 'example.com' },
+      rdap: { upstreamStatus: 404, parsed: {} },
+      whois: {
+        parsed: {
+          domainName: 'EXAMPLE.COM', registryDomainId: 'DOMAIN-1', registrar: 'Example Registrar',
+          lifecycle: {
+            createdDate: '2020-01-02T03:04:05Z',
+            expiryDate: '2030-01-02T03:04:05Z',
+            updatedDate: '2026-07-12T01:02:03Z',
+          },
+          statuses: ['clientTransferProhibited'], nameservers: ['NS1.EXAMPLE.COM'],
+          chainStatus: 'complete', fieldsTruncated: ['registrantAddress'],
+          contactsByRole: {
+            registrant: [{
+              handle: 'REG-1', name: 'Example Person', organizations: ['Example Org'],
+              emails: ['person@example.com'], phones: ['+61 3 0000 0000'],
+              addresses: ['Suite 1, 2 Example Road, Melbourne VIC 3000, AU'],
+              publicIds: [{ type: 'Registry contact ID', identifier: 'REG-1' }], links: [],
+            }],
+            abuse: [{
+              handle: null, name: null, organizations: ['Example Registrar'],
+              emails: ['abuse@example.com'], phones: [], addresses: [], publicIds: [], links: [],
+            }],
+          },
+        },
+        chain: [],
+      },
+      diagnostics: { rdap: { status: 'not_found' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+    }),
+  }));
+
+  await page.locator('#query').fill('example.com');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const whoisSection = page.locator('.sources > details').nth(1);
+  await expect(whoisSection.getByText('Published contacts · 2 roles · capped')).toBeVisible();
+  await whoisSection.getByText('Published contacts · 2 roles · capped').click();
+  await expect(whoisSection.getByText('Example Person', { exact: true })).toBeVisible();
+  await expect(whoisSection.getByText('Email: person@example.com')).toBeVisible();
+  await expect(whoisSection.getByText('Address: Suite 1, 2 Example Road, Melbourne VIC 3000, AU')).toBeVisible();
+  await expect(whoisSection.getByText('IDs: Registry contact ID: REG-1')).toBeVisible();
+  await expect(whoisSection.getByText(/Some WHOIS fields exceeded local display limits: registrantAddress/)).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('IP results use network-specific RDAP labels instead of domain fields', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

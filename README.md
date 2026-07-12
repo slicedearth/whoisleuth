@@ -180,6 +180,11 @@ root and is gitignored.
 - Structured domain results retain registry object IDs, registrar IANA IDs,
   registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
   are RDAP-only; full Lookup and deep scans retain the WHOIS referral chain.
+- Full Lookup normalizes WHOIS creation, expiration, and update dates alongside
+  bounded registrant, administrative, technical, billing, and registrar-abuse
+  contacts when those roles are published. Existing scalar WHOIS fields remain
+  available for compatibility, while capped fields and inventories are labelled
+  in the structured view rather than presented as complete.
 - Lookup retains a bounded inventory of nested RDAP contacts by published role,
   including repeated names, organizations, email addresses, phone numbers,
   postal addresses, public identifiers, and HTTP(S) references. Bulk,
