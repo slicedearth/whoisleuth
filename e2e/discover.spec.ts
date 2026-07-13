@@ -133,6 +133,22 @@ test('keyboard layout selection adds locale-specific neighbours and clears stale
   await expect(page.locator('.generation-options')).toContainText('Not used by the selected preset');
 });
 
+test('multi-word lookalikes retain separator and reordering provenance', async ({ page }) => {
+  await page.getByRole('button', { name: 'Use Common edits generation preset' }).click();
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('Acme Pay');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  const hyphenated = page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^acme-pay\.com$/ }),
+  });
+  await expect(hyphenated).toContainText('Hyphen insertion');
+  const reordered = page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^pay-acme\.com$/ }),
+  });
+  await expect(reordered).toContainText('Word reordering');
+});
+
 test('lookalike generation rejects ambiguous dotted input and invalid mutation labels', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
   await page.getByRole('button', { name: 'Generate candidates' }).click();

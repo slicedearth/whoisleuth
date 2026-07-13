@@ -134,12 +134,12 @@ export function scoreTone(score) {
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
-// Version 3 retains the grouped contextual evidence model from version 2 and
-// adds the generator-owned selected-TLD-substitution machine value to the
-// bounded lookalike context allowlist. Older scores remain readable, but case
-// and watchlist comparisons gate numeric changes on matching model versions so
-// formula changes are not mistaken for changes in the observed domain.
-export const RISK_MODEL_VERSION = 3;
+// Version 4 retains the grouped contextual evidence model and adds the
+// generator-owned separator and word-reordering machine values to the bounded
+// low-context allowlist. Older scores remain readable, but case and watchlist
+// comparisons gate numeric changes on matching model versions so formula
+// changes are not mistaken for changes in the observed domain.
+export const RISK_MODEL_VERSION = 4;
 
 const RISK_STATE_BASE = {
   registered: 10,
@@ -153,6 +153,9 @@ const LOW_CONTEXT_MUTATIONS = new Set([
   'character_omission',
   'character_duplication',
   'character_transposition',
+  'hyphenation',
+  'separator_omission',
+  'word_reordering',
   'keyboard_substitution',
   'keyboard_insertion',
   'vowel_swap',

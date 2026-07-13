@@ -146,6 +146,63 @@ describe('provenance-aware typosquat generation', () => {
     });
   });
 
+  test('inserts hyphens only at valid internal label boundaries', () => {
+    const result = generator.generateTyposquatCandidateSet('acme.com', [], { preset: 'common' });
+    for (const domain of ['a-cme.com', 'ac-me.com', 'acm-e.com']) {
+      assert.deepEqual(result.candidates.find((candidate) => candidate.domain === domain)?.mutationTypes, ['hyphenation']);
+    }
+    assert.equal(result.candidates.some((candidate) => candidate.domain.startsWith('-.')), false);
+    assert.equal(result.candidates.some((candidate) => candidate.domain.includes('--')), false);
+  });
+
+  test('removes one or all existing separators with explicit provenance', () => {
+    const result = generator.generateTyposquatCandidateSet('acme-pay-login.com', [], { preset: 'common' });
+    assert.ok(result.candidates.some((candidate) =>
+      candidate.domain === 'acmepaylogin.com' && candidate.mutationTypes.includes('separator_omission')));
+    assert.ok(result.candidates.some((candidate) =>
+      candidate.domain === 'acmepay-login.com' && candidate.mutationTypes.includes('separator_omission')));
+    assert.ok(result.candidates.some((candidate) =>
+      candidate.domain === 'acme-paylogin.com' && candidate.mutationTypes.includes('separator_omission')));
+  });
+
+  test('preserves bounded word boundaries and generates deterministic reordered forms', () => {
+    const result = generator.generateTyposquatCandidateSet('Acme Pay', ['com'], { preset: 'common' });
+    assert.deepEqual(result.candidates.find((candidate) => candidate.domain === 'acme-pay.com'), {
+      domain: 'acme-pay.com',
+      source: 'acmepay',
+      tld: 'com',
+      mutationTypes: ['hyphenation'],
+    });
+    for (const domain of ['payacme.com', 'pay-acme.com']) {
+      assert.deepEqual(result.candidates.find((candidate) => candidate.domain === domain)?.mutationTypes, ['word_reordering']);
+    }
+  });
+
+  test('reorders hyphenated domain tokens without mislabelling the original order', () => {
+    const result = generator.generateTyposquatCandidateSet('acme-pay.com', [], { preset: 'common' });
+    assert.ok(result.candidates.some((candidate) =>
+      candidate.domain === 'pay-acme.com' && candidate.mutationTypes.includes('word_reordering')));
+    const joinedOriginal = result.candidates.find((candidate) => candidate.domain === 'acmepay.com');
+    assert.ok(joinedOriginal);
+    assert.ok(joinedOriginal.mutationTypes.includes('separator_omission'));
+    assert.equal(joinedOriginal.mutationTypes.includes('word_reordering'), false);
+  });
+
+  test('caps four-token word permutations and reports the family boundary', () => {
+    const result = generator.generateTyposquatCandidateSet('one two three four', ['com'], { preset: 'common' });
+    assert.equal(result.truncated, true);
+    assert.ok(result.limitReasons.includes('family:word_reordering'));
+    assert.ok(result.candidates.some((candidate) => candidate.domain === 'one-two-four-three.com'));
+  });
+
+  test('multi-word estimates remain an upper bound for generated separator forms', () => {
+    for (const input of ['Acme Pay', 'acme-pay.com', 'one two three four']) {
+      const estimate = generator.estimateTyposquatCandidateCount(input, ['com'], { preset: 'common' });
+      const result = generator.generateTyposquatCandidateSet(input, ['com'], { preset: 'common' });
+      assert.ok(estimate.estimatedMaximum >= result.candidates.length, input);
+    }
+  });
+
   test('keeps all mutation families as the explicit and implicit default', () => {
     const implicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
     const explicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], {

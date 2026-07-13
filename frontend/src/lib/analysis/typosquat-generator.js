@@ -80,6 +80,9 @@ const FAMILY_NEW_VARIANT_LIMITS = Object.freeze({
   character_omission: 128,
   character_duplication: 128,
   character_transposition: 128,
+  hyphenation: 64,
+  separator_omission: 16,
+  word_reordering: 32,
   keyboard_substitution: 512,
   keyboard_insertion: 768,
   vowel_swap: 256,
@@ -93,6 +96,9 @@ const COMMON_EDIT_MUTATIONS = Object.freeze([
   'character_omission',
   'character_duplication',
   'character_transposition',
+  'hyphenation',
+  'separator_omission',
+  'word_reordering',
   'keyboard_substitution',
   'vowel_swap',
   'bitsquatting',
@@ -103,6 +109,8 @@ const IMPERSONATION_MUTATIONS = Object.freeze([
   'ascii_homoglyph',
   'unicode_homoglyph',
   'dictionary',
+  'hyphenation',
+  'word_reordering',
   'tld_typo',
   'tld_substitution',
 ]);
@@ -117,13 +125,13 @@ export const GENERATION_PRESETS = Object.freeze({
   common: Object.freeze({
     id: 'common',
     label: 'Common edits',
-    description: 'Character edits, keyboard substitutions, bitsquats, and TLD changes.',
+    description: 'Character, separator, word-order, keyboard, bitsquat, and TLD changes.',
     mutationTypes: COMMON_EDIT_MUTATIONS,
   }),
   impersonation: Object.freeze({
     id: 'impersonation',
     label: 'Impersonation',
-    description: 'Homoglyphs, phishing terms, and TLD changes.',
+    description: 'Homoglyphs, phishing terms, word forms, and TLD changes.',
     mutationTypes: IMPERSONATION_MUTATIONS,
   }),
   all: Object.freeze({
@@ -138,6 +146,9 @@ export const MUTATION_LABELS = {
   character_omission: 'Character omission',
   character_duplication: 'Character duplication',
   character_transposition: 'Adjacent transposition',
+  hyphenation: 'Hyphen insertion',
+  separator_omission: 'Separator omission',
+  word_reordering: 'Word reordering',
   keyboard_substitution: 'Keyboard substitution',
   keyboard_insertion: 'Keyboard insertion',
   vowel_swap: 'Vowel swap',
@@ -161,13 +172,43 @@ function splitDomainParts(input) {
   if (trimmed.includes('.')) {
     const match = trimmed.match(/^([a-z0-9-]+)\.([a-z]+)$/);
     if (!match || !isValidDomainLabel(match[1]) || !TLD_RE.test(match[2])) return null;
-    return { name: match[1], tld: match[2] };
+    const tokens = match[1].split('-');
+    return { name: match[1], tld: match[2], wordTokens: tokens.length >= 2 && tokens.length <= 4 && tokens.every(Boolean) ? tokens : [] };
   }
 
   // Preserve the established brand-label convenience while refusing to turn
   // ambiguous dotted inputs into a different domain by deleting punctuation.
   const name = trimmed.replace(/[^a-z0-9-]/g, '');
-  return isValidDomainLabel(name) ? { name, tld: null } : null;
+  if (!isValidDomainLabel(name)) return null;
+  const tokenized = /^[a-z0-9]+(?:[\s_-]+[a-z0-9]+){1,3}$/.test(trimmed)
+    ? trimmed.split(/[\s_-]+/)
+    : [];
+  return { name, tld: null, wordTokens: tokenized.length >= 2 && tokenized.length <= 4 ? tokenized : [] };
+}
+
+function distinctWordOrders(tokens) {
+  if (!Array.isArray(tokens) || tokens.length < 2 || tokens.length > 4) return [];
+  const orders = [];
+  const used = Array(tokens.length).fill(false);
+  const current = [];
+  function visit() {
+    if (current.length === tokens.length) {
+      orders.push([...current]);
+      return;
+    }
+    const seenAtDepth = new Set();
+    for (let index = 0; index < tokens.length; index += 1) {
+      if (used[index] || seenAtDepth.has(tokens[index])) continue;
+      seenAtDepth.add(tokens[index]);
+      used[index] = true;
+      current.push(tokens[index]);
+      visit();
+      current.pop();
+      used[index] = false;
+    }
+  }
+  visit();
+  return orders;
 }
 
 function normalizeTlds(values) {
@@ -320,6 +361,17 @@ export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options 
   }
 
   const name = parts.name;
+  const hyphenCount = [...name].filter((character) => character === '-').length;
+  let hyphenationCount = 0;
+  for (let index = 1; index < name.length; index += 1) {
+    if (name[index - 1] !== '-' && name[index] !== '-') hyphenationCount += 1;
+  }
+  let wordOrderMaximum = 0;
+  if (parts.wordTokens.length >= 2) {
+    let orderCount = 1;
+    for (let value = 2; value <= parts.wordTokens.length; value += 1) orderCount *= value;
+    wordOrderMaximum = Math.max(0, orderCount - 1) * 2;
+  }
   let adjacentCount = 0;
   let vowelCount = 0;
   let asciiHomoglyphCount = 0;
@@ -337,6 +389,9 @@ export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options 
     character_omission: name.length,
     character_duplication: name.length,
     character_transposition: Math.max(0, name.length - 1),
+    hyphenation: hyphenationCount,
+    separator_omission: hyphenCount > 0 ? hyphenCount + 1 : 0,
+    word_reordering: wordOrderMaximum,
     keyboard_substitution: adjacentCount,
     keyboard_insertion: adjacentCount * 2,
     vowel_swap: vowelCount * (VOWELS.length - 1),
@@ -422,6 +477,26 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds, options = 
   if (enabledFamilies.has('character_transposition')) {
     for (let i = 0; i < name.length - 1; i += 1) {
       addVariant(state, name.slice(0, i) + name[i + 1] + name[i] + name.slice(i + 2), 'character_transposition');
+    }
+  }
+  if (enabledFamilies.has('hyphenation')) {
+    for (let index = 1; index < name.length; index += 1) {
+      if (name[index - 1] === '-' || name[index] === '-') continue;
+      addVariant(state, `${name.slice(0, index)}-${name.slice(index)}`, 'hyphenation');
+    }
+  }
+  if (enabledFamilies.has('separator_omission') && name.includes('-')) {
+    for (let index = 0; index < name.length; index += 1) {
+      if (name[index] === '-') addVariant(state, name.slice(0, index) + name.slice(index + 1), 'separator_omission');
+    }
+    addVariant(state, name.replaceAll('-', ''), 'separator_omission');
+  }
+  if (enabledFamilies.has('word_reordering') && parts.wordTokens.length >= 2) {
+    const originalOrder = parts.wordTokens.join('\u0000');
+    for (const order of distinctWordOrders(parts.wordTokens)) {
+      if (order.join('\u0000') === originalOrder) continue;
+      addVariant(state, order.join(''), 'word_reordering');
+      addVariant(state, order.join('-'), 'word_reordering');
     }
   }
   if (enabledFamilies.has('keyboard_substitution') || enabledFamilies.has('keyboard_insertion')) {

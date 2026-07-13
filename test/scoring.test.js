@@ -150,8 +150,8 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('stamps the explicit model version and gives ordinary states a low base score', () => {
-    assert.equal(scoring.RISK_MODEL_VERSION, 3);
-    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 3);
+    assert.equal(scoring.RISK_MODEL_VERSION, 4);
+    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 4);
     assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 10);
     assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 5);
     assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 8);
@@ -279,6 +279,9 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['bitsquatting'] }), 22);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['tld_substitution'] }), 22);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['character_omission'] }), 18);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['hyphenation'] }), 18);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['separator_omission'] }), 18);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['word_reordering'] }), 18);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['invented_high_risk'] }), 10);
   });
 

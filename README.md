@@ -458,6 +458,13 @@ compact-storage boundary, and lookup evidence schema are documented in the
   layout clears any previously generated set so the visible results always
   match the active configuration. Layout selection changes only local
   candidate generation and does not alter the Risk model.
+- Bounded separator families add valid internal hyphens, remove existing
+  separators, and preserve two-to-four-token brand boundaries so deterministic
+  word reorderings can be generated in joined and hyphenated forms. Each family
+  keeps separate provenance, and four-token permutations stop at the existing
+  per-family boundary. Risk model v4 recognizes these generator-owned values as
+  low-context evidence; earlier stored scores remain readable but incomparable
+  across model versions.
 - When the seed is a domain, the selected TLD field now expands that exact
   label and every generated label variation across the bounded selected TLD
   set. These results retain an explicit **Selected TLD substitution** source,
