@@ -145,4 +145,93 @@ describe('provenance-aware typosquat generation', () => {
       candidates: generator.MAX_GENERATED_CANDIDATES,
     });
   });
+
+  test('keeps all mutation families as the explicit and implicit default', () => {
+    const implicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
+    const explicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'all' });
+    assert.equal(generator.DEFAULT_GENERATION_PRESET, 'all');
+    assert.deepEqual(explicit, implicit);
+  });
+
+  test('common-edits preset excludes impersonation and keyboard-insertion families', () => {
+    const result = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'common' });
+    const mutationTypes = new Set(result.candidates.flatMap((candidate) => candidate.mutationTypes));
+    assert.ok(mutationTypes.has('character_omission'));
+    assert.ok(mutationTypes.has('bitsquatting'));
+    assert.ok(mutationTypes.has('tld_substitution'));
+    assert.equal(mutationTypes.has('dictionary'), false);
+    assert.equal(mutationTypes.has('ascii_homoglyph'), false);
+    assert.equal(mutationTypes.has('unicode_homoglyph'), false);
+    assert.equal(mutationTypes.has('keyboard_insertion'), false);
+    assert.equal(result.candidates.some((candidate) => candidate.domain === 'loginacme.com'), false);
+  });
+
+  test('impersonation preset excludes ordinary character-edit families', () => {
+    const result = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'impersonation' });
+    const mutationTypes = new Set(result.candidates.flatMap((candidate) => candidate.mutationTypes));
+    assert.ok(mutationTypes.has('dictionary'));
+    assert.ok(mutationTypes.has('unicode_homoglyph'));
+    assert.ok(mutationTypes.has('tld_substitution'));
+    assert.equal(mutationTypes.has('character_omission'), false);
+    assert.equal(mutationTypes.has('keyboard_substitution'), false);
+    assert.equal(mutationTypes.has('bitsquatting'), false);
+    assert.ok(result.candidates.some((candidate) => candidate.domain === 'loginacme.com'));
+    assert.equal(result.candidates.some((candidate) => candidate.domain === 'acm.com'), false);
+  });
+
+  test('unknown presets fall back to the established all-family result', () => {
+    const expected = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
+    const result = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'not-a-preset' });
+    assert.deepEqual(result, expected);
+  });
+
+  test('publishes immutable preset definitions', () => {
+    assert.equal(Object.isFrozen(generator.GENERATION_PRESETS), true);
+    for (const preset of Object.values(generator.GENERATION_PRESETS)) {
+      assert.equal(Object.isFrozen(preset), true);
+      assert.equal(Object.isFrozen(preset.mutationTypes), true);
+    }
+  });
+
+  test('estimate is a deterministic upper bound for every preset', () => {
+    for (const preset of Object.keys(generator.GENERATION_PRESETS)) {
+      const tlds = ['com', 'net', 'org'];
+      const before = structuredClone(tlds);
+      const estimate = generator.estimateTyposquatCandidateCount('acme.com', tlds, { preset });
+      const result = generator.generateTyposquatCandidateSet('acme.com', tlds, { preset });
+      assert.equal(estimate.inputValid, true);
+      assert.equal(estimate.preset, preset);
+      assert.equal(estimate.tldCount, 3);
+      assert.ok(estimate.estimatedMaximum >= result.candidates.length);
+      assert.ok(estimate.estimatedMaximum <= generator.MAX_GENERATED_CANDIDATES);
+      assert.deepEqual(generator.estimateTyposquatCandidateCount('acme.com', tlds, { preset }), estimate);
+      assert.deepEqual(tlds, before);
+    }
+  });
+
+  test('estimate reports invalid and missing-TLD inputs without generating candidates', () => {
+    assert.deepEqual(generator.estimateTyposquatCandidateCount('example.co.uk', ['com']), {
+      inputValid: false,
+      preset: 'all',
+      tldCount: 0,
+      estimatedMaximum: 0,
+      mayReachLimit: false,
+    });
+    assert.deepEqual(generator.estimateTyposquatCandidateCount('acme', []), {
+      inputValid: true,
+      preset: 'all',
+      tldCount: 0,
+      estimatedMaximum: 0,
+      mayReachLimit: false,
+    });
+  });
+
+  test('estimate discloses when the global candidate cap may apply', () => {
+    const tlds = Array.from({ length: generator.MAX_GENERATION_TLDS }, (_, index) =>
+      `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
+    );
+    const estimate = generator.estimateTyposquatCandidateCount('acme', tlds);
+    assert.equal(estimate.estimatedMaximum, generator.MAX_GENERATED_CANDIDATES);
+    assert.equal(estimate.mayReachLimit, true);
+  });
 });

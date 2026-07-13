@@ -445,6 +445,14 @@ compact-storage boundary, and lookup evidence schema are documented in the
   domain labels before including them and applies deterministic per-family,
   label-variant, TLD, and overall candidate limits before browser handoff. The
   Discover status reports when a limit prevents complete coverage.
+- Discover offers three local **generation presets**: Common edits,
+  Impersonation, and All families. All families preserves the established
+  default output, while the narrower presets let analysts focus on particular
+  mutation groups without changing the global safety limits. A live upper-bound
+  estimate shows the possible candidate count before validity filtering and
+  deduplication; it allocates no candidate objects and makes no network
+  requests. Network lookups begin only after selected candidates are handed to
+  Bulk and scanned.
 - When the seed is a domain, the selected TLD field now expands that exact
   label and every generated label variation across the bounded selected TLD
   set. These results retain an explicit **Selected TLD substitution** source,

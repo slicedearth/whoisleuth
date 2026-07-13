@@ -77,6 +77,39 @@ test('lookalike generation discloses and enforces its candidate limits', async (
   await expect(page.locator('.limit')).toContainText('first 300 matching candidates');
 });
 
+test('lookalike presets expose a live upper-bound estimate and clear stale results', async ({ page }) => {
+  const allFamilies = page.getByRole('button', { name: 'Use All families generation preset' });
+  const impersonation = page.getByRole('button', { name: 'Use Impersonation generation preset' });
+  await expect(allFamilies).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com, net, org');
+  await expect(page.locator('.generation-estimate')).toContainText('Estimated maximum before validation and deduplication');
+  await expect(page.locator('.generation-estimate')).toContainText('across 3 TLDs');
+
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.locator('.candidate')).not.toHaveCount(0);
+  await impersonation.click();
+  await expect(impersonation).toHaveAttribute('aria-pressed', 'true');
+  await expect(allFamilies).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.candidate')).toHaveCount(0);
+  await expect(page.locator('.status')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.locator('.candidate strong', { hasText: /^loginacme\.com$/ })).toBeVisible();
+  await expect(page.locator('.candidate strong', { hasText: /^acm\.com$/ })).toHaveCount(0);
+});
+
+test('lookalike estimate discloses when the hard generation cap may apply', async ({ page }) => {
+  const tlds = Array.from({ length: 20 }, (_, index) =>
+    `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
+  );
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill(tlds.join(', '));
+  await expect(page.locator('.generation-estimate')).toContainText('up to 2,000 candidates');
+  await expect(page.locator('.generation-estimate')).toContainText('hard cap may apply');
+});
+
 test('lookalike generation rejects ambiguous dotted input and invalid mutation labels', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
@@ -117,6 +150,7 @@ test('name-idea generation refuses labels that exceed DNS bounds', async ({ page
 test('candidate limit guidance and controls do not overflow at mobile width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.generation-limits')).toBeVisible();
+  await expect(page.locator('.generation-presets')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
