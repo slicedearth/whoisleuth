@@ -9,7 +9,12 @@ const assert = require('node:assert/strict');
 const {
   MAX_FORM_ACTION_ORIGINS,
   MAX_FORMS,
+  MAX_CONTACT_DOMAINS,
+  MAX_EMBEDDED_ORIGINS,
   MAX_IDENTITY_TAGS,
+  MAX_RESOURCE_ORIGINS,
+  MAX_RESOURCE_TAGS,
+  MAX_TRACKING_IDENTIFIERS,
   PAGE_IDENTITY_VERSION,
   extractHtmlSignals,
   extractPageIdentity,
@@ -278,5 +283,137 @@ describe('pageIdentity', () => {
     assert.equal(result.pageIdentity, null);
     assert.equal(result.pageTitle, 'Example');
     assert.equal(result.hasPasswordField, true);
+  });
+
+  test('summarizes normalized resource types and external origins without retaining paths', () => {
+    const result = identity(`
+      <img src="https://cdn.example/images/logo.png?token=secret">
+      <img src="https://cdn.example/images/logo.png?token=other">
+      <script src="/assets/app.js"></script>
+      <link rel="stylesheet" href="https://style.example/css/main.css">
+      <link rel="canonical" href="/not-a-resource">
+      <video src="https://media.example/movie.mp4" poster="https://cdn.example/poster.jpg"></video>
+    `);
+    assert.equal(result.resources.count, 5);
+    assert.deepEqual(result.resources.byType, {
+      image: 2, script: 1, stylesheet: 1, link: 0, frame: 0, media: 1, object: 0,
+    });
+    assert.deepEqual(result.resources.externalOrigins, [
+      'https://cdn.example', 'https://media.example', 'https://style.example',
+    ]);
+    assert.doesNotMatch(JSON.stringify(result.resources), /logo\.png|app\.js|main\.css|movie\.mp4|secret|token=/);
+  });
+
+  test('retains bounded embedded origins separately from general resources', () => {
+    const result = identity(`
+      <iframe src="https://frame.example/login?secret=value"></iframe>
+      <object data="https://object.example/plugin.bin"></object>
+      <embed src="/same-origin.bin">
+    `);
+    assert.deepEqual(result.embeddedOrigins, ['https://frame.example', 'https://object.example']);
+    assert.equal(result.resources.byType.frame, 1);
+    assert.equal(result.resources.byType.object, 2);
+    assert.doesNotMatch(JSON.stringify(result.embeddedOrigins), /login|plugin|secret/);
+  });
+
+  test('extracts only normalized domains from mail contact links', () => {
+    const result = identity(`
+      <a href="mailto:person@example.com,other@Sub.Example.com?subject=private">Contact</a>
+      <a href="mailto:user@bücher.example">International contact</a>
+      <a href="mailto:local@localhost">Invalid local address</a>
+      <a href="mailto:not-an-address">Invalid</a>
+    `);
+    assert.deepEqual(result.contactDomains, ['example.com', 'sub.example.com', 'xn--bcher-kva.example']);
+    assert.doesNotMatch(JSON.stringify(result.contactDomains), /person|other|user|subject|private/);
+  });
+
+  test('summarizes explicit and risky download destinations without retaining filenames', () => {
+    const result = identity(`
+      <a download href="https://files.example/reports/ordinary.pdf?account=secret">Report</a>
+      <a href="https://payload.example/releases/tool.EXE?token=secret">Installer</a>
+      <a href="/archive.zip">Archive</a>
+      <a href="/ordinary-page">Page</a>
+    `);
+    assert.deepEqual(result.downloads, {
+      count: 3,
+      explicitCount: 1,
+      riskyCount: 2,
+      externalOrigins: ['https://files.example', 'https://payload.example'],
+      riskyFileTypes: ['exe', 'zip'],
+      truncated: false,
+    });
+    assert.doesNotMatch(JSON.stringify(result.downloads), /ordinary\.pdf|tool\.EXE|archive\.zip|account|token|secret/);
+  });
+
+  test('extracts, normalizes, deduplicates, and sorts recognized tracking identifiers', () => {
+    const result = identity(`
+      <script src="https://metrics.example/tag.js?id=gtm-ab12"></script>
+      <script>window.ids = ['GTM-AB12', 'G-ABC1234567', 'ua-123456-7', 'AW-123456789'];</script>
+    `);
+    assert.deepEqual(result.trackingIdentifiers, [
+      { type: 'advertising-property', value: 'AW-123456789' },
+      { type: 'analytics-property', value: 'G-ABC1234567' },
+      { type: 'legacy-analytics-property', value: 'UA-123456-7' },
+      { type: 'tag-container', value: 'GTM-AB12' },
+    ]);
+  });
+
+  test('caps external resource origins and reports partial provenance', () => {
+    const html = Array.from({ length: MAX_RESOURCE_ORIGINS + 1 }, (_, index) => `<script src="https://cdn-${index}.example/app.js"></script>`).join('');
+    const result = identity(html);
+    assert.equal(result.resources.externalOrigins.length, MAX_RESOURCE_ORIGINS);
+    assert.equal(result.resources.truncated, true);
+    assert.equal(result.status, 'partial');
+    assert.match(result.limitations.join(' '), /external resource origins were retained/);
+  });
+
+  test('caps embedded origins and contact domains independently', () => {
+    const frames = Array.from({ length: MAX_EMBEDDED_ORIGINS + 1 }, (_, index) => `<iframe src="https://frame-${index}.example/"></iframe>`).join('');
+    const contacts = Array.from({ length: MAX_CONTACT_DOMAINS + 1 }, (_, index) => `<a href="mailto:user@contact-${index}.example">Mail</a>`).join('');
+    const result = identity(`${frames}${contacts}`);
+    assert.equal(result.embeddedOrigins.length, MAX_EMBEDDED_ORIGINS);
+    assert.equal(result.contactDomains.length, MAX_CONTACT_DOMAINS);
+    assert.equal(result.status, 'partial');
+  });
+
+  test('caps relationship tags, srcset candidates, and tracking identifiers', () => {
+    const tags = Array.from({ length: MAX_RESOURCE_TAGS + 1 }, () => '<img src="/same.png">').join('');
+    const srcset = Array.from({ length: 21 }, (_, index) => `/image-${index}.png ${index + 1}w`).join(',');
+    const trackers = Array.from({ length: MAX_TRACKING_IDENTIFIERS + 1 }, (_, index) => `GTM-${index.toString(36).toUpperCase().padStart(4, '0')}`).join(' ');
+    const result = identity(`${tags}<img srcset="${srcset}"><script>${trackers}</script>`);
+    assert.equal(result.resources.truncated, true);
+    assert.equal(result.trackingIdentifiers.length, MAX_TRACKING_IDENTIFIERS);
+    assert.equal(result.status, 'partial');
+  });
+
+  test('skips data-bearing srcsets rather than parsing encoded commas as resources', () => {
+    const result = identity('<img srcset="data:image/svg+xml,%3Csvg%3E,%3C/svg%3E 1x, /real.png 2x">');
+    assert.equal(result.resources.count, 0);
+    assert.equal(result.resources.truncated, true);
+    assert.equal(result.status, 'partial');
+    assert.match(result.limitations.join(' '), /srcset URL candidates could not be safely enumerated/);
+  });
+
+  test('caps ordinary srcset candidates deterministically', () => {
+    const srcset = Array.from({ length: 21 }, (_, index) => `/image-${index}.png ${index + 1}w`).join(',');
+    const result = identity(`<img srcset="${srcset}">`);
+    assert.equal(result.resources.count, 20);
+    assert.equal(result.resources.truncated, true);
+    assert.equal(result.status, 'partial');
+  });
+
+  test('does not treat comments or raw-text element bodies as live markup', () => {
+    const result = identity(`
+      <!-- <iframe src="https://comment.example/"></iframe> -->
+      <!-- GTM-NOPE -->
+      <script>const fake = '<form action="https://script.example/submit"></form><img src="https://script.example/pixel.png">'; const tracker = 'GTM-REAL';</script>
+      <template><a href="mailto:hidden@template.example">Hidden</a> GTM-HIDE</template>
+      <iframe src="https://real.example/frame"></iframe>
+    `);
+    assert.deepEqual(result.embeddedOrigins, ['https://real.example']);
+    assert.deepEqual(result.resources.externalOrigins, ['https://real.example']);
+    assert.deepEqual(result.contactDomains, []);
+    assert.equal(result.forms.count, 0);
+    assert.deepEqual(result.trackingIdentifiers, [{ type: 'tag-container', value: 'GTM-REAL' }]);
   });
 });

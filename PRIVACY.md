@@ -46,8 +46,11 @@ at all.
 - **Page identity**: a requested deep Lookup can derive bounded metadata from
   the homepage HTML already captured by the HTTP probe. This can include the
   document language, canonical and meta-refresh targets, selected Open Graph
-  fields, generator metadata, form counts, and external form-action origins.
-  URL credentials, queries, fragments, and form-action paths are not retained.
+  fields, generator metadata, form counts, external form-action origins,
+  normalized resource counts, external resource/embedded origins, mail-contact
+  domains, download context, and recognized public tracking identifiers. URL
+  credentials, queries, fragments, resource/download paths, form-action paths,
+  and complete email addresses are not retained.
   The summary is not copied into Bulk, watchlists, analyst cases, or other
   browser-local stores; it appears only in the transient Lookup result and a
   deliberate Lookup evidence export.

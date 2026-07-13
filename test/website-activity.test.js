@@ -159,6 +159,7 @@ describe('website activity classification', () => {
     });
 
     assert.equal(homepageCalls, 1);
+    assert.equal(result.pageIdentity.identityVersion, 2);
     assert.equal(result.pageIdentity.observedAt, '2026-07-13T04:05:06.000Z');
     assert.equal(result.pageIdentity.status, 'partial');
     assert.equal(result.pageIdentity.canonical.url, 'https://www.example.test/account');

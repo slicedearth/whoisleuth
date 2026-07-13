@@ -327,7 +327,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   are contextual review indicators, never a maliciousness verdict, and do not
   change the Risk score. The typosquat generator uses the same curated mapping
   so generated confusable candidates and result explanations stay consistent.
-  Lookup evidence schema version 8 retains the analysis supplied to the
+  Lookup evidence schema version 9 retains the analysis supplied to the
   export; Bulk CSV exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
@@ -361,14 +361,18 @@ compact-storage boundary, and lookup evidence schema are documented in the
 - Deep Lookup also derives a versioned, bounded page-identity summary from
   that same captured HTML response, without making another request. It can
   retain the document language, canonical and meta-refresh targets, selected
-  Open Graph identity, generator metadata, form counts, and bounded external
-  form-action origins. Credentials, query strings, fragments, and form-action
-  paths are not retained; oversized inputs and collection caps are reported as
-  partial observations. This first increment is displayed only in Lookup and
-  its deliberate evidence export. It is not copied into Bulk, watchlists, or
-  analyst cases and does not alter Risk scoring. Static parsing does not run
-  JavaScript, and the resulting metadata is contextual evidence rather than a
-  verdict about site ownership or intent.
+  Open Graph identity, generator metadata, form counts, bounded external
+  form-action origins, normalized resource-type counts, external resource and
+  embedded origins, mail-contact domains, download context, and recognized
+  public tracking identifiers. Credentials, query strings, fragments,
+  resource/download paths, form-action paths, and complete email addresses are
+  not retained; oversized inputs and collection caps are reported as partial
+  observations. This evidence is displayed only in Lookup and its deliberate
+  evidence export. It is not copied into Bulk, watchlists, or analyst cases and
+  does not alter Risk scoring. Static parsing does not run JavaScript, and the
+  resulting metadata is contextual relationship/review evidence rather than a
+  verdict about site ownership or intent. Data-bearing `srcset` attributes are
+  skipped instead of being split incorrectly by the lightweight parser.
 - A bulk scan flags **Related infrastructure**: domains in the same scan
   that share an exact nameserver set or favicon hash with each other, with
   a one-click way to load the group back into the query box. Uses signals

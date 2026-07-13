@@ -333,7 +333,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           },
         },
         pageIdentity: {
-          identityVersion: 1, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
+          identityVersion: 2, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
           durationMs: null, complete: false, truncated: true,
           limitations: ['Static HTML metadata only; JavaScript-rendered changes are not evaluated.', 'Query strings and fragments were omitted from retained page-identity URLs.'],
           diagnostics: { tagsExamined: 8, discardedUrls: 1, formsObserved: 2 },
@@ -343,6 +343,11 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           openGraph: { title: 'Account centre', siteName: 'Example portal', url: { url: 'https://login.example.test/', queryOmitted: false, pathTruncated: false } },
           generator: 'Example CMS',
           forms: { count: 2, postCount: 1, insecureActionCount: 1, externalActionOrigins: ['https://collect.example'], truncated: false },
+          resources: { count: 4, byType: { image: 1, script: 1, stylesheet: 1, link: 0, frame: 1, media: 0, object: 0 }, externalOrigins: ['https://assets.example'], truncated: false },
+          embeddedOrigins: ['https://frame.example'],
+          contactDomains: ['support.example'],
+          downloads: { count: 1, explicitCount: 0, riskyCount: 1, externalOrigins: ['https://files.example'], riskyFileTypes: ['zip'], truncated: false },
+          trackingIdentifiers: [{ type: 'tag-container', value: 'GTM-AB12' }],
         },
       },
       rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
@@ -370,11 +375,23 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText('https://login.example.test/account', { exact: true })).toBeVisible();
   await expect(pageCard.getByText('Account centre', { exact: true })).toBeVisible();
   await expect(pageCard.getByText('Example portal', { exact: true })).toBeVisible();
-  await expect(pageCard.getByText('1', { exact: true })).toHaveCount(2);
+  await expect(pageCard.locator('article').filter({ hasText: 'POST forms' }).getByText('1', { exact: true })).toBeVisible();
+  await expect(pageCard.locator('article').filter({ hasText: 'External resources' }).getByText('1', { exact: true })).toBeVisible();
+  await expect(pageCard.locator('article').filter({ hasText: 'Tracking identifiers' }).getByText('1', { exact: true })).toBeVisible();
   await pageCard.getByText('External form destinations · 1', { exact: true }).click();
   await expect(pageCard.getByText('https://collect.example', { exact: true })).toBeVisible();
+  await pageCard.getByText('Resource summary · 4', { exact: true }).click();
+  await expect(pageCard.getByText('https://assets.example', { exact: true })).toBeVisible();
+  await pageCard.getByText('Embedded origins · 1', { exact: true }).click();
+  await expect(pageCard.getByText('https://frame.example', { exact: true })).toBeVisible();
+  await pageCard.getByText('Contact domains · 1', { exact: true }).click();
+  await expect(pageCard.getByText('support.example', { exact: true })).toBeVisible();
+  await pageCard.getByText('Download context · 1', { exact: true }).click();
+  await expect(pageCard.getByText('https://files.example', { exact: true })).toBeVisible();
+  await pageCard.getByText('Tracking identifiers · 1', { exact: true }).click();
+  await expect(pageCard.getByText('GTM-AB12', { exact: true })).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
-  await expect(pageCard.getByText(/static HTML already captured/i)).toBeVisible();
+  await expect(pageCard.getByText(/contact links retain domains only/i)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
