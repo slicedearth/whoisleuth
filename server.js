@@ -25,6 +25,7 @@ const { checkRateLimit, getClientIp, getForwardedProtocol, LOGIN_RATE_LIMIT, API
 const {
   defaultOperationBudget,
   operationBudgetError,
+  runWithOperationBudget,
   operationClassFor,
 } = require('./lib/operation-budget');
 const { featureDisabledError, networkFeaturePolicy } = require('./lib/feature-policy');
@@ -112,16 +113,12 @@ async function withExpressOperationBudget(req, res, operationClass, callback) {
   if (!sessionKey) {
     return res.status(401).json({ error: 'Authentication required', errorCode: LOOKUP_ERROR_CODES.AUTH_REQUIRED });
   }
-  const lease = defaultOperationBudget.acquire(operationClass, sessionKey);
-  if (!lease.allowed) {
-    res.setHeader('Retry-After', String(lease.retryAfterSeconds));
-    return res.status(429).json(operationBudgetError(lease));
+  const outcome = await runWithOperationBudget(defaultOperationBudget, operationClass, sessionKey, callback);
+  if (!outcome.allowed) {
+    res.setHeader('Retry-After', String(outcome.denial.retryAfterSeconds));
+    return res.status(429).json(operationBudgetError(outcome.denial));
   }
-  try {
-    return await callback();
-  } finally {
-    lease.release?.();
-  }
+  return outcome.value;
 }
 
 app.post('/api/login', (req, res, next) => {

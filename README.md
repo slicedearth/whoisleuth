@@ -646,6 +646,13 @@ An exhausted lease returns `429`, `Retry-After: 1`, and the stable
 the request succeeds or fails. Session keys are irreversible hashes of valid
 session tokens; bearer tokens are not retained in the budget maps.
 
+Express and Netlify now enter these leases through the same provider-neutral
+runner. Its contract uses one atomic acquire decision, an explicit lease
+release, and bounded status reporting; acquisition and release may be
+synchronous or asynchronous. The default provider remains entirely in memory,
+so this abstraction alone does not enable distributed counters or change any
+deployment limit.
+
 These concurrency ceilings have the same local-only boundary as the fixed
 window limiter. Express enforces them across one process. Netlify enforces
 them only inside one warm function instance, with state reset on cold starts;

@@ -4,10 +4,12 @@ const assert = require('node:assert/strict');
 const {
   OPERATION_BUDGET_ERROR_CODE,
   OPERATION_CLASSES,
+  assertOperationBudgetProvider,
   createOperationBudget,
   operationBudgetError,
   operationBudgetReport,
   operationClassFor,
+  runWithOperationBudget,
 } = require('../lib/operation-budget');
 
 const TEST_LIMITS = {
@@ -100,5 +102,107 @@ describe('in-memory operation leases', () => {
     assert.equal(payload.operationClass, OPERATION_CLASSES.REGISTRY_DEEP);
     assert.equal(payload.limitScope, 'session');
     assert.match(payload.error, /maximum number of network operations/i);
+  });
+});
+
+describe('provider-neutral operation runner', () => {
+  test('accepts the established in-memory provider contract', () => {
+    const provider = createOperationBudget(TEST_LIMITS);
+    assert.equal(assertOperationBudgetProvider(provider), provider);
+    assert.throws(() => assertOperationBudgetProvider(null), /acquire\(\) and status\(\)/);
+    assert.throws(() => assertOperationBudgetProvider({ acquire() {} }), /acquire\(\) and status\(\)/);
+  });
+
+  test('supports asynchronous providers and releases after downstream work', async () => {
+    const events = [];
+    const provider = {
+      async acquire(operationClass, sessionKey) {
+        events.push(`acquire:${operationClass}:${sessionKey}`);
+        return {
+          allowed: true,
+          async release() {
+            events.push('release');
+          },
+        };
+      },
+      async status() {
+        return [];
+      },
+    };
+    const outcome = await runWithOperationBudget(
+      provider,
+      OPERATION_CLASSES.REGISTRY_LIGHT,
+      'session-a',
+      async () => {
+        events.push('callback');
+        return 'result';
+      },
+    );
+    assert.deepEqual(outcome, { allowed: true, value: 'result' });
+    assert.deepEqual(events, [
+      `acquire:${OPERATION_CLASSES.REGISTRY_LIGHT}:session-a`,
+      'callback',
+      'release',
+    ]);
+  });
+
+  test('returns provider denials without running downstream work', async () => {
+    let callbackCalls = 0;
+    const denial = {
+      allowed: false,
+      operationClass: OPERATION_CLASSES.REGISTRY_DEEP,
+      scope: 'runtime',
+      retryAfterSeconds: 2,
+    };
+    const outcome = await runWithOperationBudget(
+      { acquire: async () => denial, status: () => [] },
+      OPERATION_CLASSES.REGISTRY_DEEP,
+      'session-a',
+      () => { callbackCalls += 1; },
+    );
+    assert.equal(callbackCalls, 0);
+    assert.deepEqual(outcome, { allowed: false, denial });
+  });
+
+  test('releases an acquired lease when downstream work throws', async () => {
+    let releases = 0;
+    const provider = {
+      acquire: () => ({
+        allowed: true,
+        release: async () => { releases += 1; },
+      }),
+      status: () => [],
+    };
+    await assert.rejects(
+      runWithOperationBudget(provider, OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a', async () => {
+        throw new Error('downstream failed');
+      }),
+      /downstream failed/,
+    );
+    assert.equal(releases, 1);
+  });
+
+  test('rejects malformed provider decisions before running downstream work', async () => {
+    let callbackCalls = 0;
+    const callback = () => { callbackCalls += 1; };
+    await assert.rejects(
+      runWithOperationBudget(
+        { acquire: () => null, status: () => [] },
+        OPERATION_CLASSES.REGISTRY_LIGHT,
+        'session-a',
+        callback,
+      ),
+      /allowed decision/,
+    );
+    await assert.rejects(
+      runWithOperationBudget(
+        { acquire: () => ({ allowed: true }), status: () => [] },
+        OPERATION_CLASSES.REGISTRY_LIGHT,
+        'session-a',
+        callback,
+      ),
+      /include release/,
+    );
+    assert.equal(callbackCalls, 0);
   });
 });
