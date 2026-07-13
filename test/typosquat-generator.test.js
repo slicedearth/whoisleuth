@@ -148,8 +148,12 @@ describe('provenance-aware typosquat generation', () => {
 
   test('keeps all mutation families as the explicit and implicit default', () => {
     const implicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
-    const explicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], { preset: 'all' });
+    const explicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], {
+      preset: 'all',
+      keyboardLayout: 'qwerty',
+    });
     assert.equal(generator.DEFAULT_GENERATION_PRESET, 'all');
+    assert.equal(generator.DEFAULT_KEYBOARD_LAYOUT, 'qwerty');
     assert.deepEqual(explicit, implicit);
   });
 
@@ -193,19 +197,51 @@ describe('provenance-aware typosquat generation', () => {
     }
   });
 
+  test('publishes immutable keyboard-layout definitions', () => {
+    assert.deepEqual(Object.keys(generator.KEYBOARD_LAYOUTS), ['qwerty', 'azerty', 'qwertz']);
+    assert.equal(Object.isFrozen(generator.KEYBOARD_LAYOUTS), true);
+    for (const layout of Object.values(generator.KEYBOARD_LAYOUTS)) {
+      assert.equal(Object.isFrozen(layout), true);
+      assert.equal(Object.isFrozen(layout.adjacent), true);
+    }
+  });
+
+  test('AZERTY adds its physical-key neighbours without changing mutation semantics', () => {
+    const qwerty = generator.generateTyposquatCandidateSet('z.com', [], { preset: 'common', keyboardLayout: 'qwerty' });
+    const azerty = generator.generateTyposquatCandidateSet('z.com', [], { preset: 'common', keyboardLayout: 'azerty' });
+    assert.equal(qwerty.candidates.some((candidate) => candidate.domain === 'e.com'), false);
+    assert.deepEqual(azerty.candidates.find((candidate) => candidate.domain === 'e.com'), {
+      domain: 'e.com',
+      source: 'z.com',
+      tld: 'com',
+      mutationTypes: ['keyboard_substitution'],
+    });
+  });
+
+  test('QWERTZ adds its physical-key neighbours and unknown layouts fall back to QWERTY', () => {
+    const qwerty = generator.generateTyposquatCandidateSet('z.com', [], { preset: 'common', keyboardLayout: 'qwerty' });
+    const qwertz = generator.generateTyposquatCandidateSet('z.com', [], { preset: 'common', keyboardLayout: 'qwertz' });
+    const unknown = generator.generateTyposquatCandidateSet('z.com', [], { preset: 'common', keyboardLayout: 'unknown' });
+    assert.equal(qwerty.candidates.some((candidate) => candidate.domain === 't.com'), false);
+    assert.ok(qwertz.candidates.some((candidate) => candidate.domain === 't.com'));
+    assert.deepEqual(unknown, qwerty);
+  });
+
   test('estimate is a deterministic upper bound for every preset', () => {
     for (const preset of Object.keys(generator.GENERATION_PRESETS)) {
-      const tlds = ['com', 'net', 'org'];
-      const before = structuredClone(tlds);
-      const estimate = generator.estimateTyposquatCandidateCount('acme.com', tlds, { preset });
-      const result = generator.generateTyposquatCandidateSet('acme.com', tlds, { preset });
-      assert.equal(estimate.inputValid, true);
-      assert.equal(estimate.preset, preset);
-      assert.equal(estimate.tldCount, 3);
-      assert.ok(estimate.estimatedMaximum >= result.candidates.length);
-      assert.ok(estimate.estimatedMaximum <= generator.MAX_GENERATED_CANDIDATES);
-      assert.deepEqual(generator.estimateTyposquatCandidateCount('acme.com', tlds, { preset }), estimate);
-      assert.deepEqual(tlds, before);
+      for (const keyboardLayout of Object.keys(generator.KEYBOARD_LAYOUTS)) {
+        const tlds = ['com', 'net', 'org'];
+        const before = structuredClone(tlds);
+        const estimate = generator.estimateTyposquatCandidateCount('acme.com', tlds, { preset, keyboardLayout });
+        const result = generator.generateTyposquatCandidateSet('acme.com', tlds, { preset, keyboardLayout });
+        assert.equal(estimate.inputValid, true);
+        assert.equal(estimate.preset, preset);
+        assert.equal(estimate.tldCount, 3);
+        assert.ok(estimate.estimatedMaximum >= result.candidates.length);
+        assert.ok(estimate.estimatedMaximum <= generator.MAX_GENERATED_CANDIDATES);
+        assert.deepEqual(generator.estimateTyposquatCandidateCount('acme.com', tlds, { preset, keyboardLayout }), estimate);
+        assert.deepEqual(tlds, before);
+      }
     }
   });
 

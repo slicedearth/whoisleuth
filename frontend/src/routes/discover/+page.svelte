@@ -3,9 +3,11 @@
   import { getContext, onMount } from 'svelte';
   import {
     DEFAULT_GENERATION_PRESET,
+    DEFAULT_KEYBOARD_LAYOUT,
     estimateTyposquatCandidateCount,
     GENERATION_PRESETS,
     generateTyposquatCandidateSet,
+    KEYBOARD_LAYOUTS,
     MAX_GENERATED_CANDIDATES,
     MAX_GENERATION_INPUT_LENGTH,
     MAX_GENERATION_TLDS,
@@ -20,8 +22,10 @@
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all';
+  type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz';
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
+  let keyboardLayout = $state<KeyboardLayoutId>(DEFAULT_KEYBOARD_LAYOUT as KeyboardLayoutId);
   let seed = $state('');
   let tldText = $state('com, net, org');
   let candidates = $state<Candidate[]>([]);
@@ -63,6 +67,7 @@
     label: string;
     description: string;
   }>;
+  const keyboardLayouts = Object.values(KEYBOARD_LAYOUTS) as Array<{ id: KeyboardLayoutId; label: string }>;
   const maxTldTextLength = 2_048;
 
   const visible = $derived(candidates.filter((c) => ctCandidateMatchesFilter(c, filter) && (!ctNewOnly || ctNewDomains.has(c.domain))));
@@ -94,18 +99,35 @@
 
   const generationEstimate = $derived.by(() => {
     if (mode !== 'typosquat' || !seed.trim()) return null;
-    return estimateTyposquatCandidateCount(seed, tldSelection().values, { preset: generationPreset });
+    return estimateTyposquatCandidateCount(seed, tldSelection().values, {
+      preset: generationPreset,
+      keyboardLayout,
+    });
   });
+  const keyboardLayoutRelevant = $derived(
+    GENERATION_PRESETS[generationPreset].mutationTypes.includes('keyboard_substitution')
+      || GENERATION_PRESETS[generationPreset].mutationTypes.includes('keyboard_insertion'),
+  );
 
-  function selectGenerationPreset(next: GenerationPresetId) {
-    if (next === generationPreset) return;
-    generationPreset = next;
+  function clearGeneratedResults() {
     candidates = [];
     generatedContext = [];
     selected = new Set();
     status = '';
     error = '';
     filter = '';
+  }
+
+  function selectGenerationPreset(next: GenerationPresetId) {
+    if (next === generationPreset) return;
+    generationPreset = next;
+    clearGeneratedResults();
+  }
+
+  function selectKeyboardLayout(next: string) {
+    if (!(next in KEYBOARD_LAYOUTS) || next === keyboardLayout) return;
+    keyboardLayout = next as KeyboardLayoutId;
+    clearGeneratedResults();
   }
 
   function generateKeywordCandidates(selectedTlds:string[]): Candidate[] {
@@ -160,7 +182,10 @@
       setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${capNote}`, generated);
       return;
     }
-    const result = generateTyposquatCandidateSet(seed, selection.values, { preset: generationPreset });
+    const result = generateTyposquatCandidateSet(seed, selection.values, {
+      preset: generationPreset,
+      keyboardLayout,
+    });
     if (!result.inputValid) {
       error = 'Enter a valid brand label or a domain with one suffix label.';
       candidates = []; generatedContext = []; selected = new Set(); status = '';
@@ -304,6 +329,19 @@
         </button>
       {/each}
     </div>
+    <div class="generation-options">
+      <label>
+        Keyboard layout
+        <select
+          value={keyboardLayout}
+          disabled={!keyboardLayoutRelevant}
+          onchange={(event) => selectKeyboardLayout(event.currentTarget.value)}
+        >
+          {#each keyboardLayouts as layout}<option value={layout.id}>{layout.label}</option>{/each}
+        </select>
+      </label>
+      <span>{keyboardLayoutRelevant ? 'Used for adjacent-key substitutions and insertions.' : 'Not used by the selected preset.'}</span>
+    </div>
     {#if generationEstimate?.inputValid && generationEstimate.tldCount > 0}
       <p class="generation-estimate">
         Estimated maximum before validation and deduplication: up to {generationEstimate.estimatedMaximum.toLocaleString()} candidates across {generationEstimate.tldCount} TLD{generationEstimate.tldCount===1?'':'s'}.
@@ -364,4 +402,4 @@
   </section>
 {/if}
 
-<style>.controls{padding:22px}.profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-4px 0 16px;padding:10px 12px;border:1px solid rgba(126,224,168,.3);border-radius:10px;background:rgba(126,224,168,.04);color:var(--muted);font-size:.72rem}.profile-context strong{color:var(--text)}.profile-context button{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--accent)}.modes{display:flex;gap:6px;margin-bottom:20px}.modes button,.toolbar button{padding:8px 12px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel)}.modes button.active,.toolbar button.active{color:var(--accent);border-color:#7ee0a8;background:rgba(94,179,255,.1)}.fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}.fields label{font-size:.72rem;font-weight:700}.fields input{display:block;margin-top:7px}.generation-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.generation-presets button{min-width:0;padding:10px 11px;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--muted);text-align:left}.generation-presets button:hover{border-color:rgba(126,224,168,.55)}.generation-presets button.active{border-color:var(--accent);background:rgba(126,224,168,.08);box-shadow:inset 3px 0 0 var(--accent)}.generation-presets strong,.generation-presets small{display:block}.generation-presets strong{color:var(--text);font-size:.72rem}.generation-presets button.active strong{color:var(--accent)}.generation-presets small{margin-top:4px;font-size:.62rem;line-height:1.45}.generation-estimate,.generation-limits{margin:9px 0 0;color:var(--muted);font-size:.66rem}.generation-estimate{color:var(--text)}.status{color:var(--muted);font-size:.78rem}.ct-history-notice{color:#f2b84b;font-size:.7rem}.ct-history{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}.ct-history>summary{color:var(--accent);cursor:pointer;font-size:.7rem}.ct-history-list{display:grid;gap:7px;margin-top:10px}.ct-history article{display:flex;justify-content:space-between;gap:12px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.ct-history article strong,.ct-history article small{display:block}.ct-history article strong{overflow-wrap:anywhere}.ct-history article small{margin-top:3px;color:var(--muted);font-size:.62rem}.ct-history article>div:last-child{display:flex;gap:5px;align-items:center}.ct-history button{min-height:32px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--panel-raised);font-size:.64rem}.ct-checks{margin-top:7px}.ct-checks summary{color:var(--accent);cursor:pointer;font-size:.62rem}.ct-checks ol{display:grid;gap:4px;margin:6px 0 0;padding-left:18px}.ct-checks li{font-size:.6rem}.ct-checks li span{display:block;color:var(--muted)}.ct-clear-history{margin-top:9px}.results{margin-top:16px;padding:22px}.results header{display:flex;justify-content:space-between;align-items:end;gap:16px}.results h2{margin:0}.toolbar{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);gap:8px;margin:18px 0 12px}.candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}.candidate{display:flex;gap:10px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}.candidate.has-ct{align-items:flex-start}.candidate input{width:16px;min-height:auto;margin-top:2px}.candidate-body{flex:1;min-width:0}.candidate-body label{display:block;min-width:0;cursor:pointer}.candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}.candidate small{display:block;margin-top:4px;color:var(--muted);font-size:.65rem;text-transform:capitalize}.ct-new{display:inline-block;margin-top:6px;padding:3px 7px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent);font-size:.6rem}.ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}.ct-stat{color:var(--muted);font-size:.63rem}.ct-stat time{color:var(--text)}.ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-hosts code{padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:.62rem;overflow-wrap:anywhere;min-width:0}.ct-hosts details{width:100%}.ct-hosts summary{color:var(--accent);font-size:.63rem;cursor:pointer}.ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-legacy{margin:0 0 12px;color:var(--muted);font-size:.7rem}.limit{color:var(--muted);font-size:.72rem}@media(max-width:700px){.fields,.toolbar,.candidate-list,.generation-presets{grid-template-columns:1fr}.modes{overflow:auto}.profile-context,.ct-history article{align-items:flex-start;flex-direction:column}.ct-history article>div:last-child{width:100%}.results header{display:block}.results header button{margin-top:14px}}</style>
+<style>.controls{padding:22px}.profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-4px 0 16px;padding:10px 12px;border:1px solid rgba(126,224,168,.3);border-radius:10px;background:rgba(126,224,168,.04);color:var(--muted);font-size:.72rem}.profile-context strong{color:var(--text)}.profile-context button{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--accent)}.modes{display:flex;gap:6px;margin-bottom:20px}.modes button,.toolbar button{padding:8px 12px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel)}.modes button.active,.toolbar button.active{color:var(--accent);border-color:#7ee0a8;background:rgba(94,179,255,.1)}.fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}.fields label{font-size:.72rem;font-weight:700}.fields input{display:block;margin-top:7px}.generation-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.generation-presets button{min-width:0;padding:10px 11px;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--muted);text-align:left}.generation-presets button:hover{border-color:rgba(126,224,168,.55)}.generation-presets button.active{border-color:var(--accent);background:rgba(126,224,168,.08);box-shadow:inset 3px 0 0 var(--accent)}.generation-presets strong,.generation-presets small{display:block}.generation-presets strong{color:var(--text);font-size:.72rem}.generation-presets button.active strong{color:var(--accent)}.generation-presets small{margin-top:4px;font-size:.62rem;line-height:1.45}.generation-options{display:flex;align-items:end;gap:12px;margin-top:10px}.generation-options label{min-width:150px;color:var(--text);font-size:.68rem;font-weight:700}.generation-options select{display:block;width:100%;margin-top:6px}.generation-options span{padding-bottom:9px;color:var(--muted);font-size:.64rem}.generation-estimate,.generation-limits{margin:9px 0 0;color:var(--muted);font-size:.66rem}.generation-estimate{color:var(--text)}.status{color:var(--muted);font-size:.78rem}.ct-history-notice{color:#f2b84b;font-size:.7rem}.ct-history{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}.ct-history>summary{color:var(--accent);cursor:pointer;font-size:.7rem}.ct-history-list{display:grid;gap:7px;margin-top:10px}.ct-history article{display:flex;justify-content:space-between;gap:12px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.ct-history article strong,.ct-history article small{display:block}.ct-history article strong{overflow-wrap:anywhere}.ct-history article small{margin-top:3px;color:var(--muted);font-size:.62rem}.ct-history article>div:last-child{display:flex;gap:5px;align-items:center}.ct-history button{min-height:32px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--panel-raised);font-size:.64rem}.ct-checks{margin-top:7px}.ct-checks summary{color:var(--accent);cursor:pointer;font-size:.62rem}.ct-checks ol{display:grid;gap:4px;margin:6px 0 0;padding-left:18px}.ct-checks li{font-size:.6rem}.ct-checks li span{display:block;color:var(--muted)}.ct-clear-history{margin-top:9px}.results{margin-top:16px;padding:22px}.results header{display:flex;justify-content:space-between;align-items:end;gap:16px}.results h2{margin:0}.toolbar{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);gap:8px;margin:18px 0 12px}.candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}.candidate{display:flex;gap:10px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}.candidate.has-ct{align-items:flex-start}.candidate input{width:16px;min-height:auto;margin-top:2px}.candidate-body{flex:1;min-width:0}.candidate-body label{display:block;min-width:0;cursor:pointer}.candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}.candidate small{display:block;margin-top:4px;color:var(--muted);font-size:.65rem;text-transform:capitalize}.ct-new{display:inline-block;margin-top:6px;padding:3px 7px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent);font-size:.6rem}.ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}.ct-stat{color:var(--muted);font-size:.63rem}.ct-stat time{color:var(--text)}.ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-hosts code{padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:.62rem;overflow-wrap:anywhere;min-width:0}.ct-hosts details{width:100%}.ct-hosts summary{color:var(--accent);font-size:.63rem;cursor:pointer}.ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-legacy{margin:0 0 12px;color:var(--muted);font-size:.7rem}.limit{color:var(--muted);font-size:.72rem}@media(max-width:700px){.fields,.toolbar,.candidate-list,.generation-presets{grid-template-columns:1fr}.generation-options{align-items:stretch;flex-direction:column;gap:4px}.generation-options label{width:100%}.generation-options span{padding-bottom:0}.modes{overflow:auto}.profile-context,.ct-history article{align-items:flex-start;flex-direction:column}.ct-history article>div:last-child{width:100%}.results header{display:block}.results header button{margin-top:14px}}</style>

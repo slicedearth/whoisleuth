@@ -10,6 +10,50 @@ const QWERTY_ADJACENT = {
   z: 'asx', x: 'zsdc', c: 'xdfv', v: 'cfgb', b: 'vghn', n: 'bhjm', m: 'njk',
 };
 
+function buildKeyboardAdjacency(rows) {
+  const positions = new Map();
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    for (let index = 0; index < row.keys.length; index += 1) {
+      positions.set(row.keys[index], { rowIndex, index, x: index + row.offset });
+    }
+  }
+  const adjacency = {};
+  for (const [key, position] of positions) {
+    const neighbours = [];
+    const sameRow = rows[position.rowIndex].keys;
+    if (position.index > 0) neighbours.push(sameRow[position.index - 1]);
+    if (position.index + 1 < sameRow.length) neighbours.push(sameRow[position.index + 1]);
+    for (const adjacentRowIndex of [position.rowIndex - 1, position.rowIndex + 1]) {
+      const adjacentRow = rows[adjacentRowIndex];
+      if (!adjacentRow) continue;
+      for (let index = 0; index < adjacentRow.keys.length; index += 1) {
+        if (Math.abs((index + adjacentRow.offset) - position.x) <= 0.51) neighbours.push(adjacentRow.keys[index]);
+      }
+    }
+    adjacency[key] = [...new Set(neighbours)].join('');
+  }
+  return Object.freeze(adjacency);
+}
+
+const AZERTY_ADJACENT = buildKeyboardAdjacency([
+  { keys: 'azertyuiop', offset: 0 },
+  { keys: 'qsdfghjklm', offset: 0.5 },
+  { keys: 'wxcvbn', offset: 1 },
+]);
+const QWERTZ_ADJACENT = buildKeyboardAdjacency([
+  { keys: 'qwertzuiop', offset: 0 },
+  { keys: 'asdfghjkl', offset: 0.5 },
+  { keys: 'yxcvbnm', offset: 1 },
+]);
+
+export const DEFAULT_KEYBOARD_LAYOUT = 'qwerty';
+export const KEYBOARD_LAYOUTS = Object.freeze({
+  qwerty: Object.freeze({ id: 'qwerty', label: 'QWERTY', adjacent: Object.freeze(QWERTY_ADJACENT) }),
+  azerty: Object.freeze({ id: 'azerty', label: 'AZERTY', adjacent: AZERTY_ADJACENT }),
+  qwertz: Object.freeze({ id: 'qwertz', label: 'QWERTZ', adjacent: QWERTZ_ADJACENT }),
+});
+
 const HOMOGLYPH_SWAPS = [
   ['rn', 'm'], ['m', 'rn'], ['o', '0'], ['0', 'o'], ['l', '1'], ['1', 'l'], ['i', '1'], ['vv', 'w'], ['w', 'vv'],
 ];
@@ -151,6 +195,11 @@ function resolveGenerationPreset(options) {
   return GENERATION_PRESETS[requested] || GENERATION_PRESETS[DEFAULT_GENERATION_PRESET];
 }
 
+function resolveKeyboardLayout(options) {
+  const requested = typeof options?.keyboardLayout === 'string' ? options.keyboardLayout : DEFAULT_KEYBOARD_LAYOUT;
+  return KEYBOARD_LAYOUTS[requested] || KEYBOARD_LAYOUTS[DEFAULT_KEYBOARD_LAYOUT];
+}
+
 function selectCandidateTlds(sourceTld, fallbackTlds, enabledFamilies) {
   if (sourceTld && !enabledFamilies.has('tld_substitution')) {
     return { values: [sourceTld], truncated: false };
@@ -253,6 +302,7 @@ function addVariant(state, variant, mutationType) {
 export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options = {}) {
   const parts = splitDomainParts(rawInput);
   const preset = resolveGenerationPreset(options);
+  const keyboardLayout = resolveKeyboardLayout(options);
   if (!parts) {
     return { inputValid: false, preset: preset.id, tldCount: 0, estimatedMaximum: 0, mayReachLimit: false };
   }
@@ -275,7 +325,7 @@ export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options 
   let asciiHomoglyphCount = 0;
   let unicodeHomoglyphCount = 0;
   for (const character of name) {
-    adjacentCount += QWERTY_ADJACENT[character]?.length || 0;
+    adjacentCount += keyboardLayout.adjacent[character]?.length || 0;
     if (VOWELS.includes(character)) vowelCount += 1;
     unicodeHomoglyphCount += confusableCharactersForAscii(character)?.length || 0;
   }
@@ -328,6 +378,7 @@ export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options 
  */
 export function generateTyposquatCandidateSet(rawInput, fallbackTlds, options = {}) {
   const preset = resolveGenerationPreset(options);
+  const keyboardLayout = resolveKeyboardLayout(options);
   const enabledFamilies = new Set(preset.mutationTypes);
   const parts = splitDomainParts(rawInput);
   if (!parts) {
@@ -375,7 +426,7 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds, options = 
   }
   if (enabledFamilies.has('keyboard_substitution') || enabledFamilies.has('keyboard_insertion')) {
     for (let i = 0; i < name.length; i += 1) {
-      const adjacent = QWERTY_ADJACENT[name[i]];
+      const adjacent = keyboardLayout.adjacent[name[i]];
       if (!adjacent) continue;
       for (const key of adjacent) {
         if (enabledFamilies.has('keyboard_substitution')) {

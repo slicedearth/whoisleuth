@@ -110,6 +110,29 @@ test('lookalike estimate discloses when the hard generation cap may apply', asyn
   await expect(page.locator('.generation-estimate')).toContainText('hard cap may apply');
 });
 
+test('keyboard layout selection adds locale-specific neighbours and clears stale results', async ({ page }) => {
+  await page.getByRole('button', { name: 'Use Common edits generation preset' }).click();
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('z.com');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
+
+  const keyboardLayout = page.getByRole('combobox', { name: 'Keyboard layout' });
+  await expect(keyboardLayout).toHaveValue('qwerty');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.locator('.candidate strong', { hasText: /^e\.com$/ })).toHaveCount(0);
+
+  await keyboardLayout.selectOption('azerty');
+  await expect(page.locator('.candidate')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  const azertyNeighbour = page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^e\.com$/ }),
+  });
+  await expect(azertyNeighbour).toContainText('Keyboard substitution');
+
+  await page.getByRole('button', { name: 'Use Impersonation generation preset' }).click();
+  await expect(keyboardLayout).toBeDisabled();
+  await expect(page.locator('.generation-options')).toContainText('Not used by the selected preset');
+});
+
 test('lookalike generation rejects ambiguous dotted input and invalid mutation labels', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
@@ -151,6 +174,7 @@ test('candidate limit guidance and controls do not overflow at mobile width', as
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.generation-limits')).toBeVisible();
   await expect(page.locator('.generation-presets')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Keyboard layout' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

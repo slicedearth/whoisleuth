@@ -453,6 +453,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   deduplication; it allocates no candidate objects and makes no network
   requests. Network lookups begin only after selected candidates are handed to
   Bulk and scanned.
+- Adjacent-key substitution and insertion can use **QWERTY, AZERTY, or
+  QWERTZ** geometry. QWERTY remains the compatibility default; changing the
+  layout clears any previously generated set so the visible results always
+  match the active configuration. Layout selection changes only local
+  candidate generation and does not alter the Risk model.
 - When the seed is a domain, the selected TLD field now expands that exact
   label and every generated label variation across the bounded selected TLD
   set. These results retain an explicit **Selected TLD substitution** source,
