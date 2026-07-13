@@ -48,8 +48,8 @@ describe('fmtExpiresIn', () => {
 
 describe('formatPrivacyCell', () => {
   test('maps true/false/null to Protected/Public/em-dash', () => {
-    assert.equal(scoring.formatPrivacyCell(true), 'Protected');
-    assert.equal(scoring.formatPrivacyCell(false), 'Public');
+    assert.equal(scoring.formatPrivacyCell(true), 'Privacy protected');
+    assert.equal(scoring.formatPrivacyCell(false), 'Public registrant data');
     assert.equal(scoring.formatPrivacyCell(null), '—');
     assert.equal(scoring.formatPrivacyCell(undefined), '—');
   });
@@ -62,7 +62,7 @@ describe('formatActivityCell', () => {
 
   test('omits the mail suffix when nothing is configured', () => {
     assert.equal(scoring.formatActivityCell('active', false, false, false), 'Active site');
-    assert.equal(scoring.formatActivityCell('unreachable', false, false, false), 'Website probe inconclusive');
+    assert.equal(scoring.formatActivityCell('unreachable', false, false, false), 'Website check inconclusive');
   });
 
   test('falls back to an em-dash for an unrecognized/missing status', () => {

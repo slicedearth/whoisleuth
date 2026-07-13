@@ -72,7 +72,7 @@ test('a disabled Lookup capability prevents single and Bulk submissions', async 
 
   await page.goto('/bulk');
   await page.getByLabel('Domains').fill('example.invalid');
-  await expect(page.getByRole('button', { name: 'Scan 1 domains' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Scan 1 domain' })).toBeDisabled();
 });
 
 test('disabled certificate and website capabilities degrade their own controls only', async ({ page }) => {
@@ -83,10 +83,16 @@ test('disabled certificate and website capabilities degrade their own controls o
   await expect(page.getByText('certificate transparency is disabled by deployment policy.', { exact: true })).toBeVisible();
 
   await page.goto('/brands');
-  await page.getByRole('button', { name: 'New profile' }).click();
+  const newProfileButton = page.getByRole('button', { name: 'New profile' });
+  await expect(newProfileButton).toHaveCSS('color', 'rgb(7, 16, 28)');
+  await expect(newProfileButton).toHaveCSS('background-image', /linear-gradient/);
+  await newProfileButton.click();
   await expect(page.getByRole('button', { name: 'Fetch from official domain' })).toBeDisabled();
   await expect(page.getByText('website probe is disabled by deployment policy.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Save profile' })).toBeEnabled();
+  const saveProfileButton = page.getByRole('button', { name: 'Save profile' });
+  await expect(saveProfileButton).toBeEnabled();
+  await expect(saveProfileButton).toHaveCSS('color', 'rgb(7, 16, 28)');
+  await expect(saveProfileButton).toHaveCSS('background-image', /linear-gradient/);
 });
 
 test('an incomplete deep scan is stored conservatively so skipped probes cannot erase prior evidence', async ({ page }) => {
@@ -116,7 +122,7 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
   await page.goto('/bulk');
   await page.getByLabel('Domains').fill('example.invalid');
   await page.getByLabel('Scan mode').selectOption('deep');
-  await page.getByRole('button', { name: 'Scan 1 domains' }).click();
+  await page.getByRole('button', { name: 'Scan 1 domain' }).click();
   await expect(page.getByRole('status').first()).toHaveText('Completed 1 of 1 lookups.');
   await page.getByLabel('Watchlist name').fill('Policy-safe baseline');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();

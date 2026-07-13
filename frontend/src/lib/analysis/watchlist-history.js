@@ -57,7 +57,7 @@ const AVAILABILITY_LABELS = {
 const ACTIVITY_LABELS = {
   active: 'Active site',
   parked: 'Parked',
-  unreachable: 'Website probe inconclusive',
+  unreachable: 'Website check inconclusive',
   no_site: 'No site reported (legacy)',
 };
 

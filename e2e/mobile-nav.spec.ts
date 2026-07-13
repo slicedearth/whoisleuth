@@ -18,7 +18,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`mobile navigation @ ${viewport.label}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test('drawer opens with real, safely-placed hit targets and no overflow', async ({ page }) => {
+    test('drawer opens with a safely-placed session action and no overflow', async ({ page }) => {
       await page.goto('/');
 
       // Exactly one visible WHOISleuth logo/title (the header's, not the
@@ -50,36 +50,29 @@ for (const viewport of VIEWPORTS) {
       const paddingBottom = await drawer.evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
       expect(paddingBottom).toBeGreaterThanOrEqual(MIN_SAFE_AREA_PX);
 
-      const privacyLink = drawer.getByRole('link', { name: 'Privacy' });
       const signOutButton = drawer.getByRole('button', { name: 'Sign out' });
-      await expect(privacyLink).toBeVisible();
       await expect(signOutButton).toBeVisible();
       await expect(signOutButton).toBeEnabled();
+      await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
+      await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
 
       // hover() performs the same occlusion/actionability checks Playwright
-      // runs before a click, proving these are real, unobstructed pointer
-      // targets rather than just present-but-covered DOM nodes.
-      await privacyLink.hover();
+      // runs before a click, proving this is a real, unobstructed pointer
+      // target rather than just a present-but-covered DOM node.
       await signOutButton.hover();
 
-      const privacyBox = await boundingBox(privacyLink);
       const signOutBox = await boundingBox(signOutButton);
-      for (const box of [privacyBox, signOutBox]) {
-        expect(box.width).toBeGreaterThan(0);
-        expect(box.height).toBeGreaterThan(0);
-        // At least the full protected-chrome region of clearance from the
-        // viewport bottom - not merely "somewhere above the fold". This
-        // fails if the 72px reservation shrinks or disappears, even though
-        // the action would still technically render on screen.
-        const clearance = viewport.height - (box.y + box.height);
-        expect(clearance).toBeGreaterThanOrEqual(MIN_SAFE_AREA_PX);
-      }
+      expect(signOutBox.width).toBeGreaterThan(0);
+      expect(signOutBox.height).toBeGreaterThan(0);
+      // At least the full protected-chrome region of clearance from the
+      // viewport bottom - not merely "somewhere above the fold". This
+      // fails if the 72px reservation shrinks or disappears, even though
+      // the action would still technically render on screen.
+      const clearance = viewport.height - (signOutBox.y + signOutBox.height);
+      expect(clearance).toBeGreaterThanOrEqual(MIN_SAFE_AREA_PX);
 
       await expectNoHorizontalOverflow(page);
 
-      await privacyLink.click();
-      await expect(page).toHaveURL(/\/privacy$/);
-      await expect(page.getByRole('heading', { name: 'Privacy policy' })).toBeVisible();
     });
 
     test('closing the drawer updates aria-expanded, and the footer links to Privacy', async ({ page }) => {

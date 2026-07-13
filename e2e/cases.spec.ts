@@ -115,7 +115,7 @@ async function openCasesView(page: import('@playwright/test').Page) {
 
 async function createCase(page: import('@playwright/test').Page, domain: string) {
   await page.locator('#new-case').fill(domain);
-  await page.getByRole('button', { name: 'Open case' }).click();
+  await page.getByRole('button', { name: 'Open or create case' }).click();
   await expect(page.locator('.case-head', { hasText: domain })).toBeVisible();
 }
 
@@ -263,7 +263,7 @@ test.describe('cases from Bulk', () => {
     await runBulkScan(page, bulkDomains);
 
     const caseCell = page.locator('td[data-label="Case"]').first();
-    await caseCell.getByRole('button', { name: /Case/ }).click();
+    await caseCell.getByRole('button', { name: /Create case/ }).click();
     await expect(caseCell.locator('select.case-disp')).toBeVisible();
     await expect(caseCell.getByRole('link', { name: 'Open' })).toBeVisible();
 
@@ -392,8 +392,8 @@ test.describe('evidence timeline', () => {
     // Both the baseline and the reliable material change are visible.
     await expect(page.locator('.timeline-entry')).toHaveCount(2);
 
-    // Click "Changed only".
-    await page.locator('.timeline-controls button', { hasText: 'Changed only' }).click();
+    // Click "Material changes only".
+    await page.locator('.timeline-controls button', { hasText: 'Material changes only' }).click();
 
     // Filtering retains both entries because one is the baseline and the other
     // has a reliable field-level change.
@@ -446,8 +446,8 @@ test.describe('evidence timeline', () => {
     // No risk change displayed.
     await expect(fastEntry.locator('.timeline-change strong').filter({ hasText: /Risk score/i })).toHaveCount(0);
 
-    // Click "Changed only".
-    await page.locator('.timeline-controls button', { hasText: 'Changed only' }).click();
+    // Click "Material changes only".
+    await page.locator('.timeline-controls button', { hasText: 'Material changes only' }).click();
 
     // Only baseline remains.
     await expect(page.locator('.timeline-entry')).toHaveCount(1);
@@ -465,13 +465,13 @@ test.describe('evidence timeline', () => {
       caseRecord({ id: 'second', domain: 'second.invalid', evidenceHistory: [snapshot({ id: 'ev-second' })] }),
     ]);
 
-    await page.locator('.timeline-controls button', { hasText: 'Changed only' }).click();
+    await page.locator('.timeline-controls button', { hasText: 'Material changes only' }).click();
     await page.locator('.timeline-controls button', { hasText: 'Collapse all' }).click();
     await expect(page.locator('.timeline-list')).toHaveCount(0);
 
     await page.locator('.case-head', { hasText: 'second.invalid' }).click();
     await expect(page.locator('.timeline-list')).toBeVisible();
-    await expect(page.locator('.timeline-controls button', { hasText: 'Changed only' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.timeline-controls button', { hasText: 'Material changes only' })).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('.timeline-controls button', { hasText: 'Collapse all' })).toHaveAttribute('aria-expanded', 'true');
   });
 

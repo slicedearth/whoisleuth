@@ -51,7 +51,7 @@
     {#if timeline.length}
       <div class="timeline-controls">
         <button aria-expanded={timelineExpanded} aria-controls={`timeline-list-${record.id}`} onclick={()=>timelineExpanded=!timelineExpanded}>{timelineExpanded?'Collapse all':'Expand all'}</button>
-        <button aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Changed only</button>
+        <button aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Material changes only</button>
       </div>
     {/if}
   </div>

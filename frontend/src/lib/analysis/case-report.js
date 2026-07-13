@@ -22,7 +22,7 @@ const APPLICATION_NAME = 'WHOISleuth';
 
 const LIMITATIONS_TEXT = [
   'This report contains normalized browser-local observations from WHOISleuth analyst cases.',
-  'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or web-probe responses.',
+  'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks.',
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence — it may not have been evaluated.',
   'Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes.',
   'Scan-depth gates prevent some cross-depth comparisons; "incomparable" means the observations differ materially but no reliable field-level comparison is available.',

@@ -28,7 +28,7 @@ export async function pseudoContent(locator: Locator, pseudo: '::before' | '::af
 // spec that needs a finished scan rather than just the empty queue state.
 export async function runBulkScan(page: Page, domains: string[]) {
   await page.locator('#domains').fill(domains.join('\n'));
-  await page.getByRole('button', { name: new RegExp(`^Scan ${domains.length} domains$`) }).click();
+  await page.getByRole('button', { name: `Scan ${domains.length} domain${domains.length === 1 ? '' : 's'}` }).click();
   await expect(page.locator('.status')).toHaveText(`Completed ${domains.length} of ${domains.length} lookups.`, {
     timeout: 20_000,
   });

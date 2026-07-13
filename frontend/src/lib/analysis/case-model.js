@@ -645,7 +645,7 @@ const COMPARE_FIELDS = [
   { field: 'hasSpf', label: 'SPF', type: 'bool', depthGate: 'both-deep' },
   { field: 'hasDmarc', label: 'DMARC', type: 'bool', depthGate: 'both-deep' },
   { field: 'activityStatus', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
-  { field: 'websiteProbeDetail', label: 'Website probe detail', type: 'text', depthGate: 'both-deep' },
+  { field: 'websiteProbeDetail', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
   { field: 'pageTitle', label: 'Page title', type: 'text', depthGate: 'both-deep' },
   { field: 'faviconMatch', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
   { field: 'faviconNearMatch', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },

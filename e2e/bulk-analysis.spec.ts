@@ -65,7 +65,7 @@ test('results become labelled stacked cards at mobile width, with compact and fu
   const row = page.locator('.results-table tbody tr').first();
   const rowBox = await boundingBox(row);
 
-  const compactLabels = ['State', 'Risk', 'Opportunity'];
+  const compactLabels = ['Registration', 'Risk', 'Opportunity'];
   for (const label of compactLabels) {
     const cell = row.locator(`td[data-label="${label}"]`);
     const cellBox = await boundingBox(cell);
@@ -73,7 +73,7 @@ test('results become labelled stacked cards at mobile width, with compact and fu
     expect(await pseudoContent(cell, '::before')).toContain(label);
   }
 
-  const fullWidthLabels = ['Activity', 'Registrar', 'Mutation', 'Actions'];
+  const fullWidthLabels = ['Website', 'Registrar', 'Mutation', 'Actions'];
   for (const label of fullWidthLabels) {
     const cell = row.locator(`td[data-label="${label}"]`);
     const cellBox = await boundingBox(cell);

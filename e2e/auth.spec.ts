@@ -34,9 +34,15 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const backendStatus = page.getByText('Backend · Express', { exact: true });
   await expect(backendStatus).toBeVisible();
   await expect(backendStatus).toHaveCSS('white-space', 'nowrap');
+  await expect(backendStatus).toHaveCSS('text-overflow', 'clip');
+  expect(await backendStatus.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+    await backendStatus.evaluate((element) => element.clientWidth + 1),
+  );
 
   const signOutButton = page.getByRole('button', { name: 'Sign out' });
   await expect(signOutButton).toBeVisible();
+  await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
+  await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
   await signOutButton.click();
 
   await expect(loginForm).toBeVisible();

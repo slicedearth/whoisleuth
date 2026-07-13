@@ -218,7 +218,7 @@
 </script>
 
 <svelte:head><title>Discover · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Discover</p><h1>Candidate discovery</h1><p>Generate explainable lookalikes, brainstorm defensive registrations, or search public certificate logs.</p></div></section>
+<section class="heading"><div><p class="eyebrow">Discover</p><h1>Candidate discovery</h1><p>Generate explainable lookalikes, explore defensive registrations, and search public Certificate Transparency logs.</p></div></section>
 
 <section class="controls card">
   {#if mode==='certificate-transparency'&&ctDisabled}<p class="feature-disabled" role="note">{ctDisabled.reason||'Certificate Transparency search is disabled by deployment policy.'}</p>{/if}

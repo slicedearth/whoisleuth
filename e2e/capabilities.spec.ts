@@ -44,3 +44,22 @@ test('malformed or unsupported capability reports degrade conservatively', async
   await expect(page.getByText('Backend unavailable', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Investigate domains. Protect brands.' })).toBeVisible();
 });
+
+test('the serverless runtime label fits the desktop session row without truncation', async ({ page }) => {
+  await page.route('**/api/capabilities', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ version: 1, runtime: 'netlify', authoritative: true, features: [] }),
+  }));
+  await page.goto('/');
+
+  const backendStatus = page.getByText('Backend · Netlify', { exact: true });
+  await expect(backendStatus).toBeVisible();
+  await expect(backendStatus).toHaveCSS('white-space', 'nowrap');
+  await expect(backendStatus).toHaveCSS('text-overflow', 'clip');
+  expect(await backendStatus.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+    await backendStatus.evaluate((element) => element.clientWidth + 1),
+  );
+  await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCSS('white-space', 'nowrap');
+  await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
+});

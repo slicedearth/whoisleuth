@@ -33,7 +33,7 @@ const FIELD_LABELS = {
   hasSpf: 'SPF',
   hasDmarc: 'DMARC',
   activityStatus: 'Website activity',
-  websiteProbeDetail: 'Website probe detail',
+  websiteProbeDetail: 'Website check detail',
   pageTitle: 'Page title',
   faviconMatch: 'Official favicon match',
   faviconNearMatch: 'Official favicon near-match',

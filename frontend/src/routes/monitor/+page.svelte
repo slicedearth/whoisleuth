@@ -64,7 +64,7 @@
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Cases and watchlists</h1><p>Move findings from discovery into a documented, browser-local investigation record.</p></div></section>
+<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Cases and watchlists</h1><p>Track findings in browser-local cases and compare watchlist changes over time.</p></div></section>
 
 <div class="views" role="tablist" aria-label="Monitor views">
   <button role="tab" id="tab-cases" aria-selected={view==='cases'} aria-controls="panel-cases" class:active={view==='cases'} onclick={()=>view='cases'}>Cases <span>{cases.length}</span></button>
@@ -76,7 +76,7 @@
   <section class="case-toolbar card">
     <form class="track" onsubmit={(event)=>{event.preventDefault();trackDomain();}}>
       <label for="new-case">Track a domain</label>
-      <div><input id="new-case" bind:value={newDomain} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!newDomain.trim()}>Open case</button></div>
+      <div><input id="new-case" bind:value={newDomain} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!newDomain.trim()}>Open or create case</button></div>
     </form>
     <div class="top-actions"><button onclick={downloadCases} disabled={!cases.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label></div>
   </section>
@@ -128,7 +128,7 @@
       {#if !filteredCases.length}<p class="count">No cases match the current filters.</p>{/if}
     </section>
   {:else}
-    <section class="empty card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the box above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
+    <section class="empty card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}
 </div>
 {/if}
@@ -139,13 +139,13 @@
   {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
   {#if names.length}
-    <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each names as name}{@const item=watchlists[name]}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount||0)>0}>{latest?.changeCount||0}</span></td><td>{date(item.updatedAt)}</td><td><div class="actions"><button onclick={()=>rescan(name)}>Load for re-scan</button><button onclick={()=>{selected=name;changedOnly=false}}>History</button><button class="danger" onclick={()=>remove(name)}>Delete</button></div></td></tr>{/each}</tbody></table></div></section>
+    <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each names as name}{@const item=watchlists[name]}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount||0)>0}>{latest?.changeCount||0}</span></td><td>{date(item.updatedAt)}</td><td><div class="actions"><button onclick={()=>rescan(name)}>Rescan in Bulk</button><button onclick={()=>{selected=name;changedOnly=false}}>History</button><button class="danger" onclick={()=>remove(name)}>Delete</button></div></td></tr>{/each}</tbody></table></div></section>
   {:else}
     <section class="empty card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a browser-local monitoring timeline.</p><a href="/bulk">Open Bulk analysis →</a></section>
   {/if}
 
   {#if entry}
-    <section class="history card"><header><div><p class="eyebrow">History</p><h2>{selected}</h2><p>{entry.history.length} retained checks · {entry.results.length} domains</p></div><div><button class:active={changedOnly} aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Changes only</button><button onclick={()=>selected=''}>Close</button></div></header>
+    <section class="history card"><header><div><p class="eyebrow">History</p><h2>{selected}</h2><p>{entry.history.length} retained check{entry.history.length===1?'':'s'} · {entry.results.length} domain{entry.results.length===1?'':'s'}</p></div><div><button class:active={changedOnly} aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Material changes only</button><button onclick={()=>selected=''}>Close</button></div></header>
       <div class="events">{#each [...history].reverse() as event}<article><div class="event-head"><time datetime={event.checkedAt}>{date(event.checkedAt)}</time><span>{event.mode} scan</span><strong class:changed={event.changeCount>0}>{event.changeCount} change{event.changeCount===1?'':'s'}</strong><small>{event.conclusiveCount}/{event.resultCount} conclusive</small></div>{#if event.changes.length}<ul>{#each event.changes as change}<li class={change.tone}><strong>{change.domain}</strong><span>{fieldLabels[change.field]||change.field}</span><small>{formatValue(change.before)} → {formatValue(change.after)}</small></li>{/each}</ul>{:else}<p class="no-change">No material changes detected.</p>{/if}{#if event.omittedChanges}<p class="no-change">{event.omittedChanges} additional changes omitted to keep storage bounded.</p>{/if}</article>{/each}</div>
     </section>
   {/if}
