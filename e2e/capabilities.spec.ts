@@ -32,6 +32,7 @@ test('capability normalization bounds concurrency controls and accepts older ver
   expect(bounded?.controls?.concurrency.classes).toEqual([
     { id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 },
   ]);
+  expect(bounded?.controls?.concurrency.usage).toBeNull();
 
   const distributed = normalizeCapabilities({
     version: 1,
@@ -52,6 +53,43 @@ test('capability normalization bounds concurrency controls and accepts older ver
     scope: 'deployment',
     distributed: true,
     classes: [{ id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 }],
+    usage: null,
+  });
+
+  const accounted = normalizeCapabilities({
+    version: 1,
+    runtime: 'netlify',
+    authoritative: true,
+    features: [],
+    controls: {
+      concurrency: {
+        mode: 'redis_rest',
+        scope: 'deployment',
+        distributed: true,
+        classes: [{ id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 }],
+        usage: {
+          mode: 'distributed_fixed_windows',
+          modelVersion: 1,
+          windowModel: 'utc_epoch_fixed',
+          dailyLimit: 1000,
+          thirtyDayLimit: 10_000,
+          features: [
+            { id: 'bulk_deep', dailyLimit: 100, thirtyDayLimit: 1000 },
+            { id: 'bulk_deep', dailyLimit: 1, thirtyDayLimit: 2 },
+            { id: 'invalid feature', dailyLimit: 1, thirtyDayLimit: 2 },
+            { id: 'too_large', dailyLimit: 1001, thirtyDayLimit: 10_001 },
+          ],
+        },
+      },
+    },
+  });
+  expect(accounted?.controls?.concurrency.usage).toEqual({
+    mode: 'distributed_fixed_windows',
+    modelVersion: 1,
+    windowModel: 'utc_epoch_fixed',
+    dailyLimit: 1000,
+    thirtyDayLimit: 10_000,
+    features: [{ id: 'bulk_deep', dailyLimit: 100, thirtyDayLimit: 1000 }],
   });
 
   expect(normalizeCapabilities({

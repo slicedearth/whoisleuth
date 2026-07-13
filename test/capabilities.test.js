@@ -18,6 +18,7 @@ test('capability report is deterministic, provider-neutral, and honest about exe
   assert.equal(report.controls.concurrency.mode, 'in_memory');
   assert.equal(report.controls.concurrency.scope, 'serverless_instance');
   assert.equal(report.controls.concurrency.distributed, false);
+  assert.equal(report.controls.concurrency.usage.mode, 'disabled');
   assert.ok(report.controls.concurrency.classes.every((entry) => entry.runtimeLimit >= entry.sessionLimit));
   assert.match(report.limitations[0], /per serverless instance/i);
   assert.deepEqual(capabilityReport('netlify'), report);
@@ -35,6 +36,11 @@ test('capability reports distinguish configured distributed and unavailable budg
     mode: 'redis_rest',
     distributed: true,
     limits: { [OPERATION_CLASSES.REGISTRY_LIGHT]: { session: 2, runtime: 3 } },
+    usageLimits: {
+      daily: 100,
+      monthly: 1000,
+      features: { lookup_fast: { daily: 50, monthly: 500 } },
+    },
     acquire() {},
     status() {},
   };
@@ -42,8 +48,13 @@ test('capability reports distinguish configured distributed and unavailable budg
   assert.equal(enabled.controls.concurrency.mode, 'redis_rest');
   assert.equal(enabled.controls.concurrency.scope, 'deployment');
   assert.equal(enabled.controls.concurrency.distributed, true);
+  assert.equal(enabled.controls.concurrency.usage.mode, 'distributed_fixed_windows');
+  assert.equal(enabled.controls.concurrency.usage.dailyLimit, 100);
+  assert.deepEqual(enabled.controls.concurrency.usage.features, [
+    { id: 'lookup_fast', dailyLimit: 50, thirtyDayLimit: 500 },
+  ]);
   assert.equal(enabled.features.find((feature) => feature.id === 'distributed_budgets').status, 'supported');
-  assert.match(enabled.limitations[0], /deployment-wide distributed leases/i);
+  assert.match(enabled.limitations[0], /concurrency.*usage allowances.*deployment-wide/i);
 
   const unavailable = {
     mode: 'unavailable',
@@ -54,6 +65,7 @@ test('capability reports distinguish configured distributed and unavailable budg
   };
   const disabled = capabilityReport('netlify', {}, unavailable);
   assert.equal(disabled.features.find((feature) => feature.id === 'distributed_budgets').status, 'unavailable');
+  assert.equal(disabled.controls.concurrency.usage.mode, 'unavailable');
   assert.match(disabled.limitations[0], /fail closed/i);
 });
 

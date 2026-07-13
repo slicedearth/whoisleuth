@@ -101,6 +101,14 @@ Incomplete or invalid shared-provider configuration uses `mode: unavailable`,
 never silently falls back to local enforcement, and causes network-heavy work
 to fail closed. Older version-1 reports without `controls` remain valid.
 
+The nested `controls.concurrency.usage` object reports whether durable usage
+accounting is `disabled`, `unavailable`, or
+`distributed_fixed_windows`. Usage model version 1 uses
+`windowModel: utc_epoch_fixed`, publishes the configured global 24-hour and
+30-day ceilings, and lists only explicitly configured feature ceilings. These
+are application controls rather than live counts or provider billing metrics.
+Older version-1 reports without `usage` remain valid.
+
 Consumers must reject malformed or unsupported future reports conservatively;
 the browser labels capability status unavailable without hiding otherwise
 usable local workflows. Runtime limitations distinguish process-local Express
@@ -121,6 +129,14 @@ and domain-posture requests. The feature is accounting provenance rather than
 proof of the browser workflow: compact mode is the Bulk contract, but a custom
 client can select a different compatible response shape, so future durable
 enforcement must also retain deployment-wide totals.
+
+When a configured fixed-window allowance is exhausted, the endpoint returns
+HTTP `429`, `errorCode: NETWORK_USAGE_LIMITED`, a bounded `Retry-After`, and a
+`limitScope` of `global_daily`, `global_30_day`, `feature_daily`, or
+`feature_30_day`. The response includes `usageWindow` (`24_hour` or `30_day`),
+`usageModelVersion: 1`, and the same server-derived operation attribution. The
+30-day window is fixed and UTC-epoch-aligned; it is not a calendar month,
+rolling window, or hosting-provider billing statement.
 
 ## Diagnostics version 3
 

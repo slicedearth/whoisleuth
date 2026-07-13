@@ -59,6 +59,14 @@ test('the capability endpoint reports honest in-memory concurrency scope', async
         expect.objectContaining({ id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 }),
         expect.objectContaining({ id: 'registry_deep', sessionLimit: 4, runtimeLimit: 12 }),
       ]),
+      usage: {
+        mode: 'disabled',
+        modelVersion: 1,
+        windowModel: 'utc_epoch_fixed',
+        dailyLimit: null,
+        thirtyDayLimit: null,
+        features: [],
+      },
     },
   });
 });

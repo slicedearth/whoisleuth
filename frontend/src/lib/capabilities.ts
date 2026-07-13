@@ -7,11 +7,21 @@ export type Capability = {
   reason: string | null;
 };
 export type ConcurrencyClass = { id: string; sessionLimit: number; runtimeLimit: number };
+export type UsageFeatureLimit = { id: string; dailyLimit: number; thirtyDayLimit: number };
+export type UsageControls = {
+  mode: 'disabled' | 'unavailable' | 'distributed_fixed_windows';
+  modelVersion: 1;
+  windowModel: 'utc_epoch_fixed';
+  dailyLimit: number | null;
+  thirtyDayLimit: number | null;
+  features: UsageFeatureLimit[];
+};
 export type ConcurrencyControls = {
   mode: 'in_memory' | 'redis_rest' | 'unavailable';
   scope: string;
   distributed: boolean;
   classes: ConcurrencyClass[];
+  usage: UsageControls | null;
 };
 export type CapabilityReport = {
   version: 1;
@@ -35,6 +45,75 @@ const boundedLimit = (value: unknown) => typeof value === 'number'
   && value <= 1000
   ? value
   : null;
+const boundedUsageLimit = (value: unknown) => typeof value === 'number'
+  && Number.isSafeInteger(value)
+  && value > 0
+  && value <= 1_000_000_000
+  ? value
+  : null;
+
+function normalizeUsage(
+  raw: unknown,
+  distributed: boolean,
+  concurrencyMode: ConcurrencyControls['mode'],
+): UsageControls | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const mode = String(value.mode);
+  if (!['disabled', 'unavailable', 'distributed_fixed_windows'].includes(mode)
+    || value.modelVersion !== 1
+    || value.windowModel !== 'utc_epoch_fixed'
+    || !Array.isArray(value.features)) return null;
+  if (mode !== 'distributed_fixed_windows') {
+    const modeMatches = mode === 'unavailable'
+      ? concurrencyMode === 'unavailable'
+      : concurrencyMode !== 'unavailable';
+    return modeMatches
+      && value.dailyLimit === null
+      && value.thirtyDayLimit === null
+      && value.features.length === 0
+      ? {
+          mode: mode as UsageControls['mode'],
+          modelVersion: 1,
+          windowModel: 'utc_epoch_fixed',
+          dailyLimit: null,
+          thirtyDayLimit: null,
+          features: [],
+        }
+      : null;
+  }
+  if (!distributed || concurrencyMode !== 'redis_rest') return null;
+  const dailyLimit = boundedUsageLimit(value.dailyLimit);
+  const thirtyDayLimit = boundedUsageLimit(value.thirtyDayLimit);
+  if (dailyLimit === null || thirtyDayLimit === null || thirtyDayLimit < dailyLimit) return null;
+  const features: UsageFeatureLimit[] = [];
+  const seen = new Set<string>();
+  for (const item of value.features.slice(0, 50)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const id = bounded(record.id, 50);
+    const featureDaily = boundedUsageLimit(record.dailyLimit);
+    const featureThirtyDay = boundedUsageLimit(record.thirtyDayLimit);
+    if (!id
+      || !/^[a-z0-9_]+$/.test(id)
+      || seen.has(id)
+      || featureDaily === null
+      || featureThirtyDay === null
+      || featureThirtyDay < featureDaily
+      || featureDaily > dailyLimit
+      || featureThirtyDay > thirtyDayLimit) continue;
+    seen.add(id);
+    features.push({ id, dailyLimit: featureDaily, thirtyDayLimit: featureThirtyDay });
+  }
+  return {
+    mode: 'distributed_fixed_windows',
+    modelVersion: 1,
+    windowModel: 'utc_epoch_fixed',
+    dailyLimit,
+    thirtyDayLimit,
+    features,
+  };
+}
 
 function normalizeConcurrency(raw: unknown): ConcurrencyControls | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -67,6 +146,11 @@ function normalizeConcurrency(raw: unknown): ConcurrencyControls | null {
         scope: bounded(value.scope, 40) || 'runtime_instance',
         distributed: value.distributed,
         classes,
+        usage: normalizeUsage(
+          value.usage,
+          value.distributed,
+          value.mode as ConcurrencyControls['mode'],
+        ),
       }
     : null;
 }

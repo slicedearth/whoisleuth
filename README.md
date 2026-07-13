@@ -676,9 +676,46 @@ session token. A five-minute lease expiry recovers capacity after interrupted
 serverless invocations without allowing a late release to decrement a newer
 lease. Provider outages fail closed with HTTP `503` and the stable
 `NETWORK_BUDGET_UNAVAILABLE` code rather than silently reverting to per-instance
-limits. This distributed option covers concurrent operation leases only;
-fixed-window request limits and durable daily/monthly accounting remain
-separate controls.
+limits.
+
+An operator can additionally set `WHOISLEUTH_OPERATION_USAGE_LIMITS` to a
+bounded JSON policy. It requires global `daily` and `monthly` positive integer
+ceilings and accepts optional limits for the version-1 operation features:
+
+```json
+{
+  "daily": 2000,
+  "monthly": 20000,
+  "features": {
+    "bulk_deep": { "daily": 250, "monthly": 2500 },
+    "certificate_transparency": { "daily": 100, "monthly": 1000 }
+  }
+}
+```
+
+These figures are examples, not hosting-plan recommendations. Choose them from
+the deployment's measured request costs and provider allowances. The policy is
+valid only with both distributed REST credentials; missing credentials or a
+malformed policy fail closed rather than silently disabling accounting.
+
+Accounting uses provider server time and fixed UTC-epoch-aligned 24-hour and
+30-day buckets. The 30-day bucket is not a calendar month, rolling window, or
+provider billing total. One atomic acquisition checks session/runtime
+concurrency, the global counters, and any configured feature counters before it
+creates a lease or increments usage. A concurrency denial or provider failure
+does not consume usage; an admitted operation remains counted even if its
+downstream lookup later fails. Every admitted feature is counted, even without
+a feature ceiling, and the global ceiling cannot be bypassed by selecting a
+different compatible response shape. Counter keys retain only the operation
+feature, fixed-window identifier, and integer count and expire shortly after
+their window ends.
+
+Usage exhaustion returns HTTP `429`, a `Retry-After` value bounded by the
+current window reset, and `NETWORK_USAGE_LIMITED` with a global/feature and
+24-hour/30-day scope. Enabling usage accounting does not add provider commands:
+an allowed operation still uses one atomic acquisition command and one release
+command. The container-local fixed-window request limiter remains a separate
+control.
 
 Without the optional provider, these concurrency ceilings have the same
 local-only boundary as the fixed-window limiter. Express enforces them across
