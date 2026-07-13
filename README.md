@@ -398,11 +398,17 @@ compact-storage boundary, and lookup evidence schema are documented in the
   discarded after hashing. Component caps and source truncation remain
   explicit; fuzzy SimHash is comparison data, not cryptographic evidence or
   proof of common ownership.
-- A bulk scan flags **Related infrastructure**: domains in the same scan
-  that share an exact nameserver set or favicon hash with each other, with
-  a one-click way to load the group back into the query box. Uses signals
-  already collected by the scan - no extra lookups - and can surface a
-  whole campaign even without a brand profile to compare against.
+- A bulk scan presents bounded **Relationship evidence** from observations
+  already collected by that scan: exact nameserver sets, resolved IP
+  addresses, recognized public tracking identifiers, exact or perceptually
+  similar favicons, and asset hosts under configured official domains. Each
+  relationship states its comparison method and can be loaded back into the
+  query box. The comparison is scan-local, performs no extra lookups, changes
+  no Risk score, and is not copied into shortlists, watchlists, cases, or
+  exports. Shared observations are investigation pivots, not proof of common
+  ownership, coordination, intent, or maliciousness. CT hostname and
+  certificate-count provenance is not treated as certificate reuse; that
+  requires a native TLS certificate fingerprint.
 - **Bulk triage controls** keep large scans usable: filter by availability
   family, high-risk score, error state, mutation family, and one or more
   evidence signals. Counts update while the scan runs; filters change only

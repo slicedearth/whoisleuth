@@ -66,6 +66,11 @@ at all.
   hashes, versioned page fingerprints, and bounded external-resource host and
   recognized tracking-identifier sets. It never stores page HTML, URL paths,
   query strings, headers, redirects, parser diagnostics, or raw responses.
+  Bulk can transiently derive bounded scan-local relationships from its
+  nameserver, IP-address, favicon, recognized public-tracking-identifier, and
+  configured official-asset-host observations. These relationships stay in
+  memory for the current result set, trigger no additional requests, and are
+  not copied into browser-local stores or exports.
   When a compatible current Lookup result is available, its normalized
   fingerprints are compared with the active profile baseline locally in the
   browser. Normalized HTML, visible text, DOM/form structure, resource hosts,

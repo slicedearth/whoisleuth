@@ -1,9 +1,9 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, pseudoContent, runBulkScan } from './helpers';
 
-// Dotless values - classifyQuery rejects them with a 400 before any
-// RDAP/WHOIS/DNS/CT call, so every "scan" below runs entirely against the
-// local server with no upstream network access.
+// Default fixtures use dotless values so classifyQuery rejects them before
+// any upstream work. Tests that need completed result data install an explicit
+// local /api/lookup route before using domain-shaped values.
 const invalidDomains = (count: number) => Array.from({ length: count }, (_, i) => `bad-domain-${i + 1}`);
 
 // Only this spec legitimately produces Chrome's synthetic "responded with a
@@ -141,6 +141,60 @@ test('IDN evidence renders and filters without changing the risk score', async (
 
   await page.getByRole('button', { name: 'IDN / confusable' }).click();
   await expect(row).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('deep results present bounded relationship evidence without ownership or certificate claims', async ({ page }) => {
+  await page.evaluate(() => {
+    const profile = {
+      id: 'relationship-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
+      approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,
+      createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
+    localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
+  });
+  await page.reload();
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const shared = domain !== 'third.example';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          domain, state: 'registered', confidence: 'high', activityStatus: 'active', deepScanComplete: true,
+          nameservers: shared ? ['ns2.shared.example', 'ns1.shared.example'] : ['ns.third.example'],
+          faviconHash: shared ? 'a'.repeat(64) : 'b'.repeat(64),
+          externalAssetHosts: domain === 'third.example' ? ['static.official.example'] : [],
+          dns: { status: 'complete', records: { a: [shared ? '203.0.113.9' : '203.0.113.10'], aaaa: [], ns: [] } },
+          pageIdentity: {
+            fingerprints: {
+              identifiers: { values: shared ? [{ type: 'tag-container', value: 'GTM-SHARED' }] : [] },
+            },
+          },
+        },
+        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await runBulkScan(page, ['first.example', 'second.example', 'third.example']);
+
+  const section = page.getByRole('region', { name: '5 observed relationships' });
+  await expect(section).toBeVisible();
+  await expect(section.getByText('Shared nameserver set', { exact: true })).toBeVisible();
+  await expect(section.getByText('Shared IP address', { exact: true })).toBeVisible();
+  await expect(section.getByText('Shared tracking identifier', { exact: true })).toBeVisible();
+  await expect(section.getByText('Similar favicon', { exact: true })).toBeVisible();
+  await expect(section.getByText('Official asset relationship', { exact: true })).toBeVisible();
+  await expect(section).toContainText('not ownership or maliciousness conclusions');
+  await section.getByText('Interpretation limits').click();
+  await expect(section).toContainText('require native TLS fingerprints');
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
