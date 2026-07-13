@@ -59,7 +59,33 @@ const HOMOGLYPH_SWAPS = [
 ];
 
 const VOWELS = 'aeiou';
-const PHISHING_DICTIONARY = ['login', 'secure', 'verify', 'account', 'support', 'security', 'update', 'confirm', 'portal', 'admin'];
+const IMPERSONATION_TERMS = Object.freeze([
+  'login',
+  'signin',
+  'auth',
+  'sso',
+  'secure',
+  'verify',
+  'account',
+  'password',
+  'recovery',
+  'support',
+  'helpdesk',
+  'security',
+  'update',
+  'confirm',
+  'portal',
+  'admin',
+  'service',
+  'billing',
+  'payment',
+  'wallet',
+  'identity',
+  'password-reset',
+  'account-recovery',
+  'customer-support',
+  'security-check',
+]);
 const TLD_TYPOS = {
   com: ['cm', 'co', 'om', 'con', 'comm', 'cim', 'vom'],
   net: ['ner', 'nte', 'ne'],
@@ -89,7 +115,7 @@ const FAMILY_NEW_VARIANT_LIMITS = Object.freeze({
   bitsquatting: 512,
   ascii_homoglyph: 128,
   unicode_homoglyph: 768,
-  dictionary: 64,
+  dictionary: 128,
 });
 
 const COMMON_EDIT_MUTATIONS = Object.freeze([
@@ -131,7 +157,7 @@ export const GENERATION_PRESETS = Object.freeze({
   impersonation: Object.freeze({
     id: 'impersonation',
     label: 'Impersonation',
-    description: 'Homoglyphs, phishing terms, word forms, and TLD changes.',
+    description: 'Homoglyphs, account-themed terms, word forms, and TLD changes.',
     mutationTypes: IMPERSONATION_MUTATIONS,
   }),
   all: Object.freeze({
@@ -155,7 +181,7 @@ export const MUTATION_LABELS = {
   bitsquatting: 'Bitsquatting',
   ascii_homoglyph: 'ASCII homoglyph',
   unicode_homoglyph: 'Unicode homoglyph',
-  dictionary: 'Phishing dictionary',
+  dictionary: 'Impersonation term',
   tld_typo: 'TLD typo',
   tld_substitution: 'Selected TLD substitution',
 };
@@ -398,7 +424,7 @@ export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options 
     bitsquatting: name.length * 8,
     ascii_homoglyph: asciiHomoglyphCount,
     unicode_homoglyph: unicodeHomoglyphCount,
-    dictionary: PHISHING_DICTIONARY.length * 4,
+    dictionary: IMPERSONATION_TERMS.length * 4,
   };
   let rawVariantMaximum = 0;
   let familyLimitPossible = false;
@@ -549,7 +575,7 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds, options = 
     }
   }
   if (enabledFamilies.has('dictionary')) {
-    for (const word of PHISHING_DICTIONARY) {
+    for (const word of IMPERSONATION_TERMS) {
       addVariant(state, `${word}${name}`, 'dictionary');
       addVariant(state, `${word}-${name}`, 'dictionary');
       addVariant(state, `${name}${word}`, 'dictionary');

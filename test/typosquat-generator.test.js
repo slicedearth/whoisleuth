@@ -203,6 +203,31 @@ describe('provenance-aware typosquat generation', () => {
     }
   });
 
+  test('generates a bounded curated set of joined and hyphenated impersonation terms', () => {
+    const result = generator.generateTyposquatCandidateSet('acme.com', [], { preset: 'impersonation' });
+    const dictionaryCandidates = result.candidates.filter((candidate) => candidate.mutationTypes.includes('dictionary'));
+    assert.equal(dictionaryCandidates.length, 100);
+    for (const domain of [
+      'signin-acme.com',
+      'acmehelpdesk.com',
+      'password-reset-acme.com',
+      'acme-account-recovery.com',
+    ]) {
+      assert.ok(dictionaryCandidates.some((candidate) => candidate.domain === domain), domain);
+    }
+    assert.equal(result.limitReasons.includes('family:dictionary'), false);
+  });
+
+  test('keeps expanded dictionary generation deterministic and inside its estimate', () => {
+    const options = { preset: 'impersonation' };
+    const first = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], options);
+    const second = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], options);
+    const estimate = generator.estimateTyposquatCandidateCount('acme.com', ['com', 'net'], options);
+    assert.deepEqual(second, first);
+    assert.ok(estimate.estimatedMaximum >= first.candidates.length);
+    assert.equal(estimate.mayReachLimit, false);
+  });
+
   test('keeps all mutation families as the explicit and implicit default', () => {
     const implicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
     const explicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], {

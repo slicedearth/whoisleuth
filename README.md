@@ -465,6 +465,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   per-family boundary. Risk model v4 recognizes these generator-owned values as
   low-context evidence; earlier stored scores remain readable but incomparable
   across model versions.
+- The Impersonation preset uses a bounded curated set of access, account,
+  support, payment, and recovery terms in joined and hyphenated prefix/suffix
+  forms. These candidates retain the existing `dictionary` machine provenance
+  and display as **Impersonation term** evidence; a term match is investigation
+  context, not a maliciousness verdict.
 - When the seed is a domain, the selected TLD field now expands that exact
   label and every generated label variation across the bounded selected TLD
   set. These results retain an explicit **Selected TLD substitution** source,

@@ -97,6 +97,10 @@ test('lookalike presets expose a live upper-bound estimate and clear stale resul
 
   await page.getByRole('button', { name: 'Generate candidates' }).click();
   await expect(page.locator('.candidate strong', { hasText: /^loginacme\.com$/ })).toBeVisible();
+  const expandedTerm = page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^signin-acme\.com$/ }),
+  });
+  await expect(expandedTerm).toContainText('Impersonation term');
   await expect(page.locator('.candidate strong', { hasText: /^acm\.com$/ })).toHaveCount(0);
 });
 
