@@ -41,8 +41,11 @@ at all.
   collected by a requested deep check. Bulk results, watchlists, and analyst
   cases retain only the final origin (never its path or query), response status,
   transport, redirect count/flags, MIME type, and presence-only security-header
-  tokens. Raw header values, attempt errors, and redirect inventories are not
-  copied into browser-local investigation stores.
+  tokens. Monitor can compare the latest retained final origin and normalized
+  nameserver set across browser-local cases without making a request or saving
+  a separate relationship record. This comparison uses the bounded nameserver
+  set retained by each case rather than an uncapped DNS inventory. Raw header
+  values, attempt errors, and redirect inventories are not copied into browser-local investigation stores.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
   the domain through the public-address guard and opens one direct TLS
   connection to one validated address while retaining the domain as SNI.

@@ -5,6 +5,7 @@
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
+  import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import { deleteWatchlist, exportWatchlists, fieldLabels, formatValue, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
@@ -117,6 +118,7 @@
                 <button type="submit" disabled={!noteDraft.trim()}>Add note</button>
               </form>
               {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{date(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
+              <CaseRelationships {record} records={cases} onselect={expand} />
               {#key record.id}<EvidenceTimeline {record} />{/key}
               {#key record.id}<CaseReportExport {record} onmessage={(value)=>caseMessage=value} />{/key}
               <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {date(record.createdAt)}</span></div>

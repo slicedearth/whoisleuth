@@ -607,6 +607,67 @@ test.describe('evidence timeline', () => {
   });
 });
 
+test.describe('cross-case comparison', () => {
+  test('shows bounded relationships from latest stored evidence and opens a related case', async ({ page }) => {
+    const http = {
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://shared-landing.invalid',
+      httpResponseStatus: 200,
+      httpTransportSecurity: 'https',
+      httpRedirectCount: 1,
+    } as const;
+    await openSeededTimelineCase(page, 'primary.invalid', [
+      caseRecord({
+        id: 'primary', domain: 'primary.invalid',
+        evidenceHistory: [snapshot({ id: 'primary-ev', nameservers: ['ns2.shared.invalid', 'ns1.shared.invalid'], ...http })],
+      }),
+      caseRecord({
+        id: 'dns-related', domain: 'dns-related.invalid',
+        evidenceHistory: [snapshot({ id: 'dns-ev', nameservers: ['NS1.SHARED.INVALID.', 'NS2.SHARED.INVALID.'] })],
+      }),
+      caseRecord({
+        id: 'web-related', domain: 'web-related.invalid',
+        evidenceHistory: [snapshot({ id: 'web-ev', nameservers: ['ns.other.invalid'], ...http })],
+      }),
+    ]);
+
+    const region = page.getByRole('region', { name: 'Related cases for primary.invalid' });
+    await expect(region).toContainText('2 observed relationships');
+    await expect(region.getByText('Shared nameserver set', { exact: true })).toBeVisible();
+    await expect(region.getByText('Shared final website origin', { exact: true })).toBeVisible();
+    await expect(region).toContainText('not ownership or maliciousness conclusions');
+
+    await region.getByRole('button', { name: 'Open dns-related.invalid' }).click();
+    await expect(page.locator('.case-head', { hasText: 'dns-related.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('does not render a relationship section when no other case matches', async ({ page }) => {
+    await openSeededTimelineCase(page, 'standalone.invalid', [
+      caseRecord({
+        id: 'standalone', domain: 'standalone.invalid',
+        evidenceHistory: [snapshot({ id: 'standalone-ev', nameservers: ['ns.unique.invalid'] })],
+      }),
+    ]);
+    await expect(page.getByRole('region', { name: 'Related cases for standalone.invalid' })).toHaveCount(0);
+  });
+
+  test('relationship cards remain usable without horizontal overflow on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    const records = ['mobile-a.invalid', 'mobile-b.invalid'].map((domain, index) => caseRecord({
+      id: `mobile-${index}`,
+      domain,
+      evidenceHistory: [snapshot({
+        id: `mobile-ev-${index}`,
+        nameservers: ['an-extremely-long-but-valid-nameserver-label-for-overflow.invalid'],
+      })],
+    }));
+    await openSeededTimelineCase(page, 'mobile-a.invalid', records);
+    await expect(page.getByRole('region', { name: 'Related cases for mobile-a.invalid' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
 test.describe('case report export', () => {
   test('export JSON for a case with correct filename and content', async ({ page }) => {
     await openSeededTimelineCase(page, 'export-json.invalid', [

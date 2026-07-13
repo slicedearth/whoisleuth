@@ -558,6 +558,13 @@ full case workspace (a `Cases` tab alongside `Watchlists`).
   sort by recent activity, edit a case inline, and delete one with a
   confirmation. A case links back to a fresh **Look up** of its domain, and
   Lookup/Bulk link forward into the matching Monitor record.
+- Expanded cases also compare their latest compact evidence against the other
+  cases already stored in that browser. Exact retained normalized nameserver
+  sets and exact final HTTP(S) origins can become bounded cross-case
+  investigation pivots. This comparison makes no network requests, creates no aggregate
+  score or ownership claim, and does not add a new persisted relationship
+  record; shared DNS, redirect, hosting, CDN, parking, and platform services
+  remain common explanations.
 - **Cases live only in the current browser.** They are held in `localStorage`
   under `whois-rdap-cases-v1` and are never sent to any server. Clearing your
   browser storage (or using a different browser or device) removes them unless
