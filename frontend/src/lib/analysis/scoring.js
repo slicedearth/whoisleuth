@@ -134,11 +134,12 @@ export function scoreTone(score) {
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
-// The first explicitly stamped risk model. Older saved scores are intentionally
-// left unversioned: they remain readable, but are not compared with scores from
-// this recalibrated model because a numeric delta would describe a formula
-// change rather than a change in the observed domain.
-export const RISK_MODEL_VERSION = 1;
+// Version 2 groups correlated impersonation observations into distinct evidence
+// families and adds a visible corroboration factor only when multiple families
+// are present. Older scores remain readable, but case/watchlist comparisons gate
+// numeric changes on matching model versions so formula changes are not mistaken
+// for changes in the observed domain.
+export const RISK_MODEL_VERSION = 2;
 
 const RISK_STATE_BASE = {
   registered: 10,
@@ -186,6 +187,13 @@ export function explainRiskScore(r) {
   const base = RISK_STATE_BASE[state];
   const factors = [{ label: `Base score for "${STATE_LABELS[state] || state}"`, delta: base }];
   let score = base;
+  const contextualFamilies = new Set();
+
+  const addContextualFactor = (family, label, delta) => {
+    contextualFamilies.add(family);
+    factors.push({ label, delta });
+    score += delta;
+  };
 
   // Mutation provenance establishes why this domain is being reviewed, but it
   // is never sufficient by itself to declare the domain dangerous. Only
@@ -193,42 +201,40 @@ export function explainRiskScore(r) {
   // strings cannot increase the score.
   const context = mutationContext(r.mutationTypes);
   if (context) {
-    factors.push(context);
-    score += context.delta;
+    addContextualFactor('domain-resemblance', context.label, context.delta);
   }
 
-  // Set by bulk.js/render.js from a brand profile's official-site favicon
-  // hash (see lib/favicon.js) - a much stronger phishing signal than any of
-  // the activity/mail signals below, since it means this domain is serving
-  // a byte-identical copy of the brand's own favicon, not just "some site."
-  if (r.faviconMatch) {
-    factors.push({ label: 'Favicon matches your brand profile\'s official site', delta: 35 });
-    score += 35;
-  } else if (r.faviconNearMatch) {
-    // Perceptual (fuzzy) match: not byte-identical, but visually the same
-    // favicon resized/recompressed (see lib/perceptual-hash.js). Slightly
-    // weaker than an exact match since it's a similarity threshold rather
-    // than an equality, but still a strong copied-kit tell. Mutually
-    // exclusive with faviconMatch - the exact match already scored above.
-    factors.push({ label: 'Favicon closely resembles your official site (perceptual match)', delta: 28 });
-    score += 28;
+  // Brand-presentation observations are deliberately modest and share one
+  // family. A favicon and official asset host can both come from an authorized
+  // campaign, shared platform, CDN, SSO flow, or agency template; observing
+  // both must not manufacture a second independent source of corroboration.
+  if (r.faviconMatch === true) {
+    addContextualFactor('brand-presentation', 'Favicon matches your Brand Profile official site', 18);
+  } else if (r.faviconNearMatch === true) {
+    addContextualFactor('brand-presentation', 'Favicon resembles your official site (perceptual match)', 14);
+  }
+  if (r.reusesOfficialAssets === true) {
+    addContextualFactor('brand-presentation', 'Official asset host relationship observed', 6);
   }
 
-  // Cheap signals pulled from the homepage HTML already fetched for the
-  // for-sale check above (see lib/html-signals.js) - a login form and/or
-  // urgency-driven copy are the actual mechanics of a credential-harvesting
-  // page, not just circumstantial activity.
-  if (r.reusesOfficialAssets) {
-    factors.push({ label: 'Reuses assets from your official site', delta: 30 });
-    score += 30;
+  // Text and form observations also share one family: legitimate account,
+  // payment, and identity-provider pages commonly contain both. The match
+  // string must be a real non-empty bounded backend observation; arbitrary
+  // truthy imported values do not contribute.
+  if (typeof r.phishingLanguageMatch === 'string' && r.phishingLanguageMatch.trim()) {
+    addContextualFactor('credential-lure', 'Suspicious urgency language observed', 8);
   }
-  if (r.phishingLanguageMatch) {
-    factors.push({ label: 'Phishing/urgency language detected', delta: 20 });
-    score += 20;
+  if (r.hasPasswordField === true) {
+    addContextualFactor('credential-lure', 'Login/password form present', 5);
   }
-  if (r.hasPasswordField) {
-    factors.push({ label: 'Login/password form present', delta: 15 });
-    score += 15;
+
+  // The three families cover domain resemblance, brand presentation, and
+  // credential-lure behavior. This explicit factor makes the cross-family
+  // reasoning visible in Lookup, Bulk tooltips, CSV, cases, and reports.
+  if (contextualFamilies.size >= 2) {
+    const bonus = contextualFamilies.size >= 3 ? 20 : 10;
+    factors.push({ label: `Corroborating context across ${contextualFamilies.size} distinct evidence families`, delta: bonus });
+    score += bonus;
   }
 
   if (r.activityStatus === 'active') {
@@ -236,7 +242,7 @@ export function explainRiskScore(r) {
     score += 8;
   }
 
-  if (r.hasMx) {
+  if (r.hasMx === true) {
     factors.push({ label: 'Mail server configured', delta: 8 });
     score += 8;
   }
@@ -244,10 +250,10 @@ export function explainRiskScore(r) {
   // policy (SPF can end in ~all/-all, DMARC can be p=none) - the label only
   // claims what's actually verified (the record exists), not how it's
   // configured.
-  if (r.hasSpf && r.hasDmarc) {
+  if (r.hasSpf === true && r.hasDmarc === true) {
     factors.push({ label: 'SPF + DMARC records present', delta: 3 });
     score += 3;
-  } else if (r.hasSpf || r.hasDmarc) {
+  } else if (r.hasSpf === true || r.hasDmarc === true) {
     factors.push({ label: 'SPF or DMARC record present', delta: 1 });
     score += 1;
   }
@@ -256,7 +262,7 @@ export function explainRiskScore(r) {
     score += 3;
   }
 
-  if (typeof r.domainAgeDays === 'number') {
+  if (typeof r.domainAgeDays === 'number' && Number.isFinite(r.domainAgeDays) && r.domainAgeDays >= 0) {
     if (r.domainAgeDays < 90) {
       factors.push({ label: `Recently registered (${fmtAge(r.domainAgeDays)})`, delta: 10 });
       score += 10;

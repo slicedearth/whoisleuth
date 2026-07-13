@@ -297,11 +297,19 @@ compact-storage boundary, and lookup evidence schema are documented in the
 - A deep-checked registered result gets a versioned **Risk** score for analyst
   prioritization, distinct from the **Opportunity** score that rates how
   approachable a domain is to acquire. The Risk score is a heuristic review
-  indicator, not a maliciousness verdict: copied brand assets, matching or
-  near-matching favicons, phishing language, and password forms carry the most
-  weight. Site activity, mail configuration, privacy, recency, and bounded
-  generator provenance add context but cannot reach the danger threshold by
-  themselves.
+  indicator, not a maliciousness verdict. Model v2 groups related observations
+  into three contextual families: domain resemblance, brand presentation, and
+  credential-lure behavior. Related observations within one family remain
+  individually visible but do not manufacture extra corroboration; a separate
+  factor is added only when two or more distinct families agree. Even the
+  strongest single family cannot reach the danger threshold when combined with
+  all ordinary activity, mail, privacy, and recency context.
+- A matching favicon, official-asset relationship, password form, or suspicious
+  phrase can also occur on legitimate SSO, payment, agency, CDN, and authorized
+  campaign pages. Domains classified by the active Brand Profile as official,
+  partner, or allowlisted therefore keep their observational score visible but
+  are excluded from untrusted high-risk triage and Monitor saves. Review the
+  contributing factors and evidence rather than treating the score as a verdict.
 - A single-domain lookup's availability card shows a compact, numbered
   **Risk** and **Opportunity** meter beside the status: the bar speeds up
   scanning but never replaces the score value.
@@ -343,9 +351,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   URL paths or query strings. Capturing does not persist anything until the
   profile is saved; an inconclusive update leaves the existing baseline
   unchanged. A registered lookalike serving the exact or a perceptually close
-  official favicon is flagged in results and contributes heavily to its Risk
-  score. The remaining baseline components are retained for explainable page
-  comparison rather than treated as proof of common ownership or intent.
+  official favicon is flagged in results and contributes bounded
+  brand-presentation context to its Risk score. The remaining baseline
+  components are retained for explainable page comparison rather than treated
+  as proof of common ownership or intent.
   Lookup compares normalized HTML and static DOM/form digests, visible-text
   SimHash distance, external-resource-host overlap, and recognized tracking
   identifiers independently. It reports no combined page-similarity score and
@@ -357,7 +366,9 @@ compact-storage boundary, and lookup evidence schema are documented in the
   phishing/social-engineering language ("verify your account", "security
   alert", ...), the page title, and any image/script/stylesheet it loads
   directly from your official domain instead of copying - a lazy
-  phishing-kit tell. All feed into the Risk score.
+  phishing-kit tell. These observations contribute conservatively within their
+  contextual families and require evidence from another family before receiving
+  a corroboration bonus.
 - The same bounded homepage request now retains an HTTP observation with the
   final response, a validated redirect chain, transport, selected response and
   security headers, declared versus captured body size, and a SHA-256 over the

@@ -145,6 +145,48 @@ test('IDN evidence renders and filters without changing the risk score', async (
   await expectNoHorizontalOverflow(page);
 });
 
+test('risk model v2 exposes cross-family corroboration in Bulk triage', async ({ page }) => {
+  await page.evaluate(() => {
+    const profile = {
+      id: 'risk-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
+      approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: 'a'.repeat(64), officialFaviconPHash: '', pageBaseline: null,
+      createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
+    localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
+    sessionStorage.setItem('whoisleuth:candidate-handoff:v1', JSON.stringify({
+      version: 1,
+      createdAt: '2026-07-13T00:00:00.000Z',
+      source: 'typosquat',
+      candidates: [{ domain: 'candidate.example', source: 'official.example', mutationTypes: ['dictionary'] }],
+    }));
+  });
+  await page.reload();
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      availability: {
+        domain: 'candidate.example', state: 'registered', confidence: 'high',
+        faviconHash: 'a'.repeat(64), externalAssetHosts: ['official.example'],
+        phishingLanguageMatch: 'verify your account', hasPasswordField: true,
+      },
+      diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }),
+  }));
+
+  await runBulkScan(page, ['candidate.example']);
+  const row = page.locator('.results-table tbody tr');
+  const riskCell = row.locator('td[data-label="Risk"]');
+  await expect(riskCell).toHaveText('85');
+  await expect(riskCell).toHaveAttribute('title', /Corroborating context across 3 distinct evidence families \+20/);
+  await expect(riskCell).toHaveAttribute('title', /Risk model v2/);
+
+  await page.getByRole('button', { name: 'high risk' }).click();
+  await expect(row).toBeVisible();
+});
+
 test('deep results present bounded relationship evidence without ownership or certificate claims', async ({ page }) => {
   await page.evaluate(() => {
     const profile = {

@@ -150,23 +150,23 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('stamps the explicit model version and gives ordinary states a low base score', () => {
-    assert.equal(scoring.RISK_MODEL_VERSION, 1);
-    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 1);
+    assert.equal(scoring.RISK_MODEL_VERSION, 2);
+    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 2);
     assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 10);
     assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 5);
     assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 8);
   });
 
-  test('a favicon match contributes a large, dedicated bonus', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true }), 45);
+  test('a favicon match contributes a bounded contextual factor', () => {
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true }), 28);
   });
 
   test('a perceptual favicon near-match scores slightly below an exact match', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconNearMatch: true }), 38);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconNearMatch: true }), 24);
   });
 
   test('an exact favicon match takes precedence over a near-match (not double-counted)', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true, faviconNearMatch: true }), 45);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true, faviconNearMatch: true }), 28);
   });
 
   test('an active site scores higher risk than a merely parked one', () => {
@@ -193,6 +193,8 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 30 }), 20);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 200 }), 14);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 365 }), 10);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: -1 }), 10);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: Number.NaN }), 10);
   });
 
   test('ordinary active mail-enabled registration evidence stays below danger', () => {
@@ -209,16 +211,67 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.riskTone(score), 'warn');
   });
 
-  test('strong impersonation evidence reaches danger with visible factors', () => {
-    const explained = scoring.explainRiskScore({
+  test('correlated observations stay in one family and receive no corroboration bonus', () => {
+    const brand = scoring.explainRiskScore({
       availability: 'registered',
       faviconMatch: true,
       reusesOfficialAssets: true,
     });
-    assert.equal(explained.score, 75);
+    assert.equal(brand.score, 34);
+    assert.equal(brand.factors.some((factor) => factor.label.includes('Corroborating')), false);
+
+    const credential = scoring.explainRiskScore({
+      availability: 'registered',
+      phishingLanguageMatch: 'verify your account',
+      hasPasswordField: true,
+    });
+    assert.equal(credential.score, 23);
+    assert.equal(credential.factors.some((factor) => factor.label.includes('Corroborating')), false);
+  });
+
+  test('two distinct contextual families receive a visible bounded bonus', () => {
+    const explained = scoring.explainRiskScore({
+      availability: 'registered',
+      mutationTypes: ['dictionary'],
+      faviconMatch: true,
+    });
+    assert.equal(explained.score, 56);
+    assert.deepEqual(explained.factors.find((factor) => factor.label.includes('Corroborating')), {
+      label: 'Corroborating context across 2 distinct evidence families',
+      delta: 10,
+    });
+  });
+
+  test('strong evidence across all three families reaches danger with visible factors', () => {
+    const explained = scoring.explainRiskScore({
+      availability: 'registered',
+      mutationTypes: ['dictionary'],
+      faviconMatch: true,
+      reusesOfficialAssets: true,
+      phishingLanguageMatch: 'verify your account',
+      hasPasswordField: true,
+    });
+    assert.equal(explained.score, 85);
     assert.equal(scoring.riskTone(explained.score), 'danger');
     assert.ok(explained.factors.some((factor) => factor.label.includes('Favicon')));
-    assert.ok(explained.factors.some((factor) => factor.label.includes('assets')));
+    assert.ok(explained.factors.some((factor) => factor.label.includes('asset')));
+    assert.ok(explained.factors.some((factor) => factor.label.includes('3 distinct evidence families')));
+  });
+
+  test('even the strongest single contextual family cannot reach danger with all operational context', () => {
+    const score = scoring.computeRiskScore({
+      availability: 'registered',
+      faviconMatch: true,
+      reusesOfficialAssets: true,
+      activityStatus: 'active',
+      hasMx: true,
+      hasSpf: true,
+      hasDmarc: true,
+      privacyProtected: true,
+      domainAgeDays: 10,
+    });
+    assert.equal(score, 66);
+    assert.equal(scoring.riskTone(score), 'warn');
   });
 
   test('only allowlisted mutation provenance contributes bounded context', () => {
@@ -226,6 +279,22 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['bitsquatting'] }), 22);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['character_omission'] }), 18);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['invented_high_risk'] }), 10);
+  });
+
+  test('malformed truthy values cannot create impersonation or operational factors', () => {
+    const explained = scoring.explainRiskScore({
+      availability: 'registered',
+      faviconMatch: 'true',
+      faviconNearMatch: 1,
+      reusesOfficialAssets: {},
+      phishingLanguageMatch: true,
+      hasPasswordField: 'yes',
+      hasMx: 'yes',
+      hasSpf: 1,
+      hasDmarc: {},
+    });
+    assert.equal(explained.score, 10);
+    assert.deepEqual(explained.factors, [{ label: 'Base score for "registered"', delta: 10 }]);
   });
 
   test('risk model versions are strictly bounded positive integers', () => {
@@ -238,6 +307,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   test('the total is clamped to 100', () => {
     const score = scoring.computeRiskScore({
       availability: 'registered',
+      mutationTypes: ['dictionary'],
       faviconMatch: true,
       reusesOfficialAssets: true,
       phishingLanguageMatch: 'verify your account',
