@@ -93,11 +93,13 @@ audit. Frontend controls are advisory reflections of this report, not the
 enforcement boundary.
 
 The optional version-1 `controls.concurrency` object reports the active
-in-memory operation classes and their per-session and per-runtime-instance
-ceilings. Its `distributed` field is `false`. `scope: process` describes one
-Express process; `scope: serverless_instance` describes one warm function
-instance and must not be interpreted as deployment-wide or provider billing
-state. Older version-1 reports without `controls` remain valid.
+operation classes and their per-session and per-runtime ceilings. The default
+uses `mode: in_memory`, `distributed: false`, and a `process` or
+`serverless_instance` scope. An explicitly configured shared REST provider
+uses `mode: redis_rest`, `distributed: true`, and `scope: deployment`.
+Incomplete or invalid shared-provider configuration uses `mode: unavailable`,
+never silently falls back to local enforcement, and causes network-heavy work
+to fail closed. Older version-1 reports without `controls` remain valid.
 
 Consumers must reject malformed or unsupported future reports conservatively;
 the browser labels capability status unavailable without hiding otherwise
@@ -105,11 +107,13 @@ usable local workflows. Runtime limitations distinguish process-local Express
 state from per-instance serverless state and must not be presented as globally
 enforced usage accounting.
 
-When local concurrency is exhausted, network endpoints return HTTP `429`, a
+When concurrency is exhausted, network endpoints return HTTP `429`, a
 short `Retry-After` value, and `errorCode: NETWORK_CONCURRENCY_LIMITED` with a
-bounded operation class and `session` or `runtime` scope. This is a temporary
-local circuit response, not an upstream registry result and not evidence about
-the queried domain.
+bounded operation class and `session` or `runtime` scope. An unavailable
+configured provider instead returns HTTP `503`,
+`errorCode: NETWORK_BUDGET_UNAVAILABLE`, and `provider` scope. These are
+temporary application-control responses, not upstream registry results or
+evidence about the queried domain.
 
 ## Diagnostics version 3
 

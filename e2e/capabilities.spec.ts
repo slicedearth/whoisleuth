@@ -32,6 +32,42 @@ test('capability normalization bounds concurrency controls and accepts older ver
   expect(bounded?.controls?.concurrency.classes).toEqual([
     { id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 },
   ]);
+
+  const distributed = normalizeCapabilities({
+    version: 1,
+    runtime: 'netlify',
+    authoritative: true,
+    features: [{ id: 'distributed_budgets', status: 'supported', execution: 'hosted', scanModes: [] }],
+    controls: {
+      concurrency: {
+        mode: 'redis_rest',
+        scope: 'deployment',
+        distributed: true,
+        classes: [{ id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 }],
+      },
+    },
+  });
+  expect(distributed?.controls?.concurrency).toEqual({
+    mode: 'redis_rest',
+    scope: 'deployment',
+    distributed: true,
+    classes: [{ id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 }],
+  });
+
+  expect(normalizeCapabilities({
+    version: 1,
+    runtime: 'netlify',
+    authoritative: true,
+    features: [],
+    controls: {
+      concurrency: {
+        mode: 'in_memory',
+        scope: 'deployment',
+        distributed: true,
+        classes: [{ id: 'registry_light', sessionLimit: 12, runtimeLimit: 36 }],
+      },
+    },
+  })?.controls).toBeNull();
 });
 
 test('malformed or unsupported capability reports degrade conservatively', async ({ page }) => {

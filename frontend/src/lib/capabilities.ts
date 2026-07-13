@@ -8,9 +8,9 @@ export type Capability = {
 };
 export type ConcurrencyClass = { id: string; sessionLimit: number; runtimeLimit: number };
 export type ConcurrencyControls = {
-  mode: 'in_memory';
+  mode: 'in_memory' | 'redis_rest' | 'unavailable';
   scope: string;
-  distributed: false;
+  distributed: boolean;
   classes: ConcurrencyClass[];
 };
 export type CapabilityReport = {
@@ -39,7 +39,10 @@ const boundedLimit = (value: unknown) => typeof value === 'number'
 function normalizeConcurrency(raw: unknown): ConcurrencyControls | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const value = raw as Record<string, unknown>;
-  if (value.mode !== 'in_memory' || value.distributed !== false || !Array.isArray(value.classes)) return null;
+  if (!['in_memory', 'redis_rest', 'unavailable'].includes(String(value.mode))
+    || typeof value.distributed !== 'boolean'
+    || (value.mode === 'redis_rest') !== value.distributed
+    || !Array.isArray(value.classes)) return null;
 
   const classes: ConcurrencyClass[] = [];
   const seen = new Set<string>();
@@ -60,9 +63,9 @@ function normalizeConcurrency(raw: unknown): ConcurrencyControls | null {
   }
   return classes.length
     ? {
-        mode: 'in_memory',
+        mode: value.mode as ConcurrencyControls['mode'],
         scope: bounded(value.scope, 40) || 'runtime_instance',
-        distributed: false,
+        distributed: value.distributed,
         classes,
       }
     : null;

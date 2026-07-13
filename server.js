@@ -25,6 +25,7 @@ const { checkRateLimit, getClientIp, getForwardedProtocol, LOGIN_RATE_LIMIT, API
 const {
   defaultOperationBudget,
   operationBudgetError,
+  operationBudgetHttpStatus,
   runWithOperationBudget,
   operationClassFor,
 } = require('./lib/operation-budget');
@@ -116,7 +117,7 @@ async function withExpressOperationBudget(req, res, operationClass, callback) {
   const outcome = await runWithOperationBudget(defaultOperationBudget, operationClass, sessionKey, callback);
   if (!outcome.allowed) {
     res.setHeader('Retry-After', String(outcome.denial.retryAfterSeconds));
-    return res.status(429).json(operationBudgetError(outcome.denial));
+    return res.status(operationBudgetHttpStatus(outcome.denial)).json(operationBudgetError(outcome.denial));
   }
   return outcome.value;
 }

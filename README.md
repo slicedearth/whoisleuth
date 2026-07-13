@@ -294,9 +294,8 @@ compact-storage boundary, and lookup evidence schema are documented in the
 - Authenticated deployments expose a provider-neutral `/api/capabilities`
   report so browser, CLI, and worker consumers can distinguish hosted support,
   local-only analysis, disabled features, and unavailable integrations. The
-  report is server-authoritative, identifies runtime-local enforcement limits,
-  reports the active in-memory concurrency classes, and does not claim
-  unimplemented scheduled or distributed capabilities.
+  report is server-authoritative, identifies the active concurrency provider
+  and scope, and does not claim unimplemented scheduled capabilities.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
 
@@ -646,18 +645,35 @@ An exhausted lease returns `429`, `Retry-After: 1`, and the stable
 the request succeeds or fails. Session keys are irreversible hashes of valid
 session tokens; bearer tokens are not retained in the budget maps.
 
-Express and Netlify now enter these leases through the same provider-neutral
+Express and Netlify enter these leases through the same provider-neutral
 runner. Its contract uses one atomic acquire decision, an explicit lease
 release, and bounded status reporting; acquisition and release may be
-synchronous or asynchronous. The default provider remains entirely in memory,
-so this abstraction alone does not enable distributed counters or change any
-deployment limit.
+synchronous or asynchronous. The default provider remains entirely in memory.
 
-These concurrency ceilings have the same local-only boundary as the fixed
-window limiter. Express enforces them across one process. Netlify enforces
-them only inside one warm function instance, with state reset on cold starts;
-they are neither distributed provider accounting nor a guarantee that another
-instance cannot start equivalent work. Direct function paths still perform
+Deployments can optionally set both `UPSTASH_REDIS_REST_URL` and
+`UPSTASH_REDIS_REST_TOKEN` to enforce the same ceilings across runtime
+instances through the service's HTTPS REST API. No additional package is
+required. `WHOISLEUTH_BUDGET_NAMESPACE` can provide a deployment-specific
+1-64 character key prefix when one database is shared; otherwise a versioned
+default is used. The write-capable REST token is a server secret and must never
+be exposed to browser code, committed, or included in a public build.
+
+Distributed acquisition uses one atomic server-side script over expiring
+sorted-set leases and release uses one further command. Leases contain only an
+operation class, opaque random identifier, expiry, and one-way hash of the
+existing session fingerprint—never query targets, evidence, responses, or the
+session token. A five-minute lease expiry recovers capacity after interrupted
+serverless invocations without allowing a late release to decrement a newer
+lease. Provider outages fail closed with HTTP `503` and the stable
+`NETWORK_BUDGET_UNAVAILABLE` code rather than silently reverting to per-instance
+limits. This distributed option covers concurrent operation leases only;
+fixed-window request limits and durable daily/monthly accounting remain
+separate controls.
+
+Without the optional provider, these concurrency ceilings have the same
+local-only boundary as the fixed-window limiter. Express enforces them across
+one process. Netlify enforces them only inside one warm function instance,
+with state reset on cold starts. Direct function paths still perform
 function-level authentication, rate limiting, and concurrency checks even
 when they bypass canonical-path edge rules.
 

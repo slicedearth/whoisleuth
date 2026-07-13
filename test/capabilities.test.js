@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { capabilityReport, isCapabilityStatus } = require('../lib/capabilities');
+const { OPERATION_CLASSES } = require('../lib/operation-budget');
 const { createSessionToken, buildSessionCookie } = require('../lib/auth');
 const { handler } = require('../netlify/functions/capabilities');
 
@@ -27,6 +28,33 @@ test('unknown runtimes fail to a bounded generic report without changing feature
   assert.equal(report.runtime, 'unknown');
   assert.equal(report.features.length, capabilityReport('express').features.length);
   assert.match(report.limitations[0], /runtime instance/i);
+});
+
+test('capability reports distinguish configured distributed and unavailable budgets', () => {
+  const distributed = {
+    mode: 'redis_rest',
+    distributed: true,
+    limits: { [OPERATION_CLASSES.REGISTRY_LIGHT]: { session: 2, runtime: 3 } },
+    acquire() {},
+    status() {},
+  };
+  const enabled = capabilityReport('netlify', {}, distributed);
+  assert.equal(enabled.controls.concurrency.mode, 'redis_rest');
+  assert.equal(enabled.controls.concurrency.scope, 'deployment');
+  assert.equal(enabled.controls.concurrency.distributed, true);
+  assert.equal(enabled.features.find((feature) => feature.id === 'distributed_budgets').status, 'supported');
+  assert.match(enabled.limitations[0], /deployment-wide distributed leases/i);
+
+  const unavailable = {
+    mode: 'unavailable',
+    distributed: false,
+    limits: { [OPERATION_CLASSES.REGISTRY_LIGHT]: { session: 2, runtime: 3 } },
+    acquire() {},
+    status() {},
+  };
+  const disabled = capabilityReport('netlify', {}, unavailable);
+  assert.equal(disabled.features.find((feature) => feature.id === 'distributed_budgets').status, 'unavailable');
+  assert.match(disabled.limitations[0], /fail closed/i);
 });
 
 test('emergency switches are reflected by the server-authoritative feature report', () => {

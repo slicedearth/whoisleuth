@@ -116,6 +116,14 @@ at all.
 - **Outreach / abuse-report drafts**: build a `mailto:` link and copy
   pre-filled text to your clipboard. Nothing is sent automatically; a
   human reviews and sends each one from their own mail client.
+- **Optional distributed operation limits**: when the operator configures the
+  shared REST counter provider, it receives only bounded operation classes,
+  opaque random lease identifiers, expiry timestamps, and a one-way hash of
+  the already-opaque session fingerprint. It does not receive lookup targets,
+  registry data, evidence, responses, notes, browser-local records, or session
+  tokens. Leases expire after five minutes and empty keys are removed on
+  release. Deployments without this optional configuration keep concurrency
+  state in server memory only.
 
 The signed session cookie is stateless and valid for up to 30 days. Signing
 out removes it from that browser but does not revoke a captured copy; the
@@ -145,6 +153,10 @@ above for the latter. Direct any such request to: `[operator contact]`.
 - Netlify: request handling runs on Netlify's infrastructure. Check
   Netlify's own Data Processing Addendum if you're operating this beyond a
   personal/internal scale.
+- Upstash: only when the operator explicitly configures distributed operation
+  limits, the minimal short-lived lease metadata described above is processed
+  through its HTTPS REST service. Operators should review its terms, select an
+  appropriate region and retention posture, and keep the write token secret.
 - Upstream RDAP/WHOIS servers, public DNS, `crt.sh` (Certificate Transparency
   search), a deep-scanned domain's TLS endpoint, and an audited domain's own
   MTA-STS policy host are queried live,

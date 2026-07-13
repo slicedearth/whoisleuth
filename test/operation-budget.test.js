@@ -93,6 +93,12 @@ describe('in-memory operation leases', () => {
     assert.throws(() => budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, ''), /session key/);
   });
 
+  test('rejects malformed limit definitions before creating a provider', () => {
+    assert.throws(() => createOperationBudget({}), /At least one operation limit/);
+    assert.throws(() => createOperationBudget({ unsafe: { session: 0, runtime: 2 } }), /Invalid operation limits/);
+    assert.throws(() => createOperationBudget({ unsafe: { session: 3, runtime: 2 } }), /Invalid operation limits/);
+  });
+
   test('returns a stable machine-readable overload response', () => {
     const payload = operationBudgetError({
       operationClass: OPERATION_CLASSES.REGISTRY_DEEP,
