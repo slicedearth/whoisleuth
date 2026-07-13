@@ -343,8 +343,14 @@ compact-storage boundary, and lookup evidence schema are documented in the
   are contextual review indicators, never a maliciousness verdict, and do not
   change the Risk score. The typosquat generator uses the same curated mapping
   so generated confusable candidates and result explanations stay consistent.
-  Lookup evidence schema version 11 retains the analysis supplied to the
-  export; Bulk CSV exports include the compact IDN fields.
+  Mapping `tr39-17.0-curated-ascii-v2` adds a reviewed IDNA-distinct
+  candidate-generation subset from Unicode 17 while retaining a maximum of
+  eight generated substitutions per ASCII character. Mapping changes are
+  explicitly versioned because upstream confusable data can evolve; the
+  curated subset is not an exhaustive registry-variant or visual-similarity
+  database. Lookup evidence
+  schema version 11 retains the analysis supplied to the export; Bulk CSV
+  exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
   passed or needs review/action, and provides a concrete next step. DKIM is

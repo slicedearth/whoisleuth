@@ -81,7 +81,7 @@ describe('versioned visual skeleton comparison', () => {
   test('matches a mixed-script lookalike to an official ASCII domain', () => {
     const result = idn.analyzeDomainIdn(domainToASCII('раypal.com'), ['paypal.com']);
     assert.equal(result.version, 1);
-    assert.equal(result.mappingVersion, 'tr39-curated-ascii-v1');
+    assert.equal(result.mappingVersion, 'tr39-17.0-curated-ascii-v2');
     assert.equal(result.skeleton, 'paypal.com');
     assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['paypal.com']);
     assert.ok(result.findings.some((finding) => finding.id === 'official_skeleton_match'));
@@ -103,6 +103,19 @@ describe('versioned visual skeleton comparison', () => {
     assert.equal(idn.unicodeSkeleton('ｐａｙｐａｌ.com'), 'paypal.com');
   });
 
+  test('matches a newly curated Coptic lookalike with explicit script provenance', () => {
+    const ascii = domainToASCII('ⲥope.example');
+    const result = idn.analyzeDomainIdn(ascii, ['cope.example']);
+    assert.equal(result.mappingVersion, 'tr39-17.0-curated-ascii-v2');
+    assert.equal(result.skeleton, 'cope.example');
+    assert.deepEqual(result.labels[0].scripts, ['Coptic', 'Latin']);
+    assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['cope.example']);
+  });
+
+  test('maps selected Unicode 17 additions without broad compatibility folding', () => {
+    assert.equal(idn.unicodeSkeleton('ᴄꭇᴏꭎᴠᴡʏ'), 'crouvwy');
+  });
+
   test('bounds reference processing and reports truncation', () => {
     const references = Array.from({ length: 60 }, (_, index) => `unrelated-${index}.example`);
     const result = idn.analyzeDomainIdn(domainToASCII('café.example'), references);
@@ -121,7 +134,20 @@ describe('versioned visual skeleton comparison', () => {
 describe('shared candidate-generation mapping', () => {
   test('provides a bounded deterministic set for supported ASCII characters', () => {
     assert.deepEqual(idn.confusableCharactersForAscii('A'), ['а', 'α', 'ɑ']);
+    assert.deepEqual(idn.confusableCharactersForAscii('c'), ['с', 'ᴄ', 'ⲥ', '𐐽']);
+    assert.deepEqual(idn.confusableCharactersForAscii('i'), ['і', 'ι', 'ı', 'ɪ', 'ɩ', 'ⲓ', 'ꙇ']);
     assert.deepEqual(idn.confusableCharactersForAscii('?'), []);
-    assert.ok(idn.confusableCharactersForAscii('o').length <= 8);
+    for (const character of 'abcdefghijklmnopqrstuvwxyz') {
+      const substitutions = idn.confusableCharactersForAscii(character);
+      assert.ok(substitutions.length <= 8, character);
+      assert.equal(new Set(substitutions).size, substitutions.length, character);
+      for (const substitution of substitutions) {
+        assert.ok(domainToASCII(`${substitution}.example`).startsWith('xn--'), `${character}: ${substitution}`);
+        assert.equal(idn.unicodeSkeleton(substitution), character, `${character}: ${substitution}`);
+      }
+    }
+    const mutableCopy = idn.confusableCharactersForAscii('c');
+    mutableCopy.push('x');
+    assert.deepEqual(idn.confusableCharactersForAscii('c'), ['с', 'ᴄ', 'ⲥ', '𐐽']);
   });
 });

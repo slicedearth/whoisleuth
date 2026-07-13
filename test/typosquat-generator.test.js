@@ -1,5 +1,6 @@
 const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
+const { domainToASCII } = require('node:url');
 
 let generator;
 before(async () => {
@@ -87,6 +88,18 @@ describe('provenance-aware typosquat generation', () => {
         assert.match(label, /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/);
       }
     }
+  });
+
+  test('generates newly curated IDNA-safe confusables with unchanged provenance', () => {
+    const expected = domainToASCII('sⲥope.com');
+    const result = generator.generateTyposquatCandidateSet('scope.com', [], { preset: 'impersonation' });
+    assert.ok(expected.startsWith('xn--'));
+    assert.deepEqual(result.candidates.find((candidate) => candidate.domain === expected), {
+      domain: expected,
+      source: 'scope.com',
+      tld: 'com',
+      mutationTypes: ['unicode_homoglyph'],
+    });
   });
 
   test('caps unique candidates and reports the limiting boundary', () => {

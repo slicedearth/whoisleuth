@@ -6,7 +6,7 @@
 // visually collapse to common ASCII domain-label characters.
 
 export const IDN_ANALYSIS_VERSION = 1;
-export const CONFUSABLE_MAPPING_VERSION = 'tr39-curated-ascii-v1';
+export const CONFUSABLE_MAPPING_VERSION = 'tr39-17.0-curated-ascii-v2';
 
 const MAX_DOMAIN_LENGTH = 253;
 const MAX_LABELS = 20;
@@ -17,35 +17,71 @@ const MAX_FINDINGS = 20;
 const MAX_GENERATION_CONFUSABLES = 8;
 
 // NFKD handles full-width and mathematical presentation forms before this
-// table is consulted. Keep only defensible single-character visual mappings;
-// broader language-aware similarity belongs in a later, separately versioned
-// mapping rather than silently changing this contract.
+// table is consulted. Version 2 broadens the original visual set with a small
+// reviewed subset of single-code-point mappings from Unicode 17 UTS #39 data.
+// Candidate-generation additions must produce a distinct ACE label through
+// the platform IDNA conversion, and each ASCII source remains capped below.
 const CONFUSABLE_GROUPS = Object.freeze({
   a: 'аαɑ',
-  b: 'ЬƄ',
-  c: 'сϲⅽ',
-  d: 'ԁⅾ',
-  e: 'еεҽ',
-  f: 'ϝ',
+  b: 'ьƄ',
+  c: 'сϲⅽᴄⲥ𐐽',
+  d: 'ԁⅾꓒ',
+  e: 'еεҽꬲ',
+  f: 'ϝꞙƒ',
   g: 'ɡ',
   h: 'һհ',
-  i: 'іιı',
+  i: 'іιıɪɩⲓꙇ',
   j: 'јϳ',
   k: 'κк',
-  l: 'ӏⅼ',
+  l: 'ӏⅼǀꓲ',
   m: 'мⅿ',
-  n: 'ո',
-  o: 'оοօ',
-  p: 'рρ',
-  q: 'ԛ',
-  r: 'г',
-  s: 'ѕꜱ',
+  n: 'ոռ',
+  o: 'оοօᴏⲟ',
+  p: 'рρϱⲣ',
+  q: 'ԛգզ',
+  r: 'гꭇ',
+  s: 'ѕꜱƽ',
   t: 'тτ',
-  u: 'υս',
-  v: 'ѵν',
-  w: 'ԝա',
+  u: 'υսᴜꭎ',
+  v: 'ѵνᴠ',
+  w: 'ԝաᴡш',
   x: 'хχ',
-  y: 'уү',
+  y: 'уүʏγⲩ',
+  z: 'ᴢ',
+});
+
+// Generation is intentionally narrower than skeleton analysis. Compatibility
+// forms that native IDNA processing folds back to plain ASCII remain useful
+// for comparison but are omitted here because they cannot produce a distinct
+// registrable label. Tests verify every checked-in character produces an ACE
+// label whose visual skeleton returns to the source, and the per-source cap
+// limits any future additions.
+const GENERATION_CONFUSABLE_GROUPS = Object.freeze({
+  a: 'аαɑ',
+  b: 'ь',
+  c: 'сᴄⲥ𐐽',
+  d: 'ԁꓒ',
+  e: 'еεҽꬲ',
+  f: 'ϝꞙƒ',
+  g: 'ɡ',
+  h: 'һհ',
+  i: 'іιıɪɩⲓꙇ',
+  j: 'јϳ',
+  k: 'κк',
+  l: 'ӏǀꓲ',
+  m: 'м',
+  n: 'ոռ',
+  o: 'оοօᴏⲟ',
+  p: 'рρⲣ',
+  q: 'ԛգզ',
+  r: 'гꭇ',
+  s: 'ѕꜱƽ',
+  t: 'тτ',
+  u: 'υսᴜꭎ',
+  v: 'ѵνᴠ',
+  w: 'ԝաᴡш',
+  x: 'хχ',
+  y: 'уүʏγⲩ',
   z: 'ᴢ',
 });
 
@@ -60,6 +96,9 @@ const SCRIPT_TESTS = Object.freeze([
   ['Cyrillic', /\p{Script=Cyrillic}/u],
   ['Greek', /\p{Script=Greek}/u],
   ['Armenian', /\p{Script=Armenian}/u],
+  ['Coptic', /\p{Script=Coptic}/u],
+  ['Deseret', /\p{Script=Deseret}/u],
+  ['Lisu', /\p{Script=Lisu}/u],
   ['Hebrew', /\p{Script=Hebrew}/u],
   ['Arabic', /\p{Script=Arabic}/u],
   ['Devanagari', /\p{Script=Devanagari}/u],
@@ -221,7 +260,8 @@ export function unicodeSkeleton(raw) {
 }
 
 export function confusableCharactersForAscii(character) {
-  return [...(CONFUSABLE_GROUPS[String(character || '').toLowerCase()] || '')].slice(0, MAX_GENERATION_CONFUSABLES);
+  const source = String(character || '').toLowerCase();
+  return [...(GENERATION_CONFUSABLE_GROUPS[source] || '')].slice(0, MAX_GENERATION_CONFUSABLES);
 }
 
 function analyzeLabels(unicodeDomain) {
