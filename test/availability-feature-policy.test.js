@@ -9,10 +9,12 @@ test('disabled DNS and website probes produce skipped unknown evidence without n
   let delegationCalls = 0;
   let homepageCalls = 0;
   let faviconCalls = 0;
+  let tlsCalls = 0;
   const result = await checkDomainAvailability('example.com', {
     featurePolicy: networkFeaturePolicy({
       WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1',
       WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1',
+      WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1',
     }),
     rdapRecord: {
       rdapServer: 'https://rdap.example/domain/example.com',
@@ -33,12 +35,14 @@ test('disabled DNS and website probes produce skipped unknown evidence without n
     collectDnsIntelligence: async () => { dnsCalls += 1; throw new Error('must not run'); },
     fetchHomepage: async () => { homepageCalls += 1; throw new Error('must not run'); },
     fetchFaviconHash: async () => { faviconCalls += 1; throw new Error('must not run'); },
+    collectTlsIntelligence: async () => { tlsCalls += 1; throw new Error('must not run'); },
   });
 
   assert.equal(dnsCalls, 0);
   assert.equal(delegationCalls, 0);
   assert.equal(homepageCalls, 0);
   assert.equal(faviconCalls, 0);
+  assert.equal(tlsCalls, 0);
   assert.equal(result.state, 'registered');
   assert.equal(result.activityStatus, 'unknown');
   assert.equal(result.websiteProbeStatus, 'skipped');
@@ -47,6 +51,8 @@ test('disabled DNS and website probes produce skipped unknown evidence without n
   assert.match(result.websiteProbeDetail, /disabled by deployment policy/i);
   assert.equal(result.dns.status, 'skipped');
   assert.equal(result.dns.complete, false);
+  assert.equal(result.tls.status, 'skipped');
+  assert.equal(result.tls.complete, false);
   assert.equal(result.hasMx, null);
   assert.equal(result.hasSpf, null);
   assert.equal(result.hasDmarc, null);
@@ -82,9 +88,47 @@ test('a disabled registry source prevents otherwise successful deep evidence bei
     }),
     fetchHomepage: async () => ({ text: '<title>Example</title>', status: 'active', detail: 'Homepage responded.' }),
     fetchFaviconHash: async () => null,
+    collectTlsIntelligence: async () => ({
+      version: 1,
+      status: 'success',
+      source: 'tls',
+      complete: true,
+      certificate: { fingerprintSha256: 'a'.repeat(64) },
+    }),
   });
 
   assert.equal(result.state, 'registered');
   assert.equal(result.websiteProbeStatus, 'active');
   assert.equal(result.deepScanComplete, false);
+  assert.equal(result.tls.status, 'success');
+});
+
+test('enabled TLS intelligence runs once in parallel and remains explicit in deep evidence', async () => {
+  let tlsCalls = 0;
+  const result = await checkDomainAvailability('example.com', {
+    featurePolicy: networkFeaturePolicy({
+      WHOISLEUTH_DISABLE_WHOIS: '1',
+      WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1',
+      WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1',
+    }),
+    rdapRecord: {
+      upstreamStatus: 200,
+      parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
+    },
+    collectTlsIntelligence: async (domain) => {
+      tlsCalls += 1;
+      assert.equal(domain, 'example.com');
+      return {
+        version: 1,
+        status: 'success',
+        source: 'tls',
+        complete: true,
+        certificate: { fingerprintSha256: 'b'.repeat(64) },
+      };
+    },
+  });
+
+  assert.equal(tlsCalls, 1);
+  assert.equal(result.tls.status, 'success');
+  assert.equal(result.tls.certificate.fingerprintSha256, 'b'.repeat(64));
 });

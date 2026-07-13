@@ -43,6 +43,15 @@ at all.
   transport, redirect count/flags, MIME type, and presence-only security-header
   tokens. Raw header values, attempt errors, and redirect inventories are not
   copied into browser-local investigation stores.
+- **TLS and certificate intelligence**: a requested deep domain scan resolves
+  the domain through the public-address guard and opens one direct TLS
+  connection to one validated address while retaining the domain as SNI.
+  Lookup and its deliberate evidence export can include the connected public
+  address, negotiated protocol/cipher/ALPN, runtime trust and hostname outcome,
+  bounded public certificate identity/validity/SAN/public-key metadata, and a
+  capped certificate-chain summary. Certificate bytes and TLS session material
+  are not retained. The richer profile is not copied into browser-local cases,
+  watchlists, profiles, or Certificate Transparency history.
 - **Page identity**: a requested deep Lookup can derive bounded metadata from
   the homepage HTML already captured by the HTTP probe. This can include the
   document language, canonical and meta-refresh targets, selected Open Graph
@@ -134,13 +143,15 @@ above for the latter. Direct any such request to: `[operator contact]`.
   Netlify's own Data Processing Addendum if you're operating this beyond a
   personal/internal scale.
 - Upstream RDAP/WHOIS servers, public DNS, `crt.sh` (Certificate Transparency
-  search), and an audited domain's own MTA-STS policy host are queried live,
+  search), a deep-scanned domain's TLS endpoint, and an audited domain's own
+  MTA-STS policy host are queried live,
   on demand - they're the data sources, not sub-processors this tool shares
   stored data with.
 
 ## Security measures
 
 Shared-password session auth (`lib/auth.js`), per-IP rate limiting
-(`lib/rate-limit.js`), and SSRF-guarded outbound fetches (`lib/safe-fetch.js`)
+(`lib/rate-limit.js`), SSRF-guarded outbound fetches (`lib/safe-fetch.js`), and
+public-address-pinned one-connection TLS collection (`lib/tls-intelligence.js`)
 are the technical measures in place. See [LICENSE](LICENSE) - provided as is,
 with no warranty.

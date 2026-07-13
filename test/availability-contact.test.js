@@ -44,6 +44,7 @@ test('does not promote an administrative organization to registrar', async () =>
     featurePolicy: networkFeaturePolicy({
       WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1',
       WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1',
+      WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1',
     }),
     rdapRecord: null,
     whoisChain: [{

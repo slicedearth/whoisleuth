@@ -43,7 +43,7 @@
   let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
-  const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe']));
+  const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
   const caseByDomain=$derived(new Map(cases.map(record=>[record.domain,record])));
   const mutationLabels=MUTATION_LABELS as Record<string,string>;
   const mutationOptions=$derived([...new Set(results.flatMap(row=>row.mutationTypes))].sort((a,b)=>(mutationLabels[a]||a).localeCompare(mutationLabels[b]||b)));

@@ -1,7 +1,7 @@
 import { compareRegistrySources } from './registry-comparison.js';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 10;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 11;
 
 function cloneJson(value) {
   if (value === undefined) return null;

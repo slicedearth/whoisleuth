@@ -445,6 +445,71 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expectNoHorizontalOverflow(page);
 });
 
+test('TLS intelligence presents one-connection certificate evidence without narrow-width overflow', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'tls-evidence.test', type: 'domain', registrableDomain: 'tls-evidence.test',
+      availability: {
+        state: 'registered', confidence: 'high', domain: 'tls-evidence.test',
+        tls: {
+          version: 1, profileVersion: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
+          limitations: ['This is a point-in-time TLS handshake to one validated public address.'],
+          connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'tls-evidence.test',
+          protocol: 'TLSv1.3', alpnProtocol: 'h2',
+          cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
+          ephemeralKey: { type: 'ECDH', name: 'X25519', size: 253 },
+          authorization: { authorized: false, error: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' },
+          hostname: { matches: true, error: null }, validity: { status: 'valid' },
+          certificate: {
+            subject: { commonNames: ['tls-evidence.test'], organizations: ['Example service'], organizationalUnits: [], countries: [], localities: [], states: [] },
+            issuer: { commonNames: ['Example issuing CA'], organizations: ['Example CA'], organizationalUnits: [], countries: [], localities: [], states: [] },
+            serialNumber: 'a1b2c3', validFrom: '2026-07-01T00:00:00.000Z', validTo: '2026-08-01T00:00:00.000Z',
+            fingerprintSha256: 'a'.repeat(64), isCertificateAuthority: false,
+            subjectAltNames: { dnsNames: ['*.example.test', 'tls-evidence.test'], ipAddresses: [], truncated: false },
+            publicKey: { type: 'rsa', bits: 2048, curve: null, fingerprintSha256: 'b'.repeat(64) },
+          },
+          chain: [{
+            subject: { commonNames: ['tls-evidence.test'], organizations: ['Example service'] },
+            issuer: { commonNames: ['Example issuing CA'], organizations: ['Example CA'] },
+            serialNumber: 'a1b2c3', validFrom: '2026-07-01T00:00:00.000Z', validTo: '2026-08-01T00:00:00.000Z',
+            fingerprintSha256: 'a'.repeat(64), isCertificateAuthority: false,
+          }],
+          chainTruncated: false,
+          findings: [
+            { id: 'certificate_unauthorized', tone: 'warning', label: 'Certificate not authorized', detail: 'The runtime trust store did not authorize the observed chain.' },
+            { id: 'wildcard_certificate', tone: 'neutral', label: 'Wildcard certificate', detail: 'Wildcard use is common.' },
+          ],
+        },
+      },
+      rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+    }),
+  }));
+
+  await page.locator('#query').fill('tls-evidence.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const card = page.locator('.tls-card');
+  await expect(card.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(card.getByText('93.184.216.34', { exact: true })).toBeVisible();
+  await expect(card.getByText('TLSv1.3', { exact: true })).toBeVisible();
+  await expect(card.getByText('Not authorized', { exact: true })).toBeVisible();
+  await expect(card.getByText('Certificate not authorized', { exact: true })).toBeVisible();
+  const leafCertificate = card.locator('.tls-detail').nth(0);
+  await leafCertificate.locator('summary').click();
+  await expect(leafCertificate.getByText('a'.repeat(64), { exact: true })).toBeVisible();
+  await card.locator('.tls-detail').nth(1).locator('summary').click();
+  await expect(card.getByText('*.example.test', { exact: true })).toBeVisible();
+  await card.locator('.tls-detail').last().locator('summary').click();
+  await expect(card.getByText('UNABLE_TO_VERIFY_LEAF_SIGNATURE', { exact: true })).toBeVisible();
+  await expect(card.getByText(/one connection to one validated public address/i)).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('IP results use network-specific RDAP labels instead of domain fields', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

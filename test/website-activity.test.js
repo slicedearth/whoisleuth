@@ -112,7 +112,7 @@ describe('website activity classification', () => {
 
   test('a sale landing redirect remains usable when the terminal page cannot be inspected', async () => {
     const result = await checkDomainAvailability('example.test', {
-      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1', WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1' }),
       rdapRecord: {
         upstreamStatus: 200,
         parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
@@ -137,7 +137,7 @@ describe('website activity classification', () => {
   test('binds page identity to the homepage HTTP observation without another request', async () => {
     let homepageCalls = 0;
     const result = await checkDomainAvailability('example.test', {
-      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1', WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1' }),
       rdapRecord: {
         upstreamStatus: 200,
         parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
@@ -174,7 +174,7 @@ describe('website activity classification', () => {
 
   test('does not describe an explicitly non-HTML response as page identity evidence', async () => {
     const result = await checkDomainAvailability('example.test', {
-      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1', WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1' }),
       rdapRecord: {
         upstreamStatus: 200,
         parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },

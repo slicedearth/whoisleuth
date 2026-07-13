@@ -146,6 +146,7 @@ redeploying the frontend. Set any switch to `1`, `true`, `yes`, or `on`:
 | `WHOISLEUTH_DISABLE_AVAILABILITY` | Blocks direct availability and omits availability analysis inside unified Lookup. |
 | `WHOISLEUTH_DISABLE_DNS_INTELLIGENCE` | Stops evidence/delegation DNS queries and also disables the DNS-dependent posture audit. Transport DNS needed to reach an otherwise-enabled RDAP, WHOIS, or website endpoint is not evidence collection and remains available. |
 | `WHOISLEUTH_DISABLE_WEBSITE_PROBE` | Stops homepage and favicon requests while retaining registry analysis. |
+| `WHOISLEUTH_DISABLE_TLS_INTELLIGENCE` | Stops the one-connection TLS/certificate profile while retaining other deep evidence. |
 | `WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY` | Blocks Certificate Transparency search. |
 | `WHOISLEUTH_DISABLE_DOMAIN_POSTURE` | Blocks owned-domain posture audits. |
 
@@ -158,7 +159,7 @@ the report for clarity, but hiding or disabling a control is never the security
 boundary. Existing local candidate generation, cases, watchlists, profiles,
 exports, and saved evidence remain usable.
 
-When RDAP, WHOIS, DNS intelligence, or website probing is disabled, a requested
+When RDAP, WHOIS, DNS intelligence, website probing, or TLS intelligence is disabled, a requested
 deep scan is marked incomplete for persistence purposes. Its enabled evidence
 is still shown, while watchlists and analyst cases retain prior deep-only
 evidence instead of recording skipped sources as removals.
@@ -252,6 +253,13 @@ compact-storage boundary, and lookup evidence schema are documented in the
   displays the evidence; deliberate JSON and Bulk CSV exports retain it. Shared
   infrastructure is relationship context, not proof of ownership or abuse,
   and the richer observation is not copied into watchlists or analyst cases.
+- Deep domain scans also make one bounded TLS connection to one public address
+  selected from an SSRF-guarded DNS resolution. The original domain remains the
+  SNI and hostname-verification target. Lookup retains the connected address,
+  negotiated protocol/cipher/ALPN, runtime authorization outcome, hostname and
+  validity status, bounded leaf subject/issuer/SAN/serial/fingerprint/public-key
+  metadata, and a capped chain summary. This is a point-in-time observation of
+  one edge, not an exhaustive protocol/cipher audit or a maliciousness verdict.
 - IPv4, IPv6, and ASN RDAP results retain their bounded status and lifecycle
   metadata instead of treating those fields as domain-only. Published CIDR0
   prefixes are accepted only for the requested address family and malformed
@@ -260,7 +268,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
-  discrepancy analysis, and availability/web/mail findings. The download is
+  discrepancy analysis, and availability/web/mail/TLS findings. The download is
   created locally and may contain contact data published by the registry.
 - The unified `/api/lookup` response includes a versioned `diagnostics`
   object with independent RDAP, WHOIS, and availability statuses, source
@@ -335,7 +343,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   are contextual review indicators, never a maliciousness verdict, and do not
   change the Risk score. The typosquat generator uses the same curated mapping
   so generated confusable candidates and result explanations stay consistent.
-  Lookup evidence schema version 10 retains the analysis supplied to the
+  Lookup evidence schema version 11 retains the analysis supplied to the
   export; Bulk CSV exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
@@ -418,8 +426,9 @@ compact-storage boundary, and lookup evidence schema are documented in the
   no Risk score, and is not copied into shortlists, watchlists, cases, or
   exports. Shared observations are investigation pivots, not proof of common
   ownership, coordination, intent, or maliciousness. CT hostname and
-  certificate-count provenance is not treated as certificate reuse; that
-  requires a native TLS certificate fingerprint.
+  certificate-count provenance is not treated as certificate reuse. The native
+  TLS profile now supplies a leaf-certificate fingerprint, but scan-local
+  certificate grouping remains a separate bounded follow-up increment.
 - **Bulk triage controls** keep large scans usable: filter by availability
   family, high-risk score, error state, mutation family, and one or more
   evidence signals. Counts update while the scan runs; filters change only
@@ -655,6 +664,7 @@ lib/                    Shared lookup logic, used by both server.js and netlify/
   domain-posture-parsers.js  Pure SPF/DMARC/MTA-STS/TLS-RPT/BIMI/DKIM parsers
   favicon.js            Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
   html-signals.js       Bounded homepage signals and versioned static page-identity evidence
+  tls-intelligence.js   One-connection TLS/certificate profile with public-address pinning
   ct-search.js          Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)

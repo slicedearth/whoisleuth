@@ -96,7 +96,7 @@ test('disabled certificate and website capabilities degrade their own controls o
 });
 
 test('an incomplete deep scan is stored conservatively so skipped probes cannot erase prior evidence', async ({ page }) => {
-  await mockCapabilities(page, ['dns_intelligence', 'website_probe']);
+  await mockCapabilities(page, ['dns_intelligence', 'website_probe', 'tls_intelligence']);
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -109,6 +109,7 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
         activityStatus: 'unknown',
         websiteProbeStatus: 'skipped',
         dns: { status: 'skipped', records: {}, hasMx: null, hasSpf: null, hasDmarc: null },
+        tls: { status: 'skipped', source: 'tls', complete: false, certificate: null },
       },
       diagnostics: {
         version: 3,

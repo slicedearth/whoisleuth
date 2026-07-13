@@ -11,6 +11,7 @@ test('capability report is deterministic, provider-neutral, and honest about exe
   assert.equal(report.authoritative, true);
   assert.ok(report.features.every((feature) => isCapabilityStatus(feature.status)));
   assert.equal(report.features.find((feature) => feature.id === 'lookup').status, 'supported');
+  assert.equal(report.features.find((feature) => feature.id === 'tls_intelligence').status, 'supported');
   assert.equal(report.features.find((feature) => feature.id === 'idn_confusables').status, 'local_only');
   assert.equal(report.features.find((feature) => feature.id === 'scheduled_monitoring').status, 'unavailable');
   assert.equal(report.controls.concurrency.mode, 'in_memory');
@@ -32,13 +33,16 @@ test('emergency switches are reflected by the server-authoritative feature repor
   const report = capabilityReport('express', {
     WHOISLEUTH_DISABLE_RDAP: '1',
     WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: 'true',
+    WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: 'yes',
   });
   const rdap = report.features.find((feature) => feature.id === 'rdap');
   const dns = report.features.find((feature) => feature.id === 'dns_intelligence');
   const posture = report.features.find((feature) => feature.id === 'domain_posture');
+  const tls = report.features.find((feature) => feature.id === 'tls_intelligence');
   assert.equal(rdap.status, 'disabled');
   assert.equal(dns.status, 'disabled');
   assert.equal(posture.status, 'disabled');
+  assert.equal(tls.status, 'disabled');
   assert.match(posture.reason, /DNS intelligence is disabled/i);
   assert.equal(report.features.find((feature) => feature.id === 'lookup').status, 'supported');
 });
