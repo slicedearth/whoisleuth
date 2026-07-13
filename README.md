@@ -327,7 +327,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   are contextual review indicators, never a maliciousness verdict, and do not
   change the Risk score. The typosquat generator uses the same curated mapping
   so generated confusable candidates and result explanations stay consistent.
-  Lookup evidence schema version 9 retains the analysis supplied to the
+  Lookup evidence schema version 10 retains the analysis supplied to the
   export; Bulk CSV exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
@@ -373,6 +373,18 @@ compact-storage boundary, and lookup evidence schema are documented in the
   resulting metadata is contextual relationship/review evidence rather than a
   verdict about site ownership or intent. Data-bearing `srcset` attributes are
   skipped instead of being split incorrectly by the lightweight parser.
+- Page identity also includes an independently versioned fingerprint bundle
+  derived from the same capped response. It reuses the exact captured-body
+  SHA-256 and adds a noise-reduced normalized-HTML SHA-256, visible-text
+  SimHash, static tag-sequence SHA-256, form-structure SHA-256, and bounded
+  external-resource-host and public-tracking-identifier sets with deterministic
+  set digests. Normalization removes comments and script/style/non-executing
+  bodies, reduces routine timestamps and random identifiers, omits nonce,
+  token, value, and tracking-query volatility, and sorts attributes where the
+  lightweight parser can do so safely. Normalized markup and visible text are
+  discarded after hashing. Component caps and source truncation remain
+  explicit; fuzzy SimHash is comparison data, not cryptographic evidence or
+  proof of common ownership.
 - A bulk scan flags **Related infrastructure**: domains in the same scan
   that share an exact nameserver set or favicon hash with each other, with
   a one-click way to load the group back into the query box. Uses signals

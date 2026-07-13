@@ -70,7 +70,7 @@ function fixtureResponse() {
         },
       },
       pageIdentity: {
-        identityVersion: 2,
+        identityVersion: 3,
         version: 1,
         status: 'success',
         observedAt: '2026-07-11T01:02:05.000Z',
@@ -91,6 +91,17 @@ function fixtureResponse() {
         contactDomains: ['example.com'],
         downloads: { count: 0, explicitCount: 0, riskyCount: 0, externalOrigins: [], riskyFileTypes: [], truncated: false },
         trackingIdentifiers: [{ type: 'tag-container', value: 'GTM-AB12' }],
+        fingerprints: {
+          fingerprintVersion: 1,
+          exact: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 22, source: 'captured-response-bytes' },
+          normalizedHtml: { algorithm: 'sha256', value: 'b'.repeat(64), tokenCount: 12, truncated: false },
+          visibleText: { algorithm: 'simhash64-v1', value: 'c'.repeat(16), tokenCount: 4, featureCount: 2, truncated: false },
+          domStructure: { algorithm: 'sha256', value: 'd'.repeat(64), nodeCount: 8, parser: 'static-tag-sequence-v1', truncated: false },
+          formStructure: { algorithm: 'sha256', value: 'e'.repeat(64), formCount: 1, controlCount: 2, truncated: false },
+          resourceHosts: { algorithm: 'set-sha256', value: 'f'.repeat(64), values: ['cdn.example'], truncated: false },
+          identifiers: { algorithm: 'set-sha256', value: '1'.repeat(64), values: [{ type: 'tag-container', value: 'GTM-AB12' }], truncated: false },
+          complete: true, truncated: false, limitations: [],
+        },
       },
     },
     diagnostics: {
@@ -108,7 +119,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 9);
+    assert.equal(result.schemaVersion, 10);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -124,12 +135,16 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.availability.http.response.status, 200);
     assert.equal(result.analysis.availability.http.response.bodyHash.value, 'a'.repeat(64));
     assert.equal(result.analysis.availability.http.response.bodyHash.scope, 'complete-body');
-    assert.equal(result.analysis.availability.pageIdentity.identityVersion, 2);
+    assert.equal(result.analysis.availability.pageIdentity.identityVersion, 3);
     assert.equal(result.analysis.availability.pageIdentity.canonical.url, 'https://example.com/');
     assert.equal(result.analysis.availability.pageIdentity.forms.postCount, 1);
     assert.deepEqual(result.analysis.availability.pageIdentity.resources.externalOrigins, ['https://cdn.example']);
     assert.deepEqual(result.analysis.availability.pageIdentity.contactDomains, ['example.com']);
     assert.equal(result.analysis.availability.pageIdentity.trackingIdentifiers[0].value, 'GTM-AB12');
+    assert.equal(result.analysis.availability.pageIdentity.fingerprints.fingerprintVersion, 1);
+    assert.equal(result.analysis.availability.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
+    assert.equal(result.analysis.availability.pageIdentity.fingerprints.visibleText.value, 'c'.repeat(16));
+    assert.deepEqual(result.analysis.availability.pageIdentity.fingerprints.resourceHosts.values, ['cdn.example']);
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
     assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
@@ -147,7 +162,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 9);
+    assert.equal(result.schemaVersion, 10);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });

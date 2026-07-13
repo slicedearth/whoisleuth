@@ -151,7 +151,10 @@ describe('website activity classification', () => {
           http: {
             observedAt: '2026-07-13T04:05:06.000Z',
             finalUrl: 'https://www.example.test/start/index.html',
-            response: { bodyTruncated: true },
+            response: {
+              bodyTruncated: true,
+              bodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'captured-prefix', bytes: 162 },
+            },
           },
         };
       },
@@ -159,9 +162,11 @@ describe('website activity classification', () => {
     });
 
     assert.equal(homepageCalls, 1);
-    assert.equal(result.pageIdentity.identityVersion, 2);
+    assert.equal(result.pageIdentity.identityVersion, 3);
     assert.equal(result.pageIdentity.observedAt, '2026-07-13T04:05:06.000Z');
     assert.equal(result.pageIdentity.status, 'partial');
+    assert.equal(result.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
+    assert.equal(result.pageIdentity.fingerprints.exact.source, 'captured-response-bytes');
     assert.equal(result.pageIdentity.canonical.url, 'https://www.example.test/account');
     assert.deepEqual(result.pageIdentity.forms.externalActionOrigins, ['https://collect.example']);
     assert.doesNotMatch(JSON.stringify(result.pageIdentity), /token=|key=|secret|submit/);

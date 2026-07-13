@@ -333,7 +333,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           },
         },
         pageIdentity: {
-          identityVersion: 2, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
+          identityVersion: 3, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
           durationMs: null, complete: false, truncated: true,
           limitations: ['Static HTML metadata only; JavaScript-rendered changes are not evaluated.', 'Query strings and fragments were omitted from retained page-identity URLs.'],
           diagnostics: { tagsExamined: 8, discardedUrls: 1, formsObserved: 2 },
@@ -348,6 +348,17 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           contactDomains: ['support.example'],
           downloads: { count: 1, explicitCount: 0, riskyCount: 1, externalOrigins: ['https://files.example'], riskyFileTypes: ['zip'], truncated: false },
           trackingIdentifiers: [{ type: 'tag-container', value: 'GTM-AB12' }],
+          fingerprints: {
+            fingerprintVersion: 1,
+            exact: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 2048, source: 'captured-response-bytes' },
+            normalizedHtml: { algorithm: 'sha256', value: 'b'.repeat(64), tokenCount: 42, truncated: false },
+            visibleText: { algorithm: 'simhash64-v1', value: 'c'.repeat(16), tokenCount: 18, featureCount: 16, truncated: false },
+            domStructure: { algorithm: 'sha256', value: 'd'.repeat(64), nodeCount: 30, parser: 'static-tag-sequence-v1', truncated: false },
+            formStructure: { algorithm: 'sha256', value: 'e'.repeat(64), formCount: 2, controlCount: 5, truncated: false },
+            resourceHosts: { algorithm: 'set-sha256', value: 'f'.repeat(64), values: ['assets.example'], truncated: false },
+            identifiers: { algorithm: 'set-sha256', value: '1'.repeat(64), values: [{ type: 'tag-container', value: 'GTM-AB12' }], truncated: false },
+            complete: true, truncated: false, limitations: [],
+          },
         },
       },
       rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
@@ -390,8 +401,13 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText('https://files.example', { exact: true })).toBeVisible();
   await pageCard.getByText('Tracking identifiers · 1', { exact: true }).click();
   await expect(pageCard.getByText('GTM-AB12', { exact: true })).toBeVisible();
+  await expect(pageCard.locator('article').filter({ hasText: 'Page fingerprints' }).getByText('7', { exact: true })).toBeVisible();
+  await pageCard.getByText('Page fingerprints · 7', { exact: true }).click();
+  await expect(pageCard.getByText('b'.repeat(64), { exact: true })).toBeVisible();
+  await expect(pageCard.getByText('c'.repeat(16), { exact: true })).toBeVisible();
+  await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
-  await expect(pageCard.getByText(/contact links retain domains only/i)).toBeVisible();
+  await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

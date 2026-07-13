@@ -23,7 +23,10 @@ for (const viewport of VIEWPORTS) {
 
       // Exactly one visible WHOISleuth logo/title (the header's, not the
       // drawer's - aside .brand is display:none below 900px) so there's only
-      // ever one cursor-blink treatment on screen at once.
+      // ever one cursor-blink treatment on screen at once. Wait for the
+      // authenticated shell before counting so this assertion cannot race the
+      // client-side session check after navigation.
+      await expect(page.locator('.shell > header strong', { hasText: 'WHOISleuth' })).toBeVisible();
       const visibleBrandCount = await page
         .locator('strong', { hasText: 'WHOISleuth' })
         .evaluateAll((els) => els.filter((el) => (el as HTMLElement).offsetParent !== null).length);

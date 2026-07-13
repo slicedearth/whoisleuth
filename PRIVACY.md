@@ -51,6 +51,13 @@ at all.
   domains, download context, and recognized public tracking identifiers. URL
   credentials, queries, fragments, resource/download paths, form-action paths,
   and complete email addresses are not retained.
+  Page identity can also include versioned SHA-256 fingerprints for the exact
+  captured body, noise-reduced normalized HTML, static tag structure, and form
+  structure; a fuzzy visible-text SimHash; and bounded external-resource-host
+  and public-tracking-identifier sets with deterministic set digests.
+  Intermediate normalized markup and visible text are discarded immediately
+  after fingerprinting. These digests support comparison but do not prove page
+  authorship, ownership, intent, or maliciousness.
   The summary is not copied into Bulk, watchlists, analyst cases, or other
   browser-local stores; it appears only in the transient Lookup result and a
   deliberate Lookup evidence export.
