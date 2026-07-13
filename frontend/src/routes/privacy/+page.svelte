@@ -13,6 +13,7 @@
   <h2>2. Information processed</h2>
   <p><strong>Registry data.</strong> Looking up a domain returns whatever registrant contact data its registry publishes through RDAP or WHOIS. The service relays this already-public registry data at your request; most registries redact it by default.</p>
   <p><strong>Technical data.</strong> Standard request metadata, including IP address and timestamps, is processed transiently for login and rate limiting and is not stored beyond that.</p>
+  <p><strong>Deep lookup evidence.</strong> A requested deep lookup can display bounded HTTP metadata and static page-identity fields derived from the homepage response already fetched for analysis. Page identity can include language, canonical and meta-refresh targets, selected Open Graph fields, generator metadata, form counts, and external form-action origins. URL credentials, queries, fragments, and form-action paths are not retained. This richer evidence is not copied into Bulk, watchlists, or analyst cases.</p>
   <p>The service does not use analytics, advertising, or third-party tracking scripts.</p>
 
   <h2>3. How information is used</h2>
@@ -28,7 +29,7 @@
   <h2>6. Cookies and browser storage</h2>
   <p>The service sets one signed session cookie, <code>wrt_session</code>, for up to 30 days. It is HttpOnly, SameSite=Lax, and Secure over HTTPS. It is required for authentication and is not used for tracking.</p>
   <p>Brand profiles, shortlist entries, watchlists, analyst cases, and bounded Certificate Transparency search baselines stay in your browser's local storage. Watchlists and cases may retain compact HTTP facts from deep checks: the final origin without its path or query, response status, transport, redirect count and flags, MIME type, and which selected security headers were present—not their values. CT baselines retain normalised search keywords, observed public domains, timestamps, and result counts so later searches can identify new observations; they can be deleted individually or cleared from Discover. A posture audit sends only the selected official domain and configured DKIM selectors to this deployment. Clearing site data removes all saved browser-local state.</p>
-  <p>CSV and JSON exports are generated in your browser. Evidence exports may contain contact data published in raw RDAP or WHOIS responses.</p>
+  <p>CSV and JSON exports are generated in your browser. Evidence exports may contain contact data published in raw RDAP or WHOIS responses and the bounded page-identity evidence displayed by Lookup.</p>
 
   <h2>7. Retention</h2>
   <p>Lookup and posture results are discarded after each server request. Browser-local investigation data persists until you remove it or clear site data. You are responsible for securing and deleting downloaded exports.</p>

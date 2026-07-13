@@ -133,4 +133,59 @@ describe('website activity classification', () => {
     assert.equal(result.activityStatus, 'parked');
     assert.match(result.detail, /for-sale landing-page redirect/i);
   });
+
+  test('binds page identity to the homepage HTTP observation without another request', async () => {
+    let homepageCalls = 0;
+    const result = await checkDomainAvailability('example.test', {
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+      rdapRecord: {
+        upstreamStatus: 200,
+        parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
+      },
+      fetchHomepage: async () => {
+        homepageCalls += 1;
+        return {
+          text: '<html lang="en"><link rel="canonical" href="../account?token=secret"><form method="post" action="https://collect.example/submit?key=secret"></form></html>',
+          status: 'fetched',
+          detail: 'Homepage responded.',
+          http: {
+            observedAt: '2026-07-13T04:05:06.000Z',
+            finalUrl: 'https://www.example.test/start/index.html',
+            response: { bodyTruncated: true },
+          },
+        };
+      },
+      fetchFaviconHash: async () => null,
+    });
+
+    assert.equal(homepageCalls, 1);
+    assert.equal(result.pageIdentity.observedAt, '2026-07-13T04:05:06.000Z');
+    assert.equal(result.pageIdentity.status, 'partial');
+    assert.equal(result.pageIdentity.canonical.url, 'https://www.example.test/account');
+    assert.deepEqual(result.pageIdentity.forms.externalActionOrigins, ['https://collect.example']);
+    assert.doesNotMatch(JSON.stringify(result.pageIdentity), /token=|key=|secret|submit/);
+  });
+
+  test('does not describe an explicitly non-HTML response as page identity evidence', async () => {
+    const result = await checkDomainAvailability('example.test', {
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+      rdapRecord: {
+        upstreamStatus: 200,
+        parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
+      },
+      fetchHomepage: async () => ({
+        text: '{"value":"<meta property=\\"og:title\\" content=\\"not a page\\">"}',
+        status: 'fetched',
+        detail: 'Endpoint responded.',
+        http: {
+          observedAt: '2026-07-13T04:05:06.000Z',
+          finalUrl: 'https://example.test/api',
+          response: { contentType: 'application/json', bodyTruncated: false },
+        },
+      }),
+      fetchFaviconHash: async () => null,
+    });
+
+    assert.equal(result.pageIdentity, null);
+  });
 });

@@ -6,7 +6,14 @@
 const test = require('node:test');
 const { describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { extractHtmlSignals } = require('../lib/html-signals');
+const {
+  MAX_FORM_ACTION_ORIGINS,
+  MAX_FORMS,
+  MAX_IDENTITY_TAGS,
+  PAGE_IDENTITY_VERSION,
+  extractHtmlSignals,
+  extractPageIdentity,
+} = require('../lib/html-signals');
 
 describe('pageTitle', () => {
   test('extracts and trims a <title> tag', () => {
@@ -106,5 +113,170 @@ describe('externalAssetHosts', () => {
   test('rejects control-bearing external asset hosts', () => {
     const html = '<img src="https://evil\x07.example/logo.png"><img src="https://safe.example/logo.png">';
     assert.deepEqual(extractHtmlSignals(html, 'lookalike.test').externalAssetHosts, ['safe.example']);
+  });
+});
+
+describe('pageIdentity', () => {
+  const observedAt = '2026-07-13T04:05:06.000Z';
+
+  function identity(html, options = {}) {
+    return extractPageIdentity(html, 'example.com', {
+      baseUrl: 'https://example.com/start/index.html',
+      observedAt,
+      ...options,
+    });
+  }
+
+  test('extracts bounded document and Open Graph identity metadata', () => {
+    const result = identity(`
+      <html lang="EN-au"><head>
+        <link rel="alternate canonical" href="/account?token=secret#section">
+        <meta property="og:title" content=" Example Account Centre ">
+        <meta property="og:site_name" content="Example Portal">
+        <meta property="og:url" content="https://www.example.com/welcome?campaign=private">
+        <meta name="generator" content="Example CMS 4">
+      </head></html>
+    `);
+
+    assert.equal(result.identityVersion, PAGE_IDENTITY_VERSION);
+    assert.equal(result.version, 1);
+    assert.equal(result.status, 'success');
+    assert.equal(result.observedAt, observedAt);
+    assert.equal(result.source, 'html');
+    assert.equal(result.documentLanguage, 'en-au');
+    assert.deepEqual(result.canonical, {
+      url: 'https://example.com/account', queryOmitted: true, pathTruncated: false,
+    });
+    assert.equal(result.openGraph.title, 'Example Account Centre');
+    assert.equal(result.openGraph.siteName, 'Example Portal');
+    assert.deepEqual(result.openGraph.url, {
+      url: 'https://www.example.com/welcome', queryOmitted: true, pathTruncated: false,
+    });
+    assert.equal(result.generator, 'Example CMS 4');
+    assert.match(result.limitations.join(' '), /Query strings and fragments were omitted/);
+    assert.doesNotMatch(JSON.stringify(result), /secret|campaign=private/);
+  });
+
+  test('resolves a meta-refresh target against the final response URL', () => {
+    const result = identity('<meta content="0; URL=../login?session=secret" http-equiv="refresh">');
+    assert.deepEqual(result.metaRefresh, {
+      url: 'https://example.com/login', queryOmitted: true, pathTruncated: false,
+    });
+  });
+
+  test('rejects credential-bearing, non-HTTP, control-bearing, and empty URLs', () => {
+    const result = identity(`
+      <link rel="canonical" href="https://user:password@example.com/private">
+      <meta property="og:url" content="javascript:alert(1)">
+      <meta http-equiv="refresh" content="0; url=https://safe.example/\u0007bad">
+      <form action="   "></form>
+    `);
+    assert.equal(result.canonical, null);
+    assert.equal(result.openGraph.url, null);
+    assert.equal(result.metaRefresh, null);
+    assert.equal(result.forms.count, 1);
+    assert.equal(result.diagnostics.discardedUrls, 3);
+    assert.doesNotMatch(JSON.stringify(result), /password/);
+  });
+
+  test('normalizes forms without retaining action paths or query values', () => {
+    const result = identity(`
+      <form method="POST" action="/session?csrf=secret"></form>
+      <form method="post" action="http://collect.example/submit?credential=secret"></form>
+      <form action="https://collect.example/other"></form>
+      <form></form>
+    `);
+    assert.deepEqual(result.forms, {
+      count: 4,
+      postCount: 2,
+      insecureActionCount: 1,
+      externalActionOrigins: ['http://collect.example', 'https://collect.example'],
+      truncated: false,
+    });
+    assert.doesNotMatch(JSON.stringify(result.forms), /session|submit|credential|csrf|secret/);
+  });
+
+  test('sorts and deduplicates external form-action origins', () => {
+    const result = identity(`
+      <form action="https://z.example/one"></form>
+      <form action="https://a.example/two"></form>
+      <form action="https://z.example/three"></form>
+    `);
+    assert.deepEqual(result.forms.externalActionOrigins, ['https://a.example', 'https://z.example']);
+  });
+
+  test('bounds forms while preserving explicit partial provenance', () => {
+    const html = Array.from({ length: MAX_FORMS + 1 }, (_, index) => `<form method="post" action="/form-${index}"></form>`).join('');
+    const result = identity(html);
+    assert.equal(result.forms.count, MAX_FORMS);
+    assert.equal(result.forms.postCount, MAX_FORMS);
+    assert.equal(result.forms.truncated, true);
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.equal(result.truncated, true);
+    assert.match(result.limitations.join(' '), new RegExp(`first ${MAX_FORMS} forms`));
+  });
+
+  test('bounds external form-action origins independently of form count', () => {
+    const html = Array.from({ length: MAX_FORM_ACTION_ORIGINS + 1 }, (_, index) => `<form action="https://external-${index}.example/path"></form>`).join('');
+    const result = identity(html);
+    assert.equal(result.forms.count, MAX_FORM_ACTION_ORIGINS + 1);
+    assert.equal(result.forms.externalActionOrigins.length, MAX_FORM_ACTION_ORIGINS);
+    assert.equal(result.forms.truncated, true);
+    assert.equal(result.status, 'partial');
+  });
+
+  test('reports an upstream body cap as partial even when extracted fields are valid', () => {
+    const result = identity('<html lang="en"><form></form></html>', { sourceTruncated: true });
+    assert.equal(result.documentLanguage, 'en');
+    assert.equal(result.status, 'partial');
+    assert.equal(result.truncated, true);
+    assert.match(result.limitations.join(' '), /body capture reached its byte limit/);
+  });
+
+  test('caps the number and length of inspected tags', () => {
+    const tooManyTags = Array.from({ length: MAX_IDENTITY_TAGS + 1 }, () => '<meta name="generator" content="cms">').join('');
+    const countLimited = identity(tooManyTags);
+    assert.equal(countLimited.diagnostics.tagsExamined, MAX_IDENTITY_TAGS);
+    assert.equal(countLimited.status, 'partial');
+
+    const oversized = identity(`<meta name="generator" content="${'x'.repeat(5000)}">`);
+    assert.equal(oversized.generator, null);
+    assert.equal(oversized.status, 'partial');
+  });
+
+  test('replaces an overlong retained path with its bounded origin', () => {
+    const result = identity(`<link rel="canonical" href="https://example.com/${'a'.repeat(2500)}?secret=value">`);
+    assert.deepEqual(result.canonical, {
+      url: 'https://example.com/', queryOmitted: true, pathTruncated: true,
+    });
+    assert.equal(result.status, 'partial');
+    assert.match(result.limitations.join(' '), /path was replaced by its origin/);
+  });
+
+  test('falls back safely when the supplied domain and base URL are invalid', () => {
+    const result = extractPageIdentity('<link rel="canonical" href="/safe">', '\u0000', {
+      baseUrl: 'not a URL', observedAt,
+    });
+    assert.equal(result.canonical.url, 'https://invalid.example/safe');
+  });
+
+  test('returns an empty, complete summary when no identity tags are present', () => {
+    const result = identity('<main>ordinary text</main>');
+    assert.equal(result.status, 'success');
+    assert.equal(result.complete, true);
+    assert.equal(result.documentLanguage, null);
+    assert.equal(result.canonical, null);
+    assert.deepEqual(result.openGraph, { title: null, siteName: null, url: null });
+    assert.deepEqual(result.forms.externalActionOrigins, []);
+  });
+
+  test('can leave page identity absent while preserving established flat signals', () => {
+    const result = extractHtmlSignals('<title>Example</title><input type="password">', 'example.com', {
+      includePageIdentity: false,
+    });
+    assert.equal(result.pageIdentity, null);
+    assert.equal(result.pageTitle, 'Example');
+    assert.equal(result.hasPasswordField, true);
   });
 });

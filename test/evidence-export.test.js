@@ -69,6 +69,24 @@ function fixtureResponse() {
           },
         },
       },
+      pageIdentity: {
+        identityVersion: 1,
+        version: 1,
+        status: 'success',
+        observedAt: '2026-07-11T01:02:05.000Z',
+        scanMode: 'deep',
+        source: 'html',
+        complete: true,
+        truncated: false,
+        limitations: ['Static HTML metadata only; JavaScript-rendered changes are not evaluated.'],
+        diagnostics: { tagsExamined: 4, discardedUrls: 0, formsObserved: 1 },
+        documentLanguage: 'en',
+        canonical: { url: 'https://example.com/', queryOmitted: true, pathTruncated: false },
+        metaRefresh: null,
+        openGraph: { title: 'Example', siteName: 'Example site', url: null },
+        generator: null,
+        forms: { count: 1, postCount: 1, insecureActionCount: 0, externalActionOrigins: [], truncated: false },
+      },
     },
     diagnostics: {
       version: 2,
@@ -85,7 +103,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 7);
+    assert.equal(result.schemaVersion, 8);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -101,6 +119,9 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.availability.http.response.status, 200);
     assert.equal(result.analysis.availability.http.response.bodyHash.value, 'a'.repeat(64));
     assert.equal(result.analysis.availability.http.response.bodyHash.scope, 'complete-body');
+    assert.equal(result.analysis.availability.pageIdentity.identityVersion, 1);
+    assert.equal(result.analysis.availability.pageIdentity.canonical.url, 'https://example.com/');
+    assert.equal(result.analysis.availability.pageIdentity.forms.postCount, 1);
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
     assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
@@ -118,7 +139,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 7);
+    assert.equal(result.schemaVersion, 8);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });

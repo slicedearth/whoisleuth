@@ -332,6 +332,18 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             securityHeaders: { strictTransportSecurity: 'max-age=31536000', contentSecurityPolicy: "default-src 'self'", xFrameOptions: 'DENY', xContentTypeOptions: 'nosniff', referrerPolicy: 'no-referrer' },
           },
         },
+        pageIdentity: {
+          identityVersion: 1, version: 1, status: 'partial', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'html',
+          durationMs: null, complete: false, truncated: true,
+          limitations: ['Static HTML metadata only; JavaScript-rendered changes are not evaluated.', 'Query strings and fragments were omitted from retained page-identity URLs.'],
+          diagnostics: { tagsExamined: 8, discardedUrls: 1, formsObserved: 2 },
+          documentLanguage: 'en',
+          canonical: { url: 'https://login.example.test/account', queryOmitted: true, pathTruncated: false },
+          metaRefresh: null,
+          openGraph: { title: 'Account centre', siteName: 'Example portal', url: { url: 'https://login.example.test/', queryOmitted: false, pathTruncated: false } },
+          generator: 'Example CMS',
+          forms: { count: 2, postCount: 1, insecureActionCount: 1, externalActionOrigins: ['https://collect.example'], truncated: false },
+        },
       },
       rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
       diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
@@ -352,6 +364,17 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(card.getByText('Complete captured body (2.0 KiB)', { exact: true })).toBeVisible();
   await expect(card).not.toContainText('secret');
   await expect(card.getByText(/missing security headers do not establish maliciousness/i)).toBeVisible();
+
+  const pageCard = page.locator('.page-card');
+  await expect(pageCard.getByRole('heading', { name: 'Page identity' })).toBeVisible();
+  await expect(pageCard.getByText('https://login.example.test/account', { exact: true })).toBeVisible();
+  await expect(pageCard.getByText('Account centre', { exact: true })).toBeVisible();
+  await expect(pageCard.getByText('Example portal', { exact: true })).toBeVisible();
+  await expect(pageCard.getByText('1', { exact: true })).toHaveCount(2);
+  await pageCard.getByText('External form destinations · 1', { exact: true }).click();
+  await expect(pageCard.getByText('https://collect.example', { exact: true })).toBeVisible();
+  await expect(pageCard).not.toContainText('secret');
+  await expect(pageCard.getByText(/static HTML already captured/i)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

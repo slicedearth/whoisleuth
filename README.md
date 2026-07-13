@@ -327,7 +327,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   are contextual review indicators, never a maliciousness verdict, and do not
   change the Risk score. The typosquat generator uses the same curated mapping
   so generated confusable candidates and result explanations stay consistent.
-  Lookup evidence schema version 6 retains the analysis supplied to the
+  Lookup evidence schema version 8 retains the analysis supplied to the
   export; Bulk CSV exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
@@ -358,6 +358,17 @@ compact-storage boundary, and lookup evidence schema are documented in the
   type, and presence-only security-header tokens. They never copy URL paths,
   query strings, header values, attempt errors, or redirect inventories from
   the richer Lookup observation.
+- Deep Lookup also derives a versioned, bounded page-identity summary from
+  that same captured HTML response, without making another request. It can
+  retain the document language, canonical and meta-refresh targets, selected
+  Open Graph identity, generator metadata, form counts, and bounded external
+  form-action origins. Credentials, query strings, fragments, and form-action
+  paths are not retained; oversized inputs and collection caps are reported as
+  partial observations. This first increment is displayed only in Lookup and
+  its deliberate evidence export. It is not copied into Bulk, watchlists, or
+  analyst cases and does not alter Risk scoring. Static parsing does not run
+  JavaScript, and the resulting metadata is contextual evidence rather than a
+  verdict about site ownership or intent.
 - A bulk scan flags **Related infrastructure**: domains in the same scan
   that share an exact nameserver set or favicon hash with each other, with
   a one-click way to load the group back into the query box. Uses signals
@@ -597,7 +608,7 @@ lib/                    Shared lookup logic, used by both server.js and netlify/
   domain-posture.js     Owned-domain DNS collection, assessment, and remediation
   domain-posture-parsers.js  Pure SPF/DMARC/MTA-STS/TLS-RPT/BIMI/DKIM parsers
   favicon.js            Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
-  html-signals.js       Homepage-HTML signals (title, password field, phishing language, asset hotlinking)
+  html-signals.js       Bounded homepage signals and versioned static page-identity evidence
   ct-search.js          Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.js               Shared-password session cookie (sign/verify, no user accounts)

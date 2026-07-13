@@ -43,6 +43,14 @@ at all.
   transport, redirect count/flags, MIME type, and presence-only security-header
   tokens. Raw header values, attempt errors, and redirect inventories are not
   copied into browser-local investigation stores.
+- **Page identity**: a requested deep Lookup can derive bounded metadata from
+  the homepage HTML already captured by the HTTP probe. This can include the
+  document language, canonical and meta-refresh targets, selected Open Graph
+  fields, generator metadata, form counts, and external form-action origins.
+  URL credentials, queries, fragments, and form-action paths are not retained.
+  The summary is not copied into Bulk, watchlists, analyst cases, or other
+  browser-local stores; it appears only in the transient Lookup result and a
+  deliberate Lookup evidence export.
 - **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside
