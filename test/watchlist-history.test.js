@@ -71,6 +71,28 @@ describe('watchlist history', () => {
     assert.ok(nextDeep.changes.some((change) => change.field === 'pageTitle'));
   });
 
+  test('retains legacy risk scores but compares only matching explicit model versions', () => {
+    const legacy = history.appendWatchlistScan(null, [{
+      domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskScore: 95,
+    }], { mode: 'deep' }).entry;
+    assert.equal(legacy.baseline[0].riskScore, 95);
+    assert.equal(legacy.baseline[0].riskModelVersion, null);
+
+    const current = history.appendWatchlistScan(legacy, [{
+      domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskModelVersion: 1, riskScore: 42,
+    }], { mode: 'deep' });
+    assert.equal(current.changes.some((change) => change.field === 'riskScore'), false);
+    assert.equal(current.entry.baseline[0].riskModelVersion, 1);
+    assert.equal(current.entry.baseline[0].riskScore, 42);
+
+    const comparable = history.appendWatchlistScan(current.entry, [{
+      domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskModelVersion: 1, riskScore: 80,
+    }], { mode: 'deep' });
+    const riskChange = comparable.changes.find((change) => change.field === 'riskScore');
+    assert.ok(riskChange);
+    assert.equal(riskChange.kind, 'high_risk');
+  });
+
   test('stores and compares compact HTTP facts without retaining rich response material', () => {
     const first = history.appendWatchlistScan(null, [{
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep',

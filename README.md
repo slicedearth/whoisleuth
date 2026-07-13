@@ -294,17 +294,24 @@ compact-storage boundary, and lookup evidence schema are documented in the
 
 ### Opportunity & Risk scoring
 
-- A deep-checked (registered) result gets a **Risk** score - a phishing-risk
-  indicator (active site, configured mail server, hidden ownership, recent
-  registration) distinct from the **Opportunity** score, which instead rates
-  how approachable a domain is to acquire.
+- A deep-checked registered result gets a versioned **Risk** score for analyst
+  prioritization, distinct from the **Opportunity** score that rates how
+  approachable a domain is to acquire. The Risk score is a heuristic review
+  indicator, not a maliciousness verdict: copied brand assets, matching or
+  near-matching favicons, phishing language, and password forms carry the most
+  weight. Site activity, mail configuration, privacy, recency, and bounded
+  generator provenance add context but cannot reach the danger threshold by
+  themselves.
 - A single-domain lookup's availability card shows a compact, numbered
   **Risk** and **Opportunity** meter beside the status: the bar speeds up
   scanning but never replaces the score value.
-- Hover any Opportunity/Risk meter or bulk-table score for a tooltip breaking down exactly
-  which signals contributed and by how much (e.g. "Base score for
-  'registered' +40, Active site in use -20, ... Total 30"). The same
-  breakdown is included as extra columns in CSV exports.
+- Hover any Opportunity/Risk meter or bulk-table score for a tooltip breaking
+  down exactly which signals contributed and by how much. Bulk CSV exports
+  include the Risk model version and factor breakdown alongside the score.
+  Analyst-case snapshots and reports retain the same version. Scores created
+  before explicit versioning remain readable, but watchlist and case timelines
+  do not treat a difference between unversioned and versioned scores as a
+  change in the observed domain.
 
 ### Brand protection & monitoring
 
@@ -364,7 +371,9 @@ compact-storage boundary, and lookup evidence schema are documented in the
   keyboard substitution, homoglyph, dictionary term, TLD typo, and the other
   generator families) through bulk results, watchlists, and CSV export. When
   several algorithms produce the same domain, every contributing family is
-  retained rather than silently discarded.
+  retained rather than silently discarded. The Risk model uses only its
+  allowlisted generator machine values as a bounded context signal; arbitrary
+  imported labels cannot increase the score.
 - After a generated-list scan, **Defensive registration coverage** groups the
   results by mutation family and TLD: protected/allowlisted domains,
   registered exposures, available gaps, and unknown results. Groups can be
@@ -375,7 +384,8 @@ compact-storage boundary, and lookup evidence schema are documented in the
   availability, registrar, nameserver, date, mail, compact HTTP, website, and
   Risk-score changes. Fast rescans update registration data without erasing
   last-known deep-scan evidence; an explicit deep re-scan refreshes page/mail
-  and HTTP signals.
+  and HTTP signals. Risk-score changes are reported only when both observations
+  carry the same explicit model version.
   Deep watchlist rescans keep the same 200-domain safety limit as other deep
   checks; larger watchlists remain available for fast registration monitoring.
   Timeline entries can be filtered to changed checks only and are included

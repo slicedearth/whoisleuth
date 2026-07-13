@@ -34,7 +34,7 @@ export interface EvidenceFactor { label: string; points: number }
 export interface CaseEvidenceSnapshot {
   id: string; fingerprint: string; firstCapturedAt: string; capturedAt: string; source: string; scanDepth: string;
   availability: string | null; confidence: string | null;
-  riskScore: number | null; opportunityScore: number | null;
+  riskModelVersion: number | null; riskScore: number | null; opportunityScore: number | null;
   riskFactors: EvidenceFactor[]; opportunityFactors: EvidenceFactor[];
   registrar: string | null; createdDate: string | null; expiryDate: string | null; nameservers: string[];
   hasMx: boolean | null; hasSpf: boolean | null; hasDmarc: boolean | null;

@@ -3,7 +3,7 @@
 // latestCaseEvidence) and produces display-ready derivations and formatted
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
-import { compareCaseEvidence, latestCaseEvidence } from './case-model.js';
+import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.js';
 import { httpSecurityHeaderLabel } from './http-summary.js';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,7 @@ const FIELD_LABELS = {
   scanDepth: 'Scan depth',
   availability: 'Availability',
   confidence: 'Confidence',
+  riskModelVersion: 'Risk model version',
   riskScore: 'Risk score',
   opportunityScore: 'Opportunity score',
   riskFactors: 'Risk factors',
@@ -61,7 +62,7 @@ const FIELD_GROUPS = [
   },
   {
     name: 'Scoring',
-    fields: ['riskScore', 'riskFactors', 'opportunityScore', 'opportunityFactors'],
+    fields: ['riskModelVersion', 'riskScore', 'riskFactors', 'opportunityScore', 'opportunityFactors'],
   },
   {
     name: 'Mail and web',
@@ -118,7 +119,7 @@ export function formatSnapshotValue(field, value) {
     }
     return value.join(', ');
   }
-  if (typeof value === 'number') return String(value);
+  if (typeof value === 'number') return field === 'riskModelVersion' ? `v${value}` : String(value);
   return String(value);
 }
 
@@ -205,7 +206,7 @@ function classifyChangeKind(field, before, after) {
 // ---------------------------------------------------------------------------
 
 /**
- * @typedef {{ snapshot: import('./case-model.js').CaseEvidenceSnapshot, isBaseline: boolean, hasRepeatedObservation: boolean, changes: Array<{ field: string, label: string, before: unknown, after: unknown, tone: string }> | null, hasIncomparableChange: boolean, displayIndex: number }} TimelineEntry
+ * @typedef {{ snapshot: import('./case-model.js').CaseEvidenceSnapshot, isBaseline: boolean, hasRepeatedObservation: boolean, changes: Array<{ field: string, label: string, before: unknown, after: unknown, tone: string }> | null, hasIncomparableChange: boolean, incomparableReasons: Array<'scan-depth' | 'risk-model' | 'other'>, displayIndex: number }} TimelineEntry
  */
 
 /**
@@ -216,8 +217,8 @@ function classifyChangeKind(field, before, after) {
  * - Every subsequent snapshot is compared against its immediate chronological
  *   predecessor via `compareCaseEvidence`.
  * - When two snapshots are materially distinct but `compareCaseEvidence`
- *   produces no displayable changes (depth gates prevent comparison),
- *   `hasIncomparableChange` is set to `true`.
+ *   has fields suppressed by the depth or score-model gates,
+ *   `hasIncomparableChange` and `incomparableReasons` explain why.
  * - `hasRepeatedObservation` is true when `firstCapturedAt !== capturedAt`.
  *
  * @param {import('./case-model.js').CaseEvidenceSnapshot[]} evidenceHistory
@@ -240,20 +241,19 @@ export function deriveTimeline(evidenceHistory) {
     /** @type {TimelineEntry['changes']} */
     let changes = null;
     let hasIncomparableChange = false;
+    /** @type {TimelineEntry['incomparableReasons']} */
+    let incomparableReasons = [];
 
     if (!isBaseline) {
       const previous = chronological[i - 1];
       const rawChanges = compareCaseEvidence(previous, snapshot);
+      incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot);
       if (rawChanges.length > 0) {
         changes = rawChanges;
-      } else {
-        // No field-level changes reported. Check whether the snapshots are
-        // materially distinct (different fingerprints) — if so, the depth
-        // gates prevented comparison.
-        if (snapshot.fingerprint !== previous.fingerprint) {
-          hasIncomparableChange = true;
-        }
+      } else if (snapshot.fingerprint !== previous.fingerprint && incomparableReasons.length === 0) {
+        incomparableReasons = ['other'];
       }
+      hasIncomparableChange = incomparableReasons.length > 0;
     }
 
     entries.push({
@@ -262,6 +262,7 @@ export function deriveTimeline(evidenceHistory) {
       hasRepeatedObservation,
       changes,
       hasIncomparableChange,
+      incomparableReasons,
       displayIndex: 0, // assigned after reversal
     });
   }
@@ -304,13 +305,14 @@ export function evidenceSourceLabel(source) {
  * evidence. Used for the compact current-evidence summary near the top of an
  * expanded case.
  * @param {import('./case-model.js').CaseEvidenceSnapshot[] | null | undefined} evidenceHistory
- * @returns {{ availability: string | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
+ * @returns {{ availability: string | null, riskModelVersion: number | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
  */
 export function currentEvidenceSummary(evidenceHistory) {
   const latest = latestCaseEvidence({ evidenceHistory: evidenceHistory ?? undefined });
   if (!latest) return null;
   return {
     availability: latest.availability,
+    riskModelVersion: latest.riskModelVersion,
     riskScore: latest.riskScore,
     registrar: latest.registrar,
     activityStatus: latest.activityStatus,

@@ -3,7 +3,7 @@
 // against a last-known baseline so localStorage does not grow by one complete
 // result set on every check.
 
-import { computeRiskScore } from './scoring.js';
+import { explainRiskScore, normalizeRiskModelVersion } from './scoring.js';
 import { normalizeHttpSummary } from './http-summary.js';
 
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;
@@ -32,6 +32,7 @@ const DEEP_FIELDS = new Set([
   'hasPasswordField',
   'phishingLanguageMatch',
   'reusesOfficialAssets',
+  'riskModelVersion',
   'riskScore',
 ]);
 
@@ -68,7 +69,7 @@ const FIELD_LABELS = {
 // The schema version must travel with retained summaries so every storage
 // boundary can revalidate them, but it is implementation metadata rather than
 // an analyst-facing observation and must never generate a history event.
-const BASELINE_FIELDS = ['httpSummaryVersion', ...Object.keys(FIELD_LABELS)];
+const BASELINE_FIELDS = ['httpSummaryVersion', 'riskModelVersion', ...Object.keys(FIELD_LABELS)];
 
 const AVAILABILITY_LABELS = {
   available: 'Available',
@@ -115,6 +116,16 @@ function normalizeDate(value) {
 function compactRecord(record) {
   const scanDepth = inferredScanDepth(record);
   const httpSummary = normalizeHttpSummary(record) || {};
+  const providedRiskScore = typeof record.riskScore === 'number' && Number.isFinite(record.riskScore)
+    ? Math.max(0, Math.min(100, Math.round(record.riskScore)))
+    : null;
+  const computedRisk = scanDepth === 'deep' && providedRiskScore === null ? explainRiskScore(record) : null;
+  const riskScore = scanDepth === 'deep' ? (providedRiskScore ?? computedRisk?.score ?? null) : null;
+  const riskModelVersion = riskScore === null
+    ? null
+    : providedRiskScore !== null
+      ? normalizeRiskModelVersion(record.riskModelVersion)
+      : computedRisk?.modelVersion ?? null;
   return {
     domain: String(record.domain || '').trim().toLowerCase(),
     scanDepth,
@@ -136,9 +147,8 @@ function compactRecord(record) {
     hasPasswordField: typeof record.hasPasswordField === 'boolean' ? record.hasPasswordField : null,
     phishingLanguageMatch: record.phishingLanguageMatch ?? null,
     reusesOfficialAssets: typeof record.reusesOfficialAssets === 'boolean' ? record.reusesOfficialAssets : null,
-    riskScore: scanDepth === 'deep'
-      ? (typeof record.riskScore === 'number' ? record.riskScore : computeRiskScore(record))
-      : null,
+    riskModelVersion,
+    riskScore,
   };
 }
 
@@ -152,7 +162,7 @@ function isComparable(field, value, record) {
   if (field === 'availability') return CONCLUSIVE_AVAILABILITY.has(value);
   if (field === 'nameservers') return Array.isArray(value) && value.length > 0;
   if (field === 'httpSecurityHeaders') return Array.isArray(value);
-  if (['httpSummaryVersion', 'httpResponseStatus', 'httpRedirectCount'].includes(field)) return Number.isInteger(value);
+  if (['httpSummaryVersion', 'riskModelVersion', 'httpResponseStatus', 'httpRedirectCount'].includes(field)) return Number.isInteger(value);
   if (['registrarName', 'createdDate', 'expiryDate', 'activityStatus', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpTransportSecurity', 'httpContentType'].includes(field)) return Boolean(value);
   if (['pageTitle', 'faviconHash', 'phishingLanguageMatch'].includes(field)) return value === null || typeof value === 'string';
   if (field === 'riskScore') return typeof value === 'number';
@@ -206,6 +216,10 @@ export function diffWatchlistBaseline(baseline, current, ignoredDomains = new Se
       const before = previous[field];
       const after = next[field];
       if (!isComparable(field, before, previous) || !isComparable(field, after, next)) continue;
+      if (field === 'riskScore' && (
+        !Number.isInteger(previous.riskModelVersion)
+        || previous.riskModelVersion !== next.riskModelVersion
+      )) continue;
       if (valuesEqual(field, before, after)) continue;
       changes.push({ domain: next.domain, field, before, after, ...classifyChange(field, before, after) });
     }
@@ -226,8 +240,15 @@ export function mergeWatchlistBaseline(baseline, current) {
     const previous = previousByDomain.get(next.domain) || {};
     const updated = { ...previous, domain: next.domain };
     updated.scanDepth = previous.scanDepth === 'deep' || next.scanDepth === 'deep' ? 'deep' : 'fast';
-    for (const field of BASELINE_FIELDS) {
+  for (const field of BASELINE_FIELDS) {
       if (isComparable(field, next[field], next)) updated[field] = next[field];
+    }
+    // Preserve an explicit null beside legacy scores. Absence and null both
+    // mean "unversioned" to the comparator, but retaining the key makes the
+    // stored/exported contract unambiguous and prevents consumers from having
+    // to infer why a score was deliberately excluded from comparison.
+    if (next.scanDepth === 'deep' && typeof next.riskScore === 'number') {
+      updated.riskModelVersion = normalizeRiskModelVersion(next.riskModelVersion);
     }
     return updated;
   });

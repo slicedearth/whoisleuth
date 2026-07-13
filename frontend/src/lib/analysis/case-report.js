@@ -9,7 +9,7 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { compareCaseEvidence, latestCaseEvidence } from './case-model.js';
+import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.js';
 import { httpSecurityHeaderLabel } from './http-summary.js';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ const LIMITATIONS_TEXT = [
   'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks.',
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence — it may not have been evaluated.',
   'Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes.',
-  'Scan-depth gates prevent some cross-depth comparisons; "incomparable" means the observations differ materially but no reliable field-level comparison is available.',
+  'Scan-depth and risk-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably.',
   'Generated locally in the browser. Review the package before sharing it.',
 ].join(' ');
 
@@ -116,6 +116,7 @@ function pickKnownSnapshotFields(snapshot) {
     scanDepth: snapshot.scanDepth,
     availability: snapshot.availability,
     confidence: snapshot.confidence,
+    riskModelVersion: snapshot.riskModelVersion,
     riskScore: snapshot.riskScore,
     opportunityScore: snapshot.opportunityScore,
     riskFactors: factors(snapshot.riskFactors),
@@ -186,10 +187,12 @@ export function buildCaseReport(caseRecord, options = {}) {
       /** @type {Array<object> | null} */
       let changes = null;
       let hasIncomparableChange = false;
+      let incomparableReasons = [];
 
       if (!isBaseline) {
         const previous = chronological[i - 1];
         const rawChanges = compareCaseEvidence(previous, snapshot);
+        incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot);
         if (rawChanges.length > 0) {
           changes = rawChanges.map((c) => ({
             field: c.field,
@@ -198,9 +201,10 @@ export function buildCaseReport(caseRecord, options = {}) {
             after: c.after,
             tone: c.tone,
           }));
-        } else if (snapshot.fingerprint !== previous.fingerprint) {
-          hasIncomparableChange = true;
+        } else if (snapshot.fingerprint !== previous.fingerprint && incomparableReasons.length === 0) {
+          incomparableReasons = ['other'];
         }
+        hasIncomparableChange = incomparableReasons.length > 0;
       }
 
       timelineEntries.push({
@@ -209,6 +213,7 @@ export function buildCaseReport(caseRecord, options = {}) {
         hasRepeatedObservation,
         changes,
         hasIncomparableChange,
+        incomparableReasons,
       });
     }
   }
@@ -290,6 +295,7 @@ function buildMarkdown(report) {
     const a = report.currentAssessment;
     lines.push(`- **Availability:** ${escapeMarkdownInline(formatReportValue(a.availability))}`);
     lines.push(`- **Risk score:** ${escapeMarkdownInline(formatReportValue(a.riskScore))}`);
+    lines.push(`- **Risk model:** ${a.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.riskModelVersion))}`}`);
     lines.push(`- **Registrar:** ${escapeMarkdownInline(formatReportValue(a.registrar))}`);
     lines.push(`- **Website activity:** ${escapeMarkdownInline(formatReportValue(a.activityStatus))}`);
     if (a.httpResponseStatus != null) lines.push(`- **HTTP response:** ${escapeMarkdownInline(formatReportValue(a.httpResponseStatus))}`);
@@ -338,6 +344,7 @@ function buildMarkdown(report) {
       lines.push('');
       lines.push(`- Availability: ${escapeMarkdownInline(formatReportValue(snap.availability))}`);
       lines.push(`- Risk score: ${escapeMarkdownInline(formatReportValue(snap.riskScore))}`);
+      lines.push(`- Risk model: ${snap.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(snap.riskModelVersion))}`}`);
       lines.push(`- Registrar: ${escapeMarkdownInline(formatReportValue(snap.registrar))}`);
       lines.push(`- Website activity: ${escapeMarkdownInline(formatReportValue(snap.activityStatus))}`);
       if (snap.httpResponseStatus != null) lines.push(`- HTTP response: ${escapeMarkdownInline(formatReportValue(snap.httpResponseStatus))}`);
@@ -385,8 +392,12 @@ function buildMarkdown(report) {
           lines.push(`- **${escapeMarkdownInline(change.label)}** (${escapeMarkdownInline(change.tone)}): ${escapeMarkdownInline(beforeText)} → ${escapeMarkdownInline(afterText)}`);
         }
         lines.push('');
-      } else if (entry.hasIncomparableChange) {
-        lines.push('> This observation is materially distinct from the previous one, but the capture depths differ enough that no reliable field-level comparison is available.');
+      }
+      if (entry.hasIncomparableChange) {
+        const reasons = Array.isArray(entry.incomparableReasons) ? entry.incomparableReasons : [];
+        if (reasons.includes('risk-model')) lines.push('> Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
+        if (reasons.includes('scan-depth')) lines.push('> Capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
+        if (reasons.length === 0 || reasons.includes('other')) lines.push('> The observations differ materially, but no reliable field-level comparison is available.');
         lines.push('');
       }
     }

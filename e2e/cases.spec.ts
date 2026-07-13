@@ -18,6 +18,7 @@ interface SnapshotOverrides {
   source?: string;
   scanDepth?: 'fast' | 'deep';
   availability?: string | null;
+  riskModelVersion?: number | null;
   riskScore?: number | null;
   registrar?: string | null;
   activityStatus?: string | null;
@@ -48,6 +49,7 @@ function snapshot(overrides: SnapshotOverrides = {}) {
     scanDepth: overrides.scanDepth ?? 'deep',
     availability: overrides.availability ?? 'registered',
     confidence: null,
+    riskModelVersion: Object.hasOwn(overrides, 'riskModelVersion') ? overrides.riskModelVersion : 1,
     riskScore: overrides.riskScore ?? 40,
     opportunityScore: null,
     riskFactors: [],
@@ -506,7 +508,31 @@ test.describe('evidence timeline', () => {
     // The depth-incomparable explanation is visible.
     await expect(page.locator('.timeline-filter-note')).toBeVisible();
     await expect(page.locator('.timeline-filter-note')).toContainText('No reliable comparable changes matched');
-    await expect(page.locator('.timeline-filter-note')).toContainText('capture depths prevent field-level comparison');
+    await expect(page.locator('.timeline-filter-note')).toContainText('scan depth or risk model prevents field-level comparison');
+  });
+
+  test('risk model changes stay readable without creating a false score change', async ({ page }) => {
+    await openSeededTimelineCase(page, 'model-version.invalid', [
+      caseRecord({
+        id: 'model-version', domain: 'model-version.invalid',
+        evidenceHistory: [
+          snapshot({
+            id: 'legacy-risk', fingerprint: 'legacy-risk', capturedAt: '2026-05-01T00:00:00.000Z',
+            riskModelVersion: null, riskScore: 95, registrar: 'Old Registrar',
+          }),
+          snapshot({
+            id: 'current-risk', fingerprint: 'current-risk', capturedAt: '2026-06-01T00:00:00.000Z',
+            riskModelVersion: 1, riskScore: 42, registrar: 'New Registrar',
+          }),
+        ],
+      }),
+    ]);
+
+    const current = page.locator('.timeline-entry').first();
+    await expect(current.locator('.timeline-badge.timeline-incomparable')).toContainText('Risk models differ');
+    await expect(current.locator('.timeline-incomparable-note')).toContainText('numeric difference is not treated as a domain change');
+    await expect(current.locator('.timeline-change strong').filter({ hasText: 'Risk score' })).toHaveCount(0);
+    await expect(current.locator('.timeline-change strong').filter({ hasText: 'Registrar' })).toBeVisible();
   });
 
   test('timeline controls reset when a different case is opened', async ({ page }) => {

@@ -21,6 +21,21 @@
   const visibleTimeline = $derived(changedOnly ? filterChangedOnly(timeline) : timeline);
   const filteredIncomparable = $derived(changedOnly && timeline.some(entry => entry.hasIncomparableChange && !visibleTimeline.includes(entry)));
 
+  function incomparableLabel(reasons: string[]) {
+    if (reasons.includes('risk-model') && reasons.includes('scan-depth')) return 'Model and depth limit comparison';
+    if (reasons.includes('risk-model')) return 'Risk models differ';
+    if (reasons.includes('scan-depth')) return 'Depth prevents comparison';
+    return 'Comparison unavailable';
+  }
+
+  function incomparableNote(reasons: string[]) {
+    const notes = [];
+    if (reasons.includes('risk-model')) notes.push('Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
+    if (reasons.includes('scan-depth')) notes.push('The capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
+    if (notes.length === 0) notes.push('The observations differ materially, but no reliable field-level comparison is available.');
+    return notes.join(' ');
+  }
+
   function date(value: string | null) {
     if (!value) return 'Not observed';
     const parsed = new Date(value);
@@ -38,7 +53,7 @@
 {#if summary}
   <dl class="evidence">
     <dt>Availability</dt><dd>{summary.availability ?? '—'}</dd>
-    <dt>Risk</dt><dd>{summary.riskScore ?? '—'}</dd>
+    <dt>Risk</dt><dd>{summary.riskScore ?? '—'}{#if summary.riskModelVersion !== null} · model v{summary.riskModelVersion}{/if}</dd>
     <dt>Registrar</dt><dd>{summary.registrar ?? '—'}</dd>
     <dt>Website</dt><dd>{summary.activityStatus ?? '—'}</dd>
     <dt>Captured</dt><dd>{date(summary.capturedAt)}</dd>
@@ -78,9 +93,8 @@
                 <span class="timeline-badge timeline-baseline">Baseline</span>
               {:else if entry.changes?.length}
                 <span class="timeline-badge timeline-changed">{entry.changes.length} change{entry.changes.length===1?'':'s'}</span>
-              {:else if entry.hasIncomparableChange}
-                <span class="timeline-badge timeline-incomparable">Depth prevents comparison</span>
               {/if}
+              {#if !entry.isBaseline && entry.hasIncomparableChange}<span class="timeline-badge timeline-incomparable">{incomparableLabel(entry.incomparableReasons)}</span>{/if}
             </span>
           </div>
 
@@ -94,9 +108,8 @@
                 </li>
               {/each}
             </ul>
-          {:else if entry.hasIncomparableChange}
-            <p class="timeline-incomparable-note">This observation is materially distinct from the previous one, but the capture depths differ enough that no reliable field-level comparison is available.</p>
           {/if}
+          {#if entry.hasIncomparableChange}<p class="timeline-incomparable-note">{incomparableNote(entry.incomparableReasons)}</p>{/if}
 
           {#if isExpanded}
             <div class="timeline-detail" id={bodyId} role="region" aria-labelledby={snapId}>
@@ -112,7 +125,7 @@
       {/each}
     </ol>
     {#if changedOnly && visibleTimeline.length===1 && timeline.length>1}
-      <p class="timeline-filter-note">{filteredIncomparable?'No reliable comparable changes matched — some observations differ materially but their capture depths prevent field-level comparison.':'No reliable comparable changes matched.'}</p>
+      <p class="timeline-filter-note">{filteredIncomparable?'No reliable comparable changes matched — some observations differ materially but their scan depth or risk model prevents field-level comparison.':'No reliable comparable changes matched.'}</p>
     {/if}
   {/if}
 </section>

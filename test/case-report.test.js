@@ -24,6 +24,7 @@ function snapshot(overrides = {}) {
     scanDepth: 'deep',
     availability: 'registered',
     confidence: null,
+    riskModelVersion: 1,
     riskScore: 40,
     opportunityScore: null,
     riskFactors: [],
@@ -133,6 +134,7 @@ describe('buildCaseReport JSON', () => {
     // Current assessment is the latest.
     assert.equal(json.currentAssessment.id, 'ev-new');
     assert.equal(json.currentAssessment.riskScore, 85);
+    assert.equal(json.currentAssessment.riskModelVersion, 1);
   });
 
   test('repeated observation timestamps', () => {
@@ -170,7 +172,20 @@ describe('buildCaseReport JSON', () => {
     assert.equal(json.evidenceTimeline.length, 2);
     const fastEntry = json.evidenceTimeline[1];
     assert.equal(fastEntry.hasIncomparableChange, true);
+    assert.deepEqual(fastEntry.incomparableReasons, ['scan-depth']);
     assert.equal(fastEntry.changes, null);
+  });
+
+  test('reports a risk-model mismatch without exporting a false score change', () => {
+    const legacy = snapshot({ id: 'legacy', fingerprint: 'legacy', capturedAt: ISO, riskModelVersion: null, riskScore: 95 });
+    const current = snapshot({ id: 'current', fingerprint: 'current', capturedAt: LATER, riskModelVersion: 1, riskScore: 42, registrar: 'Changed Registrar' });
+    const { json, markdown } = caseReport.buildCaseReport(caseRecord({ evidenceHistory: [legacy, current] }), { generatedAt: LATER });
+    const entry = json.evidenceTimeline[1];
+    assert.deepEqual(entry.incomparableReasons, ['risk-model']);
+    assert.equal(entry.changes.some((change) => change.field === 'riskScore'), false);
+    assert.equal(entry.changes.some((change) => change.field === 'registrar'), true);
+    assert.match(markdown, /different or unversioned models/);
+    assert.match(markdown, /Risk model: v1/);
   });
 
   test('normalized arrays and score factors', () => {

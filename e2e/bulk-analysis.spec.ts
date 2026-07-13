@@ -137,7 +137,7 @@ test('IDN evidence renders and filters without changing the risk score', async (
   await expect(row.getByText('Unicode: раypal.com', { exact: true })).toBeVisible();
   await expect(row.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(row.getByText('Official-domain skeleton match', { exact: true })).toBeVisible();
-  await expect(row.locator('td[data-label="Risk"]')).toHaveText('40');
+  await expect(row.locator('td[data-label="Risk"]')).toHaveText('10');
 
   await page.getByRole('button', { name: 'IDN / confusable' }).click();
   await expect(row).toBeVisible();

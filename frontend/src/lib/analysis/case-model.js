@@ -6,6 +6,7 @@
 // and free of any browser globals.
 
 import { normalizeHttpSummary } from './http-summary.js';
+import { normalizeRiskModelVersion } from './scoring.js';
 
 // Schema 2 replaces the single scalar `evidence` object of schema 1 with a
 // bounded, deduplicated `evidenceHistory` timeline. Version-1 stores are still
@@ -106,7 +107,7 @@ const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /**
  * @typedef {{ id: string, body: string, createdAt: string }} CaseNote
  * @typedef {{ label: string, points: number }} EvidenceFactor
- * @typedef {{ id: string, fingerprint: string, firstCapturedAt: string, capturedAt: string, source: string, scanDepth: string, availability: string | null, confidence: string | null, riskScore: number | null, opportunityScore: number | null, riskFactors: EvidenceFactor[], opportunityFactors: EvidenceFactor[], registrar: string | null, createdDate: string | null, expiryDate: string | null, nameservers: string[], hasMx: boolean | null, hasSpf: boolean | null, hasDmarc: boolean | null, activityStatus: string | null, websiteProbeDetail: string | null, pageTitle: string | null, httpSummaryVersion: number | null, httpEvidenceStatus: string | null, httpFinalOrigin: string | null, httpResponseStatus: number | null, httpTransportSecurity: string | null, httpRedirectCount: number | null, httpCrossOriginRedirect: boolean | null, httpHttpsDowngrade: boolean | null, httpContentType: string | null, httpSecurityHeaders: string[] | null, faviconMatch: boolean | null, faviconNearMatch: boolean | null, reusesOfficialAssets: boolean | null, hasPasswordField: boolean | null, phishingLanguageMatch: string | null, mutationTypes: string[] }} CaseEvidenceSnapshot
+ * @typedef {{ id: string, fingerprint: string, firstCapturedAt: string, capturedAt: string, source: string, scanDepth: string, availability: string | null, confidence: string | null, riskModelVersion: number | null, riskScore: number | null, opportunityScore: number | null, riskFactors: EvidenceFactor[], opportunityFactors: EvidenceFactor[], registrar: string | null, createdDate: string | null, expiryDate: string | null, nameservers: string[], hasMx: boolean | null, hasSpf: boolean | null, hasDmarc: boolean | null, activityStatus: string | null, websiteProbeDetail: string | null, pageTitle: string | null, httpSummaryVersion: number | null, httpEvidenceStatus: string | null, httpFinalOrigin: string | null, httpResponseStatus: number | null, httpTransportSecurity: string | null, httpRedirectCount: number | null, httpCrossOriginRedirect: boolean | null, httpHttpsDowngrade: boolean | null, httpContentType: string | null, httpSecurityHeaders: string[] | null, faviconMatch: boolean | null, faviconNearMatch: boolean | null, reusesOfficialAssets: boolean | null, hasPasswordField: boolean | null, phishingLanguageMatch: string | null, mutationTypes: string[] }} CaseEvidenceSnapshot
  * @typedef {{ id: string, domain: string, status: string, disposition: string, tags: string[], notes: CaseNote[], source: string, evidenceHistory: CaseEvidenceSnapshot[], createdAt: string, updatedAt: string }} CaseRecord
  * @typedef {{ version: number, cases: CaseRecord[] }} CaseStore
  */
@@ -388,7 +389,7 @@ const DEEP_SIGNAL_FIELDS = [
 // another. Deterministic ordering here is what makes the fingerprint stable.
 const MATERIAL_FIELD_ORDER = [
   'scanDepth',
-  'availability', 'confidence', 'riskScore', 'opportunityScore',
+  'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
   'registrar', 'createdDate', 'expiryDate', 'nameservers',
   'hasMx', 'hasSpf', 'hasDmarc',
@@ -484,6 +485,7 @@ function buildSnapshot(raw, options) {
     scanDepth,
     availability: evidenceString(record.availability),
     confidence: evidenceString(record.confidence),
+    riskModelVersion: normalizeRiskModelVersion(record.riskModelVersion),
     riskScore: clampScore(record.riskScore),
     opportunityScore: clampScore(record.opportunityScore),
     riskFactors: normalizeFactors(record.riskFactors),
@@ -515,6 +517,9 @@ function buildSnapshot(raw, options) {
     phishingLanguageMatch: evidenceString(record.phishingLanguageMatch),
     mutationTypes: normalizeMutationList(record.mutationTypes),
   };
+  // A version without an actual risk assessment is orphaned metadata. Drop it
+  // so it cannot make otherwise-identical evidence look materially different.
+  if (fields.riskScore === null && fields.riskFactors.length === 0) fields.riskModelVersion = null;
   // A fast capture never evaluates the deep signals, so any value supplied for
   // them (e.g. a profile's default `false`) is discarded as unevaluated.
   if (scanDepth === 'fast') {
@@ -652,8 +657,8 @@ export function latestCaseEvidence(record) {
 const COMPARE_FIELDS = [
   { field: 'availability', label: 'Availability', type: 'availability' },
   { field: 'confidence', label: 'Confidence', type: 'token' },
-  { field: 'riskScore', label: 'Risk score', type: 'score', depthGate: 'comparable', direction: 'risk' },
-  { field: 'riskFactors', label: 'Risk factors', type: 'factors', depthGate: 'comparable' },
+  { field: 'riskScore', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
+  { field: 'riskFactors', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
   { field: 'opportunityScore', label: 'Opportunity score', type: 'score' },
   { field: 'opportunityFactors', label: 'Opportunity factors', type: 'factors' },
   { field: 'registrar', label: 'Registrar', type: 'registrar' },
@@ -685,6 +690,42 @@ const COMPARE_FIELDS = [
 
 function depthComparable(a, b) {
   return a === b && (a === 'fast' || a === 'deep');
+}
+
+function riskModelComparable(previous, current) {
+  const before = normalizeRiskModelVersion(previous?.riskModelVersion);
+  const after = normalizeRiskModelVersion(current?.riskModelVersion);
+  return before !== null && before === after;
+}
+
+function valuesMateriallyEqual(field, previous, current) {
+  return JSON.stringify(materialValue(field, previous)) === JSON.stringify(materialValue(field, current));
+}
+
+/**
+ * Explains material fields that comparison gates deliberately suppress. The
+ * reasons are stable machine values for UI/report wording; they are not risk
+ * findings. A model-version mismatch remains visible even when another field
+ * in the same observation produced an ordinary material change.
+ * @param {CaseEvidenceSnapshot | null | undefined} previous
+ * @param {CaseEvidenceSnapshot | null | undefined} current
+ * @returns {Array<'scan-depth' | 'risk-model'>}
+ */
+export function caseEvidenceIncomparableReasons(previous, current) {
+  if (!previous || !current || previous.fingerprint === current.fingerprint) return [];
+  /** @type {Array<'scan-depth' | 'risk-model'>} */
+  const reasons = [];
+  const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
+    || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
+  if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');
+
+  if (!depthComparable(previous.scanDepth, current.scanDepth)) {
+    const deepOnlyChanged = DEEP_SIGNAL_FIELDS.some((field) => !valuesMateriallyEqual(field, previous, current));
+    const comparableRiskChanged = riskModelComparable(previous, current)
+      && (!valuesMateriallyEqual('riskScore', previous, current) || !valuesMateriallyEqual('riskFactors', previous, current));
+    if (deepOnlyChanged || comparableRiskChanged) reasons.push('scan-depth');
+  }
+  return reasons;
 }
 
 function isPresent(value) {
@@ -811,10 +852,10 @@ function compareField(spec, before, after) {
  * material changes. Timestamps, source, id and fingerprint are ignored;
  * nameservers/mutations/factors compare as sets; casing/order-only differences
  * never produce a change. Capture depth is honoured explicitly: deep-only
- * signals are only compared when both snapshots are deep, and risk-score changes
- * only when the two depths are equal and meaningful - so a difference caused
- * solely by scan mode (a fast capture omitting deep signals) is never reported
- * as a removal or a risk swing.
+ * signals are only compared when both snapshots are deep. Risk-score and
+ * factor changes additionally require matching explicit model versions and
+ * equal meaningful depths, so formula upgrades and scan-mode differences are
+ * never reported as changes in the observed domain.
  * @param {CaseEvidenceSnapshot | null | undefined} previous
  * @param {CaseEvidenceSnapshot | null | undefined} current
  * @returns {Array<{ field: string, label: string, before: unknown, after: unknown, tone: string }>}
@@ -823,10 +864,12 @@ export function compareCaseEvidence(previous, current) {
   if (!previous || !current) return [];
   const bothDeep = previous.scanDepth === 'deep' && current.scanDepth === 'deep';
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
+  const comparableRiskModel = riskModelComparable(previous, current);
   const changes = [];
   for (const spec of COMPARE_FIELDS) {
     if (spec.depthGate === 'both-deep' && !bothDeep) continue;
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
+    if (spec.modelGate === 'risk' && !comparableRiskModel) continue;
     const result = compareField(spec, previous[spec.field], current[spec.field]);
     if (result) {
       changes.push({ field: spec.field, label: spec.label, before: result.before, after: result.after, tone: result.tone });

@@ -149,52 +149,55 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'available' }), null);
   });
 
-  test('scores 40 for a bare registered domain with no other signals', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 40);
+  test('stamps the explicit model version and gives ordinary states a low base score', () => {
+    assert.equal(scoring.RISK_MODEL_VERSION, 1);
+    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 1);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 10);
+    assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 5);
+    assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 8);
   });
 
   test('a favicon match contributes a large, dedicated bonus', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true }), 70);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true }), 45);
   });
 
   test('a perceptual favicon near-match scores slightly below an exact match', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconNearMatch: true }), 62); // 40 base + 22
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconNearMatch: true }), 38);
   });
 
   test('an exact favicon match takes precedence over a near-match (not double-counted)', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true, faviconNearMatch: true }), 70);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', faviconMatch: true, faviconNearMatch: true }), 45);
   });
 
   test('an active site scores higher risk than a merely parked one', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'active' }), 65);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'parked' }), 45);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'active' }), 18);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', activityStatus: 'parked' }), 10);
   });
 
   test('a configured mail server adds risk', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasMx: true }), 60);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasMx: true }), 18);
   });
 
   test('SPF+DMARC together score higher than either alone', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: true }), 55);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: false }), 45);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: false, hasDmarc: true }), 45);
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: false, hasDmarc: false }), 40);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: true }), 13);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: false }), 11);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: false, hasDmarc: true }), 11);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: false, hasDmarc: false }), 10);
   });
 
   test('hidden ownership (WHOIS privacy) adds risk', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', privacyProtected: true }), 50);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', privacyProtected: true }), 13);
   });
 
   test('a more recently registered domain scores higher risk', () => {
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 30 }), 55); // < 90
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 200 }), 45); // 90-364
-    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 365 }), 40); // >= 365, no bonus
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 30 }), 20);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 200 }), 14);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', domainAgeDays: 365 }), 10);
   });
 
-  test('the total is clamped to 100', () => {
+  test('ordinary active mail-enabled registration evidence stays below danger', () => {
     const score = scoring.computeRiskScore({
       availability: 'registered',
-      faviconMatch: true,
       activityStatus: 'active',
       hasMx: true,
       hasSpf: true,
@@ -202,7 +205,51 @@ describe('explainRiskScore / computeRiskScore', () => {
       privacyProtected: true,
       domainAgeDays: 10,
     });
-    assert.equal(score, 100); // 40+30+25+20+15+10+15 = 155, clamped
+    assert.equal(score, 42);
+    assert.equal(scoring.riskTone(score), 'warn');
+  });
+
+  test('strong impersonation evidence reaches danger with visible factors', () => {
+    const explained = scoring.explainRiskScore({
+      availability: 'registered',
+      faviconMatch: true,
+      reusesOfficialAssets: true,
+    });
+    assert.equal(explained.score, 75);
+    assert.equal(scoring.riskTone(explained.score), 'danger');
+    assert.ok(explained.factors.some((factor) => factor.label.includes('Favicon')));
+    assert.ok(explained.factors.some((factor) => factor.label.includes('assets')));
+  });
+
+  test('only allowlisted mutation provenance contributes bounded context', () => {
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['dictionary'] }), 28);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['bitsquatting'] }), 22);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['character_omission'] }), 18);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['invented_high_risk'] }), 10);
+  });
+
+  test('risk model versions are strictly bounded positive integers', () => {
+    assert.equal(scoring.normalizeRiskModelVersion(1), 1);
+    for (const value of [0, -1, 1.5, 1001, '1', null, undefined]) {
+      assert.equal(scoring.normalizeRiskModelVersion(value), null);
+    }
+  });
+
+  test('the total is clamped to 100', () => {
+    const score = scoring.computeRiskScore({
+      availability: 'registered',
+      faviconMatch: true,
+      reusesOfficialAssets: true,
+      phishingLanguageMatch: 'verify your account',
+      hasPasswordField: true,
+      activityStatus: 'active',
+      hasMx: true,
+      hasSpf: true,
+      hasDmarc: true,
+      privacyProtected: true,
+      domainAgeDays: 10,
+    });
+    assert.equal(score, 100);
   });
 });
 

@@ -125,15 +125,56 @@ export function scoreTone(score) {
 }
 
 // ---------------------------------------------------------------------------
-// Risk score: flags a *registered* lookalike/typosquat domain as likely
-// phishing infrastructure rather than harmless coincidence or idle parking.
-// Deliberately the inverse of the opportunity score above - an actively-used
-// domain with a mail server and hidden ownership is a bad acquisition target
-// but exactly the profile of a live phishing setup, so those signals score
-// opposite ways depending on which question is being asked.
+// Risk score: prioritizes a *registered* lookalike/typosquat domain for analyst
+// review. Strong page/brand-impersonation evidence dominates; ordinary signs
+// of an operational domain add context but cannot reach the danger threshold
+// on their own. This is deliberately distinct from the opportunity score
+// above and remains a heuristic indicator, never a maliciousness verdict.
 // ---------------------------------------------------------------------------
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
+
+// The first explicitly stamped risk model. Older saved scores are intentionally
+// left unversioned: they remain readable, but are not compared with scores from
+// this recalibrated model because a numeric delta would describe a formula
+// change rather than a change in the observed domain.
+export const RISK_MODEL_VERSION = 1;
+
+const RISK_STATE_BASE = {
+  registered: 10,
+  for_sale: 5,
+  expiring: 8,
+};
+
+const HIGH_CONTEXT_MUTATIONS = new Set(['unicode_homoglyph', 'dictionary']);
+const MEDIUM_CONTEXT_MUTATIONS = new Set(['ascii_homoglyph', 'bitsquatting', 'tld_typo']);
+const LOW_CONTEXT_MUTATIONS = new Set([
+  'character_omission',
+  'character_duplication',
+  'character_transposition',
+  'keyboard_substitution',
+  'keyboard_insertion',
+  'vowel_swap',
+]);
+
+export function normalizeRiskModelVersion(value) {
+  return Number.isSafeInteger(value) && value > 0 && value <= 1000 ? value : null;
+}
+
+function mutationContext(mutationTypes) {
+  if (!Array.isArray(mutationTypes)) return null;
+  const bounded = mutationTypes.slice(0, 30);
+  if (bounded.some((value) => typeof value === 'string' && HIGH_CONTEXT_MUTATIONS.has(value))) {
+    return { label: 'High-similarity or phishing-term candidate context', delta: 18 };
+  }
+  if (bounded.some((value) => typeof value === 'string' && MEDIUM_CONTEXT_MUTATIONS.has(value))) {
+    return { label: 'Lookalike candidate context', delta: 12 };
+  }
+  if (bounded.some((value) => typeof value === 'string' && LOW_CONTEXT_MUTATIONS.has(value))) {
+    return { label: 'Generated variation candidate context', delta: 8 };
+  }
+  return null;
+}
 
 // Same breakdown-plus-final-number pattern as explainOpportunityScore()
 // above - computeRiskScore() reads its number from this, and it's what the
@@ -142,24 +183,35 @@ export function explainRiskScore(r) {
   const state = r.availability ?? r.state;
   if (!RISK_STATES.has(state)) return null;
 
-  const factors = [{ label: 'Base score (registered/for-sale/expiring)', delta: 40 }];
-  let score = 40;
+  const base = RISK_STATE_BASE[state];
+  const factors = [{ label: `Base score for "${STATE_LABELS[state] || state}"`, delta: base }];
+  let score = base;
+
+  // Mutation provenance establishes why this domain is being reviewed, but it
+  // is never sufficient by itself to declare the domain dangerous. Only
+  // generator-owned, allowlisted machine values contribute; arbitrary imported
+  // strings cannot increase the score.
+  const context = mutationContext(r.mutationTypes);
+  if (context) {
+    factors.push(context);
+    score += context.delta;
+  }
 
   // Set by bulk.js/render.js from a brand profile's official-site favicon
   // hash (see lib/favicon.js) - a much stronger phishing signal than any of
   // the activity/mail signals below, since it means this domain is serving
   // a byte-identical copy of the brand's own favicon, not just "some site."
   if (r.faviconMatch) {
-    factors.push({ label: 'Favicon matches your brand profile\'s official site', delta: 30 });
-    score += 30;
+    factors.push({ label: 'Favicon matches your brand profile\'s official site', delta: 35 });
+    score += 35;
   } else if (r.faviconNearMatch) {
     // Perceptual (fuzzy) match: not byte-identical, but visually the same
     // favicon resized/recompressed (see lib/perceptual-hash.js). Slightly
     // weaker than an exact match since it's a similarity threshold rather
     // than an equality, but still a strong copied-kit tell. Mutually
     // exclusive with faviconMatch - the exact match already scored above.
-    factors.push({ label: 'Favicon closely resembles your official site (perceptual match)', delta: 22 });
-    score += 22;
+    factors.push({ label: 'Favicon closely resembles your official site (perceptual match)', delta: 28 });
+    score += 28;
   }
 
   // Cheap signals pulled from the homepage HTML already fetched for the
@@ -167,12 +219,12 @@ export function explainRiskScore(r) {
   // urgency-driven copy are the actual mechanics of a credential-harvesting
   // page, not just circumstantial activity.
   if (r.reusesOfficialAssets) {
-    factors.push({ label: 'Reuses assets from your official site', delta: 20 });
-    score += 20;
+    factors.push({ label: 'Reuses assets from your official site', delta: 30 });
+    score += 30;
   }
   if (r.phishingLanguageMatch) {
-    factors.push({ label: 'Phishing/urgency language detected', delta: 15 });
-    score += 15;
+    factors.push({ label: 'Phishing/urgency language detected', delta: 20 });
+    score += 20;
   }
   if (r.hasPasswordField) {
     factors.push({ label: 'Login/password form present', delta: 15 });
@@ -180,44 +232,41 @@ export function explainRiskScore(r) {
   }
 
   if (r.activityStatus === 'active') {
-    factors.push({ label: 'Active site in use', delta: 25 });
-    score += 25;
-  } else if (r.activityStatus === 'parked') {
-    factors.push({ label: 'Parked page', delta: 5 });
-    score += 5;
+    factors.push({ label: 'Active site in use', delta: 8 });
+    score += 8;
   }
 
   if (r.hasMx) {
-    factors.push({ label: 'Mail server configured', delta: 20 });
-    score += 20;
+    factors.push({ label: 'Mail server configured', delta: 8 });
+    score += 8;
   }
   // Presence of these records isn't proof of a working, permissive outbound
   // policy (SPF can end in ~all/-all, DMARC can be p=none) - the label only
   // claims what's actually verified (the record exists), not how it's
   // configured.
   if (r.hasSpf && r.hasDmarc) {
-    factors.push({ label: 'SPF + DMARC records present', delta: 15 });
-    score += 15;
+    factors.push({ label: 'SPF + DMARC records present', delta: 3 });
+    score += 3;
   } else if (r.hasSpf || r.hasDmarc) {
-    factors.push({ label: 'SPF or DMARC record present', delta: 5 });
-    score += 5;
+    factors.push({ label: 'SPF or DMARC record present', delta: 1 });
+    score += 1;
   }
   if (r.privacyProtected === true) {
-    factors.push({ label: 'WHOIS privacy protected', delta: 10 });
-    score += 10;
+    factors.push({ label: 'WHOIS privacy protected', delta: 3 });
+    score += 3;
   }
 
   if (typeof r.domainAgeDays === 'number') {
     if (r.domainAgeDays < 90) {
-      factors.push({ label: `Recently registered (${fmtAge(r.domainAgeDays)})`, delta: 15 });
-      score += 15;
+      factors.push({ label: `Recently registered (${fmtAge(r.domainAgeDays)})`, delta: 10 });
+      score += 10;
     } else if (r.domainAgeDays < 365) {
-      factors.push({ label: `Registered under a year ago (${fmtAge(r.domainAgeDays)})`, delta: 5 });
-      score += 5;
+      factors.push({ label: `Registered under a year ago (${fmtAge(r.domainAgeDays)})`, delta: 4 });
+      score += 4;
     }
   }
 
-  return { score: Math.max(0, Math.min(100, Math.round(score))), factors };
+  return { modelVersion: RISK_MODEL_VERSION, score: Math.max(0, Math.min(100, Math.round(score))), factors };
 }
 
 export function computeRiskScore(r) {

@@ -18,6 +18,7 @@ function deepEvidence(overrides = {}) {
   return {
     scanDepth: 'deep',
     availability: 'registered',
+    riskModelVersion: 1,
     riskScore: 40,
     registrar: 'Example Registrar',
     activityStatus: 'active',
@@ -426,6 +427,15 @@ describe('snapshot normalization', () => {
     assert.equal(low.riskScore, 0);
   });
 
+  test('retains only a bounded risk model version attached to risk evidence', () => {
+    const current = model.normalizeSnapshot({ availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: ISO });
+    assert.equal(current.riskModelVersion, 1);
+    const malformed = model.normalizeSnapshot({ availability: 'registered', riskModelVersion: '1', riskScore: 42 }, { fallback: ISO });
+    assert.equal(malformed.riskModelVersion, null);
+    const orphaned = model.normalizeSnapshot({ availability: 'registered', riskModelVersion: 1 }, { fallback: ISO });
+    assert.equal(orphaned.riskModelVersion, null);
+  });
+
   test('preserves null vs false for booleans', () => {
     const snap = model.normalizeSnapshot({ availability: 'registered', hasMx: false, hasSpf: true }, { fallback: ISO });
     assert.equal(snap.hasMx, false); // an observed "no MX", not missing data
@@ -752,6 +762,28 @@ describe('compareCaseEvidence', () => {
     assert.equal(change.tone, 'danger');
   });
 
+  test('keeps unversioned or differently-versioned risk scores readable but incomparable', () => {
+    const legacy = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskScore: 90 }, { fallback: ISO });
+    const current = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });
+    assert.equal(legacy.riskScore, 90);
+    assert.equal(legacy.riskModelVersion, null);
+    assert.equal(find(model.compareCaseEvidence(legacy, current), 'riskScore'), undefined);
+    assert.deepEqual(model.caseEvidenceIncomparableReasons(legacy, current), ['risk-model']);
+
+    const future = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 2, riskScore: 80 }, { fallback: LATER });
+    assert.equal(find(model.compareCaseEvidence(current, future), 'riskScore'), undefined);
+    assert.deepEqual(model.caseEvidenceIncomparableReasons(current, future), ['risk-model']);
+  });
+
+  test('reports ordinary changes while separately disclosing a risk-model mismatch', () => {
+    const legacy = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', registrar: 'Old Registrar', riskScore: 90 }, { fallback: ISO });
+    const current = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', registrar: 'New Registrar', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });
+    const changes = model.compareCaseEvidence(legacy, current);
+    assert.ok(find(changes, 'registrar'));
+    assert.equal(find(changes, 'riskScore'), undefined);
+    assert.deepEqual(model.caseEvidenceIncomparableReasons(legacy, current), ['risk-model']);
+  });
+
   test('reports an availability transition into a registered-like state', () => {
     const changes = model.compareCaseEvidence(snap({ availability: 'available' }), snap({ availability: 'registered' }));
     const change = find(changes, 'availability');
@@ -794,8 +826,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports a meaningful fast->fast risk-score change', () => {
-    const a = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskScore: 20 }, { fallback: ISO });
-    const b = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskScore: 65 }, { fallback: LATER });
+    const a = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 20 }, { fallback: ISO });
+    const b = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 65 }, { fallback: LATER });
     const change = find(model.compareCaseEvidence(a, b), 'riskScore');
     assert.ok(change);
     assert.equal(change.before, 20);
@@ -803,8 +835,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('does not report a risk change caused solely by fast vs deep depth', () => {
-    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskScore: 20 }, { fallback: ISO });
-    const deep = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskScore: 80, activityStatus: 'active', hasMx: true }, { fallback: LATER });
+    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 20 }, { fallback: ISO });
+    const deep = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 80, activityStatus: 'active', hasMx: true }, { fallback: LATER });
     assert.equal(find(model.compareCaseEvidence(fast, deep), 'riskScore'), undefined);
   });
 
@@ -846,8 +878,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports a factor change even when the total score is unchanged', () => {
-    const before = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }, { fallback: ISO });
-    const after = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }, { fallback: LATER });
+    const before = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }, { fallback: ISO });
+    const after = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }, { fallback: LATER });
     const changes = model.compareCaseEvidence(before, after);
     assert.equal(find(changes, 'riskScore'), undefined); // total unchanged
     assert.ok(find(changes, 'riskFactors')); // composition changed -> explainable material change

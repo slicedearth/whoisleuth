@@ -20,6 +20,7 @@ function deepSnapshot(overrides = {}) {
     scanDepth: 'deep',
     availability: 'registered',
     confidence: null,
+    riskModelVersion: 1,
     riskScore: 40,
     opportunityScore: null,
     riskFactors: [],
@@ -64,6 +65,7 @@ describe('scanDepthLabel', () => {
 describe('fieldLabel', () => {
   test('returns labels for known fields', () => {
     assert.equal(display.fieldLabel('availability'), 'Availability');
+    assert.equal(display.fieldLabel('riskModelVersion'), 'Risk model version');
     assert.equal(display.fieldLabel('riskScore'), 'Risk score');
     assert.equal(display.fieldLabel('hasMx'), 'MX');
     assert.equal(display.fieldLabel('mutationTypes'), 'Mutation types');
@@ -88,6 +90,7 @@ describe('formatSnapshotValue', () => {
   test('returns string for numbers', () => {
     assert.equal(display.formatSnapshotValue('riskScore', 85), '85');
     assert.equal(display.formatSnapshotValue('riskScore', 0), '0');
+    assert.equal(display.formatSnapshotValue('riskModelVersion', 1), 'v1');
   });
 
   test('returns comma-joined string for string arrays', () => {
@@ -137,7 +140,7 @@ describe('snapshotFieldGroups', () => {
   });
 
   test('excludes groups with no present values', () => {
-    const snap = deepSnapshot({ availability: 'registered', registrar: null, riskScore: null });
+    const snap = deepSnapshot({ availability: 'registered', registrar: null, riskModelVersion: null, riskScore: null });
     const groups = display.snapshotFieldGroups(snap);
     // Only Registration should have a value (availability).
     assert.equal(groups.length, 1);
@@ -338,10 +341,21 @@ describe('deriveTimeline', () => {
     assert.equal(timeline[0].changes, null);
     // But snapshots are materially distinct -> incomparable.
     assert.equal(timeline[0].hasIncomparableChange, true);
+    assert.deepEqual(timeline[0].incomparableReasons, ['scan-depth']);
     // No false favicon "removal" — changes list is null.
     assert.equal(timeline[0].changes, null);
     // No risk change reported across different depths.
     assert.equal(timeline[0].changes, null);
+  });
+
+  test('identifies score-model incomparability without hiding other material changes', () => {
+    const older = deepSnapshot({ capturedAt: ISO, fingerprint: 'legacy', riskModelVersion: null, riskScore: 90, registrar: 'Old Registrar' });
+    const newer = deepSnapshot({ capturedAt: LATER, fingerprint: 'current', riskModelVersion: 1, riskScore: 42, registrar: 'New Registrar' });
+    const entry = display.deriveTimeline([older, newer])[0];
+    assert.equal(entry.hasIncomparableChange, true);
+    assert.deepEqual(entry.incomparableReasons, ['risk-model']);
+    assert.equal(entry.changes.some((change) => change.field === 'riskScore'), false);
+    assert.equal(entry.changes.some((change) => change.field === 'registrar'), true);
   });
 
   test('does not flag incomparable when fingerprints match (identical material)', () => {
@@ -396,6 +410,7 @@ describe('currentEvidenceSummary', () => {
     const newer = deepSnapshot({ capturedAt: LATER, availability: 'registered', riskScore: 85, registrar: 'NewReg', activityStatus: 'active' });
     const summary = display.currentEvidenceSummary([older, newer]);
     assert.equal(summary.availability, 'registered');
+    assert.equal(summary.riskModelVersion, 1);
     assert.equal(summary.riskScore, 85);
     assert.equal(summary.registrar, 'NewReg');
     assert.equal(summary.activityStatus, 'active');

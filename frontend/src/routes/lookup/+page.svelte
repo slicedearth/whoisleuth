@@ -25,7 +25,7 @@
 
   type JsonRecord = Record<string, any>;
   type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; transportSecurity?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null; attempts?:Array<{outcome?:string}> };
-  type ScoreExplanation = { score:number; factors:Array<{label:string;delta:number}> }|null;
+  type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
   type ComparisonField = { label:string; status:string; rdapDisplay:string; whoisDisplay:string };
 
   let query=$state('');
@@ -77,6 +77,7 @@
   const caseEvidence=$derived({
     availability:String(availability.state||''),
     confidence:availability.confidence?String(availability.confidence):null,
+    riskModelVersion:risk?.modelVersion??null,
     riskScore:risk?risk.score:null,
     opportunityScore:opportunity?opportunity.score:null,
     riskFactors:risk?risk.factors.map((f)=>({label:f.label,points:f.delta})):[],
