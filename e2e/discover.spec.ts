@@ -89,6 +89,23 @@ test('lookalike generation rejects ambiguous dotted input and invalid mutation l
   await expect(page.locator('.candidate')).not.toHaveCount(0);
 });
 
+test('domain seeds expand across selected TLDs with combined provenance', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com, net');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  const exactSubstitution = page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^acme\.net$/ }),
+  });
+  await expect(exactSubstitution).toContainText('Selected TLD substitution');
+  const combined = page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^acm\.net$/ }),
+  });
+  await expect(combined).toContainText('Character omission');
+  await expect(combined).toContainText('Selected TLD substitution');
+  await expect(page.locator('.candidate strong', { hasText: /^acme\.com$/ })).toHaveCount(0);
+});
+
 test('name-idea generation refuses labels that exceed DNS bounds', async ({ page }) => {
   await page.getByRole('tab', { name: 'Name ideas' }).click();
   await page.getByRole('textbox', { name: 'Keyword' }).fill('a'.repeat(80));

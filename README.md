@@ -445,6 +445,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   domain labels before including them and applies deterministic per-family,
   label-variant, TLD, and overall candidate limits before browser handoff. The
   Discover status reports when a limit prevents complete coverage.
+- When the seed is a domain, the selected TLD field now expands that exact
+  label and every generated label variation across the bounded selected TLD
+  set. These results retain an explicit **Selected TLD substitution** source,
+  including alongside any label-level mutation that also contributed.
 - After a generated-list scan, **Defensive registration coverage** groups the
   results by mutation family and TLD: protected/allowlisted domains,
   registered exposures, available gaps, and unknown results. Groups can be

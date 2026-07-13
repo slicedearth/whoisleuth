@@ -30,6 +30,43 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(candidate.tld, 'cm');
   });
 
+  test('expands a domain seed across selected alternate TLDs', () => {
+    const candidates = generator.generateTyposquatCandidates('acme.com', ['com', 'net', 'org']);
+    assert.deepEqual(candidates.find((candidate) => candidate.domain === 'acme.net'), {
+      domain: 'acme.net',
+      source: 'acme.com',
+      tld: 'net',
+      mutationTypes: ['tld_substitution'],
+    });
+    assert.equal(candidates.some((candidate) => candidate.domain === 'acme.com'), false);
+  });
+
+  test('retains both label and TLD mutation provenance when both change', () => {
+    const candidate = generator.generateTyposquatCandidates('acme.com', ['net'])
+      .find((item) => item.domain === 'acm.net');
+    assert.deepEqual(candidate.mutationTypes, ['character_omission', 'tld_substitution']);
+  });
+
+  test('merges selected substitutions with same-name TLD typo provenance', () => {
+    const candidate = generator.generateTyposquatCandidates('acme.com', ['co'])
+      .find((item) => item.domain === 'acme.co');
+    assert.deepEqual(candidate.mutationTypes, ['tld_typo', 'tld_substitution']);
+  });
+
+  test('counts the source TLD inside the bounded selected TLD set', () => {
+    const fallbackTlds = Array.from({ length: generator.MAX_GENERATION_TLDS }, (_, index) =>
+      `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
+    );
+    const result = generator.generateTyposquatCandidateSet('acme.com', fallbackTlds);
+    const substitutionTlds = new Set(result.candidates
+      .filter((candidate) => candidate.mutationTypes.includes('tld_substitution'))
+      .map((candidate) => candidate.tld));
+    assert.equal(substitutionTlds.size, generator.MAX_GENERATION_TLDS - 1);
+    assert.equal(substitutionTlds.has(fallbackTlds.at(-1)), false);
+    assert.equal(result.truncated, true);
+    assert.ok(result.limitReasons.includes('tlds'));
+  });
+
   test('keeps the historical string-only wrapper compatible', () => {
     const rich = generator.generateTyposquatCandidates('acme', ['com', 'net']).map((candidate) => candidate.domain);
     assert.deepEqual(generator.generateTyposquatVariants('acme', ['com', 'net']), rich);

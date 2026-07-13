@@ -134,12 +134,12 @@ export function scoreTone(score) {
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
-// Version 2 groups correlated impersonation observations into distinct evidence
-// families and adds a visible corroboration factor only when multiple families
-// are present. Older scores remain readable, but case/watchlist comparisons gate
-// numeric changes on matching model versions so formula changes are not mistaken
-// for changes in the observed domain.
-export const RISK_MODEL_VERSION = 2;
+// Version 3 retains the grouped contextual evidence model from version 2 and
+// adds the generator-owned selected-TLD-substitution machine value to the
+// bounded lookalike context allowlist. Older scores remain readable, but case
+// and watchlist comparisons gate numeric changes on matching model versions so
+// formula changes are not mistaken for changes in the observed domain.
+export const RISK_MODEL_VERSION = 3;
 
 const RISK_STATE_BASE = {
   registered: 10,
@@ -148,7 +148,7 @@ const RISK_STATE_BASE = {
 };
 
 const HIGH_CONTEXT_MUTATIONS = new Set(['unicode_homoglyph', 'dictionary']);
-const MEDIUM_CONTEXT_MUTATIONS = new Set(['ascii_homoglyph', 'bitsquatting', 'tld_typo']);
+const MEDIUM_CONTEXT_MUTATIONS = new Set(['ascii_homoglyph', 'bitsquatting', 'tld_typo', 'tld_substitution']);
 const LOW_CONTEXT_MUTATIONS = new Set([
   'character_omission',
   'character_duplication',

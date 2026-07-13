@@ -57,6 +57,7 @@ export const MUTATION_LABELS = {
   unicode_homoglyph: 'Unicode homoglyph',
   dictionary: 'Phishing dictionary',
   tld_typo: 'TLD typo',
+  tld_substitution: 'Selected TLD substitution',
 };
 
 function isValidDomainLabel(value) {
@@ -196,7 +197,14 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds) {
     };
   }
   const { name, tld } = parts;
-  const normalizedTlds = tld ? { values: [tld], truncated: false } : normalizeTlds(fallbackTlds);
+  const normalizedFallbackTlds = normalizeTlds(fallbackTlds);
+  const combinedTlds = tld
+    ? [tld, ...normalizedFallbackTlds.values.filter((value) => value !== tld)]
+    : normalizedFallbackTlds.values;
+  const normalizedTlds = {
+    values: combinedTlds.slice(0, MAX_GENERATION_TLDS),
+    truncated: normalizedFallbackTlds.truncated || combinedTlds.length > MAX_GENERATION_TLDS,
+  };
   const tlds = normalizedTlds.values;
   if (tlds.length === 0) {
     return {
@@ -285,6 +293,11 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds) {
   if (tld && TLD_TYPOS[tld]) {
     for (const typoTld of TLD_TYPOS[tld]) addCandidate(`${name}.${typoTld}`, typoTld, ['tld_typo']);
   }
+  if (tld) {
+    for (const candidateTld of tlds) {
+      if (candidateTld !== tld) addCandidate(`${name}.${candidateTld}`, candidateTld, ['tld_substitution']);
+    }
+  }
   candidateLoop: for (const [variant, mutationTypes] of state.variants) {
     for (const candidateTld of tlds) {
       if (byDomain.size >= MAX_GENERATED_CANDIDATES) {
@@ -292,7 +305,10 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds) {
         break candidateLoop;
       }
       const domain = `${variant}.${candidateTld}`;
-      addCandidate(domain, candidateTld, mutationTypes);
+      const candidateMutationTypes = tld && candidateTld !== tld
+        ? [...mutationTypes, 'tld_substitution']
+        : mutationTypes;
+      addCandidate(domain, candidateTld, candidateMutationTypes);
     }
   }
 
