@@ -7,7 +7,8 @@
 import { normalizeDomain } from './case-model.js';
 import { groupBySimilarFavicon } from './utils.js';
 
-export const RELATIONSHIP_EVIDENCE_VERSION = 1;
+export const RELATIONSHIP_EVIDENCE_VERSION = 2;
+export const TLS_RELATIONSHIP_PROFILE_VERSION = 1;
 export const MAX_RELATIONSHIP_ROWS = 2000;
 export const MAX_RELATIONSHIP_GROUPS = 100;
 export const MAX_RELATIONSHIP_DOMAINS = 50;
@@ -21,6 +22,7 @@ export const MAX_FAVICON_ROWS = 250;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const FAVICON_SHA_RE = /^[a-f0-9]{64}$/i;
 const FAVICON_PHASH_RE = /^[a-f0-9]{16}$/i;
+const CERTIFICATE_SHA_RE = /^[a-f0-9]{64}$/i;
 
 /** @param {unknown} value */
 function record(value) {
@@ -96,10 +98,22 @@ function dnsRecords(availability) {
   return record(dns?.records) || {};
 }
 
+/** @param {Record<string, any>} availability */
+function tlsCertificateFingerprint(availability) {
+  const tls = record(availability.tls);
+  const certificate = record(tls?.certificate);
+  const fingerprint = certificate?.fingerprintSha256;
+  if (tls?.source !== 'tls' || tls?.profileVersion !== TLS_RELATIONSHIP_PROFILE_VERSION
+    || !['success', 'partial'].includes(tls?.status) || typeof fingerprint !== 'string'
+    || fingerprint.length !== 64 || !CERTIFICATE_SHA_RE.test(fingerprint)) return null;
+  return fingerprint.toLowerCase();
+}
+
 /**
  * Normalizes only the observations used by the current Bulk result set. The
  * returned object is transient and contains no raw HTML, response bodies,
- * complete DNS payload, URLs, or Certificate Transparency rows.
+ * complete DNS payload, URLs, certificate bodies, or Certificate Transparency
+ * rows. The TLS field is an exact normalized leaf-certificate digest only.
  * @param {unknown} rawAvailability
  * @param {unknown} rawOfficialDomains
  */
@@ -137,6 +151,7 @@ export function relationshipObservation(rawAvailability, rawOfficialDomains = []
     officialAssetHosts,
     faviconHash,
     faviconPHash,
+    certificateFingerprint: tlsCertificateFingerprint(availability),
     truncated: nameservers.truncated || ipAddresses.truncated || trackingIdentifiers.truncated || assets.truncated
       || officialDomainSource.length > MAX_OFFICIAL_DOMAINS,
   };
@@ -172,6 +187,7 @@ export function buildScanRelationships(rawRows) {
   const nameserverSets = new Map();
   const addresses = new Map();
   const identifiers = new Map();
+  const certificates = new Map();
   const officialAssets = new Map();
   for (const { domain, observation } of rows) {
     const nameserverSource = Array.isArray(observation.nameservers) ? observation.nameservers : [];
@@ -186,12 +202,19 @@ export function buildScanRelationships(rawRows) {
     for (const value of identifierSource.slice(0, MAX_TRACKING_IDS_PER_ROW)) {
       if (/^[a-z-]{1,40}:[A-Z0-9-]{1,64}$/.test(value)) addBucket(identifiers, value, domain);
     }
+    const certificateFingerprint = typeof observation.certificateFingerprint === 'string'
+      && observation.certificateFingerprint.length === 64
+      && CERTIFICATE_SHA_RE.test(observation.certificateFingerprint)
+      ? observation.certificateFingerprint.toLowerCase()
+      : '';
+    addBucket(certificates, certificateFingerprint, domain);
     for (const value of assetSource.slice(0, MAX_OFFICIAL_ASSET_HOSTS_PER_ROW)) addBucket(officialAssets, hostname(value), domain);
   }
 
   const output = [];
   for (const [value, domains] of nameserverSets) if (domains.size >= 2) output.push(group('nameserver_set', 'Shared nameserver set', 'Exact normalized set', value, [...domains].sort(), 'These domains reported the same normalized nameserver set retained by this scan.'));
   for (const [value, domains] of addresses) if (domains.size >= 2) output.push(group('ip_address', 'Shared IP address', 'Exact normalized address', value, [...domains].sort(), 'These domains resolved to the same IP address in this scan. Shared hosting and CDNs are common.'));
+  for (const [value, domains] of certificates) if (domains.size >= 2) output.push(group('certificate', 'Shared TLS certificate', 'Exact leaf-certificate SHA-256', value, [...domains].sort(), 'These domains presented the same leaf certificate in this scan. Multi-domain certificates, shared hosting, CDNs, and managed platforms are common.'));
   for (const [value, domains] of identifiers) if (domains.size >= 2) output.push(group('tracking_identifier', 'Shared tracking identifier', 'Exact public identifier', value, [...domains].sort(), 'These pages exposed the same recognized public tracking identifier in bounded static HTML.'));
 
   const faviconRows = rows.slice(0, MAX_FAVICON_ROWS).map(({ domain, observation }) => ({
@@ -208,7 +231,7 @@ export function buildScanRelationships(rawRows) {
   }
   for (const [value, domains] of officialAssets) output.push(group('official_asset', 'Official asset relationship', 'Configured-domain host match', value, [...domains].sort(), 'One or more pages loaded an asset from this configured official domain or its subdomain.'));
 
-  const order = new Map(['nameserver_set', 'ip_address', 'tracking_identifier', 'favicon', 'official_asset'].map((value, index) => [value, index]));
+  const order = new Map(['nameserver_set', 'ip_address', 'certificate', 'tracking_identifier', 'favicon', 'official_asset'].map((value, index) => [value, index]));
   output.sort((left, right) => (Number(order.get(left.type)) - Number(order.get(right.type))) || left.value.localeCompare(right.value) || left.domains.join('|').localeCompare(right.domains.join('|')));
   if (output.length > MAX_RELATIONSHIP_GROUPS) truncated = true;
   const groups = output.slice(0, MAX_RELATIONSHIP_GROUPS).map((item) => {
@@ -222,7 +245,8 @@ export function buildScanRelationships(rawRows) {
     truncated,
     limitations: [
       'Shared observations are investigation pivots, not proof of common ownership, coordination, intent, or maliciousness.',
-      'Certificate Transparency counts and hostnames do not identify reused certificates; certificate relationships require native TLS fingerprints.',
+      'Certificate relationships use exact native TLS leaf-certificate SHA-256 values only. Certificate Transparency counts and hostnames are never treated as certificate reuse.',
+      'A shared certificate can reflect a multi-domain certificate, shared hosting, CDN, or managed platform and does not establish common control.',
     ],
   };
 }

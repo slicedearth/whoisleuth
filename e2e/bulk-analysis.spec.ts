@@ -187,7 +187,7 @@ test('risk model v2 exposes cross-family corroboration in Bulk triage', async ({
   await expect(row).toBeVisible();
 });
 
-test('deep results present bounded relationship evidence without ownership or certificate claims', async ({ page }) => {
+test('deep results present bounded relationship evidence including exact native certificate identity', async ({ page }) => {
   await page.evaluate(() => {
     const profile = {
       id: 'relationship-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
@@ -217,6 +217,10 @@ test('deep results present bounded relationship evidence without ownership or ce
               identifiers: { values: shared ? [{ type: 'tag-container', value: 'GTM-SHARED' }] : [] },
             },
           },
+          tls: shared ? {
+            source: 'tls', profileVersion: 1, status: 'success',
+            certificate: { fingerprintSha256: 'c'.repeat(64) },
+          } : null,
         },
         diagnostics: { rdap: { status: 'complete' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
       }),
@@ -226,16 +230,18 @@ test('deep results present bounded relationship evidence without ownership or ce
   await page.getByLabel('Scan mode').selectOption('deep');
   await runBulkScan(page, ['first.example', 'second.example', 'third.example']);
 
-  const section = page.getByRole('region', { name: '5 observed relationships' });
+  const section = page.getByRole('region', { name: '6 observed relationships' });
   await expect(section).toBeVisible();
   await expect(section.getByText('Shared nameserver set', { exact: true })).toBeVisible();
   await expect(section.getByText('Shared IP address', { exact: true })).toBeVisible();
+  await expect(section.getByText('Shared TLS certificate', { exact: true })).toBeVisible();
+  await expect(section.getByText('Exact leaf-certificate SHA-256', { exact: true })).toBeVisible();
   await expect(section.getByText('Shared tracking identifier', { exact: true })).toBeVisible();
   await expect(section.getByText('Similar favicon', { exact: true })).toBeVisible();
   await expect(section.getByText('Official asset relationship', { exact: true })).toBeVisible();
   await expect(section).toContainText('not ownership or maliciousness conclusions');
   await section.getByText('Interpretation limits').click();
-  await expect(section).toContainText('require native TLS fingerprints');
+  await expect(section).toContainText('does not establish common control');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

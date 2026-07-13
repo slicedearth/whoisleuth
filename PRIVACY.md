@@ -50,8 +50,11 @@ at all.
   address, negotiated protocol/cipher/ALPN, runtime trust and hostname outcome,
   bounded public certificate identity/validity/SAN/public-key metadata, and a
   capped certificate-chain summary. Certificate bytes and TLS session material
-  are not retained. The richer profile is not copied into browser-local cases,
-  watchlists, profiles, or Certificate Transparency history.
+  are not retained. Deep Bulk may compare the exact leaf-certificate SHA-256
+  transiently within the current result set; the derived relationship is not
+  persisted or treated as ownership evidence. The richer profile is not copied
+  into browser-local cases, watchlists, profiles, or Certificate Transparency
+  history.
 - **Page identity**: a requested deep Lookup can derive bounded metadata from
   the homepage HTML already captured by the HTTP probe. This can include the
   document language, canonical and meta-refresh targets, selected Open Graph

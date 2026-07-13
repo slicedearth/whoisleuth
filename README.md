@@ -426,9 +426,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   no Risk score, and is not copied into shortlists, watchlists, cases, or
   exports. Shared observations are investigation pivots, not proof of common
   ownership, coordination, intent, or maliciousness. CT hostname and
-  certificate-count provenance is not treated as certificate reuse. The native
-  TLS profile now supplies a leaf-certificate fingerprint, but scan-local
-  certificate grouping remains a separate bounded follow-up increment.
+  certificate-count provenance is not treated as certificate reuse. Deep Bulk
+  results can group exact native leaf-certificate SHA-256 observations within
+  the current scan. Multi-domain certificates, shared hosting, CDNs, and
+  managed platforms are common, so this remains relationship context rather
+  than proof of common ownership, control, intent, or abuse.
 - **Bulk triage controls** keep large scans usable: filter by availability
   family, high-risk score, error state, mutation family, and one or more
   evidence signals. Counts update while the scan runs; filters change only
