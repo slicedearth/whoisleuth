@@ -92,6 +92,7 @@ describe('formatSnapshotValue', () => {
 
   test('returns comma-joined string for string arrays', () => {
     assert.equal(display.formatSnapshotValue('nameservers', ['ns1.example', 'ns2.example']), 'ns1.example, ns2.example');
+    assert.equal(display.formatSnapshotValue('httpSecurityHeaders', ['content-security-policy', 'hsts']), 'Content Security Policy, HSTS');
   });
 
   test('returns "None" for empty arrays', () => {
@@ -151,6 +152,25 @@ describe('snapshotFieldGroups', () => {
     const mxRow = mailGroup.rows.find((r) => r.field === 'hasMx');
     assert.ok(mxRow);
     assert.equal(mxRow.value, false);
+  });
+
+  test('groups compact HTTP facts separately from page and mail evidence', () => {
+    const snap = deepSnapshot({
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://example.test',
+      httpResponseStatus: 200,
+      httpTransportSecurity: 'https',
+      httpRedirectCount: 0,
+      httpCrossOriginRedirect: false,
+      httpHttpsDowngrade: false,
+      httpContentType: 'text/html',
+      httpSecurityHeaders: ['hsts'],
+    });
+    const group = display.snapshotFieldGroups(snap).find((item) => item.name === 'HTTP');
+    assert.ok(group);
+    assert.equal(group.rows.find((row) => row.field === 'httpFinalOrigin').value, 'https://example.test');
+    assert.equal(group.rows.find((row) => row.field === 'httpRedirectCount').value, 0);
   });
 
   test('excludes null, undefined, and empty strings', () => {

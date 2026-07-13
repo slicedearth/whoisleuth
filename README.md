@@ -346,6 +346,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   of the complete upstream response. URL query strings are omitted from
   retained provenance. Missing security headers and cross-origin redirects are
   contextual evidence, not maliciousness verdicts, and do not change scoring.
+  Bulk results, watchlists, and analyst cases keep only a compact summary of
+  the final origin, response status, transport, redirect count/flags, MIME
+  type, and presence-only security-header tokens. They never copy URL paths,
+  query strings, header values, attempt errors, or redirect inventories from
+  the richer Lookup observation.
 - A bulk scan flags **Related infrastructure**: domains in the same scan
   that share an exact nameserver set or favicon hash with each other, with
   a one-click way to load the group back into the query box. Uses signals
@@ -367,9 +372,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   data already collected with no extra network calls.
 - Save a generated typosquat set as a **Watchlist** and re-scan it later.
   Each watchlist retains a bounded, browser-local timeline of material
-  availability, registrar, nameserver, date, mail, website, and Risk-score
-  changes. Fast rescans update registration data without erasing last-known
-  deep-scan evidence; an explicit deep re-scan refreshes page/mail signals.
+  availability, registrar, nameserver, date, mail, compact HTTP, website, and
+  Risk-score changes. Fast rescans update registration data without erasing
+  last-known deep-scan evidence; an explicit deep re-scan refreshes page/mail
+  and HTTP signals.
   Deep watchlist rescans keep the same 200-domain safety limit as other deep
   checks; larger watchlists remain available for fast registration monitoring.
   Timeline entries can be filtered to changed checks only and are included

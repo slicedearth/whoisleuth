@@ -265,6 +265,34 @@ describe('buildCaseReport JSON', () => {
     assert.equal(json.case._futureProp, undefined);
   });
 
+  test('exports the compact HTTP summary without rich response material', () => {
+    const rec = caseRecord({ evidenceHistory: [snapshot({
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://example.test',
+      httpResponseStatus: 200,
+      httpTransportSecurity: 'https',
+      httpRedirectCount: 1,
+      httpCrossOriginRedirect: true,
+      httpHttpsDowngrade: false,
+      httpContentType: 'text/html',
+      httpSecurityHeaders: ['content-security-policy', 'hsts'],
+      redirects: [{ from: 'https://example.test', to: 'https://example.test/private' }],
+      rawHeaders: { server: 'secret' },
+    })] });
+    const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
+    const exported = json.currentAssessment;
+    assert.equal(exported.httpFinalOrigin, 'https://example.test');
+    assert.equal(exported.httpResponseStatus, 200);
+    assert.deepEqual(exported.httpSecurityHeaders, ['content-security-policy', 'hsts']);
+    assert.equal('redirects' in exported, false);
+    assert.equal('rawHeaders' in exported, false);
+    assert.match(markdown, /Final website origin.*https\\:\/\/example\.test/);
+    assert.match(markdown, /Observed security headers: Content Security Policy, HSTS/);
+    assert.equal(markdown.includes('/private'), false);
+    assert.equal(markdown.includes('secret'), false);
+  });
+
   test('deterministic output with injected timestamp', () => {
     const rec = caseRecord({ evidenceHistory: [] });
     const a = caseReport.buildCaseReport(rec, { generatedAt: '2026-01-01T00:00:00.000Z' });

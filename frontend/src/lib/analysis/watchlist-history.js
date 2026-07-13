@@ -4,6 +4,7 @@
 // result set on every check.
 
 import { computeRiskScore } from './scoring.js';
+import { normalizeHttpSummary } from './http-summary.js';
 
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;
 export const MAX_WATCHLIST_CHANGES_PER_EVENT = 500;
@@ -15,6 +16,16 @@ const DEEP_FIELDS = new Set([
   'hasDmarc',
   'activityStatus',
   'pageTitle',
+  'httpSummaryVersion',
+  'httpEvidenceStatus',
+  'httpFinalOrigin',
+  'httpResponseStatus',
+  'httpTransportSecurity',
+  'httpRedirectCount',
+  'httpCrossOriginRedirect',
+  'httpHttpsDowngrade',
+  'httpContentType',
+  'httpSecurityHeaders',
   'faviconHash',
   'faviconMatch',
   'faviconNearMatch',
@@ -36,6 +47,15 @@ const FIELD_LABELS = {
   hasDmarc: 'DMARC',
   activityStatus: 'Website activity',
   pageTitle: 'Page title',
+  httpEvidenceStatus: 'HTTP evidence status',
+  httpFinalOrigin: 'Final website origin',
+  httpResponseStatus: 'HTTP response status',
+  httpTransportSecurity: 'Website transport',
+  httpRedirectCount: 'HTTP redirect count',
+  httpCrossOriginRedirect: 'Cross-origin redirect',
+  httpHttpsDowngrade: 'HTTPS downgrade',
+  httpContentType: 'Website content type',
+  httpSecurityHeaders: 'Observed security headers',
   faviconHash: 'Favicon',
   faviconMatch: 'Official favicon match',
   faviconNearMatch: 'Official favicon near-match',
@@ -44,6 +64,11 @@ const FIELD_LABELS = {
   reusesOfficialAssets: 'Official asset reuse',
   riskScore: 'Risk score',
 };
+
+// The schema version must travel with retained summaries so every storage
+// boundary can revalidate them, but it is implementation metadata rather than
+// an analyst-facing observation and must never generate a history event.
+const BASELINE_FIELDS = ['httpSummaryVersion', ...Object.keys(FIELD_LABELS)];
 
 const AVAILABILITY_LABELS = {
   available: 'Available',
@@ -63,7 +88,7 @@ const ACTIVITY_LABELS = {
 
 function inferredScanDepth(record) {
   if (record.scanDepth === 'deep' || record.scanDepth === 'fast') return record.scanDepth;
-  return ['hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'faviconHash', 'pageTitle']
+  return ['hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'faviconHash', 'pageTitle', 'httpResponseStatus']
     .some((key) => record[key] !== null && record[key] !== undefined)
     ? 'deep'
     : 'fast';
@@ -89,6 +114,7 @@ function normalizeDate(value) {
 
 function compactRecord(record) {
   const scanDepth = inferredScanDepth(record);
+  const httpSummary = normalizeHttpSummary(record) || {};
   return {
     domain: String(record.domain || '').trim().toLowerCase(),
     scanDepth,
@@ -103,6 +129,7 @@ function compactRecord(record) {
     hasDmarc: typeof record.hasDmarc === 'boolean' ? record.hasDmarc : null,
     activityStatus: record.activityStatus || null,
     pageTitle: record.pageTitle ?? null,
+    ...httpSummary,
     faviconHash: record.faviconHash || null,
     faviconMatch: typeof record.faviconMatch === 'boolean' ? record.faviconMatch : null,
     faviconNearMatch: typeof record.faviconNearMatch === 'boolean' ? record.faviconNearMatch : null,
@@ -124,7 +151,9 @@ function isComparable(field, value, record) {
   if (DEEP_FIELDS.has(field) && record.scanDepth !== 'deep') return false;
   if (field === 'availability') return CONCLUSIVE_AVAILABILITY.has(value);
   if (field === 'nameservers') return Array.isArray(value) && value.length > 0;
-  if (['registrarName', 'createdDate', 'expiryDate', 'activityStatus'].includes(field)) return Boolean(value);
+  if (field === 'httpSecurityHeaders') return Array.isArray(value);
+  if (['httpSummaryVersion', 'httpResponseStatus', 'httpRedirectCount'].includes(field)) return Number.isInteger(value);
+  if (['registrarName', 'createdDate', 'expiryDate', 'activityStatus', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpTransportSecurity', 'httpContentType'].includes(field)) return Boolean(value);
   if (['pageTitle', 'faviconHash', 'phishingLanguageMatch'].includes(field)) return value === null || typeof value === 'string';
   if (field === 'riskScore') return typeof value === 'number';
   return typeof value === 'boolean';
@@ -133,6 +162,7 @@ function isComparable(field, value, record) {
 function valuesEqual(field, before, after) {
   if (field === 'registrarName') return normalizeRegistrar(before) === normalizeRegistrar(after);
   if (field === 'nameservers') return JSON.stringify(normalizeNameservers(before)) === JSON.stringify(normalizeNameservers(after));
+  if (field === 'httpSecurityHeaders') return JSON.stringify(before) === JSON.stringify(after);
   if (field === 'createdDate' || field === 'expiryDate') return normalizeDate(before) === normalizeDate(after);
   return before === after;
 }
@@ -153,6 +183,10 @@ function classifyChange(field, before, after) {
   if (field === 'phishingLanguageMatch' && !before && after) return { kind: 'risk_signal_added', tone: 'danger' };
   if (field === 'hasMx' && before === false && after === true) return { kind: 'mail_activated', tone: 'warn' };
   if (field === 'riskScore' && before < 70 && after >= 70) return { kind: 'high_risk', tone: 'danger' };
+  if (field === 'httpHttpsDowngrade' && before === false && after === true) return { kind: 'risk_signal_added', tone: 'danger' };
+  if (field === 'httpCrossOriginRedirect' && before === false && after === true) return { kind: 'field_changed', tone: 'warn' };
+  if (field === 'httpTransportSecurity' && before === 'https' && after === 'http') return { kind: 'risk_signal_added', tone: 'danger' };
+  if (field === 'httpFinalOrigin') return { kind: 'infrastructure_changed', tone: 'warn' };
   if (['registrarName', 'nameservers', 'faviconHash'].includes(field)) return { kind: 'infrastructure_changed', tone: 'warn' };
   return { kind: 'field_changed', tone: 'neutral' };
 }
@@ -192,7 +226,7 @@ export function mergeWatchlistBaseline(baseline, current) {
     const previous = previousByDomain.get(next.domain) || {};
     const updated = { ...previous, domain: next.domain };
     updated.scanDepth = previous.scanDepth === 'deep' || next.scanDepth === 'deep' ? 'deep' : 'fast';
-    for (const field of Object.keys(FIELD_LABELS)) {
+    for (const field of BASELINE_FIELDS) {
       if (isComparable(field, next[field], next)) updated[field] = next[field];
     }
     return updated;

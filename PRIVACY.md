@@ -36,6 +36,13 @@ at all.
   discarded. Full Lookup and deliberate exports can contain these point-in-time
   records, while watchlists and analyst cases keep only their existing compact
   mail and nameserver fields.
+- **HTTP intelligence**: Lookup can display the bounded final URL, redirect
+  provenance, selected response/header metadata, and response-body fingerprint
+  collected by a requested deep check. Bulk results, watchlists, and analyst
+  cases retain only the final origin (never its path or query), response status,
+  transport, redirect count/flags, MIME type, and presence-only security-header
+  tokens. Raw header values, attempt errors, and redirect inventories are not
+  copied into browser-local investigation stores.
 - **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside

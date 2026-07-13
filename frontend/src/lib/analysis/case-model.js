@@ -5,6 +5,8 @@
 // access lives in the ../cases.ts wrapper so this module stays node --test-able
 // and free of any browser globals.
 
+import { normalizeHttpSummary } from './http-summary.js';
+
 // Schema 2 replaces the single scalar `evidence` object of schema 1 with a
 // bounded, deduplicated `evidenceHistory` timeline. Version-1 stores are still
 // discovered under the same localStorage key and migrated on load: their one
@@ -104,7 +106,7 @@ const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /**
  * @typedef {{ id: string, body: string, createdAt: string }} CaseNote
  * @typedef {{ label: string, points: number }} EvidenceFactor
- * @typedef {{ id: string, fingerprint: string, firstCapturedAt: string, capturedAt: string, source: string, scanDepth: string, availability: string | null, confidence: string | null, riskScore: number | null, opportunityScore: number | null, riskFactors: EvidenceFactor[], opportunityFactors: EvidenceFactor[], registrar: string | null, createdDate: string | null, expiryDate: string | null, nameservers: string[], hasMx: boolean | null, hasSpf: boolean | null, hasDmarc: boolean | null, activityStatus: string | null, websiteProbeDetail: string | null, pageTitle: string | null, faviconMatch: boolean | null, faviconNearMatch: boolean | null, reusesOfficialAssets: boolean | null, hasPasswordField: boolean | null, phishingLanguageMatch: string | null, mutationTypes: string[] }} CaseEvidenceSnapshot
+ * @typedef {{ id: string, fingerprint: string, firstCapturedAt: string, capturedAt: string, source: string, scanDepth: string, availability: string | null, confidence: string | null, riskScore: number | null, opportunityScore: number | null, riskFactors: EvidenceFactor[], opportunityFactors: EvidenceFactor[], registrar: string | null, createdDate: string | null, expiryDate: string | null, nameservers: string[], hasMx: boolean | null, hasSpf: boolean | null, hasDmarc: boolean | null, activityStatus: string | null, websiteProbeDetail: string | null, pageTitle: string | null, httpSummaryVersion: number | null, httpEvidenceStatus: string | null, httpFinalOrigin: string | null, httpResponseStatus: number | null, httpTransportSecurity: string | null, httpRedirectCount: number | null, httpCrossOriginRedirect: boolean | null, httpHttpsDowngrade: boolean | null, httpContentType: string | null, httpSecurityHeaders: string[] | null, faviconMatch: boolean | null, faviconNearMatch: boolean | null, reusesOfficialAssets: boolean | null, hasPasswordField: boolean | null, phishingLanguageMatch: string | null, mutationTypes: string[] }} CaseEvidenceSnapshot
  * @typedef {{ id: string, domain: string, status: string, disposition: string, tags: string[], notes: CaseNote[], source: string, evidenceHistory: CaseEvidenceSnapshot[], createdAt: string, updatedAt: string }} CaseRecord
  * @typedef {{ version: number, cases: CaseRecord[] }} CaseStore
  */
@@ -375,6 +377,8 @@ function normalizeScanDepth(value) {
 // cannot mistake "not scanned" for "signal removed".
 const DEEP_SIGNAL_FIELDS = [
   'hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'pageTitle', 'websiteProbeDetail',
+  'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
+  'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'phishingLanguageMatch',
 ];
 
@@ -389,6 +393,8 @@ const MATERIAL_FIELD_ORDER = [
   'registrar', 'createdDate', 'expiryDate', 'nameservers',
   'hasMx', 'hasSpf', 'hasDmarc',
   'activityStatus', 'websiteProbeDetail', 'pageTitle',
+  'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
+  'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'phishingLanguageMatch',
   'mutationTypes',
 ];
@@ -408,6 +414,8 @@ function materialValue(field, snapshot) {
       return dayOf(snapshot.expiryDate);
     case 'nameservers':
       return snapshot.nameservers;
+    case 'httpSecurityHeaders':
+      return snapshot.httpSecurityHeaders;
     case 'mutationTypes':
       return snapshot.mutationTypes;
     case 'riskFactors':
@@ -471,6 +479,7 @@ function buildSnapshot(raw, options) {
   if (!raw || typeof raw !== 'object') return null;
   const record = /** @type {Record<string, unknown>} */ (raw);
   const scanDepth = normalizeScanDepth(record.scanDepth);
+  const httpSummary = normalizeHttpSummary(record);
   const fields = {
     scanDepth,
     availability: evidenceString(record.availability),
@@ -489,6 +498,16 @@ function buildSnapshot(raw, options) {
     activityStatus: evidenceString(record.activityStatus),
     websiteProbeDetail: evidenceString(record.websiteProbeDetail, MAX_EVIDENCE_DETAIL_LENGTH),
     pageTitle: evidenceString(record.pageTitle, MAX_EVIDENCE_TITLE_LENGTH),
+    httpSummaryVersion: httpSummary?.httpSummaryVersion ?? null,
+    httpEvidenceStatus: httpSummary?.httpEvidenceStatus ?? null,
+    httpFinalOrigin: httpSummary?.httpFinalOrigin ?? null,
+    httpResponseStatus: httpSummary?.httpResponseStatus ?? null,
+    httpTransportSecurity: httpSummary?.httpTransportSecurity ?? null,
+    httpRedirectCount: httpSummary?.httpRedirectCount ?? null,
+    httpCrossOriginRedirect: httpSummary?.httpCrossOriginRedirect ?? null,
+    httpHttpsDowngrade: httpSummary?.httpHttpsDowngrade ?? null,
+    httpContentType: httpSummary?.httpContentType ?? null,
+    httpSecurityHeaders: httpSummary?.httpSecurityHeaders ?? null,
     faviconMatch: boolOrNull(record.faviconMatch),
     faviconNearMatch: boolOrNull(record.faviconNearMatch),
     reusesOfficialAssets: boolOrNull(record.reusesOfficialAssets),
@@ -647,6 +666,15 @@ const COMPARE_FIELDS = [
   { field: 'activityStatus', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
   { field: 'websiteProbeDetail', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
   { field: 'pageTitle', label: 'Page title', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpEvidenceStatus', label: 'HTTP evidence status', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpFinalOrigin', label: 'Final website origin', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpResponseStatus', label: 'HTTP response status', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpTransportSecurity', label: 'Website transport', type: 'http-transport', depthGate: 'both-deep' },
+  { field: 'httpRedirectCount', label: 'HTTP redirect count', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpCrossOriginRedirect', label: 'Cross-origin redirect', type: 'http-signal', depthGate: 'both-deep' },
+  { field: 'httpHttpsDowngrade', label: 'HTTPS downgrade', type: 'signal', depthGate: 'both-deep' },
+  { field: 'httpContentType', label: 'Website content type', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpSecurityHeaders', label: 'Observed security headers', type: 'set', depthGate: 'both-deep' },
   { field: 'faviconMatch', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
   { field: 'faviconNearMatch', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
   { field: 'reusesOfficialAssets', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
@@ -703,8 +731,13 @@ function compareField(spec, before, after) {
       return { before: before ?? null, after: after ?? null, tone: 'warn' };
     }
     case 'set': {
-      const b = spec.field === 'nameservers' ? normalizeNameserverList(before) : normalizeMutationList(before);
-      const a = spec.field === 'nameservers' ? normalizeNameserverList(after) : normalizeMutationList(after);
+      const normalizeSet = spec.field === 'nameservers'
+        ? normalizeNameserverList
+        : spec.field === 'httpSecurityHeaders'
+          ? (value) => Array.isArray(value) ? [...value].sort() : []
+          : normalizeMutationList;
+      const b = normalizeSet(before);
+      const a = normalizeSet(after);
       if (setsEqual(b, a)) return null;
       // An emptied set for a field we can't always observe isn't a removal.
       if (spec.emptyGuard && a.length === 0) return null;
@@ -715,6 +748,20 @@ function compareField(spec, before, after) {
       if (before === after) return null;
       const tone = spec.field === 'hasMx' && before === false && after === true ? 'warn' : 'neutral';
       return { before, after, tone };
+    }
+    case 'number': {
+      const b = Number.isInteger(before) ? before : null;
+      const a = Number.isInteger(after) ? after : null;
+      if (b === a || b === null || a === null) return null;
+      return { before: b, after: a, tone: 'neutral' };
+    }
+    case 'http-transport': {
+      if (!isPresent(before) || !isPresent(after) || before === after) return null;
+      return { before, after, tone: after === 'http' ? 'danger' : after === 'https' ? 'good' : 'neutral' };
+    }
+    case 'http-signal': {
+      if (typeof before !== 'boolean' || typeof after !== 'boolean' || before === after) return null;
+      return { before, after, tone: after ? 'warn' : 'good' };
     }
     case 'signal': {
       if (before === null || before === undefined || after === null || after === undefined) return null;

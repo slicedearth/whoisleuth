@@ -1,4 +1,5 @@
 import { appendWatchlistScan, normalizeWatchlistEntry } from './analysis/watchlist-history.js';
+import { httpSecurityHeaderLabel } from './analysis/http-summary.js';
 
 export const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 export const MAX_WATCHLIST_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -37,5 +38,5 @@ export function importWatchlists(value:unknown){if(!value||typeof value!=='objec
 
 export function exportWatchlists(){const blob=new Blob([JSON.stringify(loadWatchlists(),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
 
-export const fieldLabels:Record<string,string>={availability:'Availability',registrarName:'Registrar',nameservers:'Nameservers',createdDate:'Creation date',expiryDate:'Expiry date',privacyProtected:'WHOIS privacy',hasMx:'MX',hasSpf:'SPF',hasDmarc:'DMARC',activityStatus:'Website activity',pageTitle:'Page title',faviconHash:'Favicon',faviconMatch:'Official favicon match',faviconNearMatch:'Official favicon near-match',hasPasswordField:'Password form',phishingLanguageMatch:'Phishing language',reusesOfficialAssets:'Official asset reuse',riskScore:'Risk score'};
-export function formatValue(value:unknown){if(Array.isArray(value))return value.join(', ')||'None';if(typeof value==='boolean')return value?'Yes':'No';return value==null||value===''?'None':String(value);}
+export const fieldLabels:Record<string,string>={availability:'Availability',registrarName:'Registrar',nameservers:'Nameservers',createdDate:'Creation date',expiryDate:'Expiry date',privacyProtected:'WHOIS privacy',hasMx:'MX',hasSpf:'SPF',hasDmarc:'DMARC',activityStatus:'Website activity',pageTitle:'Page title',httpEvidenceStatus:'HTTP evidence status',httpFinalOrigin:'Final website origin',httpResponseStatus:'HTTP response status',httpTransportSecurity:'Website transport',httpRedirectCount:'HTTP redirect count',httpCrossOriginRedirect:'Cross-origin redirect',httpHttpsDowngrade:'HTTPS downgrade',httpContentType:'Website content type',httpSecurityHeaders:'Observed security headers',faviconHash:'Favicon',faviconMatch:'Official favicon match',faviconNearMatch:'Official favicon near-match',hasPasswordField:'Password form',phishingLanguageMatch:'Phishing language',reusesOfficialAssets:'Official asset reuse',riskScore:'Risk score'};
+export function formatValue(value:unknown,field=''){if(Array.isArray(value))return (field==='httpSecurityHeaders'?value.map(item=>httpSecurityHeaderLabel(String(item))):value).join(', ')||'None';if(typeof value==='boolean')return value?'Yes':'No';return value==null||value===''?'None':String(value);}

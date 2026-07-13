@@ -39,6 +39,10 @@ export interface CaseEvidenceSnapshot {
   registrar: string | null; createdDate: string | null; expiryDate: string | null; nameservers: string[];
   hasMx: boolean | null; hasSpf: boolean | null; hasDmarc: boolean | null;
   activityStatus: string | null; websiteProbeDetail: string | null; pageTitle: string | null;
+  httpSummaryVersion: number | null; httpEvidenceStatus: string | null; httpFinalOrigin: string | null; httpResponseStatus: number | null;
+  httpTransportSecurity: string | null; httpRedirectCount: number | null;
+  httpCrossOriginRedirect: boolean | null; httpHttpsDowngrade: boolean | null; httpContentType: string | null;
+  httpSecurityHeaders: string[] | null;
   faviconMatch: boolean | null; faviconNearMatch: boolean | null; reusesOfficialAssets: boolean | null; hasPasswordField: boolean | null;
   phishingLanguageMatch: string | null;
   mutationTypes: string[];

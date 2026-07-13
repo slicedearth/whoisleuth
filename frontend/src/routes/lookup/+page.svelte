@@ -8,6 +8,7 @@
   import { abuseAction, outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
+  import { compactHttpObservation } from '$lib/analysis/http-summary.js';
   import { compareRegistrySources } from '$lib/analysis/registry-comparison.js';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
@@ -54,6 +55,7 @@
   const httpEvidence=$derived(rec(availability.http));
   const httpResponse=$derived(rec(httpEvidence.response));
   const httpSecurityHeaders=$derived(rec(httpResponse.securityHeaders));
+  const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
   const rdapRoleOrder=['registrar','registrant','administrative','technical','billing','abuse','noc','reseller','sponsor','proxy','notifications'];
   const populatedRdapRoles=$derived(rdapRoleOrder.filter((role)=>Array.isArray(rdapParsed.entitiesByRole?.[role])&&rdapParsed.entitiesByRole[role].length));
   const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
@@ -90,6 +92,7 @@
     faviconMatch:profileSignals.faviconMatch??null,faviconNearMatch:profileSignals.faviconNearMatch??null,
     reusesOfficialAssets:profileSignals.reusesOfficialAssets??null,hasPasswordField:availability.hasPasswordField??null,
     phishingLanguageMatch:availability.phishingLanguageMatch??null,
+    ...compactHttpSummary,
     mutationTypes:[]
   });
 

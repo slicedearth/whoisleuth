@@ -433,6 +433,43 @@ describe('snapshot normalization', () => {
     assert.equal(snap.hasDmarc, null); // absent -> null, never coerced to false
   });
 
+  test('retains only the bounded compact HTTP summary in deep evidence', () => {
+    const snap = model.normalizeSnapshot({
+      scanDepth: 'deep',
+      availability: 'registered',
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://login.example.test/private/path?token=secret',
+      httpResponseStatus: 200,
+      httpTransportSecurity: 'https',
+      httpRedirectCount: 2,
+      httpCrossOriginRedirect: true,
+      httpHttpsDowngrade: false,
+      httpContentType: 'text/html; charset=utf-8',
+      httpSecurityHeaders: ['hsts', 'hsts', 'unknown', 'frame-protection'],
+      redirects: [{ from: 'https://example.test', to: 'https://login.example.test' }],
+      rawHeaders: { server: 'secret' },
+    }, { fallback: ISO });
+
+    assert.equal(snap.httpFinalOrigin, 'https://login.example.test');
+    assert.equal(snap.httpResponseStatus, 200);
+    assert.equal(snap.httpRedirectCount, 2);
+    assert.equal(snap.httpCrossOriginRedirect, true);
+    assert.deepEqual(snap.httpSecurityHeaders, ['frame-protection', 'hsts']);
+    assert.equal('redirects' in snap, false);
+    assert.equal('rawHeaders' in snap, false);
+    assert.equal(JSON.stringify(snap).includes('secret'), false);
+  });
+
+  test('fast evidence cannot retain compact HTTP fields as observed values', () => {
+    const snap = model.normalizeSnapshot({
+      scanDepth: 'fast', availability: 'registered', httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpResponseStatus: 200,
+    }, { fallback: ISO });
+    assert.equal(snap.httpEvidenceStatus, null);
+    assert.equal(snap.httpResponseStatus, null);
+    assert.equal(snap.httpSecurityHeaders, null);
+  });
+
   test('normalizes nameservers case-insensitively, strips terminal dots, dedups, and sorts', () => {
     const snap = model.normalizeSnapshot({ nameservers: ['B.NS.example.', 'a.ns.example', 'A.NS.example', 'a.ns.example.'] }, { fallback: ISO });
     assert.deepEqual(snap.nameservers, ['a.ns.example', 'b.ns.example']);
@@ -779,6 +816,33 @@ describe('compareCaseEvidence', () => {
     assert.equal(change.before, true);
     assert.equal(change.after, false);
     assert.equal(change.tone, 'good');
+  });
+
+  test('reports compact HTTP changes only across two deep observations', () => {
+    const before = model.normalizeSnapshot({
+      scanDepth: 'deep', availability: 'registered',
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success', httpFinalOrigin: 'https://example.test', httpResponseStatus: 200,
+      httpTransportSecurity: 'https', httpRedirectCount: 0, httpCrossOriginRedirect: false,
+      httpHttpsDowngrade: false, httpContentType: 'text/html', httpSecurityHeaders: ['hsts'],
+    }, { fallback: ISO });
+    const after = model.normalizeSnapshot({
+      scanDepth: 'deep', availability: 'registered',
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'partial', httpFinalOrigin: 'http://other.example.test', httpResponseStatus: 403,
+      httpTransportSecurity: 'http', httpRedirectCount: 2, httpCrossOriginRedirect: true,
+      httpHttpsDowngrade: true, httpContentType: 'text/plain', httpSecurityHeaders: [],
+    }, { fallback: LATER });
+    const changes = model.compareCaseEvidence(before, after);
+    const byField = new Map(changes.map((change) => [change.field, change]));
+    assert.equal(byField.get('httpTransportSecurity').tone, 'danger');
+    assert.equal(byField.get('httpHttpsDowngrade').tone, 'danger');
+    assert.equal(byField.get('httpCrossOriginRedirect').tone, 'warn');
+    assert.deepEqual(byField.get('httpSecurityHeaders').before, ['hsts']);
+    assert.deepEqual(byField.get('httpSecurityHeaders').after, []);
+
+    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered' }, { fallback: LATER });
+    assert.equal(model.compareCaseEvidence(before, fast).some((change) => change.field.startsWith('http')), false);
   });
 
   test('reports a factor change even when the total score is unchanged', () => {

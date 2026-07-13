@@ -25,6 +25,16 @@ interface SnapshotOverrides {
   faviconMatch?: boolean | null;
   nameservers?: string[];
   pageTitle?: string | null;
+  httpSummaryVersion?: number | null;
+  httpEvidenceStatus?: string | null;
+  httpFinalOrigin?: string | null;
+  httpResponseStatus?: number | null;
+  httpTransportSecurity?: string | null;
+  httpRedirectCount?: number | null;
+  httpCrossOriginRedirect?: boolean | null;
+  httpHttpsDowngrade?: boolean | null;
+  httpContentType?: string | null;
+  httpSecurityHeaders?: string[] | null;
 }
 
 function snapshot(overrides: SnapshotOverrides = {}) {
@@ -52,6 +62,16 @@ function snapshot(overrides: SnapshotOverrides = {}) {
     activityStatus: overrides.activityStatus ?? null,
     websiteProbeDetail: null,
     pageTitle: overrides.pageTitle ?? null,
+    httpSummaryVersion: overrides.httpSummaryVersion ?? null,
+    httpEvidenceStatus: overrides.httpEvidenceStatus ?? null,
+    httpFinalOrigin: overrides.httpFinalOrigin ?? null,
+    httpResponseStatus: overrides.httpResponseStatus ?? null,
+    httpTransportSecurity: overrides.httpTransportSecurity ?? null,
+    httpRedirectCount: overrides.httpRedirectCount ?? null,
+    httpCrossOriginRedirect: overrides.httpCrossOriginRedirect ?? null,
+    httpHttpsDowngrade: overrides.httpHttpsDowngrade ?? null,
+    httpContentType: overrides.httpContentType ?? null,
+    httpSecurityHeaders: overrides.httpSecurityHeaders ?? null,
     faviconMatch: overrides.faviconMatch ?? null,
     faviconNearMatch: null,
     reusesOfficialAssets: null,
@@ -340,6 +360,36 @@ test.describe('evidence timeline', () => {
     const firstChanges = firstEntry.locator('.timeline-change');
     await expect(firstChanges.first()).toBeVisible();
     await expect(firstEntry.locator('.timeline-change strong').filter({ hasText: 'Risk score' })).toBeVisible();
+  });
+
+  test('compact HTTP evidence renders without retaining a URL path or header values', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openSeededTimelineCase(page, 'http-summary.invalid', [
+      caseRecord({
+        id: 'http-summary', domain: 'http-summary.invalid',
+        evidenceHistory: [snapshot({
+          id: 'ev-http', fingerprint: 'http-summary',
+          httpSummaryVersion: 1,
+          httpEvidenceStatus: 'success',
+          httpFinalOrigin: 'https://login.http-summary.invalid/private/path?token=secret',
+          httpResponseStatus: 200,
+          httpTransportSecurity: 'https',
+          httpRedirectCount: 2,
+          httpCrossOriginRedirect: true,
+          httpHttpsDowngrade: false,
+          httpContentType: 'text/html; charset=utf-8',
+          httpSecurityHeaders: ['hsts', 'content-security-policy'],
+        })],
+      }),
+    ]);
+
+    await page.locator('.timeline-toggle').click();
+    const group = page.locator('.timeline-group', { hasText: 'HTTP' });
+    await expect(group).toContainText('https://login.http-summary.invalid');
+    await expect(group).toContainText('Content Security Policy, HSTS');
+    await expect(group).not.toContainText('/private/path');
+    await expect(group).not.toContainText('token=secret');
+    await expectNoHorizontalOverflow(page);
   });
 
   test('repeated identical evidence shows first/last observed', async ({ page }) => {

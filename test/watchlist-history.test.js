@@ -71,6 +71,40 @@ describe('watchlist history', () => {
     assert.ok(nextDeep.changes.some((change) => change.field === 'pageTitle'));
   });
 
+  test('stores and compares compact HTTP facts without retaining rich response material', () => {
+    const first = history.appendWatchlistScan(null, [{
+      domain: 'brand.example', availability: 'registered', scanDepth: 'deep',
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success', httpFinalOrigin: 'https://brand.example/private/path', httpResponseStatus: 200,
+      httpTransportSecurity: 'https', httpRedirectCount: 0, httpCrossOriginRedirect: false,
+      httpHttpsDowngrade: false, httpContentType: 'text/html', httpSecurityHeaders: ['hsts'],
+      rawHeaders: { server: 'secret' }, redirects: [{ to: 'https://brand.example/private/path' }],
+    }], { mode: 'deep' }).entry;
+
+    assert.equal(first.baseline[0].httpFinalOrigin, 'https://brand.example');
+    assert.equal('rawHeaders' in first.baseline[0], false);
+    assert.equal('redirects' in first.baseline[0], false);
+
+    const second = history.appendWatchlistScan(first, [{
+      domain: 'brand.example', availability: 'registered', scanDepth: 'deep',
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success', httpFinalOrigin: 'http://other.example', httpResponseStatus: 403,
+      httpTransportSecurity: 'http', httpRedirectCount: 1, httpCrossOriginRedirect: true,
+      httpHttpsDowngrade: true, httpContentType: 'text/plain', httpSecurityHeaders: [],
+    }], { mode: 'deep' });
+    const byField = new Map(second.changes.map((change) => [change.field, change]));
+    assert.equal(byField.get('httpFinalOrigin').kind, 'infrastructure_changed');
+    assert.equal(byField.get('httpTransportSecurity').tone, 'danger');
+    assert.equal(byField.get('httpHttpsDowngrade').kind, 'risk_signal_added');
+    assert.deepEqual(byField.get('httpSecurityHeaders').after, []);
+
+    const fast = history.appendWatchlistScan(second.entry, [{
+      domain: 'brand.example', availability: 'registered', scanDepth: 'fast',
+    }], { mode: 'fast' });
+    assert.equal(fast.changes.some((change) => change.field.startsWith('http')), false);
+    assert.equal(fast.entry.baseline[0].httpFinalOrigin, 'http://other.example');
+  });
+
   test('prunes domains absent from a replacement snapshot (no unbounded baseline growth)', () => {
     const first = history.appendWatchlistScan(null, [
       { domain: 'a.example', availability: 'registered', scanDepth: 'fast' },

@@ -10,6 +10,7 @@
 // data. Reports contain only the normalized case record.
 
 import { compareCaseEvidence, latestCaseEvidence } from './case-model.js';
+import { httpSecurityHeaderLabel } from './http-summary.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -129,6 +130,16 @@ function pickKnownSnapshotFields(snapshot) {
     activityStatus: snapshot.activityStatus,
     websiteProbeDetail: snapshot.websiteProbeDetail,
     pageTitle: snapshot.pageTitle,
+    httpSummaryVersion: snapshot.httpSummaryVersion,
+    httpEvidenceStatus: snapshot.httpEvidenceStatus,
+    httpFinalOrigin: snapshot.httpFinalOrigin,
+    httpResponseStatus: snapshot.httpResponseStatus,
+    httpTransportSecurity: snapshot.httpTransportSecurity,
+    httpRedirectCount: snapshot.httpRedirectCount,
+    httpCrossOriginRedirect: snapshot.httpCrossOriginRedirect,
+    httpHttpsDowngrade: snapshot.httpHttpsDowngrade,
+    httpContentType: snapshot.httpContentType,
+    httpSecurityHeaders: Array.isArray(snapshot.httpSecurityHeaders) ? [...snapshot.httpSecurityHeaders] : null,
     faviconMatch: snapshot.faviconMatch,
     faviconNearMatch: snapshot.faviconNearMatch,
     reusesOfficialAssets: snapshot.reusesOfficialAssets,
@@ -281,6 +292,8 @@ function buildMarkdown(report) {
     lines.push(`- **Risk score:** ${escapeMarkdownInline(formatReportValue(a.riskScore))}`);
     lines.push(`- **Registrar:** ${escapeMarkdownInline(formatReportValue(a.registrar))}`);
     lines.push(`- **Website activity:** ${escapeMarkdownInline(formatReportValue(a.activityStatus))}`);
+    if (a.httpResponseStatus != null) lines.push(`- **HTTP response:** ${escapeMarkdownInline(formatReportValue(a.httpResponseStatus))}`);
+    if (a.httpFinalOrigin) lines.push(`- **Final website origin:** ${escapeMarkdownInline(a.httpFinalOrigin)}`);
     lines.push(`- **Last captured:** ${escapeMarkdownInline(a.capturedAt)}`);
     lines.push(`- **Scan depth:** ${escapeMarkdownInline(formatReportValue(a.scanDepth))}`);
     lines.push(`- **Source:** ${escapeMarkdownInline(formatReportValue(a.source))}`);
@@ -327,6 +340,15 @@ function buildMarkdown(report) {
       lines.push(`- Risk score: ${escapeMarkdownInline(formatReportValue(snap.riskScore))}`);
       lines.push(`- Registrar: ${escapeMarkdownInline(formatReportValue(snap.registrar))}`);
       lines.push(`- Website activity: ${escapeMarkdownInline(formatReportValue(snap.activityStatus))}`);
+      if (snap.httpResponseStatus != null) lines.push(`- HTTP response: ${escapeMarkdownInline(formatReportValue(snap.httpResponseStatus))}`);
+      if (snap.httpFinalOrigin) lines.push(`- Final website origin: ${escapeMarkdownInline(snap.httpFinalOrigin)}`);
+      if (snap.httpTransportSecurity) lines.push(`- Website transport: ${escapeMarkdownInline(snap.httpTransportSecurity.toUpperCase())}`);
+      if (snap.httpRedirectCount != null) lines.push(`- HTTP redirects: ${escapeMarkdownInline(formatReportValue(snap.httpRedirectCount))}`);
+      if (snap.httpHttpsDowngrade === true) lines.push('- HTTPS downgrade: Detected');
+      if (Array.isArray(snap.httpSecurityHeaders)) {
+        const labels = snap.httpSecurityHeaders.map(httpSecurityHeaderLabel);
+        lines.push(`- Observed security headers: ${escapeMarkdownInline(labels.length ? labels.join(', ') : 'None')}`);
+      }
       if (snap.pageTitle) {
         lines.push(`- Page title: ${escapeMarkdownInline(formatReportValue(snap.pageTitle))}`);
       }

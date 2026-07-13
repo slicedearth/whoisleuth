@@ -4,6 +4,7 @@
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
 import { compareCaseEvidence, latestCaseEvidence } from './case-model.js';
+import { httpSecurityHeaderLabel } from './http-summary.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -35,6 +36,15 @@ const FIELD_LABELS = {
   activityStatus: 'Website activity',
   websiteProbeDetail: 'Website check detail',
   pageTitle: 'Page title',
+  httpEvidenceStatus: 'HTTP evidence status',
+  httpFinalOrigin: 'Final website origin',
+  httpResponseStatus: 'HTTP response status',
+  httpTransportSecurity: 'Website transport',
+  httpRedirectCount: 'HTTP redirect count',
+  httpCrossOriginRedirect: 'Cross-origin redirect',
+  httpHttpsDowngrade: 'HTTPS downgrade',
+  httpContentType: 'Website content type',
+  httpSecurityHeaders: 'Observed security headers',
   faviconMatch: 'Official favicon match',
   faviconNearMatch: 'Official favicon near-match',
   reusesOfficialAssets: 'Official asset reuse',
@@ -56,6 +66,10 @@ const FIELD_GROUPS = [
   {
     name: 'Mail and web',
     fields: ['hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'websiteProbeDetail', 'pageTitle'],
+  },
+  {
+    name: 'HTTP',
+    fields: ['httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount', 'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders'],
   },
   {
     name: 'Impersonation',
@@ -97,6 +111,7 @@ export function formatSnapshotValue(field, value) {
   if (typeof value === 'boolean') return value ? 'Detected' : 'Not detected';
   if (Array.isArray(value)) {
     if (value.length === 0) return 'None';
+    if (field === 'httpSecurityHeaders') return value.map(httpSecurityHeaderLabel).join(', ');
     // Factor arrays: each element is { label, points }.
     if (field === 'riskFactors' || field === 'opportunityFactors') {
       return value.map((f) => `${f.label} (${f.points > 0 ? '+' : ''}${f.points})`).join(', ');
@@ -159,6 +174,7 @@ function formatChangeValue(field, value) {
   if (value === null || value === undefined) return 'Not observed';
   if (Array.isArray(value)) {
     if (value.length === 0) return 'None';
+    if (field === 'httpSecurityHeaders') return value.map(httpSecurityHeaderLabel).join(', ');
     if (field === 'riskFactors' || field === 'opportunityFactors') {
       return value.map((f) => {
         if (typeof f === 'object' && f !== null && 'label' in f && 'points' in f) {
