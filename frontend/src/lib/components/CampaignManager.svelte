@@ -1,0 +1,126 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import type { CaseRecord } from '$lib/cases';
+  import {
+    addCampaignDomain,
+    createCampaign,
+    deleteCampaign,
+    editCampaign,
+    exportCampaigns,
+    importCampaigns,
+    loadCampaigns,
+    MAX_CAMPAIGN_IMPORT_BYTES,
+    removeCampaignDomain,
+    type CampaignRecord,
+  } from '$lib/campaigns';
+
+  let { records, onselect, oncount }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void}=$props();
+  let campaigns=$state<CampaignRecord[]>([]);
+  let expandedId=$state('');
+  let newName=$state('');
+  let nameDraft=$state('');
+  let descriptionDraft=$state('');
+  let selectedDomain=$state('');
+  let message=$state('');
+
+  const expanded=$derived(campaigns.find((campaign)=>campaign.id===expandedId)??null);
+  const caseByDomain=$derived(new Map(records.map((record)=>[record.domain,record])));
+  const availableCases=$derived(records.filter((record)=>!expanded?.domains.includes(record.domain)).sort((a,b)=>a.domain.localeCompare(b.domain)));
+
+  function refresh(next=loadCampaigns()){
+    campaigns=next;
+    if(expandedId&&!campaigns.some((campaign)=>campaign.id===expandedId))expandedId='';
+    oncount?.(campaigns.length);
+  }
+  function open(campaign:CampaignRecord){
+    if(expandedId===campaign.id){expandedId='';return;}
+    expandedId=campaign.id;nameDraft=campaign.name;descriptionDraft=campaign.description;selectedDomain='';
+  }
+  function create(){
+    try{const result=createCampaign({name:newName});refresh(result.campaigns);const created=result.record;newName='';open(created);message=`Created campaign “${created.name}”.`;}
+    catch(cause){message=cause instanceof Error?cause.message:'Could not create the campaign.';}
+  }
+  function save(campaign:CampaignRecord){
+    try{refresh(editCampaign(campaign.id,{name:nameDraft,description:descriptionDraft}));const current=campaigns.find((item)=>item.id===campaign.id);if(current){nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
+    catch(cause){message=cause instanceof Error?cause.message:'Could not update the campaign.';}
+  }
+  function add(campaign:CampaignRecord){
+    if(!selectedDomain){message='Choose a case to add.';return;}
+    try{refresh(addCampaignDomain(campaign.id,selectedDomain));message=`Added ${selectedDomain} to “${campaign.name}”.`;selectedDomain='';}
+    catch(cause){message=cause instanceof Error?cause.message:'Could not add the case.';}
+  }
+  function removeDomain(campaign:CampaignRecord,domain:string){
+    try{refresh(removeCampaignDomain(campaign.id,domain));message=`Removed ${domain} from “${campaign.name}”.`;}
+    catch(cause){message=cause instanceof Error?cause.message:'Could not remove the case.';}
+  }
+  function remove(campaign:CampaignRecord){
+    if(!confirm(`Delete campaign “${campaign.name}”? Cases and their evidence are not deleted.`))return;
+    try{refresh(deleteCampaign(campaign.id));message=`Deleted campaign “${campaign.name}”.`;}
+    catch(cause){message=cause instanceof Error?cause.message:'Could not delete the campaign.';}
+  }
+  function download(){try{exportCampaigns();message='Exported the campaign collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export campaigns.';}}
+  async function importFile(event:Event){
+    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;
+    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=importCampaigns(JSON.parse(await file.text()));refresh(result.campaigns);message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
+    catch(cause){message=cause instanceof Error?cause.message:'Campaign import failed.';}finally{input.value='';}
+  }
+  function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
+
+  onMount(()=>refresh());
+</script>
+
+<section class="campaign-toolbar card">
+  <form onsubmit={(event)=>{event.preventDefault();create();}}>
+    <label for="new-campaign">New campaign</label>
+    <div><input id="new-campaign" bind:value={newName} maxlength="100" placeholder="Investigation name" autocomplete="off"><button class="primary" type="submit" disabled={!newName.trim()}>Create campaign</button></div>
+  </form>
+  <div class="top-actions"><button type="button" onclick={download} disabled={!campaigns.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div>
+</section>
+{#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
+
+{#if campaigns.length}
+  <p class="summary">{campaigns.length} browser-local campaign{campaigns.length===1?'':'s'} · domain membership only</p>
+  <p class="privacy-note">Campaign exports include their labels and descriptions. Review the file before sharing it.</p>
+  <section class="campaign-list">
+    {#each campaigns as campaign (campaign.id)}
+      <article class="campaign card" class:open={expandedId===campaign.id}>
+        <button class="campaign-head" type="button" aria-expanded={expandedId===campaign.id} aria-controls={`campaign-${campaign.id}`} onclick={()=>open(campaign)}>
+          <span><strong>{campaign.name}</strong>{#if campaign.description}<small>{campaign.description}</small>{/if}</span>
+          <span>{campaign.domains.length} case{campaign.domains.length===1?'':'s'}</span>
+        </button>
+        {#if expandedId===campaign.id}
+          <div class="campaign-body" id={`campaign-${campaign.id}`}>
+            <form class="campaign-edit" onsubmit={(event)=>{event.preventDefault();save(campaign);}}>
+              <label for={`campaign-name-${campaign.id}`}>Name</label>
+              <input id={`campaign-name-${campaign.id}`} bind:value={nameDraft} maxlength="100" required>
+              <label for={`campaign-description-${campaign.id}`}>Description <small>optional</small></label>
+              <textarea id={`campaign-description-${campaign.id}`} bind:value={descriptionDraft} maxlength="1000" rows="3" placeholder="Scope, working hypothesis, or handoff context"></textarea>
+              <button type="submit" disabled={!nameDraft.trim()}>Save details</button>
+            </form>
+
+            <section class="members" aria-label={`Cases in ${campaign.name}`}>
+              <header><div><p class="eyebrow">Members</p><h3>{campaign.domains.length} case domain{campaign.domains.length===1?'':'s'}</h3></div></header>
+              {#if campaign.domains.length}
+                <ul>{#each campaign.domains as domain}{@const linked=caseByDomain.get(domain)}<li><div><strong>{domain}</strong>{#if !linked}<small>Case unavailable in this browser</small>{/if}</div><div>{#if linked}<button type="button" onclick={()=>openCase(domain)}>Open case</button>{/if}<button class="danger" type="button" onclick={()=>removeDomain(campaign,domain)}>Remove</button></div></li>{/each}</ul>
+              {:else}<p>No cases have been added to this campaign.</p>{/if}
+            </section>
+
+            <form class="add-case" onsubmit={(event)=>{event.preventDefault();add(campaign);}}>
+              <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>
+              <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button type="submit" disabled={!selectedDomain}>Add case</button></div>
+            </form>
+            <details><summary>Campaign data and interpretation limits</summary><p>Campaigns store only a label, description, and normalized domain membership in this browser. Membership is an analyst organization aid and does not prove common ownership, coordination, intent, or maliciousness.</p></details>
+            <button class="delete danger" type="button" onclick={()=>remove(campaign)}>Delete campaign</button>
+          </div>
+        {/if}
+      </article>
+    {/each}
+  </section>
+{:else}
+  <section class="empty card"><h2>No campaigns yet</h2><p>Group existing analyst cases into a browser-local investigation without copying their evidence or notes.</p></section>
+{/if}
+
+<style>
+  .campaign-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end;padding:16px}.campaign-toolbar form label,.campaign-edit>label,.add-case>label{display:block;margin-bottom:5px;color:var(--muted);font-size:.66rem}.campaign-toolbar form>div,.top-actions,.add-case>div{display:flex;flex-wrap:wrap;gap:8px}.campaign-toolbar input,.campaign-edit input,.campaign-edit textarea,.add-case select{min-height:38px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}button,.top-actions label{min-height:38px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised);font-size:.68rem}.top-actions label{display:grid;place-items:center;cursor:pointer}.top-actions input{display:none}.message{color:var(--accent)}.summary{margin:12px 2px 2px;color:var(--muted);font-size:.7rem}.privacy-note{margin:0 2px 12px;color:var(--muted);font-size:.64rem}.campaign-list{display:grid;gap:10px}.campaign{padding:0;overflow:hidden}.campaign.open{border-color:var(--accent)}.campaign-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left}.campaign-head>span:first-child{display:grid;gap:3px;min-width:0}.campaign-head strong,.campaign-head small{overflow-wrap:anywhere}.campaign-head small,.campaign-head>span:last-child{color:var(--muted);font-size:.64rem}.campaign-body{display:grid;gap:16px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}.campaign-edit{display:grid;gap:7px}.campaign-edit textarea{resize:vertical}.campaign-edit button{justify-self:start}.members{padding:13px;border:1px solid var(--border);border-radius:9px}.members h3{margin:0}.members ul{display:grid;gap:7px;margin:11px 0 0;padding:0;list-style:none}.members li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised)}.members li>div:first-child{display:grid;gap:2px;min-width:0}.members li strong{overflow-wrap:anywhere}.members li small,.members>p,details p{color:var(--muted);font-size:.64rem}.members li>div:last-child{display:flex;flex-wrap:wrap;gap:6px}.add-case select{min-width:0;max-width:100%}details summary{color:var(--muted);cursor:pointer;font-size:.68rem}details p{max-width:80ch}.delete{justify-self:start}.danger{color:var(--danger)}.empty{display:grid;min-height:300px;place-content:center;padding:30px;text-align:center}.empty p{color:var(--muted)}
+  @media(max-width:700px){.campaign-toolbar{align-items:stretch;flex-direction:column}.campaign-toolbar form>div,.add-case>div{display:grid}.campaign-toolbar input,.campaign-toolbar button,.top-actions>*,.add-case select{width:100%}.campaign-head{grid-template-columns:1fr}.members li{align-items:stretch;flex-direction:column}.members li>div:last-child button{flex:1}.campaign-edit button,.delete{width:100%}}
+</style>

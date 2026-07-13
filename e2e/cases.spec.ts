@@ -835,3 +835,101 @@ test.describe('case report export', () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+test.describe('browser-local campaigns', () => {
+  async function openCampaigns(
+    page: import('@playwright/test').Page,
+    records: ReturnType<typeof caseRecord>[] = [],
+  ) {
+    await page.goto('/monitor');
+    await page.evaluate((cases) => {
+      localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases }));
+    }, records);
+    await page.reload();
+    await page.getByRole('tab', { name: /Campaigns/ }).click();
+  }
+
+  test('creates a campaign, adds cases, persists details and opens a member', async ({ page }) => {
+    await openCampaigns(page, [
+      caseRecord({ id: 'member-one', domain: 'member-one.invalid' }),
+      caseRecord({ id: 'member-two', domain: 'member-two.invalid' }),
+    ]);
+
+    await page.locator('#new-campaign').fill('Credential cluster');
+    await page.getByRole('button', { name: 'Create campaign' }).click();
+    await expect(page.getByRole('status')).toContainText('Created campaign');
+
+    await page.locator('.campaign-edit textarea').fill('Domains grouped for analyst follow-up.');
+    await page.getByRole('button', { name: 'Save details' }).click();
+    await page.locator('.add-case select').selectOption('member-one.invalid');
+    await page.getByRole('button', { name: 'Add case' }).click();
+    await expect(page.locator('.members')).toContainText('member-one.invalid');
+
+    await page.reload();
+    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await page.locator('.campaign-head', { hasText: 'Credential cluster' }).click();
+    await expect(page.locator('.campaign-edit textarea')).toHaveValue('Domains grouped for analyst follow-up.');
+    await page.getByRole('button', { name: 'Open case' }).click();
+    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.case-head', { hasText: 'member-one.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('campaign export contains membership metadata but no case evidence or notes', async ({ page }) => {
+    await openCampaigns(page, [caseRecord({
+      id: 'sensitive-case',
+      domain: 'export-member.invalid',
+      notes: [{ createdAt: '2026-07-01T00:00:00.000Z', body: 'Do not copy this note.' }],
+      evidenceHistory: [snapshot({ id: 'secret-evidence', pageTitle: 'Private evidence detail' })],
+    })]);
+    await page.evaluate(() => {
+      localStorage.setItem('whoisleuth-campaigns-v1', JSON.stringify({ version: 1, campaigns: [{
+        id: 'portable-campaign', name: 'Portable group', description: 'Metadata only',
+        domains: ['export-member.invalid'], createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
+      }] }));
+    });
+    await page.reload();
+    await page.getByRole('tab', { name: /Campaigns/ }).click();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('.campaign-toolbar').getByRole('button', { name: 'Export JSON' }).click();
+    const download = await downloadPromise;
+    const body = await (await download.createReadStream()).toArray();
+    const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
+
+    expect(download.suggestedFilename()).toMatch(/^whoisleuth-campaigns-.*\.json$/);
+    expect(parsed.schema).toBe('whoisleuth.campaigns');
+    expect(parsed.version).toBe(1);
+    expect(parsed.campaigns[0].domains).toEqual(['export-member.invalid']);
+    expect(JSON.stringify(parsed)).not.toContain('Do not copy this note');
+    expect(JSON.stringify(parsed)).not.toContain('Private evidence detail');
+  });
+
+  test('imports campaigns and keeps unavailable case domains explicit', async ({ page }) => {
+    await openCampaigns(page, [caseRecord({ id: 'present', domain: 'present.invalid' })]);
+    const payload = { schema: 'whoisleuth.campaigns', version: 1, campaigns: [{
+      id: 'imported-campaign', name: 'Imported group', description: '',
+      domains: ['present.invalid', 'missing.invalid'],
+      createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
+    }] };
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.locator('.campaign-toolbar label', { hasText: 'Import JSON' }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({ name: 'campaigns.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(payload)) });
+
+    await expect(page.getByRole('status')).toContainText('Imported 1 new');
+    await page.locator('.campaign-head', { hasText: 'Imported group' }).click();
+    await expect(page.locator('.members')).toContainText('present.invalid');
+    await expect(page.locator('.members')).toContainText('missing.invalid');
+    await expect(page.locator('.members')).toContainText('Case unavailable in this browser');
+  });
+
+  test('campaign management remains usable without horizontal overflow on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await openCampaigns(page, [caseRecord({ id: 'mobile-member', domain: 'long-mobile-campaign-member.invalid' })]);
+    await page.locator('#new-campaign').fill('A long investigation campaign name that must wrap safely on a narrow viewport');
+    await page.getByRole('button', { name: 'Create campaign' }).click();
+    await page.locator('.add-case select').selectOption('long-mobile-campaign-member.invalid');
+    await page.getByRole('button', { name: 'Add case' }).click();
+    await expectNoHorizontalOverflow(page);
+  });
+});

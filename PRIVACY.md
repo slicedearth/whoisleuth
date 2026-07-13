@@ -45,7 +45,8 @@ at all.
   nameserver set across browser-local cases without making a request or saving
   a separate relationship record. This comparison uses the bounded nameserver
   set retained by each case rather than an uncapped DNS inventory. Raw header
-  values, attempt errors, and redirect inventories are not copied into browser-local investigation stores.
+  values, attempt errors, and redirect inventories are not copied into
+  browser-local investigation stores.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
   the domain through the public-address guard and opens one direct TLS
   connection to one validated address while retaining the domain as SNI.
@@ -93,8 +94,12 @@ at all.
   combined similarity score and the comparison does not affect Risk scoring.
   The derived comparison itself is transient and is not added to cases,
   watchlists, profiles, or evidence exports.
-- **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
-  `localStorage`, not on the server - only visible to whoever is using that browser.
+- **Brand Profiles / Shortlist / Watchlist / Campaigns / Certificate search
+  history**: saved in your own browser's `localStorage`, not on the server -
+  only visible to whoever is using that browser.
+  Campaigns retain a bounded label, optional description, and normalized case
+  domain membership only. They do not copy case evidence, notes, status, or
+  disposition, and deriving or editing them makes no network request.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword
@@ -104,9 +109,13 @@ at all.
   on explicit request and are stored only when the profile is saved. A failed
   or inconclusive recapture does not replace an existing baseline.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
-  button in either panel, the deletion controls under **Previous certificate
-  searches**, or by clearing the browser's site data.
-- **CSV/JSON exports**: downloaded directly to your device. Single-lookup
+  button in either panel, the campaign deletion controls, the deletion controls
+  under **Previous certificate searches**, or by clearing the browser's site
+  data.
+- **CSV/JSON exports**: downloaded directly to your device. Campaign exports
+  contain campaign labels, descriptions, domain membership, timestamps, and
+  stated interpretation limits; they do not include case evidence or notes.
+  Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
   registry-published contact data. Nothing is uploaded or retained by the
   server when you export. From that point on, the file is yours to manage -

@@ -6,13 +6,15 @@
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
+  import CampaignManager from '$lib/components/CampaignManager.svelte';
   import { deleteWatchlist, exportWatchlists, fieldLabels, formatValue, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
     importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase, sourceLabel, statusLabel, type CaseRecord
   } from '$lib/cases';
+  import { loadCampaigns } from '$lib/campaigns';
 
-  type View = 'watchlists' | 'cases';
+  type View = 'watchlists' | 'cases' | 'campaigns';
   let view=$state<View>('watchlists');
 
   // --- Watchlists ---
@@ -27,6 +29,7 @@
 
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
+  let campaignCount=$state(0);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
   const statusOrder=new Map(CASE_STATUSES.map((item,index)=>[item.value,index]));
@@ -45,6 +48,7 @@
   });
   function refreshCases(){cases=loadCases();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
+  function openCampaignCase(record:CaseRecord){view='cases';if(expandedId!==record.id)expand(record);}
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=openCase({domain,source:'monitor'});refreshCases();newDomain='';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
   function setStatus(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{status:value});refreshCases();caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
@@ -57,20 +61,28 @@
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=importCases(JSON.parse(await file.text()));refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{
-    refresh();refreshCases();
+    refresh();refreshCases();campaignCount=loadCampaigns().length;
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';if(cases.some(record=>record.id===focus)){const target=cases.find(record=>record.id===focus)!;expandedId=focus;tagDraft=target.tags.join(', ');}}
     else if(page.url.searchParams.get('view')==='cases')view='cases';
+    else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
   });
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Cases and watchlists</h1><p>Track findings in browser-local cases and compare watchlist changes over time.</p></div></section>
+<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Cases, campaigns and watchlists</h1><p>Organize investigations in browser-local cases and campaigns, then compare watchlist changes over time.</p></div></section>
 
 <div class="views" role="tablist" aria-label="Monitor views">
   <button role="tab" id="tab-cases" aria-selected={view==='cases'} aria-controls="panel-cases" class:active={view==='cases'} onclick={()=>view='cases'}>Cases <span>{cases.length}</span></button>
+  <button role="tab" id="tab-campaigns" aria-selected={view==='campaigns'} aria-controls="panel-campaigns" class:active={view==='campaigns'} onclick={()=>view='campaigns'}>Campaigns <span>{campaignCount}</span></button>
   <button role="tab" id="tab-watchlists" aria-selected={view==='watchlists'} aria-controls="panel-watchlists" class:active={view==='watchlists'} onclick={()=>view='watchlists'}>Watchlists <span>{names.length}</span></button>
 </div>
+
+{#if view==='campaigns'}
+<div id="panel-campaigns" role="tabpanel" aria-labelledby="tab-campaigns">
+  <CampaignManager records={cases} onselect={openCampaignCase} oncount={(count)=>campaignCount=count} />
+</div>
+{/if}
 
 {#if view==='cases'}
 <div id="panel-cases" role="tabpanel" aria-labelledby="tab-cases">
@@ -154,7 +166,7 @@
 </div>
 {/if}
 
-<style>.views{display:flex;gap:7px;margin-bottom:16px}.views button{display:flex;gap:7px;align-items:center;min-height:40px;padding:0 15px;border:1px solid var(--border);border-radius:9px;background:var(--panel-raised);font-size:.74rem}.views button.active{color:var(--accent);border-color:var(--accent)}.views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:.62rem}
+<style>.views{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}.views button{display:flex;gap:7px;align-items:center;min-height:40px;padding:0 15px;border:1px solid var(--border);border-radius:9px;background:var(--panel-raised);font-size:.74rem}.views button.active{color:var(--accent);border-color:var(--accent)}.views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:.62rem}
 .top-actions,.actions,.history header>div:last-child{display:flex;flex-wrap:wrap;gap:7px}.top-actions button,.top-actions label,.actions button,.history button{min-height:38px;padding:0 11px;border:1px solid var(--border);border-radius:9px;background:var(--panel-raised);font-size:.7rem}.top-actions label{display:grid;place-items:center;cursor:pointer}.top-actions input{display:none}.danger{color:var(--danger)}.message{color:var(--accent)}.watchlists,.history{padding:22px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.74rem}th,td{padding:12px 9px;border-top:1px solid var(--border);text-align:left}th{color:var(--muted);font-size:.64rem;text-transform:uppercase}.changed{color:var(--danger)}.empty{display:grid;min-height:300px;place-content:center;padding:30px;text-align:center}.empty p,.history header p,.no-change{color:var(--muted)}.empty a{color:var(--accent);font-weight:700}.history{margin-top:16px}.history header{display:flex;justify-content:space-between;gap:16px}.history h2{margin:0}.history header p{margin:5px 0}.history button.active{color:var(--accent);border-color:#7ee0a8}.events{display:grid;gap:10px;margin-top:18px}.events article{padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}.event-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.event-head span,.event-head strong{padding:5px 7px;border:1px solid var(--border);border-radius:99px;font-size:.65rem;text-transform:capitalize}.event-head small{margin-left:auto;color:var(--muted)}ul{display:grid;gap:6px;margin:14px 0 0;padding:0;list-style:none}li{display:grid;grid-template-columns:minmax(150px,1fr) 120px minmax(180px,1fr);gap:10px;padding:8px;border-left:3px solid var(--border);font-size:.7rem}li.danger{border-color:var(--danger)}li.warn{border-color:#f2b84b}li.good{border-color:var(--accent)}li span,li small{color:var(--muted)}
 .wl-toolbar,.case-toolbar,.case-filters{padding:16px}.case-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end}.track label,.case-filters label{display:block;color:var(--muted);font-size:.66rem}.track>div{display:flex;gap:8px;margin-top:5px}.track input{min-width:200px}.track input,.case-filters input,.case-filters select,.tags-edit input,.note-edit textarea,.field-grid select{min-height:38px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}.track button,.case-filters button,.tags-edit button,.note-edit button{min-height:38px;padding:0 13px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised);font-size:.7rem}.case-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:14px}.case-filters .search{flex:1;min-width:150px}.case-filters .search input{width:100%}.count{margin:12px 2px;color:var(--muted);font-size:.7rem}
 .case-list{display:grid;gap:10px}.case{padding:0;overflow:hidden}.case.open{border-color:var(--accent)}.case-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left}.case-domain{display:flex;flex-direction:column;gap:3px;min-width:0}.case-domain strong{overflow-wrap:anywhere}.case-domain small,.updated{color:var(--muted);font-size:.64rem}.badges{display:flex;flex-wrap:wrap;gap:6px}.badge{padding:4px 9px;border:1px solid var(--border);border-radius:99px;font-size:.62rem;white-space:nowrap}.badge.status-escalated{color:var(--danger);border-color:rgba(255,107,107,.4)}.badge.status-resolved{color:var(--accent2)}.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}.badge.disposition-suspicious{color:#f2b84b}.badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}.tag-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 14px}.tag{padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:.62rem}.case-body{display:grid;gap:14px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field-grid label,.tags-edit label,.note-edit label{display:block;color:var(--muted);font-size:.66rem;margin-bottom:5px}.field-grid select{width:100%}.tags-edit>div{display:flex;gap:8px}.tags-edit input{flex:1}.note-edit textarea{width:100%;resize:vertical}.note-edit button{margin-top:8px}.notes{display:grid;gap:8px;margin:0;padding:0;list-style:none}.notes li{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel-raised)}.notes time{color:var(--muted);font-size:.62rem}.notes p{margin:0;font-size:.72rem;overflow-wrap:anywhere;white-space:pre-wrap}.case-meta{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:.64rem}.case-actions{display:flex;flex-wrap:wrap;gap:8px}.case-actions a,.case-actions button{min-height:36px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised);font-size:.68rem}.case-actions a{color:var(--accent)}

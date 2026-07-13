@@ -20,9 +20,10 @@ typosquat candidate generators, a Certificate Transparency search for
 lookalikes no generated list would guess, availability/opportunity scoring, a
 typosquat phishing-risk score, and brand-asset cloning detection (exact and
 perceptual favicon matching against a Brand Profile's official site).
-Findings can be triaged, drafted into abuse reports, kept in a browser-local
-shortlist, and monitored over time with a watchlist that records a bounded
-timeline of material changes - all with CSV/JSON import/export. Brand Profiles
+Findings can be triaged, drafted into abuse reports, organized into
+browser-local cases and campaigns, kept in a shortlist, and monitored over
+time with a watchlist that records a bounded timeline of material changes -
+all with CSV/JSON import/export. Brand Profiles
 can also audit their official domains' mail and DNS posture (SPF, DMARC, MX,
 DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly configured DKIM
 selectors).
@@ -537,7 +538,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
 
 Move a finding from discovery into a documented investigation. From a **Lookup**
 result or a **Bulk** row you can open a **case** for a domain; **Monitor** is the
-full case workspace (a `Cases` tab alongside `Watchlists`).
+full investigation workspace, with `Cases`, `Campaigns`, and `Watchlists` tabs.
 
 - Each case carries an analyst **status** (New, Reviewing, Monitoring,
   Escalated, Resolved), a **disposition** (Unreviewed, Suspicious, Confirmed
@@ -561,10 +562,25 @@ full case workspace (a `Cases` tab alongside `Watchlists`).
 - Expanded cases also compare their latest compact evidence against the other
   cases already stored in that browser. Exact retained normalized nameserver
   sets and exact final HTTP(S) origins can become bounded cross-case
-  investigation pivots. This comparison makes no network requests, creates no aggregate
-  score or ownership claim, and does not add a new persisted relationship
+  investigation pivots. This comparison makes no network requests, creates no
+  aggregate score or ownership claim, and does not add a new persisted relationship
   record; shared DNS, redirect, hosting, CDN, parking, and platform services
   remain common explanations.
+- The **Campaigns** tab groups existing cases into bounded browser-local
+  investigations. Each campaign retains only a name, optional description,
+  and up to 50 normalized case domains; it does not duplicate case evidence,
+  notes, status, or disposition. A missing domain remains visible as an
+  unavailable case so portable membership is not silently lost after a case
+  deletion or import on another browser. Campaign membership is an analyst
+  organization aid, not evidence of common ownership, coordination, intent,
+  or maliciousness.
+- Campaign collection export/import uses a separate versioned JSON contract.
+  Imports merge matching campaign IDs non-destructively: domain membership is
+  unioned, while newer valid metadata wins. The store is limited to 50
+  campaigns, 50 domains per campaign, a 512 KiB serialized budget, and 2 MB
+  import files. Campaign data stays in `localStorage` under
+  `whoisleuth-campaigns-v1` and never leaves the browser unless deliberately
+  exported.
 - **Cases live only in the current browser.** They are held in `localStorage`
   under `whois-rdap-cases-v1` and are never sent to any server. Clearing your
   browser storage (or using a different browser or device) removes them unless
