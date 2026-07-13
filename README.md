@@ -640,6 +640,16 @@ leases. These are cost classes rather than provider quotas:
 | `certificate_search` | Certificate Transparency search | 2 | 4 |
 | `posture_audit` | domain-posture audit | 3 | 8 |
 
+Each admitted request also receives a versioned, server-derived feature
+identity for later durable accounting. Version 1 distinguishes fast/deep
+Lookup, fast/deep compact Bulk work, direct RDAP, direct WHOIS, fast/deep
+availability, Certificate Transparency, and domain-posture requests while
+continuing to map them onto the four cost classes above. Compact response mode
+is the existing Bulk API contract; it is useful attribution, but not a security
+boundary because a custom client can choose another compatible response shape.
+Future deployment-wide totals must therefore retain an overall limit as well as
+feature-specific limits.
+
 An exhausted lease returns `429`, `Retry-After: 1`, and the stable
 `NETWORK_CONCURRENCY_LIMITED` error code. The lease is always released when
 the request succeeds or fails. Session keys are irreversible hashes of valid

@@ -1,6 +1,6 @@
 const { classifyQuery } = require('../../lib/classify');
 const { buildWhoisChain, parseWhoisChain } = require('../../lib/whois');
-const { operationClassFor } = require('../../lib/operation-budget');
+const { operationBudgetTargetFor } = require('../../lib/operation-budget');
 const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
 const { json } = require('../../lib/http');
 
@@ -18,7 +18,7 @@ exports.handler = async (event) => {
     return json(400, { error: err.message });
   }
 
-  return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('whois'), async () => {
+  return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('whois'), async () => {
     try {
       const chain = await buildWhoisChain(classified.value);
       return json(200, {

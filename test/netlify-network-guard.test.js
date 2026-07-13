@@ -84,6 +84,8 @@ describe('direct serverless network paths', () => {
       const body = JSON.parse(response.body);
       assert.equal(body.errorCode, 'NETWORK_CONCURRENCY_LIMITED');
       assert.equal(body.operationClass, 'registry_light');
+      assert.equal(body.operationFeature, 'rdap');
+      assert.equal(body.operationFeatureModelVersion, 1);
       assert.equal(body.limitScope, 'session');
     } finally {
       for (const lease of leases) lease.release();

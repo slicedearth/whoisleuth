@@ -1,6 +1,6 @@
 const { classifyQuery } = require('../../lib/classify');
 const { checkDomainAvailability } = require('../../lib/availability');
-const { operationClassFor } = require('../../lib/operation-budget');
+const { operationBudgetTargetFor } = require('../../lib/operation-budget');
 const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
 const { json } = require('../../lib/http');
 
@@ -23,7 +23,7 @@ exports.handler = async (event) => {
 
   const params = event.queryStringParameters || {};
   const fast = params.fast === '1' || params.fast === 'true';
-  return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('availability', { fast }), async () => {
+  return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('availability', { fast }), async () => {
     try {
       const result = await checkDomainAvailability(classified.value, { fast, featurePolicy: guard.featurePolicy });
       return json(200, {

@@ -27,7 +27,7 @@ const {
   operationBudgetError,
   operationBudgetHttpStatus,
   runWithOperationBudget,
-  operationClassFor,
+  operationBudgetTargetFor,
 } = require('./lib/operation-budget');
 const { featureDisabledError, networkFeaturePolicy } = require('./lib/feature-policy');
 
@@ -109,12 +109,12 @@ function requireFeature(feature) {
   };
 }
 
-async function withExpressOperationBudget(req, res, operationClass, callback) {
+async function withExpressOperationBudget(req, res, operationTarget, callback) {
   const sessionKey = sessionFingerprintFromCookieHeader(req.headers.cookie);
   if (!sessionKey) {
     return res.status(401).json({ error: 'Authentication required', errorCode: LOOKUP_ERROR_CODES.AUTH_REQUIRED });
   }
-  const outcome = await runWithOperationBudget(defaultOperationBudget, operationClass, sessionKey, callback);
+  const outcome = await runWithOperationBudget(defaultOperationBudget, operationTarget, sessionKey, callback);
   if (!outcome.allowed) {
     res.setHeader('Retry-After', String(outcome.denial.retryAfterSeconds));
     return res.status(operationBudgetHttpStatus(outcome.denial)).json(operationBudgetError(outcome.denial));
@@ -163,9 +163,9 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
   }
 
   const fast = req.query.fast === '1' || req.query.fast === 'true';
-  return withExpressOperationBudget(req, res, operationClassFor('lookup', { fast }), async () => {
+  const compact = req.query.compact === '1' || req.query.compact === 'true';
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
     try {
-      const compact = req.query.compact === '1' || req.query.compact === 'true';
       const result = await runUnifiedLookup(classified, { fast, compact, featurePolicy: req.networkFeaturePolicy });
       res.json({
         query: q,
@@ -192,7 +192,7 @@ app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (r
     return res.status(400).json({ error: err.message });
   }
 
-  return withExpressOperationBudget(req, res, operationClassFor('rdap'), async () => {
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap'), async () => {
     try {
       const record = await fetchRdapRecord(classified.type, classified.value);
       if (!record) {
@@ -223,7 +223,7 @@ app.get('/api/whois', apiRateLimit, requireAuth, requireFeature('whois'), async 
     return res.status(400).json({ error: err.message });
   }
 
-  return withExpressOperationBudget(req, res, operationClassFor('whois'), async () => {
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('whois'), async () => {
     try {
       const chain = await buildWhoisChain(classified.value);
       res.json({
@@ -255,7 +255,7 @@ app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availabi
   }
 
   const fast = req.query.fast === '1' || req.query.fast === 'true';
-  return withExpressOperationBudget(req, res, operationClassFor('availability', { fast }), async () => {
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('availability', { fast }), async () => {
     try {
       const result = await checkDomainAvailability(classified.value, {
         fast,
@@ -283,7 +283,7 @@ app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
-  return withExpressOperationBudget(req, res, operationClassFor('certificate_transparency'), async () => {
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('certificate_transparency'), async () => {
     try {
       const result = await searchCertificateTransparency(q);
       res.json({ keyword: q, ...result });
@@ -308,7 +308,7 @@ app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain
   if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
 
   const selectors = normalizeDkimSelectors((req.query.selectors || '').toString().split(','));
-  return withExpressOperationBudget(req, res, operationClassFor('domain_posture'), async () => {
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_posture'), async () => {
     try {
       res.json(await checkDomainPosture(domain, { dkimSelectors: selectors }));
     } catch (err) {

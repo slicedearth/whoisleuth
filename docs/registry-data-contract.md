@@ -113,7 +113,14 @@ bounded operation class and `session` or `runtime` scope. An unavailable
 configured provider instead returns HTTP `503`,
 `errorCode: NETWORK_BUDGET_UNAVAILABLE`, and `provider` scope. These are
 temporary application-control responses, not upstream registry results or
-evidence about the queried domain.
+evidence about the queried domain. Current endpoint denials also include the
+server-derived `operationFeature` and `operationFeatureModelVersion: 1`.
+Version 1 distinguishes fast/deep ordinary Lookup, fast/deep compact Bulk,
+direct RDAP, direct WHOIS, fast/deep availability, Certificate Transparency,
+and domain-posture requests. The feature is accounting provenance rather than
+proof of the browser workflow: compact mode is the Bulk contract, but a custom
+client can select a different compatible response shape, so future durable
+enforcement must also retain deployment-wide totals.
 
 ## Diagnostics version 3
 

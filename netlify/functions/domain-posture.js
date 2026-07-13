@@ -1,6 +1,6 @@
 const { classifyQuery } = require('../../lib/classify');
 const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('../../lib/domain-posture');
-const { operationClassFor } = require('../../lib/operation-budget');
+const { operationBudgetTargetFor } = require('../../lib/operation-budget');
 const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
 const { json } = require('../../lib/http');
 
@@ -23,7 +23,7 @@ exports.handler = async (event) => {
   if (!domain) return json(400, { error: 'Invalid domain name for posture audit.' });
 
   const selectors = normalizeDkimSelectors(String(params.selectors || '').split(','));
-  return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('domain_posture'), async () => {
+  return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('domain_posture'), async () => {
     try {
       return json(200, await checkDomainPosture(domain, { dkimSelectors: selectors }));
     } catch (err) {

@@ -1,6 +1,6 @@
 const { classifyQuery } = require('../../lib/classify');
 const { fetchRdapRecord } = require('../../lib/rdap');
-const { operationClassFor } = require('../../lib/operation-budget');
+const { operationBudgetTargetFor } = require('../../lib/operation-budget');
 const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
 const { json } = require('../../lib/http');
 
@@ -18,7 +18,7 @@ exports.handler = async (event) => {
     return json(400, { error: err.message });
   }
 
-  return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('rdap'), async () => {
+  return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('rdap'), async () => {
     try {
       const record = await fetchRdapRecord(classified.type, classified.value);
       if (!record) {

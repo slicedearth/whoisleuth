@@ -1,6 +1,6 @@
 const { classifyQuery } = require('../../lib/classify');
 const { runUnifiedLookup, LOOKUP_ERROR_CODES } = require('../../lib/lookup');
-const { operationClassFor } = require('../../lib/operation-budget');
+const { operationBudgetTargetFor } = require('../../lib/operation-budget');
 const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
 const { json } = require('../../lib/http');
 
@@ -20,9 +20,9 @@ exports.handler = async (event) => {
   }
 
   const fast = params.fast === '1' || params.fast === 'true';
-  return withNetlifyOperationBudget(guard.sessionKey, operationClassFor('lookup', { fast }), async () => {
+  const compact = params.compact === '1' || params.compact === 'true';
+  return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
     try {
-      const compact = params.compact === '1' || params.compact === 'true';
       const result = await runUnifiedLookup(classified, { fast, compact, featurePolicy: guard.featurePolicy });
       return json(200, {
         query: q,
