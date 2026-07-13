@@ -311,6 +311,28 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
 });
 
 test('HTTP intelligence presents bounded redirect provenance and response metadata', async ({ page }) => {
+  await page.evaluate(() => {
+    const observedAt = '2026-07-12T00:00:00.000Z';
+    const profile = {
+      id: 'comparison-profile', name: 'Comparison profile', officialDomains: ['official.example'], productNames: [], tlds: [],
+      approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [], trademarkOwner: '', trademarkRegistration: '',
+      officialFaviconHash: '', officialFaviconPHash: '', createdAt: observedAt, updatedAt: observedAt,
+      pageBaseline: {
+        baselineVersion: 1, domain: 'official.example', lookupDomain: 'official.example', observedAt,
+        pageIdentityVersion: 3, fingerprintVersion: 1, pageTitle: 'Official account centre', canonicalHost: 'official.example',
+        faviconHash: null, faviconPHash: null,
+        normalizedHtml: { algorithm: 'sha256', value: 'b'.repeat(64), tokenCount: 40, truncated: false },
+        visibleText: { algorithm: 'simhash64-v1', value: 'c'.repeat(16), tokenCount: 16, featureCount: 14, truncated: false },
+        domStructure: { algorithm: 'sha256', value: '9'.repeat(64), nodeCount: 28, parser: 'static-tag-sequence-v1', truncated: false },
+        formStructure: { algorithm: 'sha256', value: 'e'.repeat(64), formCount: 2, controlCount: 5, truncated: false },
+        resourceHosts: { algorithm: 'set-sha256', value: '8'.repeat(64), values: ['assets.example', 'cdn.example'], truncated: false },
+        trackingIdentifiers: { algorithm: 'set-sha256', value: '1'.repeat(64), values: [{ type: 'tag-container', value: 'GTM-AB12' }], truncated: false },
+        complete: true, truncated: false,
+      },
+    };
+    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
+    localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
+  });
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -408,6 +430,16 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
   await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
+
+  const pageComparison = page.locator('.page-comparison');
+  await expect(pageComparison.getByRole('heading', { name: 'Official-site comparison' })).toBeVisible();
+  await expect(pageComparison.getByText('official.example', { exact: true })).toBeVisible();
+  await expect(pageComparison.locator('article').filter({ hasText: 'Normalized HTML' }).getByText('Same captured digest', { exact: true })).toBeVisible();
+  await expect(pageComparison.locator('article').filter({ hasText: 'Visible text' }).getByText('100% bit agreement', { exact: true })).toBeVisible();
+  await expect(pageComparison.locator('article').filter({ hasText: 'DOM structure' }).getByText('Different captured digest', { exact: true })).toBeVisible();
+  await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
+  await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
+  await expect(pageComparison.getByText(/does not combine these observations into a page-similarity score or use them to change the Risk score/i)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

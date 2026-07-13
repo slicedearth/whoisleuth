@@ -66,6 +66,13 @@ at all.
   hashes, versioned page fingerprints, and bounded external-resource host and
   recognized tracking-identifier sets. It never stores page HTML, URL paths,
   query strings, headers, redirects, parser diagnostics, or raw responses.
+  When a compatible current Lookup result is available, its normalized
+  fingerprints are compared with the active profile baseline locally in the
+  browser. Normalized HTML, visible text, DOM/form structure, resource hosts,
+  and tracking identifiers remain separate comparison components; there is no
+  combined similarity score and the comparison does not affect Risk scoring.
+  The derived comparison itself is transient and is not added to cases,
+  watchlists, profiles, or evidence exports.
 - **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside

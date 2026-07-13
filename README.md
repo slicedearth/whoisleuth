@@ -346,6 +346,12 @@ compact-storage boundary, and lookup evidence schema are documented in the
   official favicon is flagged in results and contributes heavily to its Risk
   score. The remaining baseline components are retained for explainable page
   comparison rather than treated as proof of common ownership or intent.
+  Lookup compares normalized HTML and static DOM/form digests, visible-text
+  SimHash distance, external-resource-host overlap, and recognized tracking
+  identifiers independently. It reports no combined page-similarity score and
+  does not feed these comparisons into Risk scoring. The comparison is
+  computed transiently in the browser and is not copied into cases,
+  watchlists, or evidence exports.
 - A deep check also pulls a few signals straight from the domain's homepage
   HTML at no extra fetch cost: a login/password form, urgency-driven
   phishing/social-engineering language ("verify your account", "security
