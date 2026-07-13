@@ -334,11 +334,18 @@ compact-storage boundary, and lookup evidence schema are documented in the
   passed or needs review/action, and provides a concrete next step. DKIM is
   checked only for selectors saved in the profile because selectors cannot be
   discovered reliably from DNS; the audit never guesses them.
-- A brand profile can also fetch and save its official site's favicon hash
-  (a plain SHA-256 of the raw `/favicon.ico` bytes, computed during any deep
-  check). A registered lookalike serving that exact same favicon - a common
-  tell for a cloned phishing kit - gets flagged in results and contributes
-  heavily to its Risk score.
+- A Brand Profile can explicitly capture a browser-local official-site
+  baseline from its first official domain. The baseline includes the page
+  title, canonical host, favicon hashes, versioned normalized-HTML,
+  visible-text, DOM and form fingerprints, and bounded external-resource host
+  and recognized tracking-identifier sets. It records whether the capture was
+  complete or partial and when it was observed, but never stores page HTML,
+  URL paths or query strings. Capturing does not persist anything until the
+  profile is saved; an inconclusive update leaves the existing baseline
+  unchanged. A registered lookalike serving the exact or a perceptually close
+  official favicon is flagged in results and contributes heavily to its Risk
+  score. The remaining baseline components are retained for explainable page
+  comparison rather than treated as proof of common ownership or intent.
 - A deep check also pulls a few signals straight from the domain's homepage
   HTML at no extra fetch cost: a login/password form, urgency-driven
   phishing/social-engineering language ("verify your account", "security

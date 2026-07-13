@@ -1,22 +1,173 @@
-export const PROFILES_KEY='whois-rdap-brand-profiles-v1';
-export const ACTIVE_PROFILE_KEY='whois-rdap-active-brand-profile-v1';
-export const MAX_PROFILE_IMPORT_BYTES=2*1024*1024;
-const MAX_PROFILES=100,MAX_VALUES=200;
-export interface BrandProfile{id:string;name:string;officialDomains:string[];productNames:string[];tlds:string[];approvedPartnerDomains:string[];allowlistedDomains:string[];allowlistedRegistrars:string[];dkimSelectors:string[];trademarkOwner:string;trademarkRegistration:string;officialFaviconHash:string;officialFaviconPHash:string;createdAt:string;updatedAt:string}
-const list=(value:unknown,lower=false)=>Array.isArray(value)?[...new Set(value.slice(0,MAX_VALUES).map(v=>String(v).trim()).filter(Boolean).map(v=>lower?v.toLowerCase():v))]:[];
-const id=()=>crypto.randomUUID?crypto.randomUUID():`bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-export function normalizeProfile(raw:any,existing?:BrandProfile,touch=false):BrandProfile{const now=new Date().toISOString();return{id:existing?.id||String(raw?.id||id()),name:String(raw?.name||'').trim().slice(0,100),officialDomains:list(raw?.officialDomains,true),productNames:list(raw?.productNames),tlds:list(raw?.tlds,true).map(v=>v.replace(/^\./,'')),approvedPartnerDomains:list(raw?.approvedPartnerDomains,true),allowlistedDomains:list(raw?.allowlistedDomains,true),allowlistedRegistrars:list(raw?.allowlistedRegistrars),dkimSelectors:list(raw?.dkimSelectors,true),trademarkOwner:String(raw?.trademarkOwner||'').trim().slice(0,200),trademarkRegistration:String(raw?.trademarkRegistration||'').trim().slice(0,200),officialFaviconHash:String(raw?.officialFaviconHash||'').trim().slice(0,128),officialFaviconPHash:String(raw?.officialFaviconPHash||'').trim().slice(0,128),createdAt:existing?.createdAt||String(raw?.createdAt||now),updatedAt:touch?now:String(raw?.updatedAt||now)};}
-export function loadProfiles():BrandProfile[]{try{const value=JSON.parse(localStorage.getItem(PROFILES_KEY)||'[]');return Array.isArray(value)?value.slice(0,MAX_PROFILES).map(v=>normalizeProfile(v)).filter(v=>v.name):[];}catch{return[];}}
-export function writeProfiles(profiles:BrandProfile[]){localStorage.setItem(PROFILES_KEY,JSON.stringify(profiles.slice(0,MAX_PROFILES)));}
-export function activeProfileId(){return localStorage.getItem(ACTIVE_PROFILE_KEY)||'';}
-export function setActiveProfile(id:string){if(id)localStorage.setItem(ACTIVE_PROFILE_KEY,id);else localStorage.removeItem(ACTIVE_PROFILE_KEY);}
-export function activeProfile(){const active=activeProfileId();return loadProfiles().find(p=>p.id===active)||null;}
-export function profileDomainKind(domain:string,profile=activeProfile()):'official'|'partner'|'allowlisted'|null{if(!profile||!domain)return null;const target=domain.trim().toLowerCase().replace(/\.$/,'');if(profile.officialDomains.some(value=>value.toLowerCase().replace(/\.$/,'')===target))return'official';if(profile.approvedPartnerDomains.some(value=>value.toLowerCase().replace(/\.$/,'')===target))return'partner';if(profile.allowlistedDomains.some(value=>value.toLowerCase().replace(/\.$/,'')===target))return'allowlisted';return null;}
-export function isDomainAllowlisted(domain:string,profile=activeProfile()){return profileDomainKind(domain,profile)!==null;}
-export function profileSignals(domain:string,evidence:Record<string,any>,profile=activeProfile()){const trusted=profileDomainKind(domain,profile);if(!profile||trusted)return{trusted,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false};const exact=Boolean(evidence.faviconHash&&profile.officialFaviconHash&&evidence.faviconHash===profile.officialFaviconHash);const left=evidence.faviconPHash,right=profile.officialFaviconPHash;const distance=isInformativeFaviconHash(left)&&isInformativeFaviconHash(right)?hammingDistanceHex(left,right):null;const official=new Set(profile.officialDomains.map(value=>value.toLowerCase().replace(/\.$/,'')));const reused=Array.isArray(evidence.externalAssetHosts)&&evidence.externalAssetHosts.some((host:string)=>official.has(String(host).toLowerCase().replace(/\.$/,'')));return{trusted:null,faviconMatch:exact,faviconNearMatch:!exact&&distance!==null&&distance<=8,reusesOfficialAssets:reused};}
-export function upsertProfile(raw:any,editingId=''){const profiles=loadProfiles();const index=editingId?profiles.findIndex(p=>p.id===editingId):-1;const existing=index>=0?profiles[index]:undefined;const profile=normalizeProfile(raw,existing,true);if(!profile.name)throw new Error('Enter a brand name.');if(index>=0)profiles[index]=profile;else{if(profiles.length>=MAX_PROFILES)throw new Error(`Profiles are limited to ${MAX_PROFILES}.`);profiles.push(profile);}writeProfiles(profiles);setActiveProfile(profile.id);return profile;}
-export function deleteProfile(profileId:string){writeProfiles(loadProfiles().filter(p=>p.id!==profileId));if(activeProfileId()===profileId)setActiveProfile('');}
-export function importProfiles(value:unknown){if(!Array.isArray(value))throw new Error('Expected a JSON array of brand profiles.');if(value.length>MAX_PROFILES)throw new Error(`Imports are limited to ${MAX_PROFILES} profiles.`);const current=loadProfiles();const byName=new Map(current.map(p=>[p.name.toLowerCase(),p]));let added=0,updated=0;for(const raw of value){const name=String(raw?.name||'').trim();if(!name)continue;const existing=byName.get(name.toLowerCase());byName.set(name.toLowerCase(),normalizeProfile(raw,existing,true));existing?updated++:added++;}writeProfiles([...byName.values()]);return{added,updated};}
-export function exportProfiles(){const blob=new Blob([JSON.stringify(loadProfiles(),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`whoisleuth-brand-profiles-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
-export function parseList(raw:string,lower=false){return[...new Set(raw.split(/[\n,]+/).map(v=>v.trim()).filter(Boolean).map(v=>lower?v.toLowerCase():v))].slice(0,MAX_VALUES);}
+import { normalizePageBaseline } from './analysis/page-baseline.js';
+import { normalizeDomain } from './analysis/case-model.js';
 import { hammingDistanceHex, isInformativeFaviconHash } from './analysis/utils.js';
+
+export const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
+export const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
+export const MAX_PROFILE_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_PROFILES = 100;
+const MAX_VALUES = 200;
+
+export type PageBaseline = ReturnType<typeof normalizePageBaseline>;
+export interface BrandProfile {
+  id: string;
+  name: string;
+  officialDomains: string[];
+  productNames: string[];
+  tlds: string[];
+  approvedPartnerDomains: string[];
+  allowlistedDomains: string[];
+  allowlistedRegistrars: string[];
+  dkimSelectors: string[];
+  trademarkOwner: string;
+  trademarkRegistration: string;
+  officialFaviconHash: string;
+  officialFaviconPHash: string;
+  pageBaseline: PageBaseline;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const list = (value: unknown, lower = false) => Array.isArray(value)
+  ? [...new Set(value.slice(0, MAX_VALUES).map((item) => String(item).trim()).filter(Boolean).map((item) => lower ? item.toLowerCase() : item))]
+  : [];
+const id = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const owns = (value: unknown, key: string) => Boolean(value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, key));
+
+export function normalizeProfile(raw: any, existing?: BrandProfile, touch = false): BrandProfile {
+  const now = new Date().toISOString();
+  const officialDomains = list(raw?.officialDomains, true);
+  const candidateBaseline = owns(raw, 'pageBaseline')
+    ? normalizePageBaseline(raw.pageBaseline)
+    : existing?.pageBaseline ?? null;
+  const pageBaseline = candidateBaseline
+    && officialDomains.some((domain) => normalizeDomain(domain) === candidateBaseline.domain)
+    ? candidateBaseline
+    : null;
+  return {
+    id: existing?.id || String(raw?.id || id()),
+    name: String(raw?.name || '').trim().slice(0, 100),
+    officialDomains,
+    productNames: list(raw?.productNames),
+    tlds: list(raw?.tlds, true).map((value) => value.replace(/^\./, '')),
+    approvedPartnerDomains: list(raw?.approvedPartnerDomains, true),
+    allowlistedDomains: list(raw?.allowlistedDomains, true),
+    allowlistedRegistrars: list(raw?.allowlistedRegistrars),
+    dkimSelectors: list(raw?.dkimSelectors, true),
+    trademarkOwner: String(raw?.trademarkOwner || '').trim().slice(0, 200),
+    trademarkRegistration: String(raw?.trademarkRegistration || '').trim().slice(0, 200),
+    officialFaviconHash: String(raw?.officialFaviconHash || '').trim().slice(0, 128),
+    officialFaviconPHash: String(raw?.officialFaviconPHash || '').trim().slice(0, 128),
+    pageBaseline,
+    createdAt: existing?.createdAt || String(raw?.createdAt || now),
+    updatedAt: touch ? now : String(raw?.updatedAt || now),
+  };
+}
+
+export function loadProfiles(): BrandProfile[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(PROFILES_KEY) || '[]');
+    return Array.isArray(value)
+      ? value.slice(0, MAX_PROFILES).map((item) => normalizeProfile(item)).filter((item) => item.name)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeProfiles(profiles: BrandProfile[]) {
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles.slice(0, MAX_PROFILES)));
+}
+
+export function activeProfileId() {
+  return localStorage.getItem(ACTIVE_PROFILE_KEY) || '';
+}
+
+export function setActiveProfile(profileId: string) {
+  if (profileId) localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+  else localStorage.removeItem(ACTIVE_PROFILE_KEY);
+}
+
+export function activeProfile() {
+  const active = activeProfileId();
+  return loadProfiles().find((profile) => profile.id === active) || null;
+}
+
+export function profileDomainKind(domain: string, profile = activeProfile()): 'official' | 'partner' | 'allowlisted' | null {
+  if (!profile || !domain) return null;
+  const target = domain.trim().toLowerCase().replace(/\.$/, '');
+  if (profile.officialDomains.some((value) => value.toLowerCase().replace(/\.$/, '') === target)) return 'official';
+  if (profile.approvedPartnerDomains.some((value) => value.toLowerCase().replace(/\.$/, '') === target)) return 'partner';
+  if (profile.allowlistedDomains.some((value) => value.toLowerCase().replace(/\.$/, '') === target)) return 'allowlisted';
+  return null;
+}
+
+export function isDomainAllowlisted(domain: string, profile = activeProfile()) {
+  return profileDomainKind(domain, profile) !== null;
+}
+
+export function profileSignals(domain: string, evidence: Record<string, any>, profile = activeProfile()) {
+  const trusted = profileDomainKind(domain, profile);
+  if (!profile || trusted) return { trusted, faviconMatch: false, faviconNearMatch: false, reusesOfficialAssets: false };
+  const exact = Boolean(evidence.faviconHash && profile.officialFaviconHash && evidence.faviconHash === profile.officialFaviconHash);
+  const left = evidence.faviconPHash;
+  const right = profile.officialFaviconPHash;
+  const distance = isInformativeFaviconHash(left) && isInformativeFaviconHash(right) ? hammingDistanceHex(left, right) : null;
+  const official = new Set(profile.officialDomains.map((value) => value.toLowerCase().replace(/\.$/, '')));
+  const reused = Array.isArray(evidence.externalAssetHosts)
+    && evidence.externalAssetHosts.some((host: string) => official.has(String(host).toLowerCase().replace(/\.$/, '')));
+  return { trusted: null, faviconMatch: exact, faviconNearMatch: !exact && distance !== null && distance <= 8, reusesOfficialAssets: reused };
+}
+
+export function upsertProfile(raw: any, editingId = '') {
+  const profiles = loadProfiles();
+  const index = editingId ? profiles.findIndex((profile) => profile.id === editingId) : -1;
+  const existing = index >= 0 ? profiles[index] : undefined;
+  const profile = normalizeProfile(raw, existing, true);
+  if (!profile.name) throw new Error('Enter a brand name.');
+  if (index >= 0) profiles[index] = profile;
+  else {
+    if (profiles.length >= MAX_PROFILES) throw new Error(`Profiles are limited to ${MAX_PROFILES}.`);
+    profiles.push(profile);
+  }
+  writeProfiles(profiles);
+  setActiveProfile(profile.id);
+  return profile;
+}
+
+export function deleteProfile(profileId: string) {
+  writeProfiles(loadProfiles().filter((profile) => profile.id !== profileId));
+  if (activeProfileId() === profileId) setActiveProfile('');
+}
+
+export function importProfiles(value: unknown) {
+  if (!Array.isArray(value)) throw new Error('Expected a JSON array of brand profiles.');
+  if (value.length > MAX_PROFILES) throw new Error(`Imports are limited to ${MAX_PROFILES} profiles.`);
+  const current = loadProfiles();
+  const byName = new Map(current.map((profile) => [profile.name.toLowerCase(), profile]));
+  let added = 0;
+  let updated = 0;
+  for (const raw of value) {
+    const name = String(raw?.name || '').trim();
+    if (!name) continue;
+    const existing = byName.get(name.toLowerCase());
+    byName.set(name.toLowerCase(), normalizeProfile(raw, existing, true));
+    existing ? updated += 1 : added += 1;
+  }
+  writeProfiles([...byName.values()]);
+  return { added, updated };
+}
+
+export function exportProfiles() {
+  const blob = new Blob([JSON.stringify(loadProfiles(), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `whoisleuth-brand-profiles-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function parseList(raw: string, lower = false) {
+  return [...new Set(raw.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean).map((value) => lower ? value.toLowerCase() : value))].slice(0, MAX_VALUES);
+}

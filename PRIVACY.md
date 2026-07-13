@@ -58,9 +58,14 @@ at all.
   Intermediate normalized markup and visible text are discarded immediately
   after fingerprinting. These digests support comparison but do not prove page
   authorship, ownership, intent, or maliciousness.
-  The summary is not copied into Bulk, watchlists, analyst cases, or other
-  browser-local stores; it appears only in the transient Lookup result and a
-  deliberate Lookup evidence export.
+  The complete summary is not copied into Bulk, watchlists, or analyst cases;
+  it appears only in the transient Lookup result and a deliberate Lookup
+  evidence export. A user can explicitly capture a much narrower official-site
+  baseline in a Brand Profile. That browser-local baseline retains only the
+  observation time, official domain, page title, canonical host, favicon
+  hashes, versioned page fingerprints, and bounded external-resource host and
+  recognized tracking-identifier sets. It never stores page HTML, URL paths,
+  query strings, headers, redirects, parser diagnostics, or raw responses.
 - **Brand Profiles / Shortlist / Watchlist / Certificate search history**: saved in your own browser's
   `localStorage`, not on the server - only visible to whoever is using that browser.
   Watchlists retain a bounded timeline of material scan changes alongside
@@ -68,7 +73,9 @@ at all.
   Structured Certificate Transparency searches retain bounded per-keyword
   domain baselines and check summaries so Discover can identify domains that
   are new since the previous complete search. Capped or legacy results never
-  replace a complete baseline.
+  replace a complete baseline. Brand Profile page baselines are captured only
+  on explicit request and are stored only when the profile is saved. A failed
+  or inconclusive recapture does not replace an existing baseline.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
   button in either panel, the deletion controls under **Previous certificate
   searches**, or by clearing the browser's site data.
