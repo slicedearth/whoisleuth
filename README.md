@@ -441,7 +441,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   several algorithms produce the same domain, every contributing family is
   retained rather than silently discarded. The Risk model uses only its
   allowlisted generator machine values as a bounded context signal; arbitrary
-  imported labels cannot increase the score.
+  imported labels cannot increase the score. Candidate generation validates
+  domain labels before including them and applies deterministic per-family,
+  label-variant, TLD, and overall candidate limits before browser handoff. The
+  Discover status reports when a limit prevents complete coverage.
 - After a generated-list scan, **Defensive registration coverage** groups the
   results by mutation family and TLD: protected/allowlisted domains,
   registered exposures, available gaps, and unknown results. Groups can be

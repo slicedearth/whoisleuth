@@ -1,7 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
-  import { generateTyposquatCandidates, MUTATION_LABELS } from '$lib/analysis/typosquat-generator.js';
+  import {
+    generateTyposquatCandidateSet,
+    MAX_GENERATED_CANDIDATES,
+    MAX_GENERATION_INPUT_LENGTH,
+    MAX_GENERATION_TLDS,
+    MAX_NAME_VARIANTS,
+    MUTATION_LABELS,
+  } from '$lib/analysis/typosquat-generator.js';
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.js';
@@ -46,6 +53,7 @@
     searching = false;
   }
   const mutationLabels = MUTATION_LABELS as Record<string, string>;
+  const maxTldTextLength = 2_048;
 
   const visible = $derived(candidates.filter((c) => ctCandidateMatchesFilter(c, filter) && (!ctNewOnly || ctNewDomains.has(c.domain))));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
@@ -65,16 +73,23 @@
     return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleString();
   }
 
-  function tlds() {
-    return [...new Set(tldText.split(/[;,\s]+/).map((v) => v.trim().toLowerCase().replace(/^\./, '')).filter((v) => /^[a-z]{2,63}$/.test(v)))];
+  function tldSelection() {
+    const boundedText = tldText.slice(0, maxTldTextLength);
+    const values = [...new Set(boundedText.split(/[;,\s]+/).map((v) => v.trim().toLowerCase().replace(/^\./, '')).filter((v) => /^[a-z]{2,63}$/.test(v)))];
+    return {
+      values,
+      truncated: tldText.length > maxTldTextLength || values.length > MAX_GENERATION_TLDS,
+    };
   }
 
-  function generateKeywordCandidates(): Candidate[] {
+  function generateKeywordCandidates(selectedTlds:string[]): Candidate[] {
     const words = seed.trim().toLowerCase().split(/\s+/).map((v) => v.replace(/[^a-z0-9-]/g, '')).filter(Boolean);
     if (!words.length) return [];
     const joined = words.join('');
     const bases = new Set([joined, words.join('-'), `get${joined}`, `my${joined}`, `${joined}hq`, `${joined}app`, `${joined}online`]);
-    return [...bases].flatMap((base) => tlds().map((tld) => ({ domain: `${base}.${tld}`, source: seed.trim(), mutationTypes: ['keyword'] })));
+    return [...bases]
+      .filter((base) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(base))
+      .flatMap((base) => selectedTlds.map((tld) => ({ domain: `${base}.${tld}`, source: seed.trim(), mutationTypes: ['keyword'] })));
   }
 
   function setResults(next: Candidate[], message: string, context:Candidate[]=next) {
@@ -105,16 +120,31 @@
   function generate() {
     cancelCtSearch(); ctResultKind = null; resetCtComparison();
     if (!seed.trim()) { error = 'Enter a brand, domain, or keyword.'; return; }
-    if (!tlds().length && !seed.includes('.')) { error = 'Enter at least one valid TLD.'; return; }
+    const selection = tldSelection();
+    if (!selection.values.length && !seed.includes('.')) { error = 'Enter at least one valid TLD.'; return; }
     if (mode === 'keyword') {
-      const generated=generateKeywordCandidates();
+      const generated=generateKeywordCandidates(selection.values.slice(0, MAX_GENERATION_TLDS));
+      if (!generated.length) {
+        error = 'Enter a shorter keyword that can form a valid domain label.';
+        candidates = []; generatedContext = []; selected = new Set(); status = '';
+        return;
+      }
       const { filtered, excluded } = withoutAllowlisted(generated);
-      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.`, generated);
+      const capNote = selection.truncated ? ' Generation limits were reached; narrow the TLD list for complete coverage.' : '';
+      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${capNote}`, generated);
       return;
     }
-    const generated = generateTyposquatCandidates(seed, tlds()) as Array<{domain:string;source:string;mutationTypes:string[]}>;
+    const result = generateTyposquatCandidateSet(seed, selection.values);
+    if (!result.inputValid) {
+      error = 'Enter a valid brand label or a domain with one suffix label.';
+      candidates = []; generatedContext = []; selected = new Set(); status = '';
+      return;
+    }
+    const generated = result.candidates as Array<{domain:string;source:string;mutationTypes:string[]}>;
     const { filtered, excluded } = withoutAllowlisted(generated);
-    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.`, generated);
+    const capped = result.truncated || (!seed.includes('.') && selection.truncated);
+    const capNote = capped ? ' Generation limits were reached; narrow the seed or TLD list for complete coverage.' : '';
+    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${capNote}`, generated);
   }
 
   async function searchCt() {
@@ -229,10 +259,11 @@
     <button role="tab" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
   </div>
   <div class="fields">
-    <label>{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Brand or certificate keyword' : 'Brand or domain'}<input bind:value={seed} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
-    {#if mode!=='certificate-transparency'}<label>TLDs<input bind:value={tldText} placeholder="com, net, org"></label>{/if}
+    <label>{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Brand or certificate keyword' : 'Brand or domain'}<input bind:value={seed} maxlength={mode==='certificate-transparency'?undefined:MAX_GENERATION_INPUT_LENGTH} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
+    {#if mode!=='certificate-transparency'}<label>TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
     <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
   </div>
+  {#if mode!=='certificate-transparency'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
   {#if ctHistoryNotice}<p class="ct-history-notice" role="status">{ctHistoryNotice}</p>{/if}
   {#if mode==='certificate-transparency' && ctHistory.entries.length}
@@ -285,4 +316,4 @@
   </section>
 {/if}
 
-<style>.controls{padding:22px}.profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-4px 0 16px;padding:10px 12px;border:1px solid rgba(126,224,168,.3);border-radius:10px;background:rgba(126,224,168,.04);color:var(--muted);font-size:.72rem}.profile-context strong{color:var(--text)}.profile-context button{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--accent)}.modes{display:flex;gap:6px;margin-bottom:20px}.modes button,.toolbar button{padding:8px 12px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel)}.modes button.active,.toolbar button.active{color:var(--accent);border-color:#7ee0a8;background:rgba(94,179,255,.1)}.fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}.fields label{font-size:.72rem;font-weight:700}.fields input{display:block;margin-top:7px}.status{color:var(--muted);font-size:.78rem}.ct-history-notice{color:#f2b84b;font-size:.7rem}.ct-history{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}.ct-history>summary{color:var(--accent);cursor:pointer;font-size:.7rem}.ct-history-list{display:grid;gap:7px;margin-top:10px}.ct-history article{display:flex;justify-content:space-between;gap:12px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.ct-history article strong,.ct-history article small{display:block}.ct-history article strong{overflow-wrap:anywhere}.ct-history article small{margin-top:3px;color:var(--muted);font-size:.62rem}.ct-history article>div:last-child{display:flex;gap:5px;align-items:center}.ct-history button{min-height:32px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--panel-raised);font-size:.64rem}.ct-checks{margin-top:7px}.ct-checks summary{color:var(--accent);cursor:pointer;font-size:.62rem}.ct-checks ol{display:grid;gap:4px;margin:6px 0 0;padding-left:18px}.ct-checks li{font-size:.6rem}.ct-checks li span{display:block;color:var(--muted)}.ct-clear-history{margin-top:9px}.results{margin-top:16px;padding:22px}.results header{display:flex;justify-content:space-between;align-items:end;gap:16px}.results h2{margin:0}.toolbar{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);gap:8px;margin:18px 0 12px}.candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}.candidate{display:flex;gap:10px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}.candidate.has-ct{align-items:flex-start}.candidate input{width:16px;min-height:auto;margin-top:2px}.candidate-body{flex:1;min-width:0}.candidate-body label{display:block;min-width:0;cursor:pointer}.candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}.candidate small{display:block;margin-top:4px;color:var(--muted);font-size:.65rem;text-transform:capitalize}.ct-new{display:inline-block;margin-top:6px;padding:3px 7px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent);font-size:.6rem}.ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}.ct-stat{color:var(--muted);font-size:.63rem}.ct-stat time{color:var(--text)}.ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-hosts code{padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:.62rem;overflow-wrap:anywhere;min-width:0}.ct-hosts details{width:100%}.ct-hosts summary{color:var(--accent);font-size:.63rem;cursor:pointer}.ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-legacy{margin:0 0 12px;color:var(--muted);font-size:.7rem}.limit{color:var(--muted);font-size:.72rem}@media(max-width:700px){.fields,.toolbar,.candidate-list{grid-template-columns:1fr}.modes{overflow:auto}.profile-context,.ct-history article{align-items:flex-start;flex-direction:column}.ct-history article>div:last-child{width:100%}.results header{display:block}.results header button{margin-top:14px}}</style>
+<style>.controls{padding:22px}.profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-4px 0 16px;padding:10px 12px;border:1px solid rgba(126,224,168,.3);border-radius:10px;background:rgba(126,224,168,.04);color:var(--muted);font-size:.72rem}.profile-context strong{color:var(--text)}.profile-context button{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--accent)}.modes{display:flex;gap:6px;margin-bottom:20px}.modes button,.toolbar button{padding:8px 12px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel)}.modes button.active,.toolbar button.active{color:var(--accent);border-color:#7ee0a8;background:rgba(94,179,255,.1)}.fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}.fields label{font-size:.72rem;font-weight:700}.fields input{display:block;margin-top:7px}.generation-limits{margin:9px 0 0;color:var(--muted);font-size:.66rem}.status{color:var(--muted);font-size:.78rem}.ct-history-notice{color:#f2b84b;font-size:.7rem}.ct-history{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}.ct-history>summary{color:var(--accent);cursor:pointer;font-size:.7rem}.ct-history-list{display:grid;gap:7px;margin-top:10px}.ct-history article{display:flex;justify-content:space-between;gap:12px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.ct-history article strong,.ct-history article small{display:block}.ct-history article strong{overflow-wrap:anywhere}.ct-history article small{margin-top:3px;color:var(--muted);font-size:.62rem}.ct-history article>div:last-child{display:flex;gap:5px;align-items:center}.ct-history button{min-height:32px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--panel-raised);font-size:.64rem}.ct-checks{margin-top:7px}.ct-checks summary{color:var(--accent);cursor:pointer;font-size:.62rem}.ct-checks ol{display:grid;gap:4px;margin:6px 0 0;padding-left:18px}.ct-checks li{font-size:.6rem}.ct-checks li span{display:block;color:var(--muted)}.ct-clear-history{margin-top:9px}.results{margin-top:16px;padding:22px}.results header{display:flex;justify-content:space-between;align-items:end;gap:16px}.results h2{margin:0}.toolbar{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);gap:8px;margin:18px 0 12px}.candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}.candidate{display:flex;gap:10px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}.candidate.has-ct{align-items:flex-start}.candidate input{width:16px;min-height:auto;margin-top:2px}.candidate-body{flex:1;min-width:0}.candidate-body label{display:block;min-width:0;cursor:pointer}.candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}.candidate small{display:block;margin-top:4px;color:var(--muted);font-size:.65rem;text-transform:capitalize}.ct-new{display:inline-block;margin-top:6px;padding:3px 7px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent);font-size:.6rem}.ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}.ct-stat{color:var(--muted);font-size:.63rem}.ct-stat time{color:var(--text)}.ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-hosts code{padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:.62rem;overflow-wrap:anywhere;min-width:0}.ct-hosts details{width:100%}.ct-hosts summary{color:var(--accent);font-size:.63rem;cursor:pointer}.ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-legacy{margin:0 0 12px;color:var(--muted);font-size:.7rem}.limit{color:var(--muted);font-size:.72rem}@media(max-width:700px){.fields,.toolbar,.candidate-list{grid-template-columns:1fr}.modes{overflow:auto}.profile-context,.ct-history article{align-items:flex-start;flex-direction:column}.ct-history article>div:last-child{width:100%}.results header{display:block}.results header button{margin-top:14px}}</style>

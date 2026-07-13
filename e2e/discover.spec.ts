@@ -62,6 +62,47 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/discover');
 });
 
+test('lookalike generation discloses and enforces its candidate limits', async ({ page }) => {
+  const tlds = Array.from({ length: 25 }, (_, index) =>
+    `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
+  );
+  await expect(page.locator('.generation-limits')).toContainText('20 TLDs, 1,500 label variants, and 2,000 candidates');
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill(tlds.join(', '));
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  await expect(page.getByRole('heading', { name: '2000 selected of 2000' })).toBeVisible();
+  await expect(page.locator('.status')).toContainText('Generation limits were reached');
+  await expect(page.locator('.candidate')).toHaveCount(300);
+  await expect(page.locator('.limit')).toContainText('first 300 matching candidates');
+});
+
+test('lookalike generation rejects ambiguous dotted input and invalid mutation labels', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.getByRole('alert')).toContainText('domain with one suffix label');
+  await expect(page.locator('.candidate')).toHaveCount(0);
+
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('m.com');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.locator('.candidate strong', { hasText: /^-\.com$/ })).toHaveCount(0);
+  await expect(page.locator('.candidate')).not.toHaveCount(0);
+});
+
+test('name-idea generation refuses labels that exceed DNS bounds', async ({ page }) => {
+  await page.getByRole('tab', { name: 'Name ideas' }).click();
+  await page.getByRole('textbox', { name: 'Keyword' }).fill('a'.repeat(80));
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.getByRole('alert')).toContainText('shorter keyword');
+  await expect(page.locator('.candidate')).toHaveCount(0);
+});
+
+test('candidate limit guidance and controls do not overflow at mobile width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.generation-limits')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test('structured CT matches render one candidate per canonical domain, newest first', async ({ page }) => {
   await mockCtSearch(page, structuredResponse);
   await runCtSearch(page);
