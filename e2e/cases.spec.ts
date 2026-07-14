@@ -999,9 +999,24 @@ test.describe('accessible cross-case relationship table', () => {
     ]);
     await page.locator('.relationship-filters select').nth(1).selectOption('member_count');
     const rows = page.getByRole('table').getByRole('row');
+    const direction = page.getByRole('button', { name: 'Ascending, switch to descending' });
+    await expect(direction).toHaveText('Ascending');
     await expect(rows.nth(1)).toContainText('2 cases');
-    await page.getByRole('button', { name: 'Sort descending' }).click();
+    await direction.click();
+    await expect(page.getByRole('button', { name: 'Descending, switch to ascending' })).toHaveText('Descending');
     await expect(rows.nth(1)).toContainText('3 cases');
+  });
+
+  test('keeps long observed values readable beside long case pivots on desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openRelationshipTable(page, Array.from({ length: 23 }, (_, index) => caseRecord({
+      id: `desktop-rel-${index}`,
+      domain: `long-desktop-relationship-member-${String(index).padStart(2, '0')}-with-extra-context.invalid`,
+      evidenceHistory: [snapshot({ nameservers: ['an-unusually-long-shared-nameserver-value.invalid'] })],
+    })));
+    const box = await page.locator('tbody td[data-label="Observed value"]').first().boundingBox();
+    expect(box).not.toBeNull();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(180);
   });
 
   test('relationship filters and rows remain usable without mobile overflow', async ({ page }) => {

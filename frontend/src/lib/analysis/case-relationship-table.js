@@ -49,7 +49,17 @@ function compareRows(left, right, sort) {
  * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown}} [rawOptions]
  */
 export function buildCaseRelationshipTable(rawCases, rawOptions = {}) {
-  const summary = buildCaseRelationships(rawCases);
+  return projectCaseRelationshipTable(buildCaseRelationships(rawCases), rawOptions);
+}
+
+/**
+ * Applies bounded presentation options to an already-normalized relationship
+ * summary. Components can derive the summary from case records once, then use
+ * this inexpensive projection for interactive filtering and sorting.
+ * @param {ReturnType<typeof buildCaseRelationships>} summary
+ * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown}} [rawOptions]
+ */
+export function projectCaseRelationshipTable(summary, rawOptions = {}) {
   const type = normalizeOption(rawOptions.type, TYPES, 'all');
   const query = normalizeQuery(rawOptions.query);
   const sort = normalizeOption(rawOptions.sort, SORTS, 'type');

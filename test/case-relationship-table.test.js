@@ -7,7 +7,9 @@ import {
   MAX_RELATIONSHIP_TABLE_MEMBERS,
   MAX_RELATIONSHIP_TABLE_QUERY_LENGTH,
   MAX_RELATIONSHIP_TABLE_ROWS,
+  projectCaseRelationshipTable,
 } from '../frontend/src/lib/analysis/case-relationship-table.js';
+import { buildCaseRelationships } from '../frontend/src/lib/analysis/case-relationships.js';
 
 const CAPTURED = '2026-07-14T00:00:00.000Z';
 
@@ -45,6 +47,15 @@ describe('case relationship table projection', () => {
     assert.equal(result.rows.length, 2);
     assert.deepEqual(result.rows.map((row) => row.type), ['nameserver_set', 'http_final_origin']);
     assert.ok(result.rows.every((row) => row.caseCount === 2 && row.omittedCases === 0));
+  });
+
+  test('projecting a prebuilt summary matches the compatible raw-case wrapper', () => {
+    const cases = relationshipFixture();
+    const options = { type: 'http_final_origin', query: 'shared', sort: 'value', direction: 'desc' };
+    assert.deepEqual(
+      projectCaseRelationshipTable(buildCaseRelationships(cases), options),
+      buildCaseRelationshipTable(cases, options),
+    );
   });
 
   test('filters by exact relationship family', () => {
