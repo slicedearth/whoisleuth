@@ -110,6 +110,23 @@ describe('RDAP endpoint failover', () => {
     );
   });
 
+  test('classifies non-JSON service errors before attempting body parsing', async () => {
+    let calls = 0;
+    const record = await fetchRdapFromBases('domain', 'example.com', [
+      'https://unavailable.example/rdap',
+      'https://good.example/rdap',
+    ], async () => {
+      calls += 1;
+      return calls === 1
+        ? { status: 503, ok: false, text: '<html>temporarily unavailable</html>' }
+        : { status: 200, ok: true, text: JSON.stringify({ ldhName: 'EXAMPLE.COM' }) };
+    });
+
+    assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['server_error', 'success']);
+    assert.equal(record.attempts[0].status, 503);
+    assert.match(record.attempts[0].detail, /HTTP 503/);
+  });
+
   test('fails over when a successful response is not valid RDAP JSON', async () => {
     let calls = 0;
     const record = await fetchRdapFromBases('domain', 'example.com', [

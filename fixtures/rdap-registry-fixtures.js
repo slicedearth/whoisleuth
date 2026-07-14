@@ -25,6 +25,7 @@ module.exports = [
       status: ['active', 'client transfer prohibited'],
       events: [
         { eventAction: 'last changed', eventDate: '2026-06-01T01:02:03Z' },
+        { eventAction: 'last update of RDAP database', eventDate: '2026-06-02T02:03:04Z' },
         { eventAction: 'registration', eventDate: '2020-01-02T03:04:05Z' },
         { eventAction: 'expiration', eventDate: '2030-01-02T03:04:05Z' },
       ],
@@ -47,6 +48,7 @@ module.exports = [
         createdDate: '2020-01-02T03:04:05Z', reregistrationDate: null,
         expiryDate: '2030-01-02T03:04:05Z', updatedDate: '2026-06-01T01:02:03Z',
         transferDate: null, deletionDate: null, reinstantiationDate: null,
+        databaseUpdatedDate: '2026-06-02T02:03:04Z',
       },
       nameservers: ['NS1.EXAMPLE.INVALID'],
       dnssec: 'Signed',

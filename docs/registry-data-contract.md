@@ -196,7 +196,11 @@ All supported RDAP object types share these bounded fields:
 - `objectClassName`, `language`, `port43`, and `parentHandle`.
 - `conformance` and `conformanceTruncated`.
 - `links` and `linksTruncated` (HTTP(S) links only).
-- `notices`/`remarks` and their corresponding `*Truncated` flags.
+- `notices`/`remarks`, their bounded registered `type` values, and their
+  corresponding `*Truncated` flags.
+- `serverTruncated` and bounded, deduplicated `serverTruncationReasons` when a
+  typed notice or remark uses an RFC 9083 registered object/result-set
+  truncation value.
 - `statuses` and `statusesTruncated`.
 - `events`, `eventsTruncated`, and deterministic `lifecycle`.
 - `redactions` and `redactionsTruncated`.
@@ -206,7 +210,15 @@ Lifecycle selection does not trust upstream array order. Registration uses the
 earliest valid `registration` event; expiration, last-change, transfer,
 deletion, reregistration, and reinstantiation summaries use the latest valid
 event of their respective type. The bounded original event list remains
-available for provenance.
+available for provenance. `lifecycle.databaseUpdatedDate` separately exposes
+the latest valid `last update of RDAP database` event as the server's own data
+freshness claim; it is not the application's fetch time.
+
+Server-declared truncation is distinct from local normalization caps. Only the
+registered typed notice/remark values set `serverTruncated`; prose containing
+the word "truncated" does not. Local `*Truncated` flags continue to report data
+that exceeded this application's display/storage bounds. Neither state is an
+availability or Risk signal.
 
 ### Domain objects
 
@@ -265,6 +277,7 @@ The principal collection limits are:
 | Notice or remark blocks | 12 |
 | Descriptions per notice/remark | 6 |
 | Description text | 800 characters |
+| Server truncation reasons | 8 |
 | RDAP entities traversed | 100 |
 | Nested entity depth | 6 |
 | Entities retained per recognized role | 5 |

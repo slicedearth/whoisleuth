@@ -81,7 +81,29 @@
         }).filter(Boolean).join(' · ')
       : '';
   }
+
+  function serverTruncationText() {
+    return Array.isArray(parsed.serverTruncationReasons)
+      ? parsed.serverTruncationReasons.join(' · ')
+      : '';
+  }
+
+  function formatDate(value: any) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+  }
+
+  function dateTimeAttribute(value: any) {
+    if (!value) return undefined;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
 </script>
+
+{#if parsed.serverTruncated}
+  <p class="server-partial"><strong>Server-declared partial response.</strong> {source} reported that some RDAP data was omitted.{serverTruncationText() ? ` ${serverTruncationText()}.` : ''}</p>
+{/if}
 
 <dl>
   <dt>Domain</dt><dd>{show(parsed.domain)}</dd>
@@ -99,6 +121,7 @@
   <dt>Language</dt><dd>{show(parsed.language)}</dd>
   <dt>Conformance</dt><dd>{show(parsed.conformance)}{parsed.conformanceTruncated ? ' (capped)' : ''}</dd>
   <dt>Lifecycle events</dt><dd>{Array.isArray(parsed.events) ? parsed.events.length : 0}{parsed.eventsTruncated ? ' (capped)' : ''}</dd>
+  <dt>RDAP database updated</dt><dd><time datetime={dateTimeAttribute(parsed.lifecycle?.databaseUpdatedDate)}>{formatDate(parsed.lifecycle?.databaseUpdatedDate)}</time></dd>
   <dt>Port 43</dt><dd>{show(parsed.port43)}</dd>
   <dt>Parent handle</dt><dd>{show(parsed.parentHandle)}</dd>
   <dt>Redactions</dt><dd>{redactionText() || '—'}{parsed.redactionsTruncated ? ' (capped)' : ''}</dd>
@@ -129,6 +152,7 @@
 
 <style>
   dl{display:grid;grid-template-columns:95px minmax(0,1fr);gap:9px;margin:0;padding:0 16px 16px;font-size:.7rem}dd{min-width:0;margin:0;overflow-wrap:anywhere}
+  .server-partial{margin:0 16px 14px;padding:10px;border-left:3px solid #f2b84b;background:rgba(242,184,75,.04);color:var(--muted);font-size:.65rem;overflow-wrap:anywhere}.server-partial strong{color:#f2b84b}
   .contact-inventory{margin:0 16px 16px;border:1px solid var(--border);border-radius:9px}.contact-inventory>summary{padding:11px;font-size:.68rem}.contact-inventory>div{display:grid;gap:9px;padding:0 11px 11px}.contact-inventory>div>p{margin:0;padding:8px;border-left:3px solid #f2b84b;background:rgba(242,184,75,.04);color:var(--muted);font-size:.62rem}.contact-inventory section{min-width:0}.contact-inventory h4{margin:0 0 5px;color:var(--muted);font-size:.62rem;text-transform:uppercase}.contact-inventory article{padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--panel)}.contact-inventory strong,.contact-inventory span{display:block;overflow-wrap:anywhere}.contact-inventory span{margin-top:4px;color:var(--muted);font-size:.62rem}
   @media(max-width:520px){dl{grid-template-columns:1fr;gap:4px}dt:not(:first-child){margin-top:7px}}
 </style>

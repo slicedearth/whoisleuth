@@ -133,7 +133,86 @@ describe('structured RDAP metadata', () => {
       transferDate: '2024-02-03T00:00:00Z',
       deletionDate: null,
       reinstantiationDate: null,
+      databaseUpdatedDate: null,
     });
+  });
+
+  test('surfaces the latest valid RDAP database-update event', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      events: [
+        { eventAction: 'last update of RDAP database', eventDate: '2025-01-01T00:00:00Z' },
+        { eventAction: ' LAST   UPDATE OF RDAP DATABASE ', eventDate: '2026-02-03T04:05:06Z' },
+        { eventAction: 'last update of RDAP database', eventDate: 'not-a-date' },
+      ],
+    });
+
+    assert.equal(parsed.lifecycle.databaseUpdatedDate, '2026-02-03T04:05:06Z');
+  });
+
+  test('distinguishes server-declared truncation from local display caps', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      notices: [
+        {
+          title: 'Search policy',
+          type: ' RESULT SET TRUNCATED DUE TO AUTHORIZATION ',
+          description: ['Some results were omitted.'],
+        },
+        {
+          title: 'Ordinary notice',
+          type: 'terms of service',
+          description: ['The word truncated in prose is not a typed partial-state declaration.'],
+        },
+      ],
+      remarks: [
+        {
+          title: 'Object policy',
+          type: 'object truncated due to excessive load',
+          description: ['Some object data was omitted.'],
+        },
+        {
+          title: 'Duplicate policy',
+          type: 'result set truncated due to authorization',
+          description: ['Duplicate reason.'],
+        },
+        {
+          title: 'Corrected registered value',
+          type: 'object truncated due to unexplainable reason',
+          description: ['RFC 9083 erratum 7986 uses the singular form.'],
+        },
+      ],
+    });
+
+    assert.equal(parsed.serverTruncated, true);
+    assert.deepEqual(parsed.serverTruncationReasons, [
+      'object truncated due to excessive load',
+      'object truncated due to unexplainable reason',
+      'result set truncated due to authorization',
+    ]);
+    assert.equal(parsed.notices[0].type, 'result set truncated due to authorization');
+    assert.equal(parsed.noticesTruncated, false);
+    assert.equal(parsed.remarksTruncated, false);
+  });
+
+  test('does not infer server truncation from untyped prose or local caps', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      notices: Array.from({ length: 13 }, (_, index) => ({
+        title: `Notice ${index}`,
+        type: index === 0 ? 'unregistered truncated wording' : undefined,
+        description: ['This local summary will be capped.'],
+      })),
+      remarks: [{
+        title: 'Truncated response',
+        type: 'result set truncated due to unexplainable reason',
+        description: ['No registered notice or remark type was published.'],
+      }],
+    });
+
+    assert.equal(parsed.noticesTruncated, true);
+    assert.equal(parsed.serverTruncated, false);
+    assert.deepEqual(parsed.serverTruncationReasons, []);
   });
 
   test('bounds malformed event data without losing valid neighbours', () => {
@@ -267,11 +346,18 @@ describe('structured RDAP metadata', () => {
         events: [
           { eventAction: 'registration', eventDate: '2020-01-02T03:04:05Z' },
           { eventAction: 'last changed', eventDate: '2026-06-07T08:09:10Z' },
+          { eventAction: 'last update of RDAP database', eventDate: '2026-06-08T09:10:11Z' },
         ],
+        notices: [{
+          title: 'Object policy', type: 'object truncated due to authorization',
+          description: ['Some fields were omitted.'],
+        }],
       });
       assert.deepEqual(parsed.statuses, ['active'], type);
       assert.equal(parsed.lifecycle.createdDate, '2020-01-02T03:04:05Z', type);
       assert.equal(parsed.lifecycle.updatedDate, '2026-06-07T08:09:10Z', type);
+      assert.equal(parsed.lifecycle.databaseUpdatedDate, '2026-06-08T09:10:11Z', type);
+      assert.equal(parsed.serverTruncated, true, type);
     }
   });
 
