@@ -2,6 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { OBSERVATION_VERSION, createObservation, readObservationEnvelope } = require('../lib/observation');
 
+test('loads the typed implementation through the stable CommonJS entry point', () => {
+  assert.strictEqual(require('../lib/observation.mts').createObservation, createObservation);
+});
+
 test('creates a deterministic bounded observation envelope', () => {
   const result = createObservation({
     status: 'partial', observedAt: '2026-07-13T01:02:03Z', scanMode: 'deep', source: 'dns',
