@@ -32,6 +32,8 @@ function byId(report, id) {
 describe('selector and MTA-STS hostname normalization', () => {
   test('normalizes IDNs and rejects non-domain audit targets', () => {
     assert.equal(normalizeAuditDomain('BÜCHER.example.'), 'xn--bcher-kva.example');
+    assert.equal(normalizeAuditDomain(`example.com${'.'.repeat(100_000)}`), 'example.com');
+    assert.equal(normalizeAuditDomain('.example.com'), null);
     assert.equal(normalizeAuditDomain('localhost'), null);
     assert.equal(normalizeAuditDomain('bad label.example'), null);
   });
@@ -40,6 +42,10 @@ describe('selector and MTA-STS hostname normalization', () => {
     assert.deepEqual(
       normalizeDkimSelectors([' Selector1 ', 'selector1', 'mail.2026', '-bad', '', ...Array(12).fill(0).map((_, i) => `s${i}`)]),
       ['selector1', 'mail.2026', 's0', 's1', 's2', 's3', 's4', 's5', 's6', 's7']
+    );
+    assert.deepEqual(
+      normalizeDkimSelectors([`${'.'.repeat(100_000)}selector${'.'.repeat(100_000)}`]),
+      ['selector']
     );
   });
 

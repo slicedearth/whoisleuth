@@ -134,5 +134,6 @@ describe('registrable-domain safety (eliminating false availability)', () => {
   test('rejects more than one terminal dot', () => {
     assert.throws(() => classifyQuery('example.com..'), /more than one terminal dot/);
     assert.throws(() => classifyQuery('example.com...'), /more than one terminal dot/);
+    assert.throws(() => classifyQuery(`example.com${'.'.repeat(100_000)}`), /more than one terminal dot/);
   });
 });
