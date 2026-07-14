@@ -13,6 +13,7 @@ printf 'example.com\n' | node bin/whoisleuth.js lookup --json
 node bin/whoisleuth.js lookup example.com --deep
 cat domains.txt | node bin/whoisleuth.js bulk --jsonl
 node bin/whoisleuth.js bulk domains.txt --concurrency 4
+node bin/whoisleuth.js ct-search 'example brand' --json
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -59,9 +60,9 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | 4 | A bulk command completed with one or more per-query failures. |
 | 70 | Unexpected CLI bootstrap failure. |
 
-This release supports `lookup` and `bulk`. Discovery, posture, HTTP, TLS,
-comparison, and export commands are added as separate bounded increments
-rather than exposing incomplete aliases.
+This release supports `lookup`, `bulk`, and `ct-search`. Local lookalike
+generation, posture, HTTP, TLS, comparison, and export commands are added as
+separate bounded increments rather than exposing incomplete aliases.
 
 ## Bulk lookup
 
@@ -76,3 +77,18 @@ Bulk uses the shared compact lookup response, so it does not retain raw RDAP
 objects or WHOIS response bodies. `--json` returns one bounded collection;
 `--jsonl` emits one self-contained versioned item per line. A mixture of
 successful and failed queries exits with code 4 while preserving every result.
+
+## Certificate Transparency search
+
+`ct-search` accepts one keyword as an argument or on stdin and calls the same
+bounded Certificate Transparency module as the web application. It contacts
+the upstream public log search service directly from the local machine; it
+does not call the hosted WHOISleuth deployment. Quote a multi-word keyword so
+the shell passes it as one argument.
+
+Terminal output summarizes certificate rows, observed hostnames, canonical
+registrable-domain matches, observation times, and completeness. It shows at
+most 100 matches and five hostnames per match, with explicit omission notes.
+`--json` returns the complete bounded structured result in the versioned
+`whoisleuth.cli.ct-search` schema. CT observations do not prove that a website
+is active or malicious.

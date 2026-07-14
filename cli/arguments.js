@@ -29,8 +29,11 @@ function parseCliArguments(rawArgv) {
   }
 
   const command = argv[0];
-  if (command !== 'lookup' && command !== 'bulk') throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk.`);
+  if (!['lookup', 'bulk', 'ct-search'].includes(command)) {
+    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search.`);
+  }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
+  if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
   let query = null;
   let output = 'terminal';
   let deep = false;
@@ -94,6 +97,25 @@ function parseBulkArguments(argv) {
     throw new CliUsageError(`--concurrency is capped at ${maximum} in ${deep ? 'deep' : 'fast'} bulk mode.`);
   }
   return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4) };
+}
+
+function parseCtSearchArguments(argv) {
+  let keyword = null;
+  let output = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (keyword === null) keyword = argument;
+    else throw new CliUsageError('ct-search accepts one keyword. Quote multi-word keywords as one argument.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'ct-search', keyword, output, quiet, color };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };

@@ -1,12 +1,13 @@
 'use strict';
 
 const { classifyQuery } = require('../lib/classify');
+const { searchCertificateTransparency } = require('../lib/ct-search');
 const { runUnifiedLookup } = require('../lib/lookup');
 const fs = require('node:fs');
 const EXIT_CODES = require('./exit-codes');
 const { CliUsageError, parseCliArguments } = require('./arguments');
-const { buildCliBulkDocument, buildCliLookupDocument, formatJsonDocument, formatJsonLines } = require('./formatters/json');
-const { formatTerminalBulk, formatTerminalLookup } = require('./formatters/terminal');
+const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliLookupDocument, formatJsonDocument, formatJsonLines } = require('./formatters/json');
+const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalLookup } = require('./formatters/terminal');
 const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
 const { version: VERSION } = require('../package.json');
 
@@ -18,6 +19,8 @@ Usage:
   printf 'example.com\\n' | whoisleuth lookup --json
   whoisleuth bulk [file] [--json|--jsonl] [--fast|--deep] [--concurrency <1-8>]
   cat domains.txt | whoisleuth bulk --jsonl
+  whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]
+  printf 'example brand\\n' | whoisleuth ct-search --json
   whoisleuth --help
   whoisleuth --version
 
@@ -57,12 +60,14 @@ function write(stream, value) {
 async function runCli(argv, dependencies = {}) {
   const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
+  let failureLabel = 'Lookup';
   try {
     const args = parseCliArguments(argv);
     if (args.action === 'help') { write(stdout, HELP); return EXIT_CODES.SUCCESS; }
     if (args.action === 'version') { write(stdout, `${VERSION}\n`); return EXIT_CODES.SUCCESS; }
 
     if (args.action === 'bulk') {
+      failureLabel = 'Bulk lookup';
       let input;
       try {
         input = dependencies.readBulkInput
@@ -90,6 +95,21 @@ async function runCli(argv, dependencies = {}) {
       return items.some((item) => !item.ok) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
     }
 
+    if (args.action === 'ct-search') {
+      failureLabel = 'Certificate Transparency search';
+      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
+      const keyword = args.keyword || await readInput();
+      if (!keyword) throw new CliUsageError('ct-search requires one keyword as an argument or on stdin.');
+      const search = dependencies.searchCertificateTransparency || searchCertificateTransparency;
+      const result = await search(keyword);
+      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
+      const document = buildCliCtSearchDocument(keyword, result, now);
+      if (!args.quiet) {
+        write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalCtSearch(document));
+      }
+      return EXIT_CODES.SUCCESS;
+    }
+
     const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
     const query = args.query || await readInput();
     if (!query) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.');
@@ -108,7 +128,7 @@ async function runCli(argv, dependencies = {}) {
       write(stderr, `Usage error: ${boundedErrorMessage(error, 'Invalid command')}\n`);
       return EXIT_CODES.USAGE;
     }
-    write(stderr, `Lookup failed: ${boundedErrorMessage(error, 'Unexpected lookup failure')}\n`);
+    write(stderr, `${failureLabel} failed: ${boundedErrorMessage(error, 'Unexpected command failure')}\n`);
     return EXIT_CODES.LOOKUP_FAILED;
   }
 }

@@ -1,6 +1,7 @@
 'use strict';
 
 const CLI_LOOKUP_SCHEMA_VERSION = 1;
+const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
 
 function buildCliLookupDocument(query, classified, result, generatedAt = new Date().toISOString(), mode = 'fast') {
   return {
@@ -19,6 +20,16 @@ function buildCliLookupDocument(query, classified, result, generatedAt = new Dat
 
 function formatJsonDocument(document) {
   return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+function buildCliCtSearchDocument(keyword, result, generatedAt = new Date().toISOString()) {
+  return {
+    ...result,
+    schema: 'whoisleuth.cli.ct-search',
+    version: CLI_CT_SEARCH_SCHEMA_VERSION,
+    generatedAt,
+    keyword,
+  };
 }
 
 function buildCliBulkDocument(items, metadata) {
@@ -66,4 +77,13 @@ function formatJsonLines(items, metadata) {
   return `${items.map((item) => JSON.stringify(bulkJsonItem(item, metadata))).join('\n')}\n`;
 }
 
-module.exports = { CLI_LOOKUP_SCHEMA_VERSION, buildCliBulkDocument, buildCliLookupDocument, bulkJsonItem, formatJsonDocument, formatJsonLines };
+module.exports = {
+  CLI_CT_SEARCH_SCHEMA_VERSION,
+  CLI_LOOKUP_SCHEMA_VERSION,
+  buildCliBulkDocument,
+  buildCliCtSearchDocument,
+  buildCliLookupDocument,
+  bulkJsonItem,
+  formatJsonDocument,
+  formatJsonLines,
+};

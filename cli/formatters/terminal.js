@@ -1,6 +1,8 @@
 'use strict';
 
 const MAX_TERMINAL_VALUE_LENGTH = 240;
+const MAX_CT_TERMINAL_MATCHES = 100;
+const MAX_CT_TERMINAL_HOSTNAMES = 5;
 
 function safeTerminalValue(value, fallback = '—') {
   if (value === null || value === undefined || value === '') return fallback;
@@ -50,4 +52,43 @@ function formatTerminalBulk(items, metadata) {
   return `${lines.join('\n')}\n`;
 }
 
-module.exports = { MAX_TERMINAL_VALUE_LENGTH, formatTerminalBulk, formatTerminalLookup, safeTerminalValue };
+function formatTerminalCtSearch(document) {
+  const matches = Array.isArray(document.matches) ? document.matches : [];
+  const visible = matches.slice(0, MAX_CT_TERMINAL_MATCHES);
+  const lines = [
+    `Keyword        ${safeTerminalValue(document.keyword)}`,
+    `CT status      ${titleCase(document.observation?.status || (document.truncated ? 'partial' : 'success'))}`,
+    `Certificates   ${safeTerminalValue(document.certCount, '0')}`,
+    `Observed hosts ${safeTerminalValue(Array.isArray(document.domains) ? document.domains.length : 0, '0')}`,
+    `Matches        ${safeTerminalValue(matches.length, '0')}`,
+    `Truncated      ${document.truncated ? 'Yes' : 'No'}`,
+    '',
+  ];
+  if (!visible.length) {
+    lines.push('No structured registrable-domain matches.');
+  } else {
+    for (const match of visible) {
+      const hostnames = Array.isArray(match.hostnames) ? match.hostnames : [];
+      const shownHosts = hostnames.slice(0, MAX_CT_TERMINAL_HOSTNAMES).map((value) => safeTerminalValue(value));
+      const omitted = hostnames.length - shownHosts.length;
+      lines.push(safeTerminalValue(match.domain));
+      lines.push(`  Certificates ${safeTerminalValue(match.certificateCount, '0')}`);
+      lines.push(`  Hostnames     ${shownHosts.join(', ')}${omitted > 0 ? ` (+${omitted} more)` : ''}`);
+      lines.push(`  Observed      ${safeTerminalValue(match.firstObservedAt)} → ${safeTerminalValue(match.lastObservedAt)}`);
+    }
+  }
+  if (matches.length > visible.length) {
+    lines.push('', `Showing ${visible.length} of ${matches.length} structured matches in terminal output; use --json for the complete bounded result.`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+module.exports = {
+  MAX_CT_TERMINAL_HOSTNAMES,
+  MAX_CT_TERMINAL_MATCHES,
+  MAX_TERMINAL_VALUE_LENGTH,
+  formatTerminalBulk,
+  formatTerminalCtSearch,
+  formatTerminalLookup,
+  safeTerminalValue,
+};
