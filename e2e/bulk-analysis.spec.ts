@@ -199,6 +199,19 @@ test('risk model v4 exposes cross-family corroboration in Bulk triage', async ({
   expect(content).toContain('0.0.0.0 candidate.example');
   expect(content).not.toContain('official.example\n');
   await expect(page.getByRole('status').filter({ hasText: 'Check for false positives before use' })).toBeVisible();
+
+  await page.getByLabel('Defensive format').selectOption('stix');
+  const stixDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export 1 high-risk indicator' }).click();
+  const stixDownload = await stixDownloadPromise;
+  expect(stixDownload.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.stix\.json$/);
+  const stixPath = await stixDownload.path();
+  expect(stixPath).not.toBeNull();
+  const bundle = JSON.parse(await readFile(stixPath!, 'utf8'));
+  expect(bundle.type).toBe('bundle');
+  expect(bundle.objects.some((item: Record<string, unknown>) => item.type === 'observed-data' && item.x_whoisleuth_evidence_kind === 'direct-observation')).toBe(true);
+  expect(bundle.objects.some((item: Record<string, unknown>) => item.type === 'indicator' && item.x_whoisleuth_evidence_kind === 'heuristic-inference')).toBe(true);
+  expect(JSON.stringify(bundle)).not.toContain('official.example');
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
