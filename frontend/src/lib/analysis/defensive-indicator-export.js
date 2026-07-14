@@ -27,6 +27,28 @@ export function isDefensiveIndicatorCandidate(value) {
   return Boolean(normalizeDomain(record.domain)) && (riskScore(record) ?? -1) >= MINIMUM_RISK_SCORE;
 }
 
+export function collectDefensiveIndicatorCandidates(records, limit = MAX_DEFENSIVE_INDICATORS) {
+  if (!Array.isArray(records)) throw new TypeError('Defensive indicator export requires an array of Bulk results.');
+  const retainedLimit = Number.isSafeInteger(limit) && limit > 0
+    ? Math.min(limit, MAX_DEFENSIVE_INDICATORS)
+    : MAX_DEFENSIVE_INDICATORS;
+  const byDomain = new Map();
+  for (const item of records.slice(0, MAX_DEFENSIVE_INDICATOR_INPUTS)) {
+    if (!isDefensiveIndicatorCandidate(item)) continue;
+    const domain = normalizeDomain(item.domain);
+    if (domain && !byDomain.has(domain)) byDomain.set(domain, item);
+  }
+  const candidates = [...byDomain.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([domain, source]) => ({ domain, source }));
+  const entries = candidates.slice(0, retainedLimit);
+  return {
+    entries,
+    domains: entries.map((entry) => entry.domain),
+    truncated: records.length > MAX_DEFENSIVE_INDICATOR_INPUTS || candidates.length > retainedLimit,
+  };
+}
+
 function timestamp(value) {
   if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
   const parsed = Date.parse(value);
@@ -73,25 +95,17 @@ function contentFor(format, domains, generatedAt) {
 }
 
 export function buildDefensiveIndicatorExport(records, options = {}) {
-  if (!Array.isArray(records)) throw new TypeError('Defensive indicator export requires an array of Bulk results.');
   const format = DEFENSIVE_INDICATOR_FORMATS.includes(options.format) ? options.format : 'domains';
   const generatedAt = timestamp(options.generatedAt) || new Date().toISOString();
-  const domains = new Set();
-  const input = records.slice(0, MAX_DEFENSIVE_INDICATOR_INPUTS);
-  for (const item of input) {
-    if (!isDefensiveIndicatorCandidate(item)) continue;
-    domains.add(normalizeDomain(item.domain));
-  }
-  const sorted = [...domains].sort().slice(0, MAX_DEFENSIVE_INDICATORS);
-  const truncated = records.length > MAX_DEFENSIVE_INDICATOR_INPUTS || domains.size > MAX_DEFENSIVE_INDICATORS;
+  const collected = collectDefensiveIndicatorCandidates(records);
   return {
     version: DEFENSIVE_INDICATOR_EXPORT_VERSION,
     format,
     generatedAt,
-    domains: sorted,
-    truncated,
+    domains: collected.domains,
+    truncated: collected.truncated,
     filename: `whoisleuth-defensive-domains-${generatedAt.slice(0, 10)}.${format === 'rpz' ? 'zone' : 'txt'}`,
     mimeType: 'text/plain;charset=utf-8',
-    content: `${contentFor(format, sorted, generatedAt)}\n`,
+    content: `${contentFor(format, collected.domains, generatedAt)}\n`,
   };
 }

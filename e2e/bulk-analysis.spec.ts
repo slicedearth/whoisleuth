@@ -212,6 +212,20 @@ test('risk model v4 exposes cross-family corroboration in Bulk triage', async ({
   expect(bundle.objects.some((item: Record<string, unknown>) => item.type === 'observed-data' && item.x_whoisleuth_evidence_kind === 'direct-observation')).toBe(true);
   expect(bundle.objects.some((item: Record<string, unknown>) => item.type === 'indicator' && item.x_whoisleuth_evidence_kind === 'heuristic-inference')).toBe(true);
   expect(JSON.stringify(bundle)).not.toContain('official.example');
+
+  await page.getByLabel('Defensive format').selectOption('misp');
+  const mispDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export 1 high-risk indicator' }).click();
+  const mispDownload = await mispDownloadPromise;
+  expect(mispDownload.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.misp\.json$/);
+  const mispPath = await mispDownload.path();
+  expect(mispPath).not.toBeNull();
+  const event = JSON.parse(await readFile(mispPath!, 'utf8')).Event;
+  expect(event.published).toBe(false);
+  expect(event.distribution).toBe('0');
+  expect(event.Attribute).toHaveLength(1);
+  expect(event.Attribute[0]).toMatchObject({ value: 'candidate.example', type: 'domain', to_ids: false, disable_correlation: true });
+  expect(JSON.stringify(event)).not.toContain('official.example');
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });

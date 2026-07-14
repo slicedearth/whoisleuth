@@ -2,10 +2,8 @@
 // observations and heuristic inferences remain separate objects so consumers
 // do not mistake a Risk score for confirmed maliciousness.
 
-import { normalizeDomain } from './case-model.js';
 import {
-  MAX_DEFENSIVE_INDICATOR_INPUTS,
-  isDefensiveIndicatorCandidate,
+  collectDefensiveIndicatorCandidates,
 } from './defensive-indicator-export.js';
 
 export const STIX_INDICATOR_EXPORT_VERSION = 1;
@@ -71,22 +69,16 @@ function stixId(type, idFactory) {
   return value.toLowerCase();
 }
 
-function candidateRecords(records) {
-  const byDomain = new Map();
-  for (const value of records.slice(0, MAX_DEFENSIVE_INDICATOR_INPUTS)) {
-    if (!isDefensiveIndicatorCandidate(value)) continue;
-    const domain = normalizeDomain(value.domain);
-    if (domain && !byDomain.has(domain)) byDomain.set(domain, value);
-  }
-  return [...byDomain.entries()].sort(([left], [right]) => left.localeCompare(right));
-}
-
 export function buildStixIndicatorExport(records, options = {}) {
-  if (!Array.isArray(records)) throw new TypeError('STIX indicator export requires an array of Bulk results.');
   const generatedAt = isoTimestamp(options.generatedAt) || new Date().toISOString();
   const idFactory = typeof options.idFactory === 'function' ? options.idFactory : defaultIdFactory;
-  const candidates = candidateRecords(records);
-  const retained = candidates.slice(0, MAX_STIX_INDICATORS);
+  let collected;
+  try {
+    collected = collectDefensiveIndicatorCandidates(records, MAX_STIX_INDICATORS);
+  } catch (cause) {
+    if (cause instanceof TypeError) throw new TypeError('STIX indicator export requires an array of Bulk results.');
+    throw cause;
+  }
   const usedIds = new Set();
   const nextId = (type) => {
     const id = stixId(type, idFactory);
@@ -106,7 +98,7 @@ export function buildStixIndicatorExport(records, options = {}) {
     x_whoisleuth_false_positive_warning: WARNING,
   }];
 
-  for (const [domain, source] of retained) {
+  for (const { domain, source } of collected.entries) {
     const domainId = nextId('domain-name');
     const observedDataId = nextId('observed-data');
     const indicatorId = nextId('indicator');
@@ -155,8 +147,8 @@ export function buildStixIndicatorExport(records, options = {}) {
     version: STIX_INDICATOR_EXPORT_VERSION,
     format: 'stix',
     generatedAt,
-    domains: retained.map(([domain]) => domain),
-    truncated: records.length > MAX_DEFENSIVE_INDICATOR_INPUTS || candidates.length > MAX_STIX_INDICATORS,
+    domains: collected.domains,
+    truncated: collected.truncated,
     filename: `whoisleuth-defensive-domains-${generatedAt.slice(0, 10)}.stix.json`,
     mimeType: 'application/stix+json;charset=utf-8',
     content: `${JSON.stringify(bundle, null, 2)}\n`,
