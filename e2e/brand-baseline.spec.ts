@@ -7,6 +7,27 @@ const SHA_A = 'a'.repeat(64);
 const SHA_B = 'b'.repeat(64);
 const SHA_C = 'c'.repeat(64);
 
+function profileFixture() {
+  return {
+    id: 'profile-1',
+    name: 'Stored Brand',
+    officialDomains: ['stored.example'],
+    productNames: [],
+    tlds: ['example'],
+    approvedPartnerDomains: [],
+    allowlistedDomains: [],
+    allowlistedRegistrars: [],
+    dkimSelectors: [],
+    trademarkOwner: '',
+    trademarkRegistration: '',
+    officialFaviconHash: '',
+    officialFaviconPHash: '',
+    pageBaseline: null,
+    createdAt: ISO,
+    updatedAt: ISO,
+  };
+}
+
 function availabilityFixture() {
   return {
     state: 'registered',
@@ -77,7 +98,10 @@ test('captures and persists only a bounded official-site baseline after profile 
 
   await expect(page.getByText('Page baseline', { exact: true })).toBeVisible();
   await expect(page.getByText(/example\.com · Complete/)).toBeVisible();
-  const persisted = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '[]')[0], PROFILES_KEY);
+  const persisted = await page.evaluate((key) => {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(value) ? value[0] : value.profiles[0];
+  }, PROFILES_KEY);
   expect(persisted.pageBaseline).toMatchObject({
     baselineVersion: 1,
     domain: 'example.com',
@@ -125,7 +149,12 @@ test('legacy profiles remain editable and migrate with an explicit null baseline
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.getByRole('button', { name: 'Capture official-site baseline' })).toBeVisible();
   await page.getByRole('button', { name: 'Save profile' }).click();
-  const persisted = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '[]')[0], PROFILES_KEY);
+  const persisted = await page.evaluate((key) => {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(value) ? value[0] : value.profiles[0];
+  }, PROFILES_KEY);
+  const persistedVersion = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null').version, PROFILES_KEY);
+  expect(persistedVersion).toBe(2);
   expect(persisted.name).toBe('Legacy Brand');
   expect(persisted.officialDomains).toEqual(['legacy.example']);
   expect(persisted.pageBaseline).toBeNull();
@@ -143,7 +172,10 @@ test('a baseline is discarded when it no longer belongs to an official domain', 
   await page.getByLabel('Official domains').fill('different.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
-  const persisted = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '[]')[0], PROFILES_KEY);
+  const persisted = await page.evaluate((key) => {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(value) ? value[0] : value.profiles[0];
+  }, PROFILES_KEY);
   expect(persisted.officialDomains).toEqual(['different.example']);
   expect(persisted.pageBaseline).toBeNull();
 });
@@ -185,4 +217,38 @@ test('official-site baseline controls fit a narrow mobile viewport without horiz
   expect(buttonBox).not.toBeNull();
   expect(buttonBox!.x).toBeGreaterThanOrEqual(box!.x);
   expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(box!.x + box!.width);
+});
+
+test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {
+  await cleanBrandStorage(page);
+  const future = { version: 99, profiles: [{ future: true }] };
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: PROFILES_KEY, value: future });
+  await page.reload();
+
+  await openProfileForm(page);
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByRole('status')).toContainText('newer app version');
+  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), PROFILES_KEY);
+  expect(stored).toEqual(future);
+});
+
+test('a browser quota failure reports a stable message and preserves the previous profiles', async ({ page }) => {
+  await cleanBrandStorage(page);
+  const stored = [profileFixture()];
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: PROFILES_KEY, value: stored });
+  await page.addInitScript((profilesKey) => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === profilesKey) throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+      return originalSetItem.call(this, key, value);
+    };
+  }, PROFILES_KEY);
+  await page.reload();
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByLabel('Brand name').fill('Changed name');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByRole('status')).toContainText('Browser storage may be full or unavailable');
+  const after = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), PROFILES_KEY);
+  expect(after).toEqual(stored);
 });

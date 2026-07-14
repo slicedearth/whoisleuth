@@ -1,12 +1,20 @@
-import { normalizePageBaseline } from './analysis/page-baseline.js';
-import { normalizeDomain } from './analysis/case-model.js';
 import { hammingDistanceHex, isInformativeFaviconHash } from './analysis/utils.js';
+import {
+  BRAND_PROFILE_SCHEMA_VERSION,
+  brandProfileStoreVersion,
+  buildBrandProfileExport,
+  mergeBrandProfiles,
+  normalizeBrandProfile,
+  normalizeBrandProfileStore,
+  serializeBrandProfileStore,
+  MAX_PROFILES,
+  MAX_PROFILE_VALUES,
+} from './analysis/brand-profile-model.js';
+import { normalizePageBaseline } from './analysis/page-baseline.js';
 
 export const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 export const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
 export const MAX_PROFILE_IMPORT_BYTES = 2 * 1024 * 1024;
-const MAX_PROFILES = 100;
-const MAX_VALUES = 200;
 
 export type PageBaseline = ReturnType<typeof normalizePageBaseline>;
 export interface BrandProfile {
@@ -28,55 +36,39 @@ export interface BrandProfile {
   updatedAt: string;
 }
 
-const list = (value: unknown, lower = false) => Array.isArray(value)
-  ? [...new Set(value.slice(0, MAX_VALUES).map((item) => String(item).trim()).filter(Boolean).map((item) => lower ? item.toLowerCase() : item))]
-  : [];
 const id = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const owns = (value: unknown, key: string) => Boolean(value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, key));
 
 export function normalizeProfile(raw: any, existing?: BrandProfile, touch = false): BrandProfile {
-  const now = new Date().toISOString();
-  const officialDomains = list(raw?.officialDomains, true);
-  const candidateBaseline = owns(raw, 'pageBaseline')
-    ? normalizePageBaseline(raw.pageBaseline)
-    : existing?.pageBaseline ?? null;
-  const pageBaseline = candidateBaseline
-    && officialDomains.some((domain) => normalizeDomain(domain) === candidateBaseline.domain)
-    ? candidateBaseline
-    : null;
-  return {
-    id: existing?.id || String(raw?.id || id()),
-    name: String(raw?.name || '').trim().slice(0, 100),
-    officialDomains,
-    productNames: list(raw?.productNames),
-    tlds: list(raw?.tlds, true).map((value) => value.replace(/^\./, '')),
-    approvedPartnerDomains: list(raw?.approvedPartnerDomains, true),
-    allowlistedDomains: list(raw?.allowlistedDomains, true),
-    allowlistedRegistrars: list(raw?.allowlistedRegistrars),
-    dkimSelectors: list(raw?.dkimSelectors, true),
-    trademarkOwner: String(raw?.trademarkOwner || '').trim().slice(0, 200),
-    trademarkRegistration: String(raw?.trademarkRegistration || '').trim().slice(0, 200),
-    officialFaviconHash: String(raw?.officialFaviconHash || '').trim().slice(0, 128),
-    officialFaviconPHash: String(raw?.officialFaviconPHash || '').trim().slice(0, 128),
-    pageBaseline,
-    createdAt: existing?.createdAt || String(raw?.createdAt || now),
-    updatedAt: touch ? now : String(raw?.updatedAt || now),
-  };
+  const profile = normalizeBrandProfile(raw, { existing, touch, makeId: id });
+  if (!profile) throw new Error('Enter a brand name.');
+  return profile as BrandProfile;
+}
+
+function readRaw(): unknown {
+  const raw = localStorage.getItem(PROFILES_KEY);
+  return raw ? JSON.parse(raw) : null;
 }
 
 export function loadProfiles(): BrandProfile[] {
   try {
-    const value = JSON.parse(localStorage.getItem(PROFILES_KEY) || '[]');
-    return Array.isArray(value)
-      ? value.slice(0, MAX_PROFILES).map((item) => normalizeProfile(item)).filter((item) => item.name)
-      : [];
+    return normalizeBrandProfileStore(readRaw()).profiles as BrandProfile[];
   } catch {
     return [];
   }
 }
 
 export function writeProfiles(profiles: BrandProfile[]) {
-  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles.slice(0, MAX_PROFILES)));
+  let version: number | null = null;
+  try { version = brandProfileStoreVersion(readRaw()); } catch { /* corrupt data can be replaced safely */ }
+  if (version !== null && version > BRAND_PROFILE_SCHEMA_VERSION) {
+    throw new Error('Brand profiles were created by a newer app version. Update the app before saving.');
+  }
+  const serialized = serializeBrandProfileStore(profiles);
+  try { localStorage.setItem(PROFILES_KEY, serialized); }
+  catch (cause) {
+    if (cause instanceof Error && cause.message.startsWith('Brand profile storage is full')) throw cause;
+    throw new Error('Could not save brand profiles. Browser storage may be full or unavailable.');
+  }
 }
 
 export function activeProfileId() {
@@ -84,8 +76,12 @@ export function activeProfileId() {
 }
 
 export function setActiveProfile(profileId: string) {
-  if (profileId) localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
-  else localStorage.removeItem(ACTIVE_PROFILE_KEY);
+  try {
+    if (profileId) localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+    else localStorage.removeItem(ACTIVE_PROFILE_KEY);
+  } catch {
+    throw new Error('Could not set the active profile. Browser storage may be full or unavailable.');
+  }
 }
 
 export function activeProfile() {
@@ -141,25 +137,18 @@ export function deleteProfile(profileId: string) {
 }
 
 export function importProfiles(value: unknown) {
-  if (!Array.isArray(value)) throw new Error('Expected a JSON array of brand profiles.');
-  if (value.length > MAX_PROFILES) throw new Error(`Imports are limited to ${MAX_PROFILES} profiles.`);
-  const current = loadProfiles();
-  const byName = new Map(current.map((profile) => [profile.name.toLowerCase(), profile]));
-  let added = 0;
-  let updated = 0;
-  for (const raw of value) {
-    const name = String(raw?.name || '').trim();
-    if (!name) continue;
-    const existing = byName.get(name.toLowerCase());
-    byName.set(name.toLowerCase(), normalizeProfile(raw, existing, true));
-    existing ? updated += 1 : added += 1;
-  }
-  writeProfiles([...byName.values()]);
-  return { added, updated };
+  const result = mergeBrandProfiles(loadProfiles(), value, { makeId: id });
+  writeProfiles(result.profiles as BrandProfile[]);
+  return { added: result.added, updated: result.updated, skipped: result.skipped };
 }
 
 export function exportProfiles() {
-  const blob = new Blob([JSON.stringify(loadProfiles(), null, 2)], { type: 'application/json' });
+  let version: number | null = null;
+  try { version = brandProfileStoreVersion(readRaw()); } catch { /* export normalized recovery */ }
+  if (version !== null && version > BRAND_PROFILE_SCHEMA_VERSION) {
+    throw new Error('Brand profiles were created by a newer app version. Update the app before exporting.');
+  }
+  const blob = new Blob([JSON.stringify(buildBrandProfileExport(loadProfiles()), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -169,5 +158,5 @@ export function exportProfiles() {
 }
 
 export function parseList(raw: string, lower = false) {
-  return [...new Set(raw.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean).map((value) => lower ? value.toLowerCase() : value))].slice(0, MAX_VALUES);
+  return [...new Set(raw.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean).map((value) => lower ? value.toLowerCase() : value))].slice(0, MAX_PROFILE_VALUES);
 }
