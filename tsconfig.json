@@ -17,7 +17,6 @@
     "types": ["node"]
   },
   "include": [
-    "lib/**/*.js",
     "lib/**/*.ts",
     "lib/**/*.mts",
     "lib/**/*.cts",

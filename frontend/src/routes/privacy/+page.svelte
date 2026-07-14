@@ -5,7 +5,7 @@
 </section>
 
 <article class="policy card">
-  <p><em>Last updated: 14 July 2026</em></p>
+  <p><em>Last updated: 15 July 2026</em></p>
 
   <h2>1. Introduction</h2>
   <p>This policy explains what WHOISleuth processes when you use it, why, and what choices you have. It applies to this deployment. By using the service, you agree to the practices described here.</p>
@@ -53,7 +53,7 @@
   <p>This policy may change over time. Material changes will update the date shown above.</p>
 
   <h2>13. Contact</h2>
-  <p>Questions are best directed to the project's <a href="https://github.com/slicedearth/whoisleuth/issues" target="_blank" rel="noopener">GitHub issue tracker</a>. The repository also contains the complete <a href="https://github.com/slicedearth/whoisleuth/blob/main/PRIVACY.md" target="_blank" rel="noopener">privacy documentation</a>.</p>
+  <p>Public support requests are not handled through this site. People authorised to use the protected console should contact the operator who provided access; data-subject requests should use the contact designated by that operator. The repository contains the complete <a href="https://github.com/slicedearth/whoisleuth/blob/main/PRIVACY.md" target="_blank" rel="noopener">privacy documentation</a>.</p>
 </article>
 
 <style>

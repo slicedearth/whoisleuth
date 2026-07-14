@@ -95,10 +95,9 @@ const inFlight = new Map<string, Promise<unknown>>();
 // this TLD") - that's cached as a real result, distinct from `undefined`
 // meaning "not cached yet", so a `null` answer doesn't get re-fetched every
 // time either.
-// The cache intentionally holds heterogeneous public lookup results. Its
-// CommonJS consumers remain JavaScript during migration, so the return stays
-// dynamically typed at this compatibility boundary until those consumers
-// receive explicit result contracts of their own.
+// The cache intentionally holds heterogeneous public lookup results. Callers
+// supply distinct result contracts, so this internal compatibility boundary
+// stays dynamically typed rather than asserting one shared payload shape.
 async function cached(key: string, factory: CacheFactory): Promise<any> {
   const hit = getCached(key);
   if (hit !== undefined) return hit;

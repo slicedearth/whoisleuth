@@ -178,7 +178,10 @@ Since there's no server-side account or database, a request from a
 registrant to access/delete their data is fulfilled by deleting whatever
 you personally exported (CSV/JSON files) or saved (shortlist/watchlist entries and history)
 about them, and not re-querying afterward - use the **Clear all** buttons
-above for the latter. Direct any such request to: `[operator contact]`.
+above for the latter. Public support requests are not handled through the
+deployed site; people authorised to use the protected console should contact
+the operator who provided access. Direct data-subject requests to:
+`[operator contact]`.
 
 ## Hosting / sub-processors
 

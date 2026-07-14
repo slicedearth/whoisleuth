@@ -1,5 +1,5 @@
 // Framework-neutral normalization of the Certificate Transparency search API
-// response (see lib/ct-search.js for the backend contract). No DOM, Svelte,
+// response (see lib/ct-search.mts for the backend contract). No DOM, Svelte,
 // localStorage, sessionStorage, or network access lives here so the module is
 // node --test-able and safe to import from both the Discover route and the
 // candidate-handoff serializer.
@@ -17,7 +17,7 @@ import { normalizeDomain } from './case-model.js';
 // coverage, and the handoff can recognise its provenance.
 export const CERTIFICATE_TRANSPARENCY_MUTATION = 'certificate_transparency';
 
-// Bounds. Kept aligned with the backend's own caps (lib/ct-search.js) so a
+// Bounds. Kept aligned with the backend's own caps (lib/ct-search.mts) so a
 // well-formed response is never clipped, while a hostile or malformed one can
 // never impose unbounded work or storage.
 export const MAX_CT_CANDIDATES = 500; // mirrors backend MAX_MATCHES / MAX_RESULTS

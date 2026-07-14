@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, runBulkScan } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -896,7 +896,13 @@ test.describe('case report export', () => {
       }),
     ]);
 
-    await expect(page.locator('.export-controls')).toBeVisible();
+    const controls = page.locator('.export-controls');
+    const checkbox = controls.locator('input[type="checkbox"]');
+    await expect(controls).toBeVisible();
+    const checkboxBox = await boundingBox(checkbox);
+    expect(checkboxBox.width).toBeLessThanOrEqual(20);
+    expect(checkboxBox.height).toBeLessThanOrEqual(20);
+    await expect(controls.getByText('Notes may contain sensitive information.')).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });

@@ -227,14 +227,15 @@ describe('lookup evidence Markdown rendering', () => {
   });
 
   test('escapes untrusted Markdown, HTML, bare-link, and email syntax', () => {
-    const hostile = '# [click](https://malicious.invalid) <script>alert(1)</script> user@example.invalid\u202e';
+    const hostile = '# [click](https://malicious.invalid) <SCRIPT>alert(1)</SCRIPT> user@example.invalid\u202e';
     const escaped = escapeMarkdownValue(hostile);
     assert.doesNotMatch(escaped, /^#/);
     assert.doesNotMatch(escaped, /\]\(https:\/\//);
-    assert.doesNotMatch(escaped, /<script>/);
+    assert.doesNotMatch(escaped, /<script>/i);
     assert.doesNotMatch(escaped, /user@example/);
     assert.doesNotMatch(escaped, /\u202e/);
     assert.match(escaped, /\\#/);
+    assert.match(escaped, /&lt;SCRIPT&gt;/);
     assert.match(escaped, /https\\:\/\//);
     assert.match(escaped, /user\\@example/);
   });

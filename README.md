@@ -8,6 +8,7 @@
   <img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License: Apache 2.0" />
   <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />
   <img src="https://img.shields.io/badge/frontend-SvelteKit%20%2B%20Vite-ff3e00" alt="SvelteKit and Vite" />
+  <a href="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml"><img src="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify Status" /></a>
 </p>
 
@@ -35,8 +36,38 @@ so it can run either as a traditional always-on Node/Express server
 (`server.mts`) or as Netlify Functions (`netlify/functions/`) with no logic
 duplicated between the two.
 
+<p align="center">
+  <a href="https://whoisleuth.com/demo"><strong>Explore the public synthetic demo →</strong></a><br />
+  <sub>Fixed fictional data · no sign-in · no live registry, DNS, website, or hosted analysis request</sub>
+</p>
+
+## At a glance
+
+| Workspace | Purpose | Important boundary |
+| --- | --- | --- |
+| **Lookup** | Inspect one domain, IP address, or ASN through normalized RDAP/WHOIS evidence and optional deep DNS, HTTP, favicon, page-identity, and TLS observations. | Fast and deep results disclose skipped, partial, unsupported, and failed sources rather than treating missing evidence as negative evidence. |
+| **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates; supplement them with structured Certificate Transparency matches. | Candidate generation is local. Certificate Transparency is an explicit hosted search and its timestamps are public-log observations, not proof of site activity or maliciousness. |
+| **Bulk** | Triage a list of domains with filters, score explanations, CSV export, scan-local relationships, and fast/deep profiles. | Each domain is a separately budgeted lookup. Fast mode avoids WHOIS and deep website/TLS collection; deep mode costs more requests and time. |
+| **Brands** | Keep browser-local official-domain profiles, posture settings, allowlists, and optional page-identity baselines. | Profiles stay in that browser. A posture audit and baseline capture run only when explicitly requested. |
+| **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local; there are no accounts, server-side projects, background jobs, automatic reports, or automatic notifications. |
+| **Demo** | Walk through a representative brand-to-case workflow using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production browser stores. |
+
+The application is intentionally an analyst workbench rather than an autonomous
+scanner or enforcement system. Scores, similarity, relationships, and generated
+candidates are prioritisation context; a human remains responsible for review
+and any external action.
+
+See the [architecture orientation](docs/architecture.md) for the main execution,
+trust, storage, and deployment boundaries, and the
+[registry data contract](docs/registry-data-contract.md) for normalized source
+shapes and compatibility details. The
+[engineering case study](docs/engineering-case-study.md) explains the project's
+constraints, representative decisions, difficult problems, and useful
+code-review entry points.
+
 ## Contents
 
+- [At a glance](#at-a-glance)
 - [Disclaimer](#disclaimer)
 - [Requirements](#requirements)
 - [Install & run](#install--run)
@@ -44,6 +75,8 @@ duplicated between the two.
 - [Rate limiting](#rate-limiting)
 - [Deploying to Netlify](#deploying-to-netlify)
 - [Project structure](#project-structure)
+- [Architecture orientation](docs/architecture.md)
+- [Engineering case study](docs/engineering-case-study.md)
 
 ## Disclaimer
 
@@ -186,8 +219,9 @@ npm run test:e2e
 ### Browser end-to-end tests
 
 The `e2e/` directory holds a [Playwright](https://playwright.dev/) smoke
-suite (Chromium only) covering authentication, mobile navigation, the Lookup
-input, and Bulk analysis. It builds and runs its own local production-style
+suite (Chromium only) covering authentication, responsive navigation, core
+investigation workflows, browser-local persistence and exports, accessibility,
+and the isolated public demo. It builds and runs its own local production-style
 server on port 4173 with a test-only `SITE_PASSWORD`/`SESSION_SECRET`
 (configured in `playwright.config.ts`, not your shell) and never queries
 live WHOIS, RDAP, DNS, CT, or website data - tests that need submission
@@ -306,6 +340,29 @@ compact-storage boundary, and lookup evidence schema are documented in the
   and scope, and does not claim unimplemented scheduled capabilities.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage.
+
+### Optional external threat-intelligence boundary
+
+No external reputation or feed provider is enabled in the current application.
+Before an adapter can be added, `lib/threat-intelligence-contract.mts` requires a
+versioned provider definition that declares its supported target types, the
+exact target representation it would receive (registrable domain, hostname,
+origin, or full URL), a reviewed terms URL and privacy-policy decision,
+commercial-use, attribution, caching, provider query-retention, and
+redistribution policy, plus bounded
+timeouts, response sizes, cache TTLs, concurrency, and daily/monthly request
+budgets. Version 1 permits lookup-only integrations and deliberately excludes
+automatic URL submission.
+
+Adapter output is normalized into separately attributed, bounded findings and
+explicit `success`, `partial`, `not_found`, `unsupported`, `skipped`,
+`rate_limited`, `unavailable`, or `error` states. It has no global “safe” field:
+a provider miss, outage, quota failure, or unsupported target cannot become
+evidence of safety. External findings do not affect Risk until a separately
+versioned calibration increment is supported by fixtures. The contract itself
+performs no requests, stores no credentials, and sends no targets to a third
+party; individual adapters remain subject to a fresh terms and privacy review
+before they are enabled.
 
 ### Opportunity & Risk scoring
 
@@ -828,12 +885,16 @@ lib/                    Shared lookup logic, used by both server.mts and netlify
   favicon.mts           Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
   html-signals.mts      Bounded homepage signals and versioned static page-identity evidence
   tls-intelligence.mts  One-connection TLS/certificate profile with public-address pinning
+  threat-intelligence-contract.mts  Bounded policy and result boundary for optional external providers
   ct-search.mts         Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.mts        SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.mts              Shared-password session cookie (sign/verify, no user accounts)
   rate-limit.mts        Per-IP rate limiting for login and lookup routes
 netlify/functions/      Netlify Functions (lookups, posture audit, auth/session)
 netlify.toml            Netlify build/redirect config
+docs/architecture.md    System context, request pipeline, trust boundaries, and trade-offs
+docs/engineering-case-study.md  Project constraints, decisions, challenges, and review guide
+docs/registry-data-contract.md  Normalized registry source and evidence contracts
 ```
 
 The frontend is a prerendered SvelteKit multi-page app built with Vite. The

@@ -35,10 +35,10 @@ export function entityDisplayName(value) {
 }
 
 // Hamming distance (0-64) between two 16-hex perceptual dHash strings (see
-// lib/perceptual-hash.js), or null if either isn't a well-formed hash. Smaller
+// lib/perceptual-hash.mts), or null if either isn't a well-formed hash. Smaller
 // = more visually similar. Shared by the brand-profile near-match check and
-// bulk favicon clustering; mirrors the backend's hammingDistanceHex (the two
-// can't share code - one is a CJS lib, the other a browser ESM module).
+// bulk favicon clustering; mirrors the backend's hammingDistanceHex. The two
+// implementations target separate Node and browser execution boundaries.
 const HEX_HASH_RE = /^[0-9a-f]{16}$/;
 
 export function hammingDistanceHex(a, b) {
@@ -55,7 +55,7 @@ export function hammingDistanceHex(a, b) {
 // A dHash carries usable structure only when its set-bit count is away from
 // the degenerate extremes - a near-all-zero (or near-all-one) hash comes from
 // a solid/monotonic icon and collides with every other such icon (see
-// lib/perceptual-hash.js's MIN_INFORMATIVE_BITS, mirrored here). Generation
+// lib/perceptual-hash.mts's MIN_INFORMATIVE_BITS, mirrored here). Generation
 // already rejects these, but this is re-checked at every comparison so a
 // degenerate hash saved into a Brand Profile before that guard existed can't
 // keep producing false near-matches.

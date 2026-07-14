@@ -55,7 +55,7 @@
   .export-controls { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 13px; border: 1px solid var(--border); border-radius: 9px; }
   legend { padding: 0 6px; color: var(--muted); font-size: .66rem; }
   .export-notes { display: flex; gap: 9px; align-items: start; min-width: 0; font-size: .7rem; }
-  .export-notes input { flex: 0 0 auto; margin-top: 2px; }
+  .export-notes input { width: 16px; min-height: auto; flex: 0 0 auto; margin-top: 2px; padding: 0; }
   .export-notes span { min-width: 0; overflow-wrap: anywhere; }
   .export-notes small { display: block; margin-top: 3px; color: var(--muted); font-size: .62rem; line-height: 1.45; }
   .export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
