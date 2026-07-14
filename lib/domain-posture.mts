@@ -4,7 +4,7 @@
 
 import { promises as dns } from 'node:dns';
 
-import rdapModule from './rdap.js';
+import { fetchRdapRecord } from './rdap.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { classifyMxRecords } from './dns-mx.mts';
 import type { MxRecord } from './dns-mx.mts';
@@ -17,8 +17,6 @@ import {
   parseBimiRecords,
   parseDkimRecords,
 } from './domain-posture-parsers.mts';
-
-const { fetchRdapRecord } = rdapModule;
 
 const DNS_TIMEOUT_MS = 6000;
 const POLICY_TIMEOUT_MS = 7000;

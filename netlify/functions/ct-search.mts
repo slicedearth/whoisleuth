@@ -1,5 +1,5 @@
-import { searchCertificateTransparency } from '../../lib/ct-search.js';
-import { operationBudgetTargetFor } from '../../lib/operation-budget.js';
+import { searchCertificateTransparency } from '../../lib/ct-search.mts';
+import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';

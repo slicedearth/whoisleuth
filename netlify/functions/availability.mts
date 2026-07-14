@@ -1,6 +1,6 @@
 import { classifyQuery } from '../../lib/classify.mts';
-import { checkDomainAvailability } from '../../lib/availability.js';
-import { operationBudgetTargetFor } from '../../lib/operation-budget.js';
+import { checkDomainAvailability } from '../../lib/availability.mts';
+import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';

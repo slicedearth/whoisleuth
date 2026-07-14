@@ -18,7 +18,7 @@ import {
   operationBudgetError,
   operationBudgetHttpStatus,
   runWithOperationBudget,
-} from './operation-budget.js';
+} from './operation-budget.mts';
 import { json } from './http.mts';
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './feature-policy.mts';
 import type { NetlifyJsonResponse } from './http.mts';

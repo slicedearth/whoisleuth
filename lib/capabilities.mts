@@ -1,4 +1,4 @@
-import { defaultOperationBudget, operationBudgetReport } from './operation-budget.js';
+import { defaultOperationBudget, operationBudgetReport } from './operation-budget.mts';
 import {
   NETWORK_FEATURE_DEFINITIONS,
   featureDecision,

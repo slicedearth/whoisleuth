@@ -10,8 +10,8 @@
 
 import { promises as dns } from 'node:dns';
 
-import rdapModule from './rdap.js';
-import whoisModule from './whois.js';
+import { fetchRdapRecord } from './rdap.mts';
+import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
 import { collectDnsIntelligence, skippedDnsIntelligence } from './dns-intelligence.mts';
 import { fetchFaviconHash } from './favicon.mts';
@@ -20,9 +20,6 @@ import { featureDecision, networkFeaturePolicy } from './feature-policy.mts';
 import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } from './http-intelligence.mts';
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
-
-const { fetchRdapRecord } = rdapModule;
-const { buildWhoisChain, parseWhoisChain } = whoisModule;
 
 const MAX_HOMEPAGE_BYTES = 300000;
 const DNS_DELEGATION_TIMEOUT_MS = 4000;

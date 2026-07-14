@@ -1,6 +1,6 @@
 import { classifyQuery } from '../../lib/classify.mts';
-import { buildWhoisChain, parseWhoisChain } from '../../lib/whois.js';
-import { operationBudgetTargetFor } from '../../lib/operation-budget.js';
+import { buildWhoisChain, parseWhoisChain } from '../../lib/whois.mts';
+import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';

@@ -6,16 +6,12 @@
 // just performed. This module fetches each registration source once and feeds
 // those exact results into availability classification.
 
-import rdapModule from './rdap.js';
-import whoisModule from './whois.js';
-import operationBudgetModule from './operation-budget.js';
+import { fetchRdapRecord, fetchRegistrarRdapRecord } from './rdap.mts';
+import { buildWhoisChain, parseWhoisChain } from './whois.mts';
+import { OPERATION_BUDGET_ERROR_CODE } from './operation-budget.mts';
 import { checkDomainAvailability } from './availability.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import { FEATURE_DISABLED_ERROR_CODE, featureDecision, networkFeaturePolicy } from './feature-policy.mts';
-
-const { fetchRdapRecord, fetchRegistrarRdapRecord } = rdapModule;
-const { buildWhoisChain, parseWhoisChain } = whoisModule;
-const { OPERATION_BUDGET_ERROR_CODE } = operationBudgetModule;
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;

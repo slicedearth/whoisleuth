@@ -2,12 +2,12 @@ import { Buffer } from 'node:buffer';
 import { createReadStream } from 'node:fs';
 import { createRequire } from 'node:module';
 
-import availabilityModule from '../lib/availability.js';
-import classifyModule from '../lib/classify.js';
-import ctSearchModule from '../lib/ct-search.js';
-import domainPostureModule from '../lib/domain-posture.js';
-import lookupModule from '../lib/lookup.js';
-import tlsIntelligenceModule from '../lib/tls-intelligence.js';
+import { fetchHomepage } from '../lib/availability.mts';
+import { classifyQuery } from '../lib/classify.mts';
+import { searchCertificateTransparency } from '../lib/ct-search.mts';
+import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
+import { runUnifiedLookup } from '../lib/lookup.mts';
+import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
 import { CliUsageError, parseCliArguments } from './arguments.mts';
 import {
   MAX_BULK_INPUT_BYTES,
@@ -58,13 +58,6 @@ import type { UnknownRecord } from './saved-lookup.mts';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json') as { version: string };
-const { fetchHomepage } = availabilityModule;
-const { classifyQuery } = classifyModule;
-const { searchCertificateTransparency } = ctSearchModule;
-const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = domainPostureModule;
-const { runUnifiedLookup } = lookupModule;
-const { collectTlsIntelligence, normalizeTlsHostname } = tlsIntelligenceModule;
-
 const MAX_STDIN_BYTES = 4096;
 const HELP = `WHOISleuth CLI
 
