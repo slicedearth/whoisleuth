@@ -4,7 +4,14 @@
   "private": true,
   "license": "Apache-2.0",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
-  "main": "server.mts",
+  "files": [
+    "bin/**/*.mts",
+    "cli/**/*.mts",
+    "lib/**/*.mts",
+    "docs/cli.md",
+    "LICENSE",
+    "NOTICE"
+  ],
   "bin": {
     "whoisleuth": "bin/whoisleuth.mts"
   },

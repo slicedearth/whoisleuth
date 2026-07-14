@@ -30,6 +30,13 @@ These examples run from a checked-out repository. The package exposes a
 package is not currently published to the public npm registry; do not assume
 that an unqualified `npx whoisleuth` resolves to this repository.
 
+The root package is distribution-scoped to the CLI: an npm archive contains
+only the executable, its TypeScript CLI and shared runtime modules, this guide,
+and the required package metadata and notices. The positive allowlist keeps the
+archive boundary stable as the repository evolves. The self-hosted application
+continues to run from a repository checkout through `npm start`; it is not
+represented as an installable library entry point.
+
 Lookup defaults to the conservative fast profile. `--deep` must be requested
 explicitly and can make the additional bounded WHOIS, DNS, website, and TLS
 requests used by a deep web lookup.
