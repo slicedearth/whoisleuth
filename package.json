@@ -5,6 +5,9 @@
   "license": "Apache-2.0",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
   "main": "server.js",
+  "bin": {
+    "whoisleuth": "bin/whoisleuth.js"
+  },
   "workspaces": [
     "frontend"
   ],
