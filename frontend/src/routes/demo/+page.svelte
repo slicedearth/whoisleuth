@@ -3,7 +3,8 @@
   import {
     buildSyntheticDemoExport, createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
     normalizeSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_PROFILE,
-    SYNTHETIC_DEMO_STORAGE_KEY, syntheticDemoCandidate, syntheticDemoStage,
+    SYNTHETIC_DEMO_STORAGE_KEY, SYNTHETIC_DEMO_VERSION, syntheticDemoCandidate,
+    syntheticDemoStage,
   } from '$lib/analysis/demo-model.js';
 
   type View='brand'|'discover'|'triage'|'evidence'|'case';
@@ -11,15 +12,27 @@
   const selected=$derived(syntheticDemoCandidate(demoState.selectedCandidateId));
   const views:Array<{id:View;label:string}>=[{id:'brand',label:'1. Brand'},{id:'discover',label:'2. Discover'},{id:'triage',label:'3. Triage'},{id:'evidence',label:'4. Evidence'},{id:'case',label:'5. Case'}];
 
-  onMount(()=>{try{demoState=normalizeSyntheticDemoState(JSON.parse(sessionStorage.getItem(SYNTHETIC_DEMO_STORAGE_KEY)||'null'));view=syntheticDemoStage(demoState) as View;}catch{demoState=createSyntheticDemoState();}});
+  onMount(()=>{
+    let stored:string|null;
+    try{stored=sessionStorage.getItem(SYNTHETIC_DEMO_STORAGE_KEY);}catch{demoState=createSyntheticDemoState();message='Tab storage is unavailable. Demo progress will last only until this page closes.';return;}
+    if(!stored)return;
+    try{
+      const parsed:unknown=JSON.parse(stored);
+      if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!('version' in parsed)||(parsed as {version?:unknown}).version!==SYNTHETIC_DEMO_VERSION)throw new Error('Unsupported demo state');
+      demoState=normalizeSyntheticDemoState(parsed);view=syntheticDemoStage(demoState) as View;
+    }catch{
+      demoState=createSyntheticDemoState();view='brand';
+      try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Stored demo progress was invalid or unsupported and has been reset.';}catch{message='Stored demo progress was invalid and could not be cleared. Closing this tab will remove it.';}
+    }
+  });
   function available(target:View){return target==='brand'||(target==='discover'&&demoState.profileReady)||(target==='triage'&&demoState.candidatesReady)||(target==='evidence'&&Boolean(demoState.selectedCandidateId))||(target==='case'&&demoState.caseReady);}
-  function save(patch:Record<string,unknown>){demoState=normalizeSyntheticDemoState({...demoState,...patch});sessionStorage.setItem(SYNTHETIC_DEMO_STORAGE_KEY,JSON.stringify(demoState));}
-  function loadProfile(){save({profileReady:true});view='discover';message='Synthetic profile loaded. No production profile was created.';}
-  function generate(){save({candidatesReady:true});view='triage';message='Loaded three fixed synthetic candidates without making a request.';}
-  function inspect(id:string){save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:''});view='evidence';message='Opened bounded fixture evidence.';}
-  function openCase(){save({caseReady:true});view='case';message='Created an isolated synthetic case in this tab only.';}
-  function updateCase(patch:Record<string,unknown>){save(patch);message='Synthetic case updated.';}
-  function reset(){sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);demoState=createSyntheticDemoState();view='brand';message='Synthetic demo reset.';}
+  function save(patch:Record<string,unknown>,successMessage?:string){demoState=normalizeSyntheticDemoState({...demoState,...patch});try{sessionStorage.setItem(SYNTHETIC_DEMO_STORAGE_KEY,JSON.stringify(demoState));if(successMessage!==undefined)message=successMessage;}catch{message='Progress updated in memory, but tab storage is unavailable. Reloading will reset the demo.';}}
+  function loadProfile(){save({profileReady:true},'Synthetic profile loaded. No production profile was created.');view='discover';}
+  function generate(){save({candidatesReady:true},'Loaded three fixed synthetic candidates without making a request.');view='triage';}
+  function inspect(id:string){save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:''},'Opened bounded fixture evidence.');view='evidence';}
+  function openCase(){save({caseReady:true},'Created an isolated synthetic case in this tab only.');view='case';}
+  function updateCase(patch:Record<string,unknown>,announce=true){save(patch,announce?'Synthetic case updated.':undefined);}
+  function reset(){demoState=createSyntheticDemoState();view='brand';try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Synthetic demo reset.';}catch{message='Demo reset in memory, but tab storage could not be cleared. Closing this tab will remove its demo state.';}}
   function exportCase(){const payload=buildSyntheticDemoExport(demoState,new Date().toISOString());const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download='whoisleuth-synthetic-demo-case.json';anchor.click();URL.revokeObjectURL(url);message='Synthetic case export created. It is clearly marked as demonstration data.';}
 </script>
 
@@ -39,7 +52,7 @@
 {:else if view==='evidence'&&selected}
   <section class="demo-panel card" aria-labelledby="evidence-heading"><p class="eyebrow">Step 4 · Synthetic evidence</p><h2 id="evidence-heading">{selected.domain}</h2><p>WHOISleuth separates direct observations, derived context, and limitations. Every value here is a local fixture.</p><dl><div><dt>Registrar</dt><dd>{selected.evidence.registrar}</dd></div><div><dt>Registration</dt><dd>{selected.evidence.registeredAt}</dd></div><div><dt>Nameservers</dt><dd>{selected.evidence.nameservers.join(', ')||'Not observed'}</dd></div><div><dt>Website</dt><dd>{selected.evidence.website}</dd></div><div><dt>Certificate</dt><dd>{selected.evidence.certificate}</dd></div><div><dt>Mail</dt><dd>{selected.evidence.mail}</dd></div></dl><div class="limitation"><strong>Interpretation limit</strong><p>These signals demonstrate workflow and explainability only. Similar observations in a live lookup would require analyst review.</p></div><button class="primary" type="button" onclick={openCase}>Open synthetic case</button></section>
 {:else if view==='case'&&selected}
-  <section class="demo-panel card" aria-labelledby="case-heading"><p class="eyebrow">Step 5 · Isolated case</p><h2 id="case-heading">Document {selected.domain}</h2><p>This case is stored only under the demo's tab-scoped key and never appears in Monitor.</p><label>Status<select value={demoState.caseStatus} onchange={(event)=>updateCase({caseStatus:(event.currentTarget as HTMLSelectElement).value})}><option value="new">New</option><option value="reviewing">Reviewing</option><option value="monitoring">Monitoring</option></select></label><label>Analyst note<textarea maxlength={MAX_SYNTHETIC_DEMO_NOTE_LENGTH} value={demoState.note} oninput={(event)=>updateCase({note:(event.currentTarget as HTMLTextAreaElement).value})} placeholder="Optional synthetic note"></textarea></label><div class="case-actions"><button class="primary" type="button" onclick={exportCase}>Export synthetic JSON</button><button type="button" onclick={()=>view='evidence'}>Review evidence</button></div><p class="export-warning">Exports are marked <code>synthetic: true</code> and must not be used as evidence or an abuse report.</p></section>
+  <section class="demo-panel card" aria-labelledby="case-heading"><p class="eyebrow">Step 5 · Isolated case</p><h2 id="case-heading">Document {selected.domain}</h2><p>This case is stored only under the demo's tab-scoped key and never appears in Monitor.</p><label>Status<select value={demoState.caseStatus} onchange={(event)=>updateCase({caseStatus:(event.currentTarget as HTMLSelectElement).value})}><option value="new">New</option><option value="reviewing">Reviewing</option><option value="monitoring">Monitoring</option></select></label><label>Analyst note<textarea maxlength={MAX_SYNTHETIC_DEMO_NOTE_LENGTH} value={demoState.note} oninput={(event)=>updateCase({note:(event.currentTarget as HTMLTextAreaElement).value},false)} placeholder="Optional synthetic note"></textarea></label><div class="case-actions"><button class="primary" type="button" onclick={exportCase}>Export synthetic JSON</button><button type="button" onclick={()=>view='evidence'}>Review evidence</button></div><p class="export-warning">Exports are marked <code>synthetic: true</code> and must not be used as evidence or an abuse report.</p></section>
 {/if}
 
 <footer class="demo-footer"><p>Ready for live investigation? <a href="/" data-sveltekit-reload>Sign in to the protected console</a>.</p><p>© 2026 WHOISleuth · <a href="/privacy">Privacy</a></p></footer>
