@@ -442,11 +442,11 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   let whoisParsed: ReturnType<typeof parseWhoisChain> | null = null;
   if (!rdapFound && !fast && whoisEnabled) {
     try {
-      whoisChain = hasPreloadedWhoisPromise
+      whoisChain = (hasPreloadedWhoisPromise
         ? await options.whoisChainPromise
         : hasPreloadedWhois
           ? options.whoisChain
-          : await buildWhoisChain(domain);
+          : await buildWhoisChain(domain)) ?? null;
       if (!Array.isArray(whoisChain)) throw new Error('WHOIS chain unavailable');
       const parsed = parseWhoisChain(whoisChain);
       whoisParsed = parsed;
