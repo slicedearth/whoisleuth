@@ -58,7 +58,13 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
       createdDate: '2020-01-02T03:04:05Z',
       expiryDate: '2030-01-02T03:04:05Z',
       updatedDate: '2026-07-12T01:02:03Z',
+      createdDateIso: '2020-01-02T03:04:05.000Z',
+      expiryDateIso: '2030-01-02T03:04:05.000Z',
+      updatedDateIso: '2026-07-12T01:02:03.000Z',
     });
+    assert.equal(parsed.createdDateIso, '2020-01-02T03:04:05.000Z');
+    assert.equal(parsed.expiryDateIso, '2030-01-02T03:04:05.000Z');
+    assert.equal(parsed.updatedDateIso, '2026-07-12T01:02:03.000Z');
 
     const registrant = parsed.contactsByRole.registrant[0];
     assert.equal(registrant.handle, 'REG-1');

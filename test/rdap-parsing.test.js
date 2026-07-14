@@ -134,6 +134,14 @@ describe('structured RDAP metadata', () => {
       deletionDate: null,
       reinstantiationDate: null,
       databaseUpdatedDate: null,
+      createdDateIso: '2020-01-01T00:00:00.000Z',
+      reregistrationDateIso: null,
+      expiryDateIso: '2028-01-01T00:00:00.000Z',
+      updatedDateIso: '2025-01-01T00:00:00.000Z',
+      transferDateIso: '2024-02-03T00:00:00.000Z',
+      deletionDateIso: null,
+      reinstantiationDateIso: null,
+      databaseUpdatedDateIso: null,
     });
   });
 
@@ -148,6 +156,17 @@ describe('structured RDAP metadata', () => {
     });
 
     assert.equal(parsed.lifecycle.databaseUpdatedDate, '2026-02-03T04:05:06Z');
+    assert.equal(parsed.lifecycle.databaseUpdatedDateIso, '2026-02-03T04:05:06.000Z');
+  });
+
+  test('does not fabricate an ISO lifecycle companion for an invalid event date', () => {
+    const parsed = parseRdap('domain', {
+      ldhName: 'EXAMPLE.COM',
+      events: [{ eventAction: 'last changed', eventDate: 'not-a-date' }],
+    });
+    assert.equal(parsed.events[0].date, 'not-a-date');
+    assert.equal(parsed.lifecycle.updatedDate, null);
+    assert.equal(parsed.lifecycle.updatedDateIso, null);
   });
 
   test('distinguishes server-declared truncation from local display caps', () => {

@@ -27,6 +27,12 @@ test('availability keeps the compact contact shape when RDAP exposes richer arra
       rdapServer: 'https://rdap.example/domain/example.com',
       parsed: {
         statuses: ['active'], nameservers: [], events: [],
+        lifecycle: {
+          createdDate: '2020-01-02T03:04:05Z',
+          createdDateIso: '2020-01-02T03:04:05.000Z',
+          expiryDate: '2030-01-02T03:04:05Z',
+          expiryDateIso: '2030-01-02T03:04:05.000Z',
+        },
         registrar: richContact, registrant: richContact, abuse: richContact,
       },
     },
@@ -37,6 +43,10 @@ test('availability keeps the compact contact shape when RDAP exposes richer arra
     assert.equal(Object.hasOwn(contact, 'emails'), false);
     assert.equal(Object.hasOwn(contact, 'links'), false);
   }
+  assert.equal(result.createdDate, '2020-01-02T03:04:05Z');
+  assert.equal(result.createdDateIso, '2020-01-02T03:04:05.000Z');
+  assert.equal(result.expiryDate, '2030-01-02T03:04:05Z');
+  assert.equal(result.expiryDateIso, '2030-01-02T03:04:05.000Z');
 });
 
 test('does not promote an administrative organization to registrar', async () => {
@@ -57,6 +67,8 @@ test('does not promote an administrative organization to registrar', async () =>
         'Domain Status: Active',
         'Registrant Organization: Example Holder',
         'Admin Organization: Example Holder',
+        'Creation Date: 03.04.2024',
+        'Registry Expiry Date: 05.11.2030',
         'Name Server: ns1.example.net',
       ].join('\n'),
     }],
@@ -65,4 +77,8 @@ test('does not promote an administrative organization to registrar', async () =>
   assert.equal(result.state, 'registered');
   assert.equal(result.registrar, null);
   assert.equal(result.registrant.org, 'Example Holder');
+  assert.equal(result.createdDate, '03.04.2024');
+  assert.equal(result.createdDateIso, '2024-04-03T00:00:00.000Z');
+  assert.equal(result.expiryDate, '05.11.2030');
+  assert.equal(result.expiryDateIso, '2030-11-05T00:00:00.000Z');
 });

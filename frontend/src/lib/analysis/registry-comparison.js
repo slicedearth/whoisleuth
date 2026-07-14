@@ -146,7 +146,7 @@ function classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, norma
   return 'whois_redacted';
 }
 
-function compareField(label, rdapValue, whoisValue, normalize, sourceHealth) {
+function compareField(label, rdapValue, whoisValue, normalize, sourceHealth, comparisonValues = {}) {
   const rdapPublishedState = publishedState(rdapValue);
   const whoisPublishedState = publishedState(whoisValue);
   if (rdapPublishedState === 'absent' && whoisPublishedState === 'absent') return null;
@@ -156,7 +156,13 @@ function compareField(label, rdapValue, whoisValue, normalize, sourceHealth) {
 
   return {
     label,
-    status: classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, normalize),
+    status: classifyFieldStatus(
+      rdapState,
+      whoisState,
+      comparisonValues.rdap ?? rdapValue,
+      comparisonValues.whois ?? whoisValue,
+      normalize
+    ),
     rdapState,
     whoisState,
     rdapDisplay: displayValue(rdapValue, rdapState, sourceHealth.rdapStatus),
@@ -173,14 +179,22 @@ export function compareRegistrySources(rdapParsed, whoisParsed, options = {}) {
     rdapCondition: sourceCondition(options.rdapStatus),
     whoisCondition: sourceCondition(options.whoisStatus),
   };
+  const dateField = (label, field, fallbackAction) => {
+    const rdapValue = rdapLifecycleDate(rdap, field, fallbackAction);
+    const whoisValue = whois[field] || whois.lifecycle?.[field] || null;
+    return compareField(label, rdapValue, whoisValue, normalizeDate, sourceHealth, {
+      rdap: rdap.lifecycle?.[`${field}Iso`] || rdapValue,
+      whois: whois[`${field}Iso`] || whois.lifecycle?.[`${field}Iso`] || whoisValue,
+    });
+  };
   const fields = [
     compareField('Domain', rdap.domain, whois.domainName, normalizeDomain, sourceHealth),
     compareField('Registry object ID', rdap.handle, whois.registryDomainId, normalizeText, sourceHealth),
     compareField('Registrar', registrarValue(rdap.registrar), whois.registrar, normalizeText, sourceHealth),
     compareField('Registrar IANA ID', rdap.registrarIanaId, whois.registrarIanaId, normalizeText, sourceHealth),
-    compareField('Created', rdapLifecycleDate(rdap, 'createdDate', 'registration'), whois.createdDate, normalizeDate, sourceHealth),
-    compareField('Expires', rdapLifecycleDate(rdap, 'expiryDate', 'expiration'), whois.expiryDate, normalizeDate, sourceHealth),
-    compareField('Last updated', rdapLifecycleDate(rdap, 'updatedDate', 'last changed'), whois.updatedDate, normalizeDate, sourceHealth),
+    dateField('Created', 'createdDate', 'registration'),
+    dateField('Expires', 'expiryDate', 'expiration'),
+    dateField('Last updated', 'updatedDate', 'last changed'),
     compareField('DNSSEC', rdap.dnssec, whois.dnssec, normalizeDnssec, sourceHealth),
     compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, normalizeStatus), sourceHealth),
     compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver), sourceHealth),

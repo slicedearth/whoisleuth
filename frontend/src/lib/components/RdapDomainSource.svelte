@@ -121,7 +121,7 @@
   <dt>Language</dt><dd>{show(parsed.language)}</dd>
   <dt>Conformance</dt><dd>{show(parsed.conformance)}{parsed.conformanceTruncated ? ' (capped)' : ''}</dd>
   <dt>Lifecycle events</dt><dd>{Array.isArray(parsed.events) ? parsed.events.length : 0}{parsed.eventsTruncated ? ' (capped)' : ''}</dd>
-  <dt>RDAP database updated</dt><dd><time datetime={dateTimeAttribute(parsed.lifecycle?.databaseUpdatedDate)}>{formatDate(parsed.lifecycle?.databaseUpdatedDate)}</time></dd>
+  <dt>RDAP database updated</dt><dd><time datetime={dateTimeAttribute(parsed.lifecycle?.databaseUpdatedDateIso || parsed.lifecycle?.databaseUpdatedDate)}>{formatDate(parsed.lifecycle?.databaseUpdatedDateIso || parsed.lifecycle?.databaseUpdatedDate)}</time></dd>
   <dt>Port 43</dt><dd>{show(parsed.port43)}</dd>
   <dt>Parent handle</dt><dd>{show(parsed.parentHandle)}</dd>
   <dt>Redactions</dt><dd>{redactionText() || '—'}{parsed.redactionsTruncated ? ' (capped)' : ''}</dd>

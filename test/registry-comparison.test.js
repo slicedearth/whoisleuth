@@ -49,6 +49,25 @@ describe('compareRegistrySources', () => {
     assert.equal(field(result, 'Expires').status, 'equivalent');
   });
 
+  test('uses ISO companions for comparison while preserving raw source display values', () => {
+    const result = comparison.compareRegistrySources(
+      {
+        lifecycle: {
+          createdDate: '2025-04-03T00:00:00Z',
+          createdDateIso: '2025-04-03T00:00:00.000Z',
+        },
+      },
+      {
+        createdDate: '03.04.2025',
+        createdDateIso: '2025-04-03T00:00:00.000Z',
+      }
+    );
+    const created = field(result, 'Created');
+    assert.equal(created.status, 'equivalent');
+    assert.equal(created.rdapDisplay, '2025-04-03T00:00:00Z');
+    assert.equal(created.whoisDisplay, '03.04.2025');
+  });
+
   test('compares nameservers as a case-insensitive, order-independent set', () => {
     const result = comparison.compareRegistrySources(
       { nameservers: ['NS2.EXAMPLE.NET.', 'ns1.example.net'] },

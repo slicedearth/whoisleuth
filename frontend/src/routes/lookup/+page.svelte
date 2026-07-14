@@ -130,9 +130,9 @@
   onMount(()=>{const q=page.url.searchParams.get('q');if(q)query=q;});
 
   function eventDate(action:string){return rdapParsed.events?.find((item:JsonRecord)=>item.action===action)?.date||null;}
-  function created(){return availability.createdDate||rdapParsed.lifecycle?.createdDate||eventDate('registration')||whoisParsed.createdDate;}
-  function expires(){return availability.expiryDate||rdapParsed.lifecycle?.expiryDate||eventDate('expiration')||whoisParsed.expiryDate;}
-  function updated(){return rdapParsed.lifecycle?.updatedDate||eventDate('last changed')||whoisParsed.updatedDate;}
+  function created(){return availability.createdDateIso||availability.createdDate||rdapParsed.lifecycle?.createdDateIso||rdapParsed.lifecycle?.createdDate||eventDate('registration')||whoisParsed.createdDateIso||whoisParsed.lifecycle?.createdDateIso||whoisParsed.createdDate;}
+  function expires(){return availability.expiryDateIso||availability.expiryDate||rdapParsed.lifecycle?.expiryDateIso||rdapParsed.lifecycle?.expiryDate||eventDate('expiration')||whoisParsed.expiryDateIso||whoisParsed.lifecycle?.expiryDateIso||whoisParsed.expiryDate;}
+  function updated(){return rdapParsed.lifecycle?.updatedDateIso||rdapParsed.lifecycle?.updatedDate||eventDate('last changed')||whoisParsed.updatedDateIso||whoisParsed.lifecycle?.updatedDateIso||whoisParsed.updatedDate;}
   function formatDate(value:any){if(!value)return'—';const parsed=new Date(value);return Number.isNaN(parsed.getTime())?String(value):parsed.toLocaleString();}
   function dateTimeAttribute(value:any){if(!value)return undefined;const parsed=new Date(value);return Number.isNaN(parsed.getTime())?undefined:parsed.toISOString();}
   function statusLabel(value:string){return value.replaceAll('_',' ');}

@@ -210,9 +210,12 @@ Lifecycle selection does not trust upstream array order. Registration uses the
 earliest valid `registration` event; expiration, last-change, transfer,
 deletion, reregistration, and reinstantiation summaries use the latest valid
 event of their respective type. The bounded original event list remains
-available for provenance. `lifecycle.databaseUpdatedDate` separately exposes
+available for provenance. Every raw lifecycle summary has an additive
+`*DateIso` companion containing a canonical UTC ISO-8601 timestamp, or `null`
+when the upstream value cannot be normalized. `lifecycle.databaseUpdatedDate` separately exposes
 the latest valid `last update of RDAP database` event as the server's own data
-freshness claim; it is not the application's fetch time.
+freshness claim; `databaseUpdatedDateIso` is its canonical companion, not the
+application's fetch time.
 
 Server-declared truncation is distinct from local normalization caps. Only the
 registered typed notice/remark values set `serverTruncated`; prose containing
@@ -327,11 +330,21 @@ WHOIS scalar values are capped at 1,000 characters unless a narrower
 field-specific limit applies. Nameservers are capped at 200 and statuses at
 100. Control-bearing values are rejected.
 
+Raw `createdDate`, `expiryDate`, and `updatedDate` strings remain available at
+their compatibility locations and in `lifecycle`. Additive `*DateIso`
+companions use the same deterministic parser as availability analysis, support
+the documented ccTLD formats, and are `null` for invalid or unsupported input.
+Availability likewise retains its raw creation/expiry values while publishing
+`createdDateIso` and `expiryDateIso`; compact consumers may store the canonical
+form without losing full-Lookup provenance.
+
 ## RDAP/WHOIS comparison
 
 Domain comparison normalizes harmless differences in case, punctuation,
 timestamp precision, status formatting, nameserver order, and set order while
-retaining the original display values. Each field is classified as one of:
+retaining the original display values. Lifecycle comparisons prefer canonical
+ISO companions when present and fall back to legacy raw-value normalization.
+Each field is classified as one of:
 
 - `equivalent` or `conflict` when both sources provide comparable values.
 - `rdap_only` or `whois_only` for a genuinely unpublished opposite value.
