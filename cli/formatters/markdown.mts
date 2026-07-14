@@ -1,27 +1,10 @@
-import evidenceReportModule from './evidence-report.js';
-
-const {
+import {
   MAX_REPORT_LIST_ITEMS,
   MAX_REPORT_VALUE_LENGTH,
   buildLookupEvidenceReport,
   cleanReportText,
-} = evidenceReportModule;
-
-type ReportField = { label: string; value: string };
-type ReportGroup = { title: string; fields: ReportField[] };
-type ComparisonField = { label: string; status: string; rdap: string; whois: string };
-type LookupEvidenceReport = {
-  title: string;
-  notice: string;
-  metadata: ReportField[];
-  query: ReportField[];
-  assessment: ReportField[];
-  registryGroups: ReportGroup[];
-  comparison: { health: ReportField[]; fields: ComparisonField[]; omitted: number };
-  networkGroups: ReportGroup[];
-  diagnostics: ReportField[];
-  limitations: string[];
-};
+} from './evidence-report.mts';
+import type { ComparisonField, LookupEvidenceReport, ReportField, ReportGroup } from './evidence-report.mts';
 
 function escapeMarkdownValue(value: unknown, fallback = 'Not reported'): string {
   return cleanReportText(value, fallback)
@@ -45,7 +28,7 @@ function appendGroups(lines: string[], groups: ReportGroup[]): void {
 }
 
 function formatLookupEvidenceMarkdown(document: unknown): string {
-  const report = buildLookupEvidenceReport(document) as LookupEvidenceReport;
+  const report: LookupEvidenceReport = buildLookupEvidenceReport(document);
   const lines = [
     `# Lookup evidence report — ${escapeMarkdownValue(report.title)}`,
     '', `> ${report.notice}`, '',

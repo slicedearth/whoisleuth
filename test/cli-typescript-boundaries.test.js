@@ -26,6 +26,10 @@ test('CLI CommonJS leaf entry points resolve to their typed implementations', ()
     require('../cli/formatters/html').formatLookupEvidenceHtml,
     require('../cli/formatters/html.mts').formatLookupEvidenceHtml,
   );
+  assert.strictEqual(
+    require('../cli/formatters/evidence-report').buildLookupEvidenceReport,
+    require('../cli/formatters/evidence-report.mts').buildLookupEvidenceReport,
+  );
   assert.strictEqual(require('../cli/exit-codes'), require('../cli/exit-codes.mts').default);
   assert.strictEqual(
     require('../cli/errors').boundedCliErrorMessage,

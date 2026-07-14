@@ -1,7 +1,5 @@
-import evidenceReportModule from './evidence-report.js';
-import type { ComparisonField, LookupEvidenceReport, ReportField, ReportGroup } from './markdown.mts';
-
-const { buildLookupEvidenceReport, cleanReportText } = evidenceReportModule;
+import { buildLookupEvidenceReport, cleanReportText } from './evidence-report.mts';
+import type { ComparisonField, LookupEvidenceReport, ReportField, ReportGroup } from './evidence-report.mts';
 
 function escapeHtml(value: unknown, fallback = 'Not reported'): string {
   return cleanReportText(value, fallback)
@@ -27,7 +25,7 @@ function renderComparison(comparison: { fields: ComparisonField[]; omitted: numb
 }
 
 function formatLookupEvidenceHtml(document: unknown): string {
-  const report = buildLookupEvidenceReport(document) as LookupEvidenceReport;
+  const report: LookupEvidenceReport = buildLookupEvidenceReport(document);
   const title = `Lookup evidence report — ${report.title}`;
   return `<!doctype html>
 <html lang="en">
