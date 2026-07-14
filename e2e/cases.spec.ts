@@ -24,6 +24,7 @@ interface SnapshotOverrides {
   activityStatus?: string | null;
   hasMx?: boolean | null;
   faviconMatch?: boolean | null;
+  hasPasswordField?: boolean | null;
   nameservers?: string[];
   pageTitle?: string | null;
   httpSummaryVersion?: number | null;
@@ -77,7 +78,7 @@ function snapshot(overrides: SnapshotOverrides = {}) {
     faviconMatch: overrides.faviconMatch ?? null,
     faviconNearMatch: null,
     reusesOfficialAssets: null,
-    hasPasswordField: null,
+    hasPasswordField: overrides.hasPasswordField ?? null,
     phishingLanguageMatch: null,
     mutationTypes: [],
   };
@@ -175,6 +176,70 @@ test('status and disposition edits persist across a reload', async ({ page }) =>
   const reloaded = page.locator('.case-head', { hasText: 'triage.invalid' });
   await expect(reloaded.locator('.badge').first()).toHaveText('Escalated');
   await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
+});
+
+test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {
+  await page.goto('/monitor');
+  await page.evaluate((records) => {
+    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases: records }));
+  }, [caseRecord({ domain: 'rule-match.invalid', evidenceHistory: [snapshot({ riskScore: 65, hasPasswordField: true })] })]);
+  await page.reload();
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+
+  await page.getByLabel('Name', { exact: true }).fill('Password page above threshold');
+  await page.getByLabel('Custom contribution').fill('15');
+  await page.getByLabel('Suggested tag').fill('manual-review');
+  await page.getByLabel('Field').selectOption('hasPasswordField');
+  await page.getByRole('button', { name: 'Add condition' }).click();
+  await page.getByLabel('Field').nth(1).selectOption('riskScore');
+  await page.getByLabel('Comparison').nth(1).selectOption('at_least');
+  await page.getByLabel('Value').nth(1).fill('60');
+  await page.getByRole('button', { name: 'Create custom rule' }).click();
+
+  const result = page.locator('.test-results li', { hasText: 'rule-match.invalid' });
+  await expect(result).toContainText('Built-in 65');
+  await expect(result).toContainText('Custom +15');
+  await expect(result).toContainText('Context 80');
+  await expect(result).toContainText('Suggested: manual-review');
+  const storedScore = await page.evaluate(() => JSON.parse(localStorage.getItem('whois-rdap-cases-v1')!).cases[0].evidenceHistory[0].riskScore);
+  expect(storedScore).toBe(65);
+});
+
+test('custom rules persist, can be disabled, and export a versioned safe schema', async ({ page }) => {
+  await page.goto('/monitor');
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Registered domains');
+  await page.getByRole('button', { name: 'Create custom rule' }).click();
+  await expect(page.getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  const rule = page.getByRole('article').filter({ hasText: 'Registered domains' });
+  await expect(rule).toBeVisible();
+  await rule.getByRole('button', { name: 'Enabled' }).click();
+  await expect(rule.getByRole('button', { name: 'Disabled' })).toHaveAttribute('aria-pressed', 'false');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export JSON' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^whoisleuth-custom-rules-\d{4}-\d{2}-\d{2}\.json$/);
+  const body = await (await download.createReadStream()).toArray();
+  const payload = JSON.parse(Buffer.concat(body).toString('utf8'));
+  expect(payload.schema).toBe('whoisleuth.detection-rules');
+  expect(payload.version).toBe(1);
+  expect(payload.rules[0].enabled).toBe(false);
+  expect(JSON.stringify(payload)).not.toContain('function');
+});
+
+test('custom-rule controls and results avoid horizontal overflow on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/monitor');
+  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Mobile layout rule');
+  await page.getByRole('button', { name: 'Create custom rule' }).click();
+  await expectNoHorizontalOverflow(page);
+  await expect(page.getByRole('button', { name: 'Add condition' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export JSON' })).toBeVisible();
 });
 
 test('a note can be added and is shown in the record', async ({ page }) => {

@@ -9,6 +9,7 @@
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
+  import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
   import { buildCaseRelationships } from '$lib/analysis/case-relationships.js';
   import { deleteWatchlist, exportWatchlists, fieldLabels, formatValue, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
   import {
@@ -16,8 +17,9 @@
     importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase, sourceLabel, statusLabel, type CaseRecord
   } from '$lib/cases';
   import { loadCampaigns } from '$lib/campaigns';
+  import { loadDetectionRules } from '$lib/detection-rules';
 
-  type View = 'watchlists' | 'cases' | 'campaigns' | 'relationships';
+  type View = 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   let view=$state<View>('watchlists');
 
   // --- Watchlists ---
@@ -34,6 +36,7 @@
   let cases=$state<CaseRecord[]>([]);
   let campaignCount=$state(0);
   let relationshipCount=$state(0);
+  let customRuleCount=$state(0);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
   const statusOrder=new Map(CASE_STATUSES.map((item,index)=>[item.value,index]));
@@ -65,22 +68,24 @@
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=importCases(JSON.parse(await file.text()));refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{
-    refresh();refreshCases();campaignCount=loadCampaigns().length;
+    refresh();refreshCases();campaignCount=loadCampaigns().length;customRuleCount=loadDetectionRules().length;
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';if(cases.some(record=>record.id===focus)){const target=cases.find(record=>record.id===focus)!;expandedId=focus;tagDraft=target.tags.join(', ');}}
     else if(page.url.searchParams.get('view')==='cases')view='cases';
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
     else if(page.url.searchParams.get('view')==='relationships')view='relationships';
+    else if(page.url.searchParams.get('view')==='rules')view='rules';
   });
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Investigation workspace</h1><p>Organize cases into campaigns, review cross-case relationships, and compare watchlist changes over time.</p></div></section>
+<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Investigation workspace</h1><p>Organize cases, review relationships, test local detection rules, and compare watchlist changes over time.</p></div></section>
 
 <div class="views" role="tablist" aria-label="Monitor views">
   <button role="tab" id="tab-cases" aria-selected={view==='cases'} aria-controls="panel-cases" class:active={view==='cases'} onclick={()=>view='cases'}>Cases <span>{cases.length}</span></button>
   <button role="tab" id="tab-campaigns" aria-selected={view==='campaigns'} aria-controls="panel-campaigns" class:active={view==='campaigns'} onclick={()=>view='campaigns'}>Campaigns <span>{campaignCount}</span></button>
   <button role="tab" id="tab-relationships" aria-selected={view==='relationships'} aria-controls="panel-relationships" class:active={view==='relationships'} onclick={()=>view='relationships'}>Relationships <span>{relationshipCount}</span></button>
+  <button role="tab" id="tab-rules" aria-selected={view==='rules'} aria-controls="panel-rules" class:active={view==='rules'} onclick={()=>view='rules'}>Custom rules <span>{customRuleCount}</span></button>
   <button role="tab" id="tab-watchlists" aria-selected={view==='watchlists'} aria-controls="panel-watchlists" class:active={view==='watchlists'} onclick={()=>view='watchlists'}>Watchlists <span>{names.length}</span></button>
 </div>
 
@@ -94,6 +99,12 @@
 <div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
   <CaseRelationshipGraph records={cases} onselect={openRelatedCase} />
   <CaseRelationshipTable records={cases} onselect={openRelatedCase} />
+</div>
+{/if}
+
+{#if view==='rules'}
+<div id="panel-rules" role="tabpanel" aria-labelledby="tab-rules">
+  <DetectionRuleManager records={cases} onselect={openRelatedCase} oncount={(count)=>customRuleCount=count} />
 </div>
 {/if}
 
