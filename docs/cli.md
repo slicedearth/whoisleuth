@@ -20,6 +20,7 @@ node bin/whoisleuth.js http example.com --json
 node bin/whoisleuth.js tls example.com --json
 node bin/whoisleuth.js lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.js compare lookup.json --json
+node bin/whoisleuth.js export lookup.json > evidence.json
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -67,8 +68,8 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | 70 | Unexpected CLI bootstrap failure. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
-`http`, `tls`, and `compare`. Export commands are added as separate bounded
-increments rather than exposing incomplete aliases.
+`http`, `tls`, `compare`, and `export`. Additional export formats are added as
+separate bounded increments rather than exposing incomplete aliases.
 
 ## Bulk lookup
 
@@ -180,3 +181,24 @@ ordering, and date-precision differences while distinguishing conflicts,
 one-source publication, redaction, incomplete sources, and unavailable
 sources. This is source reconciliation, not an availability, ownership, or
 maliciousness decision.
+
+## Lookup evidence export
+
+`export` converts one version-1 `whoisleuth.cli.lookup` domain document from a
+file or stdin into the same versioned `whoisleuth.lookup-evidence` JSON package
+produced by the web Lookup workspace. It performs no lookup and writes only to
+stdout, so use ordinary shell redirection when a file is wanted. Pretty JSON is
+the default; `--compact` emits one compact JSON line for pipeline use.
+
+The saved input is capped at 8 MiB and revalidated using the same schema,
+source-status, parsed-data, scalar, list, and event boundaries as `compare`.
+The export retains query context, source diagnostics, normalized registry data,
+raw RDAP JSON, the raw WHOIS referral chain, availability analysis, and the
+shared registry-source comparison. Registrar RDAP raw data remains excluded by
+the established evidence schema; its bounded diagnostics are retained.
+
+This is a deliberately rich evidence package. Raw registry sources can contain
+publicly published contact data, and deep availability evidence can contain
+bounded website, DNS, mail, page-identity, and TLS observations. Review and
+secure the output before sharing it. The CLI does not add browser-only IDN
+profile analysis, so that optional evidence field is `null`.

@@ -383,17 +383,23 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `6`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `11`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 6 retains the bounded, versioned browser-side
-IDN/script/confusable analysis introduced in version 4, the additive
-network-observation provenance supplied by deep Lookup, and bounded HTTP
-response/redirect provenance derived from the already-fetched homepage. URL
-query strings are deliberately omitted from retained HTTP provenance. It is
-intentionally rich and may contain public registry
+registry comparison. Version 11 retains optional bounded, versioned browser-side
+IDN/script/confusable analysis, additive network-observation provenance supplied
+by deep Lookup, and bounded HTTP response/redirect, page-identity, DNS, and TLS
+evidence derived from the requested collection. URL query strings are
+deliberately omitted from retained HTTP provenance. It is intentionally rich
+and may contain public registry
 contact data. The file is generated locally and is the user's responsibility
 after download.
+
+The local CLI `export` command can convert one bounded version-1
+`whoisleuth.cli.lookup` domain document into the same evidence schema without
+making another request. CLI conversion retains the source material already in
+that saved document but cannot add browser-only profile context, so its optional
+IDN analysis is `null`.
 
 Lookup evidence is a downloadable report contract, not a browser-local case
 storage schema. Consumers must check `schema` and `schemaVersion`; an unknown

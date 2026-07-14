@@ -13,6 +13,8 @@ const { buildCliBulkDocument, buildCliCompareDocument, buildCliCtSearchDocument,
 const { formatTerminalBulk, formatTerminalCompare, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalHttp, formatTerminalLookup, formatTerminalPosture, formatTerminalTls } = require('./formatters/terminal');
 const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
 const { MAX_COMPARE_INPUT_BYTES, compareLookupDocument, parseCliLookupDocument, readCompareInputBounded } = require('./compare');
+const { buildCliEvidenceExport, formatCliEvidenceExport } = require('./export-evidence');
+const { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } = require('./saved-lookup');
 const { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } = require('./discover');
 const { normalizePostureSelectors } = require('./posture');
 const { buildHttpProbeResult } = require('./http');
@@ -33,6 +35,7 @@ Usage:
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
   whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]
+  whoisleuth export [lookup.json] [--compact]
   whoisleuth --help
   whoisleuth --version
 
@@ -101,6 +104,31 @@ async function runCli(argv, dependencies = {}) {
       if (!args.quiet) {
         write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalCompare(document));
       }
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'export') {
+      failureLabel = 'Evidence export';
+      let input;
+      try {
+        input = dependencies.readExportInput
+          ? await dependencies.readExportInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? fs.createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_SAVED_LOOKUP_INPUT_BYTES,
+              label: 'Evidence export input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read evidence export input: ${boundedErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('export requires one lookup JSON file or a lookup document on stdin.');
+      const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mjs'));
+      const evidenceModule = await loadEvidence();
+      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
+      const document = buildCliEvidenceExport(input, evidenceModule, now);
+      write(stdout, formatCliEvidenceExport(document, args.compact));
       return EXIT_CODES.SUCCESS;
     }
 

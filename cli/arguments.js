@@ -29,8 +29,8 @@ function parseCliArguments(rawArgv) {
   }
 
   const command = argv[0];
-  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture', 'http', 'tls', 'compare'].includes(command)) {
-    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture, http, tls, compare.`);
+  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture', 'http', 'tls', 'compare', 'export'].includes(command)) {
+    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture, http, tls, compare, export.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
@@ -39,6 +39,7 @@ function parseCliArguments(rawArgv) {
   if (command === 'http') return parseHttpArguments(argv.slice(1));
   if (command === 'tls') return parseTlsArguments(argv.slice(1));
   if (command === 'compare') return parseCompareArguments(argv.slice(1));
+  if (command === 'export') return parseExportArguments(argv.slice(1));
   let query = null;
   let output = 'terminal';
   let deep = false;
@@ -250,6 +251,20 @@ function parseCompareArguments(argv) {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'compare', source, output, quiet, color };
+}
+
+function parseExportArguments(argv) {
+  let source = null;
+  let compact = false;
+  for (const argument of argv) {
+    if (argument === '--compact') {
+      if (compact) throw new CliUsageError('--compact may be supplied only once.');
+      compact = true;
+    } else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('export accepts one optional lookup JSON file. Otherwise pipe one lookup document on stdin.');
+  }
+  return { action: 'export', source, compact };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
