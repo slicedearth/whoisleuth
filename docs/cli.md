@@ -38,6 +38,21 @@ Only one query is accepted by `lookup`. Multiple-input processing belongs to
 the explicit `bulk` command rather than being silently inferred by `lookup`.
 Standard input is capped at 4 KiB and must contain one non-empty line.
 
+## Deployment boundary
+
+The CLI is a local repository tool. The serverless deployment publishes only
+`frontend/build` and packages functions only from `netlify/functions`, so
+`bin/` and `cli/` are not part of the hosted static site or function bundle.
+The package also remains private and is not published to the public npm
+registry.
+
+Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
+so directly from the machine running the CLI. They do not use the hosted login,
+hosted session, or deployment usage controls; upstream providers can see and
+rate-limit the local machine's network address. Offline `discover`, `compare`,
+and `export` operations make no network requests and write their results only
+to local stdout unless the user redirects them to a file.
+
 ## Output
 
 Human-readable terminal output is the default. `--json` writes one versioned

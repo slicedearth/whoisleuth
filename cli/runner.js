@@ -20,6 +20,7 @@ const { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } = require('.
 const { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } = require('./discover');
 const { normalizePostureSelectors } = require('./posture');
 const { buildHttpProbeResult } = require('./http');
+const { boundedCliErrorMessage } = require('./errors');
 const { version: VERSION } = require('../package.json');
 
 const MAX_STDIN_BYTES = 4096;
@@ -45,14 +46,6 @@ Lookup defaults to fast mode. Deep mode must be requested explicitly and may
 perform WHOIS, website, DNS, and TLS work through the shared bounded pipeline.
 Machine-readable output is written to stdout; diagnostics are written to stderr.
 `;
-
-function boundedErrorMessage(error, fallback) {
-  return String(error?.message || fallback)
-    .replace(/[\x00-\x1f\x7f]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 300) || fallback;
-}
 
 async function readStdinBounded(stream, limit = MAX_STDIN_BYTES) {
   if (!stream || stream.isTTY) return '';
@@ -94,7 +87,7 @@ async function runCli(argv, dependencies = {}) {
             : dependencies.stdin || process.stdin, MAX_COMPARE_INPUT_BYTES);
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read comparison input: ${boundedErrorMessage(error, 'Input could not be read')}`);
+        throw new CliUsageError(`Could not read comparison input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
       if (!input.trim()) throw new CliUsageError('compare requires one lookup JSON file or a lookup document on stdin.');
       const parsed = parseCliLookupDocument(input);
@@ -123,7 +116,7 @@ async function runCli(argv, dependencies = {}) {
             });
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read evidence export input: ${boundedErrorMessage(error, 'Input could not be read')}`);
+        throw new CliUsageError(`Could not read evidence export input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
       if (!input.trim()) throw new CliUsageError('export requires one lookup JSON file or a lookup document on stdin.');
       const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mjs'));
@@ -150,7 +143,7 @@ async function runCli(argv, dependencies = {}) {
             : dependencies.stdin || process.stdin, MAX_BULK_INPUT_BYTES);
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read bulk input: ${boundedErrorMessage(error, 'Input could not be read')}`);
+        throw new CliUsageError(`Could not read bulk input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
       const parsed = parseBulkQueries(input, { deep: args.deep });
       const items = await runBulkLookups(parsed.queries, {
@@ -276,7 +269,7 @@ async function runCli(argv, dependencies = {}) {
     const executeLookup = dependencies.runUnifiedLookup || runUnifiedLookup;
     let classified;
     try { classified = classify(query); }
-    catch (error) { throw new CliUsageError(boundedErrorMessage(error, 'Invalid query')); }
+    catch (error) { throw new CliUsageError(boundedCliErrorMessage(error, 'Invalid query')); }
     const result = await executeLookup(classified, { fast: !args.deep, compact: false });
     const now = dependencies.now ? dependencies.now() : new Date().toISOString();
     const document = buildCliLookupDocument(query, classified, result, now, args.deep ? 'deep' : 'fast');
@@ -284,10 +277,10 @@ async function runCli(argv, dependencies = {}) {
     return EXIT_CODES.SUCCESS;
   } catch (error) {
     if (error instanceof CliUsageError) {
-      write(stderr, `Usage error: ${boundedErrorMessage(error, 'Invalid command')}\n`);
+      write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid command')}\n`);
       return EXIT_CODES.USAGE;
     }
-    write(stderr, `${failureLabel} failed: ${boundedErrorMessage(error, 'Unexpected command failure')}\n`);
+    write(stderr, `${failureLabel} failed: ${boundedCliErrorMessage(error, 'Unexpected command failure')}\n`);
     return EXIT_CODES.LOOKUP_FAILED;
   }
 }
