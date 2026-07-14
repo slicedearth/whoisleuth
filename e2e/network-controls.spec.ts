@@ -138,7 +138,8 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
 
   const storedDepth = await page.evaluate(() => {
     const store = JSON.parse(localStorage.getItem('whois-rdap-watchlist-v1') || '{}');
-    return store['Policy-safe baseline']?.results?.[0]?.scanDepth;
+    const watchlists = store.watchlists || store;
+    return watchlists['Policy-safe baseline']?.results?.[0]?.scanDepth;
   });
   expect(storedDepth).toBe('fast');
 });

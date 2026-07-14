@@ -150,4 +150,86 @@ describe('watchlist history', () => {
     assert.equal(entry.history.length, history.MAX_WATCHLIST_HISTORY_EVENTS);
     assert.equal(entry.history.at(-1).checkedAt, '2026-01-15T00:00:00.000Z');
   });
+
+  test('stored results retain only bounded known evidence and rescan provenance', () => {
+    const nameservers = Array.from({ length: history.MAX_WATCHLIST_NAMESERVERS + 5 }, (_, index) => `ns-${index}.example`);
+    const mutationTypes = Array.from({ length: history.MAX_WATCHLIST_MUTATION_TYPES + 5 }, (_, index) => `TYPE-${index}`);
+    const [stored] = history.compactWatchlistResults([{
+      domain: 'HTTPS://Brand.Example/private',
+      availability: 'registered',
+      scanDepth: 'deep',
+      registrarName: 'R'.repeat(500),
+      nameservers,
+      pageTitle: 'T'.repeat(500),
+      mutationTypes,
+      unknown: { secret: true },
+      rawHeaders: { authorization: 'secret' },
+    }]);
+    assert.equal(stored.domain, 'brand.example');
+    assert.equal(stored.registrarName.length, 300);
+    assert.equal(stored.pageTitle.length, 200);
+    assert.equal(stored.nameservers.length, history.MAX_WATCHLIST_NAMESERVERS);
+    assert.equal(stored.mutationTypes.length, history.MAX_WATCHLIST_MUTATION_TYPES);
+    assert.equal(stored.unknown, undefined);
+    assert.equal(stored.rawHeaders, undefined);
+  });
+
+  test('result normalization bounds hostile input before retaining valid records', () => {
+    const values = Array.from({ length: history.MAX_WATCHLIST_INPUT_RECORDS + 1 }, (_, index) => ({
+      domain: index < history.MAX_WATCHLIST_INPUT_RECORDS ? 'not valid' : 'late.example',
+    }));
+    assert.deepEqual(history.compactWatchlistResults(values), []);
+  });
+
+  test('stored results deduplicate canonical domains without mutating input', () => {
+    const values = [
+      { domain: 'DUPLICATE.EXAMPLE.', availability: 'registered' },
+      { domain: 'duplicate.example', availability: 'available' },
+    ];
+    const before = structuredClone(values);
+    const result = history.compactWatchlistResults(values);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].domain, 'duplicate.example');
+    assert.equal(result[0].availability, 'registered');
+    assert.deepEqual(values, before);
+  });
+
+  test('imported history values are revalidated and bounded at the display boundary', () => {
+    const changes = Array.from({ length: history.MAX_WATCHLIST_CHANGES_PER_EVENT + 5 }, (_, index) => ({
+      domain: `item-${index}.example`,
+      field: 'pageTitle',
+      before: 'Old',
+      after: 'N'.repeat(500),
+      kind: index === 0 ? 'risk_signal_added' : 'invented-kind',
+      tone: index === 0 ? 'danger' : 'invented-tone',
+      secret: 'drop me',
+    }));
+    const entry = history.normalizeWatchlistEntry({
+      updatedAt: 'not a date',
+      results: [{ domain: 'brand.example', availability: 'registered' }],
+      history: [{
+        checkedAt: 'not a date', mode: 'invalid', resultCount: -1,
+        conclusiveCount: 999999, changeCount: 999999, omittedChanges: -1, changes,
+      }],
+    });
+    assert.equal(entry.updatedAt, '1970-01-01T00:00:00.000Z');
+    assert.equal(entry.history[0].checkedAt, '1970-01-01T00:00:00.000Z');
+    assert.equal(entry.history[0].mode, 'saved');
+    assert.equal(entry.history[0].resultCount, 1);
+    assert.equal(entry.history[0].conclusiveCount, 0);
+    assert.equal(entry.history[0].changeCount, history.MAX_WATCHLIST_CHANGES_PER_EVENT);
+    assert.equal(entry.history[0].changes.length, history.MAX_WATCHLIST_CHANGES_PER_EVENT);
+    assert.equal(entry.history[0].changes[0].after.length, 200);
+    assert.equal(entry.history[0].changes[1].kind, 'field_changed');
+    assert.equal(entry.history[0].changes[1].tone, 'neutral');
+    assert.equal(entry.history[0].changes[0].secret, undefined);
+  });
+
+  test('append stores the compact snapshot rather than caller-owned raw objects', () => {
+    const raw = [{ domain: 'brand.example', availability: 'registered', mutationTypes: ['omission'], rawHtml: '<secret>' }];
+    const result = history.appendWatchlistScan(null, raw, { checkedAt: '2026-07-14T00:00:00.000Z', mode: 'fast' });
+    assert.equal(result.entry.results[0].rawHtml, undefined);
+    assert.deepEqual(result.entry.results[0].mutationTypes, ['omission']);
+    assert.equal(raw[0].rawHtml, '<secret>');
+  });
 });

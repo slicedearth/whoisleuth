@@ -4,10 +4,21 @@
 // result set on every check.
 
 import { explainRiskScore, normalizeRiskModelVersion } from './scoring.js';
-import { normalizeHttpSummary } from './http-summary.js';
+import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from './http-summary.js';
+import { normalizeDomain } from './case-model.js';
 
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;
 export const MAX_WATCHLIST_CHANGES_PER_EVENT = 500;
+export const MAX_WATCHLIST_DOMAINS = 2000;
+export const MAX_WATCHLIST_INPUT_RECORDS = MAX_WATCHLIST_DOMAINS * 2;
+export const MAX_WATCHLIST_NAMESERVERS = 12;
+export const MAX_WATCHLIST_MUTATION_TYPES = 30;
+
+const MAX_TEXT_LENGTH = 300;
+const MAX_TITLE_LENGTH = 200;
+const MAX_MUTATION_TYPE_LENGTH = 60;
+const MAX_TIMESTAMP_LENGTH = 64;
+const CONTROL_RE = /[\x00-\x1f\x7f]/;
 
 const CONCLUSIVE_AVAILABILITY = new Set(['available', 'registered', 'for_sale', 'expiring']);
 const DEEP_FIELDS = new Set([
@@ -66,6 +77,8 @@ const FIELD_LABELS = {
   riskScore: 'Risk score',
 };
 
+const MAX_CHANGE_COUNT = MAX_WATCHLIST_DOMAINS * Object.keys(FIELD_LABELS).length;
+
 // The schema version must travel with retained summaries so every storage
 // boundary can revalidate them, but it is implementation metadata rather than
 // an analyst-facing observation and must never generate a history event.
@@ -87,6 +100,34 @@ const ACTIVITY_LABELS = {
   no_site: 'No site reported (legacy)',
 };
 
+const AVAILABILITY_VALUES = new Set(Object.keys(AVAILABILITY_LABELS));
+const ACTIVITY_VALUES = new Set(Object.keys(ACTIVITY_LABELS));
+const CHANGE_KINDS = new Set(['new_registration', 'released', 'availability_changed', 'risk_signal_added', 'mail_activated', 'high_risk', 'infrastructure_changed', 'field_changed']);
+const HTTP_HEADER_VALUES = new Set(HTTP_SECURITY_HEADER_TOKENS);
+
+function boundedText(value, maximum = MAX_TEXT_LENGTH, allowNull = true) {
+  if (value == null && allowNull) return null;
+  if (typeof value !== 'string' || CONTROL_RE.test(value)) return allowNull ? null : '';
+  const normalized = value.slice(0, maximum * 4).replace(/\s+/g, ' ').trim().slice(0, maximum).trim();
+  return normalized || (allowNull ? null : '');
+}
+
+function isoTimestamp(value, fallback = new Date(0).toISOString()) {
+  if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return fallback;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+}
+
+function boundedInteger(value, maximum, fallback = 0) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= maximum ? value : fallback;
+}
+
+function normalizeDateValue(value) {
+  if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : null;
+}
+
 function inferredScanDepth(record) {
   if (record.scanDepth === 'deep' || record.scanDepth === 'fast') return record.scanDepth;
   return ['hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'faviconHash', 'pageTitle', 'httpResponseStatus']
@@ -96,11 +137,14 @@ function inferredScanDepth(record) {
 }
 
 function normalizeNameservers(value) {
-  const values = Array.isArray(value) ? value : String(value || '').split(';');
-  return [...new Set(values
-    .map((name) => String(name).trim().toLowerCase().replace(/\.$/, ''))
-    .filter(Boolean))]
-    .sort();
+  const values = Array.isArray(value) ? value : String(value || '').slice(0, 4096).split(';');
+  const normalized = new Set();
+  for (const item of values.slice(0, MAX_WATCHLIST_NAMESERVERS * 4)) {
+    const nameserver = normalizeDomain(item);
+    if (nameserver) normalized.add(nameserver);
+    if (normalized.size >= MAX_WATCHLIST_NAMESERVERS) break;
+  }
+  return [...normalized].sort();
 }
 
 function normalizeRegistrar(value) {
@@ -108,12 +152,24 @@ function normalizeRegistrar(value) {
 }
 
 function normalizeDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString().slice(0, 10);
+  return normalizeDateValue(value);
+}
+
+function normalizeMutationTypes(value) {
+  if (!Array.isArray(value)) return [];
+  const types = new Set();
+  for (const item of value.slice(0, MAX_WATCHLIST_MUTATION_TYPES * 4)) {
+    const type = (boundedText(item, MAX_MUTATION_TYPE_LENGTH, false) || '').toLowerCase();
+    if (type) types.add(type);
+    if (types.size >= MAX_WATCHLIST_MUTATION_TYPES) break;
+  }
+  return [...types].sort();
 }
 
 function compactRecord(record) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  const domain = normalizeDomain(record.domain);
+  if (!domain) return null;
   const scanDepth = inferredScanDepth(record);
   const httpSummary = normalizeHttpSummary(record) || {};
   const providedRiskScore = typeof record.riskScore === 'number' && Number.isFinite(record.riskScore)
@@ -127,34 +183,43 @@ function compactRecord(record) {
       ? normalizeRiskModelVersion(record.riskModelVersion)
       : computedRisk?.modelVersion ?? null;
   return {
-    domain: String(record.domain || '').trim().toLowerCase(),
+    domain,
     scanDepth,
-    availability: record.availability || null,
-    registrarName: record.registrarName || null,
+    availability: AVAILABILITY_VALUES.has(record.availability) ? record.availability : null,
+    registrarName: boundedText(record.registrarName),
     nameservers: normalizeNameservers(record.nameservers),
-    createdDate: record.createdDate || null,
-    expiryDate: record.expiryDate || null,
+    createdDate: normalizeDateValue(record.createdDate),
+    expiryDate: normalizeDateValue(record.expiryDate),
     privacyProtected: typeof record.privacyProtected === 'boolean' ? record.privacyProtected : null,
     hasMx: typeof record.hasMx === 'boolean' ? record.hasMx : null,
     hasSpf: typeof record.hasSpf === 'boolean' ? record.hasSpf : null,
     hasDmarc: typeof record.hasDmarc === 'boolean' ? record.hasDmarc : null,
-    activityStatus: record.activityStatus || null,
-    pageTitle: record.pageTitle ?? null,
+    activityStatus: ACTIVITY_VALUES.has(record.activityStatus) ? record.activityStatus : null,
+    pageTitle: boundedText(record.pageTitle, MAX_TITLE_LENGTH),
     ...httpSummary,
-    faviconHash: record.faviconHash || null,
+    faviconHash: boundedText(record.faviconHash, 128),
     faviconMatch: typeof record.faviconMatch === 'boolean' ? record.faviconMatch : null,
     faviconNearMatch: typeof record.faviconNearMatch === 'boolean' ? record.faviconNearMatch : null,
     hasPasswordField: typeof record.hasPasswordField === 'boolean' ? record.hasPasswordField : null,
-    phishingLanguageMatch: record.phishingLanguageMatch ?? null,
+    phishingLanguageMatch: boundedText(record.phishingLanguageMatch, MAX_TITLE_LENGTH),
     reusesOfficialAssets: typeof record.reusesOfficialAssets === 'boolean' ? record.reusesOfficialAssets : null,
     riskModelVersion,
     riskScore,
+    mutationTypes: normalizeMutationTypes(record.mutationTypes),
   };
 }
 
 /** @param {object[]} results */
 export function compactWatchlistResults(results) {
-  return results.map(compactRecord).filter((record) => record.domain);
+  if (!Array.isArray(results)) return [];
+  const byDomain = new Map();
+  for (const item of results.slice(0, MAX_WATCHLIST_INPUT_RECORDS)) {
+    const record = compactRecord(item);
+    if (!record || byDomain.has(record.domain)) continue;
+    byDomain.set(record.domain, record);
+    if (byDomain.size >= MAX_WATCHLIST_DOMAINS) break;
+  }
+  return [...byDomain.values()];
 }
 
 function isComparable(field, value, record) {
@@ -255,15 +320,56 @@ export function mergeWatchlistBaseline(baseline, current) {
 }
 
 function sanitizeStoredChange(change) {
-  if (!change || typeof change.domain !== 'string' || !FIELD_LABELS[change.field]) return null;
+  if (!change || typeof change !== 'object' || Array.isArray(change) || !FIELD_LABELS[change.field]) return null;
+  const domain = normalizeDomain(change.domain);
+  if (!domain) return null;
+  const before = normalizeStoredFieldValue(change.field, change.before);
+  const after = normalizeStoredFieldValue(change.field, change.after);
+  if (before === undefined || after === undefined) return null;
   return {
-    domain: change.domain,
+    domain,
     field: change.field,
-    before: change.before,
-    after: change.after,
-    kind: typeof change.kind === 'string' ? change.kind : 'field_changed',
+    before,
+    after,
+    kind: CHANGE_KINDS.has(change.kind) ? change.kind : 'field_changed',
     tone: ['danger', 'warn', 'good', 'neutral'].includes(change.tone) ? change.tone : 'neutral',
   };
+}
+
+function normalizedOrigin(value) {
+  if (typeof value !== 'string' || value.length > 4096 || CONTROL_RE.test(value)) return undefined;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && url.origin.length <= 300
+      ? url.origin
+      : undefined;
+  } catch { return undefined; }
+}
+
+function normalizeStoredFieldValue(field, value) {
+  if (field === 'availability') return AVAILABILITY_VALUES.has(value) ? value : undefined;
+  if (field === 'nameservers') return Array.isArray(value) ? normalizeNameservers(value) : undefined;
+  if (field === 'httpSecurityHeaders') {
+    return Array.isArray(value) ? [...new Set(value.slice(0, 20).filter((item) => HTTP_HEADER_VALUES.has(item)))].sort() : undefined;
+  }
+  if (field === 'createdDate' || field === 'expiryDate') return normalizeDateValue(value) ?? undefined;
+  if (field === 'activityStatus') return ACTIVITY_VALUES.has(value) ? value : undefined;
+  if (field === 'httpEvidenceStatus') return value === 'success' || value === 'partial' ? value : undefined;
+  if (field === 'httpFinalOrigin') return normalizedOrigin(value);
+  if (field === 'httpResponseStatus') return Number.isInteger(value) && value >= 100 && value <= 599 ? value : undefined;
+  if (field === 'httpRedirectCount') return Number.isInteger(value) && value >= 0 && value <= 5 ? value : undefined;
+  if (field === 'riskScore') return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 ? Math.round(value) : undefined;
+  if (field === 'httpTransportSecurity') return value === 'http' || value === 'https' ? value : undefined;
+  if (field === 'httpContentType') {
+    const type = boundedText(value, 100);
+    return type && /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(type) ? type.toLowerCase() : undefined;
+  }
+  if (field === 'registrarName') return boundedText(value) ?? undefined;
+  if (['pageTitle', 'faviconHash', 'phishingLanguageMatch'].includes(field)) {
+    if (value === null) return null;
+    return boundedText(value, field === 'pageTitle' || field === 'phishingLanguageMatch' ? MAX_TITLE_LENGTH : 128) ?? undefined;
+  }
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function initialHistoryEvent(entry, baseline) {
@@ -280,28 +386,29 @@ function initialHistoryEvent(entry, baseline) {
 
 /** @param {object} entry */
 export function normalizeWatchlistEntry(entry) {
-  const results = Array.isArray(entry?.results) ? entry.results : [];
-  const compactResults = compactWatchlistResults(results);
+  const rawResults = Array.isArray(entry?.results) ? entry.results : [];
+  const results = compactWatchlistResults(rawResults);
+  const compactResults = results;
   const importedBaseline = Array.isArray(entry?.baseline) ? compactWatchlistResults(entry.baseline) : [];
   const baseline = mergeWatchlistBaseline(importedBaseline, compactResults);
   const history = Array.isArray(entry?.history)
-    ? entry.history.map((event) => {
+    ? entry.history.slice(-MAX_WATCHLIST_HISTORY_EVENTS * 4).map((event) => {
       const changes = Array.isArray(event?.changes)
-        ? event.changes.map(sanitizeStoredChange).filter(Boolean).slice(0, MAX_WATCHLIST_CHANGES_PER_EVENT)
+        ? event.changes.slice(0, MAX_WATCHLIST_CHANGES_PER_EVENT * 4).map(sanitizeStoredChange).filter(Boolean).slice(0, MAX_WATCHLIST_CHANGES_PER_EVENT)
         : [];
       return {
-        checkedAt: typeof event?.checkedAt === 'string' ? event.checkedAt : new Date(0).toISOString(),
+        checkedAt: isoTimestamp(event?.checkedAt),
         mode: ['fast', 'deep', 'saved'].includes(event?.mode) ? event.mode : 'saved',
-        resultCount: Number.isFinite(event?.resultCount) ? event.resultCount : results.length,
-        conclusiveCount: Number.isFinite(event?.conclusiveCount) ? event.conclusiveCount : 0,
-        changeCount: Number.isFinite(event?.changeCount) ? event.changeCount : changes.length,
-        omittedChanges: Number.isFinite(event?.omittedChanges) ? event.omittedChanges : 0,
+        resultCount: boundedInteger(event?.resultCount, MAX_WATCHLIST_DOMAINS, results.length),
+        conclusiveCount: boundedInteger(event?.conclusiveCount, MAX_WATCHLIST_DOMAINS),
+        changeCount: boundedInteger(event?.changeCount, MAX_CHANGE_COUNT, changes.length),
+        omittedChanges: boundedInteger(event?.omittedChanges, MAX_CHANGE_COUNT),
         changes,
       };
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
   const normalized = {
-    updatedAt: typeof entry?.updatedAt === 'string' ? entry.updatedAt : new Date(0).toISOString(),
+    updatedAt: isoTimestamp(entry?.updatedAt),
     results,
     baseline,
     history,
@@ -316,7 +423,7 @@ export function normalizeWatchlistEntry(entry) {
  * @param {{ checkedAt?: string, mode?: string, ignoredDomains?: Set<string> }} [options]
  */
 export function appendWatchlistScan(existingEntry, results, options = {}) {
-  const checkedAt = options.checkedAt || new Date().toISOString();
+  const checkedAt = isoTimestamp(options.checkedAt, new Date().toISOString());
   const mode = typeof options.mode === 'string' && ['fast', 'deep', 'saved'].includes(options.mode)
     ? options.mode
     : 'saved';
@@ -329,7 +436,7 @@ export function appendWatchlistScan(existingEntry, results, options = {}) {
   const event = {
     checkedAt,
     mode,
-    resultCount: results.length,
+    resultCount: current.length,
     conclusiveCount: current.filter((record) => CONCLUSIVE_AVAILABILITY.has(record.availability)).length,
     changeCount: changes.length,
     omittedChanges: Math.max(0, changes.length - storedChanges.length),
@@ -339,7 +446,7 @@ export function appendWatchlistScan(existingEntry, results, options = {}) {
   return {
     entry: {
       updatedAt: checkedAt,
-      results,
+      results: current,
       baseline: mergeWatchlistBaseline(previous?.baseline || [], current),
       history,
     },

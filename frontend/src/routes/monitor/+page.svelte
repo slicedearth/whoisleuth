@@ -27,10 +27,11 @@
   const names=$derived(Object.keys(watchlists).sort());const entry=$derived(selected?watchlists[selected]||null:null);const history=$derived(entry?(changedOnly?entry.history.filter(e=>e.changeCount>0):entry.history):[]);
   function refresh(){watchlists=loadWatchlists();if(selected&&!watchlists[selected])selected='';}
   function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
-  function remove(name:string){if(!confirm(`Delete watchlist "${name}" and its history?`))return;deleteWatchlist(name);refresh();}
-  function clearAll(){if(!names.length||!confirm('Delete every saved watchlist and its history?'))return;writeWatchlists({});refresh();}
+  function remove(name:string){if(!confirm(`Delete watchlist "${name}" and its history?`))return;try{deleteWatchlist(name);refresh();message=`Deleted "${name}".`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete watchlist.';}}
+  function clearAll(){if(!names.length||!confirm('Delete every saved watchlist and its history?'))return;try{writeWatchlists({});refresh();message='Cleared all watchlists.';}catch(cause){message=cause instanceof Error?cause.message:'Could not clear watchlists.';}}
+  function downloadWatchlists(){try{exportWatchlists();}catch(cause){message=cause instanceof Error?cause.message:'Could not export watchlists.';}}
   async function rescan(name:string){const current=watchlists[name];if(!current)return;const candidates=current.results.map(record=>({domain:String(record.domain),source:name,mutationTypes:Array.isArray(record.mutationTypes)?record.mutationTypes:[]}));saveCandidateHandoff('watchlist',candidates);await goto('/bulk?source=watchlist');}
-  async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_IMPORT_BYTES)throw new Error('Watchlist imports are limited to 2 MB.');const result=importWatchlists(JSON.parse(await file.text()));message=`Imported ${result.added} new and ${result.updated} updated watchlists.`;refresh();}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
+  async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_IMPORT_BYTES)throw new Error('Watchlist imports are limited to 2 MB.');const result=importWatchlists(JSON.parse(await file.text()));const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit watchlist${result.skipped===1?'':'s'}`:'';message=`Imported ${result.added} new and ${result.updated} updated watchlists${skipped}.`;refresh();}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
 
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
@@ -173,7 +174,7 @@
 
 {#if view==='watchlists'}
 <div id="panel-watchlists" role="tabpanel" aria-labelledby="tab-watchlists">
-  <section class="wl-toolbar card"><div class="top-actions"><button onclick={exportWatchlists} disabled={!names.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label><button class="danger" onclick={clearAll} disabled={!names.length}>Clear all</button></div></section>
+  <section class="wl-toolbar card"><div class="top-actions"><button onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label><button class="danger" onclick={clearAll} disabled={!names.length}>Clear all</button></div></section>
   {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
   {#if names.length}
