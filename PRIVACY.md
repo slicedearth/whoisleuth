@@ -48,6 +48,13 @@ at all.
   set retained by each case rather than an uncapped DNS inventory. Raw header
   values, attempt errors, and redirect inventories are not copied into
   browser-local investigation stores.
+- **Public synthetic demo** - the unauthenticated demo uses fixed fictional
+  fixtures on reserved domains and performs no live analysis request. Its
+  progress is isolated to the current tab's `sessionStorage` under
+  `whoisleuth:synthetic-demo:v1`, never enters production browser-local stores,
+  and is removed by the demo reset action or when that tab session ends. Any
+  downloaded demo package is explicitly marked as synthetic and is not a live
+  finding or evidence report.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
   the domain through the public-address guard and opens one direct TLS
   connection to one validated address while retaining the domain as SNI.

@@ -631,6 +631,22 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
   report before sharing it — Markdown reports in particular should be checked
   for escaped content that an analyst or import may have stored.
 
+### Public synthetic demo
+
+The unauthenticated `/demo` route presents one bounded fictional workflow from
+brand definition through candidate discovery, triage, evidence review, and a
+synthetic case export. It uses fixed fixtures on reserved domains and makes no
+live registry, DNS, website, certificate, Netlify Function, or other analysis
+request. Demo progress is kept only in `sessionStorage` under
+`whoisleuth:synthetic-demo:v1`; it never reads or writes production Brand
+Profiles, candidates, cases, campaigns, watchlists, or history, and **Reset
+demo** removes the tab-scoped record.
+
+Demo exports use the distinct `whoisleuth.synthetic-demo-case` schema, carry
+`synthetic: true`, and include an explicit warning that they are not live
+findings, evidence packages, or abuse reports. The demo is a representative
+product walkthrough rather than a shadow implementation of every workspace.
+
 ## Rate limiting
 
 Authentication attempts and network-heavy API routes are rate-limited per
