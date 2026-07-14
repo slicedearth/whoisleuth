@@ -7,6 +7,10 @@ const { describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { classifyQuery } = require('../lib/classify');
 
+test('loads the typed implementation through the stable CommonJS entry point', () => {
+  assert.strictEqual(require('../lib/classify.mts').classifyQuery, classifyQuery);
+});
+
 describe('control characters', () => {
   test('rejects an embedded CRLF (WHOIS protocol injection)', () => {
     // A normal URL-encoded query string (?q=example.com%0D%0AHELP) decodes
