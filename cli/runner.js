@@ -2,10 +2,12 @@
 
 const { classifyQuery } = require('../lib/classify');
 const { runUnifiedLookup } = require('../lib/lookup');
+const fs = require('node:fs');
 const EXIT_CODES = require('./exit-codes');
 const { CliUsageError, parseCliArguments } = require('./arguments');
-const { buildCliLookupDocument, formatJsonDocument } = require('./formatters/json');
-const { formatTerminalLookup } = require('./formatters/terminal');
+const { buildCliBulkDocument, buildCliLookupDocument, formatJsonDocument, formatJsonLines } = require('./formatters/json');
+const { formatTerminalBulk, formatTerminalLookup } = require('./formatters/terminal');
+const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
 const { version: VERSION } = require('../package.json');
 
 const MAX_STDIN_BYTES = 4096;
@@ -14,6 +16,8 @@ const HELP = `WHOISleuth CLI
 Usage:
   whoisleuth lookup <domain|IP|ASN> [--json] [--fast|--deep] [--quiet] [--no-color]
   printf 'example.com\\n' | whoisleuth lookup --json
+  whoisleuth bulk [file] [--json|--jsonl] [--fast|--deep] [--concurrency <1-8>]
+  cat domains.txt | whoisleuth bulk --jsonl
   whoisleuth --help
   whoisleuth --version
 
@@ -42,7 +46,7 @@ async function readStdinBounded(stream, limit = MAX_STDIN_BYTES) {
   }
   const text = Buffer.concat(chunks).toString('utf8').trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length > 1) throw new CliUsageError('lookup accepts one stdin query. Use a future bulk command for multiple inputs.');
+  if (lines.length > 1) throw new CliUsageError('lookup accepts one stdin query. Use the bulk command for multiple inputs.');
   return lines[0] || '';
 }
 
@@ -57,6 +61,34 @@ async function runCli(argv, dependencies = {}) {
     const args = parseCliArguments(argv);
     if (args.action === 'help') { write(stdout, HELP); return EXIT_CODES.SUCCESS; }
     if (args.action === 'version') { write(stdout, `${VERSION}\n`); return EXIT_CODES.SUCCESS; }
+
+    if (args.action === 'bulk') {
+      let input;
+      try {
+        input = dependencies.readBulkInput
+          ? await dependencies.readBulkInput(args.source)
+          : await readTextStreamBounded(args.source
+            ? fs.createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, MAX_BULK_INPUT_BYTES);
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read bulk input: ${boundedErrorMessage(error, 'Input could not be read')}`);
+      }
+      const parsed = parseBulkQueries(input, { deep: args.deep });
+      const items = await runBulkLookups(parsed.queries, {
+        deep: args.deep,
+        concurrency: args.concurrency,
+        classifyQuery: dependencies.classifyQuery || classifyQuery,
+        runUnifiedLookup: dependencies.runUnifiedLookup || runUnifiedLookup,
+      });
+      const metadata = { deep: args.deep, duplicates: parsed.duplicates, generatedAt: dependencies.now ? dependencies.now() : new Date().toISOString() };
+      if (!args.quiet) {
+        if (args.output === 'json') write(stdout, formatJsonDocument(buildCliBulkDocument(items, metadata)));
+        else if (args.output === 'jsonl') write(stdout, formatJsonLines(items, metadata));
+        else write(stdout, formatTerminalBulk(items, metadata));
+      }
+      return items.some((item) => !item.ok) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+    }
 
     const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
     const query = args.query || await readInput();

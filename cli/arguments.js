@@ -29,7 +29,8 @@ function parseCliArguments(rawArgv) {
   }
 
   const command = argv[0];
-  if (command !== 'lookup') throw new CliUsageError(`Unknown command "${command}". This release supports: lookup.`);
+  if (command !== 'lookup' && command !== 'bulk') throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk.`);
+  if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   let query = null;
   let output = 'terminal';
   let deep = false;
@@ -52,10 +53,47 @@ function parseCliArguments(rawArgv) {
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else if (query === null) query = argument;
-    else throw new CliUsageError('lookup accepts one query. Use a future bulk command for multiple inputs.');
+    else throw new CliUsageError('lookup accepts one query. Use the bulk command for multiple inputs.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'lookup', query, output, deep, quiet, color };
+}
+
+function parseBulkArguments(argv) {
+  let source = null;
+  let output = 'terminal';
+  let deep = false;
+  let scanMode = null;
+  let quiet = false;
+  let color = true;
+  let concurrency = null;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === '--json' || argument === '--jsonl') {
+      if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
+      output = argument.slice(2);
+    } else if (argument === '--deep' || argument === '--fast') {
+      if (scanMode) throw new CliUsageError('--fast and --deep are mutually exclusive and may be supplied only once.');
+      scanMode = argument.slice(2);
+      deep = scanMode === 'deep';
+    } else if (argument === '--concurrency') {
+      if (concurrency !== null) throw new CliUsageError('--concurrency may be supplied only once.');
+      const raw = argv[++index];
+      if (!raw || !/^\d+$/.test(raw)) throw new CliUsageError('--concurrency requires an integer from 1 to 8.');
+      concurrency = Number(raw);
+      if (concurrency < 1 || concurrency > 8) throw new CliUsageError('--concurrency must be from 1 to 8.');
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('bulk accepts one optional input file. Otherwise pipe newline-delimited queries on stdin.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  const maximum = deep ? 3 : 8;
+  if (concurrency !== null && concurrency > maximum) {
+    throw new CliUsageError(`--concurrency is capped at ${maximum} in ${deep ? 'deep' : 'fast'} bulk mode.`);
+  }
+  return { action: 'bulk', source, output, deep, quiet, color, concurrency: concurrency ?? (deep ? 2 : 4) };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };

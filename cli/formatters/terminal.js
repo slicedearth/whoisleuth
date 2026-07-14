@@ -37,4 +37,17 @@ function formatTerminalLookup(document) {
   return `${lines.join('\n')}\n`;
 }
 
-module.exports = { MAX_TERMINAL_VALUE_LENGTH, formatTerminalLookup, safeTerminalValue };
+function formatTerminalBulk(items, metadata) {
+  const lines = items.map((item) => {
+    if (!item.ok) return `! ${safeTerminalValue(item.query)} — ${safeTerminalValue(item.error, 'Lookup failed')}`;
+    const state = titleCase(item.result?.availability?.state);
+    const confidence = titleCase(item.result?.availability?.confidence);
+    return `✓ ${safeTerminalValue(item.query)} — ${state} (${confidence} confidence)`;
+  });
+  const succeeded = items.filter((item) => item.ok).length;
+  lines.push('');
+  lines.push(`${items.length} queries · ${succeeded} succeeded · ${items.length - succeeded} failed · ${metadata.duplicates || 0} duplicates removed`);
+  return `${lines.join('\n')}\n`;
+}
+
+module.exports = { MAX_TERMINAL_VALUE_LENGTH, formatTerminalBulk, formatTerminalLookup, safeTerminalValue };

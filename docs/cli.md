@@ -11,6 +11,8 @@ node bin/whoisleuth.js lookup example.com
 node bin/whoisleuth.js lookup AS13335 --json
 printf 'example.com\n' | node bin/whoisleuth.js lookup --json
 node bin/whoisleuth.js lookup example.com --deep
+cat domains.txt | node bin/whoisleuth.js bulk --jsonl
+node bin/whoisleuth.js bulk domains.txt --concurrency 4
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -22,8 +24,8 @@ Lookup defaults to the conservative fast profile. `--deep` must be requested
 explicitly and can make the additional bounded WHOIS, DNS, website, and TLS
 requests used by a deep web lookup.
 
-Only one query is accepted by this command. Multiple-input processing belongs
-to the later `bulk` command rather than being silently inferred by `lookup`.
+Only one query is accepted by `lookup`. Multiple-input processing belongs to
+the explicit `bulk` command rather than being silently inferred by `lookup`.
 Standard input is capped at 4 KiB and must contain one non-empty line.
 
 ## Output
@@ -54,8 +56,23 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | 0 | Command completed. Individual sources may still be partial or inconclusive; inspect diagnostics. |
 | 2 | Invalid command, option, input, or stdin shape. |
 | 3 | The unified lookup could not run. |
+| 4 | A bulk command completed with one or more per-query failures. |
 | 70 | Unexpected CLI bootstrap failure. |
 
-This initial increment intentionally supports only `lookup`. Bulk, discovery,
-posture, HTTP, TLS, comparison, and export commands will be added as separate
-bounded increments rather than exposing incomplete aliases.
+This release supports `lookup` and `bulk`. Discovery, posture, HTTP, TLS,
+comparison, and export commands are added as separate bounded increments
+rather than exposing incomplete aliases.
+
+## Bulk lookup
+
+`bulk` accepts a newline-delimited file or stdin. It preserves input order,
+removes case-insensitive duplicates, and returns a result for every retained
+query. Input is capped at 1 MiB. Fast mode is capped at 500 queries with four
+workers by default. Deep mode is capped at 50 queries with two workers by
+default. Explicit concurrency cannot exceed eight in fast mode or three in
+deep mode.
+
+Bulk uses the shared compact lookup response, so it does not retain raw RDAP
+objects or WHOIS response bodies. `--json` returns one bounded collection;
+`--jsonl` emits one self-contained versioned item per line. A mixture of
+successful and failed queries exits with code 4 while preserving every result.

@@ -38,7 +38,7 @@ describe('CLI argument parsing', () => {
   });
 
   test('rejects unknown commands, options, conflicting modes, and multiple queries', () => {
-    assert.throws(() => parseCliArguments(['bulk', 'x']), /Unknown command/);
+    assert.throws(() => parseCliArguments(['unknown', 'x']), /Unknown command/);
     assert.throws(() => parseCliArguments(['lookup', '--wat']), /Unknown option/);
     assert.throws(() => parseCliArguments(['lookup', '--deep', '--fast']), /mutually exclusive/);
     assert.throws(() => parseCliArguments(['lookup', '--fast', '--deep']), /mutually exclusive/);
