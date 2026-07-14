@@ -42,8 +42,9 @@ at all.
   cases retain only the final origin (never its path or query), response status,
   transport, redirect count/flags, MIME type, and presence-only security-header
   tokens. Monitor can compare the latest retained final origin and normalized
-  nameserver set across browser-local cases without making a request or saving
-  a separate relationship record. This comparison uses the bounded nameserver
+  nameserver set across browser-local cases, including through a capped local
+  relationship table, without making a request or saving a separate
+  relationship record. This comparison uses the bounded nameserver
   set retained by each case rather than an uncapped DNS inventory. Raw header
   values, attempt errors, and redirect inventories are not copied into
   browser-local investigation stores.

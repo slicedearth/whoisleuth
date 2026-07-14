@@ -933,3 +933,84 @@ test.describe('browser-local campaigns', () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+test.describe('accessible cross-case relationship table', () => {
+  async function openRelationshipTable(
+    page: import('@playwright/test').Page,
+    records: ReturnType<typeof caseRecord>[],
+  ) {
+    await page.goto('/monitor');
+    await page.evaluate((cases) => {
+      localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases }));
+    }, records);
+    await page.reload();
+    await page.getByRole('tab', { name: /Relationships/ }).click();
+  }
+
+  test('filters semantic relationship rows and opens a member case', async ({ page }) => {
+    const http = {
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://shared-destination.invalid',
+      httpResponseStatus: 200,
+    };
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'ns-a', domain: 'alpha-table.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-table.invalid'] })] }),
+      caseRecord({ id: 'ns-b', domain: 'bravo-table.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-table.invalid'] })] }),
+      caseRecord({ id: 'http-a', domain: 'charlie-table.invalid', evidenceHistory: [snapshot(http)] }),
+      caseRecord({ id: 'http-b', domain: 'delta-table.invalid', evidenceHistory: [snapshot(http)] }),
+    ]);
+
+    await expect(page.getByRole('tab', { name: /Relationships 2/ })).toHaveAttribute('aria-selected', 'true');
+    const table = page.getByRole('table', { name: 'Cross-case relationships from latest browser-local case evidence' });
+    await expect(table).toBeVisible();
+    await expect(table.getByRole('columnheader')).toHaveCount(4);
+    await expect(table.getByRole('row')).toHaveCount(3);
+
+    await page.locator('.relationship-filters .search input').fill('bravo-table.invalid');
+    await expect(table.getByRole('row')).toHaveCount(2);
+    await expect(table).toContainText('Shared nameserver set');
+    await page.getByRole('button', { name: 'Clear' }).click();
+    await page.locator('.relationship-filters select').first().selectOption('http_final_origin');
+    await expect(table.getByRole('row')).toHaveCount(2);
+    await expect(table).toContainText('Shared final website origin');
+
+    await page.getByRole('button', { name: 'Open charlie-table.invalid' }).click();
+    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('shows a clear empty state when no retained evidence relates cases', async ({ page }) => {
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'single-a', domain: 'single-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.one.invalid'] })] }),
+      caseRecord({ id: 'single-b', domain: 'single-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.two.invalid'] })] }),
+    ]);
+    await expect(page.getByRole('heading', { name: 'No cross-case relationships yet' })).toBeVisible();
+    await expect(page.getByRole('table')).toHaveCount(0);
+  });
+
+  test('sorts relationship rows by case count in both directions', async ({ page }) => {
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'large-a', domain: 'large-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.large.invalid'] })] }),
+      caseRecord({ id: 'large-b', domain: 'large-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.large.invalid'] })] }),
+      caseRecord({ id: 'large-c', domain: 'large-c.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.large.invalid'] })] }),
+      caseRecord({ id: 'small-a', domain: 'small-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.small.invalid'] })] }),
+      caseRecord({ id: 'small-b', domain: 'small-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.small.invalid'] })] }),
+    ]);
+    await page.locator('.relationship-filters select').nth(1).selectOption('member_count');
+    const rows = page.getByRole('table').getByRole('row');
+    await expect(rows.nth(1)).toContainText('2 cases');
+    await page.getByRole('button', { name: 'Sort descending' }).click();
+    await expect(rows.nth(1)).toContainText('3 cases');
+  });
+
+  test('relationship filters and rows remain usable without mobile overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'mobile-rel-a', domain: 'long-mobile-relationship-member-a.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
+      caseRecord({ id: 'mobile-rel-b', domain: 'long-mobile-relationship-member-b.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
+    ]);
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from latest browser-local case evidence' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});

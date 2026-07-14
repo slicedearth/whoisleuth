@@ -7,6 +7,8 @@
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
+  import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
+  import { buildCaseRelationships } from '$lib/analysis/case-relationships.js';
   import { deleteWatchlist, exportWatchlists, fieldLabels, formatValue, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
@@ -14,7 +16,7 @@
   } from '$lib/cases';
   import { loadCampaigns } from '$lib/campaigns';
 
-  type View = 'watchlists' | 'cases' | 'campaigns';
+  type View = 'watchlists' | 'cases' | 'campaigns' | 'relationships';
   let view=$state<View>('watchlists');
 
   // --- Watchlists ---
@@ -30,6 +32,7 @@
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
   let campaignCount=$state(0);
+  let relationshipCount=$state(0);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
   const statusOrder=new Map(CASE_STATUSES.map((item,index)=>[item.value,index]));
@@ -46,9 +49,9 @@
       return Date.parse(b.updatedAt)-Date.parse(a.updatedAt);
     });
   });
-  function refreshCases(){cases=loadCases();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
+  function refreshCases(){cases=loadCases();relationshipCount=buildCaseRelationships(cases).groups.length;if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
-  function openCampaignCase(record:CaseRecord){view='cases';if(expandedId!==record.id)expand(record);}
+  function openRelatedCase(record:CaseRecord){view='cases';if(expandedId!==record.id)expand(record);}
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=openCase({domain,source:'monitor'});refreshCases();newDomain='';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
   function setStatus(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{status:value});refreshCases();caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
@@ -66,21 +69,29 @@
     if(focus){view='cases';if(cases.some(record=>record.id===focus)){const target=cases.find(record=>record.id===focus)!;expandedId=focus;tagDraft=target.tags.join(', ');}}
     else if(page.url.searchParams.get('view')==='cases')view='cases';
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
+    else if(page.url.searchParams.get('view')==='relationships')view='relationships';
   });
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Cases, campaigns and watchlists</h1><p>Organize investigations in browser-local cases and campaigns, then compare watchlist changes over time.</p></div></section>
+<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Investigation workspace</h1><p>Organize cases into campaigns, review cross-case relationships, and compare watchlist changes over time.</p></div></section>
 
 <div class="views" role="tablist" aria-label="Monitor views">
   <button role="tab" id="tab-cases" aria-selected={view==='cases'} aria-controls="panel-cases" class:active={view==='cases'} onclick={()=>view='cases'}>Cases <span>{cases.length}</span></button>
   <button role="tab" id="tab-campaigns" aria-selected={view==='campaigns'} aria-controls="panel-campaigns" class:active={view==='campaigns'} onclick={()=>view='campaigns'}>Campaigns <span>{campaignCount}</span></button>
+  <button role="tab" id="tab-relationships" aria-selected={view==='relationships'} aria-controls="panel-relationships" class:active={view==='relationships'} onclick={()=>view='relationships'}>Relationships <span>{relationshipCount}</span></button>
   <button role="tab" id="tab-watchlists" aria-selected={view==='watchlists'} aria-controls="panel-watchlists" class:active={view==='watchlists'} onclick={()=>view='watchlists'}>Watchlists <span>{names.length}</span></button>
 </div>
 
 {#if view==='campaigns'}
 <div id="panel-campaigns" role="tabpanel" aria-labelledby="tab-campaigns">
-  <CampaignManager records={cases} onselect={openCampaignCase} oncount={(count)=>campaignCount=count} />
+  <CampaignManager records={cases} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} />
+</div>
+{/if}
+
+{#if view==='relationships'}
+<div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
+  <CaseRelationshipTable records={cases} onselect={openRelatedCase} />
 </div>
 {/if}
 

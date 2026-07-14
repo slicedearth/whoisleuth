@@ -538,7 +538,8 @@ compact-storage boundary, and lookup evidence schema are documented in the
 
 Move a finding from discovery into a documented investigation. From a **Lookup**
 result or a **Bulk** row you can open a **case** for a domain; **Monitor** is the
-full investigation workspace, with `Cases`, `Campaigns`, and `Watchlists` tabs.
+full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
+`Watchlists` tabs.
 
 - Each case carries an analyst **status** (New, Reviewing, Monitoring,
   Escalated, Resolved), a **disposition** (Unreviewed, Suspicious, Confirmed
@@ -566,6 +567,12 @@ full investigation workspace, with `Cases`, `Campaigns`, and `Watchlists` tabs.
   aggregate score or ownership claim, and does not add a new persisted relationship
   record; shared DNS, redirect, hosting, CDN, parking, and platform services
   remain common explanations.
+- The **Relationships** tab presents those same bounded comparisons in a
+  semantic table with search, relationship-family filtering, stable sorting,
+  explicit partial-result labels, and direct case pivots. The projection shows
+  at most 50 relationships and 20 case links per row, transforms into labelled
+  stacked rows on narrow screens, and creates no new request, score, or stored
+  relationship record.
 - The **Campaigns** tab groups existing cases into bounded browser-local
   investigations. Each campaign retains only a name, optional description,
   and up to 50 normalized case domains; it does not duplicate case evidence,
