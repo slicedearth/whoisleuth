@@ -4,6 +4,7 @@ const MAX_TERMINAL_VALUE_LENGTH = 240;
 const MAX_CT_TERMINAL_MATCHES = 100;
 const MAX_CT_TERMINAL_HOSTNAMES = 5;
 const MAX_DISCOVER_TERMINAL_CANDIDATES = 200;
+const MAX_POSTURE_TERMINAL_RECORDS = 5;
 
 function safeTerminalValue(value, fallback = '—') {
   if (value === null || value === undefined || value === '') return fallback;
@@ -108,14 +109,43 @@ function formatTerminalDiscover(document, mutationLabels = {}) {
   return `${lines.join('\n')}\n`;
 }
 
+function formatTerminalPosture(document) {
+  const summary = document.summary && typeof document.summary === 'object' ? document.summary : {};
+  const selectors = Array.isArray(document.dkimSelectors) ? document.dkimSelectors : [];
+  const checks = Array.isArray(document.checks) ? document.checks : [];
+  const lines = [
+    `Domain         ${safeTerminalValue(document.domain)}`,
+    `Checked        ${safeTerminalValue(document.checkedAt)}`,
+    `DKIM selectors ${selectors.length ? selectors.map((value) => safeTerminalValue(value)).join(', ') : 'None supplied'}`,
+    `Summary        ${safeTerminalValue(summary.danger, '0')} action · ${safeTerminalValue(summary.warning, '0')} review · ${safeTerminalValue(summary.pass, '0')} pass · ${safeTerminalValue(summary.info, '0')} info`,
+    '',
+  ];
+  for (const item of checks) {
+    lines.push(`[${safeTerminalValue(item.status, 'info').toUpperCase()}] ${safeTerminalValue(item.label)} — ${safeTerminalValue(item.summary)}`);
+    if (item.detail) lines.push(`  Detail  ${safeTerminalValue(item.detail)}`);
+    if (item.remediation) lines.push(`  Next    ${safeTerminalValue(item.remediation)}`);
+    const records = Array.isArray(item.records) ? item.records : [];
+    for (const record of records.slice(0, MAX_POSTURE_TERMINAL_RECORDS)) {
+      lines.push(`  Record  ${safeTerminalValue(record)}`);
+    }
+    if (records.length > MAX_POSTURE_TERMINAL_RECORDS) {
+      lines.push(`  Records ${records.length - MAX_POSTURE_TERMINAL_RECORDS} more omitted from terminal output; use --json for the complete bounded report.`);
+    }
+  }
+  if (!checks.length) lines.push('No posture checks were returned.');
+  return `${lines.join('\n')}\n`;
+}
+
 module.exports = {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
   MAX_DISCOVER_TERMINAL_CANDIDATES,
+  MAX_POSTURE_TERMINAL_RECORDS,
   MAX_TERMINAL_VALUE_LENGTH,
   formatTerminalBulk,
   formatTerminalCtSearch,
   formatTerminalDiscover,
   formatTerminalLookup,
+  formatTerminalPosture,
   safeTerminalValue,
 };

@@ -15,6 +15,7 @@ cat domains.txt | node bin/whoisleuth.js bulk --jsonl
 node bin/whoisleuth.js bulk domains.txt --concurrency 4
 node bin/whoisleuth.js ct-search 'example brand' --json
 node bin/whoisleuth.js discover example.com --preset common --jsonl
+node bin/whoisleuth.js posture example.com --selectors selector1,selector2 --json
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -61,7 +62,7 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | 4 | A bulk command completed with one or more per-query failures. |
 | 70 | Unexpected CLI bootstrap failure. |
 
-This release supports `lookup`, `bulk`, `ct-search`, and `discover`. Posture,
+This release supports `lookup`, `bulk`, `ct-search`, `discover`, and `posture`.
 HTTP, TLS, comparison, and export commands are added as separate bounded
 increments rather than exposing incomplete aliases.
 
@@ -107,3 +108,17 @@ Keyboard-aware mutations support `qwerty` (the default), `azerty`, and
 versioned JSON and JSONL retain the complete bounded candidate set and mutation
 provenance. The command generates candidates only—it does not claim that a
 domain is registered, active, or malicious.
+
+## Domain posture audit
+
+`posture` runs the same owned-domain DNS and email-security audit used by Brand
+Profiles. It queries SPF, DMARC, MX, CAA, MTA-STS, TLS-RPT, BIMI, and RDAP
+DNSSEC state directly from the local machine. Supply up to ten known DKIM
+selectors with `--selectors selector1,selector2`; selectors cannot be reliably
+discovered from DNS, so no-selector output reports DKIM as not checked.
+
+Terminal output shows each pass, review, action, or informational result and
+caps displayed records at five per check with an explicit omission notice.
+Versioned JSON retains the complete bounded report. Warnings and dangers are
+findings rather than command failures; transient resolver or policy-fetch
+failures remain informational and should be retried before changing DNS.

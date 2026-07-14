@@ -29,12 +29,13 @@ function parseCliArguments(rawArgv) {
   }
 
   const command = argv[0];
-  if (!['lookup', 'bulk', 'ct-search', 'discover'].includes(command)) {
-    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover.`);
+  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture'].includes(command)) {
+    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
   if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
+  if (command === 'posture') return parsePostureArguments(argv.slice(1));
   let query = null;
   let output = 'terminal';
   let deep = false;
@@ -163,6 +164,32 @@ function parseDiscoverArguments(argv) {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'discover', seed, output, quiet, color, preset, keyboardLayout, tldText };
+}
+
+function parsePostureArguments(argv) {
+  let domain = null;
+  let output = 'terminal';
+  let quiet = false;
+  let color = true;
+  let selectorText = null;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--selectors') {
+      if (selectorText !== null) throw new CliUsageError('--selectors may be supplied only once.');
+      const value = argv[++index];
+      if (!value) throw new CliUsageError('--selectors requires a comma-separated list.');
+      selectorText = value;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (domain === null) domain = argument;
+    else throw new CliUsageError('posture accepts one domain.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'posture', domain, output, quiet, color, selectorText };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };

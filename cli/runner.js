@@ -2,14 +2,16 @@
 
 const { classifyQuery } = require('../lib/classify');
 const { searchCertificateTransparency } = require('../lib/ct-search');
+const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('../lib/domain-posture');
 const { runUnifiedLookup } = require('../lib/lookup');
 const fs = require('node:fs');
 const EXIT_CODES = require('./exit-codes');
 const { CliUsageError, parseCliArguments } = require('./arguments');
-const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliLookupDocument, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines } = require('./formatters/json');
-const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalLookup } = require('./formatters/terminal');
+const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliLookupDocument, buildCliPostureDocument, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines } = require('./formatters/json');
+const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalLookup, formatTerminalPosture } = require('./formatters/terminal');
 const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
 const { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } = require('./discover');
+const { normalizePostureSelectors } = require('./posture');
 const { version: VERSION } = require('../package.json');
 
 const MAX_STDIN_BYTES = 4096;
@@ -23,6 +25,7 @@ Usage:
   whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]
   printf 'example brand\\n' | whoisleuth ct-search --json
   whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>] [--keyboard <layout>] [--json|--jsonl]
+  whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]
   whoisleuth --help
   whoisleuth --version
 
@@ -138,6 +141,26 @@ async function runCli(argv, dependencies = {}) {
         if (args.output === 'json') write(stdout, formatJsonDocument(document));
         else if (args.output === 'jsonl') write(stdout, formatDiscoverJsonLines(result.candidates, metadata));
         else write(stdout, formatTerminalDiscover(document, generator.MUTATION_LABELS));
+      }
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'posture') {
+      failureLabel = 'Domain posture audit';
+      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
+      const requestedDomain = args.domain || await readInput();
+      if (!requestedDomain) throw new CliUsageError('posture requires one domain as an argument or on stdin.');
+      const normalizeDomain = dependencies.normalizeAuditDomain || normalizeAuditDomain;
+      const domain = normalizeDomain(requestedDomain);
+      if (!domain) throw new CliUsageError('posture requires a valid domain name.');
+      const normalizeSelectors = dependencies.normalizeDkimSelectors || normalizeDkimSelectors;
+      const dkimSelectors = normalizePostureSelectors(args.selectorText, normalizeSelectors);
+      const audit = dependencies.checkDomainPosture || checkDomainPosture;
+      const report = await audit(domain, { dkimSelectors });
+      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
+      const document = buildCliPostureDocument(requestedDomain, report, now);
+      if (!args.quiet) {
+        write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalPosture(document));
       }
       return EXIT_CODES.SUCCESS;
     }
