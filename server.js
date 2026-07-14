@@ -317,6 +317,7 @@ app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, (error) => {
+  if (error) throw error;
   console.log(`WHOIS/RDAP tool listening on http://localhost:${PORT}`);
 });
