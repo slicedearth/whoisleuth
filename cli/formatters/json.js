@@ -4,6 +4,7 @@ const CLI_LOOKUP_SCHEMA_VERSION = 1;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
 const CLI_DISCOVER_SCHEMA_VERSION = 1;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
+const CLI_HTTP_SCHEMA_VERSION = 1;
 
 function buildCliLookupDocument(query, classified, result, generatedAt = new Date().toISOString(), mode = 'fast') {
   return {
@@ -77,6 +78,16 @@ function buildCliPostureDocument(requestedDomain, report, generatedAt = new Date
   };
 }
 
+function buildCliHttpDocument(requestedDomain, result, generatedAt = new Date().toISOString()) {
+  return {
+    ...result,
+    schema: 'whoisleuth.cli.http',
+    version: CLI_HTTP_SCHEMA_VERSION,
+    generatedAt,
+    requestedDomain,
+  };
+}
+
 function buildCliBulkDocument(items, metadata) {
   const succeeded = items.filter((item) => item.ok).length;
   return {
@@ -125,11 +136,13 @@ function formatJsonLines(items, metadata) {
 module.exports = {
   CLI_CT_SEARCH_SCHEMA_VERSION,
   CLI_DISCOVER_SCHEMA_VERSION,
+  CLI_HTTP_SCHEMA_VERSION,
   CLI_POSTURE_SCHEMA_VERSION,
   CLI_LOOKUP_SCHEMA_VERSION,
   buildCliBulkDocument,
   buildCliCtSearchDocument,
   buildCliDiscoverDocument,
+  buildCliHttpDocument,
   buildCliLookupDocument,
   buildCliPostureDocument,
   bulkJsonItem,

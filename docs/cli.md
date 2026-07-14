@@ -16,6 +16,7 @@ node bin/whoisleuth.js bulk domains.txt --concurrency 4
 node bin/whoisleuth.js ct-search 'example brand' --json
 node bin/whoisleuth.js discover example.com --preset common --jsonl
 node bin/whoisleuth.js posture example.com --selectors selector1,selector2 --json
+node bin/whoisleuth.js http example.com --json
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -62,8 +63,8 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | 4 | A bulk command completed with one or more per-query failures. |
 | 70 | Unexpected CLI bootstrap failure. |
 
-This release supports `lookup`, `bulk`, `ct-search`, `discover`, and `posture`.
-HTTP, TLS, comparison, and export commands are added as separate bounded
+This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`, and
+`http`. TLS, comparison, and export commands are added as separate bounded
 increments rather than exposing incomplete aliases.
 
 ## Bulk lookup
@@ -122,3 +123,18 @@ caps displayed records at five per check with an explicit omission notice.
 Versioned JSON retains the complete bounded report. Warnings and dangers are
 findings rather than command failures; transient resolver or policy-fetch
 failures remain informational and should be retried before changing DNS.
+
+## HTTP intelligence
+
+`http` runs the same bounded safe homepage probe used by a deep lookup. It
+tries HTTPS before HTTP, follows only validated public-network redirects, caps
+each attempt at six seconds, and captures at most 300,000 response bytes for
+hashing and metadata. A non-success HTTP response still proves that a web
+service answered; failure of both schemes remains inconclusive rather than
+evidence that no website exists.
+
+The command reports normalized redirect, response, content, selected security-
+header, body-hash, completeness, and attempt provenance. Captured homepage text
+is never written to terminal or JSON output. Query strings are removed by the
+shared HTTP evidence normalizer, and terminal values are additionally bounded
+and control-safe.

@@ -136,6 +136,39 @@ function formatTerminalPosture(document) {
   return `${lines.join('\n')}\n`;
 }
 
+function formatTerminalHttp(document) {
+  const http = document.http && typeof document.http === 'object' ? document.http : {};
+  const response = http.response && typeof http.response === 'object' ? http.response : {};
+  const attempts = Array.isArray(http.attempts) ? http.attempts : [];
+  const limitations = Array.isArray(http.limitations) ? http.limitations : [];
+  const securityHeaders = response.securityHeaders && typeof response.securityHeaders === 'object'
+    ? Object.entries(response.securityHeaders).filter(([, value]) => Boolean(value)).map(([name]) => name)
+    : [];
+  const lines = [
+    `Domain         ${safeTerminalValue(document.domain)}`,
+    `Probe          ${titleCase(document.probeStatus)}`,
+    `Activity       ${titleCase(document.activityStatus)}`,
+    `Evidence       ${titleCase(http.status)}`,
+    `Final URL      ${safeTerminalValue(http.finalUrl)}`,
+    `HTTP status    ${safeTerminalValue(response.status)}`,
+    `Transport      ${safeTerminalValue(http.transportSecurity)}`,
+    `Redirects      ${safeTerminalValue(http.redirectCount, '0')}`,
+    `Content type   ${safeTerminalValue(response.contentType)}`,
+    `Body inspected ${response.bodyInspected === true ? 'Yes' : response.bodyInspected === false ? 'No' : '—'}`,
+    `Security       ${securityHeaders.length ? securityHeaders.join(', ') : 'No selected headers observed'}`,
+  ];
+  if (document.detail) lines.push(`Detail         ${safeTerminalValue(document.detail)}`);
+  if (response.bodyHash?.value) {
+    lines.push(`Body hash      ${safeTerminalValue(`${response.bodyHash.algorithm}:${response.bodyHash.value} (${response.bodyHash.scope})`)}`);
+  }
+  for (const attempt of attempts) {
+    const outcome = attempt.httpStatus ? `HTTP ${attempt.httpStatus}` : attempt.error || attempt.outcome;
+    lines.push(`Attempt        ${safeTerminalValue(attempt.url)} — ${safeTerminalValue(outcome)}`);
+  }
+  for (const limitation of limitations) lines.push(`Limitation     ${safeTerminalValue(limitation)}`);
+  return `${lines.join('\n')}\n`;
+}
+
 module.exports = {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
@@ -145,6 +178,7 @@ module.exports = {
   formatTerminalBulk,
   formatTerminalCtSearch,
   formatTerminalDiscover,
+  formatTerminalHttp,
   formatTerminalLookup,
   formatTerminalPosture,
   safeTerminalValue,
