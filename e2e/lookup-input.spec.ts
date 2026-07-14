@@ -155,6 +155,84 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expectNoHorizontalOverflow(page);
 });
 
+test('deep Lookup presents registrar RDAP as a separate collapsed source', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'registrar-source.example', type: 'domain', registrableDomain: 'registrar-source.example',
+      availability: { state: 'registered', confidence: 'high', domain: 'registrar-source.example' },
+      rdap: {
+        upstreamStatus: 200,
+        rdapServer: 'https://registry.example/domain/registrar-source.example',
+        parsed: { domain: 'REGISTRAR-SOURCE.EXAMPLE', entitiesByRole: {} },
+        registrarRdap: {
+          status: 'success', detail: null,
+          endpoint: 'https://registrar.example/very/long/path/domain/registrar-source.example',
+          transportSecurity: 'https', upstreamStatus: 200, fetchedAt: '2026-07-14T01:02:03.000Z',
+          parsed: {
+            objectClassName: 'domain', domain: 'REGISTRAR-SOURCE.EXAMPLE', statuses: ['active'],
+            entitiesByRole: {
+              abuse: [{ name: 'Registrar abuse desk', organizations: [], emails: ['abuse@registrar.example'], phones: [], addresses: [], publicIds: [], links: [] }],
+            },
+          },
+        },
+      },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        version: 4,
+        rdap: { status: 'success', registrar: { status: 'success' } },
+        whois: { status: 'partial' }, availability: { status: 'complete' },
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('registrar-source.example');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const section = page.locator('details.registrar-rdap');
+  await expect(section).not.toHaveAttribute('open', '');
+  const summary = section.locator(':scope > summary');
+  await expect(summary).toHaveText('Registrar RDAP · success');
+  await summary.focus();
+  await summary.press('Enter');
+  await expect(section).toHaveAttribute('open', '');
+  await expect(section.getByText(/Published by the sponsoring registrar's RDAP service, not the registry/)).toBeVisible();
+  await expect(section.getByText('REGISTRAR-SOURCE.EXAMPLE', { exact: true })).toBeVisible();
+  await section.getByText('Published contacts · 1 role').click();
+  await expect(section.getByText('Email: abuse@registrar.example')).toBeVisible();
+
+  await page.setViewportSize({ width: 360, height: 780 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('registrar RDAP unsupported and error states remain neutral source rows', async ({ page }) => {
+  for (const state of [
+    { status: 'unsupported', detail: 'The registry did not publish a registrar RDAP link for this domain.' },
+    { status: 'error', detail: 'The registrar RDAP request failed.' },
+  ]) {
+    await page.route('**/api/lookup?*', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: `${state.status}.example`, type: 'domain', registrableDomain: `${state.status}.example`,
+        availability: { state: 'registered', confidence: 'high', domain: `${state.status}.example` },
+        rdap: {
+          upstreamStatus: 200, parsed: { domain: `${state.status}.example`, entitiesByRole: {} },
+          registrarRdap: { ...state, endpoint: null, upstreamStatus: null, fetchedAt: null },
+        },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: { version: 4, rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+      }),
+    }));
+    await page.locator('#query').fill(`${state.status}.example`);
+    await page.getByRole('button', { name: 'Run lookup' }).click();
+    const section = page.locator('details.registrar-rdap');
+    await section.locator(':scope > summary').click();
+    await expect(section.getByText(state.detail, { exact: true })).toBeVisible();
+    await page.unroute('**/api/lookup?*');
+  }
+});
+
 test('a Lookup case stores the registrar name rather than stringifying its entity', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

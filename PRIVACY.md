@@ -8,12 +8,12 @@ publishing it to anyone you share `SITE_PASSWORD` with.
 ## What personal data this tool processes
 
 Looking up a domain returns whatever registrant contact data (name,
-organisation, email, phone, address) the domain's registry chooses to
-expose in its public RDAP/WHOIS response. This tool doesn't collect
-anything beyond that - it's a client for data the registry already
-publishes, not a separate data-gathering system. Most registries redact
-this by default (see the README), so many lookups return no personal data
-at all.
+organisation, email, phone, address) the domain's registry or sponsoring
+registrar chooses to expose in its public RDAP/WHOIS response. This tool
+doesn't collect anything beyond that - it's a client for data those sources
+already publish, not a separate data-gathering system. Most sources redact
+this by default (see the README), so many lookups return no personal data at
+all.
 
 ## Where that data goes
 
@@ -25,6 +25,16 @@ at all.
   roles. Bulk, watchlist, and case data retain only the existing compact
   primary-contact fields; these expanded contact inventories are not copied
   into browser-local investigation stores.
+- **Registrar RDAP in deep Lookup**: when a registry RDAP object publishes a
+  complete HTTPS link for the same domain at the sponsoring registrar, a deep
+  non-compact Lookup can relay that one public registrar object as a separately
+  attributed source. It is briefly cached in server memory like other registry
+  responses, displayed in the transient Lookup result, and never consulted by
+  availability or scoring. Fast and compact Bulk requests do not perform the
+  follow-up, and registrar RDAP is not copied into browser-local watchlists,
+  cases, or other compact stores. The deliberate raw unified-response view can
+  contain it; the structured Lookup evidence export retains only its bounded
+  source diagnostics in this version.
 - **IDN/confusable review**: performed locally in the browser from the domain
   already being displayed and, when present, the active Brand Profile's
   bounded official-domain list. It makes no additional network request and is

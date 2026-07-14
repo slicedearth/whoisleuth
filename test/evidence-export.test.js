@@ -31,6 +31,11 @@ function fixtureResponse() {
         events: [{ action: 'registration', date: '2020-01-01T00:00:00Z' }],
       },
       data: { objectClassName: 'domain', ldhName: 'EXAMPLE.COM' },
+      registrarRdap: {
+        status: 'success', endpoint: 'https://registrar.example/domain/example.com',
+        data: { ldhName: 'EXAMPLE.COM', privateTestValue: 'not part of the structured export' },
+        parsed: { domain: 'EXAMPLE.COM' },
+      },
     },
     whois: {
       parsed: {
@@ -125,8 +130,11 @@ function fixtureResponse() {
       },
     },
     diagnostics: {
-      version: 2,
-      rdap: { status: 'success', errorCode: null, attempts: [] },
+      version: 4,
+      rdap: {
+        status: 'success', errorCode: null, attempts: [],
+        registrar: { status: 'success', endpoint: 'https://registrar.example/domain/example.com' },
+      },
       whois: { status: 'complete', errorCode: null },
       availability: { status: 'complete', errorCode: null, resultState: 'registered' },
     },
@@ -143,12 +151,15 @@ describe('lookup evidence export', () => {
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
+    assert.equal(result.diagnostics.rdap.registrar.status, 'success');
     assert.equal(result.sources.rdap.endpoint, 'https://rdap.example/domain/example.com');
     assert.equal(result.sources.rdap.transportSecurity, 'https');
     assert.equal(result.sources.rdap.raw.ldhName, 'EXAMPLE.COM');
     assert.equal(result.sources.rdap.parsed.linksTruncated, true);
     assert.equal(result.sources.rdap.parsed.noticesTruncated, false);
     assert.equal(result.sources.rdap.attempts[0].outcome, 'success');
+    assert.equal(Object.hasOwn(result.sources.rdap, 'registrarRdap'), false);
+    assert.equal(JSON.stringify(result.sources).includes('privateTestValue'), false);
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
     assert.equal(result.analysis.availability.hasMx, true);

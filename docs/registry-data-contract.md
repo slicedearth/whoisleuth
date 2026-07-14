@@ -17,7 +17,9 @@ ASN. A full successful response contains:
 
 - Query classification and, for domain input, submitted-hostname and
   registrable-domain context.
-- `rdap`: raw and normalized RDAP source data or a source error.
+- `rdap`: raw and normalized registry RDAP source data or a source error. A
+  successful deep non-compact domain result may include a separately
+  attributed `registrarRdap` child.
 - `whois`: the raw referral chain and normalized WHOIS data or a source error.
 - `availability`: the derived domain-registration assessment, or a
   non-applicable result for IP/ASN input.
@@ -34,6 +36,17 @@ cannot provide registrar, lifecycle, or contact data. A missing delegation is
 never treated as availability because registered domains may be undelegated.
 The WHOIS diagnostic status remains `skipped`; this is not a WHOIS failure or
 an observation that WHOIS data is absent.
+
+For a deep, non-compact domain Lookup only, a successful registry RDAP object
+may publish a complete `rel="related"` HTTPS domain-object link at the
+sponsoring registrar. Lookup follows at most one eligible link, validates the
+returned object against the same canonical domain, and exposes it as
+`rdap.registrarRdap`. Its status is `success`, `not_found`, `unsupported`,
+`skipped`, or `error`. Registrar data remains separately attributed: it never
+overwrites registry fields and is not an input to availability, Risk scoring,
+registry/WHOIS comparison, Bulk, watchlists, or analyst cases. The extra
+request has its own seven-second bound and can add latency when it does not
+fully overlap the WHOIS referral chain.
 
 Deep registered-domain assessments additionally expose a bounded
 `availability.dns` observation. The collector runs A, AAAA, CNAME, NS, MX,
@@ -138,13 +151,15 @@ HTTP `429`, `errorCode: NETWORK_USAGE_LIMITED`, a bounded `Retry-After`, and a
 30-day window is fixed and UTC-epoch-aligned; it is not a calendar month,
 rolling window, or hosting-provider billing statement.
 
-## Diagnostics version 3
+## Diagnostics version 4
 
-`diagnostics.version` is `3`. Version 3 retains the version-2 source fields and
-adds the explicit `disabled` state and `FEATURE_DISABLED` code; consumers that
-do not recognize version 3 must fail conservatively rather than reinterpret a
-disabled source as an upstream failure or absence. The source objects use
-explicit status values:
+`diagnostics.version` is `4`. Version 4 retains the version-3 source fields,
+including the explicit `disabled` state and `FEATURE_DISABLED` code, and adds
+an optional `diagnostics.rdap.registrar` child for the separately attributed
+registrar follow-up. Consumers that do not recognize version 4 must fail
+conservatively rather than reinterpret a disabled, skipped, unsupported, or
+failed source as upstream absence. The source objects use explicit status
+values:
 
 - RDAP: `success`, `not_found`, `unsupported`, `disabled`, or `error`.
 - WHOIS: `complete`, `partial`, `skipped`, `disabled`, or `error`.
@@ -154,6 +169,9 @@ RDAP diagnostics may include the selected endpoint, transport (`https` or
 `http`), upstream HTTP status, fetch time, and up to three bounded endpoint
 attempts. Each attempt records endpoint, transport, status, outcome, selected
 state, and a control-safe detail of at most 240 characters.
+Registrar diagnostics may include its status, endpoint, HTTPS transport,
+upstream status, fetch time, and one bounded attempt. Registrar `not_found` is
+diagnostic only and never an availability signal.
 
 WHOIS diagnostics may include query time, authoritative hop, failed hop, and
 conflicting hop. A partial chain can still contain useful published values;

@@ -226,6 +226,12 @@ compact-storage boundary, and lookup evidence schema are documented in the
   IP range, or ASN range match the requested object. Empty, mismatched, and
   malformed successful responses fall through to the next bounded bootstrap
   endpoint; diagnostics and evidence exports retain the outcome of each attempt.
+- A deep, non-compact domain Lookup may make one additional bounded HTTPS
+  request when the registry object publishes a complete registrar RDAP domain
+  link. Registrar data is displayed as a separate attributed source and is
+  never merged into registry fields or used for availability or Risk scoring.
+  The follow-up is omitted from fast and compact Bulk work, and unsupported or
+  failed registrar responses remain neutral source states.
 - Structured domain results retain registry object IDs, registrar IANA IDs,
   registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
   remain WHOIS-free: they use RDAP first and may use a bounded authoritative
@@ -276,7 +282,8 @@ compact-storage boundary, and lookup evidence schema are documented in the
   provenance, and stable source error codes. HTTP errors retain the existing
   human-readable `error` and add a machine-readable `errorCode` such as
   `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
-  clients do not need to match message text.
+  clients do not need to match message text. Diagnostics version 4 adds an
+  optional separately-attributed registrar RDAP child beneath the RDAP source.
 - Clients that only need the derived assessment can add `compact=1` to
   `/api/lookup`. This retains `availability` and `diagnostics` while omitting
   raw RDAP and WHOIS payloads; Bulk uses this mode to bound browser memory and

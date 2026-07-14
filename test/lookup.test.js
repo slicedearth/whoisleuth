@@ -55,7 +55,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 3);
+    assert.equal(result.diagnostics.version, 4);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
@@ -169,9 +169,148 @@ describe('runUnifiedLookup', () => {
       },
     });
     assert.equal(whoisCalls, 0);
+    assert.equal(result.rdap.registrarRdap.status, 'skipped');
+    assert.equal(result.diagnostics.rdap.registrar.status, 'skipped');
     assert.equal(result.diagnostics.whois.status, 'skipped');
     assert.equal(result.diagnostics.whois.errorCode, null);
     assert.deepEqual(result.whois, { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' });
+  });
+
+  test('adds registrar RDAP only to deep non-compact domain lookups', async () => {
+    const rdapRecord = {
+      rdapServer: 'https://registry.example/domain/example.com',
+      upstreamStatus: 200,
+      parsed: { domain: 'EXAMPLE.COM', links: [] },
+    };
+    let registrarCalls = 0;
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => rdapRecord,
+      fetchRegistrarRdapRecord: async (domain, record) => {
+        registrarCalls += 1;
+        assert.equal(domain, 'example.com');
+        assert.equal(record, rdapRecord);
+        return {
+          status: 'success',
+          detail: null,
+          endpoint: 'https://registrar.example/domain/example.com',
+          transportSecurity: 'https',
+          upstreamStatus: 200,
+          fetchedAt: '2026-07-14T00:00:00.000Z',
+          data: { ldhName: 'EXAMPLE.COM' },
+          parsed: { domain: 'EXAMPLE.COM', entitiesByRole: {} },
+          attempt: { outcome: 'success', selected: true },
+        };
+      },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+    });
+
+    assert.equal(registrarCalls, 1);
+    assert.equal(result.rdap.registrarRdap.status, 'success');
+    assert.equal(result.rdap.parsed, rdapRecord.parsed);
+    assert.equal(result.diagnostics.version, 4);
+    assert.deepEqual(result.diagnostics.rdap.registrar, {
+      status: 'success',
+      endpoint: 'https://registrar.example/domain/example.com',
+      transportSecurity: 'https',
+      httpStatus: 200,
+      fetchedAt: '2026-07-14T00:00:00.000Z',
+      attempt: { outcome: 'success', selected: true },
+    });
+  });
+
+  test('registrar not_found remains diagnostic and cannot alter availability', async () => {
+    const availability = { state: 'registered', confidence: 'high', registrar: 'Registry value' };
+    const rdapRecord = {
+      rdapServer: 'https://registry.example/domain/example.com',
+      upstreamStatus: 200,
+      parsed: { domain: 'EXAMPLE.COM', links: [] },
+    };
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => rdapRecord,
+      fetchRegistrarRdapRecord: async () => ({
+        status: 'not_found', detail: 'No object', endpoint: 'https://registrar.example/domain/example.com',
+        transportSecurity: 'https', upstreamStatus: 404, fetchedAt: '2026-07-14T00:00:00.000Z',
+        data: { errorCode: 404 }, parsed: null, attempt: { outcome: 'not_found', selected: true },
+      }),
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => availability,
+    });
+    assert.deepEqual(
+      result.availability,
+      { applicable: true, domain: 'example.com', inputHostname: 'login.example.com', registrableDomain: 'example.com', isSubdomain: true, ...availability }
+    );
+    assert.equal(result.rdap.registrarRdap.status, 'not_found');
+    assert.equal(result.diagnostics.rdap.status, 'success');
+  });
+
+  test('omits registrar follow-up for compact, disabled, and non-domain lookups', async () => {
+    const rdapRecord = {
+      rdapServer: 'https://registry.example/domain/example.com',
+      upstreamStatus: 200,
+      parsed: { domain: 'EXAMPLE.COM', links: [] },
+    };
+    let registrarCalls = 0;
+    const common = {
+      fetchRdapRecord: async () => rdapRecord,
+      fetchRegistrarRdapRecord: async () => { registrarCalls += 1; },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+    };
+    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true });
+    const disabled = await runUnifiedLookup(classifiedDomain, {
+      ...common,
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_RDAP: '1' }),
+    });
+    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, common);
+    assert.equal(registrarCalls, 0);
+    assert.equal(Object.hasOwn(compact.diagnostics.rdap, 'registrar'), false);
+    assert.equal(Object.hasOwn(disabled.rdap, 'registrarRdap'), false);
+    assert.equal(Object.hasOwn(ip.rdap, 'registrarRdap'), false);
+  });
+
+  test('converts registrar transient failures into an additive error source', async () => {
+    const attempt = {
+      endpoint: 'https://registrar.example/domain/example.com', transportSecurity: 'https',
+      status: 429, outcome: 'rate_limited', detail: 'HTTP 429', selected: false,
+    };
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => ({
+        rdapServer: 'https://registry.example/domain/example.com',
+        upstreamStatus: 200,
+        parsed: { domain: 'EXAMPLE.COM', links: [] },
+      }),
+      fetchRegistrarRdapRecord: async () => {
+        throw Object.assign(new Error('HTTP 429'), {
+          registrarRdap: {
+            status: 'error', detail: 'HTTP 429', endpoint: attempt.endpoint,
+            transportSecurity: 'https', upstreamStatus: 429, fetchedAt: null, attempt,
+          },
+        });
+      },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+    });
+    assert.equal(result.rdap.registrarRdap.status, 'error');
+    assert.equal(result.diagnostics.rdap.registrar.status, 'error');
+    assert.equal(result.diagnostics.rdap.registrar.attempt.outcome, 'rate_limited');
+    assert.equal(result.availability.state, 'registered');
+  });
+
+  test('bounds unexpected registrar error detail before returning it', async () => {
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => ({
+        rdapServer: 'https://registry.example/domain/example.com',
+        upstreamStatus: 200,
+        parsed: { domain: 'EXAMPLE.COM', links: [] },
+      }),
+      fetchRegistrarRdapRecord: async () => { throw new Error(`unexpected\n${'x'.repeat(500)}`); },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+    });
+    assert.equal(result.rdap.registrarRdap.status, 'error');
+    assert.ok(result.rdap.registrarRdap.detail.length <= 240);
+    assert.equal(/[\u0000-\u001f\u007f]/.test(result.rdap.registrarRdap.detail), false);
   });
 
   test('disabled RDAP and WHOIS sources are never called and remain explicit in diagnostics', async () => {
