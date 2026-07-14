@@ -22,6 +22,7 @@ node bin/whoisleuth.js lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.js compare lookup.json --json
 node bin/whoisleuth.js export lookup.json > evidence.json
 node bin/whoisleuth.js export lookup.json --markdown > evidence.md
+node bin/whoisleuth.js export lookup.json --html > evidence.html
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -190,8 +191,9 @@ file or stdin into the same versioned `whoisleuth.lookup-evidence` JSON package
 produced by the web Lookup workspace. It performs no lookup and writes only to
 stdout, so use ordinary shell redirection when a file is wanted. Pretty JSON is
 the default; `--compact` emits one compact JSON line for pipeline use, while
-`--markdown` produces a readable source-attributed summary. Compact and
-Markdown output are mutually exclusive.
+`--markdown` produces a readable source-attributed summary and `--html`
+produces a self-contained printable report. Compact, Markdown, and HTML output
+are mutually exclusive.
 
 The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
@@ -205,6 +207,12 @@ source reconciliation, network observations, and collection diagnostics. It
 escapes all upstream text as untrusted content, bounds displayed values and
 lists, and deliberately omits raw RDAP JSON and full WHOIS response bodies.
 Use JSON when the complete evidence package or machine processing is required.
+
+HTML uses the same bounded summary model as Markdown. The generated document
+contains inline styling for screen and print, but no scripts, forms, active
+links, or external resources. A restrictive embedded Content Security Policy
+provides defense in depth when the local file is opened in a browser. All
+registry values are HTML-escaped and displayed as text.
 
 This is a deliberately rich evidence package. Raw registry sources can contain
 publicly published contact data, and deep availability evidence can contain

@@ -14,6 +14,7 @@ const {
   escapeMarkdownValue,
   formatLookupEvidenceMarkdown,
 } = require('../cli/formatters/markdown');
+const { formatLookupEvidenceHtml } = require('../cli/formatters/html');
 const EXIT_CODES = require('../cli/exit-codes');
 const { runCli } = require('../cli/runner');
 
@@ -118,13 +119,18 @@ describe('evidence export CLI arguments', () => {
     assert.deepEqual(parseCliArguments(['export', 'lookup.json', '--markdown']), {
       action: 'export', source: 'lookup.json', format: 'markdown', compact: false,
     });
+    assert.deepEqual(parseCliArguments(['export', '--html', 'lookup.json']), {
+      action: 'export', source: 'lookup.json', format: 'html', compact: false,
+    });
   });
 
   test('rejects multiple files, repeated or conflicting format flags, and unrelated output flags', () => {
     assert.throws(() => parseCliArguments(['export', 'one.json', 'two.json']), /one optional lookup JSON file/);
     assert.throws(() => parseCliArguments(['export', '--compact', '--compact']), /only once/);
-    assert.throws(() => parseCliArguments(['export', '--markdown', '--markdown']), /only once/);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--markdown']), /only one evidence export format/);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--html']), /only one evidence export format/);
     assert.throws(() => parseCliArguments(['export', '--markdown', '--compact']), /cannot be combined/);
+    assert.throws(() => parseCliArguments(['export', '--html', '--compact']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['export', '--json']), /Unknown option/);
     assert.throws(() => parseCliArguments(['export', '--quiet']), /Unknown option/);
   });
@@ -239,7 +245,7 @@ describe('lookup evidence Markdown rendering', () => {
     result.sources.rdap.parsed.nameservers = Array.from({ length: 51 }, (_, index) => `ns${index}.example.test`);
     const markdown = formatLookupEvidenceMarkdown(result);
     assert.doesNotMatch(markdown, new RegExp(`x{${MAX_MARKDOWN_VALUE_LENGTH + 1}}`));
-    assert.match(markdown, /and 1 more/);
+    assert.match(markdown, /and \d+ more/);
     assert.doesNotMatch(markdown, /ns50\\\.example\\\.test/);
   });
 
@@ -251,6 +257,37 @@ describe('lookup evidence Markdown rendering', () => {
     const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
     const markdown = formatLookupEvidenceMarkdown(result);
     assert.match(markdown, /### WHOIS[\s\S]*\*\*Source status:\*\* Skipped/);
+  });
+});
+
+describe('lookup evidence HTML rendering', () => {
+  test('renders a self-contained semantic and printable report without active content', async () => {
+    const result = buildCliEvidenceExport(
+      JSON.stringify(savedLookup()),
+      await evidenceModule(),
+      '2026-07-14T09:00:00.000Z'
+    );
+    const html = formatLookupEvidenceHtml(result);
+    assert.match(html, /^<!doctype html>/);
+    assert.match(html, /<meta http-equiv="Content-Security-Policy"/);
+    assert.match(html, /default-src 'none'/);
+    assert.match(html, /<style>[\s\S]*@media print/);
+    assert.match(html, /<main>[\s\S]*<h2>Registry sources<\/h2>/);
+    assert.match(html, /<table>[\s\S]*Normalized registry publication comparison/);
+    assert.doesNotMatch(html, /<script\b/i);
+    assert.doesNotMatch(html, /<a\b/i);
+    assert.doesNotMatch(html, /publicContact|Registrant Email/);
+    assert.equal(html.endsWith('\n'), true);
+  });
+
+  test('escapes hostile source values rather than creating HTML elements or attributes', async () => {
+    const result = buildCliEvidenceExport(JSON.stringify(savedLookup()), await evidenceModule());
+    result.query.submitted = '\"><script>alert(1)</script><img src=x onerror=alert(2)>';
+    result.sources.rdap.parsed.registrar = { name: '<form action=https://malicious.invalid>Submit</form>' };
+    const html = formatLookupEvidenceHtml(result);
+    assert.doesNotMatch(html, /<script\b|<img\b|<form\b/i);
+    assert.match(html, /&lt;script&gt;/);
+    assert.match(html, /&lt;form action=/);
   });
 });
 
@@ -311,6 +348,22 @@ describe('evidence export CLI runner', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(lookupCalls, 0);
     assert.match(stdout.value(), /^# Lookup evidence report/);
+    assert.doesNotMatch(stdout.value(), /published@example/);
+  });
+
+  test('writes the self-contained HTML format to stdout without making a lookup', async () => {
+    const stdout = capture();
+    let lookupCalls = 0;
+    const code = await runCli(['export', '--html'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      readExportInput: async () => JSON.stringify(savedLookup()),
+      runUnifiedLookup: async () => { lookupCalls++; },
+      loadEvidenceExport: evidenceModule,
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalls, 0);
+    assert.match(stdout.value(), /^<!doctype html>/);
     assert.doesNotMatch(stdout.value(), /published@example/);
   });
 

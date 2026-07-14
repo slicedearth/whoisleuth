@@ -401,11 +401,13 @@ making another request. CLI conversion retains the source material already in
 that saved document but cannot add browser-only profile context, so its optional
 IDN analysis is `null`.
 
-The optional CLI Markdown rendering is a bounded human-readable summary of that
-JSON contract, not a second evidence schema. It escapes upstream strings,
-discloses omitted list values, and excludes raw RDAP JSON and full WHOIS
-responses. The versioned JSON package remains the authoritative machine-readable
-export when complete captured source material is required.
+The optional CLI Markdown and self-contained HTML renderings share one bounded
+human-readable view of that JSON contract rather than defining additional
+evidence schemas. Both escape upstream strings, disclose omitted list values,
+and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
+forms, active links, or external resources and includes a restrictive embedded
+Content Security Policy. The versioned JSON package remains the authoritative
+machine-readable export when complete captured source material is required.
 
 Lookup evidence is a downloadable report contract, not a browser-local case
 storage schema. Consumers must check `schema` and `schemaVersion`; an unknown

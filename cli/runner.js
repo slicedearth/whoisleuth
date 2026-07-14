@@ -14,6 +14,7 @@ const { formatTerminalBulk, formatTerminalCompare, formatTerminalCtSearch, forma
 const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
 const { MAX_COMPARE_INPUT_BYTES, compareLookupDocument, parseCliLookupDocument, readCompareInputBounded } = require('./compare');
 const { buildCliEvidenceExport, formatCliEvidenceExport } = require('./export-evidence');
+const { formatLookupEvidenceHtml } = require('./formatters/html');
 const { formatLookupEvidenceMarkdown } = require('./formatters/markdown');
 const { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } = require('./saved-lookup');
 const { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } = require('./discover');
@@ -36,7 +37,7 @@ Usage:
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
   whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]
-  whoisleuth export [lookup.json] [--markdown|--compact]
+  whoisleuth export [lookup.json] [--markdown|--html|--compact]
   whoisleuth --help
   whoisleuth --version
 
@@ -129,9 +130,12 @@ async function runCli(argv, dependencies = {}) {
       const evidenceModule = await loadEvidence();
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
       const document = buildCliEvidenceExport(input, evidenceModule, now);
-      write(stdout, args.format === 'markdown'
+      const output = args.format === 'markdown'
         ? formatLookupEvidenceMarkdown(document)
-        : formatCliEvidenceExport(document, args.compact));
+        : args.format === 'html'
+          ? formatLookupEvidenceHtml(document)
+          : formatCliEvidenceExport(document, args.compact);
+      write(stdout, output);
       return EXIT_CODES.SUCCESS;
     }
 
