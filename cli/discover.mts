@@ -1,6 +1,4 @@
-import argumentsModule from './arguments.js';
-
-const { CliUsageError } = argumentsModule;
+import { CliUsageError } from './arguments.mts';
 
 const DEFAULT_DISCOVERY_TLDS = Object.freeze(['com', 'net', 'org']);
 const MAX_DISCOVERY_TLD_TEXT_LENGTH = 1024;

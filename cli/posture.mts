@@ -1,6 +1,4 @@
-import argumentsModule from './arguments.js';
-
-const { CliUsageError } = argumentsModule;
+import { CliUsageError } from './arguments.mts';
 
 type SelectorNormalizer = (values: string[]) => string[];
 
