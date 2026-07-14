@@ -256,15 +256,20 @@ function parseCompareArguments(argv) {
 function parseExportArguments(argv) {
   let source = null;
   let compact = false;
+  let format = 'json';
   for (const argument of argv) {
     if (argument === '--compact') {
       if (compact) throw new CliUsageError('--compact may be supplied only once.');
       compact = true;
+    } else if (argument === '--markdown') {
+      if (format !== 'json') throw new CliUsageError('--markdown may be supplied only once.');
+      format = 'markdown';
     } else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
     else if (source === null) source = argument;
     else throw new CliUsageError('export accepts one optional lookup JSON file. Otherwise pipe one lookup document on stdin.');
   }
-  return { action: 'export', source, compact };
+  if (compact && format !== 'json') throw new CliUsageError('--compact applies to JSON export and cannot be combined with --markdown.');
+  return { action: 'export', source, format, compact };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };

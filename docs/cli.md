@@ -21,6 +21,7 @@ node bin/whoisleuth.js tls example.com --json
 node bin/whoisleuth.js lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.js compare lookup.json --json
 node bin/whoisleuth.js export lookup.json > evidence.json
+node bin/whoisleuth.js export lookup.json --markdown > evidence.md
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -188,7 +189,9 @@ maliciousness decision.
 file or stdin into the same versioned `whoisleuth.lookup-evidence` JSON package
 produced by the web Lookup workspace. It performs no lookup and writes only to
 stdout, so use ordinary shell redirection when a file is wanted. Pretty JSON is
-the default; `--compact` emits one compact JSON line for pipeline use.
+the default; `--compact` emits one compact JSON line for pipeline use, while
+`--markdown` produces a readable source-attributed summary. Compact and
+Markdown output are mutually exclusive.
 
 The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
@@ -196,6 +199,12 @@ The export retains query context, source diagnostics, normalized registry data,
 raw RDAP JSON, the raw WHOIS referral chain, availability analysis, and the
 shared registry-source comparison. Registrar RDAP raw data remains excluded by
 the established evidence schema; its bounded diagnostics are retained.
+
+Markdown output summarizes query context, assessment state, registry sources,
+source reconciliation, network observations, and collection diagnostics. It
+escapes all upstream text as untrusted content, bounds displayed values and
+lists, and deliberately omits raw RDAP JSON and full WHOIS response bodies.
+Use JSON when the complete evidence package or machine processing is required.
 
 This is a deliberately rich evidence package. Raw registry sources can contain
 publicly published contact data, and deep availability evidence can contain

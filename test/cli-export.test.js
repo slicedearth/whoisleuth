@@ -9,6 +9,11 @@ const { Readable, Writable } = require('node:stream');
 
 const { parseCliArguments } = require('../cli/arguments');
 const { buildCliEvidenceExport, formatCliEvidenceExport } = require('../cli/export-evidence');
+const {
+  MAX_MARKDOWN_VALUE_LENGTH,
+  escapeMarkdownValue,
+  formatLookupEvidenceMarkdown,
+} = require('../cli/formatters/markdown');
 const EXIT_CODES = require('../cli/exit-codes');
 const { runCli } = require('../cli/runner');
 
@@ -105,16 +110,21 @@ async function evidenceModule() {
 describe('evidence export CLI arguments', () => {
   test('accepts an optional file, stdin, and compact output', () => {
     assert.deepEqual(parseCliArguments(['export', 'lookup.json']), {
-      action: 'export', source: 'lookup.json', compact: false,
+      action: 'export', source: 'lookup.json', format: 'json', compact: false,
     });
     assert.deepEqual(parseCliArguments(['export', '--compact']), {
-      action: 'export', source: null, compact: true,
+      action: 'export', source: null, format: 'json', compact: true,
+    });
+    assert.deepEqual(parseCliArguments(['export', 'lookup.json', '--markdown']), {
+      action: 'export', source: 'lookup.json', format: 'markdown', compact: false,
     });
   });
 
-  test('rejects multiple files, repeated compact flags, and unrelated output flags', () => {
+  test('rejects multiple files, repeated or conflicting format flags, and unrelated output flags', () => {
     assert.throws(() => parseCliArguments(['export', 'one.json', 'two.json']), /one optional lookup JSON file/);
     assert.throws(() => parseCliArguments(['export', '--compact', '--compact']), /only once/);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--markdown']), /only once/);
+    assert.throws(() => parseCliArguments(['export', '--markdown', '--compact']), /cannot be combined/);
     assert.throws(() => parseCliArguments(['export', '--json']), /Unknown option/);
     assert.throws(() => parseCliArguments(['export', '--quiet']), /Unknown option/);
   });
@@ -190,6 +200,60 @@ describe('lookup evidence export conversion', () => {
   });
 });
 
+describe('lookup evidence Markdown rendering', () => {
+  test('renders a readable source-attributed summary without raw registry bodies', async () => {
+    const result = buildCliEvidenceExport(
+      JSON.stringify(savedLookup()),
+      await evidenceModule(),
+      '2026-07-14T09:00:00.000Z'
+    );
+    const markdown = formatLookupEvidenceMarkdown(result);
+    assert.match(markdown, /^# Lookup evidence report/);
+    assert.match(markdown, /## Assessment/);
+    assert.match(markdown, /### Registry RDAP/);
+    assert.match(markdown, /### WHOIS/);
+    assert.match(markdown, /## Registry-source comparison/);
+    assert.match(markdown, /## Network evidence/);
+    assert.match(markdown, /Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package/);
+    assert.doesNotMatch(markdown, /publicContact/);
+    assert.doesNotMatch(markdown, /Registrant Email/);
+    assert.equal(markdown.endsWith('\n'), true);
+  });
+
+  test('escapes untrusted Markdown, HTML, bare-link, and email syntax', () => {
+    const hostile = '# [click](https://malicious.invalid) <script>alert(1)</script> user@example.invalid\u202e';
+    const escaped = escapeMarkdownValue(hostile);
+    assert.doesNotMatch(escaped, /^#/);
+    assert.doesNotMatch(escaped, /\]\(https:\/\//);
+    assert.doesNotMatch(escaped, /<script>/);
+    assert.doesNotMatch(escaped, /user@example/);
+    assert.doesNotMatch(escaped, /\u202e/);
+    assert.match(escaped, /\\#/);
+    assert.match(escaped, /https\\:\/\//);
+    assert.match(escaped, /user\\@example/);
+  });
+
+  test('bounds displayed values and lists while disclosing omissions', async () => {
+    const result = buildCliEvidenceExport(JSON.stringify(savedLookup()), await evidenceModule());
+    result.query.submitted = 'x'.repeat(MAX_MARKDOWN_VALUE_LENGTH + 100);
+    result.sources.rdap.parsed.nameservers = Array.from({ length: 51 }, (_, index) => `ns${index}.example.test`);
+    const markdown = formatLookupEvidenceMarkdown(result);
+    assert.doesNotMatch(markdown, new RegExp(`x{${MAX_MARKDOWN_VALUE_LENGTH + 1}}`));
+    assert.match(markdown, /and 1 more/);
+    assert.doesNotMatch(markdown, /ns50\\\.example\\\.test/);
+  });
+
+  test('uses diagnostics for an explicitly skipped source instead of calling it unknown', async () => {
+    const source = savedLookup();
+    source.mode = 'fast';
+    source.whois = { skipped: true, detail: 'WHOIS is omitted in fast mode.' };
+    source.diagnostics.whois = { status: 'skipped' };
+    const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
+    const markdown = formatLookupEvidenceMarkdown(result);
+    assert.match(markdown, /### WHOIS[\s\S]*\*\*Source status:\*\* Skipped/);
+  });
+});
+
 describe('evidence export CLI runner', () => {
   test('reads stdin through the default builder without making a lookup request', async () => {
     const stdout = capture();
@@ -232,6 +296,22 @@ describe('evidence export CLI runner', () => {
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(received, 'saved.json');
+  });
+
+  test('writes the readable Markdown format to stdout without raw source bodies', async () => {
+    const stdout = capture();
+    let lookupCalls = 0;
+    const code = await runCli(['export', '--markdown'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      readExportInput: async () => JSON.stringify(savedLookup()),
+      runUnifiedLookup: async () => { lookupCalls++; },
+      loadEvidenceExport: evidenceModule,
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(lookupCalls, 0);
+    assert.match(stdout.value(), /^# Lookup evidence report/);
+    assert.doesNotMatch(stdout.value(), /published@example/);
   });
 
   test('missing, invalid, and unreadable input return bounded usage errors', async () => {
