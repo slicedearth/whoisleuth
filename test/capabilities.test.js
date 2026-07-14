@@ -1,9 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { capabilityReport, isCapabilityStatus } = require('../lib/capabilities');
+const typedCapabilities = require('../lib/capabilities.mts');
 const { OPERATION_CLASSES } = require('../lib/operation-budget');
 const { createSessionToken, buildSessionCookie } = require('../lib/auth');
 const { handler } = require('../netlify/functions/capabilities.mts');
+
+test('retains the CommonJS capability entry point over the typed implementation', () => {
+  assert.strictEqual(capabilityReport, typedCapabilities.capabilityReport);
+});
 
 test('capability report is deterministic, provider-neutral, and honest about execution', () => {
   const report = capabilityReport('netlify');

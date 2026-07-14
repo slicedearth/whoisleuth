@@ -7,8 +7,8 @@
 import {
   isAuthenticatedFromCookieHeader,
   sessionFingerprintFromCookieHeader,
-} from './auth.js';
-import { checkRateLimit, getClientIp, API_RATE_LIMIT } from './rate-limit.js';
+} from './auth.mts';
+import { checkRateLimit, getClientIp, API_RATE_LIMIT } from './rate-limit.mts';
 import {
   featureDisabledError,
   networkFeaturePolicy,

@@ -1,4 +1,4 @@
-// Covers lib/auth.js's isTrustedOrigin - the same-origin check that closes
+// Covers the shared authentication boundary's isTrustedOrigin - the same-origin check that closes
 // the logout CSRF gap a plain POST-method restriction leaves open (see
 // test/logout.test.js for the end-to-end handler behavior).
 
@@ -12,6 +12,11 @@ const {
   parseCookies,
   sessionFingerprintFromCookieHeader,
 } = require('../lib/auth');
+const typedAuth = require('../lib/auth.mts');
+
+test('retains the CommonJS authentication entry point over the typed implementation', () => {
+  assert.strictEqual(isTrustedOrigin, typedAuth.isTrustedOrigin);
+});
 
 describe('isTrustedOrigin', () => {
   test('accepts a matching Origin/Host pair', () => {

@@ -1,5 +1,5 @@
-import { isAuthenticatedFromCookieHeader } from '../../lib/auth.js';
-import { capabilityReport } from '../../lib/capabilities.js';
+import { isAuthenticatedFromCookieHeader } from '../../lib/auth.mts';
+import { capabilityReport } from '../../lib/capabilities.mts';
 import { json } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 

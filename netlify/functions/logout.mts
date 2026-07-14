@@ -1,4 +1,4 @@
-import { buildClearCookie, isTrustedOrigin, isAuthenticatedFromCookieHeader } from '../../lib/auth.js';
+import { buildClearCookie, isTrustedOrigin, isAuthenticatedFromCookieHeader } from '../../lib/auth.mts';
 import { json } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
