@@ -1,4 +1,4 @@
-// Covers the null-MX classification bug fix (see lib/dns-mx.js): a domain
+// Covers the null-MX classification boundary: a domain
 // that explicitly declares "I accept no mail" via a single root-target MX
 // record (RFC 7505) was previously counted the same as a domain with a real
 // mail server, incorrectly contributing to the phishing-risk score. Tests
@@ -8,6 +8,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { classifyMxRecords } = require('../lib/dns-mx');
+const typedDnsMx = require('../lib/dns-mx.mts');
+
+test('retains the CommonJS MX entry point over the typed implementation', () => {
+  assert.strictEqual(classifyMxRecords, typedDnsMx.classifyMxRecords);
+});
 
 test('a null MX record (root target, no trailing dot) is not counted as mail configured', () => {
   const result = classifyMxRecords([{ exchange: '', priority: 0 }]);

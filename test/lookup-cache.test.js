@@ -1,4 +1,4 @@
-// Covers lib/lookup-cache.js's size bounds - entry count (MAX_ENTRIES) and
+// Covers the shared lookup cache's size bounds - entry count (MAX_ENTRIES) and
 // total bytes (MAX_TOTAL_BYTES). MAX_ENTRIES alone doesn't stop a hostile or
 // compromised registry from serving many distinct domains a near-maximum-
 // size response each (RDAP: 2MB, WHOIS: 200KB/hop) - that could otherwise
@@ -7,6 +7,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { cached, MAX_ENTRIES, MAX_TOTAL_BYTES, _storeSize, _storeBytes } = require('../lib/lookup-cache');
+const typedLookupCache = require('../lib/lookup-cache.mts');
+
+test('retains the CommonJS lookup-cache entry point over the typed implementation', () => {
+  assert.strictEqual(cached, typedLookupCache.cached);
+  assert.strictEqual(_storeSize, typedLookupCache._storeSize);
+  assert.strictEqual(_storeBytes, typedLookupCache._storeBytes);
+});
 
 test('the cache never grows past MAX_ENTRIES, even when every key is unique', async () => {
   const extra = 50;
