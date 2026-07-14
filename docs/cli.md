@@ -14,6 +14,7 @@ node bin/whoisleuth.js lookup example.com --deep
 cat domains.txt | node bin/whoisleuth.js bulk --jsonl
 node bin/whoisleuth.js bulk domains.txt --concurrency 4
 node bin/whoisleuth.js ct-search 'example brand' --json
+node bin/whoisleuth.js discover example.com --preset common --jsonl
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -60,9 +61,9 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | 4 | A bulk command completed with one or more per-query failures. |
 | 70 | Unexpected CLI bootstrap failure. |
 
-This release supports `lookup`, `bulk`, and `ct-search`. Local lookalike
-generation, posture, HTTP, TLS, comparison, and export commands are added as
-separate bounded increments rather than exposing incomplete aliases.
+This release supports `lookup`, `bulk`, `ct-search`, and `discover`. Posture,
+HTTP, TLS, comparison, and export commands are added as separate bounded
+increments rather than exposing incomplete aliases.
 
 ## Bulk lookup
 
@@ -92,3 +93,17 @@ most 100 matches and five hostnames per match, with explicit omission notes.
 `--json` returns the complete bounded structured result in the versioned
 `whoisleuth.cli.ct-search` schema. CT observations do not prove that a website
 is active or malicious.
+
+## Lookalike discovery
+
+`discover` runs the same pure, bounded lookalike generator as the Discover
+workspace without making network requests. It accepts a brand label or a
+domain with one suffix label. The default TLD set is `com,net,org`; replace it
+with `--tlds com,net` when narrower coverage is wanted.
+
+Generation presets are `common`, `impersonation`, and `all` (the default).
+Keyboard-aware mutations support `qwerty` (the default), `azerty`, and
+`qwertz`. Terminal output is capped at 200 candidates with an explicit notice;
+versioned JSON and JSONL retain the complete bounded candidate set and mutation
+provenance. The command generates candidates only—it does not claim that a
+domain is registered, active, or malicious.

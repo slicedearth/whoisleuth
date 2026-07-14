@@ -29,11 +29,12 @@ function parseCliArguments(rawArgv) {
   }
 
   const command = argv[0];
-  if (!['lookup', 'bulk', 'ct-search'].includes(command)) {
-    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search.`);
+  if (!['lookup', 'bulk', 'ct-search', 'discover'].includes(command)) {
+    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
+  if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
   let query = null;
   let output = 'terminal';
   let deep = false;
@@ -116,6 +117,52 @@ function parseCtSearchArguments(argv) {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'ct-search', keyword, output, quiet, color };
+}
+
+function parseDiscoverArguments(argv) {
+  let seed = null;
+  let output = 'terminal';
+  let quiet = false;
+  let color = true;
+  let preset = 'all';
+  let keyboardLayout = 'qwerty';
+  let tldText = null;
+  let presetSet = false;
+  let keyboardSet = false;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === '--json' || argument === '--jsonl') {
+      if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
+      output = argument.slice(2);
+    } else if (argument === '--preset') {
+      if (presetSet) throw new CliUsageError('--preset may be supplied only once.');
+      const value = argv[++index];
+      if (!['common', 'impersonation', 'all'].includes(value)) {
+        throw new CliUsageError('--preset requires common, impersonation, or all.');
+      }
+      preset = value;
+      presetSet = true;
+    } else if (argument === '--keyboard') {
+      if (keyboardSet) throw new CliUsageError('--keyboard may be supplied only once.');
+      const value = argv[++index];
+      if (!['qwerty', 'azerty', 'qwertz'].includes(value)) {
+        throw new CliUsageError('--keyboard requires qwerty, azerty, or qwertz.');
+      }
+      keyboardLayout = value;
+      keyboardSet = true;
+    } else if (argument === '--tlds') {
+      if (tldText !== null) throw new CliUsageError('--tlds may be supplied only once.');
+      const value = argv[++index];
+      if (!value) throw new CliUsageError('--tlds requires a comma-separated list.');
+      tldText = value;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (seed === null) seed = argument;
+    else throw new CliUsageError('discover accepts one brand label or domain. Quote multi-word labels as one argument.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'discover', seed, output, quiet, color, preset, keyboardLayout, tldText };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };

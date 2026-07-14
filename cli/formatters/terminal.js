@@ -3,6 +3,7 @@
 const MAX_TERMINAL_VALUE_LENGTH = 240;
 const MAX_CT_TERMINAL_MATCHES = 100;
 const MAX_CT_TERMINAL_HOSTNAMES = 5;
+const MAX_DISCOVER_TERMINAL_CANDIDATES = 200;
 
 function safeTerminalValue(value, fallback = '—') {
   if (value === null || value === undefined || value === '') return fallback;
@@ -83,12 +84,38 @@ function formatTerminalCtSearch(document) {
   return `${lines.join('\n')}\n`;
 }
 
+function formatTerminalDiscover(document, mutationLabels = {}) {
+  const candidates = Array.isArray(document.candidates) ? document.candidates : [];
+  const visible = candidates.slice(0, MAX_DISCOVER_TERMINAL_CANDIDATES);
+  const lines = [
+    `Seed           ${safeTerminalValue(document.seed)}`,
+    `Preset         ${safeTerminalValue(document.preset)}`,
+    `Keyboard       ${safeTerminalValue(document.keyboardLayout)}`,
+    `TLDs           ${(Array.isArray(document.tlds) ? document.tlds : []).map((value) => safeTerminalValue(value)).join(', ')}`,
+    `Candidates     ${safeTerminalValue(candidates.length, '0')}`,
+    `Truncated      ${document.truncated ? 'Yes' : 'No'}`,
+    '',
+  ];
+  for (const candidate of visible) {
+    const labels = (Array.isArray(candidate.mutationTypes) ? candidate.mutationTypes : [])
+      .map((value) => safeTerminalValue(mutationLabels[value] || value));
+    lines.push(`${safeTerminalValue(candidate.domain)} — ${labels.join(', ') || 'Generated variant'}`);
+  }
+  if (!visible.length) lines.push('No candidates were generated.');
+  if (candidates.length > visible.length) {
+    lines.push('', `Showing ${visible.length} of ${candidates.length} candidates in terminal output; use --json or --jsonl for the complete bounded result.`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 module.exports = {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
+  MAX_DISCOVER_TERMINAL_CANDIDATES,
   MAX_TERMINAL_VALUE_LENGTH,
   formatTerminalBulk,
   formatTerminalCtSearch,
+  formatTerminalDiscover,
   formatTerminalLookup,
   safeTerminalValue,
 };

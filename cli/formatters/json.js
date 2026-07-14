@@ -2,6 +2,7 @@
 
 const CLI_LOOKUP_SCHEMA_VERSION = 1;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
+const CLI_DISCOVER_SCHEMA_VERSION = 1;
 
 function buildCliLookupDocument(query, classified, result, generatedAt = new Date().toISOString(), mode = 'fast') {
   return {
@@ -30,6 +31,39 @@ function buildCliCtSearchDocument(keyword, result, generatedAt = new Date().toIS
     generatedAt,
     keyword,
   };
+}
+
+function buildCliDiscoverDocument(seed, result, metadata) {
+  return {
+    ...result,
+    schema: 'whoisleuth.cli.discover',
+    version: CLI_DISCOVER_SCHEMA_VERSION,
+    generatedAt: metadata.generatedAt,
+    seed,
+    preset: metadata.preset,
+    keyboardLayout: metadata.keyboardLayout,
+    tlds: [...metadata.tlds],
+  };
+}
+
+function discoverJsonItem(candidate, metadata) {
+  return {
+    schema: 'whoisleuth.cli.discover.item',
+    version: CLI_DISCOVER_SCHEMA_VERSION,
+    generatedAt: metadata.generatedAt,
+    seed: metadata.seed,
+    preset: metadata.preset,
+    keyboardLayout: metadata.keyboardLayout,
+    domain: candidate.domain,
+    source: candidate.source,
+    tld: candidate.tld,
+    mutationTypes: candidate.mutationTypes,
+  };
+}
+
+function formatDiscoverJsonLines(candidates, metadata) {
+  if (!candidates.length) return '';
+  return `${candidates.map((candidate) => JSON.stringify(discoverJsonItem(candidate, metadata))).join('\n')}\n`;
 }
 
 function buildCliBulkDocument(items, metadata) {
@@ -79,11 +113,15 @@ function formatJsonLines(items, metadata) {
 
 module.exports = {
   CLI_CT_SEARCH_SCHEMA_VERSION,
+  CLI_DISCOVER_SCHEMA_VERSION,
   CLI_LOOKUP_SCHEMA_VERSION,
   buildCliBulkDocument,
   buildCliCtSearchDocument,
+  buildCliDiscoverDocument,
   buildCliLookupDocument,
   bulkJsonItem,
+  discoverJsonItem,
+  formatDiscoverJsonLines,
   formatJsonDocument,
   formatJsonLines,
 };

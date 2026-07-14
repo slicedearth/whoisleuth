@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["lib/**/*.js", "server.js", "netlify/**/*.js", "cli/**/*.js", "bin/**/*.js"]
+  "include": ["lib/**/*.js", "lib/**/*.mjs", "server.js", "netlify/**/*.js", "cli/**/*.js", "bin/**/*.js"]
 }

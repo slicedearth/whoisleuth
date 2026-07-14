@@ -60,7 +60,7 @@ describe('bounded CLI stdin', () => {
   });
 
   test('rejects multiple queries and oversized input before lookup', async () => {
-    await assert.rejects(readStdinBounded(Readable.from(['one.com\ntwo.com\n'])), /one stdin query/);
+    await assert.rejects(readStdinBounded(Readable.from(['one.com\ntwo.com\n'])), /one stdin line/);
     await assert.rejects(readStdinBounded(Readable.from(['x'.repeat(MAX_STDIN_BYTES + 1)])), /limited to/);
   });
 });

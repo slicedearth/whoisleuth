@@ -6,9 +6,10 @@ const { runUnifiedLookup } = require('../lib/lookup');
 const fs = require('node:fs');
 const EXIT_CODES = require('./exit-codes');
 const { CliUsageError, parseCliArguments } = require('./arguments');
-const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliLookupDocument, formatJsonDocument, formatJsonLines } = require('./formatters/json');
-const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalLookup } = require('./formatters/terminal');
+const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliLookupDocument, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines } = require('./formatters/json');
+const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalLookup } = require('./formatters/terminal');
 const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
+const { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } = require('./discover');
 const { version: VERSION } = require('../package.json');
 
 const MAX_STDIN_BYTES = 4096;
@@ -21,6 +22,7 @@ Usage:
   cat domains.txt | whoisleuth bulk --jsonl
   whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]
   printf 'example brand\\n' | whoisleuth ct-search --json
+  whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>] [--keyboard <layout>] [--json|--jsonl]
   whoisleuth --help
   whoisleuth --version
 
@@ -49,7 +51,7 @@ async function readStdinBounded(stream, limit = MAX_STDIN_BYTES) {
   }
   const text = Buffer.concat(chunks).toString('utf8').trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length > 1) throw new CliUsageError('lookup accepts one stdin query. Use the bulk command for multiple inputs.');
+  if (lines.length > 1) throw new CliUsageError('Single-value commands accept one stdin line. Use the bulk command for multiple inputs.');
   return lines[0] || '';
 }
 
@@ -106,6 +108,36 @@ async function runCli(argv, dependencies = {}) {
       const document = buildCliCtSearchDocument(keyword, result, now);
       if (!args.quiet) {
         write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalCtSearch(document));
+      }
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'discover') {
+      failureLabel = 'Candidate generation';
+      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
+      const seed = args.seed || await readInput();
+      if (!seed) throw new CliUsageError('discover requires one brand label or domain as an argument or on stdin.');
+      const loadGenerator = dependencies.loadTyposquatGenerator || (() => import('../lib/typosquat-generator.mjs'));
+      const generator = await loadGenerator();
+      const tlds = normalizeDiscoveryTlds(args.tldText || DEFAULT_DISCOVERY_TLDS.join(','), generator.MAX_GENERATION_TLDS);
+      const result = generator.generateTyposquatCandidateSet(seed, tlds, {
+        preset: args.preset,
+        keyboardLayout: args.keyboardLayout,
+      });
+      if (!result.inputValid) throw new CliUsageError('discover requires a valid brand label or domain with one suffix label.');
+      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
+      const metadata = {
+        generatedAt: now,
+        seed,
+        preset: args.preset,
+        keyboardLayout: args.keyboardLayout,
+        tlds,
+      };
+      const document = buildCliDiscoverDocument(seed, result, metadata);
+      if (!args.quiet) {
+        if (args.output === 'json') write(stdout, formatJsonDocument(document));
+        else if (args.output === 'jsonl') write(stdout, formatDiscoverJsonLines(result.candidates, metadata));
+        else write(stdout, formatTerminalDiscover(document, generator.MUTATION_LABELS));
       }
       return EXIT_CODES.SUCCESS;
     }
