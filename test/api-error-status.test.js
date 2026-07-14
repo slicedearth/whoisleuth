@@ -30,7 +30,7 @@ function authedEvent(query) {
 
 describe('invalid query returns 400, not 500', () => {
   test('unified lookup', async () => {
-    const { handler } = require('../netlify/functions/lookup');
+    const { handler } = require('../netlify/functions/lookup.mts');
     const res = await handler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
     const body = JSON.parse(res.body);
@@ -39,28 +39,28 @@ describe('invalid query returns 400, not 500', () => {
   });
 
   test('rdap', async () => {
-    const { handler } = require('../netlify/functions/rdap');
+    const { handler } = require('../netlify/functions/rdap.mts');
     const res = await handler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
     assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
   });
 
   test('whois', async () => {
-    const { handler } = require('../netlify/functions/whois');
+    const { handler } = require('../netlify/functions/whois.mts');
     const res = await handler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
     assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
   });
 
   test('availability', async () => {
-    const { handler } = require('../netlify/functions/availability');
+    const { handler } = require('../netlify/functions/availability.mts');
     const res = await handler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
     assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
   });
 
   test('domain-posture', async () => {
-    const { handler } = require('../netlify/functions/domain-posture');
+    const { handler } = require('../netlify/functions/domain-posture.mts');
     const res = await handler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
     assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
@@ -69,14 +69,14 @@ describe('invalid query returns 400, not 500', () => {
 
 describe('unified lookup error codes', () => {
   test('reports missing authentication with a stable code', async () => {
-    const { handler } = require('../netlify/functions/lookup');
+    const { handler } = require('../netlify/functions/lookup.mts');
     const res = await handler({ headers: {}, queryStringParameters: { q: 'example.com' } });
     assert.equal(res.statusCode, 401);
     assert.equal(JSON.parse(res.body).errorCode, 'AUTH_REQUIRED');
   });
 
   test('reports a missing query with a stable code', async () => {
-    const { handler } = require('../netlify/functions/lookup');
+    const { handler } = require('../netlify/functions/lookup.mts');
     const res = await handler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
     assert.equal(res.statusCode, 400);
     assert.equal(JSON.parse(res.body).errorCode, 'MISSING_QUERY');

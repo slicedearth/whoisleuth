@@ -1,9 +1,10 @@
-const { searchCertificateTransparency } = require('../../lib/ct-search');
-const { operationBudgetTargetFor } = require('../../lib/operation-budget');
-const { guardNetlifyNetworkRequest, withNetlifyOperationBudget } = require('../../lib/netlify-network-guard');
-const { json } = require('../../lib/http');
+import { searchCertificateTransparency } from '../../lib/ct-search.js';
+import { operationBudgetTargetFor } from '../../lib/operation-budget.js';
+import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
+import { json } from '../../lib/http.mts';
+import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-exports.handler = async (event) => {
+const handler: NetlifyFunctionHandler = async (event) => {
   const guard = guardNetlifyNetworkRequest(event, 'certificate_transparency');
   if (guard.response) return guard.response;
 
@@ -19,3 +20,5 @@ exports.handler = async (event) => {
     }
   });
 };
+
+export { handler };

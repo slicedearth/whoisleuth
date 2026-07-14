@@ -779,10 +779,10 @@ when they bypass canonical-path edge rules.
 
 ## Deploying to Netlify
 
-This branch also ships `netlify/functions/rdap.js`, `whois.js`,
-`availability.js`, `ct-search.js`, and `domain-posture.js` - thin wrappers
-around the same `lib/` code `server.js` uses, so behavior is identical either
-way. To deploy:
+This repository also ships TypeScript Netlify Functions for RDAP, WHOIS,
+availability, Certificate Transparency search, and domain-posture audits. They
+remain thin entry points over the same `lib/` code `server.js` uses, so behavior
+is identical either way. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).

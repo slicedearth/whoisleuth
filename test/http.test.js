@@ -1,14 +1,9 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { json } = require('../lib/http');
-const typedImplementation = require('../lib/http.mts');
+const { json } = require('../lib/http.mts');
 
 describe('Netlify JSON responses', () => {
-  test('retain the CommonJS entry point over the typed implementation', () => {
-    assert.equal(json, typedImplementation.json);
-  });
-
   test('include the API security headers emitted by the Express server', () => {
     const response = json(200, { ok: true });
 

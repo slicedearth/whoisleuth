@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { handler } = require('../netlify/functions/login');
+const { handler } = require('../netlify/functions/login.mts');
 
 function request(headers, password = process.env.SITE_PASSWORD) {
   return handler({ httpMethod: 'POST', headers, body: JSON.stringify({ password }) });

@@ -4,21 +4,40 @@
 // the same application safeguards as canonical `/api/*` redirects, even
 // though only the canonical paths can benefit from Netlify edge rate rules.
 
-const {
+import {
   isAuthenticatedFromCookieHeader,
   sessionFingerprintFromCookieHeader,
-} = require('./auth');
-const { checkRateLimit, getClientIp, API_RATE_LIMIT } = require('./rate-limit');
-const { featureDisabledError, networkFeaturePolicy } = require('./feature-policy');
-const {
+} from './auth.js';
+import { checkRateLimit, getClientIp, API_RATE_LIMIT } from './rate-limit.js';
+import {
+  featureDisabledError,
+  networkFeaturePolicy,
+} from './feature-policy.mts';
+import {
   defaultOperationBudget,
   operationBudgetError,
   operationBudgetHttpStatus,
   runWithOperationBudget,
-} = require('./operation-budget');
-const { json } = require('./http');
+} from './operation-budget.js';
+import { json } from './http.mts';
+import type { NetworkFeatureId, NetworkFeaturePolicy } from './feature-policy.mts';
+import type { NetlifyJsonResponse } from './http.mts';
+import type { NetlifyFunctionEvent } from './netlify-function-types.mts';
 
-function guardNetlifyNetworkRequest(event, feature) {
+type NetlifyGuardResult = {
+  response: NetlifyJsonResponse;
+  sessionKey?: never;
+  featurePolicy?: never;
+} | {
+  response: null;
+  sessionKey: string | null;
+  featurePolicy: NetworkFeaturePolicy;
+};
+
+function guardNetlifyNetworkRequest(
+  event: NetlifyFunctionEvent | null | undefined,
+  feature?: NetworkFeatureId,
+): NetlifyGuardResult {
   const headers = event && event.headers ? event.headers : {};
   const ip = getClientIp(headers);
   const { allowed, retryAfterSeconds } = checkRateLimit(`api:${ip}`, API_RATE_LIMIT);
@@ -51,7 +70,11 @@ function guardNetlifyNetworkRequest(event, feature) {
   };
 }
 
-async function withNetlifyOperationBudget(sessionKey, operationTarget, callback) {
+async function withNetlifyOperationBudget<T extends NetlifyJsonResponse>(
+  sessionKey: string | null,
+  operationTarget: unknown,
+  callback: () => Promise<T> | T,
+): Promise<T | NetlifyJsonResponse> {
   const outcome = await runWithOperationBudget(defaultOperationBudget, operationTarget, sessionKey, callback);
   if (!outcome.allowed) {
     return json(operationBudgetHttpStatus(outcome.denial), operationBudgetError(outcome.denial), {
@@ -61,4 +84,4 @@ async function withNetlifyOperationBudget(sessionKey, operationTarget, callback)
   return outcome.value;
 }
 
-module.exports = { guardNetlifyNetworkRequest, withNetlifyOperationBudget };
+export { guardNetlifyNetworkRequest, withNetlifyOperationBudget };

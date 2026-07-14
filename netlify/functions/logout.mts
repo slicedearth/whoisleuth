@@ -1,7 +1,8 @@
-const { buildClearCookie, isTrustedOrigin, isAuthenticatedFromCookieHeader } = require('../../lib/auth');
-const { json } = require('../../lib/http');
+import { buildClearCookie, isTrustedOrigin, isAuthenticatedFromCookieHeader } from '../../lib/auth.js';
+import { json } from '../../lib/http.mts';
+import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-exports.handler = async (event) => {
+const handler: NetlifyFunctionHandler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }
@@ -14,3 +15,5 @@ exports.handler = async (event) => {
 
   return json(200, { ok: true }, { 'Set-Cookie': buildClearCookie({ secure: true }) });
 };
+
+export { handler };

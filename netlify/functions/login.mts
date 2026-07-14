@@ -1,8 +1,9 @@
-const { checkPassword, createSessionToken, buildSessionCookie, isTrustedLoginOrigin } = require('../../lib/auth');
-const { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT } = require('../../lib/rate-limit');
-const { json } = require('../../lib/http');
+import { checkPassword, createSessionToken, buildSessionCookie, isTrustedLoginOrigin } from '../../lib/auth.js';
+import { checkRateLimit, getClientIp, LOGIN_RATE_LIMIT } from '../../lib/rate-limit.js';
+import { json } from '../../lib/http.mts';
+import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-exports.handler = async (event) => {
+const handler: NetlifyFunctionHandler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }
@@ -29,3 +30,5 @@ exports.handler = async (event) => {
 
   return json(200, { ok: true }, { 'Set-Cookie': buildSessionCookie(createSessionToken(), { secure: true }) });
 };
+
+export { handler };

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { capabilityReport, isCapabilityStatus } = require('../lib/capabilities');
 const { OPERATION_CLASSES } = require('../lib/operation-budget');
 const { createSessionToken, buildSessionCookie } = require('../lib/auth');
-const { handler } = require('../netlify/functions/capabilities');
+const { handler } = require('../netlify/functions/capabilities.mts');
 
 test('capability report is deterministic, provider-neutral, and honest about execution', () => {
   const report = capabilityReport('netlify');

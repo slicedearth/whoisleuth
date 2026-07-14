@@ -1,4 +1,4 @@
-// Covers netlify/functions/logout.js's three defenses: the HTTP-method gate
+// Covers netlify/functions/logout.mts's three defenses: the HTTP-method gate
 // (previously any method, including a plain cross-site GET from an <img>
 // tag, cleared the session cookie), the same-origin check (a hostile page
 // can auto-submit a cross-site <form method="POST"> here - SameSite=Lax
@@ -28,7 +28,7 @@ process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
 const { createSessionToken, buildSessionCookie } = require('../lib/auth');
-const { handler } = require('../netlify/functions/logout');
+const { handler } = require('../netlify/functions/logout.mts');
 
 let cookie;
 before(() => {

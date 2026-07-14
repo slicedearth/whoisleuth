@@ -16,7 +16,7 @@ const {
   OPERATION_CLASSES,
   defaultOperationBudget,
 } = require('../lib/operation-budget');
-const { withNetlifyOperationBudget } = require('../lib/netlify-network-guard');
+const { withNetlifyOperationBudget } = require('../lib/netlify-network-guard.mts');
 
 let cookie;
 before(() => {
@@ -30,20 +30,20 @@ after(() => {
 });
 
 const networkHandlers = [
-  ['lookup', require('../netlify/functions/lookup').handler],
-  ['rdap', require('../netlify/functions/rdap').handler],
-  ['whois', require('../netlify/functions/whois').handler],
-  ['availability', require('../netlify/functions/availability').handler],
-  ['certificate search', require('../netlify/functions/ct-search').handler],
-  ['domain posture', require('../netlify/functions/domain-posture').handler],
+  ['lookup', require('../netlify/functions/lookup.mts').handler],
+  ['rdap', require('../netlify/functions/rdap.mts').handler],
+  ['whois', require('../netlify/functions/whois.mts').handler],
+  ['availability', require('../netlify/functions/availability.mts').handler],
+  ['certificate search', require('../netlify/functions/ct-search.mts').handler],
+  ['domain posture', require('../netlify/functions/domain-posture.mts').handler],
 ];
 const disabledNetworkHandlers = [
-  ['lookup', 'WHOISLEUTH_DISABLE_LOOKUP', require('../netlify/functions/lookup').handler],
-  ['rdap', 'WHOISLEUTH_DISABLE_RDAP', require('../netlify/functions/rdap').handler],
-  ['whois', 'WHOISLEUTH_DISABLE_WHOIS', require('../netlify/functions/whois').handler],
-  ['availability', 'WHOISLEUTH_DISABLE_AVAILABILITY', require('../netlify/functions/availability').handler],
-  ['certificate_transparency', 'WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY', require('../netlify/functions/ct-search').handler],
-  ['domain_posture', 'WHOISLEUTH_DISABLE_DOMAIN_POSTURE', require('../netlify/functions/domain-posture').handler],
+  ['lookup', 'WHOISLEUTH_DISABLE_LOOKUP', require('../netlify/functions/lookup.mts').handler],
+  ['rdap', 'WHOISLEUTH_DISABLE_RDAP', require('../netlify/functions/rdap.mts').handler],
+  ['whois', 'WHOISLEUTH_DISABLE_WHOIS', require('../netlify/functions/whois.mts').handler],
+  ['availability', 'WHOISLEUTH_DISABLE_AVAILABILITY', require('../netlify/functions/availability.mts').handler],
+  ['certificate_transparency', 'WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY', require('../netlify/functions/ct-search.mts').handler],
+  ['domain_posture', 'WHOISLEUTH_DISABLE_DOMAIN_POSTURE', require('../netlify/functions/domain-posture.mts').handler],
 ];
 
 async function withEnvironment(name, value, callback) {
@@ -75,7 +75,7 @@ describe('direct serverless network paths', () => {
         assert.equal(lease.allowed, true);
         leases.push(lease);
       }
-      const response = await require('../netlify/functions/rdap').handler({
+      const response = await require('../netlify/functions/rdap.mts').handler({
         headers: { cookie },
         queryStringParameters: { q: 'example.com' },
       });
@@ -125,7 +125,7 @@ describe('direct serverless network paths', () => {
 
   test('enforces dependency shutdown for direct posture audits', async () => {
     await withEnvironment('WHOISLEUTH_DISABLE_DNS_INTELLIGENCE', 'true', async () => {
-      const response = await require('../netlify/functions/domain-posture').handler({
+      const response = await require('../netlify/functions/domain-posture.mts').handler({
         headers: { cookie },
         queryStringParameters: { q: 'example.com' },
       });
@@ -139,7 +139,7 @@ describe('direct serverless network paths', () => {
 
   test('does not disclose disabled feature state to an unauthenticated caller', async () => {
     await withEnvironment('WHOISLEUTH_DISABLE_RDAP', '1', async () => {
-      const response = await require('../netlify/functions/rdap').handler({
+      const response = await require('../netlify/functions/rdap.mts').handler({
         headers: {},
         queryStringParameters: { q: 'example.com' },
       });
