@@ -1,11 +1,11 @@
 const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
 
-// Tests the framework-neutral handoff core directly (CI runs Node 20, which
-// cannot load the .ts wrapper). buildHandoff is exactly what saveCandidateHandoff
-// serializes; parseHandoff is exactly what loadCandidateHandoff runs on the raw
-// sessionStorage value - so passing a hand-built object to parseHandoff models a
-// hostile payload written straight into sessionStorage.
+// Tests the framework-neutral handoff core directly without requiring browser
+// sessionStorage. buildHandoff is exactly what saveCandidateHandoff serializes;
+// parseHandoff is exactly what loadCandidateHandoff runs on the raw sessionStorage
+// value, so passing a hand-built object to parseHandoff models a hostile payload
+// written straight into sessionStorage.
 let core;
 before(async () => {
   core = await import('../frontend/src/lib/candidate-handoff-core.js');

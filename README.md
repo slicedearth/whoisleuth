@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License: Apache 2.0" />
-  <img src="https://img.shields.io/badge/node-%3E%3D20.19-brightgreen" alt="Node >= 20.19" />
+  <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />
   <img src="https://img.shields.io/badge/frontend-SvelteKit%20%2B%20Vite-ff3e00" alt="SvelteKit and Vite" />
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify Status" /></a>
 </p>
@@ -82,7 +82,7 @@ clear it (fill in your own contact details before sharing a deployment).
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) 20.19.0 or later (required by the Svelte build toolchain)
+- [Node.js](https://nodejs.org/) 24 or later (the current LTS line used by CI and Netlify)
 - npm (bundled with Node)
 
 ## Install & run

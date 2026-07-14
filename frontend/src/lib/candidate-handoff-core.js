@@ -1,8 +1,8 @@
 // Framework-neutral, storage-agnostic core of the Discover -> Bulk candidate
 // handoff. No sessionStorage, DOM, Svelte, or network access lives here so the
-// full normalization contract is node --test-able (CI runs Node 20, which
-// cannot load the .ts wrapper directly). candidate-handoff.ts is a thin
-// sessionStorage wrapper around buildHandoff / parseHandoff.
+// full normalization contract is directly testable under Node.
+// candidate-handoff.ts is a thin sessionStorage wrapper around buildHandoff /
+// parseHandoff.
 
 import { normalizeDomain } from './analysis/case-model.js';
 import { normalizeCtProvenance } from './analysis/ct-results.js';
