@@ -1,7 +1,7 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { fetchRdapFromBases, uniqueBases } = require('../lib/rdap');
+const { fetchRdapFromBases, uniqueBases } = require('../lib/rdap.mts');
 
 describe('RDAP endpoint failover', () => {
   test('prefers HTTPS and removes duplicate bootstrap endpoints', () => {

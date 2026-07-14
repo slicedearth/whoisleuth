@@ -6,10 +6,10 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage } = require('../cli/errors');
+const { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage } = require('../cli/errors.mts');
 
 const ROOT = join(__dirname, '..');
-const BIN = join(ROOT, 'bin', 'whoisleuth.js');
+const BIN = join(ROOT, 'bin', 'whoisleuth.mts');
 
 function savedLookup() {
   return {

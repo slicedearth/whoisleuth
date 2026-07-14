@@ -1,4 +1,4 @@
-// Covers lib/safe-fetch.js's isPrivateAddress() - the SSRF guard used
+// Covers lib/safe-fetch.mts's isPrivateAddress() - the SSRF guard used
 // before every outbound fetch this app makes to a domain-controlled target
 // (homepage text, favicon, MTA-STS policy). The same address can be
 // written multiple ways (a "::" shorthand, an embedded IPv4 as either
@@ -10,7 +10,7 @@
 const test = require('node:test');
 const { describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { isPrivateAddress } = require('../lib/safe-fetch');
+const { isPrivateAddress } = require('../lib/safe-fetch.mts');
 
 describe('IPv4', () => {
   test('flags loopback, RFC1918, and link-local ranges', () => {

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseWhoisDate } = require('../lib/availability');
+const { parseWhoisDate } = require('../lib/availability.mts');
 
 test('parses dotted day-first WHOIS dates without month/day ambiguity', () => {
   assert.equal(parseWhoisDate('03.04.2024').toISOString(), '2024-04-03T00:00:00.000Z');

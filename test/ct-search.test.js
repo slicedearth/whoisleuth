@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 let searchCertificateTransparency;
 let summarizeCtResults;
 before(async () => {
-  const mod = await import('../lib/ct-search.js');
+  const mod = await import('../lib/ct-search.mts');
   searchCertificateTransparency = mod.searchCertificateTransparency;
   summarizeCtResults = mod.summarizeCtResults;
 });

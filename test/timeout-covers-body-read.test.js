@@ -1,5 +1,5 @@
-// Covers the fix applied to lib/availability.js's fetchHomepage() and
-// lib/favicon.js's fetchFaviconHash(): both used to clear their abort
+// Covers the fix applied to lib/availability.mts's fetchHomepage() and
+// lib/favicon.mts's fetchFaviconHash(): both used to clear their abort
 // timeout as soon as response headers arrived, before reading the body,
 // which left an unbounded (no-timeout) read for the rest of the response -
 // a domain that sends headers immediately and then stalls or trickles the
@@ -8,7 +8,7 @@
 // read.
 //
 // The actual functions can't be pointed at a local test server here - they
-// go through lib/safe-fetch.js's SSRF guard, which correctly refuses to
+// go through lib/safe-fetch.mts's SSRF guard, which correctly refuses to
 // connect to 127.0.0.1 (that guard has its own test coverage in
 // safe-fetch.test.js). This tests the timeout-covers-the-read pattern
 // itself, in isolation, against a real local server that sends headers and

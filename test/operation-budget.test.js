@@ -15,7 +15,7 @@ const {
   operationClassFor,
   operationFeatureFor,
   runWithOperationBudget,
-} = require('../lib/operation-budget');
+} = require('../lib/operation-budget.mts');
 
 const TEST_LIMITS = {
   [OPERATION_CLASSES.REGISTRY_LIGHT]: { session: 2, runtime: 3 },

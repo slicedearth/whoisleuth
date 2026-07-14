@@ -2,7 +2,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseWhoisChain } = require('../lib/whois');
+const { parseWhoisChain } = require('../lib/whois.mts');
 
 const rootHop = {
   server: 'whois.iana.org',

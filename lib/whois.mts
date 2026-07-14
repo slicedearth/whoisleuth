@@ -65,7 +65,7 @@ function errorMessage(value: unknown, fallback: string): string {
 }
 
 // `server` here isn't always the trusted IANA root - after the first hop,
-// it's a referral hostname lib/whois.js's own extractReferral() pulled out
+// it's a referral hostname lib/whois.mts's own extractReferral() pulled out
 // of the *previous* server's response text (a "refer:"/"whois:" field), so
 // a malicious or compromised registry could point this at an internal
 // address. Same DNS-rebinding-guarded-connection-pinning approach
@@ -337,7 +337,7 @@ function formatGtResultAsText(domain: string, result: GtRegistryResult): string 
   return lines.join('\n');
 }
 
-// Cached briefly (lib/lookup-cache.js) - the same query looked up again
+// Cached briefly (lib/lookup-cache.mts) - the same query looked up again
 // shortly after (a deep-check following a fast scan, re-reviewing a
 // candidate list) doesn't need a fresh TCP:43 chain every time.
 async function buildWhoisChainUncached(

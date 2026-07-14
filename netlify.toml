@@ -3,7 +3,7 @@
   publish = "frontend/build"
   functions = "netlify/functions"
 
-# Mirrors the response security headers server.js sets for self-hosted
+# Mirrors the response security headers server.mts sets for self-hosted
 # deployments. SvelteKit emits a hash-restricted CSP meta tag in every
 # prerendered page.
 [[headers]]

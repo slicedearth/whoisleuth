@@ -27,7 +27,7 @@ const assert = require('node:assert/strict');
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { createSessionToken, buildSessionCookie } = require('../lib/auth');
+const { createSessionToken, buildSessionCookie } = require('../lib/auth.mts');
 const { handler } = require('../netlify/functions/logout.mts');
 
 let cookie;

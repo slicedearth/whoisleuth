@@ -7,7 +7,7 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { Readable, Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
+const { parseCliArguments } = require('../cli/arguments.mts');
 const {
   MAX_COMPARE_EVENTS,
   MAX_COMPARE_INPUT_BYTES,
@@ -16,11 +16,11 @@ const {
   compareLookupDocument,
   parseCliLookupDocument,
   readCompareInputBounded,
-} = require('../cli/compare');
-const EXIT_CODES = require('../cli/exit-codes');
-const { buildCliCompareDocument } = require('../cli/formatters/json');
-const { formatTerminalCompare } = require('../cli/formatters/terminal');
-const { runCli } = require('../cli/runner');
+} = require('../cli/compare.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { buildCliCompareDocument } = require('../cli/formatters/json.mts');
+const { formatTerminalCompare } = require('../cli/formatters/terminal.mts');
+const { runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';
@@ -86,7 +86,7 @@ function lookupDocument(overrides = {}) {
 }
 
 async function comparisonModule() {
-  return import('../lib/registry-comparison.mjs');
+  return import('../lib/registry-comparison.mts');
 }
 
 describe('comparison CLI arguments', () => {

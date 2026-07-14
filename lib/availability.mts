@@ -385,9 +385,9 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
 
   if (rdapEnabled) {
     try {
-      // Shared with /api/rdap (lib/rdap.js's fetchRdapRecord) rather than a
+      // Shared with /api/rdap (lib/rdap.mts's fetchRdapRecord) rather than a
       // separate fetch+parse here - same registry data either way, and this
-      // also picks up that function's short-TTL cache (lib/lookup-cache.js)
+      // also picks up that function's short-TTL cache (lib/lookup-cache.mts)
       // and upstream timeout for free.
       const record = hasPreloadedRdapPromise
         ? await options.rdapRecordPromise

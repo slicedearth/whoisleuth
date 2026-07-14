@@ -367,4 +367,8 @@ function startServer() {
   });
 }
 
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  startServer();
+}
+
 export { app, isHttps, usesSecureCookies, requireAuth, rateLimit, requireFeature, startServer };

@@ -1,6 +1,6 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeAuditDomain, normalizeDkimSelectors, matchesMtaPattern, buildPostureReport } = require('../lib/domain-posture');
+const { normalizeAuditDomain, normalizeDkimSelectors, matchesMtaPattern, buildPostureReport } = require('../lib/domain-posture.mts');
 
 function query(records = [], error = null) {
   return { records, error };

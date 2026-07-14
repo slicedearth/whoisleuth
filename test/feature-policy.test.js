@@ -8,11 +8,7 @@ const {
   networkFeaturePolicy,
   featureDecision,
   featureDisabledError,
-} = require('../lib/feature-policy');
-
-test('loads the typed implementation through the stable CommonJS entry point', () => {
-  assert.strictEqual(require('../lib/feature-policy.mts').featureDecision, featureDecision);
-});
+} = require('../lib/feature-policy.mts');
 
 describe('network feature policy', () => {
   test('defaults every implemented network feature to enabled', () => {

@@ -6,7 +6,7 @@ const {
   safeFetchDetailed,
   readBytesCapped,
   readTextCapped,
-} = require('../lib/safe-fetch');
+} = require('../lib/safe-fetch.mts');
 
 const PUBLIC_ADDRESSES = [{ address: '8.8.8.8', family: 4 }];
 

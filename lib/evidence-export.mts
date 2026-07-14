@@ -1,14 +1,17 @@
-import { compareRegistrySources } from './registry-comparison.mjs';
+import { compareRegistrySources } from './registry-comparison.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 11;
 
-function cloneJson(value) {
+type LooseRecord = Record<string, any>;
+type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
+
+function cloneJson(value: unknown): unknown {
   if (value === undefined) return null;
   return JSON.parse(JSON.stringify(value));
 }
 
-function rdapSource(rdap) {
+function rdapSource(rdap: LooseRecord | null | undefined) {
   const source = rdap || {};
   if (source.error) return {
     status: 'error',
@@ -27,7 +30,7 @@ function rdapSource(rdap) {
   };
 }
 
-function whoisSource(whois) {
+function whoisSource(whois: LooseRecord | null | undefined) {
   const source = whois || {};
   if (source.error) return { status: 'error', error: String(source.error) };
   const parsed = source.parsed || null;
@@ -42,11 +45,7 @@ function whoisSource(whois) {
   };
 }
 
-/**
- * @param {any} response
- * @param {{ generatedAt?: string, idnAnalysis?: any }} [options]
- */
-export function buildLookupEvidence(response, options = {}) {
+export function buildLookupEvidence(response: LooseRecord | null | undefined, options: LookupEvidenceOptions = {}) {
   const { generatedAt = new Date().toISOString(), idnAnalysis = null } = options;
   const body = response || {};
   const rdapParsed = body.rdap && !body.rdap.error ? body.rdap.parsed : null;
@@ -79,7 +78,7 @@ export function buildLookupEvidence(response, options = {}) {
   };
 }
 
-export function evidenceFilename(response, now = Date.now()) {
+export function evidenceFilename(response: LooseRecord | null | undefined, now = Date.now()) {
   const rawTarget = response?.registrableDomain || response?.inputHostname || response?.query || 'lookup';
   const target = String(rawTarget)
     .toLowerCase()

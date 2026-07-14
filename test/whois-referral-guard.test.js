@@ -1,4 +1,4 @@
-// Covers the SSRF guard added to lib/whois.js's whoisQuery(). After the
+// Covers the SSRF guard added to lib/whois.mts's whoisQuery(). After the
 // first hop, the server it connects to next is a referral hostname pulled
 // out of the *previous* server's own response text (buildWhoisChain()
 // follows "refer:"/"whois:" fields) - a malicious or compromised registry
@@ -9,7 +9,7 @@
 const test = require('node:test');
 const { describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { whoisQuery } = require('../lib/whois');
+const { whoisQuery } = require('../lib/whois.mts');
 
 describe('referral target validation', () => {
   test('refuses to connect to a loopback address', async () => {

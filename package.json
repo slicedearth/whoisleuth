@@ -4,15 +4,15 @@
   "private": true,
   "license": "Apache-2.0",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
-  "main": "server.js",
+  "main": "server.mts",
   "bin": {
-    "whoisleuth": "bin/whoisleuth.js"
+    "whoisleuth": "bin/whoisleuth.mts"
   },
   "workspaces": [
     "frontend"
   ],
   "scripts": {
-    "start": "npm run build && node server.js",
+    "start": "npm run build && node server.mts",
     "test": "node --test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
     "dev": "npm run dev --workspace=frontend",

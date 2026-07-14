@@ -10,12 +10,12 @@ const {
   buildSessionCookie,
   createSessionToken,
   sessionFingerprintFromCookieHeader,
-} = require('../lib/auth');
+} = require('../lib/auth.mts');
 const {
   DEFAULT_OPERATION_LIMITS,
   OPERATION_CLASSES,
   defaultOperationBudget,
-} = require('../lib/operation-budget');
+} = require('../lib/operation-budget.mts');
 const { withNetlifyOperationBudget } = require('../lib/netlify-network-guard.mts');
 
 let cookie;

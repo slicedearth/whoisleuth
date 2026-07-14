@@ -12,7 +12,7 @@ const assert = require('node:assert/strict');
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 
-const { createSessionToken, buildSessionCookie } = require('../lib/auth');
+const { createSessionToken, buildSessionCookie } = require('../lib/auth.mts');
 
 const INVALID_QUERY = 'not a valid domain'; // embedded spaces - fails classifyQuery's URL-hostname check
 

@@ -7,7 +7,7 @@ const {
   normalizeMx,
   normalizeTxtPolicies,
   normalizeCaa,
-} = require('../lib/dns-intelligence');
+} = require('../lib/dns-intelligence.mts');
 
 function missing() {
   const error = new Error('no data');

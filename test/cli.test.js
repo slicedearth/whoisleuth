@@ -7,11 +7,11 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { Readable, Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
-const EXIT_CODES = require('../cli/exit-codes');
-const { buildCliLookupDocument } = require('../cli/formatters/json');
-const { formatTerminalLookup, safeTerminalValue } = require('../cli/formatters/terminal');
-const { MAX_STDIN_BYTES, readStdinBounded, runCli } = require('../cli/runner');
+const { parseCliArguments } = require('../cli/arguments.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { buildCliLookupDocument } = require('../cli/formatters/json.mts');
+const { formatTerminalLookup, safeTerminalValue } = require('../cli/formatters/terminal.mts');
+const { MAX_STDIN_BYTES, readStdinBounded, runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';
@@ -154,7 +154,7 @@ test('terminal values strip controls and stay bounded', () => {
 test('package metadata exposes an executable local CLI entry point', () => {
   const root = path.join(__dirname, '..');
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  assert.deepEqual(packageJson.bin, { whoisleuth: 'bin/whoisleuth.js' });
+  assert.deepEqual(packageJson.bin, { whoisleuth: 'bin/whoisleuth.mts' });
   const mode = fs.statSync(path.join(root, packageJson.bin.whoisleuth)).mode;
   assert.notEqual(mode & 0o111, 0);
   const result = spawnSync(process.execPath, [path.join(root, packageJson.bin.whoisleuth), '--help'], { encoding: 'utf8' });

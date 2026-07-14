@@ -1,7 +1,7 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseRdap } = require('../lib/rdap');
+const { parseRdap } = require('../lib/rdap.mts');
 
 describe('structured RDAP metadata', () => {
   test('preserves registrar IDs, addresses, glue, DNSSEC, and protocol notes', () => {

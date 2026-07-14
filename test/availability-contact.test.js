@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { checkDomainAvailability } = require('../lib/availability');
-const { networkFeaturePolicy } = require('../lib/feature-policy');
+const { checkDomainAvailability } = require('../lib/availability.mts');
+const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
 
 test('availability keeps the compact contact shape when RDAP exposes richer arrays', async () => {
   const richContact = {

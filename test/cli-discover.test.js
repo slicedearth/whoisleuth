@@ -4,23 +4,23 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
+const { parseCliArguments } = require('../cli/arguments.mts');
 const {
   DEFAULT_DISCOVERY_TLDS,
   MAX_DISCOVERY_TLD_TEXT_LENGTH,
   MAX_DISCOVERY_TLD_TOKENS_INSPECTED,
   normalizeDiscoveryTlds,
-} = require('../cli/discover');
-const EXIT_CODES = require('../cli/exit-codes');
+} = require('../cli/discover.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
 const {
   buildCliDiscoverDocument,
   formatDiscoverJsonLines,
-} = require('../cli/formatters/json');
+} = require('../cli/formatters/json.mts');
 const {
   MAX_DISCOVER_TERMINAL_CANDIDATES,
   formatTerminalDiscover,
-} = require('../cli/formatters/terminal');
-const { runCli } = require('../cli/runner');
+} = require('../cli/formatters/terminal.mts');
+const { runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';
@@ -126,7 +126,7 @@ describe('discover TLD normalization', () => {
 
 describe('shared discovery core', () => {
   test('frontend compatibility exports and CLI core resolve to the same functions', async () => {
-    const shared = await import('../lib/typosquat-generator.mjs');
+    const shared = await import('../lib/typosquat-generator.mts');
     const frontend = await import('../frontend/src/lib/analysis/typosquat-generator.js');
     assert.equal(frontend.generateTyposquatCandidateSet, shared.generateTyposquatCandidateSet);
     assert.equal(frontend.estimateTyposquatCandidateCount, shared.estimateTyposquatCandidateCount);
@@ -137,7 +137,7 @@ describe('shared discovery core', () => {
   });
 
   test('shared IDN compatibility exports retain one mapping implementation', async () => {
-    const shared = await import('../lib/idn-confusables.mjs');
+    const shared = await import('../lib/idn-confusables.mts');
     const frontend = await import('../frontend/src/lib/analysis/idn-confusables.js');
     assert.equal(frontend.analyzeDomainIdn, shared.analyzeDomainIdn);
     assert.equal(frontend.confusableCharactersForAscii, shared.confusableCharactersForAscii);

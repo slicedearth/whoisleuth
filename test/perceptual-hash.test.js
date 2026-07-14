@@ -1,4 +1,4 @@
-// Covers lib/perceptual-hash.js. Fixtures are built in-code rather than
+// Covers lib/perceptual-hash.mts. Fixtures are built in-code rather than
 // committed as binary blobs: the decoder ignores PNG CRCs, so a structurally
 // valid chunk stream with placeholder CRCs is enough, and BMP/ICO containers
 // are just packed byte layouts. The key properties under test are that the
@@ -9,7 +9,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const zlib = require('node:zlib');
-const { faviconPerceptualHash, hammingDistanceHex } = require('../lib/perceptual-hash');
+const { faviconPerceptualHash, hammingDistanceHex } = require('../lib/perceptual-hash.mts');
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 

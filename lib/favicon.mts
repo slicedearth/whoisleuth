@@ -6,7 +6,7 @@
 // Two hashes are produced from the same bytes:
 //   - hash:  exact SHA-256 of the raw bytes. Zero false positives, but only
 //            catches a byte-for-byte copy.
-//   - phash: perceptual (fuzzy) dHash (lib/perceptual-hash.js). Catches a
+//   - phash: perceptual (fuzzy) dHash (lib/perceptual-hash.mts). Catches a
 //            resized/recompressed/re-saved copy that's visually identical but
 //            no longer byte-identical - the common case when the favicon
 //            passed through a different tool than the original. Null when the

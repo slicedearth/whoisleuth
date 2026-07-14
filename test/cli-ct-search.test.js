@@ -4,15 +4,15 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
-const EXIT_CODES = require('../cli/exit-codes');
-const { buildCliCtSearchDocument } = require('../cli/formatters/json');
+const { parseCliArguments } = require('../cli/arguments.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { buildCliCtSearchDocument } = require('../cli/formatters/json.mts');
 const {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
   formatTerminalCtSearch,
-} = require('../cli/formatters/terminal');
-const { runCli } = require('../cli/runner');
+} = require('../cli/formatters/terminal.mts');
+const { runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';

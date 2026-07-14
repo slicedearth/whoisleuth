@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
-const { queryWhoisAddress } = require('../lib/whois');
+const { queryWhoisAddress } = require('../lib/whois.mts');
 
 function fixtureConnection(chunks) {
   let written = '';

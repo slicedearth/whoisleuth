@@ -4,11 +4,11 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
-const EXIT_CODES = require('../cli/exit-codes');
-const { buildCliTlsDocument } = require('../cli/formatters/json');
-const { MAX_TLS_TERMINAL_ALT_NAMES, formatTerminalTls } = require('../cli/formatters/terminal');
-const { runCli } = require('../cli/runner');
+const { parseCliArguments } = require('../cli/arguments.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { buildCliTlsDocument } = require('../cli/formatters/json.mts');
+const { MAX_TLS_TERMINAL_ALT_NAMES, formatTerminalTls } = require('../cli/formatters/terminal.mts');
+const { runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';

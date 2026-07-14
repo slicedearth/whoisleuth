@@ -1,7 +1,7 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { whoisQuery, buildWhoisChainUncached } = require('../lib/whois');
+const { whoisQuery, buildWhoisChainUncached } = require('../lib/whois.mts');
 
 describe('WHOIS address failover', () => {
   test('tries validated addresses sequentially within one hop deadline', async () => {

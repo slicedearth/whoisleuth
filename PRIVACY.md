@@ -182,7 +182,7 @@ above for the latter. Direct any such request to: `[operator contact]`.
 
 ## Hosting / sub-processors
 
-- Self-hosted: data stays on whatever server you run `server.js` on.
+- Self-hosted: data stays on whatever server you run `server.mts` on.
 - Netlify: request handling runs on Netlify's infrastructure. Check
   Netlify's own Data Processing Addendum if you're operating this beyond a
   personal/internal scale.
@@ -199,8 +199,8 @@ above for the latter. Direct any such request to: `[operator contact]`.
 
 ## Security measures
 
-Shared-password session auth (`lib/auth.js`), per-IP rate limiting
-(`lib/rate-limit.js`), SSRF-guarded outbound fetches (`lib/safe-fetch.js`), and
-public-address-pinned one-connection TLS collection (`lib/tls-intelligence.js`)
+Shared-password session auth (`lib/auth.mts`), per-IP rate limiting
+(`lib/rate-limit.mts`), SSRF-guarded outbound fetches (`lib/safe-fetch.mts`), and
+public-address-pinned one-connection TLS collection (`lib/tls-intelligence.mts`)
 are the technical measures in place. See [LICENSE](LICENSE) - provided as is,
 with no warranty.

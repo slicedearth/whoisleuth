@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { checkDomainAvailability } = require('../lib/availability');
-const { networkFeaturePolicy } = require('../lib/feature-policy');
+const { checkDomainAvailability } = require('../lib/availability.mts');
+const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
 
 test('disabled DNS and website probes produce skipped unknown evidence without network calls', async () => {
   let dnsCalls = 0;

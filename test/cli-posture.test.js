@@ -4,13 +4,13 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
-const EXIT_CODES = require('../cli/exit-codes');
-const { buildCliPostureDocument } = require('../cli/formatters/json');
-const { MAX_POSTURE_TERMINAL_RECORDS, formatTerminalPosture } = require('../cli/formatters/terminal');
-const { MAX_POSTURE_SELECTORS, normalizePostureSelectors } = require('../cli/posture');
-const { runCli } = require('../cli/runner');
-const { normalizeDkimSelectors } = require('../lib/domain-posture');
+const { parseCliArguments } = require('../cli/arguments.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { buildCliPostureDocument } = require('../cli/formatters/json.mts');
+const { MAX_POSTURE_TERMINAL_RECORDS, formatTerminalPosture } = require('../cli/formatters/terminal.mts');
+const { MAX_POSTURE_SELECTORS, normalizePostureSelectors } = require('../cli/posture.mts');
+const { runCli } = require('../cli/runner.mts');
+const { normalizeDkimSelectors } = require('../lib/domain-posture.mts');
 
 function capture() {
   let value = '';

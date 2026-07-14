@@ -1,5 +1,5 @@
 // Perceptual (fuzzy) favicon hashing - complements the exact SHA-256 in
-// lib/favicon.js. An exact hash only catches a byte-for-byte copied favicon;
+// lib/favicon.mts. An exact hash only catches a byte-for-byte copied favicon;
 // a lookalike that resized, recompressed, or re-saved the brand's icon (very
 // common - the copy passes through a different tool than the original) slips
 // past it while still being visually identical. A perceptual hash catches

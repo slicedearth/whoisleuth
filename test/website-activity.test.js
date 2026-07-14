@@ -1,8 +1,8 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { checkDomainAvailability, fetchHomepage, deriveWebsiteActivity, forSaleRedirectSignal } = require('../lib/availability');
-const { networkFeaturePolicy } = require('../lib/feature-policy');
+const { checkDomainAvailability, fetchHomepage, deriveWebsiteActivity, forSaleRedirectSignal } = require('../lib/availability.mts');
+const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
 
 describe('website activity classification', () => {
   test('any HTTP response proves that a web service is active', async () => {

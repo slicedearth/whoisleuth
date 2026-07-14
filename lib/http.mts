@@ -1,5 +1,5 @@
 // Shared response builder for Netlify Functions - was copy-pasted
-// identically into every function file (server.js doesn't need this; Express
+// identically into every function file (server.mts doesn't need this; Express
 // has res.json() built in).
 
 type NetlifyResponseHeaders = Readonly<Record<string, string>>;

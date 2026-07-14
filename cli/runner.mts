@@ -140,7 +140,7 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       }
       if (!input.trim()) throw new CliUsageError('compare requires one lookup JSON file or a lookup document on stdin.');
       const parsed = parseCliLookupDocument(input);
-      const loadComparison = dependencies.loadRegistryComparison || (() => import('../lib/registry-comparison.mjs'));
+      const loadComparison = dependencies.loadRegistryComparison || (() => import('../lib/registry-comparison.mts'));
       const comparisonModule = await loadComparison();
       const result = compareLookupDocument(parsed, comparisonModule.compareRegistrySources);
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
@@ -166,7 +166,7 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
         throw new CliUsageError(`Could not read evidence export input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
       }
       if (!input.trim()) throw new CliUsageError('export requires one lookup JSON file or a lookup document on stdin.');
-      const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mjs'));
+      const loadEvidence = dependencies.loadEvidenceExport || (() => import('../lib/evidence-export.mts'));
       const evidenceModule = await loadEvidence();
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
       const document = buildCliEvidenceExport(input, evidenceModule, now);
@@ -226,7 +226,7 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
       const seed = args.seed || await readInput();
       if (!seed) throw new CliUsageError('discover requires one brand label or domain as an argument or on stdin.');
-      const loadGenerator = dependencies.loadTyposquatGenerator || (() => import('../lib/typosquat-generator.mjs'));
+      const loadGenerator = dependencies.loadTyposquatGenerator || (() => import('../lib/typosquat-generator.mts'));
       const generator = await loadGenerator();
       const tlds = normalizeDiscoveryTlds(args.tldText || DEFAULT_DISCOVERY_TLDS.join(','), generator.MAX_GENERATION_TLDS);
       const result = generator.generateTyposquatCandidateSet(seed, tlds, {

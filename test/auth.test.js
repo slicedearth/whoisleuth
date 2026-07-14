@@ -11,12 +11,7 @@ const {
   isValidSessionToken,
   parseCookies,
   sessionFingerprintFromCookieHeader,
-} = require('../lib/auth');
-const typedAuth = require('../lib/auth.mts');
-
-test('retains the CommonJS authentication entry point over the typed implementation', () => {
-  assert.strictEqual(isTrustedOrigin, typedAuth.isTrustedOrigin);
-});
+} = require('../lib/auth.mts');
 
 describe('isTrustedOrigin', () => {
   test('accepts a matching Origin/Host pair', () => {

@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildWhoisChainUncached } = require('../lib/whois');
+const { buildWhoisChainUncached } = require('../lib/whois.mts');
 
 test('the WHOIS referral chain shares one total deadline across hops', async () => {
   const times = [0, 0, 9000, 13000];

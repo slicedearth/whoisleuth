@@ -7,16 +7,16 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { Readable, Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
-const { buildCliEvidenceExport, formatCliEvidenceExport } = require('../cli/export-evidence');
+const { parseCliArguments } = require('../cli/arguments.mts');
+const { buildCliEvidenceExport, formatCliEvidenceExport } = require('../cli/export-evidence.mts');
 const {
   MAX_MARKDOWN_VALUE_LENGTH,
   escapeMarkdownValue,
   formatLookupEvidenceMarkdown,
-} = require('../cli/formatters/markdown');
-const { formatLookupEvidenceHtml } = require('../cli/formatters/html');
-const EXIT_CODES = require('../cli/exit-codes');
-const { runCli } = require('../cli/runner');
+} = require('../cli/formatters/markdown.mts');
+const { formatLookupEvidenceHtml } = require('../cli/formatters/html.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';
@@ -105,7 +105,7 @@ function savedLookup(overrides = {}) {
 }
 
 async function evidenceModule() {
-  return import('../lib/evidence-export.mjs');
+  return import('../lib/evidence-export.mts');
 }
 
 describe('evidence export CLI arguments', () => {

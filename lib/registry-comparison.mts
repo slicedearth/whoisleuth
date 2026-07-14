@@ -12,35 +12,53 @@ const REDACTION_MARKERS = [
   /masked/i,
 ];
 
-function isRedacted(value) {
+type LooseRecord = Record<string, any>;
+type PublishedState = 'absent' | 'redacted' | 'value';
+type SourceCondition = 'complete' | 'incomplete' | 'unavailable';
+type FieldState = PublishedState | Exclude<SourceCondition, 'complete'>;
+type FieldStatus =
+  | 'equivalent' | 'conflict' | 'rdap_only' | 'whois_only'
+  | 'rdap_redacted' | 'whois_redacted'
+  | 'rdap_unavailable' | 'whois_unavailable'
+  | 'rdap_incomplete' | 'whois_incomplete';
+type RegistryComparisonOptions = { rdapStatus?: unknown; whoisStatus?: unknown };
+type SourceHealth = {
+  rdapStatus: unknown;
+  whoisStatus: unknown;
+  rdapCondition: SourceCondition;
+  whoisCondition: SourceCondition;
+};
+
+function isRedacted(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   return REDACTION_MARKERS.some((re) => re.test(value));
 }
 
-function publishedState(value) {
+function publishedState(value: unknown): PublishedState {
   if (value === null || value === undefined || value === '') return 'absent';
   if (Array.isArray(value) && value.length === 0) return 'absent';
   if (isRedacted(value)) return 'redacted';
   return 'value';
 }
 
-function sourceCondition(status) {
+function sourceCondition(status: unknown): SourceCondition {
   if (status === 'partial') return 'incomplete';
-  if (['error', 'unsupported', 'not_found', 'skipped', 'disabled'].includes(status)) return 'unavailable';
+  if (typeof status === 'string' && ['error', 'unsupported', 'not_found', 'skipped', 'disabled'].includes(status)) return 'unavailable';
   return 'complete';
 }
 
-function fieldState(value, condition) {
+function fieldState(value: unknown, condition: SourceCondition): FieldState {
   const state = publishedState(value);
   return state === 'absent' && condition !== 'complete' ? condition : state;
 }
 
-function registrarValue(value) {
+function registrarValue(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value || null;
-  return value.name || value.org || value.handle || null;
+  const record = value as LooseRecord;
+  return record.name || record.org || record.handle || null;
 }
 
-function normalizeText(value) {
+function normalizeText(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value
     .normalize('NFKC')
@@ -53,7 +71,7 @@ function normalizeText(value) {
   return normalized || null;
 }
 
-function normalizeDomain(value) {
+function normalizeDomain(value: unknown): string | null {
   return typeof value === 'string' ? value.trim().toLowerCase().replace(/\.+$/, '') : null;
 }
 
@@ -61,7 +79,7 @@ function normalizeDomain(value) {
 // different precision. Registration lifecycle comparisons only need the UTC
 // calendar date; comparing milliseconds would turn equivalent publication
 // formats into false conflicts.
-function normalizeDate(value) {
+function normalizeDate(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
   const trimmed = value.trim();
   const ymd = trimmed.match(/^(\d{4})[-/.](\d{2})[-/.](\d{2})/);
@@ -71,7 +89,7 @@ function normalizeDate(value) {
   return normalizeText(trimmed);
 }
 
-function normalizeDnssec(value) {
+function normalizeDnssec(value: unknown): string | null {
   const normalized = normalizeText(value);
   if (!normalized) return null;
   if (/unsigned|not signed|insecure/.test(normalized)) return 'unsigned';
@@ -79,22 +97,22 @@ function normalizeDnssec(value) {
   return normalized;
 }
 
-function normalizeStatus(value) {
+function normalizeStatus(value: unknown): string | null {
   return typeof value === 'string'
     ? value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
     : null;
 }
 
-function normalizeNameserver(value) {
+function normalizeNameserver(value: unknown): string | null {
   return normalizeDomain(value);
 }
 
-function normalizeSet(values, normalizeItem) {
+function normalizeSet(values: unknown, normalizeItem: (value: unknown) => string | null): string[] {
   if (!Array.isArray(values)) return [];
-  return [...new Set(values.map(normalizeItem).filter(Boolean))].sort();
+  return [...new Set(values.map(normalizeItem).filter((value): value is string => Boolean(value)))].sort();
 }
 
-function sameNormalizedValue(left, right) {
+function sameNormalizedValue(left: unknown, right: unknown): boolean {
   if (Array.isArray(left) || Array.isArray(right)) {
     if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
     return left.every((value, index) => value === right[index]);
@@ -102,7 +120,7 @@ function sameNormalizedValue(left, right) {
   return left === right;
 }
 
-function displayValue(value, state, status) {
+function displayValue(value: unknown, state: FieldState, status: unknown): string {
   if (state === 'absent') return 'Not published';
   if (state === 'redacted') return 'Redacted by source';
   if (state === 'incomplete') return 'Not observed (partial source)';
@@ -117,12 +135,12 @@ function displayValue(value, state, status) {
   return String(value);
 }
 
-function findRdapEvent(rdap, action) {
+function findRdapEvent(rdap: LooseRecord, action: string): unknown {
   const event = Array.isArray(rdap?.events) ? rdap.events.find((item) => item.action === action) : null;
   return event?.date || null;
 }
 
-function rdapLifecycleDate(rdap, field, fallbackAction) {
+function rdapLifecycleDate(rdap: LooseRecord, field: string, fallbackAction: string): unknown {
   const value = rdap?.lifecycle?.[field];
   return typeof value === 'string' && value ? value : findRdapEvent(rdap, fallbackAction);
 }
@@ -131,7 +149,13 @@ function rdapLifecycleDate(rdap, field, fallbackAction) {
 // in a failed, unsupported, skipped, not-found, or partial source are not
 // publication differences: preserving that source health prevents a lookup
 // failure from being presented as an RDAP/WHOIS disagreement.
-function classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, normalize) {
+function classifyFieldStatus(
+  rdapState: FieldState,
+  whoisState: FieldState,
+  rdapValue: unknown,
+  whoisValue: unknown,
+  normalize: (value: unknown) => unknown,
+): FieldStatus {
   if (rdapState === 'value' && whoisState === 'value') {
     return sameNormalizedValue(normalize(rdapValue), normalize(whoisValue)) ? 'equivalent' : 'conflict';
   }
@@ -146,7 +170,14 @@ function classifyFieldStatus(rdapState, whoisState, rdapValue, whoisValue, norma
   return 'whois_redacted';
 }
 
-function compareField(label, rdapValue, whoisValue, normalize, sourceHealth, comparisonValues = {}) {
+function compareField(
+  label: string,
+  rdapValue: unknown,
+  whoisValue: unknown,
+  normalize: (value: unknown) => unknown,
+  sourceHealth: SourceHealth,
+  comparisonValues: { rdap?: unknown; whois?: unknown } = {},
+) {
   const rdapPublishedState = publishedState(rdapValue);
   const whoisPublishedState = publishedState(whoisValue);
   if (rdapPublishedState === 'absent' && whoisPublishedState === 'absent') return null;
@@ -170,16 +201,20 @@ function compareField(label, rdapValue, whoisValue, normalize, sourceHealth, com
   };
 }
 
-export function compareRegistrySources(rdapParsed, whoisParsed, options = {}) {
-  const rdap = rdapParsed || {};
-  const whois = whoisParsed || {};
+export function compareRegistrySources(
+  rdapParsed: LooseRecord | null | undefined,
+  whoisParsed: LooseRecord | null | undefined,
+  options: RegistryComparisonOptions = {},
+) {
+  const rdap: LooseRecord = rdapParsed || {};
+  const whois: LooseRecord = whoisParsed || {};
   const sourceHealth = {
     rdapStatus: options.rdapStatus || null,
     whoisStatus: options.whoisStatus || null,
     rdapCondition: sourceCondition(options.rdapStatus),
     whoisCondition: sourceCondition(options.whoisStatus),
   };
-  const dateField = (label, field, fallbackAction) => {
+  const dateField = (label: string, field: string, fallbackAction: string) => {
     const rdapValue = rdapLifecycleDate(rdap, field, fallbackAction);
     const whoisValue = whois[field] || whois.lifecycle?.[field] || null;
     return compareField(label, rdapValue, whoisValue, normalizeDate, sourceHealth, {
@@ -200,7 +235,7 @@ export function compareRegistrySources(rdapParsed, whoisParsed, options = {}) {
     compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver), sourceHealth),
   ].filter((field) => field !== null);
 
-  const counts = {
+  const counts: Record<FieldStatus, number> = {
     equivalent: 0, conflict: 0, rdap_only: 0, whois_only: 0,
     rdap_redacted: 0, whois_redacted: 0,
     rdap_unavailable: 0, whois_unavailable: 0,

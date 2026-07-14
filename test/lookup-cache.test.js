@@ -6,14 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { cached, MAX_ENTRIES, MAX_TOTAL_BYTES, _storeSize, _storeBytes } = require('../lib/lookup-cache');
-const typedLookupCache = require('../lib/lookup-cache.mts');
-
-test('retains the CommonJS lookup-cache entry point over the typed implementation', () => {
-  assert.strictEqual(cached, typedLookupCache.cached);
-  assert.strictEqual(_storeSize, typedLookupCache._storeSize);
-  assert.strictEqual(_storeBytes, typedLookupCache._storeBytes);
-});
+const { cached, MAX_ENTRIES, MAX_TOTAL_BYTES, _storeSize, _storeBytes } = require('../lib/lookup-cache.mts');
 
 test('the cache never grows past MAX_ENTRIES, even when every key is unique', async () => {
   const extra = 50;

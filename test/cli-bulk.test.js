@@ -4,7 +4,7 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Readable, Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
+const { parseCliArguments } = require('../cli/arguments.mts');
 const {
   MAX_BULK_INPUT_BYTES,
   MAX_DEEP_BULK_QUERIES,
@@ -12,11 +12,11 @@ const {
   parseBulkQueries,
   readTextStreamBounded,
   runBulkLookups,
-} = require('../cli/bulk');
-const EXIT_CODES = require('../cli/exit-codes');
-const { buildCliBulkDocument, formatJsonLines } = require('../cli/formatters/json');
-const { formatTerminalBulk } = require('../cli/formatters/terminal');
-const { runCli } = require('../cli/runner');
+} = require('../cli/bulk.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { buildCliBulkDocument, formatJsonLines } = require('../cli/formatters/json.mts');
+const { formatTerminalBulk } = require('../cli/formatters/terminal.mts');
+const { runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';

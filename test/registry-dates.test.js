@@ -1,14 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseRegistryDate, registryDateIso } = require('../lib/registry-dates');
-const typedRegistryDates = require('../lib/registry-dates.mts');
-const { parseWhoisDate } = require('../lib/availability');
-
-test('retains the CommonJS registry-date entry point over the typed implementation', () => {
-  assert.strictEqual(parseRegistryDate, typedRegistryDates.parseRegistryDate);
-  assert.strictEqual(registryDateIso, typedRegistryDates.registryDateIso);
-});
+const { parseRegistryDate, registryDateIso } = require('../lib/registry-dates.mts');
+const { parseWhoisDate } = require('../lib/availability.mts');
 
 test('normalizes supported registry date shapes to canonical ISO timestamps', () => {
   assert.equal(registryDateIso('03.04.2024'), '2024-04-03T00:00:00.000Z');

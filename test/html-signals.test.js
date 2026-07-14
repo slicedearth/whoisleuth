@@ -1,4 +1,4 @@
-// Covers lib/html-signals.js - the regex-based signals pulled from an
+// Covers lib/html-signals.mts - the regex-based signals pulled from an
 // already-fetched homepage HTML (page title, password field, phishing
 // language, external asset hotlinking). Pure text-in/object-out, no
 // network access needed.
@@ -18,7 +18,7 @@ const {
   PAGE_IDENTITY_VERSION,
   extractHtmlSignals,
   extractPageIdentity,
-} = require('../lib/html-signals');
+} = require('../lib/html-signals.mts');
 
 describe('pageTitle', () => {
   test('extracts and trims a <title> tag', () => {

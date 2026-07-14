@@ -10,7 +10,7 @@ const {
   parseTlsRptRecords,
   parseBimiRecords,
   parseDkimRecords,
-} = require('../lib/domain-posture-parsers');
+} = require('../lib/domain-posture-parsers.mts');
 
 describe('TXT/tag parsing', () => {
   test('joins DNS TXT chunks without inserting spaces', () => {

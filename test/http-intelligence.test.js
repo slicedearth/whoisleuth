@@ -7,7 +7,7 @@ const {
   failedHttpObservation,
   normalizeProvenanceUrl,
   skippedHttpObservation,
-} = require('../lib/http-intelligence');
+} = require('../lib/http-intelligence.mts');
 
 const OBSERVED_AT = '2026-07-13T00:00:00.000Z';
 

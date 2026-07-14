@@ -1,4 +1,4 @@
-// Fixed-window, per-IP rate limiting. Shared by server.js and the Netlify
+// Fixed-window, per-IP rate limiting. Shared by server.mts and the Netlify
 // Functions so both deployment modes get the same protection: strict limits
 // on /api/login (the shared password is the tool's only access control, so
 // brute-forcing it is the main risk) and a generous ceiling on the lookup
@@ -7,7 +7,7 @@
 // worst-case bulk scan (up to MAX_FAST_BULK_DOMAINS domains, client-driven
 // at the Bulk workspace's configured number of in-flight requests).
 //
-// This is in-memory, so on server.js (one long-lived process) it limits
+// This is in-memory, so on server.mts (one long-lived process) it limits
 // globally; on Netlify Functions each container has its own memory, so it
 // only limits bursts within a single warm container rather than across the
 // whole deployment. Still worth having as a cheap first line of defense -
@@ -42,7 +42,7 @@ function checkRateLimit(key: string, { limit, windowMs }: RateLimitConfig): Rate
   return { allowed: true };
 }
 
-// Periodic sweep so a long-running process (server.js) doesn't accumulate
+// Periodic sweep so a long-running process (server.mts) doesn't accumulate
 // one entry per distinct IP forever.
 const sweepInterval = setInterval(() => {
   const now = Date.now();

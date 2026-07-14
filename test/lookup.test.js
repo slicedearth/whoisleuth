@@ -1,8 +1,8 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { runUnifiedLookup } = require('../lib/lookup');
-const { networkFeaturePolicy } = require('../lib/feature-policy');
+const { runUnifiedLookup } = require('../lib/lookup.mts');
+const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
 
 const classifiedDomain = {
   type: 'domain',

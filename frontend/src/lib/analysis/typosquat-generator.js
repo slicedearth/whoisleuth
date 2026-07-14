@@ -1,2 +1,2 @@
 // Compatibility re-export: the browser and CLI consume one shared pure core.
-export * from '../../../../lib/typosquat-generator.mjs';
+export * from '../../../../lib/typosquat-generator.mts';

@@ -36,7 +36,7 @@ const MAX_RESULTS = 500;
 // crt.sh's response size scales with how many certificates ever matched the
 // keyword, not with MAX_RESULTS - a broad single-word keyword can have
 // millions of matching certificates, and unlike the domain-homepage fetch in
-// lib/availability.js (fine to scan a truncated prefix for a text match),
+// lib/availability.mts (fine to scan a truncated prefix for a text match),
 // this response has to be complete, valid JSON to parse at all. Capped so a
 // broad keyword fails with a clear "narrow your search" error instead of
 // buffering an arbitrarily large body in memory first.

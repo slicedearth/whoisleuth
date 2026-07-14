@@ -2,25 +2,50 @@
 // objects so a later scan can explain why each domain was generated; callers
 // that only need the historical string list can use the compatibility wrapper.
 
-import { confusableCharactersForAscii } from './idn-confusables.mjs';
+import { confusableCharactersForAscii } from './idn-confusables.mts';
 
-const QWERTY_ADJACENT = {
+type KeyboardRow = { keys: string; offset: number };
+type KeyboardPosition = { rowIndex: number; index: number; x: number };
+type KeyboardLayout = { id: string; label: string; adjacent: Readonly<Record<string, string>> };
+type GenerationPreset = { id: string; label: string; description: string; mutationTypes: readonly string[] };
+type GenerationOptions = { preset?: unknown; keyboardLayout?: unknown };
+type DomainParts = { name: string; tld: string | null; wordTokens: string[] };
+type GenerationState = {
+  sourceName: string;
+  variants: Map<string, Set<string>>;
+  familyCounts: Map<string, number>;
+  limitReasons: Set<string>;
+  rejectedVariantCount: number;
+  enabledFamilies: Set<string>;
+};
+export type TyposquatCandidate = { domain: string; source: string; tld: string; mutationTypes: string[] };
+export type TyposquatGenerationResult = {
+  version: 1;
+  candidates: TyposquatCandidate[];
+  inputValid: boolean;
+  truncated: boolean;
+  limitReasons: string[];
+  rejectedVariantCount: number;
+  limits: { tlds: number; nameVariants: number; candidates: number };
+};
+
+const QWERTY_ADJACENT: Readonly<Record<string, string>> = {
   q: 'wa', w: 'qeas', e: 'wrds', r: 'etdf', t: 'ryfg', y: 'tugh', u: 'yihj', i: 'uojk', o: 'iplk', p: 'ol',
   a: 'qwsz', s: 'awedxz', d: 'serfcx', f: 'drtgvc', g: 'ftyhbv', h: 'gyujnb', j: 'huikmn', k: 'jiolm', l: 'kop',
   z: 'asx', x: 'zsdc', c: 'xdfv', v: 'cfgb', b: 'vghn', n: 'bhjm', m: 'njk',
 };
 
-function buildKeyboardAdjacency(rows) {
-  const positions = new Map();
+function buildKeyboardAdjacency(rows: KeyboardRow[]): Readonly<Record<string, string>> {
+  const positions = new Map<string, KeyboardPosition>();
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex];
     for (let index = 0; index < row.keys.length; index += 1) {
       positions.set(row.keys[index], { rowIndex, index, x: index + row.offset });
     }
   }
-  const adjacency = {};
+  const adjacency: Record<string, string> = {};
   for (const [key, position] of positions) {
-    const neighbours = [];
+    const neighbours: string[] = [];
     const sameRow = rows[position.rowIndex].keys;
     if (position.index > 0) neighbours.push(sameRow[position.index - 1]);
     if (position.index + 1 < sameRow.length) neighbours.push(sameRow[position.index + 1]);
@@ -48,13 +73,13 @@ const QWERTZ_ADJACENT = buildKeyboardAdjacency([
 ]);
 
 export const DEFAULT_KEYBOARD_LAYOUT = 'qwerty';
-export const KEYBOARD_LAYOUTS = Object.freeze({
+export const KEYBOARD_LAYOUTS: Readonly<Record<string, KeyboardLayout>> = Object.freeze({
   qwerty: Object.freeze({ id: 'qwerty', label: 'QWERTY', adjacent: Object.freeze(QWERTY_ADJACENT) }),
   azerty: Object.freeze({ id: 'azerty', label: 'AZERTY', adjacent: AZERTY_ADJACENT }),
   qwertz: Object.freeze({ id: 'qwertz', label: 'QWERTZ', adjacent: QWERTZ_ADJACENT }),
 });
 
-const HOMOGLYPH_SWAPS = [
+const HOMOGLYPH_SWAPS: ReadonlyArray<readonly [string, string]> = [
   ['rn', 'm'], ['m', 'rn'], ['o', '0'], ['0', 'o'], ['l', '1'], ['1', 'l'], ['i', '1'], ['vv', 'w'], ['w', 'vv'],
 ];
 
@@ -86,7 +111,7 @@ const IMPERSONATION_TERMS = Object.freeze([
   'customer-support',
   'security-check',
 ]);
-const TLD_TYPOS = {
+const TLD_TYPOS: Readonly<Record<string, readonly string[]>> = {
   com: ['cm', 'co', 'om', 'con', 'comm', 'cim', 'vom'],
   net: ['ner', 'nte', 'ne'],
   org: ['ogr', 'rg', 'orgg'],
@@ -102,7 +127,7 @@ const MAX_TLD_INPUTS_INSPECTED = MAX_GENERATION_TLDS * 4;
 const CONTROL_CHARACTER_RE = /[\x00-\x1f\x7f]/;
 const DOMAIN_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const TLD_RE = /^[a-z]{2,63}$/;
-const FAMILY_NEW_VARIANT_LIMITS = Object.freeze({
+const FAMILY_NEW_VARIANT_LIMITS: Readonly<Record<string, number>> = Object.freeze({
   character_omission: 128,
   character_duplication: 128,
   character_transposition: 128,
@@ -147,7 +172,7 @@ const ALL_MUTATIONS = Object.freeze([
 ]);
 
 export const DEFAULT_GENERATION_PRESET = 'all';
-export const GENERATION_PRESETS = Object.freeze({
+export const GENERATION_PRESETS: Readonly<Record<string, GenerationPreset>> = Object.freeze({
   common: Object.freeze({
     id: 'common',
     label: 'Common edits',
@@ -186,11 +211,11 @@ export const MUTATION_LABELS = {
   tld_substitution: 'Selected TLD substitution',
 };
 
-function isValidDomainLabel(value) {
+function isValidDomainLabel(value: unknown): value is string {
   return typeof value === 'string' && value.length <= MAX_LABEL_LENGTH && DOMAIN_LABEL_RE.test(value);
 }
 
-function splitDomainParts(input) {
+function splitDomainParts(input: unknown): DomainParts | null {
   if (typeof input !== 'string' || input.length > MAX_GENERATION_INPUT_LENGTH || CONTROL_CHARACTER_RE.test(input)) return null;
   const trimmed = input.trim().toLowerCase();
   if (!trimmed) return null;
@@ -212,22 +237,24 @@ function splitDomainParts(input) {
   return { name, tld: null, wordTokens: tokenized.length >= 2 && tokenized.length <= 4 ? tokenized : [] };
 }
 
-function distinctWordOrders(tokens) {
+function distinctWordOrders(tokens: unknown): string[][] {
   if (!Array.isArray(tokens) || tokens.length < 2 || tokens.length > 4) return [];
-  const orders = [];
-  const used = Array(tokens.length).fill(false);
-  const current = [];
+  if (!tokens.every((token) => typeof token === 'string')) return [];
+  const strings = tokens as string[];
+  const orders: string[][] = [];
+  const used = Array(strings.length).fill(false);
+  const current: string[] = [];
   function visit() {
-    if (current.length === tokens.length) {
+    if (current.length === strings.length) {
       orders.push([...current]);
       return;
     }
-    const seenAtDepth = new Set();
-    for (let index = 0; index < tokens.length; index += 1) {
-      if (used[index] || seenAtDepth.has(tokens[index])) continue;
-      seenAtDepth.add(tokens[index]);
+    const seenAtDepth = new Set<string>();
+    for (let index = 0; index < strings.length; index += 1) {
+      if (used[index] || seenAtDepth.has(strings[index])) continue;
+      seenAtDepth.add(strings[index]);
       used[index] = true;
-      current.push(tokens[index]);
+      current.push(strings[index]);
       visit();
       current.pop();
       used[index] = false;
@@ -237,10 +264,10 @@ function distinctWordOrders(tokens) {
   return orders;
 }
 
-function normalizeTlds(values) {
+function normalizeTlds(values: unknown): { values: string[]; truncated: boolean } {
   if (!Array.isArray(values)) return { values: [], truncated: false };
-  const normalized = [];
-  const seen = new Set();
+  const normalized: string[] = [];
+  const seen = new Set<string>();
   let truncated = values.length > MAX_TLD_INPUTS_INSPECTED;
 
   for (const raw of values.slice(0, MAX_TLD_INPUTS_INSPECTED)) {
@@ -257,17 +284,17 @@ function normalizeTlds(values) {
   return { values: normalized, truncated };
 }
 
-function resolveGenerationPreset(options) {
+function resolveGenerationPreset(options: GenerationOptions): GenerationPreset {
   const requested = typeof options?.preset === 'string' ? options.preset : DEFAULT_GENERATION_PRESET;
   return GENERATION_PRESETS[requested] || GENERATION_PRESETS[DEFAULT_GENERATION_PRESET];
 }
 
-function resolveKeyboardLayout(options) {
+function resolveKeyboardLayout(options: GenerationOptions): KeyboardLayout {
   const requested = typeof options?.keyboardLayout === 'string' ? options.keyboardLayout : DEFAULT_KEYBOARD_LAYOUT;
   return KEYBOARD_LAYOUTS[requested] || KEYBOARD_LAYOUTS[DEFAULT_KEYBOARD_LAYOUT];
 }
 
-function selectCandidateTlds(sourceTld, fallbackTlds, enabledFamilies) {
+function selectCandidateTlds(sourceTld: string | null, fallbackTlds: unknown, enabledFamilies: Set<string>) {
   if (sourceTld && !enabledFamilies.has('tld_substitution')) {
     return { values: [sourceTld], truncated: false };
   }
@@ -281,7 +308,7 @@ function selectCandidateTlds(sourceTld, fallbackTlds, enabledFamilies) {
   };
 }
 
-function toAsciiLabel(label) {
+function toAsciiLabel(label: string): string | null {
   try {
     return new URL(`https://${label}.example`).hostname.replace(/\.example$/, '');
   } catch {
@@ -289,18 +316,7 @@ function toAsciiLabel(label) {
   }
 }
 
-/**
- * @typedef {Object} GenerationState
- * @property {string} sourceName
- * @property {Map<string, Set<string>>} variants
- * @property {Map<string, number>} familyCounts
- * @property {Set<string>} limitReasons
- * @property {number} rejectedVariantCount
- * @property {Set<string>} enabledFamilies
- */
-
-/** @returns {GenerationState} */
-function generationState(sourceName, enabledFamilies) {
+function generationState(sourceName: string, enabledFamilies: Set<string>): GenerationState {
   return {
     sourceName,
     variants: new Map(),
@@ -311,8 +327,7 @@ function generationState(sourceName, enabledFamilies) {
   };
 }
 
-/** @param {GenerationState} state */
-function addVariant(state, variant, mutationType) {
+function addVariant(state: GenerationState, variant: string, mutationType: string): void {
   if (!state.enabledFamilies.has(mutationType)) return;
   if (!isValidDomainLabel(variant) || variant === state.sourceName) {
     if (variant && variant !== state.sourceName) state.rejectedVariantCount += 1;
@@ -343,30 +358,11 @@ function addVariant(state, variant, mutationType) {
 }
 
 /**
- * @typedef {Object} TyposquatCandidate
- * @property {string} domain
- * @property {string} source
- * @property {string} tld
- * @property {string[]} mutationTypes
- */
-
-/**
- * @typedef {Object} TyposquatGenerationResult
- * @property {1} version
- * @property {TyposquatCandidate[]} candidates
- * @property {boolean} inputValid
- * @property {boolean} truncated
- * @property {string[]} limitReasons
- * @property {number} rejectedVariantCount
- * @property {{tlds: number, nameVariants: number, candidates: number}} limits
- */
-
-/**
  * Returns a cheap upper-bound estimate without allocating candidate objects.
  * The estimate intentionally precedes validity filtering and deduplication, so
  * the generated result can be smaller but never larger than this bounded value.
  */
-export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options = {}) {
+export function estimateTyposquatCandidateCount(rawInput: unknown, fallbackTlds: unknown, options: GenerationOptions = {}) {
   const parts = splitDomainParts(rawInput);
   const preset = resolveGenerationPreset(options);
   const keyboardLayout = resolveKeyboardLayout(options);
@@ -457,7 +453,7 @@ export function estimateTyposquatCandidateCount(rawInput, fallbackTlds, options 
  * Compatibility callers can continue to use generateTyposquatCandidates().
  * @returns {TyposquatGenerationResult}
  */
-export function generateTyposquatCandidateSet(rawInput, fallbackTlds, options = {}) {
+export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: unknown, options: GenerationOptions = {}): TyposquatGenerationResult {
   const preset = resolveGenerationPreset(options);
   const keyboardLayout = resolveKeyboardLayout(options);
   const enabledFamilies = new Set(preset.mutationTypes);
@@ -583,11 +579,10 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds, options = 
     }
   }
 
-  /** @type {Map<string, TyposquatCandidate>} */
-  const byDomain = new Map();
+  const byDomain = new Map<string, TyposquatCandidate>();
   const source = tld ? `${name}.${tld}` : name;
 
-  function addCandidate(domain, candidateTld, mutationTypes) {
+  function addCandidate(domain: string, candidateTld: string, mutationTypes: Iterable<string>) {
     const existing = byDomain.get(domain);
     if (existing) {
       for (const mutationType of mutationTypes) {
@@ -638,11 +633,10 @@ export function generateTyposquatCandidateSet(rawInput, fallbackTlds, options = 
   };
 }
 
-/** @returns {TyposquatCandidate[]} */
-export function generateTyposquatCandidates(rawInput, fallbackTlds, options = {}) {
+export function generateTyposquatCandidates(rawInput: unknown, fallbackTlds: unknown, options: GenerationOptions = {}): TyposquatCandidate[] {
   return generateTyposquatCandidateSet(rawInput, fallbackTlds, options).candidates;
 }
 
-export function generateTyposquatVariants(rawInput, fallbackTlds, options = {}) {
+export function generateTyposquatVariants(rawInput: unknown, fallbackTlds: unknown, options: GenerationOptions = {}): string[] {
   return generateTyposquatCandidates(rawInput, fallbackTlds, options).map((candidate) => candidate.domain);
 }

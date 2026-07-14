@@ -16,12 +16,16 @@ const MAX_REFERENCE_MATCHES = 20;
 const MAX_FINDINGS = 20;
 const MAX_GENERATION_CONFUSABLES = 8;
 
+type ScriptLabel = { label: string; scripts: string[]; mixed: boolean };
+type ReferenceMatch = { asciiDomain: string; unicodeDomain: string; skeleton: string };
+type IdnFinding = { id: string; tone: string; label: string; detail: string };
+
 // NFKD handles full-width and mathematical presentation forms before this
 // table is consulted. Version 2 broadens the original visual set with a small
 // reviewed subset of single-code-point mappings from Unicode 17 UTS #39 data.
 // Candidate-generation additions must produce a distinct ACE label through
 // the platform IDNA conversion, and each ASCII source remains capped below.
-const CONFUSABLE_GROUPS = Object.freeze({
+const CONFUSABLE_GROUPS: Readonly<Record<string, string>> = Object.freeze({
   a: 'аαɑ',
   b: 'ьƄ',
   c: 'сϲⅽᴄⲥ𐐽',
@@ -56,7 +60,7 @@ const CONFUSABLE_GROUPS = Object.freeze({
 // registrable label. Tests verify every checked-in character produces an ACE
 // label whose visual skeleton returns to the source, and the per-source cap
 // limits any future additions.
-const GENERATION_CONFUSABLE_GROUPS = Object.freeze({
+const GENERATION_CONFUSABLE_GROUPS: Readonly<Record<string, string>> = Object.freeze({
   a: 'аαɑ',
   b: 'ь',
   c: 'сᴄⲥ𐐽',
@@ -85,13 +89,12 @@ const GENERATION_CONFUSABLE_GROUPS = Object.freeze({
   z: 'ᴢ',
 });
 
-const CONFUSABLE_TO_ASCII = new Map();
+const CONFUSABLE_TO_ASCII = new Map<string, string>();
 for (const [ascii, values] of Object.entries(CONFUSABLE_GROUPS)) {
   for (const value of values) CONFUSABLE_TO_ASCII.set(value, ascii);
 }
 
-/** @type {ReadonlyArray<readonly [string, RegExp]>} */
-const SCRIPT_TESTS = Object.freeze([
+const SCRIPT_TESTS: ReadonlyArray<readonly [string, RegExp]> = Object.freeze([
   ['Latin', /\p{Script=Latin}/u],
   ['Cyrillic', /\p{Script=Cyrillic}/u],
   ['Greek', /\p{Script=Greek}/u],
@@ -119,16 +122,16 @@ const SCRIPT_TESTS = Object.freeze([
 
 const MARK_RE = /\p{Mark}/u;
 const LETTER_RE = /\p{Letter}/u;
-const JAPANESE_SCRIPTS = new Set(['Han', 'Hiragana', 'Katakana']);
+const JAPANESE_SCRIPTS = new Set<string>(['Han', 'Hiragana', 'Katakana']);
 
-function decodeDigit(codePoint) {
+function decodeDigit(codePoint: number): number {
   if (codePoint >= 0x61 && codePoint <= 0x7a) return codePoint - 0x61;
   if (codePoint >= 0x41 && codePoint <= 0x5a) return codePoint - 0x41;
   if (codePoint >= 0x30 && codePoint <= 0x39) return codePoint - 0x30 + 26;
   return -1;
 }
 
-function adaptBias(delta, pointCount, firstTime) {
+function adaptBias(delta: number, pointCount: number, firstTime: boolean): number {
   let value = firstTime ? Math.floor(delta / 700) : delta >> 1;
   value += Math.floor(value / pointCount);
   let k = 0;
@@ -142,10 +145,9 @@ function adaptBias(delta, pointCount, firstTime) {
 // RFC 3492 decoder kept local so the browser build does not acquire a runtime
 // dependency merely to present the Unicode form of an already-normalized ACE
 // label. Every arithmetic step is checked and decoded output is capped.
-export function decodePunycodeLabel(input) {
+export function decodePunycodeLabel(input: unknown): string | null {
   if (typeof input !== 'string' || input.length === 0 || input.length > 59 || !/^[a-z0-9-]+$/i.test(input)) return null;
-  /** @type {number[]} */
-  const output = [];
+  const output: number[] = [];
   const delimiter = input.lastIndexOf('-');
   let cursor = 0;
   if (delimiter >= 0) {
@@ -195,7 +197,7 @@ export function decodePunycodeLabel(input) {
   }
 }
 
-function normalizeAsciiDomain(raw) {
+function normalizeAsciiDomain(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim().replace(/\.+$/, '');
   if (!trimmed || trimmed.length > MAX_DOMAIN_LENGTH || /[\u0000-\u0020\u007f]/.test(trimmed)) return null;
@@ -211,10 +213,10 @@ function normalizeAsciiDomain(raw) {
   return hostname;
 }
 
-export function unicodeDomainFromAscii(raw) {
+export function unicodeDomainFromAscii(raw: unknown): string | null {
   const asciiDomain = normalizeAsciiDomain(raw);
   if (!asciiDomain) return null;
-  const labels = [];
+  const labels: string[] = [];
   for (const label of asciiDomain.split('.')) {
     if (!label.startsWith('xn--')) {
       labels.push(label);
@@ -227,7 +229,7 @@ export function unicodeDomainFromAscii(raw) {
   return labels.join('.');
 }
 
-function scriptForCharacter(character) {
+function scriptForCharacter(character: string): string | null {
   if (!LETTER_RE.test(character)) return null;
   for (const [name, expression] of SCRIPT_TESTS) {
     if (expression.test(character)) return name;
@@ -235,11 +237,11 @@ function scriptForCharacter(character) {
   return 'Other';
 }
 
-function isCompatibleScriptSet(scripts) {
+function isCompatibleScriptSet(scripts: string[]): boolean {
   return scripts.length <= 1 || scripts.every((script) => JAPANESE_SCRIPTS.has(script));
 }
 
-export function unicodeSkeleton(raw) {
+export function unicodeSkeleton(raw: unknown): string | null {
   if (typeof raw !== 'string' || raw.length > MAX_DOMAIN_LENGTH * 4) return null;
   let output = '';
   for (const character of raw.normalize('NFKD').toLowerCase()) {
@@ -259,27 +261,23 @@ export function unicodeSkeleton(raw) {
   return output;
 }
 
-export function confusableCharactersForAscii(character) {
+export function confusableCharactersForAscii(character: unknown): string[] {
   const source = String(character || '').toLowerCase();
   return [...(GENERATION_CONFUSABLE_GROUPS[source] || '')].slice(0, MAX_GENERATION_CONFUSABLES);
 }
 
-function analyzeLabels(unicodeDomain) {
-  const labels = [];
-  const allScripts = new Set();
+function analyzeLabels(unicodeDomain: string): { labels: ScriptLabel[]; scripts: string[] } {
+  const labels: ScriptLabel[] = [];
+  const allScripts = new Set<string>();
   for (const label of unicodeDomain.split('.').slice(0, MAX_LABELS)) {
-    const scripts = [...new Set([...label].map(scriptForCharacter).filter(Boolean))].sort();
+    const scripts = [...new Set([...label].map(scriptForCharacter).filter((script): script is string => Boolean(script)))].sort();
     for (const script of scripts) allScripts.add(script);
     labels.push({ label, scripts, mixed: !isCompatibleScriptSet(scripts) });
   }
   return { labels, scripts: [...allScripts].sort() };
 }
 
-/**
- * @param {string} rawDomain
- * @param {string[]} [referenceDomains]
- */
-export function analyzeDomainIdn(rawDomain, referenceDomains = []) {
+export function analyzeDomainIdn(rawDomain: unknown, referenceDomains: unknown = []) {
   const asciiDomain = normalizeAsciiDomain(rawDomain);
   if (!asciiDomain) return null;
   const unicodeDomain = unicodeDomainFromAscii(asciiDomain);
@@ -288,15 +286,15 @@ export function analyzeDomainIdn(rawDomain, referenceDomains = []) {
   const analyzed = analyzeLabels(unicodeDomain);
   const mixedScriptLabels = analyzed.labels.filter((label) => label.mixed);
   const skeleton = unicodeSkeleton(unicodeDomain);
-  const referenceMatches = [];
-  const seenReferences = new Set();
+  const referenceMatches: ReferenceMatch[] = [];
+  const seenReferences = new Set<string>();
   for (const rawReference of (Array.isArray(referenceDomains) ? referenceDomains : []).slice(0, MAX_REFERENCE_DOMAINS)) {
     const referenceAscii = normalizeAsciiDomain(rawReference);
     if (!referenceAscii || referenceAscii === asciiDomain || seenReferences.has(referenceAscii)) continue;
     seenReferences.add(referenceAscii);
     const referenceUnicode = unicodeDomainFromAscii(referenceAscii);
     const referenceSkeleton = referenceUnicode ? unicodeSkeleton(referenceUnicode) : null;
-    if (!skeleton || !referenceSkeleton || skeleton !== referenceSkeleton) continue;
+    if (!skeleton || !referenceUnicode || !referenceSkeleton || skeleton !== referenceSkeleton) continue;
     referenceMatches.push({
       asciiDomain: referenceAscii,
       unicodeDomain: referenceUnicode,
@@ -305,7 +303,7 @@ export function analyzeDomainIdn(rawDomain, referenceDomains = []) {
     if (referenceMatches.length >= MAX_REFERENCE_MATCHES) break;
   }
 
-  const findings = [];
+  const findings: IdnFinding[] = [];
   if (hasIdn) findings.push({
     id: 'internationalized_domain',
     tone: 'info',

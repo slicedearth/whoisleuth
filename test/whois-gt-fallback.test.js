@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildWhoisChainUncached, fetchGtRegistryWhois } = require('../lib/whois');
+const { buildWhoisChainUncached, fetchGtRegistryWhois } = require('../lib/whois.mts');
 
 test('registry HTML fallback uses the injected safe request boundary', async () => {
   const calls = [];

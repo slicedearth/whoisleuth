@@ -27,7 +27,7 @@ export default defineConfig({
   // CI builds the frontend as its own step, so the server here just starts
   // node directly; locally `npm start` builds first so a single command works.
   webServer: {
-    command: isCI ? 'node server.js' : 'npm start',
+    command: isCI ? 'node server.mts' : 'npm start',
     url: BASE_URL,
     // A port collision should fail the run loudly, not silently test
     // whatever unrelated (or stale) server already happens to be listening.

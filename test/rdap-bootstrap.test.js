@@ -6,7 +6,7 @@ const {
   BOOTSTRAP_STALE_TTL_MS,
   clearRdapBootstrapCache,
   fetchBootstrap,
-} = require('../lib/rdap');
+} = require('../lib/rdap.mts');
 
 const FIXTURE = {
   version: '1.0',

@@ -2,7 +2,7 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseRdap } = require('../lib/rdap');
+const { parseRdap } = require('../lib/rdap.mts');
 const fixtures = require('../fixtures/rdap-registry-fixtures');
 
 function observed(parsed, key) {

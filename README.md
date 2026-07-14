@@ -32,7 +32,7 @@ Runs as a small Node backend (needed for raw WHOIS sockets and cross-origin
 RDAP requests, which browsers can't do directly) serving a prerendered
 SvelteKit frontend built with Vite. The lookup logic lives in a shared `lib/`
 so it can run either as a traditional always-on Node/Express server
-(`server.js`) or as Netlify Functions (`netlify/functions/`) with no logic
+(`server.mts`) or as Netlify Functions (`netlify/functions/`) with no logic
 duplicated between the two.
 
 ## Contents
@@ -54,7 +54,7 @@ this tool or point it at data that isn't your own:
 - **Data accuracy.** RDAP/WHOIS responses are only as current, complete, and
   correctly-parsed as the upstream registry provides - fields can be
   redacted, stale, or missing entirely (see the WHOIS parsing notes in
-  `lib/whois.js`). Don't treat the Opportunity/Risk scores, availability
+  `lib/whois.mts`). Don't treat the Opportunity/Risk scores, availability
   state, or abuse contact as a substitute for your own verification before
   acting on them, especially for anything with legal or financial
   consequences.
@@ -657,7 +657,7 @@ product walkthrough rather than a shadow implementation of every workspace.
 ## Rate limiting
 
 Authentication attempts and network-heavy API routes are rate-limited per
-client IP (`lib/rate-limit.js`), shared by `server.js` and the Netlify
+client IP (`lib/rate-limit.mts`), shared by `server.mts` and the Netlify
 Functions:
 
 - `/api/login` - 10 attempts per 5 minutes, since the shared password is the
@@ -669,7 +669,7 @@ Functions:
   abuse.
 
 Exceeding either limit returns `429` with a `Retry-After` header. The limiter
-is in-memory: on `server.js` (one long-lived process) it applies globally; on
+is in-memory: on `server.mts` (one long-lived process) it applies globally; on
 Netlify Functions each container has its own memory, so it only limits bursts
 within a single warm container rather than across the whole deployment - a
 cheap first line of defense, not a substitute for a shared store (e.g. Redis)
@@ -781,7 +781,7 @@ when they bypass canonical-path edge rules.
 
 This repository also ships TypeScript Netlify Functions for RDAP, WHOIS,
 availability, Certificate Transparency search, and domain-posture audits. They
-remain thin entry points over the same `lib/` code `server.js` uses, so behavior
+remain thin entry points over the same `lib/` code `server.mts` uses, so behavior
 is identical either way. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
@@ -794,7 +794,7 @@ is identical either way. To deploy:
 3. In the Netlify dashboard, set `SITE_PASSWORD` and a separate random
    `SESSION_SECRET` environment variable
    (Site settings → Environment variables) before your first deploy - the
-   login/session functions read them the same way `server.js` does. Without
+   login/session functions read them the same way `server.mts` does. Without
    `SITE_PASSWORD`, authentication fails closed and nobody can log in.
 
 Bulk scans run as one `/api/lookup` call per domain with client-side
@@ -809,7 +809,7 @@ bulk run.
 LICENSE                 Apache 2.0 license text
 NOTICE                  Copyright attribution notice
 PRIVACY.md              Template privacy notice - what data is processed, retention, deletion
-server.js               Express backend: lookup/posture/auth routes
+server.mts               Express backend: lookup/posture/auth routes
 frontend/               SvelteKit multi-page frontend workspace
   src/routes/           Lookup, Discover, Bulk, Monitor, Brands, and Privacy pages
   src/lib/              Browser state, workflow helpers, and analysis modules
@@ -817,21 +817,21 @@ frontend/               SvelteKit multi-page frontend workspace
     analysis/           Framework-neutral scoring, comparison, generation, history, and case logic
   static/               Frontend-owned static assets
   build/                Generated static output (ignored; created by npm run build)
-lib/                    Shared lookup logic, used by both server.js and netlify/functions/
-  classify.js           Query classification (domain/IPv4/IPv6/ASN)
-  rdap.js               IANA bootstrap lookup + RDAP response parsing
-  whois.js              WHOIS (TCP/43) referral chain + response parsing
-  availability.js       Availability/opportunity signal derivation
-  dns-mx.js             MX-record lookup (phishing-risk signal for deep checks)
-  domain-posture.js     Owned-domain DNS collection, assessment, and remediation
-  domain-posture-parsers.js  Pure SPF/DMARC/MTA-STS/TLS-RPT/BIMI/DKIM parsers
-  favicon.js            Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
-  html-signals.js       Bounded homepage signals and versioned static page-identity evidence
-  tls-intelligence.js   One-connection TLS/certificate profile with public-address pinning
-  ct-search.js          Certificate Transparency search (crt.sh) for lookalike hostnames
-  safe-fetch.js         SSRF-guarded fetch (blocks private/loopback/link-local targets)
-  auth.js               Shared-password session cookie (sign/verify, no user accounts)
-  rate-limit.js         Per-IP rate limiting for login and lookup routes
+lib/                    Shared lookup logic, used by both server.mts and netlify/functions/
+  classify.mts          Query classification (domain/IPv4/IPv6/ASN)
+  rdap.mts              IANA bootstrap lookup + RDAP response parsing
+  whois.mts             WHOIS (TCP/43) referral chain + response parsing
+  availability.mts      Availability/opportunity signal derivation
+  dns-mx.mts            MX-record lookup (phishing-risk signal for deep checks)
+  domain-posture.mts    Owned-domain DNS collection, assessment, and remediation
+  domain-posture-parsers.mts  Pure SPF/DMARC/MTA-STS/TLS-RPT/BIMI/DKIM parsers
+  favicon.mts           Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
+  html-signals.mts      Bounded homepage signals and versioned static page-identity evidence
+  tls-intelligence.mts  One-connection TLS/certificate profile with public-address pinning
+  ct-search.mts         Certificate Transparency search (crt.sh) for lookalike hostnames
+  safe-fetch.mts        SSRF-guarded fetch (blocks private/loopback/link-local targets)
+  auth.mts              Shared-password session cookie (sign/verify, no user accounts)
+  rate-limit.mts        Per-IP rate limiting for login and lookup routes
 netlify/functions/      Netlify Functions (lookups, posture audit, auth/session)
 netlify.toml            Netlify build/redirect config
 ```

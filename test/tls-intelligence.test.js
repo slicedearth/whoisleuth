@@ -14,7 +14,7 @@ const {
   normalizePublicAddressRecords,
   normalizeTlsHostname,
   skippedTlsObservation,
-} = require('../lib/tls-intelligence');
+} = require('../lib/tls-intelligence.mts');
 
 const OBSERVED_AT = '2026-07-13T10:00:00.000Z';
 const NOW = new Date('2026-07-13T10:00:00.000Z');

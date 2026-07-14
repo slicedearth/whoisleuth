@@ -4,12 +4,12 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Writable } = require('node:stream');
 
-const { parseCliArguments } = require('../cli/arguments');
-const EXIT_CODES = require('../cli/exit-codes');
-const { buildCliHttpDocument } = require('../cli/formatters/json');
-const { formatTerminalHttp } = require('../cli/formatters/terminal');
-const { MAX_HTTP_CLI_DETAIL_LENGTH, buildHttpProbeResult } = require('../cli/http');
-const { runCli } = require('../cli/runner');
+const { parseCliArguments } = require('../cli/arguments.mts');
+const EXIT_CODES = require('../cli/exit-codes.mts').default;
+const { buildCliHttpDocument } = require('../cli/formatters/json.mts');
+const { formatTerminalHttp } = require('../cli/formatters/terminal.mts');
+const { MAX_HTTP_CLI_DETAIL_LENGTH, buildHttpProbeResult } = require('../cli/http.mts');
+const { runCli } = require('../cli/runner.mts');
 
 function capture() {
   let value = '';

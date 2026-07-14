@@ -7,12 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyMxRecords } = require('../lib/dns-mx');
-const typedDnsMx = require('../lib/dns-mx.mts');
-
-test('retains the CommonJS MX entry point over the typed implementation', () => {
-  assert.strictEqual(classifyMxRecords, typedDnsMx.classifyMxRecords);
-});
+const { classifyMxRecords } = require('../lib/dns-mx.mts');
 
 test('a null MX record (root target, no trailing dot) is not counted as mail configured', () => {
   const result = classifyMxRecords([{ exchange: '', priority: 0 }]);

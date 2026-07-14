@@ -1,4 +1,4 @@
-// Covers lib/whois.js's authority-aware chain analysis - the decision of
+// Covers lib/whois.mts's authority-aware chain analysis - the decision of
 // whether a domain is genuinely unregistered. The bug this replaces was a
 // global "any hop's text contained 'no match'" boolean, which turned every
 // flaky registrar referral (a timeout, a rate-limit notice, or a misbehaving
@@ -8,7 +8,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { analyzeWhoisChainAuthority, parseWhoisChain } = require('../lib/whois');
+const { analyzeWhoisChainAuthority, parseWhoisChain } = require('../lib/whois.mts');
 
 const IANA = 'whois.iana.org';
 const REGISTRY = 'whois.verisign-grs.com';

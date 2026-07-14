@@ -1,12 +1,7 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { getClientIp, getForwardedProtocol, trustsForwardedHeaders } = require('../lib/rate-limit');
-const typedRateLimit = require('../lib/rate-limit.mts');
-
-test('retains the CommonJS rate-limit entry point over the typed implementation', () => {
-  assert.strictEqual(getClientIp, typedRateLimit.getClientIp);
-});
+const { getClientIp, getForwardedProtocol, trustsForwardedHeaders } = require('../lib/rate-limit.mts');
 
 describe('forwarded-header trust', () => {
   test('is opt-in for self-hosting and enabled by the Netlify runtime', () => {

@@ -47,7 +47,7 @@ const bootstrapInflight = new Map<string, Promise<BootstrapData>>();
 // Every other upstream call in this project (crt.sh, a domain's own
 // homepage, WHOIS sockets) already has a timeout - this one didn't, so a
 // slow/unresponsive registry or the IANA bootstrap endpoint could hang a
-// request indefinitely on server.js, or die ungracefully on a Netlify
+// request indefinitely on server.mts, or die ungracefully on a Netlify
 // function's own execution limit instead of failing cleanly.
 const UPSTREAM_TIMEOUT_MS = 7000;
 const UPSTREAM_TOTAL_DEADLINE_MS = 12000;
@@ -614,10 +614,10 @@ async function fetchRegistrarRdapRecord(
 }
 
 // Resolves the registry, fetches the record, and parses it - the full
-// /api/rdap request shape shared by both server.js and
+// /api/rdap request shape shared by both server.mts and
 // netlify/functions/rdap.mts, so the two deployment targets can't drift.
 // Returns null when no RDAP registry covers this query (the caller decides
-// how to report that as a 404). Cached briefly (lib/lookup-cache.js) since
+// how to report that as a 404). Cached briefly (lib/lookup-cache.mts) since
 // checkDomainAvailability() also calls this for the same domain a fast
 // scan and a follow-up deep-check both look up in quick succession.
 async function fetchRdapFromBases(

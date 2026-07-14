@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { boundedCliErrorMessage } from '../cli/errors.mts';
 import { runCli } from '../cli/runner.mts';
 

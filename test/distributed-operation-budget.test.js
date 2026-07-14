@@ -14,7 +14,7 @@ const {
   operationBudgetHttpStatus,
   operationBudgetReport,
   runWithOperationBudget,
-} = require('../lib/operation-budget');
+} = require('../lib/operation-budget.mts');
 const {
   ACQUIRE_SCRIPT,
   ACQUIRE_WITH_USAGE_SCRIPT,
@@ -30,7 +30,7 @@ const {
   normalizedRestUrl,
   normalizedToken,
   normalizedUsageLimits,
-} = require('../lib/distributed-operation-budget');
+} = require('../lib/distributed-operation-budget.mts');
 
 const TEST_LIMITS = {
   [OPERATION_CLASSES.REGISTRY_LIGHT]: { session: 2, runtime: 3 },

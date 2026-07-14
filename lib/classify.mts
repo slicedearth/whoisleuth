@@ -1,7 +1,7 @@
 // Query classification - shared by both the Express server and the Netlify
 // Functions so a domain/IP/ASN query is always parsed identically wherever
 // this code runs. Every classified value eventually reaches a raw protocol
-// call - a WHOIS TCP socket write (lib/whois.js), a DNS query, an RDAP/
+// call - a WHOIS TCP socket write (lib/whois.mts), a DNS query, an RDAP/
 // MTA-STS fetch URL - and none of those downstream call sites re-validate
 // syntax, so this is the one place responsible for rejecting anything that
 // isn't actually safe to hand to them.
@@ -44,7 +44,7 @@ type DomainQuery = ClassifiedQueryBase & {
 type ClassifiedQuery = IpQuery | AsnQuery | DomainQuery;
 
 // A CR/LF here would let one query become multiple lines once it reaches
-// lib/whois.js's raw `socket.write(query + '\r\n')` - a normal URL-encoded
+// lib/whois.mts's raw `socket.write(query + '\r\n')` - a normal URL-encoded
 // query string (?q=example.com%0D%0AHELP) decodes back into literal control
 // characters before this function ever sees them, so this has to be
 // checked explicitly, before any other parsing, rather than assumed away.

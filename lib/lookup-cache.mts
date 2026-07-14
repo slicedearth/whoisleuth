@@ -3,12 +3,12 @@
 // re-running a scan, a deep-check following a fast scan on the same
 // domain) doesn't need a fresh registry round-trip every time. Same
 // "public data, safe to share across all requests" reasoning as the IANA
-// bootstrap cache in lib/rdap.js - RDAP/WHOIS results are public registry
+// bootstrap cache in lib/rdap.mts - RDAP/WHOIS results are public registry
 // data, not anything specific to who's asking, so caching them briefly
 // isn't a privacy concern the way per-user state would be.
 //
 // In-memory, so (like the bootstrap cache and the rate limiter) this
-// applies globally on server.js's one long-lived process, but only within
+// applies globally on server.mts's one long-lived process, but only within
 // a single warm container on Netlify Functions.
 
 type CacheEntry = {
@@ -35,7 +35,7 @@ const MAX_ENTRIES = 3000;
 
 // MAX_ENTRIES alone bounds count, not size - it doesn't stop a hostile or
 // compromised registry from serving a near-maximum-size response (RDAP:
-// 2MB, lib/rdap.js; WHOIS: 200KB/hop, lib/whois.js) for many distinct
+// 2MB, lib/rdap.mts; WHOIS: 200KB/hop, lib/whois.mts) for many distinct
 // domains. A full-size fast bulk scan (up to MAX_FAST_BULK_DOMAINS) hitting
 // such a registry could otherwise retain gigabytes before entry count ever
 // reaches MAX_ENTRIES. 100MB is generous for a normal Node process while
@@ -119,7 +119,7 @@ async function cached(key: string, factory: CacheFactory): Promise<any> {
   return promise;
 }
 
-// Periodic sweep so a long-running process (server.js) doesn't accumulate
+// Periodic sweep so a long-running process (server.mts) doesn't accumulate
 // one entry per distinct lookup forever - same pattern as the rate
 // limiter's bucket cleanup.
 const sweepInterval = setInterval(() => {

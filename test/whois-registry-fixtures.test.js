@@ -2,7 +2,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseWhoisChain } = require('../lib/whois');
+const { parseWhoisChain } = require('../lib/whois.mts');
 const fixtures = require('../fixtures/whois-registry-fixtures');
 
 describe('WHOIS registry compatibility fixtures', () => {

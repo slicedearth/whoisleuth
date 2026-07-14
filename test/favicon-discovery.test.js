@@ -1,11 +1,11 @@
-// Covers lib/favicon.js's extractIconUrls - discovering the favicon a page
+// Covers lib/favicon.mts's extractIconUrls - discovering the favicon a page
 // actually declares via <link rel="...icon...">, rather than only probing
 // /favicon.ico. Motivated by real sites (e.g. npm) that serve no
 // /favicon.ico and only point to a CDN PNG this way.
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { extractIconUrls, buildFaviconCandidates } = require('../lib/favicon');
+const { extractIconUrls, buildFaviconCandidates } = require('../lib/favicon.mts');
 
 const BASE = 'https://example.com/';
 

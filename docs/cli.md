@@ -7,22 +7,22 @@ hosted WHOISleuth deployment.
 ## Current command
 
 ```bash
-node bin/whoisleuth.js lookup example.com
-node bin/whoisleuth.js lookup AS13335 --json
-printf 'example.com\n' | node bin/whoisleuth.js lookup --json
-node bin/whoisleuth.js lookup example.com --deep
-cat domains.txt | node bin/whoisleuth.js bulk --jsonl
-node bin/whoisleuth.js bulk domains.txt --concurrency 4
-node bin/whoisleuth.js ct-search 'example brand' --json
-node bin/whoisleuth.js discover example.com --preset common --jsonl
-node bin/whoisleuth.js posture example.com --selectors selector1,selector2 --json
-node bin/whoisleuth.js http example.com --json
-node bin/whoisleuth.js tls example.com --json
-node bin/whoisleuth.js lookup example.com --deep --json > lookup.json
-node bin/whoisleuth.js compare lookup.json --json
-node bin/whoisleuth.js export lookup.json > evidence.json
-node bin/whoisleuth.js export lookup.json --markdown > evidence.md
-node bin/whoisleuth.js export lookup.json --html > evidence.html
+node bin/whoisleuth.mts lookup example.com
+node bin/whoisleuth.mts lookup AS13335 --json
+printf 'example.com\n' | node bin/whoisleuth.mts lookup --json
+node bin/whoisleuth.mts lookup example.com --deep
+cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
+node bin/whoisleuth.mts bulk domains.txt --concurrency 4
+node bin/whoisleuth.mts ct-search 'example brand' --json
+node bin/whoisleuth.mts discover example.com --preset common --jsonl
+node bin/whoisleuth.mts posture example.com --selectors selector1,selector2 --json
+node bin/whoisleuth.mts http example.com --json
+node bin/whoisleuth.mts tls example.com --json
+node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
+node bin/whoisleuth.mts compare lookup.json --json
+node bin/whoisleuth.mts export lookup.json > evidence.json
+node bin/whoisleuth.mts export lookup.json --markdown > evidence.md
+node bin/whoisleuth.mts export lookup.json --html > evidence.html
 ```
 
 These examples run from a checked-out repository. The package exposes a

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const {
   fetchRegistrarRdapRecord,
   selectRegistrarRdapLink,
-} = require('../lib/rdap');
+} = require('../lib/rdap.mts');
 
 function link(href, extra = {}) {
   return { rel: 'related', href, type: 'application/rdap+json', ...extra };

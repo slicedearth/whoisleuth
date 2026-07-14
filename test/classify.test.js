@@ -1,21 +1,17 @@
-// Covers lib/classify.js - the one place a raw query string is turned into
+// Covers lib/classify.mts - the one place a raw query string is turned into
 // a typed, validated value before it reaches a WHOIS TCP socket write, a
 // DNS query, or an RDAP/MTA-STS fetch URL.
 
 const test = require('node:test');
 const { describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyQuery } = require('../lib/classify');
-
-test('loads the typed implementation through the stable CommonJS entry point', () => {
-  assert.strictEqual(require('../lib/classify.mts').classifyQuery, classifyQuery);
-});
+const { classifyQuery } = require('../lib/classify.mts');
 
 describe('control characters', () => {
   test('rejects an embedded CRLF (WHOIS protocol injection)', () => {
     // A normal URL-encoded query string (?q=example.com%0D%0AHELP) decodes
     // back into exactly this raw string before classifyQuery ever sees it -
-    // lib/whois.js writes the classified value straight onto a TCP socket
+    // lib/whois.mts writes the classified value straight onto a TCP socket
     // (`socket.write(query + '\r\n')`), so an embedded CR/LF here would let
     // one query become multiple WHOIS protocol lines.
     assert.throws(() => classifyQuery('example.com\r\nHELP'), /control characters/);

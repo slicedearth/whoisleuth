@@ -9,7 +9,7 @@ const {
   MAX_FORM_FINGERPRINTS,
   MAX_FORM_CONTROLS,
   createPageFingerprints,
-} = require('../lib/page-fingerprints');
+} = require('../lib/page-fingerprints.mts');
 
 const BASE_OPTIONS = Object.freeze({ baseUrl: 'https://example.com/start' });
 

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { checkDnsDelegation, checkDomainAvailability } = require('../lib/availability');
+const { checkDnsDelegation, checkDomainAvailability } = require('../lib/availability.mts');
 
 test('DNS delegation fallback normalizes, deduplicates, and sorts nameservers', async () => {
   const result = await checkDnsDelegation('example.test', {
