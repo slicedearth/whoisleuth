@@ -1,9 +1,5 @@
 'use strict';
 
-module.exports = Object.freeze({
-  SUCCESS: 0,
-  USAGE: 2,
-  LOOKUP_FAILED: 3,
-  PARTIAL_FAILURE: 4,
-  INTERNAL_ERROR: 70,
-});
+// Stable CommonJS entry point retained while the CLI runner remains
+// JavaScript during the incremental native TypeScript migration.
+module.exports = require('./exit-codes.mts').default;
