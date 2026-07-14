@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, pseudoContent, runBulkScan } from './helpers';
 
@@ -185,6 +186,21 @@ test('risk model v4 exposes cross-family corroboration in Bulk triage', async ({
 
   await page.getByRole('button', { name: 'high risk' }).click();
   await expect(row).toBeVisible();
+
+  await page.getByLabel('Defensive format').selectOption('hosts');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export 1 high-risk indicator' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.txt$/);
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const content = await readFile(path!, 'utf8');
+  expect(content).toContain('Review before use. Heuristic findings can include false positives.');
+  expect(content).toContain('0.0.0.0 candidate.example');
+  expect(content).not.toContain('official.example\n');
+  await expect(page.getByRole('status').filter({ hasText: 'Check for false positives before use' })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
 });
 
 test('deep results present bounded relationship evidence including exact native certificate identity', async ({ page }) => {
