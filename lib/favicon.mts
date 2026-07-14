@@ -15,7 +15,7 @@
 
 import * as crypto from 'node:crypto';
 
-import { safeFetch, readBytesCapped } from './safe-fetch.js';
+import { safeFetch, readBytesCapped } from './safe-fetch.mts';
 import { faviconPerceptualHash } from './perceptual-hash.mts';
 
 const MAX_FAVICON_BYTES = 200000; // generous for a favicon, small enough to bound memory
