@@ -9,9 +9,10 @@ const { runUnifiedLookup } = require('../lib/lookup');
 const fs = require('node:fs');
 const EXIT_CODES = require('./exit-codes');
 const { CliUsageError, parseCliArguments } = require('./arguments');
-const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliHttpDocument, buildCliLookupDocument, buildCliPostureDocument, buildCliTlsDocument, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines } = require('./formatters/json');
-const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalHttp, formatTerminalLookup, formatTerminalPosture, formatTerminalTls } = require('./formatters/terminal');
+const { buildCliBulkDocument, buildCliCompareDocument, buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliHttpDocument, buildCliLookupDocument, buildCliPostureDocument, buildCliTlsDocument, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines } = require('./formatters/json');
+const { formatTerminalBulk, formatTerminalCompare, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalHttp, formatTerminalLookup, formatTerminalPosture, formatTerminalTls } = require('./formatters/terminal');
 const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
+const { MAX_COMPARE_INPUT_BYTES, compareLookupDocument, parseCliLookupDocument, readCompareInputBounded } = require('./compare');
 const { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } = require('./discover');
 const { normalizePostureSelectors } = require('./posture');
 const { buildHttpProbeResult } = require('./http');
@@ -31,6 +32,7 @@ Usage:
   whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
+  whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]
   whoisleuth --help
   whoisleuth --version
 
@@ -75,6 +77,32 @@ async function runCli(argv, dependencies = {}) {
     const args = parseCliArguments(argv);
     if (args.action === 'help') { write(stdout, HELP); return EXIT_CODES.SUCCESS; }
     if (args.action === 'version') { write(stdout, `${VERSION}\n`); return EXIT_CODES.SUCCESS; }
+
+    if (args.action === 'compare') {
+      failureLabel = 'Registry comparison';
+      let input;
+      try {
+        input = dependencies.readCompareInput
+          ? await dependencies.readCompareInput(args.source)
+          : await readCompareInputBounded(args.source
+            ? fs.createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, MAX_COMPARE_INPUT_BYTES);
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read comparison input: ${boundedErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('compare requires one lookup JSON file or a lookup document on stdin.');
+      const parsed = parseCliLookupDocument(input);
+      const loadComparison = dependencies.loadRegistryComparison || (() => import('../lib/registry-comparison.mjs'));
+      const comparisonModule = await loadComparison();
+      const result = compareLookupDocument(parsed, comparisonModule.compareRegistrySources);
+      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
+      const document = buildCliCompareDocument(result, now);
+      if (!args.quiet) {
+        write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalCompare(document));
+      }
+      return EXIT_CODES.SUCCESS;
+    }
 
     if (args.action === 'bulk') {
       failureLabel = 'Bulk lookup';

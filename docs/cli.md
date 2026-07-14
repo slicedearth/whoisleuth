@@ -18,6 +18,8 @@ node bin/whoisleuth.js discover example.com --preset common --jsonl
 node bin/whoisleuth.js posture example.com --selectors selector1,selector2 --json
 node bin/whoisleuth.js http example.com --json
 node bin/whoisleuth.js tls example.com --json
+node bin/whoisleuth.js lookup example.com --deep --json > lookup.json
+node bin/whoisleuth.js compare lookup.json --json
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -60,12 +62,12 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | ---: | --- |
 | 0 | Command completed. Individual sources may still be partial or inconclusive; inspect diagnostics. |
 | 2 | Invalid command, option, input, or stdin shape. |
-| 3 | The unified lookup could not run. |
+| 3 | The requested lookup, collection, or comparison operation could not run. |
 | 4 | A bulk command completed with one or more per-query failures. |
 | 70 | Unexpected CLI bootstrap failure. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
-`http`, and `tls`. Comparison and export commands are added as separate bounded
+`http`, `tls`, and `compare`. Export commands are added as separate bounded
 increments rather than exposing incomplete aliases.
 
 ## Bulk lookup
@@ -155,3 +157,26 @@ and neutral findings. It stores no certificate bytes, session material, or
 application data and does not enumerate supported protocol or cipher suites.
 A failed collection is inconclusive rather than proof that no TLS service
 exists.
+
+## Registry-source comparison
+
+`compare` reads one version-1 `whoisleuth.cli.lookup` domain document from a
+file or stdin and reconciles its normalized registry RDAP and WHOIS fields. It
+does not repeat the lookup, contact the hosted deployment, or treat a conflict
+as a command failure. Use a deep lookup when both sources are wanted; a fast
+lookup deliberately records WHOIS as skipped, and comparison preserves that
+state as unavailable rather than misreporting RDAP-only publication.
+
+Input is capped at 8 MiB and must retain the lookup schema, mode, source
+diagnostics, and normalized parsed source sections. Per-value, list, and event
+bounds are revalidated because saved JSON is treated as untrusted input. Raw
+RDAP JSON, WHOIS response bodies, availability evidence, and unrelated lookup
+fields are not copied into the comparison result.
+
+Terminal and versioned JSON output cover domain identity, registry object ID,
+registrar, registrar IANA ID, lifecycle dates, DNSSEC, statuses, and name
+servers. The shared comparison model normalizes harmless case, punctuation,
+ordering, and date-precision differences while distinguishing conflicts,
+one-source publication, redaction, incomplete sources, and unavailable
+sources. This is source reconciliation, not an availability, ownership, or
+maliciousness decision.

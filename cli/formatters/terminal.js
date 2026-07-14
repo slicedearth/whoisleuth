@@ -211,6 +211,51 @@ function formatTerminalTls(document) {
   return `${lines.join('\n')}\n`;
 }
 
+function comparisonStatusLabel(status) {
+  const labels = {
+    equivalent: 'Equivalent',
+    conflict: 'Conflict',
+    rdap_only: 'RDAP only',
+    whois_only: 'WHOIS only',
+    rdap_redacted: 'RDAP redacted',
+    whois_redacted: 'WHOIS redacted',
+    rdap_unavailable: 'RDAP unavailable',
+    whois_unavailable: 'WHOIS unavailable',
+    rdap_incomplete: 'RDAP incomplete',
+    whois_incomplete: 'WHOIS incomplete',
+  };
+  return labels[status] || titleCase(status);
+}
+
+function formatTerminalCompare(document) {
+  const fields = Array.isArray(document.fields) ? document.fields : [];
+  const counts = document.counts && typeof document.counts === 'object' ? document.counts : {};
+  const sourceHealth = document.sourceHealth && typeof document.sourceHealth === 'object' ? document.sourceHealth : {};
+  const differenceCount = fields.length - (Number(counts.equivalent) || 0);
+  const lines = [
+    `Query          ${safeTerminalValue(document.query || document.registrableDomain)}`,
+    `Lookup mode    ${titleCase(document.lookupMode)}`,
+    `Lookup saved   ${safeTerminalValue(document.lookupGeneratedAt)}`,
+    `RDAP source    ${comparisonStatusLabel(sourceHealth.rdap?.status)}`,
+    `WHOIS source   ${comparisonStatusLabel(sourceHealth.whois?.status)}`,
+    `Compared       ${safeTerminalValue(fields.length, '0')} field${fields.length === 1 ? '' : 's'}`,
+    `Equivalent     ${safeTerminalValue(counts.equivalent, '0')}`,
+    `Differences    ${safeTerminalValue(differenceCount, '0')}`,
+    '',
+  ];
+  if (!fields.length) {
+    lines.push('Neither source published a comparable normalized field.');
+  } else {
+    for (const field of fields) {
+      lines.push(`[${comparisonStatusLabel(field.status).toUpperCase()}] ${safeTerminalValue(field.label)}`);
+      lines.push(`  RDAP   ${safeTerminalValue(field.rdapDisplay)}`);
+      lines.push(`  WHOIS  ${safeTerminalValue(field.whoisDisplay)}`);
+    }
+  }
+  lines.push('', 'Comparison is source reconciliation, not an availability or ownership decision.');
+  return `${lines.join('\n')}\n`;
+}
+
 module.exports = {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
@@ -219,6 +264,7 @@ module.exports = {
   MAX_TLS_TERMINAL_ALT_NAMES,
   MAX_TERMINAL_VALUE_LENGTH,
   formatTerminalBulk,
+  formatTerminalCompare,
   formatTerminalCtSearch,
   formatTerminalDiscover,
   formatTerminalHttp,

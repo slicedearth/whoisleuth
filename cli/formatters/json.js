@@ -6,6 +6,7 @@ const CLI_DISCOVER_SCHEMA_VERSION = 1;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
 const CLI_HTTP_SCHEMA_VERSION = 1;
 const CLI_TLS_SCHEMA_VERSION = 1;
+const CLI_COMPARE_SCHEMA_VERSION = 1;
 
 function buildCliLookupDocument(query, classified, result, generatedAt = new Date().toISOString(), mode = 'fast') {
   return {
@@ -99,6 +100,15 @@ function buildCliTlsDocument(requestedHostname, result, generatedAt = new Date()
   };
 }
 
+function buildCliCompareDocument(result, generatedAt = new Date().toISOString()) {
+  return {
+    ...result,
+    schema: 'whoisleuth.cli.compare',
+    version: CLI_COMPARE_SCHEMA_VERSION,
+    generatedAt,
+  };
+}
+
 function buildCliBulkDocument(items, metadata) {
   const succeeded = items.filter((item) => item.ok).length;
   return {
@@ -145,6 +155,7 @@ function formatJsonLines(items, metadata) {
 }
 
 module.exports = {
+  CLI_COMPARE_SCHEMA_VERSION,
   CLI_CT_SEARCH_SCHEMA_VERSION,
   CLI_DISCOVER_SCHEMA_VERSION,
   CLI_HTTP_SCHEMA_VERSION,
@@ -152,6 +163,7 @@ module.exports = {
   CLI_TLS_SCHEMA_VERSION,
   CLI_LOOKUP_SCHEMA_VERSION,
   buildCliBulkDocument,
+  buildCliCompareDocument,
   buildCliCtSearchDocument,
   buildCliDiscoverDocument,
   buildCliHttpDocument,

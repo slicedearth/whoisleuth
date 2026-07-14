@@ -29,8 +29,8 @@ function parseCliArguments(rawArgv) {
   }
 
   const command = argv[0];
-  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture', 'http', 'tls'].includes(command)) {
-    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture, http, tls.`);
+  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture', 'http', 'tls', 'compare'].includes(command)) {
+    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture, http, tls, compare.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
@@ -38,6 +38,7 @@ function parseCliArguments(rawArgv) {
   if (command === 'posture') return parsePostureArguments(argv.slice(1));
   if (command === 'http') return parseHttpArguments(argv.slice(1));
   if (command === 'tls') return parseTlsArguments(argv.slice(1));
+  if (command === 'compare') return parseCompareArguments(argv.slice(1));
   let query = null;
   let output = 'terminal';
   let deep = false;
@@ -230,6 +231,25 @@ function parseTlsArguments(argv) {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'tls', hostname, output, quiet, color };
+}
+
+function parseCompareArguments(argv) {
+  let source = null;
+  let output = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('compare accepts one optional lookup JSON file. Otherwise pipe one lookup document on stdin.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'compare', source, output, quiet, color };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
