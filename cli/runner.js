@@ -4,12 +4,13 @@ const { classifyQuery } = require('../lib/classify');
 const { searchCertificateTransparency } = require('../lib/ct-search');
 const { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } = require('../lib/domain-posture');
 const { fetchHomepage } = require('../lib/availability');
+const { collectTlsIntelligence, normalizeTlsHostname } = require('../lib/tls-intelligence');
 const { runUnifiedLookup } = require('../lib/lookup');
 const fs = require('node:fs');
 const EXIT_CODES = require('./exit-codes');
 const { CliUsageError, parseCliArguments } = require('./arguments');
-const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliHttpDocument, buildCliLookupDocument, buildCliPostureDocument, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines } = require('./formatters/json');
-const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalHttp, formatTerminalLookup, formatTerminalPosture } = require('./formatters/terminal');
+const { buildCliBulkDocument, buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliHttpDocument, buildCliLookupDocument, buildCliPostureDocument, buildCliTlsDocument, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines } = require('./formatters/json');
+const { formatTerminalBulk, formatTerminalCtSearch, formatTerminalDiscover, formatTerminalHttp, formatTerminalLookup, formatTerminalPosture, formatTerminalTls } = require('./formatters/terminal');
 const { MAX_BULK_INPUT_BYTES, parseBulkQueries, readTextStreamBounded, runBulkLookups } = require('./bulk');
 const { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } = require('./discover');
 const { normalizePostureSelectors } = require('./posture');
@@ -29,6 +30,7 @@ Usage:
   whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>] [--keyboard <layout>] [--json|--jsonl]
   whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
+  whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
   whoisleuth --help
   whoisleuth --version
 
@@ -182,6 +184,24 @@ async function runCli(argv, dependencies = {}) {
       const document = buildCliHttpDocument(requestedDomain, result, now);
       if (!args.quiet) {
         write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalHttp(document));
+      }
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'tls') {
+      failureLabel = 'TLS intelligence';
+      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
+      const requestedHostname = args.hostname || await readInput();
+      if (!requestedHostname) throw new CliUsageError('tls requires one hostname as an argument or on stdin.');
+      const normalizeHostname = dependencies.normalizeTlsHostname || normalizeTlsHostname;
+      const hostname = normalizeHostname(requestedHostname);
+      if (!hostname) throw new CliUsageError('tls requires a valid DNS hostname, not an IP address.');
+      const collect = dependencies.collectTlsIntelligence || collectTlsIntelligence;
+      const result = await collect(hostname);
+      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
+      const document = buildCliTlsDocument(requestedHostname, result, now);
+      if (!args.quiet) {
+        write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalTls(document));
       }
       return EXIT_CODES.SUCCESS;
     }

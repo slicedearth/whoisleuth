@@ -29,14 +29,15 @@ function parseCliArguments(rawArgv) {
   }
 
   const command = argv[0];
-  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture', 'http'].includes(command)) {
-    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture, http.`);
+  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture', 'http', 'tls'].includes(command)) {
+    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture, http, tls.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
   if (command === 'discover') return parseDiscoverArguments(argv.slice(1));
   if (command === 'posture') return parsePostureArguments(argv.slice(1));
   if (command === 'http') return parseHttpArguments(argv.slice(1));
+  if (command === 'tls') return parseTlsArguments(argv.slice(1));
   let query = null;
   let output = 'terminal';
   let deep = false;
@@ -210,6 +211,25 @@ function parseHttpArguments(argv) {
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'http', domain, output, quiet, color };
+}
+
+function parseTlsArguments(argv) {
+  let hostname = null;
+  let output = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (hostname === null) hostname = argument;
+    else throw new CliUsageError('tls accepts one hostname.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'tls', hostname, output, quiet, color };
 }
 
 module.exports = { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };

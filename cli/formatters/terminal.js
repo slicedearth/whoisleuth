@@ -5,6 +5,7 @@ const MAX_CT_TERMINAL_MATCHES = 100;
 const MAX_CT_TERMINAL_HOSTNAMES = 5;
 const MAX_DISCOVER_TERMINAL_CANDIDATES = 200;
 const MAX_POSTURE_TERMINAL_RECORDS = 5;
+const MAX_TLS_TERMINAL_ALT_NAMES = 10;
 
 function safeTerminalValue(value, fallback = '—') {
   if (value === null || value === undefined || value === '') return fallback;
@@ -169,11 +170,53 @@ function formatTerminalHttp(document) {
   return `${lines.join('\n')}\n`;
 }
 
+function formatTerminalTls(document) {
+  const certificate = document.certificate && typeof document.certificate === 'object' ? document.certificate : {};
+  const subject = certificate.subject && typeof certificate.subject === 'object' ? certificate.subject : {};
+  const issuer = certificate.issuer && typeof certificate.issuer === 'object' ? certificate.issuer : {};
+  const altNames = certificate.subjectAltNames && typeof certificate.subjectAltNames === 'object' ? certificate.subjectAltNames : {};
+  const dnsNames = Array.isArray(altNames.dnsNames) ? altNames.dnsNames : [];
+  const ipAddresses = Array.isArray(altNames.ipAddresses) ? altNames.ipAddresses : [];
+  const visibleAltNames = [...dnsNames, ...ipAddresses].slice(0, MAX_TLS_TERMINAL_ALT_NAMES);
+  const omittedAltNames = dnsNames.length + ipAddresses.length - visibleAltNames.length;
+  const cipher = document.cipher && typeof document.cipher === 'object' ? document.cipher : {};
+  const publicKey = certificate.publicKey && typeof certificate.publicKey === 'object' ? certificate.publicKey : {};
+  const findings = Array.isArray(document.findings) ? document.findings : [];
+  const limitations = Array.isArray(document.limitations) ? document.limitations : [];
+  const lines = [
+    `Hostname       ${safeTerminalValue(document.sniHost)}`,
+    `Evidence       ${titleCase(document.status)}`,
+    `Observed       ${safeTerminalValue(document.observedAt)}`,
+    `Address        ${safeTerminalValue(document.connectedAddress)}`,
+    `Protocol       ${safeTerminalValue(document.protocol)}`,
+    `ALPN           ${safeTerminalValue(document.alpnProtocol)}`,
+    `Cipher         ${safeTerminalValue(cipher.standardName || cipher.name)}`,
+    `Authorized     ${document.authorization?.authorized === true ? 'Yes' : document.authorization?.authorized === false ? 'No' : 'Unknown'}`,
+    `Hostname match ${document.hostname?.matches === true ? 'Yes' : document.hostname?.matches === false ? 'No' : 'Unknown'}`,
+    `Validity       ${titleCase(document.validity?.status)}`,
+    `Subject        ${safeTerminalValue(Array.isArray(subject.commonNames) ? subject.commonNames.join(', ') : null)}`,
+    `Issuer         ${safeTerminalValue(Array.isArray(issuer.commonNames) ? issuer.commonNames.join(', ') : null)}`,
+    `Valid from     ${safeTerminalValue(certificate.validFrom)}`,
+    `Valid to       ${safeTerminalValue(certificate.validTo)}`,
+    `Fingerprint    ${safeTerminalValue(certificate.fingerprintSha256)}`,
+    `Public key     ${safeTerminalValue([publicKey.type, publicKey.bits ? `${publicKey.bits} bits` : null, publicKey.curve].filter(Boolean).join(' '))}`,
+    `Alt names      ${visibleAltNames.length ? visibleAltNames.map((value) => safeTerminalValue(value)).join(', ') : '—'}${omittedAltNames > 0 ? ` (+${omittedAltNames} more)` : ''}`,
+    `Chain          ${safeTerminalValue(Array.isArray(document.chain) ? document.chain.length : 0, '0')} certificate${Array.isArray(document.chain) && document.chain.length === 1 ? '' : 's'}${document.chainTruncated ? ' (truncated)' : ''}`,
+  ];
+  if (document.authorization?.error) lines.push(`Trust detail   ${safeTerminalValue(document.authorization.error)}`);
+  if (document.hostname?.error) lines.push(`Name detail    ${safeTerminalValue(document.hostname.error)}`);
+  if (document.diagnostics?.error) lines.push(`Error          ${safeTerminalValue(document.diagnostics.error)}`);
+  for (const finding of findings) lines.push(`Finding        ${safeTerminalValue(finding.label)} — ${safeTerminalValue(finding.detail)}`);
+  for (const limitation of limitations) lines.push(`Limitation     ${safeTerminalValue(limitation)}`);
+  return `${lines.join('\n')}\n`;
+}
+
 module.exports = {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
   MAX_DISCOVER_TERMINAL_CANDIDATES,
   MAX_POSTURE_TERMINAL_RECORDS,
+  MAX_TLS_TERMINAL_ALT_NAMES,
   MAX_TERMINAL_VALUE_LENGTH,
   formatTerminalBulk,
   formatTerminalCtSearch,
@@ -181,5 +224,6 @@ module.exports = {
   formatTerminalHttp,
   formatTerminalLookup,
   formatTerminalPosture,
+  formatTerminalTls,
   safeTerminalValue,
 };

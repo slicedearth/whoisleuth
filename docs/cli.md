@@ -17,6 +17,7 @@ node bin/whoisleuth.js ct-search 'example brand' --json
 node bin/whoisleuth.js discover example.com --preset common --jsonl
 node bin/whoisleuth.js posture example.com --selectors selector1,selector2 --json
 node bin/whoisleuth.js http example.com --json
+node bin/whoisleuth.js tls example.com --json
 ```
 
 These examples run from a checked-out repository. The package exposes a
@@ -63,8 +64,8 @@ stderr, so redirected JSON is not mixed with diagnostics.
 | 4 | A bulk command completed with one or more per-query failures. |
 | 70 | Unexpected CLI bootstrap failure. |
 
-This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`, and
-`http`. TLS, comparison, and export commands are added as separate bounded
+This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
+`http`, and `tls`. Comparison and export commands are added as separate bounded
 increments rather than exposing incomplete aliases.
 
 ## Bulk lookup
@@ -138,3 +139,19 @@ header, body-hash, completeness, and attempt provenance. Captured homepage text
 is never written to terminal or JSON output. Query strings are removed by the
 shared HTTP evidence normalizer, and terminal values are additionally bounded
 and control-safe.
+
+## TLS intelligence
+
+`tls` runs the same bounded one-connection TLS collector used by deep lookups.
+It resolves the hostname once through the public-address guard, validates every
+answer, connects directly to the first validated address on port 443, and keeps
+the original hostname for SNI and certificate identity checking. Resolution
+and handshake work share a five-second deadline.
+
+The report retains the negotiated protocol, ALPN and cipher, runtime trust and
+hostname checks, certificate validity, bounded subject and issuer names, SANs,
+SHA-256 certificate and public-key fingerprints, a bounded certificate chain,
+and neutral findings. It stores no certificate bytes, session material, or
+application data and does not enumerate supported protocol or cipher suites.
+A failed collection is inconclusive rather than proof that no TLS service
+exists.
