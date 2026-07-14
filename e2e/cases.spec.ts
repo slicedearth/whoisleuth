@@ -980,6 +980,39 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  test('inspects evidence-backed graph nodes with keyboard case pivots', async ({ page }) => {
+    const http = {
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://shared-graph.invalid',
+      httpResponseStatus: 200,
+    };
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'graph-a', domain: 'alpha-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
+      caseRecord({ id: 'graph-b', domain: 'bravo-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
+    ]);
+
+    const graph = page.getByRole('group', { name: /Relationship graph/ });
+    await expect(graph).toBeVisible();
+    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toBeVisible();
+
+    const caseNode = graph.getByRole('button', { name: 'Case alpha-graph.invalid' });
+    await caseNode.focus();
+    await page.keyboard.press('Enter');
+    const inspector = page.locator('.relationship-graph .inspector');
+    await expect(inspector).toContainText('Selected case');
+    await expect(inspector).toContainText('alpha-graph.invalid');
+    await expect(inspector).toContainText('Shared nameserver set: ns.shared-graph.invalid');
+
+    await page.locator('.graph-controls select').selectOption('http_final_origin');
+    await expect(graph.getByRole('button', { name: 'Shared final website origin: https://shared-graph.invalid' })).toBeVisible();
+    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toHaveCount(0);
+
+    await inspector.getByRole('button', { name: 'Open case', exact: true }).click();
+    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.case-head', { hasText: 'alpha-graph.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   test('shows a clear empty state when no retained evidence relates cases', async ({ page }) => {
     await openRelationshipTable(page, [
       caseRecord({ id: 'single-a', domain: 'single-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.one.invalid'] })] }),

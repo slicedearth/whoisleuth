@@ -8,6 +8,7 @@
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
+  import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
   import { buildCaseRelationships } from '$lib/analysis/case-relationships.js';
   import { deleteWatchlist, exportWatchlists, fieldLabels, formatValue, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
   import {
@@ -91,6 +92,7 @@
 
 {#if view==='relationships'}
 <div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
+  <CaseRelationshipGraph records={cases} onselect={openRelatedCase} />
   <CaseRelationshipTable records={cases} onselect={openRelatedCase} />
 </div>
 {/if}
