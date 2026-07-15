@@ -43,8 +43,8 @@ all.
   associates the query with the operator's API credential under its own
   privacy and retention policy. WHOISleuth keeps no provider cache; the bounded
   normalized response is displayed transiently, excluded from browser-local
-  stores and the structured Lookup evidence export, and has no effect on
-  availability or Risk. Fast and compact Bulk paths never make this request.
+  stores and the structured Lookup evidence export, and never affects
+  availability. Fast and compact Bulk paths never make this request.
 - **Optional malware-host search**: if the operator explicitly enables the
   URLhaus adapter and a user selects it for a deep single-domain Lookup, the
   server posts only the canonical registrable domain to URLhaus's host API.
@@ -53,8 +53,8 @@ all.
   and associates the query with the operator's API credential under its own
   privacy and retention policy. WHOISleuth keeps no provider cache; the
   bounded normalized response is displayed transiently, excluded from
-  browser-local stores and the structured Lookup evidence export, and has no
-  effect on availability or Risk. Fast and compact Bulk paths never make this
+  browser-local stores and the structured Lookup evidence export, and never
+  affects availability. Fast and compact Bulk paths never make this
   request. Community access is subject to not-for-profit fair-use terms;
   commercial deployments may require a paid provider agreement.
 - **Optional malware-IOC search**: if the operator explicitly enables the
@@ -65,10 +65,18 @@ all.
   metadata and associates the query with the operator's abuse.ch credential
   under its own privacy and retention policy. WHOISleuth keeps no provider
   cache; the bounded normalized response is displayed transiently, excluded
-  from browser-local stores and the structured Lookup evidence export, and has
-  no effect on availability or Risk. Fast and compact Bulk paths never make
+  from browser-local stores and the structured Lookup evidence export, and
+  never affects availability. Fast and compact Bulk paths never make
   this request. Older indicators expire from the community API, and commercial
   deployments may require a paid provider agreement.
+- **Derived external Risk context**: optional provider payloads stay transient
+  and separately attributed. A lone publisher, a neutral miss, a failed
+  provider, an unknown provider, or a non-phishing/non-malware category adds no
+  Risk points. When positive qualifying records are corroborated across at
+  least two independent publisher families, Risk model v5 can add one bounded
+  factor. Multiple datasets operated by the same publisher count as one source.
+  Browser-local cases and reports can retain the resulting score, model version,
+  and factor label, but not the raw provider findings, references, or payloads.
 - **IDN/confusable review**: performed locally in the browser from the domain
   already being displayed and, when present, the active Brand Profile's
   bounded official-domain list. It makes no additional network request and is

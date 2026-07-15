@@ -10,6 +10,7 @@
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compactHttpObservation } from '$lib/analysis/http-summary.js';
+  import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
   import { compareRegistrySources } from '$lib/analysis/registry-comparison.js';
@@ -100,7 +101,8 @@
   const profileSignals=$derived.by(()=>{
     return matchProfileSignals(String(availability.domain||result?.registrableDomain||''),availability,profile);
   });
-  const scoredAvailability=$derived({...availability,...profileSignals});
+  const externalRiskContext=$derived(calibrateExternalIntelligenceRisk(threatIntelligence));
+  const scoredAvailability=$derived({...availability,...profileSignals,threatIntelligence});
   const opportunity=$derived(explainOpportunityScore(scoredAvailability) as ScoreExplanation);
   const risk=$derived(explainRiskScore(scoredAvailability) as ScoreExplanation);
   const outreach=$derived(outreachAction(String(availability.domain||result?.registrableDomain||''),(availability.registrant||null) as Contact|null));
@@ -446,7 +448,18 @@
     {#if threatIntelligenceProviders.length}
       <section class="threat-intelligence card" aria-labelledby="threat-intelligence-title">
         <header><div><p class="eyebrow">External intelligence</p><h3 id="threat-intelligence-title">Archived provider verdicts</h3></div><span>Separately attributed</span></header>
-        <p>These are bounded third-party observations, not proof that the domain is safe, malicious, active, or controlled by any party. They do not affect availability or Risk.</p>
+        <p>These are bounded third-party observations, not proof that the domain is safe, malicious, active, or controlled by any party. They never affect availability. A lone publisher contributes no Risk points; only qualifying records corroborated across at least two independent publisher families can add one bounded, explainable factor.</p>
+        {#if externalRiskContext.eligibleProviderCount}
+          <p class="external-risk-context">
+            {#if externalRiskContext.contribution}
+              Risk context: {externalRiskContext.independentPublisherCount} independent publisher families contributed +{externalRiskContext.contribution} under model v{risk?.modelVersion??'—'}.
+            {:else}
+              Risk context: {externalRiskContext.eligibleProviderCount} qualifying provider observation{externalRiskContext.eligibleProviderCount===1?'':'s'} represented {externalRiskContext.independentPublisherCount} publisher family; no points were added because independent corroboration was absent.
+            {/if}
+            {#if externalRiskContext.freshestAgeDays!==null} Newest qualifying record age: {externalRiskContext.freshestAgeDays} day{externalRiskContext.freshestAgeDays===1?'':'s'}.{/if}
+            {#if externalRiskContext.unknownAgeProviderCount} {externalRiskContext.unknownAgeProviderCount} qualifying provider observation{externalRiskContext.unknownAgeProviderCount===1?' has':'s have'} unknown age.{/if}
+          </p>
+        {/if}
         {#each threatIntelligenceProviders as provider}
           {@const providerIdentity=rec(provider.provider)}
           {@const providerObservation=rec(provider.observation)}
@@ -473,6 +486,7 @@
   .page-card{margin-bottom:12px;padding:20px}.page-card header{display:flex;justify-content:space-between;gap:12px}.page-card h3{margin:0}.page-card header>span{color:var(--accent);font-size:.64rem;text-transform:uppercase}.page-card header>span.partial{color:#f2b84b}.page-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.page-grid article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.page-grid small,.page-grid strong{display:block}.page-grid small{color:var(--muted);font-size:.61rem;text-transform:uppercase}.page-grid strong{margin-top:5px;font-size:.7rem;overflow-wrap:anywhere}.page-grid .danger-text{color:var(--danger)}.page-detail{margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:9px}.page-detail summary{cursor:pointer;font-size:.68rem;font-weight:700}.page-detail ul{display:grid;gap:5px;margin:9px 0 0;padding-left:20px}.page-detail li{font-size:.64rem;overflow-wrap:anywhere}.page-detail li strong,.page-detail li span{display:block}.page-detail li span{margin-top:2px;color:var(--muted)}.page-detail dl{display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:7px;margin:9px 0 0;padding:0;font-size:.64rem}.page-fingerprints code{display:block;overflow-wrap:anywhere;color:var(--accent);font-size:.62rem}.page-fingerprints dd small{display:block;margin-top:3px;color:var(--muted)}.page-fingerprints>p{margin:9px 0 0;color:var(--muted);font-size:.63rem}.page-limitations{padding:9px 11px;border-left:3px solid #f2b84b;background:rgba(242,184,75,.04);color:var(--text)!important}.page-card>p{margin:11px 0 0;color:var(--muted);font-size:.66rem}
   .page-comparison{margin-bottom:12px;padding:20px}.page-comparison header{display:flex;justify-content:space-between;gap:12px}.page-comparison h3{margin:0}.page-comparison header>span{color:var(--accent);font-size:.64rem;text-transform:uppercase}.page-comparison header>span.partial{color:#f2b84b}.comparison-context,.page-comparison-note,.unavailable-comparison>p{margin:11px 0 0;color:var(--muted);font-size:.66rem}.comparison-context strong{color:var(--text)}.page-comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:13px}.page-comparison-grid article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.page-comparison-grid article.comparison-same{border-color:rgba(126,224,168,.3)}.page-comparison-grid article.comparison-overlap{border-color:rgba(242,184,75,.35)}.page-comparison-grid article>div{display:flex;align-items:start;justify-content:space-between;gap:8px}.page-comparison-grid small{color:var(--muted);font-size:.61rem;text-transform:uppercase}.page-comparison-grid article>div>span{color:var(--muted);font-size:.56rem;text-align:right}.page-comparison-grid strong{display:block;margin-top:7px;font-size:.72rem;overflow-wrap:anywhere}.page-comparison-grid .comparison-same strong{color:var(--accent)}.page-comparison-grid .comparison-overlap strong{color:#f2b84b}.page-comparison-grid p{margin:5px 0 0;color:var(--muted);font-size:.62rem;overflow-wrap:anywhere}.page-comparison-grid .shared-values{color:var(--text)}.page-comparison-note{padding:9px 11px;border-left:3px solid #f2b84b;background:rgba(242,184,75,.04);color:var(--text)}
   .case-card{margin:12px 0;padding:20px}.case-card h3{margin:0}.case-intro{display:flex;justify-content:space-between;gap:14px;align-items:start}.case-badges{display:flex;flex-wrap:wrap;gap:6px}.badge{padding:4px 9px;border:1px solid var(--border);border-radius:99px;font-size:.62rem;white-space:nowrap}.badge.status-escalated,.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}.badge.status-resolved,.badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}.badge.disposition-suspicious{color:#f2b84b}.case-body{margin-top:12px}.note-edit label{display:block;color:var(--muted);font-size:.66rem;margin-bottom:5px}.note-edit textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel);resize:vertical}.case-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.case-actions button{min-height:36px;padding:8px 13px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised);font-size:.68rem}.case-body>.primary{margin-top:4px}.case-actions a{color:var(--accent);font-size:.68rem}.case-hint,.case-status{margin:8px 0 0;color:var(--muted);font-size:.66rem}.case-status{color:var(--accent)}
+  .threat-intelligence .external-risk-context{padding:9px 11px;border-left:3px solid #f2b84b;background:rgba(242,184,75,.04);color:var(--text)}
   .diagnostics .limited-state{color:#f2b84b}
   @media(max-width:900px){.summaries{grid-template-columns:repeat(2,1fr)}.diagnostics{grid-template-columns:1fr}.availability header{display:block}.scores{margin-top:12px}}
   @media(max-width:650px){.input-row,.summaries,.sources,.score-details,.response-actions,.idn-forms,.dns-grid,.http-grid,.page-grid,.page-comparison-grid{grid-template-columns:1fr}.http-detail dl,.page-detail dl{grid-template-columns:1fr}.input-row .primary{min-height:44px}.result-head{align-items:flex-start;flex-direction:column}.result-actions{width:100%;flex-wrap:wrap}.scores{display:grid;grid-template-columns:1fr 1fr}.score{width:auto}.page-comparison header,.page-comparison-grid article>div{display:block}.page-comparison header>span{display:block;margin-top:7px}.page-comparison-grid article>div>span{display:block;margin-top:3px;text-align:left}}

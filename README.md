@@ -367,9 +367,9 @@ registrable domain to the fixed host-lookup endpoint, keeps its Auth-Key in an
 HTTP header, follows no credential-bearing redirect, and never submits a URL,
 sample, or report. Responses are capped at 256 KB and 20 displayed findings;
 the adapter uses a six-second timeout, one-request process-local concurrency,
-conservative process-local fair-use counters, and no cache. Results remain
-separately attributed and outside scoring, compact stores, and structured
-evidence exports.
+conservative process-local fair-use counters, and no cache. Raw results remain
+separately attributed and outside compact stores and structured evidence
+exports.
 
 A third optional adapter searches retained ThreatFox malware indicators for an
 exact canonical registrable-domain match. It remains disabled unless the
@@ -381,8 +381,8 @@ the adapter follows no redirect, never submits an indicator, URL, sample, or
 report, and keeps no cache. Responses are capped at 256 KB and 20 displayed
 findings with a six-second deadline, one-request process-local concurrency, and
 conservative process-local fair-use counters. Findings retain bounded malware
-family, infrastructure role, confidence, and observation-time context, remain
-separately attributed, and cannot affect availability or Risk.
+family, infrastructure role, confidence, and observation-time context and
+remain separately attributed.
 
 Before any adapter can be enabled, `lib/threat-intelligence-contract.mts` requires a
 versioned provider definition that declares its supported target types, the
@@ -398,10 +398,17 @@ Adapter output is normalized into separately attributed, bounded findings and
 explicit `success`, `partial`, `not_found`, `unsupported`, `skipped`,
 `rate_limited`, `unavailable`, or `error` states. It has no global “safe” field:
 a provider miss, outage, quota failure, or unsupported target cannot become
-evidence of safety. External findings do not affect Risk until a separately
-versioned calibration increment is supported by fixtures. The contract itself
-performs no requests or stores credentials. Each adapter remains subject to a
-fresh terms and privacy review before it is enabled; the URLscan policy
+evidence of safety. Risk model v5 recognizes only allowlisted phishing or
+malware findings from positive provider states. A lone publisher contributes
+no points, and the two community malware datasets remain one publisher family;
+only corroboration across at least two independent publisher families can add
+one bounded factor (+18 when both have a record observed within 90 days of its
+provider query, otherwise +10). Unknown providers, suspicious-only categories,
+neutral misses, and failures contribute nothing. Raw provider findings remain
+transient; compact cases retain only the already-supported versioned score and
+factor explanation. The contract itself performs no requests or stores
+credentials. Each adapter remains subject to a fresh terms and privacy review
+before it is enabled; the URLscan policy
 declaration was reviewed on 15 July 2026 and conservatively records commercial
 use and redistribution as restricted, provider query retention as
 provider-defined, and caching as prohibited.
@@ -422,13 +429,19 @@ covered by the provider's community terms or an appropriate paid agreement.
 - A deep-checked registered result gets a versioned **Risk** score for analyst
   prioritization, distinct from the **Opportunity** score that rates how
   approachable a domain is to acquire. The Risk score is a heuristic review
-  indicator, not a maliciousness verdict. Model v2 groups related observations
+  indicator, not a maliciousness verdict. Model v5 groups related observations
   into three contextual families: domain resemblance, brand presentation, and
   credential-lure behavior. Related observations within one family remain
   individually visible but do not manufacture extra corroboration; a separate
   factor is added only when two or more distinct families agree. Even the
   strongest single family cannot reach the danger threshold when combined with
   all ordinary activity, mail, privacy, and recency context.
+- Optional external observations stay independently attributed. Only
+  allowlisted phishing or malware records corroborated across two independent
+  publisher families add one bounded Risk factor; multiple datasets from one
+  publisher cannot corroborate one another. Source age is derived against each
+  provider result's own observation time, a lone source adds no points, and a
+  provider miss is never evidence of safety.
 - A matching favicon, official-asset relationship, password form, or suspicious
   phrase can also occur on legitimate SSO, payment, agency, CDN, and authorized
   campaign pages. Domains classified by the active Brand Profile as official,
@@ -585,7 +598,7 @@ covered by the provider's community terms or an appropriate paid agreement.
   separators, and preserve two-to-four-token brand boundaries so deterministic
   word reorderings can be generated in joined and hyphenated forms. Each family
   keeps separate provenance, and four-token permutations stop at the existing
-  per-family boundary. Risk model v4 recognizes these generator-owned values as
+  per-family boundary. Risk model v5 recognizes these generator-owned values as
   low-context evidence; earlier stored scores remain readable but incomparable
   across model versions.
 - The Impersonation preset uses a bounded curated set of access, account,

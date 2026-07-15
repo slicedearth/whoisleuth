@@ -274,7 +274,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
         threatIntelligence: {
           version: 1,
           providers: [{
-            provider: { id: 'fixture_archive', label: 'Fixture archived verdicts' },
+            provider: { id: 'urlscan_search', label: 'Fixture archived verdicts' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'success', detail: 'Found one archived malicious-verdict match.',
             findings: [{
@@ -284,10 +284,11 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               referenceUrl: 'https://provider.invalid/result/11111111-1111-4111-8111-111111111111/',
             }],
             observation: {
+              observedAt: '2026-07-15T01:02:03.000Z',
               limitations: ['No matching provider record is not evidence that the target is safe.'],
             },
           }, {
-            provider: { id: 'fixture_malware', label: 'Fixture malware-host records' },
+            provider: { id: 'urlhaus_host', label: 'Fixture malware-host records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'success', detail: 'Found one bounded malware-distribution record.',
             findings: [{
@@ -298,10 +299,11 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               referenceUrl: 'https://provider.invalid/result/123456/',
             }],
             observation: {
+              observedAt: '2026-07-15T01:02:03.000Z',
               limitations: ['A listed host may have been compromised or cleaned.'],
             },
           }, {
-            provider: { id: 'fixture_ioc', label: 'Fixture malware-IOC records' },
+            provider: { id: 'threatfox_domain_ioc', label: 'Fixture malware-IOC records' },
             target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
             state: 'success', detail: 'Found one retained malware-IOC record.',
             findings: [{
@@ -312,6 +314,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
               referenceUrl: 'https://provider.invalid/result/654321/',
             }],
             observation: {
+              observedAt: '2026-07-15T01:02:03.000Z',
               limitations: ['The provider retains malware-associated indicators for a limited period.'],
             },
           }],
@@ -340,7 +343,10 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.getByText('Fixture archived verdicts', { exact: true })).toBeVisible();
   await expect(section.getByText('Fixture malware-host records', { exact: true })).toBeVisible();
   await expect(section.getByText('Fixture malware-IOC records', { exact: true })).toBeVisible();
-  await expect(section.getByText(/do not affect availability or Risk/i)).toBeVisible();
+  await expect(section.getByText(/never affect availability/i)).toBeVisible();
+  await expect(section.getByText(/2 independent publisher families contributed \+18 under model v5/i)).toBeVisible();
+  await page.getByText('Why the risk score is 28', { exact: true }).click();
+  await expect(page.getByText('Corroborated recent external phishing/malware records')).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(2);
   for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {

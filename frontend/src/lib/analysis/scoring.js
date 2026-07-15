@@ -1,3 +1,5 @@
+import { calibrateExternalIntelligenceRisk } from './external-intelligence-risk.js';
+
 // Acquisition/sourcing signals (domain age, expiry proximity, WHOIS privacy,
 // site activity) and the opportunity score that combines them into one
 // sortable number. Shared by the single-lookup availability card, the bulk
@@ -134,12 +136,14 @@ export function scoreTone(score) {
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
-// Version 4 retains the grouped contextual evidence model and adds the
-// generator-owned separator and word-reordering machine values to the bounded
-// low-context allowlist. Older scores remain readable, but case and watchlist
-// comparisons gate numeric changes on matching model versions so formula
-// changes are not mistaken for changes in the observed domain.
-export const RISK_MODEL_VERSION = 4;
+// Version 5 retains the grouped contextual evidence model and adds a bounded
+// external-evidence factor. A lone provider never contributes, two datasets
+// from the same publisher remain one source, and only allowlisted phishing or
+// malware observations from two independent publisher families can add points.
+// Older scores remain readable, while case and watchlist comparisons gate
+// numeric changes on matching model versions so formula changes are not
+// mistaken for changes in the observed domain.
+export const RISK_MODEL_VERSION = 5;
 
 const RISK_STATE_BASE = {
   registered: 10,
@@ -238,6 +242,12 @@ export function explainRiskScore(r) {
     const bonus = contextualFamilies.size >= 3 ? 20 : 10;
     factors.push({ label: `Corroborating context across ${contextualFamilies.size} distinct evidence families`, delta: bonus });
     score += bonus;
+  }
+
+  const externalEvidence = calibrateExternalIntelligenceRisk(r.threatIntelligence);
+  if (externalEvidence.factor) {
+    factors.push(externalEvidence.factor);
+    score += externalEvidence.contribution;
   }
 
   if (r.activityStatus === 'active') {

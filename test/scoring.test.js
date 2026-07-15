@@ -150,8 +150,8 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('stamps the explicit model version and gives ordinary states a low base score', () => {
-    assert.equal(scoring.RISK_MODEL_VERSION, 4);
-    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 4);
+    assert.equal(scoring.RISK_MODEL_VERSION, 5);
+    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 5);
     assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 10);
     assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 5);
     assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 8);
@@ -272,6 +272,86 @@ describe('explainRiskScore / computeRiskScore', () => {
     });
     assert.equal(score, 66);
     assert.equal(scoring.riskTone(score), 'warn');
+  });
+
+  test('a lone external publisher and two same-publisher datasets add no Risk points', () => {
+    const finding = { category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' };
+    const provider = (id) => ({
+      provider: { id }, state: 'success', findings: [finding],
+      observation: { observedAt: '2026-07-15T00:00:00.000Z' },
+    });
+    assert.equal(scoring.computeRiskScore({
+      availability: 'registered',
+      threatIntelligence: { providers: [provider('urlscan_search')] },
+    }), 10);
+    assert.equal(scoring.computeRiskScore({
+      availability: 'registered',
+      threatIntelligence: { providers: [provider('urlhaus_host'), provider('threatfox_domain_ioc')] },
+    }), 10);
+  });
+
+  test('two independent recent publisher families add one explainable bounded factor', () => {
+    const provider = (id) => ({
+      provider: { id }, state: 'success',
+      findings: [{ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' }],
+      observation: { observedAt: '2026-07-15T00:00:00.000Z' },
+    });
+    const explained = scoring.explainRiskScore({
+      availability: 'registered',
+      threatIntelligence: { providers: [provider('urlscan_search'), provider('urlhaus_host')] },
+    });
+    assert.equal(explained.score, 28);
+    assert.deepEqual(explained.factors.at(-1), {
+      label: 'Corroborated recent external phishing/malware records',
+      delta: 18,
+    });
+  });
+
+  test('external evidence crosses the danger band only with independent publisher corroboration', () => {
+    const provider = (id) => ({
+      provider: { id }, state: 'success',
+      findings: [{ category: 'phishing', lastObservedAt: '2026-07-12T00:00:00.000Z' }],
+      observation: { observedAt: '2026-07-15T00:00:00.000Z' },
+    });
+    const base = {
+      availability: 'registered',
+      faviconMatch: true,
+      reusesOfficialAssets: true,
+      activityStatus: 'active',
+      hasMx: true,
+      hasSpf: true,
+      hasDmarc: true,
+      privacyProtected: true,
+      domainAgeDays: 10,
+    };
+    const loneSource = scoring.computeRiskScore({
+      ...base,
+      threatIntelligence: { providers: [provider('urlscan_search')] },
+    });
+    const corroborated = scoring.computeRiskScore({
+      ...base,
+      threatIntelligence: { providers: [provider('urlscan_search'), provider('urlhaus_host')] },
+    });
+
+    assert.equal(loneSource, 66);
+    assert.equal(scoring.riskTone(loneSource), 'warn');
+    assert.equal(corroborated, 84);
+    assert.equal(scoring.riskTone(corroborated), 'danger');
+  });
+
+  test('unknown providers and malformed external records cannot affect Risk', () => {
+    const explained = scoring.explainRiskScore({
+      availability: 'registered',
+      threatIntelligence: {
+        providers: [
+          { provider: { id: 'invented' }, state: 'success', findings: [{ category: 'malware' }] },
+          { provider: { id: 'urlscan_search' }, state: 'not_found', findings: [{ category: 'malware' }] },
+          { provider: { id: 'urlhaus_host' }, state: 'success', findings: [{ category: 'safe' }] },
+        ],
+      },
+    });
+    assert.equal(explained.score, 10);
+    assert.equal(explained.factors.length, 1);
   });
 
   test('only allowlisted mutation provenance contributes bounded context', () => {
