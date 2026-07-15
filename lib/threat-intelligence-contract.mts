@@ -490,15 +490,16 @@ function createThreatIntelligenceResult(
   }
 
   let state = requestedState;
+  const sourceTruncated = resultInput.truncated === true;
   if (TERMINAL_STATES_WITHOUT_FINDINGS.has(state) && findings.length) state = 'partial';
   if (state === 'success' && findings.length === 0) state = 'error';
-  if (discarded > 0 && !['error', 'unavailable', 'rate_limited'].includes(state)) state = 'partial';
+  if ((discarded > 0 || sourceTruncated) && !['error', 'unavailable', 'rate_limited'].includes(state)) state = 'partial';
   const limitations = normalizeLimitations(resultInput.limitations);
   if (state === 'not_found') limitations.unshift(NO_MATCH_LIMITATION);
   if (discarded > 0) limitations.unshift(`${discarded} invalid or over-limit provider finding${discarded === 1 ? ' was' : 's were'} omitted.`);
   limitations.unshift(BASE_LIMITATION);
   const boundedLimitations = [...new Set(limitations)].slice(0, MAX_LIMITATIONS);
-  const complete = ['success', 'not_found'].includes(state) && discarded === 0;
+  const complete = ['success', 'not_found'].includes(state) && discarded === 0 && !sourceTruncated;
   const observationStatus: ObservationStatus = state === 'rate_limited' || state === 'unavailable'
     ? 'error'
     : state;
@@ -530,7 +531,7 @@ function createThreatIntelligenceResult(
       observedAt: isoTimestamp(observedAt) || new Date().toISOString(),
       source: provider.id,
       complete,
-      truncated: discarded > 0,
+      truncated: discarded > 0 || sourceTruncated,
       limitations: boundedLimitations,
       diagnostics: { discarded },
     }),

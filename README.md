@@ -343,8 +343,18 @@ compact-storage boundary, and lookup evidence schema are documented in the
 
 ### Optional external threat-intelligence boundary
 
-No external reputation or feed provider is enabled in the current application.
-Before an adapter can be added, `lib/threat-intelligence-contract.mts` requires a
+The first optional adapter searches existing URLscan public scan history for
+recent malicious-verdict matches. It remains disabled unless the operator sets
+`WHOISLEUTH_ENABLE_URLSCAN=1` and a valid `URLSCAN_API_KEY`, and it runs only
+when a user explicitly selects the archived-verdict option for a deep,
+non-compact single-domain Lookup. It sends the canonical registrable domain,
+never a URL path or query, makes one bounded search request, follows no
+redirect with the credential, performs no scan submission, retains no cache,
+and does not run in fast or compact Bulk paths. The normalized provider result
+is displayed transiently and is not copied into browser-local stores or the
+structured Lookup evidence export.
+
+Before any adapter can be enabled, `lib/threat-intelligence-contract.mts` requires a
 versioned provider definition that declares its supported target types, the
 exact target representation it would receive (registrable domain, hostname,
 origin, or full URL), a reviewed terms URL and privacy-policy decision,
@@ -360,9 +370,11 @@ explicit `success`, `partial`, `not_found`, `unsupported`, `skipped`,
 a provider miss, outage, quota failure, or unsupported target cannot become
 evidence of safety. External findings do not affect Risk until a separately
 versioned calibration increment is supported by fixtures. The contract itself
-performs no requests, stores no credentials, and sends no targets to a third
-party; individual adapters remain subject to a fresh terms and privacy review
-before they are enabled.
+performs no requests or stores credentials. Each adapter remains subject to a
+fresh terms and privacy review before it is enabled; the URLscan policy
+declaration was reviewed on 15 July 2026 and conservatively records commercial
+use and redistribution as restricted, provider query retention as
+provider-defined, and caching as prohibited.
 
 ### Opportunity & Risk scoring
 

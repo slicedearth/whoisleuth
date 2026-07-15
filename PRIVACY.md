@@ -35,6 +35,16 @@ all.
   cases, or other compact stores. The deliberate raw unified-response view can
   contain it; the structured Lookup evidence export retains only its bounded
   source diagnostics in this version.
+- **Optional archived-verdict search**: if the operator explicitly enables the
+  URLscan adapter and a user selects it for a deep single-domain Lookup, the
+  server sends only the canonical registrable domain to URLscan's Search API.
+  It searches existing public scan history and never submits the domain or URL
+  for scanning. The provider also receives ordinary API request metadata and
+  associates the query with the operator's API credential under its own
+  privacy and retention policy. WHOISleuth keeps no provider cache; the bounded
+  normalized response is displayed transiently, excluded from browser-local
+  stores and the structured Lookup evidence export, and has no effect on
+  availability or Risk. Fast and compact Bulk paths never make this request.
 - **IDN/confusable review**: performed locally in the browser from the domain
   already being displayed and, when present, the active Brand Profile's
   bounded official-domain list. It makes no additional network request and is
@@ -199,6 +209,11 @@ the operator who provided access. Direct data-subject requests to:
   MTA-STS policy host are queried live,
   on demand - they're the data sources, not sub-processors this tool shares
   stored data with.
+- URLscan: only when the operator configures the optional adapter and a user
+  explicitly selects archived-verdict search, its API receives the canonical
+  registrable domain and ordinary request metadata. Operators should review
+  URLscan's terms, privacy policy, account quota, and commercial-use posture;
+  the integration uses search only and never submits targets for scanning.
 
 ## Security measures
 

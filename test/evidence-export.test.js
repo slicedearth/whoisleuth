@@ -144,6 +144,10 @@ function fixtureResponse() {
 describe('lookup evidence export', () => {
   test('packages query context, raw sources, analysis, and provenance', () => {
     const response = fixtureResponse();
+    response.threatIntelligence = {
+      version: 1,
+      providers: [{ provider: { id: 'fixture_provider' }, findings: [{ detail: 'provider-only-secret' }] }],
+    };
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
@@ -160,6 +164,7 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.rdap.attempts[0].outcome, 'success');
     assert.equal(Object.hasOwn(result.sources.rdap, 'registrarRdap'), false);
     assert.equal(JSON.stringify(result.sources).includes('privateTestValue'), false);
+    assert.equal(JSON.stringify(result).includes('provider-only-secret'), false);
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
     assert.equal(result.analysis.availability.hasMx, true);

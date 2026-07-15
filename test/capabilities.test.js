@@ -87,6 +87,24 @@ test('emergency switches are reflected by the server-authoritative feature repor
   assert.equal(report.features.find((feature) => feature.id === 'lookup').status, 'supported');
 });
 
+test('optional archived-verdict search is explicit, credential-gated, and deep-only', () => {
+  const disabled = capabilityReport('express', {});
+  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_URLSCAN: '1' });
+  const supported = capabilityReport('express', {
+    WHOISLEUTH_ENABLE_URLSCAN: '1',
+    URLSCAN_API_KEY: 'fixture-api-key',
+  });
+  const byId = (report) => report.features.find((feature) => feature.id === 'urlscan_search');
+  assert.equal(byId(disabled).status, 'disabled');
+  assert.match(byId(disabled).reason, /not enabled/i);
+  assert.equal(byId(unavailable).status, 'unavailable');
+  assert.match(byId(unavailable).reason, /credential is unavailable or malformed/i);
+  assert.deepEqual(byId(supported), {
+    id: 'urlscan_search', status: 'supported', execution: 'hosted', scanModes: ['deep'],
+  });
+  assert.equal(JSON.stringify(supported).includes('fixture-api-key'), false);
+});
+
 test('direct serverless capability path requires authentication', async () => {
   const previousPassword = process.env.SITE_PASSWORD;
   const previousSecret = process.env.SESSION_SECRET;

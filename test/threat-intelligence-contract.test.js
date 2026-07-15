@@ -202,6 +202,17 @@ describe('threat-intelligence result normalization', () => {
     assert.equal(result.observation.complete, false);
   });
 
+  test('retains provider-declared source truncation as an explicit partial observation', () => {
+    const result = createThreatIntelligenceResult(provider(), { type: 'domain', value: 'example.test' }, {
+      state: 'success',
+      truncated: true,
+      findings: [finding()],
+    });
+    assert.equal(result.state, 'partial');
+    assert.equal(result.observation.complete, false);
+    assert.equal(result.observation.truncated, true);
+  });
+
   test('normalizes, sorts, deduplicates, and bounds provider findings', () => {
     const findings = Array.from({ length: MAX_FINDINGS + 5 }, (_, index) => finding({
       id: `finding-${index}`,

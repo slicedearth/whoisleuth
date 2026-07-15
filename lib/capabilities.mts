@@ -4,6 +4,7 @@ import {
   featureDecision,
   networkFeaturePolicy,
 } from './feature-policy.mts';
+import { urlscanConfiguration } from './urlscan-intelligence.mts';
 
 type CapabilityStatus = 'supported' | 'disabled' | 'unavailable' | 'local_only';
 type CapabilityExecution = 'hosted' | 'browser' | 'worker';
@@ -31,6 +32,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = Object.freeze([
   { id: 'website_probe', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
   { id: 'tls_intelligence', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
   { id: 'certificate_transparency', status: 'supported', execution: 'hosted', scanModes: [] },
+  { id: 'urlscan_search', status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason: 'Archived URLscan verdict search is not configured.' },
   { id: 'domain_posture', status: 'supported', execution: 'hosted', scanModes: [] },
   { id: 'idn_confusables', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
   { id: 'analyst_cases', status: 'local_only', execution: 'browser', scanModes: [] },
@@ -54,6 +56,16 @@ function capabilityReport(
     runtime: normalizedRuntime,
     authoritative: true,
     features: DEFINITIONS.map((item) => {
+      if (item.id === 'urlscan_search') {
+        const configuration = urlscanConfiguration(env);
+        const { reason: _reason, ...definition } = item;
+        return {
+          ...definition,
+          status: configuration.configured ? 'supported' : configuration.enabled ? 'unavailable' : 'disabled',
+          scanModes: [...item.scanModes],
+          ...(configuration.reason ? { reason: configuration.reason } : {}),
+        };
+      }
       if (item.id === 'distributed_budgets') {
         if (concurrency.distributed) {
           const { reason: _reason, ...supported } = item;

@@ -239,6 +239,73 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
   }
 });
 
+test('optional archived verdict search is explicit, attributed, and mobile-safe', async ({ page }) => {
+  await page.route('**/api/capabilities', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      version: 1,
+      runtime: 'express',
+      authoritative: true,
+      features: [
+        { id: 'lookup', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
+        { id: 'urlscan_search', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
+      ],
+      controls: null,
+      limitations: [],
+    }),
+  }));
+  await page.reload();
+  await page.route('**/api/lookup?*', async (route) => {
+    const requested = new URL(route.request().url());
+    expect(requested.searchParams.get('intelligence')).toBe('1');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'archive-review.example', type: 'domain', registrableDomain: 'archive-review.example',
+        availability: { state: 'registered', confidence: 'high', domain: 'archive-review.example' },
+        rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+        threatIntelligence: {
+          version: 1,
+          providers: [{
+            provider: { id: 'fixture_archive', label: 'Fixture archived verdicts' },
+            target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
+            state: 'success', detail: 'Found one archived malicious-verdict match.',
+            findings: [{
+              id: '11111111-1111-4111-8111-111111111111', category: 'phishing',
+              providerVerdict: 'malicious verdict match', detail: 'Archived scan page title: Fixture sign-in',
+              lastObservedAt: '2026-07-14T01:02:03.000Z',
+              referenceUrl: 'https://provider.invalid/result/11111111-1111-4111-8111-111111111111/',
+            }],
+            observation: {
+              limitations: ['No matching provider record is not evidence that the target is safe.'],
+            },
+          }],
+        },
+      }),
+    });
+  });
+
+  const option = page.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
+  await expect(option).toBeVisible();
+  await expect(page.getByText(/does not submit the domain for scanning/i)).toBeVisible();
+  await option.check();
+  await page.locator('#query').fill('archive-review.example');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const section = page.locator('.threat-intelligence');
+  await expect(section.getByRole('heading', { name: 'Archived provider verdicts' })).toBeVisible();
+  await expect(section.getByText('Fixture archived verdicts', { exact: true })).toBeVisible();
+  await expect(section.getByText(/do not affect availability or Risk/i)).toBeVisible();
+  await expect(section.getByText('phishing', { exact: true })).toBeVisible();
+  await expect(section.getByRole('link', { name: 'View attributed provider record' })).toHaveAttribute('rel', 'noopener');
+
+  await page.setViewportSize({ width: 360, height: 780 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('a Lookup case stores the registrar name rather than stringifying its entity', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

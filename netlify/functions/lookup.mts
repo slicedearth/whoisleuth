@@ -22,9 +22,15 @@ const handler: NetlifyFunctionHandler = async (event) => {
 
   const fast = params.fast === '1' || params.fast === 'true';
   const compact = params.compact === '1' || params.compact === 'true';
+  const externalIntelligence = params.intelligence === '1' || params.intelligence === 'true';
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
     try {
-      const result = await runUnifiedLookup(classified, { fast, compact, featurePolicy: guard.featurePolicy });
+      const result = await runUnifiedLookup(classified, {
+        fast,
+        compact,
+        externalIntelligence,
+        featurePolicy: guard.featurePolicy,
+      });
       return json(200, {
         query: q,
         type: classified.type,

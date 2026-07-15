@@ -269,6 +269,77 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(ip.rdap, 'registrarRdap'), false);
   });
 
+  test('adds archived provider intelligence only to an explicit deep non-compact domain lookup', async () => {
+    let intelligenceCalls = 0;
+    const providerResult = {
+      schema: 'whoisleuth.threat-intelligence-result',
+      version: 1,
+      provider: { id: 'fixture_provider', label: 'Fixture provider' },
+      target: { type: 'domain', value: 'example.com', exposure: 'registrable_domain' },
+      state: 'not_found',
+      detail: 'No fixture record.',
+      upstreamStatus: 200,
+      retryAfterSeconds: null,
+      findings: [],
+      observation: { status: 'not_found', limitations: ['No match is neutral.'] },
+    };
+    const result = await runUnifiedLookup(classifiedDomain, {
+      externalIntelligence: true,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      lookupUrlscanDomain: async (domain) => {
+        intelligenceCalls += 1;
+        assert.equal(domain, 'example.com');
+        return providerResult;
+      },
+    });
+    assert.equal(intelligenceCalls, 1);
+    assert.deepEqual(result.threatIntelligence, { version: 1, providers: [providerResult] });
+    assert.equal(result.availability.state, 'registered');
+    assert.equal(Object.hasOwn(result.diagnostics, 'threatIntelligence'), false);
+  });
+
+  test('never runs archived provider intelligence implicitly or in fast, compact, and non-domain paths', async () => {
+    let intelligenceCalls = 0;
+    const common = {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      lookupUrlscanDomain: async () => {
+        intelligenceCalls += 1;
+        throw new Error('must not run');
+      },
+    };
+    const implicit = await runUnifiedLookup(classifiedDomain, common);
+    const fast = await runUnifiedLookup(classifiedDomain, { ...common, fast: true, externalIntelligence: true });
+    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true, externalIntelligence: true });
+    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, {
+      ...common,
+      externalIntelligence: true,
+    });
+    assert.equal(intelligenceCalls, 0);
+    assert.equal(Object.hasOwn(implicit, 'threatIntelligence'), false);
+    assert.equal(Object.hasOwn(fast, 'threatIntelligence'), false);
+    assert.equal(Object.hasOwn(compact, 'threatIntelligence'), false);
+    assert.equal(Object.hasOwn(ip, 'threatIntelligence'), false);
+  });
+
+  test('keeps unexpected archived-provider failures as an explicit neutral source state', async () => {
+    const result = await runUnifiedLookup(classifiedDomain, {
+      externalIntelligence: true,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      lookupUrlscanDomain: async () => { throw new Error('secret provider failure'); },
+    });
+    const provider = result.threatIntelligence.providers[0];
+    assert.equal(provider.state, 'error');
+    assert.deepEqual(provider.findings, []);
+    assert.equal(JSON.stringify(provider).includes('secret provider failure'), false);
+    assert.equal(result.availability.state, 'registered');
+  });
+
   test('converts registrar transient failures into an additive error source', async () => {
     const attempt = {
       endpoint: 'https://registrar.example/domain/example.com', transportSecurity: 'https',
