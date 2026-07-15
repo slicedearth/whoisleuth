@@ -239,7 +239,7 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
   }
 });
 
-test('optional archived verdict search is explicit, attributed, and mobile-safe', async ({ page }) => {
+test('optional external intelligence searches are explicit, attributed, and mobile-safe', async ({ page }) => {
   await page.route('**/api/capabilities', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -250,6 +250,7 @@ test('optional archived verdict search is explicit, attributed, and mobile-safe'
       features: [
         { id: 'lookup', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
         { id: 'urlscan_search', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
+        { id: 'urlhaus_host', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
       ],
       controls: null,
       limitations: [],
@@ -259,6 +260,7 @@ test('optional archived verdict search is explicit, attributed, and mobile-safe'
   await page.route('**/api/lookup?*', async (route) => {
     const requested = new URL(route.request().url());
     expect(requested.searchParams.get('intelligence')).toBe('1');
+    expect(requested.searchParams.get('malware')).toBe('1');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -282,6 +284,20 @@ test('optional archived verdict search is explicit, attributed, and mobile-safe'
             observation: {
               limitations: ['No matching provider record is not evidence that the target is safe.'],
             },
+          }, {
+            provider: { id: 'fixture_malware', label: 'Fixture malware-host records' },
+            target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
+            state: 'success', detail: 'Found one bounded malware-distribution record.',
+            findings: [{
+              id: '123456', category: 'malware',
+              providerVerdict: 'malware distribution · online',
+              detail: 'The provider labels an archived malware-distribution URL on this host as online.',
+              lastObservedAt: '2026-07-13T01:02:03.000Z',
+              referenceUrl: 'https://provider.invalid/result/123456/',
+            }],
+            observation: {
+              limitations: ['A listed host may have been compromised or cleaned.'],
+            },
           }],
         },
       }),
@@ -289,18 +305,26 @@ test('optional archived verdict search is explicit, attributed, and mobile-safe'
   });
 
   const option = page.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
+  const malwareOption = page.getByRole('checkbox', { name: /Search malware-distribution records/ });
   await expect(option).toBeVisible();
+  await expect(malwareOption).toBeVisible();
   await expect(page.getByText(/does not submit the domain for scanning/i)).toBeVisible();
+  await expect(page.getByText(/does not submit a URL or sample/i)).toBeVisible();
   await option.check();
+  await malwareOption.check();
   await page.locator('#query').fill('archive-review.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const section = page.locator('.threat-intelligence');
   await expect(section.getByRole('heading', { name: 'Archived provider verdicts' })).toBeVisible();
   await expect(section.getByText('Fixture archived verdicts', { exact: true })).toBeVisible();
+  await expect(section.getByText('Fixture malware-host records', { exact: true })).toBeVisible();
   await expect(section.getByText(/do not affect availability or Risk/i)).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
-  await expect(section.getByRole('link', { name: 'View attributed provider record' })).toHaveAttribute('rel', 'noopener');
+  await expect(section.getByText('malware', { exact: true })).toBeVisible();
+  for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {
+    await expect(link).toHaveAttribute('rel', 'noopener');
+  }
 
   await page.setViewportSize({ width: 360, height: 780 });
   await expectNoHorizontalOverflow(page);

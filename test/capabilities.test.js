@@ -105,6 +105,24 @@ test('optional archived-verdict search is explicit, credential-gated, and deep-o
   assert.equal(JSON.stringify(supported).includes('fixture-api-key'), false);
 });
 
+test('optional malware-host intelligence is explicit, credential-gated, and deep-only', () => {
+  const disabled = capabilityReport('express', {});
+  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_URLHAUS: '1' });
+  const supported = capabilityReport('express', {
+    WHOISLEUTH_ENABLE_URLHAUS: '1',
+    URLHAUS_AUTH_KEY: 'fixture-auth-key',
+  });
+  const byId = (report) => report.features.find((feature) => feature.id === 'urlhaus_host');
+  assert.equal(byId(disabled).status, 'disabled');
+  assert.match(byId(disabled).reason, /not enabled/i);
+  assert.equal(byId(unavailable).status, 'unavailable');
+  assert.match(byId(unavailable).reason, /credential is unavailable or malformed/i);
+  assert.deepEqual(byId(supported), {
+    id: 'urlhaus_host', status: 'supported', execution: 'hosted', scanModes: ['deep'],
+  });
+  assert.equal(JSON.stringify(supported).includes('fixture-auth-key'), false);
+});
+
 test('direct serverless capability path requires authentication', async () => {
   const previousPassword = process.env.SITE_PASSWORD;
   const previousSecret = process.env.SESSION_SECRET;

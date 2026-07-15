@@ -343,7 +343,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
 
 ### Optional external threat-intelligence boundary
 
-The first optional adapter searches existing URLscan public scan history for
+One optional adapter searches existing URLscan public scan history for
 recent malicious-verdict matches. It remains disabled unless the operator sets
 `WHOISLEUTH_ENABLE_URLSCAN=1` and a valid `URLSCAN_API_KEY`, and it runs only
 when a user explicitly selects the archived-verdict option for a deep,
@@ -352,7 +352,23 @@ never a URL path or query, makes one bounded search request, follows no
 redirect with the credential, performs no scan submission, retains no cache,
 and does not run in fast or compact Bulk paths. The normalized provider result
 is displayed transiently and is not copied into browser-local stores or the
-structured Lookup evidence export.
+structured Lookup evidence export. To remain compatible with URLscan's free
+API tier, it searches the canonical domain and date range, then filters verdicts
+from the newest 20 returned scans locally. This bounded view can miss older
+malicious scans and a provider miss is never treated as evidence of safety.
+
+A second optional adapter queries existing URLhaus host records for archived
+malware-distribution URLs. It remains disabled unless the operator sets
+`WHOISLEUTH_ENABLE_URLHAUS=1` and a valid `URLHAUS_AUTH_KEY`, and it runs only
+when a user explicitly selects malware-distribution records for a deep,
+non-compact single-domain Lookup. The adapter posts only the canonical
+registrable domain to the fixed host-lookup endpoint, keeps its Auth-Key in an
+HTTP header, follows no credential-bearing redirect, and never submits a URL,
+sample, or report. Responses are capped at 256 KB and 20 displayed findings;
+the adapter uses a six-second timeout, one-request process-local concurrency,
+conservative process-local fair-use counters, and no cache. Results remain
+separately attributed and outside scoring, compact stores, and structured
+evidence exports.
 
 Before any adapter can be enabled, `lib/threat-intelligence-contract.mts` requires a
 versioned provider definition that declares its supported target types, the
@@ -375,6 +391,12 @@ fresh terms and privacy review before it is enabled; the URLscan policy
 declaration was reviewed on 15 July 2026 and conservatively records commercial
 use and redistribution as restricted, provider query retention as
 provider-defined, and caching as prohibited.
+The URLhaus policy declaration was also reviewed on 15 July 2026. Its
+community API is free for authenticated not-for-profit use under fair-use
+limits, while commercial use may require a paid plan; redistribution is
+therefore treated as restricted and provider query retention as
+provider-defined. Deployments must keep the adapter disabled unless their use
+qualifies under those terms or they have an appropriate commercial agreement.
 
 ### Opportunity & Risk scoring
 

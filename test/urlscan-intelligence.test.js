@@ -99,7 +99,7 @@ describe('URLscan archived-verdict lookup', () => {
     assert.equal(requestUrl.origin, 'https://urlscan.io');
     assert.equal(requestUrl.pathname, '/api/v1/search/');
     assert.equal(requestUrl.searchParams.get('size'), String(URLSCAN_MAX_RESULTS));
-    assert.equal(requestUrl.searchParams.get('q'), 'task.apexDomain:example.com AND verdicts.malicious:true AND date:>now-90d');
+    assert.equal(requestUrl.searchParams.get('q'), 'task.apexDomain:example.com AND date:>now-90d');
     assert.equal(requestUrl.toString().includes('fixture-api-key'), false);
     assert.equal(requestUrl.toString().includes('account'), false);
     assert.equal(calls[0].options.headers['api-key'], 'fixture-api-key');
@@ -122,7 +122,7 @@ describe('URLscan archived-verdict lookup', () => {
     assert.match(result.observation.limitations.join(' '), /not evidence.*safe/i);
   });
 
-  test('discards cross-domain, contradictory, and malformed records as partial data', async () => {
+  test('keeps non-malicious scans neutral while discarding cross-domain and malformed records', async () => {
     const adapter = fixtureAdapter(async () => jsonResponse({
       results: [
         searchRecord({ task: { url: 'https://unrelated.example.net/' } }),
@@ -134,7 +134,22 @@ describe('URLscan archived-verdict lookup', () => {
     const result = await adapter.lookupDomain('example.com', { env: ENABLED_ENV });
     assert.equal(result.state, 'partial');
     assert.deepEqual(result.findings, []);
-    assert.match(result.detail, /3 provider records were omitted/i);
+    assert.match(result.detail, /2 provider records were omitted/i);
+  });
+
+  test('returns a neutral miss when recent scans have no malicious verdict', async () => {
+    const adapter = fixtureAdapter(async () => jsonResponse({
+      results: [
+        searchRecord({ verdicts: { malicious: false } }),
+        searchRecord({ _id: UUID_B, verdicts: {} }),
+      ],
+      has_more: false,
+    }));
+    const result = await adapter.lookupDomain('example.com', { env: ENABLED_ENV });
+    assert.equal(result.state, 'not_found');
+    assert.deepEqual(result.findings, []);
+    assert.match(result.detail, /no malicious verdict.*2 recent scans/i);
+    assert.match(result.observation.limitations.join(' '), /older malicious scans may be missed/i);
   });
 
   test('bounds results and reports provider pagination as partial', async () => {
@@ -146,13 +161,14 @@ describe('URLscan archived-verdict lookup', () => {
     assert.equal(result.state, 'partial');
     assert.equal(result.findings.length, URLSCAN_MAX_RESULTS);
     assert.equal(result.observation.truncated, true);
-    assert.match(result.detail, /newest 20 bounded/i);
+    assert.match(result.detail, /newest 20 bounded scans/i);
   });
 
-  test('maps upstream quota and credential responses without exposing response bodies', async () => {
+  test('maps upstream quota, credential, plan, and failure responses without exposing response bodies', async () => {
     for (const fixture of [
       { status: 429, expected: 'rate_limited', headers: { 'retry-after': '45' } },
       { status: 401, expected: 'unavailable', headers: {} },
+      { status: 403, expected: 'unavailable', headers: {} },
       { status: 503, expected: 'error', headers: {} },
     ]) {
       const adapter = fixtureAdapter(async () => jsonResponse({ message: 'secret upstream detail' }, fixture.status, fixture.headers));
@@ -161,6 +177,7 @@ describe('URLscan archived-verdict lookup', () => {
       assert.equal(result.upstreamStatus, fixture.status);
       assert.equal(JSON.stringify(result).includes('secret upstream detail'), false);
       if (fixture.status === 429) assert.equal(result.retryAfterSeconds, 45);
+      if (fixture.status === 403) assert.match(result.detail, /credential or account plan/i);
     }
   });
 

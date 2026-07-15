@@ -148,10 +148,11 @@ function normalizeSearchFinding(value: unknown, targetDomain: string) {
   const verdicts = isRecord(value.verdicts) ? value.verdicts : {};
   const id = boundedText(value._id, 80) || boundedText(task.uuid, 80);
   if (!id || !UUID_RE.test(id) || targetDomainFromUrl(task.url) !== targetDomain) return null;
-  // The fixed query requires verdicts.malicious:true. A contradictory response
-  // is discarded rather than being presented as a positive provider finding;
-  // an omitted property remains acceptable because API fields are optional.
-  if (verdicts.malicious === false) return null;
+  // URLscan restricts verdict-filtered Search API queries to paid plans. The
+  // free-compatible query therefore retrieves recent domain scans and checks
+  // their returned verdict locally. False or omitted verdicts are valid
+  // neutral records, not malformed provider data.
+  if (verdicts.malicious !== true) return undefined;
   const categories = normalizedCategories(verdicts.categories);
   const observedAt = isoTimestamp(task.time) || isoTimestamp(value.date);
   const title = boundedText(page.title, 180);
@@ -173,7 +174,7 @@ function normalizeSearchFinding(value: unknown, targetDomain: string) {
 
 function searchUrl(targetDomain: string): string {
   const url = new URL(URLSCAN_SEARCH_ENDPOINT);
-  url.searchParams.set('q', `task.apexDomain:${targetDomain} AND verdicts.malicious:true AND date:>now-${URLSCAN_SEARCH_DAYS}d`);
+  url.searchParams.set('q', `task.apexDomain:${targetDomain} AND date:>now-${URLSCAN_SEARCH_DAYS}d`);
   url.searchParams.set('size', String(URLSCAN_MAX_RESULTS));
   return url.toString();
 }
@@ -274,7 +275,9 @@ function createUrlscanIntelligenceAdapter(dependencies: AdapterDependencies = {}
         await response.body?.cancel().catch(() => {});
         return result(targetDomain, {
           state: 'unavailable',
-          detail: 'URLscan did not accept the configured search credential.',
+          detail: upstreamStatus === 401
+            ? 'URLscan did not accept the configured search credential.'
+            : 'URLscan denied the search; the credential or account plan may not permit this request.',
           upstreamStatus,
         }, observedAt);
       }
@@ -314,11 +317,12 @@ function createUrlscanIntelligenceAdapter(dependencies: AdapterDependencies = {}
       }
 
       const rawResults = parsed.results.slice(0, URLSCAN_MAX_RESULTS);
-      const findings = rawResults
-        .map((item) => normalizeSearchFinding(item, targetDomain))
-        .filter((item): item is NonNullable<ReturnType<typeof normalizeSearchFinding>> => item !== null);
+      const normalized = rawResults.map((item) => normalizeSearchFinding(item, targetDomain));
+      const findings = normalized
+        .filter((item): item is Exclude<ReturnType<typeof normalizeSearchFinding>, null | undefined> => Boolean(item));
       const overLimit = parsed.results.length > URLSCAN_MAX_RESULTS || parsed.has_more === true;
-      const invalid = rawResults.length - findings.length;
+      const invalid = normalized.filter((item) => item === null).length;
+      const reviewed = rawResults.length - invalid;
       if (!findings.length && parsed.results.length === 0) {
         return result(targetDomain, {
           state: 'not_found',
@@ -327,18 +331,28 @@ function createUrlscanIntelligenceAdapter(dependencies: AdapterDependencies = {}
         }, observedAt);
       }
       return result(targetDomain, {
-        state: overLimit || invalid > 0 ? 'partial' : 'success',
+        state: overLimit || invalid > 0
+          ? 'partial'
+          : findings.length
+            ? 'success'
+            : 'not_found',
         truncated: overLimit,
-        detail: overLimit
-          ? `Showing the newest ${findings.length} bounded archived malicious-verdict match${findings.length === 1 ? '' : 'es'}; older matches may exist.`
-          : invalid > 0
-            ? `${invalid} provider record${invalid === 1 ? ' was' : 's were'} omitted because it could not be safely normalized.`
-            : `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'} in the last ${URLSCAN_SEARCH_DAYS} days.`,
+        detail: findings.length
+          ? overLimit
+            ? `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'} among the newest ${reviewed} bounded scan${reviewed === 1 ? '' : 's'}; older scans may exist.`
+            : invalid > 0
+              ? `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'}; ${invalid} provider record${invalid === 1 ? ' was' : 's were'} omitted because it could not be safely normalized.`
+              : `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'} among ${reviewed} recent scan${reviewed === 1 ? '' : 's'}.`
+          : overLimit
+            ? `No malicious verdict was found among the newest ${reviewed} bounded scan${reviewed === 1 ? '' : 's'}; older scans may exist.`
+            : invalid > 0
+              ? `No malicious verdict was found among ${reviewed} normalized recent scan${reviewed === 1 ? '' : 's'}; ${invalid} provider record${invalid === 1 ? ' was' : 's were'} omitted.`
+              : `No malicious verdict was found among ${reviewed} recent scan${reviewed === 1 ? '' : 's'} in the last ${URLSCAN_SEARCH_DAYS} days.`,
         upstreamStatus,
         findings,
         limitations: [
           'Search covers archived scans and provider verdicts only; it does not submit or rescan the domain.',
-          `Search is limited to the newest ${URLSCAN_MAX_RESULTS} matches from the last ${URLSCAN_SEARCH_DAYS} days.`,
+          `Search reviews only the newest ${URLSCAN_MAX_RESULTS} returned scans from the last ${URLSCAN_SEARCH_DAYS} days and filters their verdicts locally; older malicious scans may be missed.`,
         ],
       }, observedAt);
     } catch (error) {

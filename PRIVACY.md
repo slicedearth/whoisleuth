@@ -45,6 +45,18 @@ all.
   normalized response is displayed transiently, excluded from browser-local
   stores and the structured Lookup evidence export, and has no effect on
   availability or Risk. Fast and compact Bulk paths never make this request.
+- **Optional malware-host search**: if the operator explicitly enables the
+  URLhaus adapter and a user selects it for a deep single-domain Lookup, the
+  server posts only the canonical registrable domain to URLhaus's host API.
+  It searches existing malware-distribution records and never submits a URL,
+  sample, or report. The provider also receives ordinary API request metadata
+  and associates the query with the operator's API credential under its own
+  privacy and retention policy. WHOISleuth keeps no provider cache; the
+  bounded normalized response is displayed transiently, excluded from
+  browser-local stores and the structured Lookup evidence export, and has no
+  effect on availability or Risk. Fast and compact Bulk paths never make this
+  request. Community access is subject to not-for-profit fair-use terms;
+  commercial deployments may require a paid provider agreement.
 - **IDN/confusable review**: performed locally in the browser from the domain
   already being displayed and, when present, the active Brand Profile's
   bounded official-domain list. It makes no additional network request and is
@@ -214,6 +226,12 @@ the operator who provided access. Direct data-subject requests to:
   registrable domain and ordinary request metadata. Operators should review
   URLscan's terms, privacy policy, account quota, and commercial-use posture;
   the integration uses search only and never submits targets for scanning.
+- URLhaus: only when the operator configures the optional adapter and a user
+  explicitly selects malware-host search, its API receives the canonical
+  registrable domain and ordinary request metadata. Operators should review
+  the provider's fair-use terms, privacy policy, account quota, and
+  commercial-use posture; the integration performs host lookup only and never
+  submits URLs, samples, or reports.
 
 ## Security measures
 

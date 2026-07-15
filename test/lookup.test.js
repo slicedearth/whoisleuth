@@ -340,6 +340,87 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.availability.state, 'registered');
   });
 
+  test('adds malware-host intelligence only to an explicit deep non-compact domain lookup', async () => {
+    let malwareCalls = 0;
+    const providerResult = {
+      schema: 'whoisleuth.threat-intelligence-result',
+      version: 1,
+      provider: { id: 'fixture_malware', label: 'Fixture malware provider' },
+      target: { type: 'domain', value: 'example.com', exposure: 'registrable_domain' },
+      state: 'not_found',
+      detail: 'No fixture record.',
+      upstreamStatus: 200,
+      retryAfterSeconds: null,
+      findings: [],
+      observation: { status: 'not_found', limitations: ['No match is neutral.'] },
+    };
+    const result = await runUnifiedLookup(classifiedDomain, {
+      malwareHostIntelligence: true,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      lookupUrlhausDomain: async (domain) => {
+        malwareCalls += 1;
+        assert.equal(domain, 'example.com');
+        return providerResult;
+      },
+    });
+    assert.equal(malwareCalls, 1);
+    assert.deepEqual(result.threatIntelligence, { version: 1, providers: [providerResult] });
+    assert.equal(result.availability.state, 'registered');
+  });
+
+  test('keeps requested external providers ordered and neutral when one adapter fails', async () => {
+    const archivedResult = {
+      schema: 'whoisleuth.threat-intelligence-result', version: 1,
+      provider: { id: 'fixture_archive', label: 'Fixture archive' },
+      target: { type: 'domain', value: 'example.com', exposure: 'registrable_domain' },
+      state: 'not_found', detail: 'No match.', upstreamStatus: 200, retryAfterSeconds: null,
+      findings: [], observation: { status: 'not_found', limitations: [] },
+    };
+    const result = await runUnifiedLookup(classifiedDomain, {
+      externalIntelligence: true,
+      malwareHostIntelligence: true,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      lookupUrlscanDomain: async () => archivedResult,
+      lookupUrlhausDomain: async () => { throw new Error('private upstream detail'); },
+    });
+    assert.deepEqual(result.threatIntelligence.providers.map((provider) => provider.provider.id), [
+      'fixture_archive',
+      'urlhaus_host',
+    ]);
+    assert.equal(result.threatIntelligence.providers[1].state, 'error');
+    assert.equal(JSON.stringify(result).includes('private upstream detail'), false);
+    assert.equal(result.availability.state, 'registered');
+  });
+
+  test('never runs malware-host intelligence implicitly or in fast, compact, and non-domain paths', async () => {
+    let malwareCalls = 0;
+    const common = {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      lookupUrlhausDomain: async () => {
+        malwareCalls += 1;
+        throw new Error('must not run');
+      },
+    };
+    const implicit = await runUnifiedLookup(classifiedDomain, common);
+    const fast = await runUnifiedLookup(classifiedDomain, { ...common, fast: true, malwareHostIntelligence: true });
+    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true, malwareHostIntelligence: true });
+    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, {
+      ...common,
+      malwareHostIntelligence: true,
+    });
+    assert.equal(malwareCalls, 0);
+    assert.equal(Object.hasOwn(implicit, 'threatIntelligence'), false);
+    assert.equal(Object.hasOwn(fast, 'threatIntelligence'), false);
+    assert.equal(Object.hasOwn(compact, 'threatIntelligence'), false);
+    assert.equal(Object.hasOwn(ip, 'threatIntelligence'), false);
+  });
+
   test('converts registrar transient failures into an additive error source', async () => {
     const attempt = {
       endpoint: 'https://registrar.example/domain/example.com', transportSecurity: 'https',

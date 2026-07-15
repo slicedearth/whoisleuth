@@ -13,6 +13,7 @@ import { checkDomainAvailability } from './availability.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import { FEATURE_DISABLED_ERROR_CODE, featureDecision, networkFeaturePolicy } from './feature-policy.mts';
 import { lookupUrlscanDomain, URLSCAN_PROVIDER } from './urlscan-intelligence.mts';
+import { lookupUrlhausDomain, URLHAUS_PROVIDER } from './urlhaus-intelligence.mts';
 import { createThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 
@@ -22,9 +23,11 @@ type LookupOptions = {
   buildWhoisChain?: typeof buildWhoisChain;
   checkDomainAvailability?: typeof checkDomainAvailability;
   lookupUrlscanDomain?: typeof lookupUrlscanDomain;
+  lookupUrlhausDomain?: typeof lookupUrlhausDomain;
   fast?: boolean;
   compact?: boolean;
   externalIntelligence?: boolean;
+  malwareHostIntelligence?: boolean;
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
 };
 type RegistrarRdap = {
@@ -87,9 +90,11 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const fetchWhois = options.buildWhoisChain || buildWhoisChain;
   const checkAvailability = options.checkDomainAvailability || checkDomainAvailability;
   const fetchUrlscanIntelligence = options.lookupUrlscanDomain || lookupUrlscanDomain;
+  const fetchUrlhausIntelligence = options.lookupUrlhausDomain || lookupUrlhausDomain;
   const fast = options.fast === true;
   const compact = options.compact === true;
   const externalIntelligence = options.externalIntelligence === true;
+  const malwareHostIntelligence = options.malwareHostIntelligence === true;
   const featurePolicy = options.featurePolicy || networkFeaturePolicy();
   const rdapEnabled = featureDecision('rdap', featurePolicy).enabled;
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
@@ -114,19 +119,26 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         whoisChainPromise: whoisPromise,
       })
     : null;
-  const threatIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = externalIntelligence
+  const urlscanIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = externalIntelligence
     && classified.type === 'domain'
     && !fast
     && !compact
     ? fetchUrlscanIntelligence(classified.registrableDomain || classified.value)
     : null;
+  const urlhausIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = malwareHostIntelligence
+    && classified.type === 'domain'
+    && !fast
+    && !compact
+    ? fetchUrlhausIntelligence(classified.registrableDomain || classified.value)
+    : null;
 
-  const [rdapResult, whoisResult, availabilityResult, registrarRdapResult, threatIntelligenceResult] = await Promise.allSettled([
+  const [rdapResult, whoisResult, availabilityResult, registrarRdapResult, urlscanIntelligenceResult, urlhausIntelligenceResult] = await Promise.allSettled([
     rdapPromise,
     whoisPromise,
     availabilityPromise,
     registrarRdapPromise,
-    threatIntelligencePromise,
+    urlscanIntelligencePromise,
+    urlhausIntelligencePromise,
   ]);
 
   const rdapRecord = rdapResult.status === 'fulfilled' ? rdapResult.value : null;
@@ -291,20 +303,28 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   // opt-in response prevents large scans from downloading and retaining the
   // same registry payloads the backend already used to build `availability`.
   if (compact) return { availability, diagnostics };
-  const threatIntelligence = threatIntelligencePromise
-    ? {
-        version: 1,
-        providers: threatIntelligenceResult.status === 'fulfilled' && threatIntelligenceResult.value
-          ? [threatIntelligenceResult.value]
-          : [createThreatIntelligenceResult(
-              URLSCAN_PROVIDER,
-              { type: 'domain', value: classified.registrableDomain || classified.value },
-              {
-                state: 'error',
-                detail: 'Archived provider intelligence could not be completed.',
-              },
-            )],
-      }
+  const targetDomain = classified.registrableDomain || classified.value;
+  const threatIntelligenceProviders: ThreatIntelligenceResult[] = [];
+  if (urlscanIntelligencePromise) {
+    threatIntelligenceProviders.push(urlscanIntelligenceResult.status === 'fulfilled' && urlscanIntelligenceResult.value
+      ? urlscanIntelligenceResult.value
+      : createThreatIntelligenceResult(
+          URLSCAN_PROVIDER,
+          { type: 'domain', value: targetDomain },
+          { state: 'error', detail: 'Archived provider intelligence could not be completed.' },
+        ));
+  }
+  if (urlhausIntelligencePromise) {
+    threatIntelligenceProviders.push(urlhausIntelligenceResult.status === 'fulfilled' && urlhausIntelligenceResult.value
+      ? urlhausIntelligenceResult.value
+      : createThreatIntelligenceResult(
+          URLHAUS_PROVIDER,
+          { type: 'domain', value: targetDomain },
+          { state: 'error', detail: 'Malware-host intelligence could not be completed.' },
+        ));
+  }
+  const threatIntelligence = threatIntelligenceProviders.length
+    ? { version: 1, providers: threatIntelligenceProviders }
     : null;
   return {
     rdap,
