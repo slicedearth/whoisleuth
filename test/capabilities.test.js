@@ -123,6 +123,24 @@ test('optional malware-host intelligence is explicit, credential-gated, and deep
   assert.equal(JSON.stringify(supported).includes('fixture-auth-key'), false);
 });
 
+test('optional malware-IOC intelligence is explicit, credential-gated, and deep-only', () => {
+  const disabled = capabilityReport('express', {});
+  const unavailable = capabilityReport('express', { WHOISLEUTH_ENABLE_THREATFOX: '1' });
+  const supported = capabilityReport('express', {
+    WHOISLEUTH_ENABLE_THREATFOX: '1',
+    ABUSECH_AUTH_KEY: 'fixture-auth-key',
+  });
+  const byId = (report) => report.features.find((feature) => feature.id === 'threatfox_domain_ioc');
+  assert.equal(byId(disabled).status, 'disabled');
+  assert.match(byId(disabled).reason, /not enabled/i);
+  assert.equal(byId(unavailable).status, 'unavailable');
+  assert.match(byId(unavailable).reason, /credential is unavailable or malformed/i);
+  assert.deepEqual(byId(supported), {
+    id: 'threatfox_domain_ioc', status: 'supported', execution: 'hosted', scanModes: ['deep'],
+  });
+  assert.equal(JSON.stringify(supported).includes('fixture-auth-key'), false);
+});
+
 test('direct serverless capability path requires authentication', async () => {
   const previousPassword = process.env.SITE_PASSWORD;
   const previousSecret = process.env.SESSION_SECRET;

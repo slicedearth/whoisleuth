@@ -359,7 +359,8 @@ malicious scans and a provider miss is never treated as evidence of safety.
 
 A second optional adapter queries existing URLhaus host records for archived
 malware-distribution URLs. It remains disabled unless the operator sets
-`WHOISLEUTH_ENABLE_URLHAUS=1` and a valid `URLHAUS_AUTH_KEY`, and it runs only
+`WHOISLEUTH_ENABLE_URLHAUS=1` and a valid `ABUSECH_AUTH_KEY` (the legacy
+`URLHAUS_AUTH_KEY` remains accepted), and it runs only
 when a user explicitly selects malware-distribution records for a deep,
 non-compact single-domain Lookup. The adapter posts only the canonical
 registrable domain to the fixed host-lookup endpoint, keeps its Auth-Key in an
@@ -369,6 +370,19 @@ the adapter uses a six-second timeout, one-request process-local concurrency,
 conservative process-local fair-use counters, and no cache. Results remain
 separately attributed and outside scoring, compact stores, and structured
 evidence exports.
+
+A third optional adapter searches retained ThreatFox malware indicators for an
+exact canonical registrable-domain match. It remains disabled unless the
+operator sets `WHOISLEUTH_ENABLE_THREATFOX=1` and the same valid
+`ABUSECH_AUTH_KEY`, and it runs only when a user explicitly selects malware
+infrastructure records for a deep, non-compact single-domain Lookup. The fixed
+HTTPS endpoint receives one JSON search request with `exact_match` enabled;
+the adapter follows no redirect, never submits an indicator, URL, sample, or
+report, and keeps no cache. Responses are capped at 256 KB and 20 displayed
+findings with a six-second deadline, one-request process-local concurrency, and
+conservative process-local fair-use counters. Findings retain bounded malware
+family, infrastructure role, confidence, and observation-time context, remain
+separately attributed, and cannot affect availability or Risk.
 
 Before any adapter can be enabled, `lib/threat-intelligence-contract.mts` requires a
 versioned provider definition that declares its supported target types, the
@@ -397,6 +411,11 @@ limits, while commercial use may require a paid plan; redistribution is
 therefore treated as restricted and provider query retention as
 provider-defined. Deployments must keep the adapter disabled unless their use
 qualifies under those terms or they have an appropriate commercial agreement.
+The ThreatFox declaration was reviewed on the same date under the same abuse.ch
+terms and privacy policy. Its community API expires older indicators, so a
+neutral result is never presented as complete historical coverage or evidence
+of safety. Commercial deployments must keep it disabled unless their use is
+covered by the provider's community terms or an appropriate paid agreement.
 
 ### Opportunity & Risk scoring
 

@@ -5,6 +5,7 @@
 // lookup endpoint.
 
 import { classifyQuery } from './classify.mts';
+import { abusechAuthKey } from './abusech-auth.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
 import {
   createThreatIntelligenceResult,
@@ -31,7 +32,6 @@ const URLHAUS_TIMEOUT_MS = 6_000;
 // remain authoritative, and serverless cold starts can reset local counters.
 const URLHAUS_DAILY_REQUESTS = 200;
 const URLHAUS_MONTHLY_REQUESTS = 3_000;
-const MAX_AUTH_KEY_LENGTH = 256;
 const MAX_URL_ID_LENGTH = 24;
 
 const URLHAUS_PROVIDER = defineThreatIntelligenceProvider({
@@ -68,18 +68,10 @@ function enabledValue(value: unknown): boolean {
   return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
-function normalizedAuthKey(value: unknown): string | null {
-  if (typeof value !== 'string'
-    || value.length < 8
-    || value.length > MAX_AUTH_KEY_LENGTH
-    || /[\u0000-\u0020\u007f]/u.test(value)) return null;
-  return value;
-}
-
 function urlhausConfiguration(env: EnvironmentInput | null | undefined = process.env) {
   const source = env && typeof env === 'object' ? env : {};
   const enabled = enabledValue(source.WHOISLEUTH_ENABLE_URLHAUS);
-  const authKey = normalizedAuthKey(source.URLHAUS_AUTH_KEY);
+  const authKey = abusechAuthKey(source);
   return {
     enabled,
     configured: enabled && authKey !== null,

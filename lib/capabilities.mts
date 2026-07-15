@@ -6,6 +6,7 @@ import {
 } from './feature-policy.mts';
 import { urlscanConfiguration } from './urlscan-intelligence.mts';
 import { urlhausConfiguration } from './urlhaus-intelligence.mts';
+import { threatfoxConfiguration } from './threatfox-intelligence.mts';
 
 type CapabilityStatus = 'supported' | 'disabled' | 'unavailable' | 'local_only';
 type CapabilityExecution = 'hosted' | 'browser' | 'worker';
@@ -35,6 +36,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = Object.freeze([
   { id: 'certificate_transparency', status: 'supported', execution: 'hosted', scanModes: [] },
   { id: 'urlscan_search', status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason: 'Archived URLscan verdict search is not configured.' },
   { id: 'urlhaus_host', status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason: 'Malware-host intelligence is not configured.' },
+  { id: 'threatfox_domain_ioc', status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason: 'Malware-IOC intelligence is not configured.' },
   { id: 'domain_posture', status: 'supported', execution: 'hosted', scanModes: [] },
   { id: 'idn_confusables', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
   { id: 'analyst_cases', status: 'local_only', execution: 'browser', scanModes: [] },
@@ -70,6 +72,16 @@ function capabilityReport(
       }
       if (item.id === 'urlhaus_host') {
         const configuration = urlhausConfiguration(env);
+        const { reason: _reason, ...definition } = item;
+        return {
+          ...definition,
+          status: configuration.configured ? 'supported' : configuration.enabled ? 'unavailable' : 'disabled',
+          scanModes: [...item.scanModes],
+          ...(configuration.reason ? { reason: configuration.reason } : {}),
+        };
+      }
+      if (item.id === 'threatfox_domain_ioc') {
+        const configuration = threatfoxConfiguration(env);
         const { reason: _reason, ...definition } = item;
         return {
           ...definition,

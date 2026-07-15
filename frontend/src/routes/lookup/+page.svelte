@@ -35,6 +35,7 @@
   let loading=$state(false);
   let includeExternalIntelligence=$state(false);
   let includeMalwareHostIntelligence=$state(false);
+  let includeMalwareIocIntelligence=$state(false);
   let error=$state('');
   let result=$state<JsonRecord|null>(null);
   let profile=$state<BrandProfile|null>(null);
@@ -47,6 +48,8 @@
   const externalIntelligenceSupported=$derived(urlscanCapability?.status==='supported');
   const urlhausCapability=$derived(featureCapability(capabilityReport?.()||null,'urlhaus_host'));
   const malwareHostIntelligenceSupported=$derived(urlhausCapability?.status==='supported');
+  const threatfoxCapability=$derived(featureCapability(capabilityReport?.()||null,'threatfox_domain_ioc'));
+  const malwareIocIntelligenceSupported=$derived(threatfoxCapability?.status==='supported');
 
   const rec=(value:any):JsonRecord=>value&&typeof value==='object'?value:{};
   const show=(value:any):string=>value==null||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='object'?show(value.name||value.org||value.handle||value.domain):String(value);
@@ -190,7 +193,7 @@
   function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField)values.push({label:'Password field',tone:'warn'});if(availability.phishingLanguageMatch)values.push({label:'Phishing language',tone:'danger',detail:availability.phishingLanguageMatch});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const age=fmtAge(availability.domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiry=fmtExpiresIn(availability.expiresInDays);if(expiry)values.push({label:expiry,tone:availability.expiresInDays<=60?'warn':'neutral'});if(availability.privacyProtected!==null&&availability.privacyProtected!==undefined)values.push({label:formatPrivacyCell(availability.privacyProtected),tone:availability.privacyProtected?'warn':'good'});if(availability.activityStatus)values.push({label:formatActivityCell(availability.activityStatus,availability.hasMx,availability.hasSpf,availability.hasDmarc),tone:availability.activityStatus==='active'?'good':availability.activityStatus==='parked'?'warn':'neutral',detail:availability.websiteProbeDetail});return values;}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
-  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');const response=await fetch(`/api/lookup?${params}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
+  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');const response=await fetch(`/api/lookup?${params}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
@@ -206,6 +209,9 @@
   {/if}
   {#if malwareHostIntelligenceSupported}
     <label class="intelligence-option"><input type="checkbox" bind:checked={includeMalwareHostIntelligence} disabled={entries.length>1}> <span><strong>Search malware-distribution records</strong> Sends only the registrable domain to the optional URLhaus host API. It searches existing records and does not submit a URL or sample.</span></label>
+  {/if}
+  {#if malwareIocIntelligenceSupported}
+    <label class="intelligence-option"><input type="checkbox" bind:checked={includeMalwareIocIntelligence} disabled={entries.length>1}> <span><strong>Search malware infrastructure records</strong> Sends only the registrable domain to the optional ThreatFox search API. It searches retained indicators and does not submit an IOC, URL, or sample.</span></label>
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 </form>

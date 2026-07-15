@@ -80,6 +80,9 @@ describe('malware-host provider policy and configuration', () => {
     assert.equal(urlhausConfiguration({ WHOISLEUTH_ENABLE_URLHAUS: 'true' }).configured, false);
     assert.equal(urlhausConfiguration({ ...ENABLED_ENV, URLHAUS_AUTH_KEY: 'bad key' }).configured, false);
     assert.equal(urlhausConfiguration(ENABLED_ENV).configured, true);
+    assert.equal(urlhausConfiguration({
+      WHOISLEUTH_ENABLE_URLHAUS: '1', ABUSECH_AUTH_KEY: 'shared-fixture-key',
+    }).configured, true);
   });
 });
 

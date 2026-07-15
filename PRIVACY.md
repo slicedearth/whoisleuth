@@ -57,6 +57,18 @@ all.
   effect on availability or Risk. Fast and compact Bulk paths never make this
   request. Community access is subject to not-for-profit fair-use terms;
   commercial deployments may require a paid provider agreement.
+- **Optional malware-IOC search**: if the operator explicitly enables the
+  ThreatFox adapter and a user selects it for a deep single-domain Lookup, the
+  server sends only the canonical registrable domain in an exact-match search
+  to ThreatFox. It searches retained malware indicators and never submits an
+  IOC, URL, sample, or report. The provider receives ordinary API request
+  metadata and associates the query with the operator's abuse.ch credential
+  under its own privacy and retention policy. WHOISleuth keeps no provider
+  cache; the bounded normalized response is displayed transiently, excluded
+  from browser-local stores and the structured Lookup evidence export, and has
+  no effect on availability or Risk. Fast and compact Bulk paths never make
+  this request. Older indicators expire from the community API, and commercial
+  deployments may require a paid provider agreement.
 - **IDN/confusable review**: performed locally in the browser from the domain
   already being displayed and, when present, the active Brand Profile's
   bounded official-domain list. It makes no additional network request and is
@@ -232,6 +244,12 @@ the operator who provided access. Direct data-subject requests to:
   the provider's fair-use terms, privacy policy, account quota, and
   commercial-use posture; the integration performs host lookup only and never
   submits URLs, samples, or reports.
+- ThreatFox: only when the operator configures the optional adapter and a user
+  explicitly selects malware-IOC search, its API receives the canonical
+  registrable domain and ordinary request metadata. Operators should review
+  abuse.ch fair-use terms, privacy policy, account quota, data-retention window,
+  and commercial-use posture; the integration performs exact-match search only
+  and never submits indicators, URLs, samples, or reports.
 
 ## Security measures
 

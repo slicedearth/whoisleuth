@@ -251,6 +251,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
         { id: 'lookup', status: 'supported', execution: 'hosted', scanModes: ['fast', 'deep'] },
         { id: 'urlscan_search', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
         { id: 'urlhaus_host', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
+        { id: 'threatfox_domain_ioc', status: 'supported', execution: 'hosted', scanModes: ['deep'] },
       ],
       controls: null,
       limitations: [],
@@ -261,6 +262,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
     const requested = new URL(route.request().url());
     expect(requested.searchParams.get('intelligence')).toBe('1');
     expect(requested.searchParams.get('malware')).toBe('1');
+    expect(requested.searchParams.get('ioc')).toBe('1');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -298,6 +300,20 @@ test('optional external intelligence searches are explicit, attributed, and mobi
             observation: {
               limitations: ['A listed host may have been compromised or cleaned.'],
             },
+          }, {
+            provider: { id: 'fixture_ioc', label: 'Fixture malware-IOC records' },
+            target: { type: 'domain', value: 'archive-review.example', exposure: 'registrable_domain' },
+            state: 'success', detail: 'Found one retained malware-IOC record.',
+            findings: [{
+              id: '654321', category: 'malware',
+              providerVerdict: 'Botnet command and control · Fixture family',
+              detail: 'The provider associates this domain with botnet command and control.',
+              lastObservedAt: '2026-07-12T01:02:03.000Z',
+              referenceUrl: 'https://provider.invalid/result/654321/',
+            }],
+            observation: {
+              limitations: ['The provider retains malware-associated indicators for a limited period.'],
+            },
           }],
         },
       }),
@@ -306,12 +322,16 @@ test('optional external intelligence searches are explicit, attributed, and mobi
 
   const option = page.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
   const malwareOption = page.getByRole('checkbox', { name: /Search malware-distribution records/ });
+  const iocOption = page.getByRole('checkbox', { name: /Search malware infrastructure records/ });
   await expect(option).toBeVisible();
   await expect(malwareOption).toBeVisible();
+  await expect(iocOption).toBeVisible();
   await expect(page.getByText(/does not submit the domain for scanning/i)).toBeVisible();
   await expect(page.getByText(/does not submit a URL or sample/i)).toBeVisible();
+  await expect(page.getByText(/does not submit an IOC, URL, or sample/i)).toBeVisible();
   await option.check();
   await malwareOption.check();
+  await iocOption.check();
   await page.locator('#query').fill('archive-review.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
@@ -319,9 +339,10 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.getByRole('heading', { name: 'Archived provider verdicts' })).toBeVisible();
   await expect(section.getByText('Fixture archived verdicts', { exact: true })).toBeVisible();
   await expect(section.getByText('Fixture malware-host records', { exact: true })).toBeVisible();
+  await expect(section.getByText('Fixture malware-IOC records', { exact: true })).toBeVisible();
   await expect(section.getByText(/do not affect availability or Risk/i)).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
-  await expect(section.getByText('malware', { exact: true })).toBeVisible();
+  await expect(section.getByText('malware', { exact: true })).toHaveCount(2);
   for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {
     await expect(link).toHaveAttribute('rel', 'noopener');
   }

@@ -24,6 +24,7 @@ const handler: NetlifyFunctionHandler = async (event) => {
   const compact = params.compact === '1' || params.compact === 'true';
   const externalIntelligence = params.intelligence === '1' || params.intelligence === 'true';
   const malwareHostIntelligence = params.malware === '1' || params.malware === 'true';
+  const malwareIocIntelligence = params.ioc === '1' || params.ioc === 'true';
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
     try {
       const result = await runUnifiedLookup(classified, {
@@ -31,6 +32,7 @@ const handler: NetlifyFunctionHandler = async (event) => {
         compact,
         externalIntelligence,
         malwareHostIntelligence,
+        malwareIocIntelligence,
         featurePolicy: guard.featurePolicy,
       });
       return json(200, {
