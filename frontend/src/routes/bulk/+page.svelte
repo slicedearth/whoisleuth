@@ -1,5 +1,8 @@
 <script lang="ts">
   import { getContext, onMount } from 'svelte';
+  import BulkResultsTable from '$lib/components/BulkResultsTable.svelte';
+  import BulkScanQueue from '$lib/components/BulkScanQueue.svelte';
+  import BulkTriageControls from '$lib/components/BulkTriageControls.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
@@ -93,6 +96,11 @@
   function normalize(domain:string,body:Record<string,any>):ScanResult {const av=body.availability||{};const canonicalDomain=String(av.domain||domain);const candidate=provenance(domain)||provenance(canonicalDomain);const matched=profileSignals(canonicalDomain,av,profile);const idn=analyzeDomainIdn(canonicalDomain,profile?.officialDomains||[]);const scoring={...av,...matched,availability:av.state,mutationTypes:candidate?.mutationTypes||[]};const riskExplanation=explainRiskScore(scoring);const risk=riskExplanation?.score??null;const opportunity=computeOpportunityScore(scoring);const nameservers=Array.isArray(av.nameservers)?av.nameservers.map(String):[];const registrant=av.registrant&&typeof av.registrant==='object'?av.registrant as Contact:null;const abuseEvidence=av.abuse?.email?{abuseEmail:String(av.abuse.email),hasMx:av.hasMx??null,activityStatus:av.activityStatus||null,privacyProtected:av.privacyProtected??null,domainAgeDays:av.domainAgeDays??null}:null;const httpSummary=compactHttpObservation(av.http)||{};const relationship=relationshipObservation(av,profile?.officialDomains||[]);const saved={domain:canonicalDomain,scanDepth:mode,availability:av.state||'unknown',registrarName:entityDisplayName(av.registrar)||'—',nameservers,createdDate:av.createdDate||null,expiryDate:av.expiryDate||null,privacyProtected:av.privacyProtected??null,hasMx:av.hasMx??null,hasSpf:av.hasSpf??null,hasDmarc:av.hasDmarc??null,activityStatus:av.activityStatus||null,pageTitle:av.pageTitle??null,...httpSummary,faviconHash:av.faviconHash||null,faviconPHash:av.faviconPHash||null,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:av.hasPasswordField??null,phishingLanguageMatch:av.phishingLanguageMatch??null,riskModelVersion:riskExplanation?.modelVersion??null,riskScore:risk,riskFactors:riskExplanation?.factors.map((factor)=>({label:factor.label,points:factor.delta}))||[],mutationTypes:candidate?.mutationTypes||[]};return{domain:canonicalDomain,status:'complete',availability:saved.availability,confidence:av.confidence||'low',registrar:saved.registrarName,activity:formatActivityCell(av.activityStatus,av.hasMx,av.hasSpf,av.hasDmarc),risk,opportunity,mutationTypes:candidate?.mutationTypes||[],trusted:matched.trusted,error:'',saved,nameservers,faviconHash:saved.faviconHash,faviconPHash:saved.faviconPHash,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:Boolean(av.hasPasswordField),phishingLanguageMatch:av.phishingLanguageMatch||null,registrant,abuseEvidence,ct:candidate?.certificateTransparency||null,idn,dns:av.dns&&typeof av.dns==='object'?av.dns:null,dnssec:av.dnssec||null,relationship};}
   function failedResult(domain:string,message:string):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const idn=analyzeDomainIdn(domain,profile?.officialDomains||[]);return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'low',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:profileDomainKind(domain,profile),error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:mode,availability:'error',mutationTypes,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false,hasPasswordField:false,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,relationship:relationshipObservation({},[])};}
   function riskTitle(row:ScanResult){const factors=Array.isArray(row.saved.riskFactors)?row.saved.riskFactors:[];const lines=factors.map((factor:Record<string,any>)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`);if(row.saved.riskModelVersion)lines.push(`Risk model v${row.saved.riskModelVersion}`);return lines.join('\n')||undefined;}
+  function resultDisplayRows(){return visibleResults.map((row)=>{const resultIndex=results.indexOf(row);const caseRecord=caseByDomain.get(row.domain)||null;const outreach=outreachAction(row.domain,row.registrant);const abuse=abuseAction(row.domain,row.abuseEvidence);return{resultIndex,domain:row.domain,shortlisted:isShortlisted(row.domain),unicodeDomain:row.idn?.hasIdn?String(row.idn.unicodeDomain||''):'',mixedScript:Boolean(row.idn?.mixedScript),referenceMatch:Boolean(row.idn?.referenceMatches?.length),trusted:row.trusted||'',faviconMatch:row.faviconMatch,faviconNearMatch:row.faviconNearMatch,reusesOfficialAssets:row.reusesOfficialAssets,hasPasswordField:row.hasPasswordField,phishingLanguageMatch:row.phishingLanguageMatch||'',ct:row.ct?{lastObservedAt:row.ct.lastObservedAt,hostnameCount:row.ct.hostnames.length,certificateCount:row.ct.certificateCount}:null,errorRow:row.status==='error',error:row.error,availability:row.availability,risk:row.risk,highRisk:(row.risk??-1)>=70&&!row.trusted,riskTitle:riskTitle(row),opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,mutationLabel:row.mutationTypes.map(value=>mutationLabels[value]||value.replaceAll('_',' ')).join(', ')||'—',caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null,outreach:outreach?{mailto:outreach.mailto,body:outreach.body}:null,abuse:abuse?{mailto:abuse.mailto,body:abuse.body}:null};});}
+  function resultAt(index:number){return index>=0&&index<results.length?results[index]:null;}
+  function toggleSavedAt(index:number){const row=resultAt(index);if(row)toggleSaved(row);}
+  function trackCaseAt(index:number){const row=resultAt(index);if(row)trackCase(row);}
+  function setDispositionAt(index:number,value:string){const row=resultAt(index);if(row)setRowDisposition(row,value);}
   async function run(domains:string[],replace=true){
     const limit=mode==='fast'?2000:200;
     if(!domains.length){status='Enter at least one domain.';return;}
@@ -123,49 +131,75 @@
 
 <svelte:head><title>Bulk analysis · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Assess" title="Bulk analysis" description="Scan multiple domains, prioritise findings, and retry inconclusive results." />
-<section class="queue card">
-  {#if lookupDisabled}<p class="feature-disabled" role="note">{lookupDisabled.reason||'Lookup is disabled by deployment policy.'}</p>{/if}
-  {#if !lookupDisabled&&scanLimitations.length}<p class="feature-disabled" role="note">Some {mode} scan sources are disabled by deployment policy: {scanLimitations.map((item)=>item.id.replaceAll('_',' ')).join(', ')}. {mode==='deep'?'Saved evidence will not claim a complete deep scan.':'Results will identify unevaluated evidence.'}</p>{/if}
-  {#if profile}<p class="profile-context">Active profile: <strong>{profile.name}</strong>. Official, partner, and allowlisted domains remain visible but are excluded from high-risk triage and Monitor saves.</p>{/if}
-  {#if handoff}<p class="handoff">Loaded {handoff.candidates.length} candidate{handoff.candidates.length===1?'':'s'} from {handoff.source.replaceAll('-',' ')}.</p>{/if}
-  <div class="queue-label"><label class="queue-title" for="domains">Domains</label><label class="btn small file-btn">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div><textarea id="domains" bind:value={input} disabled={running} placeholder="example.com&#10;example.net"></textarea>
-  <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column.{#if parsedInput.duplicates} {parsedInput.duplicates} duplicate{parsedInput.duplicates===1?'':'s'} removed.{/if}</p>
-  <div class="queue-actions"><label class="field">Scan mode<select bind:value={mode} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · web and mail signals</option></select></label><button class="primary" onclick={start} disabled={running||!input.trim()||Boolean(lookupDisabled)}>{parsedInput.entries.length?`Scan ${parsedInput.entries.length} domain${parsedInput.entries.length===1?'':'s'}`:'Scan domains'}</button>{#if running}<button class="btn" onclick={togglePause}>{paused?'Resume':'Pause'}</button><button class="btn danger" onclick={cancel}>Cancel</button>{/if}</div>
-  {#if running||total}<div class="progress" role="progressbar" aria-label="Bulk scan progress" aria-valuemin="0" aria-valuemax={total} aria-valuenow={completed}><span style:width={`${total?completed/total*100:0}%`}></span></div>{/if}<p class="status" role="status" aria-live="polite">{status}</p>
-</section>
+<BulkScanQueue
+  lookupDisabledReason={lookupDisabled?(lookupDisabled.reason||'Lookup is disabled by deployment policy.'):''}
+  scanLimitations={scanLimitations.map((item)=>item.id.replaceAll('_',' '))}
+  profileName={profile?.name||''}
+  handoffCount={handoff?.candidates.length||0}
+  handoffSource={handoff?.source.replaceAll('-',' ')||''}
+  {input}
+  setInput={(value)=>input=value}
+  {mode}
+  setMode={(value)=>mode=value}
+  {running}
+  {paused}
+  entryCount={parsedInput.entries.length}
+  duplicateCount={parsedInput.duplicates}
+  {importDomainFile}
+  {start}
+  {togglePause}
+  {cancel}
+  {completed}
+  {total}
+  {status}
+/>
 
 {#if results.length}
   <section class="triage card">
-    <div class="triage-head"><div class="filters">{#each ['all','available','registered','high_risk','trusted','errors'] as key}<button class="btn" class:active={filter===key} onclick={()=>setFilter(key as Filter)}>{key.replace('_',' ')} <span>{counts[key as keyof typeof counts]}</span></button>{/each}</div><div class="triage-actions">{#if counts.errors}<button class="btn" onclick={retryErrors} disabled={running}>Retry errors</button>{/if}<button class="btn" onclick={exportCsv}>Export CSV</button><label class="indicator-format">Defensive format<select bind:value={indicatorFormat}><option value="domains">Domains</option><option value="hosts">Hosts file</option><option value="dnsmasq">dnsmasq</option><option value="rpz">RPZ</option><option value="stix">STIX 2.1</option><option value="misp">MISP event JSON</option></select></label><button class="btn" onclick={exportDefensiveIndicators} disabled={!indicatorCount}>Export {indicatorCount} high-risk indicator{indicatorCount===1?'':'s'}</button></div></div>
-    <div class="advanced-filters"><label class="field">Mutation<select bind:value={mutationFilter} onchange={()=>page=1}><option value="">All mutations</option>{#each mutationOptions as mutation}<option value={mutation}>{mutationLabels[mutation]||mutation.replaceAll('_',' ')}</option>{/each}</select></label><div class="signal-filters" aria-label="Evidence filters">{#each [['favicon','Favicon'],['password','Password field'],['phishing','Phishing language'],['asset_reuse','Official assets'],['idn','IDN / confusable']] as option}<button class="btn small" class:active={signalFilters.has(option[0])} aria-pressed={signalFilters.has(option[0])} onclick={()=>toggleSignal(option[0])}>{option[1]}</button>{/each}</div><button class="btn" onclick={clearFilters} disabled={filter==='all'&&!mutationFilter&&!signalFilters.size}>Clear filters</button></div>
-    {#if indicatorStatus}<p class="indicator-status" role="status" aria-live="polite">{indicatorStatus}</p>{/if}
-    <p>{filtered.length} of {results.length} result{results.length===1?'':'s'} matched · showing {visibleResults.length} on page {currentPage} of {pageCount}</p>
-    <div class="save-watchlist"><input aria-label="Watchlist name" bind:value={watchlistName} placeholder="Watchlist name"><button class="btn" onclick={saveResults}>Save to Monitor</button><span role="status" aria-live="polite">{saveStatus}</span></div>
-    <div class="table-wrap results-table">
-      <table>
-        <thead><tr><th aria-sort={sortKey==='domain'?(sortDirection===1?'ascending':'descending'):'none'}><button class="sort" onclick={()=>setSort('domain')}>Domain {sortKey==='domain'?(sortDirection===1?'↑':'↓'):''}</button></th><th>Registration</th><th aria-sort={sortKey==='risk'?(sortDirection===1?'ascending':'descending'):'none'}><button class="sort" onclick={()=>setSort('risk')}>Risk {sortKey==='risk'?(sortDirection===1?'↑':'↓'):''}</button></th><th aria-sort={sortKey==='opportunity'?(sortDirection===1?'ascending':'descending'):'none'}><button class="sort" onclick={()=>setSort('opportunity')}>Opportunity {sortKey==='opportunity'?(sortDirection===1?'↑':'↓'):''}</button></th><th>Website</th><th>Registrar</th><th>Mutation</th><th>Case</th><th>Actions</th></tr></thead>
-        <tbody>
-          {#each visibleResults as row}
-            {@const outreach=outreachAction(row.domain,row.registrant)}
-            {@const abuse=abuseAction(row.domain,row.abuseEvidence)}
-            <tr class:error-row={row.status==='error'} class:trusted-row={row.trusted}>
-              <td data-label="Domain"><div class="domain"><button class="star" aria-label={`${isShortlisted(row.domain)?'Remove':'Add'} ${row.domain} ${isShortlisted(row.domain)?'from':'to'} shortlist`} aria-pressed={isShortlisted(row.domain)} onclick={()=>toggleSaved(row)}>{isShortlisted(row.domain)?'★':'☆'}</button><div class="domain-content"><strong>{row.domain}</strong>{#if row.idn?.hasIdn}<small class="idn-label">Unicode: {row.idn.unicodeDomain}</small>{/if}{#if row.idn?.mixedScript}<small class="warn-label">Mixed writing scripts</small>{/if}{#if row.idn?.referenceMatches?.length}<small class="warn-label">Official-domain skeleton match</small>{/if}{#if row.trusted}<small class="trusted-label">{row.trusted}</small>{/if}{#if row.faviconMatch}<small class="danger-label">Favicon match</small>{:else if row.faviconNearMatch}<small class="warn-label">Favicon near-match</small>{/if}{#if row.reusesOfficialAssets}<small class="warn-label">Official asset relationship</small>{/if}{#if row.hasPasswordField}<small class="warn-label">Password field</small>{/if}{#if row.phishingLanguageMatch}<small class="danger-label">Phishing language</small>{/if}{#if row.ct}<details class="ct-source"><summary>Certificate Transparency</summary><div class="ct-source-detail">{#if row.ct.lastObservedAt}<span>Latest CT observation <time datetime={row.ct.lastObservedAt}>{row.ct.lastObservedAt.slice(0,10)}</time></span>{/if}<span>{row.ct.hostnames.length} observed hostname{row.ct.hostnames.length===1?'':'s'}</span><span>{row.ct.certificateCount} distinct certificate{row.ct.certificateCount===1?'':'s'}</span></div></details>{/if}{#if row.error}<small>{row.error}</small>{/if}</div></div></td>
-              <td data-label="Registration"><span class="state">{row.availability.replace('_',' ')}</span></td>
-              <td data-label="Risk" class:high={(row.risk??-1)>=70&&!row.trusted} title={riskTitle(row)}>{row.risk??'—'}</td>
-              <td data-label="Opportunity">{row.opportunity??'—'}</td>
-              <td data-label="Website">{row.activity}</td>
-              <td data-label="Registrar">{row.registrar}</td>
-              <td data-label="Mutation">{row.mutationTypes.map(v=>mutationLabels[v]||v.replaceAll('_',' ')).join(', ')||'—'}</td>
-              <td data-label="Case">{#if caseByDomain.has(row.domain)}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={caseByDomain.get(row.domain)?.disposition} onchange={(event)=>setRowDisposition(row,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(caseByDomain.get(row.domain)?.id ?? '')}`}>Open</a></div>{:else}<button class="btn small case-track" onclick={()=>trackCase(row)}>＋ Create case</button>{/if}</td>
-              <td data-label="Actions"><div class="draft-actions">{#if outreach}<a href={outreach.mailto}>Outreach</a><button onclick={()=>copyDraft(outreach.body,`${row.domain} outreach draft`)}>Copy</button>{/if}{#if abuse}<a class="danger" href={abuse.mailto}>Report abuse</a><button onclick={()=>copyDraft(abuse.body,`${row.domain} abuse draft`)}>Copy</button>{/if}{#if !outreach&&!abuse}—{/if}</div></td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-    {#if pageCount>1}<div class="pagination" role="navigation" aria-label="Bulk result pages"><button class="btn small" onclick={()=>page=Math.max(1,currentPage-1)} disabled={currentPage===1}>Previous</button><span>Page {currentPage} of {pageCount}</span><button class="btn small" onclick={()=>page=Math.min(pageCount,currentPage+1)} disabled={currentPage===pageCount}>Next</button></div>{/if}
-    {#if draftStatus}<p class="draft-status" aria-live="polite">{draftStatus}</p>{/if}
-    {#if caseStatus}<p class="draft-status" role="status" aria-live="polite">{caseStatus}</p>{/if}
+    <BulkTriageControls
+      {counts}
+      {filter}
+      {setFilter}
+      {running}
+      {retryErrors}
+      {exportCsv}
+      {indicatorFormat}
+      setIndicatorFormat={(value)=>indicatorFormat=value}
+      exportIndicators={exportDefensiveIndicators}
+      {indicatorCount}
+      {mutationFilter}
+      setMutationFilter={(value)=>{mutationFilter=value;page=1;}}
+      mutationOptions={mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_',' ')}))}
+      {signalFilters}
+      {toggleSignal}
+      {clearFilters}
+      {indicatorStatus}
+      matchedCount={filtered.length}
+      resultCount={results.length}
+      visibleCount={visibleResults.length}
+      {currentPage}
+      {pageCount}
+      {watchlistName}
+      setWatchlistName={(value)=>watchlistName=value}
+      {saveResults}
+      {saveStatus}
+    />
+    <BulkResultsTable
+      rows={resultDisplayRows()}
+      {sortKey}
+      {sortDirection}
+      {setSort}
+      toggleSaved={toggleSavedAt}
+      caseOptions={CASE_DISPOSITIONS}
+      setDisposition={setDispositionAt}
+      trackCase={trackCaseAt}
+      {copyDraft}
+      {currentPage}
+      {pageCount}
+      setPage={(value)=>page=value}
+      {draftStatus}
+      {caseStatus}
+    />
   </section>
 
   {#if relationshipSummary.groups.length}<section class="relationships card" aria-labelledby="relationship-title"><header class="section-head"><div><p class="eyebrow">Relationship evidence</p><h2 id="relationship-title">{relationshipSummary.groups.length} observed relationship{relationshipSummary.groups.length===1?'':'s'}</h2></div>{#if relationshipSummary.truncated}<span class="partial">Partial result</span>{/if}</header><p class="relationship-intro">Compare bounded observations already collected by this scan. These are investigation pivots, not ownership or maliciousness conclusions.</p><div class="relationship-list">{#each relationshipSummary.groups as relationship}<article><div><strong>{relationship.label}</strong><span>{relationship.domains.length} domain{relationship.domains.length===1?'':'s'}</span></div><small>{relationship.method}</small>{#if relationship.value}<code>{relationship.value}</code>{/if}<p>{relationship.description}</p><p>{relationship.domains.join(' · ')}</p><button class="btn small" onclick={()=>loadDomains(relationship.domains)}>Load related domain{relationship.domains.length===1?'':'s'}</button></article>{/each}</div><details class="relationship-limitations"><summary>Interpretation limits</summary>{#each relationshipSummary.limitations as limitation}<p>{limitation}</p>{/each}</details></section>{/if}
@@ -175,65 +209,8 @@
 <section class="shortlist card"><header class="section-head"><div><p class="eyebrow">Saved</p><h2>Shortlist · {shortlist.length}</h2></div><div class="toolbar">{#if shortlist.length}<button class="btn" onclick={loadShortlisted}>Load for scan</button><button class="btn" onclick={downloadShortlist}>Export JSON</button>{/if}<label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importShortlistFile}></label>{#if shortlist.length}<button class="btn danger" onclick={removeAllShortlisted}>Clear shortlist</button>{/if}</div></header>{#if shortlistStatus}<p role="status" aria-live="polite">{shortlistStatus}</p>{/if}{#if shortlist.length}<div class="shortlist-items">{#each shortlist as item}<span>{item.domain}</span>{/each}</div>{:else}<p>No shortlisted domains yet. Star a Bulk result to save it locally.</p>{/if}</section>
 
 <style>
-  .queue,.triage{padding:var(--card-pad)}
-  .profile-context{margin-top:0;padding:10px 12px;border:1px solid rgba(126,224,168,.3);border-radius:var(--radius-md);background:rgba(126,224,168,.04);color:var(--muted);font-size:var(--text-xs)}
-  .profile-context strong{color:var(--text)}
-  .handoff{margin-top:0;color:var(--accent);font-size:var(--text-sm)}
-  .queue-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
-  .queue-title{font:700 var(--text-sm) var(--mono)}
-  .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  textarea{width:100%;min-height:150px;padding:12px;background:rgba(15,17,21,.78);font-family:var(--mono);font-size:var(--text-sm)}
-  .queue-actions{display:flex;gap:9px;align-items:end;margin-top:12px}
-  .queue-actions .field{margin-right:auto}
-  .queue-actions select{min-width:220px;min-height:42px}
-  .progress{height:6px;margin-top:16px;overflow:hidden;border-radius:99px;background:var(--border)}
-  .progress span{display:block;height:100%;background:var(--accent);transition:width .15s}
-  .status{margin-bottom:0}
+  .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
-  .triage-head{display:flex;min-width:0;justify-content:space-between;gap:14px}
-  .filters,.triage-head>div{display:flex;min-width:0;flex-wrap:wrap;gap:6px}
-  .filters button{text-transform:capitalize}
-  .filters span{color:var(--muted);font-weight:400}
-  .filters .active span{color:inherit}
-  .indicator-format{display:flex;min-width:0;align-items:center;gap:6px;padding:0 4px 0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .indicator-format select{min-width:0;min-height:32px;border:0;background:var(--panel-raised);font-size:var(--text-2xs)}
-  .indicator-status{color:var(--amber)!important}
-  .advanced-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .advanced-filters select{min-width:200px}
-  .signal-filters{display:flex;flex-wrap:wrap;gap:5px}
-  .triage>p{color:var(--muted);font-size:var(--text-xs)}
-  .save-watchlist{display:grid;grid-template-columns:minmax(180px,280px) auto 1fr;gap:8px;align-items:center;margin:12px 0}
-  .save-watchlist input{min-height:var(--control-h)}
-  .save-watchlist span{color:var(--muted);font-size:var(--text-xs)}
-  .sort{min-height:auto;min-width:0;padding:0;border:0;background:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
-  .domain{display:flex;gap:7px}
-  .star{min-width:24px;min-height:24px;padding:0;border:0;background:none;color:var(--amber);font-size:1rem;cursor:pointer}
-  .domain-content,td strong,td small{display:block;max-width:300px;overflow-wrap:anywhere}
-  td strong{font-size:var(--text-sm)}
-  td small{margin-top:4px;color:var(--danger);font-size:var(--text-2xs)}
-  td .idn-label{color:var(--muted)}
-  td .trusted-label{color:var(--accent2);text-transform:capitalize}
-  td .warn-label{color:var(--amber)}
-  td .danger-label{color:var(--danger)}
-  .ct-source{margin-top:4px}
-  .ct-source summary{color:var(--accent);font-size:var(--text-2xs);cursor:pointer}
-  .ct-source-detail{display:flex;flex-direction:column;gap:2px;margin-top:4px}
-  .ct-source-detail span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
-  .ct-source-detail time{color:var(--text)}
-  .state{color:var(--accent);text-transform:capitalize}
-  .high{color:var(--danger);font-weight:800}
-  .error-row{background:rgba(255,107,107,.03)}
-  .trusted-row{background:rgba(126,224,168,.03)}
-  .draft-actions{display:grid;grid-template-columns:auto auto;gap:4px;align-items:center}
-  .draft-actions a,.draft-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:600 var(--text-2xs) var(--mono);text-align:center}
-  .draft-actions a.danger{border-color:rgba(255,107,107,.34);background:rgba(255,107,107,.05)}
-  .pagination{display:flex;justify-content:flex-end;align-items:center;gap:10px}
-  .pagination span{color:var(--muted);font-size:var(--text-xs)}
-  .draft-status{color:var(--accent)!important;font-size:var(--text-xs)}
-  .case-cell{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
-  .case-disp{min-height:32px;padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}
-  .case-open{color:var(--accent);font-size:var(--text-2xs);font-weight:700}
-  .case-track{white-space:nowrap}
   .relationships,.shortlist,.coverage{margin-top:16px;padding:var(--card-pad)}
   .relationships h2,.shortlist h2,.coverage h2{margin:0}
   .relationship-intro,.relationship-limitations p{color:var(--muted);font-size:var(--text-xs)}
@@ -254,16 +231,7 @@
   .coverage-tables>div{min-width:0}
   .coverage-tables h3{font:700 var(--text-sm) var(--mono)}
   @media(max-width:700px){
-    .queue-label{align-items:flex-start;flex-direction:column;gap:8px}
-    .queue-actions,.triage-head{align-items:stretch;flex-direction:column}
-    .queue-actions .field{margin:0}
-    .queue-actions select,.advanced-filters select{width:100%;min-width:0}
-    .triage-actions{display:grid;width:100%;grid-template-columns:minmax(0,1fr)}
-    .triage-actions>*{width:100%;min-width:0}
-    .indicator-format{justify-content:space-between;min-height:var(--control-h)}
-    .save-watchlist,.relationship-list,.coverage-tables{grid-template-columns:1fr}
-    .pagination{justify-content:space-between}
-    .table-wrap{margin-inline:calc(-1 * var(--card-pad));padding-inline:var(--card-pad)}
+    .relationship-list,.coverage-tables{grid-template-columns:1fr}
     .coverage .table-wrap{max-width:100%;margin-inline:0;padding-inline:0;overflow-x:auto}
   }
 </style>
