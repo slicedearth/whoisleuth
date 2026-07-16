@@ -4,11 +4,16 @@
   import { page } from '$app/state';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
+  import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
+  import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
+  import LookupPageComparison from '$lib/components/LookupPageComparison.svelte';
+  import LookupPageIdentity from '$lib/components/LookupPageIdentity.svelte';
+  import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
+  import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
-  import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
@@ -161,15 +166,57 @@
     'legacy-analytics-property':'Legacy analytics property',
     'tag-container':'Tag container'
   } as Record<string,string>)[String(value)]||statusLabel(show(value));}
+  function stringList(value:any){return Array.isArray(value)?value.map((item)=>String(item)):[];}
+  function pageIdentityFactRows(){return[
+    {label:'Document language',value:show(pageIdentity.documentLanguage)},
+    {label:'Canonical URL',value:show(pageCanonical.url)},
+    {label:'Meta refresh target',value:show(pageMetaRefresh.url)},
+    {label:'Open Graph title',value:show(pageOpenGraph.title)},
+    {label:'Open Graph site',value:show(pageOpenGraph.siteName)},
+    {label:'Open Graph URL',value:show(pageOpenGraphUrl.url)},
+    {label:'Generator',value:show(pageIdentity.generator)},
+    {label:'Forms observed',value:`${show(pageForms.count)}${pageForms.truncated?' · capped':''}`},
+    {label:'POST forms',value:show(pageForms.postCount)},
+    {label:'Insecure actions',value:show(pageForms.insecureActionCount),danger:Number(pageForms.insecureActionCount)>0},
+    {label:'Resource references',value:`${show(pageResources.count)}${pageResources.truncated?' · capped':''}`},
+    {label:'External resources',value:Array.isArray(pageResources.externalOrigins)?String(pageResources.externalOrigins.length):'—'},
+    {label:'Embedded origins',value:Array.isArray(pageIdentity.embeddedOrigins)?String(pageIdentity.embeddedOrigins.length):'—'},
+    {label:'Contact domains',value:Array.isArray(pageIdentity.contactDomains)?String(pageIdentity.contactDomains.length):'—'},
+    {label:'Download links',value:`${show(pageDownloads.count)}${Number(pageDownloads.riskyCount)>0?` · ${pageDownloads.riskyCount} review`:''}`},
+    {label:'Tracking identifiers',value:Array.isArray(pageIdentity.trackingIdentifiers)?String(pageIdentity.trackingIdentifiers.length):'—'},
+    {label:'Page fingerprints',value:`${pageFingerprintRows().length}${pageFingerprints.truncated?' · partial':''}`},
+  ];}
+  function pageResourceSummaryRows(){return[
+    ['Images',pageResourceTypes.image],
+    ['Scripts',pageResourceTypes.script],
+    ['Stylesheets',pageResourceTypes.stylesheet],
+    ['Other links',pageResourceTypes.link],
+    ['Frames',pageResourceTypes.frame],
+    ['Media',pageResourceTypes.media],
+    ['Objects',pageResourceTypes.object],
+  ].filter(([,value])=>Boolean(value)).map(([label,value])=>({label:String(label),value:show(value)})).concat({label:'External origins',value:stringList(pageResources.externalOrigins).join(', ')||'None observed'});}
+  function pageDownloadSummaryRows(){return[
+    {label:'Explicit links',value:show(pageDownloads.explicitCount)},
+    {label:'Review file types',value:stringList(pageDownloads.riskyFileTypes).join(', ')||'None observed'},
+    {label:'External origins',value:stringList(pageDownloads.externalOrigins).join(', ')||'None observed'},
+  ];}
+  function pageTrackingIdentifierRows(){return Array.isArray(pageIdentity.trackingIdentifiers)?pageIdentity.trackingIdentifiers.map((identifier:any)=>({label:trackingIdentifierLabel(identifier?.type),value:show(identifier?.value)})):[];}
   function pageFingerprintRows(){return[
-    ['Exact captured body',rec(pageFingerprints.exact).value,rec(pageFingerprints.exact).scope==='captured-prefix'?'Captured prefix':'Complete captured body'],
-    ['Normalized HTML',rec(pageFingerprints.normalizedHtml).value,`${show(rec(pageFingerprints.normalizedHtml).tokenCount)} tokens`],
-    ['Visible text',rec(pageFingerprints.visibleText).value,rec(pageFingerprints.visibleText).value?`${show(rec(pageFingerprints.visibleText).tokenCount)} tokens · fuzzy SimHash`:null],
-    ['Static tag structure',rec(pageFingerprints.domStructure).value,`${show(rec(pageFingerprints.domStructure).nodeCount)} nodes`],
-    ['Form structure',rec(pageFingerprints.formStructure).value,rec(pageFingerprints.formStructure).value?`${show(rec(pageFingerprints.formStructure).formCount)} forms · ${show(rec(pageFingerprints.formStructure).controlCount)} controls`:null],
-    ['External resource hosts',rec(pageFingerprints.resourceHosts).value,rec(pageFingerprints.resourceHosts).value?`${Array.isArray(rec(pageFingerprints.resourceHosts).values)?rec(pageFingerprints.resourceHosts).values.length:0} hosts`:null],
-    ['Tracking identifiers',rec(pageFingerprints.identifiers).value,rec(pageFingerprints.identifiers).value?`${Array.isArray(rec(pageFingerprints.identifiers).values)?rec(pageFingerprints.identifiers).values.length:0} identifiers`:null]
-  ].filter((row)=>row[1]);}
+    {label:'Exact captured body',value:rec(pageFingerprints.exact).value,detail:rec(pageFingerprints.exact).scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
+    {label:'Normalized HTML',value:rec(pageFingerprints.normalizedHtml).value,detail:`${show(rec(pageFingerprints.normalizedHtml).tokenCount)} tokens`},
+    {label:'Visible text',value:rec(pageFingerprints.visibleText).value,detail:rec(pageFingerprints.visibleText).value?`${show(rec(pageFingerprints.visibleText).tokenCount)} tokens · fuzzy SimHash`:null},
+    {label:'Static tag structure',value:rec(pageFingerprints.domStructure).value,detail:`${show(rec(pageFingerprints.domStructure).nodeCount)} nodes`},
+    {label:'Form structure',value:rec(pageFingerprints.formStructure).value,detail:rec(pageFingerprints.formStructure).value?`${show(rec(pageFingerprints.formStructure).formCount)} forms · ${show(rec(pageFingerprints.formStructure).controlCount)} controls`:null},
+    {label:'External resource hosts',value:rec(pageFingerprints.resourceHosts).value,detail:rec(pageFingerprints.resourceHosts).value?`${Array.isArray(rec(pageFingerprints.resourceHosts).values)?rec(pageFingerprints.resourceHosts).values.length:0} hosts`:null},
+    {label:'Tracking identifiers',value:rec(pageFingerprints.identifiers).value,detail:rec(pageFingerprints.identifiers).value?`${Array.isArray(rec(pageFingerprints.identifiers).values)?rec(pageFingerprints.identifiers).values.length:0} identifiers`:null}
+  ].filter((row)=>row.value).map((row)=>({...row,value:String(row.value)}));}
+  function pageComparisonDisplay(){if(!pageComparison)return null;return{
+    partial:Boolean(pageComparison.partial),
+    referenceDomain:String(pageComparison.reference.domain),
+    referenceObservedAt:String(pageComparison.reference.observedAt),
+    referenceObservedLabel:formatDate(pageComparison.reference.observedAt),
+    components:Array.isArray(pageComparison.components)?pageComparison.components.map((item:any)=>({label:String(item.label),method:String(item.method),outcome:String(item.outcome),detail:String(item.detail),status:String(item.status),sharedValues:stringList(item.sharedValues)})):[],
+  };}
   function assessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',rdap_only:'RDAP only',whois_only:'WHOIS only',rdap_redacted:'RDAP redacted',whois_redacted:'WHOIS redacted',rdap_unavailable:'RDAP unavailable',whois_unavailable:'WHOIS unavailable',rdap_incomplete:'RDAP incomplete',whois_incomplete:'WHOIS incomplete'} as Record<string,string>)[status]||status;}
   function diagnosticLabel(source:SourceStatus){return source.status?source.status.replaceAll('_',' '):'unknown';}
   function attemptSummary(source:SourceStatus){return Array.isArray(source.attempts)&&source.attempts.length?`attempts: ${source.attempts.map((item)=>String(item.outcome||'unknown').replaceAll('_',' ')).join(' → ')}`:null;}
@@ -183,9 +230,76 @@
     Array.isArray(contact.publicIds)&&contact.publicIds.length?`IDs: ${contact.publicIds.map((item:JsonRecord)=>`${item.type}: ${item.identifier}`).join(', ')}`:null,
     Array.isArray(contact.links)&&contact.links.length?`Links: ${contact.links.map((item:JsonRecord)=>item.href).join(', ')}`:null
   ].filter(Boolean) as string[];}
+  function comparisonDisplayRows(){return comparison.fields.map((field:ComparisonField)=>({
+    label:field.label,
+    rdapValue:field.rdapDisplay,
+    whoisValue:field.whoisDisplay,
+    status:field.status,
+    assessment:assessment(field.status),
+    tone:field.status==='conflict'?'danger':field.status==='equivalent'?'good':['rdap_unavailable','whois_unavailable','rdap_incomplete','whois_incomplete'].includes(field.status)?'warn':'',
+  }));}
+  function rdapPartialDetail(){if(!rdapParsed.serverTruncated)return'';const reasons=stringList(rdapParsed.serverTruncationReasons);return`The registry reported that some RDAP data was omitted.${reasons.length?` ${reasons.join(' · ')}.`:''}`;}
+  function rdapSourceRows(){const rows:Array<{label:string;value:string;datetime?:string}>=[];if(result?.type==='ipv4'||result?.type==='ipv6')rows.push(
+    {label:'Handle',value:show(rdapParsed.handle)},
+    {label:'Name',value:show(rdapParsed.name)},
+    {label:'Range',value:`${show(rdapParsed.startAddress)} – ${show(rdapParsed.endAddress)}`},
+    {label:'CIDRs',value:`${show(rdapParsed.cidrs)}${rdapParsed.cidrsTruncated?' (capped)':''}`},
+    {label:'Country',value:show(rdapParsed.country)},
+    {label:'Type',value:show(rdapParsed.networkType)},
+    {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
+    {label:'Registered',value:formatDate(rdapParsed.lifecycle?.createdDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.createdDate)},
+    {label:'Updated',value:formatDate(rdapParsed.lifecycle?.updatedDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.updatedDate)},
+  );else if(result?.type==='asn')rows.push(
+    {label:'Handle',value:show(rdapParsed.handle)},
+    {label:'Name',value:show(rdapParsed.name)},
+    {label:'AS range',value:`${show(rdapParsed.startAutnum)} – ${show(rdapParsed.endAutnum)}`},
+    {label:'Country',value:show(rdapParsed.country)},
+    {label:'Type',value:show(rdapParsed.autnumType)},
+    {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
+    {label:'Registered',value:formatDate(rdapParsed.lifecycle?.createdDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.createdDate)},
+    {label:'Updated',value:formatDate(rdapParsed.lifecycle?.updatedDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.updatedDate)},
+  );rows.push(
+    {label:'Object class',value:show(rdapParsed.objectClassName)},
+    {label:'Language',value:show(rdapParsed.language)},
+    {label:'Conformance',value:`${show(rdapParsed.conformance)}${rdapParsed.conformanceTruncated?' (capped)':''}`},
+    {label:'Lifecycle events',value:`${Array.isArray(rdapParsed.events)?rdapParsed.events.length:0}${rdapParsed.eventsTruncated?' (capped)':''}`},
+    {label:'RDAP database updated',value:formatDate(rdapParsed.lifecycle?.databaseUpdatedDate)},
+    {label:'Port 43',value:show(rdapParsed.port43)},
+    {label:'Parent handle',value:show(rdapParsed.parentHandle)},
+  );return rows;}
+  function whoisSourceRows(){return[
+    {label:'Domain',value:show(whoisParsed.domainName)},
+    {label:'Registry ID',value:show(whoisParsed.registryDomainId)},
+    {label:'Registrar',value:show(whoisParsed.registrar)},
+    {label:'Registrar ID',value:show(whoisParsed.registrarIanaId)},
+    {label:'Registrar WHOIS',value:show(whoisParsed.registrarWhoisServer)},
+    {label:'Reseller',value:show(whoisParsed.reseller)},
+    {label:'Created',value:formatDate(whoisParsed.lifecycle?.createdDate)},
+    {label:'Expires',value:formatDate(whoisParsed.lifecycle?.expiryDate)},
+    {label:'Updated',value:formatDate(whoisParsed.lifecycle?.updatedDate)},
+    {label:'DNSSEC',value:show(whoisParsed.dnssec)},
+    {label:'Status',value:show(whoisParsed.statuses)},
+    {label:'Nameservers',value:show(whoisParsed.nameservers)},
+    {label:'Chain',value:show(whoisParsed.chainStatus)},
+  ];}
+  function whoisContactRoleRows(){return populatedWhoisRoles.map((role)=>({role,contacts:whoisParsed.contactsByRole[role].map((contact:JsonRecord)=>({identity:contactIdentity(contact),details:contactDetails(contact)}))}));}
+  function registrarRdapDisplay(){return{
+    visible:Boolean(registrarRdap.status),
+    label:diagnosticLabel(registrarRdap),
+    endpoint:registrarRdap.endpoint?String(registrarRdap.endpoint):'',
+    detail:[registrarRdap.upstreamStatus?`HTTP ${registrarRdap.upstreamStatus}`:null,registrarRdap.fetchedAt?`Fetched ${formatDate(registrarRdap.fetchedAt)}`:null].filter(Boolean).join(' · '),
+    stateDetail:show(registrarRdap.detail),
+    error:registrarRdap.status==='error',
+    success:registrarRdap.status==='success',
+    parsed:registrarRdapParsed,
+  };}
   function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:String(record)).join(' · ');}
   function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}
   function dnsQueryFailures(){return Object.entries(rec(dnsEvidence.diagnostics)).filter(([,item])=>rec(item).status==='error').map(([name,item])=>`${name.toUpperCase()}: ${rec(item).error||'query failed'}`).join(' · ');}
+  function dnsEvidenceRows(){return[
+    {label:'DNSSEC',value:show(availability.dnssec)},
+    ...[['A','a'],['AAAA','aaaa'],['CNAME','cname'],['Nameservers','ns'],['MX','mx'],['SPF','spf'],['DMARC','dmarc'],['CAA','caa']].map(([label,name])=>({label,value:dnsDisplay(name)})),
+  ];}
   function formatBytes(value:any){const bytes=Number(value);if(!Number.isFinite(bytes)||bytes<0)return'—';return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(bytes<10240?1:0)} KiB`;}
   function tlsName(value:JsonRecord){const common=Array.isArray(value.commonNames)?value.commonNames:[];const organizations=Array.isArray(value.organizations)?value.organizations:[];return[...common,...organizations].join(' · ')||'—';}
   function tlsTrust(){return tlsAuthorization.authorized===true?'Authorized':tlsAuthorization.authorized===false?'Not authorized':'Not observed';}
@@ -197,6 +311,39 @@
     ['Frame protection',httpSecurityHeaders.xFrameOptions],
     ['Content-type protection',httpSecurityHeaders.xContentTypeOptions],
     ['Referrer policy',httpSecurityHeaders.referrerPolicy]
+  ];}
+  function httpEvidenceRows(){return[
+    {label:'Final URL',value:show(httpEvidence.finalUrl||httpEvidence.requestUrl)},
+    {label:'Response',value:httpResponse.status?`HTTP ${httpResponse.status}`:'Not observed'},
+    {label:'Transport',value:httpEvidence.transportSecurity==='https'?'HTTPS':httpEvidence.transportSecurity==='http'?'Cleartext HTTP':'Not observed'},
+    {label:'Redirects',value:show(httpEvidence.redirectCount)},
+    {label:'Content type',value:show(httpResponse.contentType)},
+    {label:'Body captured',value:`${formatBytes(httpResponse.capturedBodyBytes)}${httpResponse.bodyTruncated?' · capped':''}`},
+  ];}
+  function httpRedirectRows(){return Array.isArray(httpEvidence.redirects)?httpEvidence.redirects.map((redirect:JsonRecord)=>({status:show(redirect.status),from:show(redirect.from),to:show(redirect.to),queryOmitted:Boolean(redirect.queryOmitted)})):[];}
+  function httpAttemptRows(){const attempts=Array.isArray(httpEvidence.attempts)?httpEvidence.attempts:[];return attempts.some((attempt:JsonRecord)=>attempt.error)?attempts.map((attempt:JsonRecord)=>({url:show(attempt.url),detail:attempt.error?String(attempt.error):`HTTP ${show(attempt.httpStatus)}`})):[];}
+  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:show(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});if(httpResponse.bodyHash){rows.push({label:'Body SHA-256',value:show(httpResponse.bodyHash.value),hash:true},{label:'Hash scope',value:httpResponse.bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(httpResponse.bodyHash.bytes)})`:`Complete captured body (${formatBytes(httpResponse.bodyHash.bytes)})`});}return rows;}
+  function tlsEvidenceRows(){return[
+    {label:'Connected address',value:show(tlsEvidence.connectedAddress)},
+    {label:'SNI hostname',value:show(tlsEvidence.sniHost)},
+    {label:'Protocol',value:show(tlsEvidence.protocol)},
+    {label:'Cipher',value:show(tlsCipher.standardName||tlsCipher.name)},
+    {label:'ALPN',value:show(tlsEvidence.alpnProtocol)},
+    {label:'Chain trust',value:tlsTrust(),danger:tlsAuthorization.authorized===false},
+    {label:'Hostname',value:tlsHostnameStatus(),danger:tlsHostname.matches===false},
+    {label:'Validity',value:tlsValidityStatus(),danger:tlsValidity.status==='expired'||tlsValidity.status==='not_yet_valid'},
+  ];}
+  function tlsFindingRows(){return Array.isArray(tlsEvidence.findings)?tlsEvidence.findings.map((finding:JsonRecord)=>({label:show(finding.label),detail:show(finding.detail),tone:String(finding.tone||'')})):[];}
+  function tlsLeafCertificateRows(){if(!tlsCertificate.fingerprintSha256)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=[{label:'Subject',value:tlsName(tlsSubject)},{label:'Issuer',value:tlsName(tlsIssuer)},{label:'Serial number',value:show(tlsCertificate.serialNumber),hash:true},{label:'Valid from',value:formatDate(tlsCertificate.validFrom)},{label:'Valid to',value:formatDate(tlsCertificate.validTo)},{label:'Certificate SHA-256',value:show(tlsCertificate.fingerprintSha256),hash:true},{label:'Public key',value:`${show(tlsPublicKey.type)}${tlsPublicKey.bits?` · ${tlsPublicKey.bits} bits`:''}${tlsPublicKey.curve?` · ${tlsPublicKey.curve}`:''}`}];if(tlsPublicKey.fingerprintSha256)rows.push({label:'Public-key SHA-256',value:show(tlsPublicKey.fingerprintSha256),hash:true});return rows;}
+  function tlsAlternativeNameRows(){return[
+    ...(Array.isArray(tlsAltNames.dnsNames)?tlsAltNames.dnsNames.map((value:any)=>({type:'DNS',value:show(value)})):[]),
+    ...(Array.isArray(tlsAltNames.ipAddresses)?tlsAltNames.ipAddresses.map((value:any)=>({type:'IP address',value:show(value)})):[]),
+  ];}
+  function tlsChainRows(){return Array.isArray(tlsEvidence.chain)?tlsEvidence.chain.map((certificate:JsonRecord,index:number)=>({label:index===0?'Leaf certificate':`Chain certificate ${index+1}`,subject:tlsName(rec(certificate.subject)),fingerprint:show(certificate.fingerprintSha256)})):[];}
+  function tlsValidationRows(){return[
+    ...(tlsDiagnostics.error?[{label:'Collection',value:String(tlsDiagnostics.error)}]:[]),
+    ...(tlsAuthorization.error?[{label:'Authorization',value:String(tlsAuthorization.error)}]:[]),
+    ...(tlsHostname.error?[{label:'Hostname',value:String(tlsHostname.error)}]:[]),
   ];}
   function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField)values.push({label:'Password field',tone:'warn'});if(availability.phishingLanguageMatch)values.push({label:'Phishing language',tone:'danger',detail:availability.phishingLanguageMatch});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const age=fmtAge(availability.domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiry=fmtExpiresIn(availability.expiresInDays);if(expiry)values.push({label:expiry,tone:availability.expiresInDays<=60?'warn':'neutral'});if(availability.privacyProtected!==null&&availability.privacyProtected!==undefined)values.push({label:formatPrivacyCell(availability.privacyProtected),tone:availability.privacyProtected?'warn':'good'});if(availability.activityStatus)values.push({label:formatActivityCell(availability.activityStatus,availability.hasMx,availability.hasSpf,availability.hasDmarc),tone:availability.activityStatus==='active'?'good':availability.activityStatus==='parked'?'warn':'neutral',detail:availability.websiteProbeDetail});return values;}
   function overviewFacts(){return[
@@ -270,134 +417,37 @@
       <h3 id="web-evidence-title">Web and DNS evidence</h3>
 
       {#if dnsEvidence.source==='dns'}
-        <section class="dns-card evidence-card card" aria-labelledby="dns-title">
-          <header class="section-head"><div><p class="eyebrow">Deep-scan evidence</p><h4 id="dns-title">DNS intelligence</h4></div><span class:partial={!dnsEvidence.complete}>{dnsEvidence.status}</span></header>
-          <div class="dns-grid stat-grid">
-            <article><small>DNSSEC</small><strong>{show(availability.dnssec)}</strong></article><article><small>A</small><strong>{dnsDisplay('a')}</strong></article><article><small>AAAA</small><strong>{dnsDisplay('aaaa')}</strong></article><article><small>CNAME</small><strong>{dnsDisplay('cname')}</strong></article><article><small>Nameservers</small><strong>{dnsDisplay('ns')}</strong></article><article><small>MX</small><strong>{dnsDisplay('mx')}</strong></article><article><small>SPF</small><strong>{dnsDisplay('spf')}</strong></article><article><small>DMARC</small><strong>{dnsDisplay('dmarc')}</strong></article><article><small>CAA</small><strong>{dnsDisplay('caa')}</strong></article>
-          </div>
-          {#if dnsQueryFailures()}<p class="callout warn dns-warning">Partial observation: {dnsQueryFailures()}. A resolver failure is not evidence that a record is absent.</p>{/if}
-          <p class="card-note">Point-in-time resolver evidence. Shared DNS infrastructure can connect investigations but does not prove common ownership or maliciousness.{dnsEvidence.truncated?' Some record inventories were capped.':''}</p>
-        </section>
+        <div class="evidence-component"><LookupDnsEvidence status={show(dnsEvidence.status)} complete={dnsEvidence.complete!==false} rows={dnsEvidenceRows()} failureDetail={dnsQueryFailures()} truncated={Boolean(dnsEvidence.truncated)} /></div>
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <section class="http-card evidence-card card" aria-labelledby="http-title">
-          <header class="section-head"><div><p class="eyebrow">Deep-scan evidence</p><h4 id="http-title">HTTP intelligence</h4></div><span class:partial={!httpEvidence.complete}>{statusLabel(show(httpEvidence.status))}</span></header>
-          <div class="http-grid stat-grid">
-            <article><small>Final URL</small><strong>{show(httpEvidence.finalUrl||httpEvidence.requestUrl)}</strong></article>
-            <article><small>Response</small><strong>{httpResponse.status?`HTTP ${httpResponse.status}`:'Not observed'}</strong></article>
-            <article><small>Transport</small><strong>{httpEvidence.transportSecurity==='https'?'HTTPS':httpEvidence.transportSecurity==='http'?'Cleartext HTTP':'Not observed'}</strong></article>
-            <article><small>Redirects</small><strong>{show(httpEvidence.redirectCount)}</strong></article>
-            <article><small>Content type</small><strong>{show(httpResponse.contentType)}</strong></article>
-            <article><small>Body captured</small><strong>{formatBytes(httpResponse.capturedBodyBytes)}{httpResponse.bodyTruncated?' · capped':''}</strong></article>
-          </div>
-          {#if httpEvidence.crossOriginRedirect||httpEvidence.httpsDowngrade}<div class="http-findings">{#if httpEvidence.crossOriginRedirect}<span class="chip warn">Cross-origin redirect</span>{/if}{#if httpEvidence.httpsDowngrade}<span class="chip danger">HTTPS downgrade</span>{/if}</div>{/if}
-          {#if Array.isArray(httpEvidence.redirects)&&httpEvidence.redirects.length}<details class="http-detail disclosure"><summary>Redirect chain · {httpEvidence.redirects.length} hop{httpEvidence.redirects.length===1?'':'s'}</summary><ol>{#each httpEvidence.redirects as redirect}<li><span>HTTP {show(redirect.status)}</span><strong>{show(redirect.from)}</strong><b>→ {show(redirect.to)}</b>{#if redirect.queryOmitted}<small>Query omitted from retained provenance</small>{/if}</li>{/each}</ol></details>{/if}
-          {#if httpEvidence.attempts?.some((attempt:JsonRecord)=>attempt.error)}<details class="http-detail disclosure"><summary>Connection attempts</summary><ul>{#each httpEvidence.attempts as attempt}<li><strong>{show(attempt.url)}</strong><span>{attempt.error||`HTTP ${show(attempt.httpStatus)}`}</span></li>{/each}</ul></details>{/if}
-          {#if httpResponse.status}<details class="http-detail disclosure"><summary>Selected response metadata</summary><dl>{#each httpSecurityRows() as row}<dt>{row[0]}</dt><dd>{show(row[1])}</dd>{/each}<dt>Server</dt><dd>{show(httpResponse.server)}</dd><dt>Content language</dt><dd>{show(httpResponse.contentLanguage)}</dd><dt>Declared length</dt><dd>{httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)}</dd>{#if httpResponse.bodyHash}<dt>Body SHA-256</dt><dd class="http-hash">{show(httpResponse.bodyHash.value)}</dd><dt>Hash scope</dt><dd>{httpResponse.bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(httpResponse.bodyHash.bytes)})`:`Complete captured body (${formatBytes(httpResponse.bodyHash.bytes)})`}</dd>{/if}</dl></details>{/if}
-          {#if httpEvidence.limitations?.length}<p class="callout warn">{httpEvidence.limitations.join(' ')}</p>{/if}
-          <p class="card-note">Point-in-time response metadata from the homepage request already used for deep analysis. Redirects and headers provide context; missing security headers do not establish maliciousness.</p>
-        </section>
+        <div class="evidence-component"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={httpEvidenceRows()} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={httpRedirectRows()} attempts={httpAttemptRows()} metadata={httpMetadataRows()} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <section class="tls-card evidence-card card" aria-labelledby="tls-title">
-          <header class="section-head"><div><p class="eyebrow">Deep-scan evidence</p><h4 id="tls-title">TLS and certificate intelligence</h4></div><span class:partial={!tlsEvidence.complete}>{statusLabel(show(tlsEvidence.status))}</span></header>
-          <div class="tls-grid stat-grid">
-            <article><small>Connected address</small><strong>{show(tlsEvidence.connectedAddress)}</strong></article>
-            <article><small>SNI hostname</small><strong>{show(tlsEvidence.sniHost)}</strong></article>
-            <article><small>Protocol</small><strong>{show(tlsEvidence.protocol)}</strong></article>
-            <article><small>Cipher</small><strong>{show(tlsCipher.standardName||tlsCipher.name)}</strong></article>
-            <article><small>ALPN</small><strong>{show(tlsEvidence.alpnProtocol)}</strong></article>
-            <article><small>Chain trust</small><strong class:danger-text={tlsAuthorization.authorized===false}>{tlsTrust()}</strong></article>
-            <article><small>Hostname</small><strong class:danger-text={tlsHostname.matches===false}>{tlsHostnameStatus()}</strong></article>
-            <article><small>Validity</small><strong class:danger-text={tlsValidity.status==='expired'||tlsValidity.status==='not_yet_valid'}>{tlsValidityStatus()}</strong></article>
-          </div>
-          {#if Array.isArray(tlsEvidence.findings)&&tlsEvidence.findings.length}<ul class="finding-list tls-findings">{#each tlsEvidence.findings as finding}<li class="callout {finding.tone==='warning'?'warn':'info'}"><strong>{show(finding.label)}</strong><span>{show(finding.detail)}</span></li>{/each}</ul>{/if}
-          {#if tlsCertificate.fingerprintSha256}
-            <details class="tls-detail http-detail disclosure"><summary>Leaf certificate</summary><dl><dt>Subject</dt><dd>{tlsName(tlsSubject)}</dd><dt>Issuer</dt><dd>{tlsName(tlsIssuer)}</dd><dt>Serial number</dt><dd class="http-hash">{show(tlsCertificate.serialNumber)}</dd><dt>Valid from</dt><dd>{formatDate(tlsCertificate.validFrom)}</dd><dt>Valid to</dt><dd>{formatDate(tlsCertificate.validTo)}</dd><dt>Certificate SHA-256</dt><dd class="http-hash">{show(tlsCertificate.fingerprintSha256)}</dd><dt>Public key</dt><dd>{show(tlsPublicKey.type)}{tlsPublicKey.bits?` · ${tlsPublicKey.bits} bits`:''}{tlsPublicKey.curve?` · ${tlsPublicKey.curve}`:''}</dd>{#if tlsPublicKey.fingerprintSha256}<dt>Public-key SHA-256</dt><dd class="http-hash">{tlsPublicKey.fingerprintSha256}</dd>{/if}</dl></details>
-          {/if}
-          {#if (Array.isArray(tlsAltNames.dnsNames)&&tlsAltNames.dnsNames.length)||(Array.isArray(tlsAltNames.ipAddresses)&&tlsAltNames.ipAddresses.length)}
-            <details class="tls-detail http-detail disclosure"><summary>Subject alternative names · {(tlsAltNames.dnsNames?.length||0)+(tlsAltNames.ipAddresses?.length||0)}{tlsAltNames.truncated?' · capped':''}</summary><ul>{#each tlsAltNames.dnsNames||[] as name}<li><strong>DNS</strong><b>{name}</b></li>{/each}{#each tlsAltNames.ipAddresses||[] as address}<li><strong>IP address</strong><b>{address}</b></li>{/each}</ul></details>
-          {/if}
-          {#if Array.isArray(tlsEvidence.chain)&&tlsEvidence.chain.length}
-            <details class="tls-detail http-detail disclosure"><summary>Certificate chain · {tlsEvidence.chain.length}{tlsEvidence.chainTruncated?' · capped':''}</summary><ol>{#each tlsEvidence.chain as certificate,index}<li><strong>{index===0?'Leaf certificate':`Chain certificate ${index+1}`}</strong><b>{tlsName(rec(certificate.subject))}</b><small>{show(certificate.fingerprintSha256)}</small></li>{/each}</ol></details>
-          {/if}
-          {#if tlsDiagnostics.error||tlsAuthorization.error||tlsHostname.error}<details class="tls-detail http-detail disclosure"><summary>Collection and validation detail</summary><dl>{#if tlsDiagnostics.error}<dt>Collection</dt><dd>{tlsDiagnostics.error}</dd>{/if}{#if tlsAuthorization.error}<dt>Authorization</dt><dd>{tlsAuthorization.error}</dd>{/if}{#if tlsHostname.error}<dt>Hostname</dt><dd>{tlsHostname.error}</dd>{/if}</dl></details>{/if}
-          {#if tlsEvidence.limitations?.length}<p class="callout warn">{tlsEvidence.limitations.join(' ')}</p>{/if}
-          <p class="card-note">Point-in-time evidence from one connection to one validated public address. Trust and hostname findings describe this runtime observation; wildcard certificates and shared certificate infrastructure are not inherently suspicious.</p>
-        </section>
+        <div class="evidence-component"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={tlsEvidenceRows()} findings={tlsFindingRows()} leafCertificate={tlsLeafCertificateRows()} alternativeNames={tlsAlternativeNameRows()} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={tlsChainRows()} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={tlsValidationRows()} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} /></div>
       {/if}
 
       {#if pageIdentity.source==='html'}
-        <section class="page-card evidence-card card" aria-labelledby="page-identity-title">
-          <header class="section-head"><div><p class="eyebrow">Deep-scan evidence</p><h4 id="page-identity-title">Page identity</h4></div><span class:partial={!pageIdentity.complete}>{statusLabel(show(pageIdentity.status))}</span></header>
-          <div class="page-grid stat-grid">
-            <article><small>Document language</small><strong>{show(pageIdentity.documentLanguage)}</strong></article>
-            <article><small>Canonical URL</small><strong>{show(pageCanonical.url)}</strong></article>
-            <article><small>Meta refresh target</small><strong>{show(pageMetaRefresh.url)}</strong></article>
-            <article><small>Open Graph title</small><strong>{show(pageOpenGraph.title)}</strong></article>
-            <article><small>Open Graph site</small><strong>{show(pageOpenGraph.siteName)}</strong></article>
-            <article><small>Open Graph URL</small><strong>{show(pageOpenGraphUrl.url)}</strong></article>
-            <article><small>Generator</small><strong>{show(pageIdentity.generator)}</strong></article>
-            <article><small>Forms observed</small><strong>{show(pageForms.count)}{pageForms.truncated?' · capped':''}</strong></article>
-            <article><small>POST forms</small><strong>{show(pageForms.postCount)}</strong></article>
-            <article><small>Insecure actions</small><strong class:danger-text={Number(pageForms.insecureActionCount)>0}>{show(pageForms.insecureActionCount)}</strong></article>
-            <article><small>Resource references</small><strong>{show(pageResources.count)}{pageResources.truncated?' · capped':''}</strong></article>
-            <article><small>External resources</small><strong>{Array.isArray(pageResources.externalOrigins)?pageResources.externalOrigins.length:'—'}</strong></article>
-            <article><small>Embedded origins</small><strong>{Array.isArray(pageIdentity.embeddedOrigins)?pageIdentity.embeddedOrigins.length:'—'}</strong></article>
-            <article><small>Contact domains</small><strong>{Array.isArray(pageIdentity.contactDomains)?pageIdentity.contactDomains.length:'—'}</strong></article>
-            <article><small>Download links</small><strong>{show(pageDownloads.count)}{Number(pageDownloads.riskyCount)>0?` · ${pageDownloads.riskyCount} review`:''}</strong></article>
-            <article><small>Tracking identifiers</small><strong>{Array.isArray(pageIdentity.trackingIdentifiers)?pageIdentity.trackingIdentifiers.length:'—'}</strong></article>
-            <article><small>Page fingerprints</small><strong>{pageFingerprintRows().length}{pageFingerprints.truncated?' · partial':''}</strong></article>
-          </div>
-          {#if Array.isArray(pageForms.externalActionOrigins)&&pageForms.externalActionOrigins.length}
-            <details class="page-detail disclosure"><summary>External form destinations · {pageForms.externalActionOrigins.length}</summary><ul>{#each pageForms.externalActionOrigins as origin}<li>{origin}</li>{/each}</ul></details>
-          {/if}
-          {#if Number(pageResources.count)>0}
-            <details class="page-detail disclosure"><summary>Resource summary · {pageResources.count}</summary><dl>{#if pageResourceTypes.image}<dt>Images</dt><dd>{pageResourceTypes.image}</dd>{/if}{#if pageResourceTypes.script}<dt>Scripts</dt><dd>{pageResourceTypes.script}</dd>{/if}{#if pageResourceTypes.stylesheet}<dt>Stylesheets</dt><dd>{pageResourceTypes.stylesheet}</dd>{/if}{#if pageResourceTypes.link}<dt>Other links</dt><dd>{pageResourceTypes.link}</dd>{/if}{#if pageResourceTypes.frame}<dt>Frames</dt><dd>{pageResourceTypes.frame}</dd>{/if}{#if pageResourceTypes.media}<dt>Media</dt><dd>{pageResourceTypes.media}</dd>{/if}{#if pageResourceTypes.object}<dt>Objects</dt><dd>{pageResourceTypes.object}</dd>{/if}<dt>External origins</dt><dd>{Array.isArray(pageResources.externalOrigins)&&pageResources.externalOrigins.length?pageResources.externalOrigins.join(', '):'None observed'}</dd></dl></details>
-          {/if}
-          {#if Array.isArray(pageIdentity.embeddedOrigins)&&pageIdentity.embeddedOrigins.length}
-            <details class="page-detail disclosure"><summary>Embedded origins · {pageIdentity.embeddedOrigins.length}</summary><ul>{#each pageIdentity.embeddedOrigins as origin}<li>{origin}</li>{/each}</ul></details>
-          {/if}
-          {#if Array.isArray(pageIdentity.contactDomains)&&pageIdentity.contactDomains.length}
-            <details class="page-detail disclosure"><summary>Contact domains · {pageIdentity.contactDomains.length}</summary><ul>{#each pageIdentity.contactDomains as domain}<li>{domain}</li>{/each}</ul></details>
-          {/if}
-          {#if Number(pageDownloads.count)>0}
-            <details class="page-detail disclosure"><summary>Download context · {pageDownloads.count}</summary><dl><dt>Explicit links</dt><dd>{show(pageDownloads.explicitCount)}</dd><dt>Review file types</dt><dd>{Array.isArray(pageDownloads.riskyFileTypes)&&pageDownloads.riskyFileTypes.length?pageDownloads.riskyFileTypes.join(', '):'None observed'}</dd><dt>External origins</dt><dd>{Array.isArray(pageDownloads.externalOrigins)&&pageDownloads.externalOrigins.length?pageDownloads.externalOrigins.join(', '):'None observed'}</dd></dl></details>
-          {/if}
-          {#if Array.isArray(pageIdentity.trackingIdentifiers)&&pageIdentity.trackingIdentifiers.length}
-            <details class="page-detail disclosure"><summary>Tracking identifiers · {pageIdentity.trackingIdentifiers.length}</summary><ul>{#each pageIdentity.trackingIdentifiers as identifier}<li><strong>{trackingIdentifierLabel(identifier.type)}</strong><span>{show(identifier.value)}</span></li>{/each}</ul></details>
-          {/if}
-          {#if pageFingerprintRows().length}
-            <details class="page-detail page-fingerprints disclosure"><summary>Page fingerprints · {pageFingerprintRows().length}</summary><dl>{#each pageFingerprintRows() as row}<dt>{row[0]}</dt><dd><code>{row[1]}</code>{#if row[2]}<small>{row[2]}</small>{/if}</dd>{/each}</dl><p>SHA-256 components support exact equality checks. Visible-text SimHash is fuzzy comparison data, not a cryptographic digest or proof of common ownership.</p></details>
-          {/if}
-          {#if pageIdentity.limitations?.length}<p class="callout warn">{pageIdentity.limitations.join(' ')}</p>{/if}
-          <p class="card-note">Bounded metadata and versioned fingerprints from the static HTML already captured for this lookup. Resource and embedded locations retain origins only; contact links retain domains only; download paths, URL queries, normalized markup, and visible text are not retained. These fields provide comparison and review context rather than proof of ownership or maliciousness.</p>
-        </section>
+        <div class="evidence-component"><LookupPageIdentity
+          status={statusLabel(show(pageIdentity.status))}
+          complete={Boolean(pageIdentity.complete)}
+          facts={pageIdentityFactRows()}
+          externalFormOrigins={stringList(pageForms.externalActionOrigins)}
+          resourceCount={Number(pageResources.count)||0}
+          resourceSummary={pageResourceSummaryRows()}
+          embeddedOrigins={stringList(pageIdentity.embeddedOrigins)}
+          contactDomains={stringList(pageIdentity.contactDomains)}
+          downloadCount={Number(pageDownloads.count)||0}
+          downloadSummary={pageDownloadSummaryRows()}
+          trackingIdentifiers={pageTrackingIdentifierRows()}
+          fingerprints={pageFingerprintRows()}
+          limitations={stringList(pageIdentity.limitations)}
+        /></div>
       {/if}
 
-      {#if pageComparison}
-        <section class="page-comparison evidence-card card" aria-labelledby="page-comparison-title">
-          <header class="section-head"><div><p class="eyebrow">Active Brand Profile</p><h4 id="page-comparison-title">Official-site comparison</h4></div><span class:partial={pageComparison.partial}>{pageComparison.partial?'Partial evidence':'Comparable captures'}</span></header>
-          <p class="comparison-context">Comparing this capture with the bounded baseline for <strong>{pageComparison.reference.domain}</strong>, observed <time datetime={pageComparison.reference.observedAt}>{formatDate(pageComparison.reference.observedAt)}</time>.</p>
-          <div class="page-comparison-grid">
-            {#each pageComparison.components as item}
-              <article class={`comparison-${item.status}`}>
-                <div><small>{item.label}</small><span>{item.method}</span></div>
-                <strong>{item.outcome}</strong>
-                <p>{item.detail}</p>
-                {#if Array.isArray(item.sharedValues)&&item.sharedValues.length}<p class="shared-values">Shared: {item.sharedValues.join(', ')}</p>{/if}
-              </article>
-            {/each}
-          </div>
-          <p class="callout warn page-comparison-note">Each component stands on its own. WHOISleuth does not combine these observations into a page-similarity score or use them to change the Risk score. Matches can arise from shared templates, providers, libraries, or analytics, and do not prove common ownership, copying, intent, or maliciousness.</p>
-        </section>
-      {:else if profile?.pageBaseline && result.type==='domain'}
-        <section class="page-comparison unavailable-comparison evidence-card card" aria-labelledby="page-comparison-title">
-          <header class="section-head"><div><p class="eyebrow">Active Brand Profile</p><h4 id="page-comparison-title">Official-site comparison</h4></div><span class="partial">Unavailable</span></header>
-          <p class="card-note">No current compatible page fingerprint was captured, so the saved official-site baseline cannot be compared with this result. This does not indicate that the pages differ.</p>
-        </section>
+      {#if pageComparison || (profile?.pageBaseline && result.type==='domain')}
+        <div class="evidence-component"><LookupPageComparison comparison={pageComparisonDisplay()} unavailable={Boolean(!pageComparison&&profile?.pageBaseline&&result.type==='domain')} /></div>
       {/if}
     </section>
     {/if}
@@ -405,46 +455,21 @@
     <section class="result-section" id="registry" aria-labelledby="registry-title">
       <h3 id="registry-title">Registry sources</h3>
 
-      {#if comparison.fields.length}
-        <details class="comparison card" open={comparison.counts.conflict>0}>
-          <summary>RDAP / WHOIS comparison · {comparison.counts.conflict} conflicts · {sourceOnlyCount} source-only · {redactedComparisonCount} redacted · {limitedComparisonCount} unavailable/incomplete · {comparison.counts.equivalent} equivalent</summary>
-          <div class="table-wrap"><table><thead><tr><th>Field</th><th>RDAP</th><th>WHOIS</th><th>Assessment</th></tr></thead><tbody>{#each comparison.fields as field}<tr class:conflict={field.status==='conflict'}><th scope="row">{field.label}</th><td>{field.rdapDisplay}</td><td>{field.whoisDisplay}</td><td><span class="chip {field.status==='conflict'?'danger':field.status==='equivalent'?'good':['rdap_unavailable','whois_unavailable','rdap_incomplete','whois_incomplete'].includes(field.status)?'warn':''}">{assessment(field.status)}</span></td></tr>{/each}</tbody></table></div>
-        </details>
-      {/if}
-
-      <div class="sources">
-        <details class="card" open><summary>RDAP structured data</summary>{#if rdap.error}<p class="error source-error">{rdap.error}</p>{:else}
-          {#if result.type==='domain'}
-            <RdapDomainSource parsed={rdapParsed} source="Registry" />
-          {:else}
-            {#if rdapParsed.serverTruncated}<p class="callout warn source-partial"><strong>Server-declared partial response.</strong> The registry reported that some RDAP data was omitted.{Array.isArray(rdapParsed.serverTruncationReasons)&&rdapParsed.serverTruncationReasons.length?` ${rdapParsed.serverTruncationReasons.join(' · ')}.`:''}</p>{/if}
-            <dl>
-            {#if result.type==='ipv4'||result.type==='ipv6'}
-              <dt>Handle</dt><dd>{show(rdapParsed.handle)}</dd><dt>Name</dt><dd>{show(rdapParsed.name)}</dd><dt>Range</dt><dd>{show(rdapParsed.startAddress)} – {show(rdapParsed.endAddress)}</dd><dt>CIDRs</dt><dd>{show(rdapParsed.cidrs)}{rdapParsed.cidrsTruncated?' (capped)':''}</dd><dt>Country</dt><dd>{show(rdapParsed.country)}</dd><dt>Type</dt><dd>{show(rdapParsed.networkType)}</dd><dt>Status</dt><dd>{show(rdapParsed.statuses)}{rdapParsed.statusesTruncated?' (capped)':''}</dd><dt>Registered</dt><dd><time datetime={dateTimeAttribute(rdapParsed.lifecycle?.createdDate)}>{formatDate(rdapParsed.lifecycle?.createdDate)}</time></dd><dt>Updated</dt><dd><time datetime={dateTimeAttribute(rdapParsed.lifecycle?.updatedDate)}>{formatDate(rdapParsed.lifecycle?.updatedDate)}</time></dd>
-            {:else if result.type==='asn'}
-              <dt>Handle</dt><dd>{show(rdapParsed.handle)}</dd><dt>Name</dt><dd>{show(rdapParsed.name)}</dd><dt>AS range</dt><dd>{show(rdapParsed.startAutnum)} – {show(rdapParsed.endAutnum)}</dd><dt>Country</dt><dd>{show(rdapParsed.country)}</dd><dt>Type</dt><dd>{show(rdapParsed.autnumType)}</dd><dt>Status</dt><dd>{show(rdapParsed.statuses)}{rdapParsed.statusesTruncated?' (capped)':''}</dd><dt>Registered</dt><dd><time datetime={dateTimeAttribute(rdapParsed.lifecycle?.createdDate)}>{formatDate(rdapParsed.lifecycle?.createdDate)}</time></dd><dt>Updated</dt><dd><time datetime={dateTimeAttribute(rdapParsed.lifecycle?.updatedDate)}>{formatDate(rdapParsed.lifecycle?.updatedDate)}</time></dd>
-            {/if}
-            <dt>Object class</dt><dd>{show(rdapParsed.objectClassName)}</dd><dt>Language</dt><dd>{show(rdapParsed.language)}</dd><dt>Conformance</dt><dd>{show(rdapParsed.conformance)}{rdapParsed.conformanceTruncated?' (capped)':''}</dd><dt>Lifecycle events</dt><dd>{Array.isArray(rdapParsed.events)?rdapParsed.events.length:0}{rdapParsed.eventsTruncated?' (capped)':''}</dd><dt>RDAP database updated</dt><dd>{formatDate(rdapParsed.lifecycle?.databaseUpdatedDate)}</dd><dt>Port 43</dt><dd>{show(rdapParsed.port43)}</dd><dt>Parent handle</dt><dd>{show(rdapParsed.parentHandle)}</dd>
-            </dl>
-          {/if}
-        {/if}</details>
-        <details class="card" open><summary>WHOIS structured data</summary>{#if whois.error}<p class="error source-error">{whois.error}</p>{:else}<dl><dt>Domain</dt><dd>{show(whoisParsed.domainName)}</dd><dt>Registry ID</dt><dd>{show(whoisParsed.registryDomainId)}</dd><dt>Registrar</dt><dd>{show(whoisParsed.registrar)}</dd><dt>Registrar ID</dt><dd>{show(whoisParsed.registrarIanaId)}</dd><dt>Registrar WHOIS</dt><dd>{show(whoisParsed.registrarWhoisServer)}</dd><dt>Reseller</dt><dd>{show(whoisParsed.reseller)}</dd><dt>Created</dt><dd>{formatDate(whoisParsed.lifecycle?.createdDate)}</dd><dt>Expires</dt><dd>{formatDate(whoisParsed.lifecycle?.expiryDate)}</dd><dt>Updated</dt><dd>{formatDate(whoisParsed.lifecycle?.updatedDate)}</dd><dt>DNSSEC</dt><dd>{show(whoisParsed.dnssec)}</dd><dt>Status</dt><dd>{show(whoisParsed.statuses)}</dd><dt>Nameservers</dt><dd>{show(whoisParsed.nameservers)}</dd><dt>Chain</dt><dd>{show(whoisParsed.chainStatus)}</dd></dl>{#if populatedWhoisRoles.length}<details class="contact-inventory disclosure"><summary>Published contacts · {populatedWhoisRoles.length} role{populatedWhoisRoles.length===1?'':'s'}{whoisParsed.fieldsTruncated?.length?' · capped':''}</summary><div>{#if whoisParsed.fieldsTruncated?.length}<p class="callout warn">Some WHOIS fields exceeded local display limits: {whoisParsed.fieldsTruncated.join(', ')}. Review the raw response or exported evidence for the complete upstream text.</p>{/if}{#each populatedWhoisRoles as role}<section><h5>{role}</h5>{#each whoisParsed.contactsByRole[role] as contact}<article><strong>{contactIdentity(contact)}</strong>{#each contactDetails(contact) as detail}<span>{detail}</span>{/each}</article>{/each}</section>{/each}</div></details>{/if}{/if}</details>
-      </div>
-      {#if registrarRdap.status}
-        <details class="registrar-rdap card">
-          <summary>Registrar RDAP · {diagnosticLabel(registrarRdap)}</summary>
-          <div class="registrar-provenance">
-            {#if registrarRdap.endpoint}<strong>{registrarRdap.endpoint}</strong>{/if}
-            <span>{[registrarRdap.upstreamStatus?`HTTP ${registrarRdap.upstreamStatus}`:null,registrarRdap.fetchedAt?`Fetched ${formatDate(registrarRdap.fetchedAt)}`:null].filter(Boolean).join(' · ')}</span>
-            <p>Published by the sponsoring registrar's RDAP service, not the registry. Registrar-published contacts are relationship evidence, not proof of ownership.</p>
-          </div>
-          {#if registrarRdap.status==='success'}
-            <RdapDomainSource parsed={registrarRdapParsed} source="Registrar" />
-          {:else}
-            <p class:error={registrarRdap.status==='error'} class="registrar-state">{show(registrarRdap.detail)}</p>
-          {/if}
-        </details>
-      {/if}
+      <div class="evidence-component"><LookupRegistrySources
+        comparisonSummary={`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`}
+        comparisonRows={comparisonDisplayRows()}
+        comparisonHasConflicts={comparison.counts.conflict>0}
+        rdapError={rdap.error?String(rdap.error):''}
+        resultType={String(result.type)}
+        {rdapParsed}
+        rdapPartialDetail={rdapPartialDetail()}
+        rdapRows={rdapSourceRows()}
+        whoisError={whois.error?String(whois.error):''}
+        whoisRows={whoisSourceRows()}
+        whoisContactRoles={whoisContactRoleRows()}
+        whoisTruncatedFields={stringList(whoisParsed.fieldsTruncated)}
+        registrar={registrarRdapDisplay()}
+      /></div>
     </section>
 
     {#if threatIntelligenceProviders.length}
@@ -519,7 +544,7 @@
   .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
   .result-section>h3::before{content:"//";color:var(--muted)}
   .result-section>h3::after{content:"";flex:1;height:1px;background:var(--border)}
-  .result-section>.card,.result-section>.sources,.result-section>.registrar-rdap{margin-top:12px}
+  .result-section>.card,.result-section>.evidence-component{margin-top:12px}
   .result-section>:nth-child(2){margin-top:0}
 
   .evidence-card{padding:var(--card-pad)}
@@ -532,35 +557,8 @@
   .finding-list strong{display:block;color:var(--text);font-size:var(--text-xs)}
   .finding-list span{display:block;margin-top:3px}
 
-  .http-findings{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-  .evidence-card .disclosure ol,.evidence-card .disclosure ul{display:grid;gap:7px;margin:10px 12px;padding-left:18px}
+  .evidence-card .disclosure ul{display:grid;gap:7px;margin:10px 12px;padding-left:18px}
   .evidence-card .disclosure li{font-size:var(--text-xs);overflow-wrap:anywhere}
-  .evidence-card .disclosure li strong,.evidence-card .disclosure li b,.evidence-card .disclosure li small{display:block;margin-top:2px;font-weight:400}
-  .evidence-card .disclosure li b,.evidence-card .disclosure li small{color:var(--muted)}
-  .evidence-card .disclosure dl{display:grid;grid-template-columns:minmax(130px,190px) 1fr;gap:8px;margin:10px 12px;padding:0;font-size:var(--text-xs)}
-  .evidence-card .disclosure dd{min-width:0;margin:0;overflow-wrap:anywhere}
-  .http-hash{overflow-wrap:anywhere;font-family:var(--mono)}
-  .tls-grid .danger-text,.page-grid .danger-text{color:var(--danger)}
-
-  .page-fingerprints code{display:block;overflow-wrap:anywhere;color:var(--accent);font-size:var(--text-2xs)}
-  .page-fingerprints dd small{display:block;margin-top:3px;color:var(--muted)}
-  .page-fingerprints>p{margin:10px 12px;color:var(--muted);font-size:var(--text-xs)}
-
-  .comparison-context{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .comparison-context strong{color:var(--text)}
-  .page-comparison-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:13px}
-  .page-comparison-grid article{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .page-comparison-grid article.comparison-same{border-color:rgba(126,224,168,.3)}
-  .page-comparison-grid article.comparison-overlap{border-color:rgba(242,184,75,.35)}
-  .page-comparison-grid article>div{display:flex;align-items:start;justify-content:space-between;gap:8px}
-  .page-comparison-grid small{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase;letter-spacing:.05em}
-  .page-comparison-grid article>div>span{color:var(--muted);font-size:var(--text-2xs);text-align:right}
-  .page-comparison-grid strong{display:block;margin-top:7px;font-size:var(--text-sm);overflow-wrap:anywhere}
-  .page-comparison-grid .comparison-same strong{color:var(--accent2)}
-  .page-comparison-grid .comparison-overlap strong{color:var(--amber)}
-  .page-comparison-grid p{margin:5px 0 0;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
-  .page-comparison-grid .shared-values{color:var(--text)}
-
   .case-badges{display:flex;flex-wrap:wrap;gap:6px}
   .badge.status-escalated,.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}
   .badge.status-resolved,.badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
@@ -581,32 +579,7 @@
   .response-actions article>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
   .draft-status{margin:10px 0 0;color:var(--accent);font-size:var(--text-xs)}
 
-  .comparison,.sources>details,.registrar-rdap,.raw{padding:0;overflow:hidden}
-  .comparison .table-wrap{border-top:1px solid var(--border)}
-  .comparison tr.conflict{background:rgba(255,107,107,.03)}
-  .comparison .chip{white-space:normal}
-  .sources{display:grid;gap:12px}
-  dl{display:grid;grid-template-columns:110px 1fr;gap:9px;margin:0;padding:4px var(--card-pad) var(--card-pad);font-size:var(--text-xs)}
-  dd{margin:0;overflow-wrap:anywhere}
-  .source-error{padding:0 var(--card-pad) var(--card-pad)}
-  .source-partial{margin:0 var(--card-pad) 14px}
-  .contact-inventory{margin:0 var(--card-pad) var(--card-pad)}
-  .contact-inventory>div{display:grid;gap:9px;margin:11px 12px}
-  .contact-inventory>div>.callout{margin:0}
-  .contact-inventory section{min-width:0}
-  .contact-inventory h5{margin:0 0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase;letter-spacing:.05em}
-  .contact-inventory article{padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
-  .contact-inventory strong,.contact-inventory span{display:block;overflow-wrap:anywhere}
-  .contact-inventory strong{font-size:var(--text-xs)}
-  .contact-inventory span{margin-top:4px;color:var(--muted);font-size:var(--text-xs)}
-
-  .registrar-provenance{display:grid;gap:5px;padding:0 var(--card-pad) 14px;font-size:var(--text-xs)}
-  .registrar-provenance strong,.registrar-provenance span,.registrar-provenance p{overflow-wrap:anywhere}
-  .registrar-provenance strong{font-family:var(--mono)}
-  .registrar-provenance span,.registrar-provenance p{color:var(--muted)}
-  .registrar-provenance p{margin:4px 0 0;line-height:1.5}
-  .registrar-state{margin:0;padding:0 var(--card-pad) var(--card-pad);color:var(--muted);font-size:var(--text-xs)}
-  .registrar-state.error{color:var(--danger)}
+  .raw{padding:0;overflow:hidden}
 
   .threat-intelligence>article{margin-top:12px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .threat-source{display:flex;justify-content:space-between;gap:10px;align-items:start}
@@ -625,10 +598,6 @@
   .raw pre{max-height:520px;overflow:auto;margin:0;padding:var(--card-pad);border-top:1px solid var(--border);font-size:var(--text-xs)}
 
   @media(max-width:650px){
-    .evidence-card .disclosure dl{grid-template-columns:1fr;gap:4px}
-    .evidence-card .disclosure dt{margin-top:6px}
-    dl{grid-template-columns:1fr;gap:4px}
-    dt:not(:first-child){margin-top:7px}
     .threat-source{flex-direction:column;gap:6px}
   }
 </style>
