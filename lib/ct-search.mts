@@ -9,6 +9,7 @@
 
 import { parse } from 'tldts';
 
+import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { createObservation } from './observation.mts';
 
@@ -404,9 +405,9 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
 // Production search
 // ---------------------------------------------------------------------------
 
-async function searchCertificateTransparency(keyword: string, dependencies: CtDependencies = {}) {
+async function searchCertificateTransparency(keyword: unknown, dependencies: CtDependencies = {}) {
   const startedAt = Date.now();
-  const trimmed = (keyword || '').trim();
+  const trimmed = normalizeCtQuery(keyword);
   if (!trimmed) {
     return {
       domains: [], certCount: 0, truncated: false, matches: [],

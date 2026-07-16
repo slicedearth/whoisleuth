@@ -3,10 +3,13 @@ const assert = require('node:assert/strict');
 
 let searchCertificateTransparency;
 let summarizeCtResults;
+let MAX_CT_QUERY_LENGTH;
 before(async () => {
   const mod = await import('../lib/ct-search.mts');
+  const query = await import('../lib/ct-query.mts');
   searchCertificateTransparency = mod.searchCertificateTransparency;
   summarizeCtResults = mod.summarizeCtResults;
+  MAX_CT_QUERY_LENGTH = query.MAX_CT_QUERY_LENGTH;
 });
 
 // ---------------------------------------------------------------------------
@@ -178,6 +181,15 @@ describe('searchCertificateTransparency', () => {
     assert.equal(result.matches[0].certificateCount, 1);
     assert.equal(result.observation.complete, true);
     assert.equal(result.observation.diagnostics.certificateRows, 2);
+  });
+
+  test('rejects an invalid query before invoking the safe request boundary', async () => {
+    let calls = 0;
+    await assert.rejects(
+      searchCertificateTransparency('x'.repeat(MAX_CT_QUERY_LENGTH + 1), { fetcher: async () => { calls += 1; } }),
+      /must be at most 200 characters/,
+    );
+    assert.equal(calls, 0);
   });
 
   test('rejects a non-array upstream JSON response cleanly', async () => {

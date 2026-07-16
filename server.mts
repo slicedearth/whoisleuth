@@ -8,6 +8,7 @@ import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
+import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from './lib/domain-posture.mts';
 import { capabilityReport } from './lib/capabilities.mts';
 import {
@@ -333,8 +334,14 @@ app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availabi
 });
 
 app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
-  const q = queryText(req.query.q);
-  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
+  let q: string;
+  try {
+    q = normalizeCtQuery(req.query.q);
+  } catch (error) {
+    if (isCtQueryError(error)) return res.status(400).json({ error: error.message, errorCode: error.code });
+    throw error;
+  }
+  if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: 'MISSING_QUERY' });
 
   return withExpressOperationBudget(req, res, operationBudgetTargetFor('certificate_transparency'), async () => {
     try {

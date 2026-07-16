@@ -629,7 +629,10 @@ covered by the provider's community terms or an appropriate paid agreement.
 - Use **Search Certificate Transparency logs** to find hostnames with a
   publicly-issued TLS certificate matching a brand keyword - catches
   lookalikes the typosquat generator's fixed permutations would never guess,
-  often before the domain shows up anywhere else. Results now retain
+  often before the domain shows up anywhere else. Certificate searches now use
+  a shared bounded query contract: keywords are limited to 200 characters,
+  control characters are rejected before any upstream request, and invalid
+  input does not consume a hosted certificate-search operation. Results retain
   structured provenance: each match groups observed hostnames by canonical
   registrable domain, records the earliest and latest CT observation
   timestamps, and counts distinct certificates. CT timestamps are public-log

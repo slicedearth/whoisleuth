@@ -82,3 +82,23 @@ describe('unified lookup error codes', () => {
     assert.equal(JSON.parse(res.body).errorCode, 'MISSING_QUERY');
   });
 });
+
+describe('Certificate Transparency query errors', () => {
+  test('reports a missing query with a stable code', async () => {
+    const { handler } = require('../netlify/functions/ct-search.mts');
+    const res = await handler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
+    assert.equal(res.statusCode, 400);
+    assert.equal(JSON.parse(res.body).errorCode, 'MISSING_QUERY');
+  });
+
+  test('rejects control characters and overlong input before network work', async () => {
+    const { handler } = require('../netlify/functions/ct-search.mts');
+    for (const q of ['brand\nname', 'x'.repeat(201)]) {
+      const res = await handler(authedEvent(q));
+      assert.equal(res.statusCode, 400);
+      const body = JSON.parse(res.body);
+      assert.equal(body.errorCode, 'INVALID_CT_QUERY');
+      assert.match(body.error, /at most 200 characters/);
+    }
+  });
+});

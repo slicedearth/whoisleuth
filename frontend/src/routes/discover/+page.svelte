@@ -21,6 +21,7 @@
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.js';
+  import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.js';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
 
@@ -221,13 +222,15 @@
 
   async function searchCt() {
     if (ctDisabled) { error = ctDisabled.reason || 'Certificate Transparency search is disabled by deployment policy.'; return; }
-    if (!seed.trim()) { error = 'Enter a brand or keyword to search.'; return; }
+    let query: string;
+    try { query = normalizeCtQuery(seed); }
+    catch (cause) { error = cause instanceof Error ? cause.message : 'Enter a valid certificate-log keyword.'; return; }
+    if (!query) { error = 'Enter a brand or keyword to search.'; return; }
     // Supersede and abort any earlier in-flight search before starting.
     cancelCtSearch();
     const token = searchToken;
     const controller = new AbortController();
     ctController = controller;
-    const query = seed.trim();
     searching = true; error = ''; status = 'Searching Certificate Transparency logs…'; resetCtComparison();
     try {
       const response = await fetch(`/api/ct-search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
@@ -356,7 +359,7 @@
     <button role="tab" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
   </div>
   <div class="fields">
-    <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Brand or certificate keyword' : 'Brand or domain'}<input bind:value={seed} maxlength={mode==='certificate-transparency'?undefined:MAX_GENERATION_INPUT_LENGTH} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
+    <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Certificate-log keyword' : 'Brand or domain'}<input bind:value={seed} maxlength={mode==='certificate-transparency'?MAX_CT_QUERY_LENGTH:MAX_GENERATION_INPUT_LENGTH} aria-describedby={mode==='certificate-transparency'?'ct-query-guidance':undefined} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
     {#if mode!=='certificate-transparency'}<label class="field">TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
     <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
   </div>
@@ -375,6 +378,7 @@
       maxCandidates={MAX_GENERATED_CANDIDATES}
     />
   {/if}
+  {#if mode==='certificate-transparency'}<p class="generation-limits" id="ct-query-guidance">Search public certificate names using a keyword of up to {MAX_CT_QUERY_LENGTH} characters. This does not submit the target for a live website scan.</p>{/if}
   {#if mode==='keyword'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
   {#if ctHistoryNotice}<p class="ct-history-notice" role="status">{ctHistoryNotice}</p>{/if}

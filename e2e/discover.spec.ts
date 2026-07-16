@@ -62,6 +62,22 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/discover');
 });
 
+test('certificate search exposes and enforces the shared bounded query contract', async ({ page, request }) => {
+  await page.getByRole('tab', { name: 'Certificates' }).click();
+  const input = page.getByRole('textbox', { name: 'Certificate-log keyword' });
+  await expect(input).toHaveAttribute('maxlength', '200');
+  await expect(page.locator('#ct-query-guidance')).toContainText('up to 200 characters');
+  await expect(page.locator('#ct-query-guidance')).toContainText('does not submit the target for a live website scan');
+
+  const missingResponse = await request.get('/api/ct-search');
+  expect(missingResponse.status()).toBe(400);
+  expect(await missingResponse.json()).toMatchObject({ errorCode: 'MISSING_QUERY' });
+
+  const invalidResponse = await request.get(`/api/ct-search?q=${encodeURIComponent('x'.repeat(201))}`);
+  expect(invalidResponse.status()).toBe(400);
+  expect(await invalidResponse.json()).toMatchObject({ errorCode: 'INVALID_CT_QUERY' });
+});
+
 test('lookalike generation discloses and enforces its candidate limits', async ({ page }) => {
   const tlds = Array.from({ length: 25 }, (_, index) =>
     `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
