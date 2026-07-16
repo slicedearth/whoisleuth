@@ -71,10 +71,14 @@ function scheduledMonitorLogRecord(
 }
 
 async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {}) {
-  if (options.deploy?.published === false) {
+  // Scheduled invocations can report `published: false` even when the provider
+  // runs the current production function. The provider-controlled deploy
+  // context is the stable boundary: previews and branch deploys use distinct
+  // context values, while direct unit/runtime composition omits `deploy`.
+  if (Object.hasOwn(options, 'deploy') && options.deploy?.context !== 'production') {
     return {
       status: 'skipped',
-      stopReason: 'non_published_deploy',
+      stopReason: 'non_production_deploy',
       processedDeliveries: 0,
       lookupDeliveries: 0,
       deferredDeliveries: 0,

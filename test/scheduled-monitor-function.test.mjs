@@ -164,7 +164,7 @@ test('the disabled worker performs no Blob construction, storage, or lookup work
   assert.equal(lookups, 0);
 });
 
-test('a manual invocation from a non-published deploy cannot touch the site-wide store', async () => {
+test('a manual invocation from a non-production deploy cannot touch the site-wide store', async () => {
   let storeConstructions = 0;
   let lookups = 0;
   const result = await runScheduledMonitorFunction({
@@ -181,13 +181,59 @@ test('a manual invocation from a non-published deploy cannot touch the site-wide
   });
   assert.deepEqual(result, {
     status: 'skipped',
-    stopReason: 'non_published_deploy',
+    stopReason: 'non_production_deploy',
     processedDeliveries: 0,
     lookupDeliveries: 0,
     deferredDeliveries: 0,
   });
   assert.equal(storeConstructions, 0);
   assert.equal(lookups, 0);
+});
+
+test('the scheduled production context runs even when published provenance is false', async () => {
+  const blobs = new FakeBlobStore();
+  const names = [];
+  const result = await runScheduledMonitorFunction({
+    env: readyEnv(),
+    deploy: { context: 'production', published: false },
+    blobStoreFactory: (name) => {
+      names.push(name);
+      return blobs;
+    },
+    lookup: async () => {
+      throw new Error('An empty scheduled state must not perform a lookup.');
+    },
+  });
+  assert.deepEqual(names, [SCHEDULED_MONITOR_STORE_NAME]);
+  assert.deepEqual(result, {
+    status: 'idle',
+    stopReason: 'complete',
+    processedDeliveries: 1,
+    lookupDeliveries: 0,
+    deferredDeliveries: 0,
+  });
+  assert.equal(blobs.reads, 1);
+  assert.equal(blobs.writes, 0);
+});
+
+test('an explicitly supplied malformed deploy context fails closed before storage', async () => {
+  let storeConstructions = 0;
+  const result = await runScheduledMonitorFunction({
+    env: readyEnv(),
+    deploy: { published: true },
+    blobStoreFactory: () => {
+      storeConstructions += 1;
+      throw new Error('Malformed deploy provenance must not construct the site-wide store.');
+    },
+  });
+  assert.deepEqual(result, {
+    status: 'skipped',
+    stopReason: 'non_production_deploy',
+    processedDeliveries: 0,
+    lookupDeliveries: 0,
+    deferredDeliveries: 0,
+  });
+  assert.equal(storeConstructions, 0);
 });
 
 test('malformed enabled configuration fails before Blob construction or lookup work', async () => {
