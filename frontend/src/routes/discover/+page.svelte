@@ -1,6 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
+  import DiscoverCandidateResults from '$lib/components/DiscoverCandidateResults.svelte';
+  import DiscoverCtHistory from '$lib/components/DiscoverCtHistory.svelte';
+  import DiscoverGenerationOptions from '$lib/components/DiscoverGenerationOptions.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import {
     DEFAULT_GENERATION_PRESET,
@@ -87,6 +90,23 @@
     if (!value) return 'No complete baseline';
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleString();
+  }
+
+  function historyDisplayEntries() {
+    return ctHistory.entries.map((entry) => ({
+      query: entry.query,
+      domainCount: entry.domains.length,
+      checkCount: entry.history.length,
+      updatedLabel: historyDate(entry.updatedAt),
+      latestNewCount: entry.history.at(-1)?.newCount || 0,
+      checks: [...entry.history].reverse().map((event) => ({
+        checkedAt: event.checkedAt,
+        checkedLabel: historyDate(event.checkedAt),
+        resultCount: event.resultCount,
+        newCount: event.newCount,
+        truncated: event.truncated,
+      })),
+    }));
   }
 
   function tldSelection() {
@@ -280,6 +300,16 @@
     }
   }
 
+  function useHistoryQuery(query:string) {
+    const entry = ctHistory.entries.find((candidate) => candidate.query === query);
+    if (entry) useHistoryEntry(entry);
+  }
+
+  function deleteHistoryQuery(query:string) {
+    const entry = ctHistory.entries.find((candidate) => candidate.query === query);
+    if (entry) deleteHistoryEntry(entry);
+  }
+
   function toggle(domain: string) {
     const next = new Set(selected);
     if (next.has(domain)) next.delete(domain); else next.add(domain);
@@ -290,6 +320,21 @@
     const next = new Set(selected);
     for (const candidate of visible) checked ? next.add(candidate.domain) : next.delete(candidate.domain);
     selected = next;
+  }
+
+  function candidateDisplayRows() {
+    return visible.slice(0, 300).map((candidate) => ({
+      domain: candidate.domain,
+      mutationLabel: candidate.mutationTypes.map((type) => mutationLabels[type] || type.replaceAll('_', ' ')).join(' · '),
+      selected: selected.has(candidate.domain),
+      isNew: ctNewDomains.has(candidate.domain),
+      certificateEvidence: candidate.certificateTransparency ? {
+        certificateCount: candidate.certificateTransparency.certificateCount,
+        firstObservedAt: candidate.certificateTransparency.firstObservedAt,
+        lastObservedAt: candidate.certificateTransparency.lastObservedAt,
+        hostnames: candidate.certificateTransparency.hostnames.map(String),
+      } : null,
+    }));
   }
 
   async function sendToBulk() {
@@ -316,91 +361,46 @@
     <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
   </div>
   {#if mode==='typosquat'}
-    <div class="generation-presets" role="group" aria-label="Generation preset">
-      {#each generationPresets as preset}
-        <button
-          type="button"
-          class:active={generationPreset===preset.id}
-          aria-pressed={generationPreset===preset.id}
-          aria-label={`Use ${preset.label} generation preset`}
-          onclick={() => selectGenerationPreset(preset.id)}
-        >
-          <strong>{preset.label}</strong>
-          <small>{preset.description}</small>
-        </button>
-      {/each}
-    </div>
-    <div class="generation-options">
-      <label class="field">
-        Keyboard layout
-        <select
-          value={keyboardLayout}
-          disabled={!keyboardLayoutRelevant}
-          onchange={(event) => selectKeyboardLayout(event.currentTarget.value)}
-        >
-          {#each keyboardLayouts as layout}<option value={layout.id}>{layout.label}</option>{/each}
-        </select>
-      </label>
-      <span>{keyboardLayoutRelevant ? 'Used for adjacent-key substitutions and insertions.' : 'Not used by the selected preset.'}</span>
-    </div>
-    {#if generationEstimate?.inputValid && generationEstimate.tldCount > 0}
-      <p class="generation-estimate">
-        Estimated maximum before validation and deduplication: up to {generationEstimate.estimatedMaximum.toLocaleString()} candidates across {generationEstimate.tldCount} TLD{generationEstimate.tldCount===1?'':'s'}.
-        {#if generationEstimate.mayReachLimit} The {MAX_GENERATED_CANDIDATES.toLocaleString()}-candidate hard cap may apply.{/if}
-      </p>
-    {/if}
+    <DiscoverGenerationOptions
+      presets={generationPresets}
+      selectedPreset={generationPreset}
+      selectPreset={(id)=>selectGenerationPreset(id as GenerationPresetId)}
+      {keyboardLayouts}
+      selectedKeyboardLayout={keyboardLayout}
+      {keyboardLayoutRelevant}
+      {selectKeyboardLayout}
+      estimate={generationEstimate}
+      maxTlds={MAX_GENERATION_TLDS}
+      maxNameVariants={MAX_NAME_VARIANTS}
+      maxCandidates={MAX_GENERATED_CANDIDATES}
+    />
   {/if}
-  {#if mode!=='certificate-transparency'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
+  {#if mode==='keyword'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
   {#if ctHistoryNotice}<p class="ct-history-notice" role="status">{ctHistoryNotice}</p>{/if}
   {#if mode==='certificate-transparency' && ctHistory.entries.length}
-    <details class="ct-history">
-      <summary>Previous certificate searches · {ctHistory.entries.length}</summary>
-      <div class="ct-history-list">
-        {#each ctHistory.entries as entry (entry.query)}
-          {@const latest = entry.history.at(-1)}
-          <article>
-            <div><strong>{entry.query}</strong><small>{entry.domains.length} baseline domain{entry.domains.length===1?'':'s'} · {entry.history.length} retained check{entry.history.length===1?'':'s'}</small><small>Last checked {historyDate(entry.updatedAt)}{latest?.newCount ? ` · ${latest.newCount} new` : ''}</small>{#if entry.history.length}<details class="ct-checks"><summary>View check history</summary><ol>{#each [...entry.history].reverse() as event}<li><time datetime={event.checkedAt}>{historyDate(event.checkedAt)}</time><span>{event.resultCount} result{event.resultCount===1?'':'s'} · {event.newCount} new{event.truncated?' · capped':''}</span></li>{/each}</ol></details>{/if}</div>
-            <div><button class="btn small" aria-label={`Use ${entry.query} certificate search`} onclick={()=>useHistoryEntry(entry)}>Use</button><button class="btn small danger" aria-label={`Delete ${entry.query} certificate history`} onclick={()=>deleteHistoryEntry(entry)}>Delete</button></div>
-          </article>
-        {/each}
-      </div>
-      <button class="btn small danger ct-clear-history" onclick={deleteAllHistory}>Clear all certificate history</button>
-    </details>
+    <DiscoverCtHistory entries={historyDisplayEntries()} useEntry={useHistoryQuery} deleteEntry={deleteHistoryQuery} clearHistory={deleteAllHistory} />
   {/if}
 </section>
 
 {#if candidates.length}
-  <section class="results card">
-    <header class="section-head"><div><p class="eyebrow">Candidates</p><h2>{selected.size} selected of {candidates.length}</h2></div><button class="primary" onclick={sendToBulk} disabled={!selected.size}>Continue to Bulk</button></header>
-    <div class="toolbar results-toolbar"><input bind:value={filter} aria-label="Filter candidates" placeholder={ctResultKind==='structured'?'Filter by domain or observed hostname':'Filter candidates'}>{#if ctResultKind==='structured' && ctPreviousCheckedAt}<button class="btn" class:active={ctNewOnly} aria-pressed={ctNewOnly} onclick={()=>ctNewOnly=!ctNewOnly}>New only · {ctNewDomains.size}</button>{/if}<button class="btn" onclick={()=>selectVisible(true)}>Select visible</button><button class="btn" onclick={()=>selectVisible(false)}>Clear visible</button></div>
-    {#if ctResultKind==='legacy'}<p class="ct-legacy" role="note">Detailed certificate provenance was unavailable for this search; showing observed hostnames only.</p>{/if}
-    <div class="candidate-list">
-      {#each visible.slice(0, 300) as candidate, i (candidate.domain)}
-        <div class="candidate" class:has-ct={candidate.certificateTransparency}>
-          <input type="checkbox" id={`candidate-${i}`} checked={selected.has(candidate.domain)} onchange={()=>toggle(candidate.domain)}>
-          <div class="candidate-body">
-            <label for={`candidate-${i}`}><strong>{candidate.domain}</strong><small>{candidate.mutationTypes.map((type)=>mutationLabels[type] || type.replaceAll('_',' ')).join(' · ')}</small>{#if ctNewDomains.has(candidate.domain)}<span class="ct-new">New since previous search</span>{/if}</label>
-            {#if candidate.certificateTransparency}
-              {@const ct = candidate.certificateTransparency}
-              <div class="ct-meta">
-                <span class="ct-stat">{ct.certificateCount} distinct certificate{ct.certificateCount===1?'':'s'}</span>
-                {#if ct.firstObservedAt}<span class="ct-stat">Earliest CT observation <time datetime={ct.firstObservedAt}>{ct.firstObservedAt.slice(0,10)}</time></span>{/if}
-                {#if ct.lastObservedAt}<span class="ct-stat">Latest CT observation <time datetime={ct.lastObservedAt}>{ct.lastObservedAt.slice(0,10)}</time></span>{/if}
-              </div>
-              {#if ct.hostnames.length}
-                <div class="ct-hosts">
-                  {#each ct.hostnames.slice(0,3) as host}<code>{host}</code>{/each}
-                  {#if ct.hostnames.length>3}<details><summary>Show all {ct.hostnames.length} observed hostnames</summary><div class="ct-host-list">{#each ct.hostnames as host}<code>{host}</code>{/each}</div></details>{/if}
-                </div>
-              {/if}
-            {/if}
-          </div>
-        </div>
-      {/each}
-    </div>
-    {#if visible.length>300}<p class="limit">Showing the first 300 matching candidates. Refine the filter to inspect the remainder.</p>{/if}
-  </section>
+  <DiscoverCandidateResults
+    selectedCount={selected.size}
+    candidateCount={candidates.length}
+    continueToBulk={sendToBulk}
+    {filter}
+    setFilter={(value)=>filter=value}
+    structured={ctResultKind==='structured'}
+    previousCheckedAt={ctPreviousCheckedAt}
+    newOnly={ctNewOnly}
+    newCount={ctNewDomains.size}
+    toggleNewOnly={()=>ctNewOnly=!ctNewOnly}
+    {selectVisible}
+    legacy={ctResultKind==='legacy'}
+    rows={candidateDisplayRows()}
+    visibleCount={visible.length}
+    toggleCandidate={toggle}
+  />
 {/if}
 
 <style>
@@ -412,65 +412,11 @@
   .modes button:hover{color:var(--text)}
   .modes button.active{color:var(--accent2);border-color:rgba(126,224,168,.45);background:rgba(126,224,168,.08)}
   .fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}
-  .generation-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
-  .generation-presets button{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);color:var(--muted);text-align:left}
-  .generation-presets button:hover{border-color:rgba(126,224,168,.55)}
-  .generation-presets button.active{border-color:var(--accent2);background:rgba(126,224,168,.08);box-shadow:inset 3px 0 0 var(--accent2)}
-  .generation-presets strong,.generation-presets small{display:block}
-  .generation-presets strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .generation-presets button.active strong{color:var(--accent2)}
-  .generation-presets small{margin-top:4px;font-size:var(--text-2xs);line-height:1.5}
-  .generation-options{display:flex;align-items:end;gap:12px;margin-top:10px}
-  .generation-options label{min-width:170px}
-  .generation-options span{padding-bottom:10px;color:var(--muted);font-size:var(--text-xs)}
-  .generation-estimate,.generation-limits{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .generation-estimate{color:var(--text)}
+  .generation-limits{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .ct-history-notice{color:var(--amber);font-size:var(--text-xs)}
-  .ct-history{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
-  .ct-history>summary{color:var(--accent);cursor:pointer;font:600 var(--text-xs) var(--mono)}
-  .ct-history-list{display:grid;gap:7px;margin-top:10px}
-  .ct-history article{display:flex;justify-content:space-between;gap:12px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .ct-history article strong,.ct-history article small{display:block}
-  .ct-history article strong{overflow-wrap:anywhere;font-size:var(--text-sm)}
-  .ct-history article small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
-  .ct-history article>div:last-child{display:flex;gap:5px;align-items:center}
-  .ct-checks{margin-top:7px}
-  .ct-checks summary{color:var(--accent);cursor:pointer;font-size:var(--text-2xs)}
-  .ct-checks ol{display:grid;gap:4px;margin:6px 0 0;padding-left:18px}
-  .ct-checks li{font-size:var(--text-2xs)}
-  .ct-checks li span{display:block;color:var(--muted)}
-  .ct-clear-history{margin-top:9px}
-  .results{margin-top:16px;padding:var(--card-pad)}
-  .results h2{margin:0}
-  .results-toolbar{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);margin:16px 0 12px}
-  .candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}
-  .candidate{display:flex;gap:10px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .candidate.has-ct{align-items:flex-start}
-  .candidate input{margin-top:2px}
-  .candidate-body{flex:1;min-width:0}
-  .candidate-body label{display:block;min-width:0;cursor:pointer}
-  .candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere;font-size:var(--text-sm)}
-  .candidate small{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-2xs);text-transform:capitalize}
-  .ct-new{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent2);font:600 var(--text-2xs) var(--mono)}
-  .ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}
-  .ct-stat{color:var(--muted);font-size:var(--text-2xs)}
-  .ct-stat time{color:var(--text)}
-  .ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-  .ct-hosts code{padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:var(--text-2xs);overflow-wrap:anywhere;min-width:0}
-  .ct-hosts details{width:100%}
-  .ct-hosts summary{color:var(--accent);font-size:var(--text-2xs);cursor:pointer}
-  .ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-  .ct-legacy{margin:0 0 12px;color:var(--muted);font-size:var(--text-xs)}
-  .limit{color:var(--muted);font-size:var(--text-xs)}
   @media(max-width:700px){
-    .fields,.results-toolbar,.candidate-list,.generation-presets{grid-template-columns:1fr}
-    .generation-options{align-items:stretch;flex-direction:column;gap:4px}
-    .generation-options label{width:100%;min-width:0}
-    .generation-options span{padding-bottom:0}
+    .fields{grid-template-columns:1fr}
     .modes{overflow:auto}
-    .profile-context,.ct-history article{align-items:flex-start;flex-direction:column}
-    .ct-history article>div:last-child{width:100%}
-    .results .section-head{display:block}
-    .results .section-head button{margin-top:14px;width:100%}
+    .profile-context{align-items:flex-start;flex-direction:column}
   }
 </style>

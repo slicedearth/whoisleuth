@@ -104,6 +104,7 @@ test('empty Lookup shows the compact query card without result sections or local
 });
 
 test('a data-heavy Lookup result groups evidence into navigable sections', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/lookup?*', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify(sectionedLookupFixture('sectioned-result.invalid')),
   }));
