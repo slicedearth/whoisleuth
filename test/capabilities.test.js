@@ -14,7 +14,7 @@ test('capability report is deterministic, provider-neutral, and honest about exe
   assert.equal(report.features.find((feature) => feature.id === 'lookup').status, 'supported');
   assert.equal(report.features.find((feature) => feature.id === 'tls_intelligence').status, 'supported');
   assert.equal(report.features.find((feature) => feature.id === 'idn_confusables').status, 'local_only');
-  assert.equal(report.features.find((feature) => feature.id === 'scheduled_monitoring').status, 'unavailable');
+  assert.equal(report.features.find((feature) => feature.id === 'scheduled_monitoring').status, 'disabled');
   assert.equal(report.controls.concurrency.mode, 'in_memory');
   assert.equal(report.controls.concurrency.scope, 'serverless_instance');
   assert.equal(report.controls.concurrency.distributed, false);
@@ -85,6 +85,29 @@ test('emergency switches are reflected by the server-authoritative feature repor
   assert.equal(tls.status, 'disabled');
   assert.match(posture.reason, /DNS intelligence is disabled/i);
   assert.equal(report.features.find((feature) => feature.id === 'lookup').status, 'supported');
+});
+
+test('optional scheduled monitoring is explicit, credential-gated, and Netlify-only', () => {
+  const disabled = capabilityReport('netlify', {});
+  const unavailable = capabilityReport('netlify', { WHOISLEUTH_SCHEDULED_MONITORING: '1' });
+  const readyEnvironment = {
+    WHOISLEUTH_SCHEDULED_MONITORING: '1',
+    WHOISLEUTH_SCHEDULED_MONITOR_KEY: Buffer.alloc(32, 7).toString('base64'),
+    WHOISLEUTH_SCHEDULED_MONITOR_NAMESPACE: 'whoisleuth:scheduled-monitor:test',
+  };
+  const supported = capabilityReport('netlify', readyEnvironment);
+  const unsupportedRuntime = capabilityReport('express', readyEnvironment);
+  const byId = (report) => report.features.find((feature) => feature.id === 'scheduled_monitoring');
+  assert.equal(byId(disabled).status, 'disabled');
+  assert.match(byId(disabled).reason, /not enabled/i);
+  assert.equal(byId(unavailable).status, 'unavailable');
+  assert.match(byId(unavailable).reason, /valid WHOISLEUTH_SCHEDULED_MONITOR_KEY/i);
+  assert.deepEqual(byId(supported), {
+    id: 'scheduled_monitoring', status: 'supported', execution: 'worker', scanModes: ['fast'],
+  });
+  assert.equal(byId(unsupportedRuntime).status, 'unavailable');
+  assert.match(byId(unsupportedRuntime).reason, /Netlify worker deployment/i);
+  assert.equal(JSON.stringify(supported).includes(readyEnvironment.WHOISLEUTH_SCHEDULED_MONITOR_KEY), false);
 });
 
 test('optional archived-verdict search is explicit, credential-gated, and deep-only', () => {

@@ -7,6 +7,7 @@ import {
 import { urlscanConfiguration } from './urlscan-intelligence.mts';
 import { urlhausConfiguration } from './urlhaus-intelligence.mts';
 import { threatfoxConfiguration } from './threatfox-intelligence.mts';
+import { scheduledMonitorRuntimeConfiguration } from './scheduled-monitor-configuration.mts';
 
 type CapabilityStatus = 'supported' | 'disabled' | 'unavailable' | 'local_only';
 type CapabilityExecution = 'hosted' | 'browser' | 'worker';
@@ -41,7 +42,7 @@ const DEFINITIONS: readonly CapabilityDefinition[] = Object.freeze([
   { id: 'idn_confusables', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
   { id: 'analyst_cases', status: 'local_only', execution: 'browser', scanModes: [] },
   { id: 'watchlists', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
-  { id: 'scheduled_monitoring', status: 'unavailable', execution: 'worker', scanModes: [], reason: 'No scheduled worker is configured in this deployment.' },
+  { id: 'scheduled_monitoring', status: 'unavailable', execution: 'worker', scanModes: ['fast'], reason: 'Scheduled monitoring is not configured.' },
   { id: 'distributed_budgets', status: 'unavailable', execution: 'hosted', scanModes: [], reason: 'Distributed counters are not configured.' },
 ]);
 
@@ -86,6 +87,24 @@ function capabilityReport(
         return {
           ...definition,
           status: configuration.configured ? 'supported' : configuration.enabled ? 'unavailable' : 'disabled',
+          scanModes: [...item.scanModes],
+          ...(configuration.reason ? { reason: configuration.reason } : {}),
+        };
+      }
+      if (item.id === 'scheduled_monitoring') {
+        const configuration = scheduledMonitorRuntimeConfiguration(env);
+        const { reason: _reason, ...definition } = item;
+        if (configuration.status === 'ready' && normalizedRuntime !== 'netlify') {
+          return {
+            ...definition,
+            status: 'unavailable',
+            scanModes: [...item.scanModes],
+            reason: 'Scheduled monitoring requires the Netlify worker deployment.',
+          };
+        }
+        return {
+          ...definition,
+          status: configuration.status === 'ready' ? 'supported' : configuration.status,
           scanModes: [...item.scanModes],
           ...(configuration.reason ? { reason: configuration.reason } : {}),
         };

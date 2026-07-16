@@ -32,6 +32,7 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@netlify/blobs": "10.1.0",
     "express": "^5.2.1",
     "tldts": "^7.4.8",
     "undici": "^7.28.0"

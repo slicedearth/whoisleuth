@@ -8,7 +8,7 @@ import type { VersionedTextStore } from './scheduled-monitor-repository.mts';
 
 type NetlifyBlobReadResult = {
   data: unknown;
-  etag: unknown;
+  etag?: unknown;
 };
 
 type NetlifyBlobWriteResult = {

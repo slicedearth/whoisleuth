@@ -172,6 +172,21 @@ all.
   button in either panel, the campaign deletion controls, the deletion controls
   under **Previous certificate searches**, or by clearing the browser's site
   data.
+- **Optional hosted scheduled monitoring**: disabled by default. When the
+  operator explicitly enables the Netlify worker and a scheduled watchlist is
+  present, it retains the bounded watchlist name, canonical domains, interval,
+  timestamps, compact fast registration evidence, six recent change events,
+  and an opaque resumable run cursor. It never stores raw RDAP/WHOIS payloads,
+  expanded contacts, analyst notes, browser sessions, or deep website content.
+  The complete state is encrypted and authenticated with AES-256-GCM before it
+  is written to the site-wide Netlify Blob store; Netlify stores the ciphertext
+  and ordinary object metadata, while its function runtime necessarily
+  processes the decrypted state transiently to run requested public lookups.
+  The worker has no public route. Disabling it stops Blob and lookup work but
+  does not delete existing ciphertext; the operator must remove that Blob
+  deliberately when its history is no longer required. Replacing or losing the
+  encryption key without migrating the state makes the retained ciphertext
+  unreadable.
 - **CSV/JSON exports**: downloaded directly to your device. Campaign exports
   contain campaign labels, descriptions, domain membership, timestamps, and
   stated interpretation limits; they do not include case evidence or notes.
@@ -216,21 +231,26 @@ mailto-link pattern), and honor any request to stop being contacted.
 
 ## Data subject rights
 
-Since there's no server-side account or database, a request from a
-registrant to access/delete their data is fulfilled by deleting whatever
-you personally exported (CSV/JSON files) or saved (shortlist/watchlist entries and history)
-about them, and not re-querying afterward - use the **Clear all** buttons
-above for the latter. Public support requests are not handled through the
-deployed site; people authorised to use the protected console should contact
-the operator who provided access. Direct data-subject requests to:
+Since there is no individual user-account database, a request from a
+registrant to access/delete their data is fulfilled by deleting whatever you
+personally exported (CSV/JSON files) or saved (shortlist/watchlist entries and
+history) about them, and not re-querying afterward. Use the **Clear all**
+buttons for browser-local records; an operator who enabled hosted scheduled
+monitoring must also remove the relevant encrypted Blob state. Public support
+requests are not handled through the deployed site; people authorised to use
+the protected console should contact the operator who provided access. Direct
+data-subject requests to:
 `[operator contact]`.
 
 ## Hosting / sub-processors
 
 - Self-hosted: data stays on whatever server you run `server.mts` on.
-- Netlify: request handling runs on Netlify's infrastructure. Check
-  Netlify's own Data Processing Addendum if you're operating this beyond a
-  personal/internal scale.
+- Netlify: request handling runs on Netlify's infrastructure. If optional
+  scheduled monitoring is enabled, its Functions runtime also performs the
+  bounded lookups and its site-wide Blobs service retains the application-
+  encrypted state and ordinary object metadata. Check Netlify's own Data
+  Processing Addendum if you're operating this beyond a personal/internal
+  scale.
 - Upstash: only when the operator explicitly configures distributed operation
   limits, the minimal lease and optional fixed-window counter metadata
   described above is processed through its HTTPS REST service. Operators

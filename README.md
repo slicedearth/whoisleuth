@@ -49,7 +49,7 @@ duplicated between the two.
 | **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates; supplement them with structured Certificate Transparency matches. | Candidate generation is local. Certificate Transparency is an explicit hosted search and its timestamps are public-log observations, not proof of site activity or maliciousness. |
 | **Bulk** | Triage a list of domains with filters, score explanations, CSV export, scan-local relationships, and fast/deep profiles. | Each domain is a separately budgeted lookup. Fast mode avoids WHOIS and deep website/TLS collection; deep mode costs more requests and time. |
 | **Brands** | Keep browser-local official-domain profiles, posture settings, allowlists, and optional page-identity baselines. | Profiles stay in that browser. A posture audit and baseline capture run only when explicitly requested. |
-| **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local; there are no accounts, server-side projects, background jobs, automatic reports, or automatic notifications. |
+| **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local by default. An optional Netlify worker can retain only encrypted compact scheduled-watchlist state when explicitly configured; there are no accounts, automatic reports, or automatic notifications. |
 | **Demo** | Walk through a representative brand-to-case workflow using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production browser stores. |
 
 The application is intentionally an analyst workbench rather than an autonomous
@@ -626,6 +626,34 @@ covered by the provider's community terms or an appropriate paid agreement.
   checks; larger watchlists remain available for fast registration monitoring.
   Timeline entries can be filtered to changed checks only and are included
   in the existing JSON backup/export.
+- **Optional hosted monitoring worker**: Netlify deployments include a private
+  scheduled function that polls every five minutes, but it is a no-op unless
+  `WHOISLEUTH_SCHEDULED_MONITORING` is explicitly enabled with a valid
+  32-byte Base64 `WHOISLEUTH_SCHEDULED_MONITOR_KEY` and a bounded
+  `WHOISLEUTH_SCHEDULED_MONITOR_NAMESPACE`. The function has no production URL.
+  Set these values for the **Production** deploy context only. Automatic runs
+  occur only for the published deploy, and a manual invocation of preview or
+  branch-deploy code is rejected before Blob construction even if its
+  configuration was inherited accidentally.
+  When ready, it opens the site-wide `whoisleuth-scheduled-monitor` Blob store,
+  decrypts one bounded state envelope in memory, and processes at most two
+  existing fast compact lookups and eight internal deliveries within a
+  24-second soft budget. Durable progress is an encrypted cursor; provider
+  outages, inconclusive observations, conflicts, and deadlines remain explicit
+  and cannot erase an earlier conclusive baseline. The current frontend does
+  not yet expose controls that copy a browser watchlist into this store.
+
+  The five-minute schedule itself can use 8,640 function invocations in a
+  30-day month or 8,928 in a 31-day month, including no-op invocations while the
+  feature is disabled. Blob reads, writes, and domain lookups occur only when
+  the complete enable configuration is valid. Scheduled intervals are targets,
+  not guarantees: bounded work is resumed by later invocations when several
+  lists are due or upstream services are slow. To roll back lookup and storage
+  activity, set `WHOISLEUTH_SCHEDULED_MONITORING=0` (or remove it) and redeploy.
+  Disabling the worker does not delete its encrypted Blob; remove that object
+  deliberately from the Netlify Blobs page only when its retained history is
+  no longer required. Removing the function's schedule is required to reclaim
+  the no-op invocation allowance as well.
 - Use **Search Certificate Transparency logs** to find hostnames with a
   publicly-issued TLS certificate matching a brand keyword - catches
   lookalikes the typosquat generator's fixed permutations would never guess,

@@ -44,7 +44,7 @@ const MAX_VERSION_LENGTH = 256;
 const NAMESPACE_RE = /^[A-Za-z0-9:_-]+$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 
-function validNamespace(value: unknown): value is string {
+function isScheduledMonitorNamespace(value: unknown): value is string {
   return typeof value === 'string'
     && value.length > 0
     && value.length <= MAX_NAMESPACE_LENGTH
@@ -102,7 +102,7 @@ class ScheduledMonitorRepository<State> {
     if (!options || !validRawStore(options.rawStore)) {
       throw new Error('A versioned scheduled monitoring storage adapter is required.');
     }
-    if (!validNamespace(options.namespace)) {
+    if (!isScheduledMonitorNamespace(options.namespace)) {
       throw new Error('Scheduled monitoring storage namespace is invalid.');
     }
     if (typeof options.emptyState !== 'function' || typeof options.normalizeState !== 'function') {
@@ -155,6 +155,7 @@ class ScheduledMonitorRepository<State> {
 }
 
 export {
+  isScheduledMonitorNamespace,
   MAX_UPDATE_ATTEMPTS,
   ScheduledMonitorRepository,
 };
