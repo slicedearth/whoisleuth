@@ -124,6 +124,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Registry sources' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
+  await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
 
   // Structured registry sources stay open for review; the raw unified
   // response stays collapsed and subordinate.
@@ -152,6 +153,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   // rather than stacking into a tall block.
   const navBox = await boundingBox(localNav);
   expect(navBox.height).toBeLessThanOrEqual(64);
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export evidence JSON' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
 });
 
 test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {

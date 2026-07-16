@@ -3,7 +3,10 @@
   import { getContext, onMount } from 'svelte';
   import { page } from '$app/state';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
+  import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
+  import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
+  import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
@@ -26,8 +29,6 @@
     fmtExpiresIn,
     formatActivityCell,
     formatPrivacyCell,
-    riskTone,
-    scoreTone
   } from '$lib/analysis/scoring.js';
 
   type JsonRecord = Record<string, any>;
@@ -198,6 +199,15 @@
     ['Referrer policy',httpSecurityHeaders.referrerPolicy]
   ];}
   function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField)values.push({label:'Password field',tone:'warn'});if(availability.phishingLanguageMatch)values.push({label:'Phishing language',tone:'danger',detail:availability.phishingLanguageMatch});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const age=fmtAge(availability.domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiry=fmtExpiresIn(availability.expiresInDays);if(expiry)values.push({label:expiry,tone:availability.expiresInDays<=60?'warn':'neutral'});if(availability.privacyProtected!==null&&availability.privacyProtected!==undefined)values.push({label:formatPrivacyCell(availability.privacyProtected),tone:availability.privacyProtected?'warn':'good'});if(availability.activityStatus)values.push({label:formatActivityCell(availability.activityStatus,availability.hasMx,availability.hasSpf,availability.hasDmarc),tone:availability.activityStatus==='active'?'good':availability.activityStatus==='parked'?'warn':'neutral',detail:availability.websiteProbeDetail});return values;}
+  function overviewFacts(){return[
+    {label:'Registration',value:show(availability.state||whoisParsed.registrationStatus),detail:`${show(availability.confidence)} confidence`},
+    {label:'Registrar',value:show(availability.registrar||rdapParsed.registrar||whoisParsed.registrar),detail:show(whoisParsed.registrarUrl)},
+    {label:'Created',value:formatDate(created()),detail:fmtAge(availability.domainAgeDays)||'Registry lifecycle date'},
+    {label:'Expires',value:formatDate(expires()),detail:fmtExpiresIn(availability.expiresInDays)||'Registry lifecycle date'},
+    {label:'Updated',value:formatDate(updated()),detail:'Most recent registry change'},
+    {label:'Website',value:show(availability.activityStatus),detail:show(availability.websiteProbeDetail)},
+  ];}
+  function sourceDiagnostics(){return['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return[
@@ -232,7 +242,7 @@
 
 {#if result}
   <section class="result-root" id="result">
-    <div class="result-head"><div><p class="eyebrow">Result</p><h2>{show(result.registrableDomain||result.query)}</h2>{#if result.isSubdomain}<p>Showing registry data for {result.registrableDomain}; submitted hostname: {result.inputHostname}.</p>{/if}</div><div class="result-actions"><span class="chip info">{show(availability.state)}</span><button class="btn" onclick={downloadEvidence}>Export evidence JSON</button></div></div>
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} />
 
     <LocalSectionNav label="Result sections" links={resultSectionLinks()} />
 
@@ -240,26 +250,10 @@
       <h3 id="overview-title">Overview</h3>
 
       {#if availability.applicable!==false}
-        <section class="availability card">
-          <header class="section-head"><div><p class="eyebrow">Assessment</p><h4>{show(availability.detail||availability.state)}</h4><p>{show(availability.confidence)} confidence</p></div><div class="scores">{#if risk}<div class="score {riskTone(risk.score)}" title={risk.factors.map(f=>`${f.label} ${f.delta>=0?'+':''}${Math.round(f.delta)}`).join('\n')}><span>Risk</span><strong>{risk.score}</strong><i><b style:width={`${risk.score}%`}></b></i></div>{/if}{#if opportunity}<div class="score {scoreTone(opportunity.score)}" title={opportunity.factors.map(f=>`${f.label} ${f.delta>=0?'+':''}${Math.round(f.delta)}`).join('\n')}><span>Opportunity</span><strong>{opportunity.score}</strong><i><b style:width={`${opportunity.score}%`}></b></i></div>{/if}</div></header>
-          {#if signals().length}<div class="signals">{#each signals() as signal}<span class="chip {signal.tone==='neutral'?'':signal.tone}" title={signal.detail||''}>{signal.label}</span>{/each}</div>{/if}
-          {#if profileSignals.trusted}<p class="callout info">This domain is {profileSignals.trusted} in the active brand profile. Scores remain visible as evidence context but are not treated as an untrusted finding.</p>{/if}
-          <div class="score-details">{#if risk}<details class="disclosure"><summary>Why the risk score is {risk.score}</summary><ul>{#each risk.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta>=0?'+':''}{Math.round(factor.delta)}</strong></li>{/each}</ul></details>{/if}{#if opportunity}<details class="disclosure"><summary>Why the opportunity score is {opportunity.score}</summary><ul>{#each opportunity.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta>=0?'+':''}{Math.round(factor.delta)}</strong></li>{/each}</ul></details>{/if}</div>
-        </section>
+        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={signals()} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
-      <div class="summaries stat-grid">
-        <article><small>Registration</small><strong>{show(availability.state||whoisParsed.registrationStatus)}</strong><p>{show(availability.confidence)} confidence</p></article>
-        <article><small>Registrar</small><strong>{show(availability.registrar||rdapParsed.registrar||whoisParsed.registrar)}</strong><p>{show(whoisParsed.registrarUrl)}</p></article>
-        <article><small>Created</small><strong>{formatDate(created())}</strong><p>{fmtAge(availability.domainAgeDays)||'Registry lifecycle date'}</p></article>
-        <article><small>Expires</small><strong>{formatDate(expires())}</strong><p>{fmtExpiresIn(availability.expiresInDays)||'Registry lifecycle date'}</p></article>
-        <article><small>Updated</small><strong>{formatDate(updated())}</strong><p>Most recent registry change</p></article>
-        <article><small>Website</small><strong>{show(availability.activityStatus)}</strong><p>{show(availability.websiteProbeDetail)}</p></article>
-      </div>
-
-      <div class="diagnostics stat-grid" aria-label="Source diagnostics">
-        {#each ['rdap','whois','availability'] as source}{@const item=rec(diagnostics[source]) as SourceStatus}<article><small>{source}</small><strong class:error-state={item.status==='error'} class:limited-state={item.status==='disabled'}>{diagnosticLabel(item)}</strong><p>{diagnosticDetail(item)}</p></article>{/each}
-      </div>
+      <LookupOverviewFacts facts={overviewFacts()} diagnostics={sourceDiagnostics()} hasAssessment={availability.applicable!==false} />
 
       {#if idnAnalysis && (idnAnalysis.hasIdn || idnAnalysis.referenceMatches.length)}
         <section class="idn-card evidence-card card" aria-labelledby="idn-title">
@@ -521,45 +515,17 @@
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
-  .result-head{display:flex;align-items:end;justify-content:space-between;gap:12px 20px;margin:30px 0 0}
-  .result-head h2{margin:0;font:700 clamp(1.5rem,3.4vw,2rem) var(--mono);letter-spacing:-.03em;overflow-wrap:anywhere}
-  .result-head p{margin:6px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .result-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-  .result-actions .chip{text-transform:capitalize;font-size:var(--text-xs)}
-
   .result-section{margin-top:26px}
   .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
   .result-section>h3::before{content:"//";color:var(--muted)}
   .result-section>h3::after{content:"";flex:1;height:1px;background:var(--border)}
-  .result-section>.card,.result-section>.stat-grid,.result-section>.sources,.result-section>.registrar-rdap{margin-top:12px}
+  .result-section>.card,.result-section>.sources,.result-section>.registrar-rdap{margin-top:12px}
   .result-section>:nth-child(2){margin-top:0}
 
   .evidence-card{padding:var(--card-pad)}
   .evidence-card .section-head p:not(.eyebrow){margin:4px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .evidence-card .stat-grid{margin-top:14px}
   .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
-
-  .availability{padding:var(--card-pad)}
-  .availability h4{margin:0;font-size:1.05rem}
-  .scores{display:flex;gap:9px}
-  .score{display:grid;grid-template-columns:1fr auto;gap:3px;width:150px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .score span{font:600 var(--text-2xs) var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-  .score strong{font-size:1.05rem}
-  .score i{grid-column:1/-1;height:5px;overflow:hidden;border-radius:99px;background:var(--border)}
-  .score b{display:block;height:100%;background:var(--accent)}
-  .score.danger b{background:var(--danger)}
-  .score.warn b{background:var(--amber)}
-  .signals{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
-  .signals .chip{white-space:normal}
-  .score-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-  .score-details details{margin-top:0}
-  .score-details ul{display:grid;gap:6px;margin:10px 12px;padding:0;list-style:none}
-  .score-details li{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:var(--text-xs)}
-  .score-details li strong{color:var(--text)}
-
-  .diagnostics strong{text-transform:capitalize;color:var(--accent)}
-  .diagnostics .error-state{color:var(--danger)}
-  .diagnostics .limited-state{color:var(--amber)}
 
   .finding-list{display:grid;gap:7px;margin:12px 0 0;padding:0;list-style:none}
   .finding-list .callout{margin:0}
@@ -658,16 +624,7 @@
 
   .raw pre{max-height:520px;overflow:auto;margin:0;padding:var(--card-pad);border-top:1px solid var(--border);font-size:var(--text-xs)}
 
-  @media(max-width:900px){
-    .availability .section-head{display:block}
-    .scores{margin-top:12px}
-  }
   @media(max-width:650px){
-    .score-details{grid-template-columns:1fr}
-    .result-head{align-items:flex-start;flex-direction:column}
-    .result-actions{width:100%}
-    .scores{display:grid;grid-template-columns:1fr 1fr}
-    .score{width:auto}
     .evidence-card .disclosure dl{grid-template-columns:1fr;gap:4px}
     .evidence-card .disclosure dt{margin-top:6px}
     dl{grid-template-columns:1fr;gap:4px}
