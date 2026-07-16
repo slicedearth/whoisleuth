@@ -3,7 +3,6 @@ import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
-  config,
   runScheduledMonitorFunction,
   SCHEDULED_MONITOR_CRON,
   SCHEDULED_MONITOR_STORE_NAME,
@@ -51,16 +50,15 @@ class FakeBlobStore {
 
 test('the production worker has a fixed bounded schedule and private store name', () => {
   assert.equal(SCHEDULED_MONITOR_CRON, '*/5 * * * *');
-  assert.deepEqual(config, { schedule: SCHEDULED_MONITOR_CRON });
   assert.equal(SCHEDULED_MONITOR_STORE_NAME, 'whoisleuth-scheduled-monitor');
   assert.equal(SCHEDULED_MONITOR_STORE_NAME.includes('/'), false);
   assert.equal(SCHEDULED_MONITOR_STORE_NAME.includes(':'), false);
   assert.ok(Buffer.byteLength(SCHEDULED_MONITOR_STORE_NAME, 'utf8') <= 64);
 });
 
-test('the deployment config exposes the cron as a directly analyzable literal', async () => {
-  const source = await readFile(new URL('../netlify/functions/scheduled-monitor.mts', import.meta.url), 'utf8');
-  assert.match(source, /export const config = \{[\s\S]*?schedule: '\*\/5 \* \* \* \*'/u);
+test('the deployment config registers the worker with a directly analyzable cron', async () => {
+  const source = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
+  assert.match(source, /\[functions\."scheduled-monitor"\]\s+schedule = "\*\/5 \* \* \* \*"/u);
 });
 
 test('the disabled worker performs no Blob construction, storage, or lookup work', async () => {

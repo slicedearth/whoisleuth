@@ -58,12 +58,6 @@ export default async function scheduledMonitorHandler(
   await runScheduledMonitorFunction({ deploy: context.deploy });
 }
 
-export const config = {
-  // Netlify extracts schedules statically at build time, so this must remain a
-  // direct literal rather than a computed or imported value.
-  schedule: '*/5 * * * *',
-} as const satisfies { schedule: typeof SCHEDULED_MONITOR_CRON };
-
 export {
   runScheduledMonitorFunction,
   SCHEDULED_MONITOR_CRON,

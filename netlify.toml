@@ -3,6 +3,9 @@
   publish = "frontend/build"
   functions = "netlify/functions"
 
+[functions."scheduled-monitor"]
+  schedule = "*/5 * * * *"
+
 # Mirrors the response security headers server.mts sets for self-hosted
 # deployments. SvelteKit emits a hash-restricted CSP meta tag in every
 # prerendered page.
