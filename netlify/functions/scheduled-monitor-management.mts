@@ -257,8 +257,6 @@ async function runScheduledMonitorManagementRequest(
   return toWebResponse(await runScheduledMonitorManagementFunction(event, options));
 }
 
-const handler = (event: NetlifyFunctionEvent) => runScheduledMonitorManagementFunction(event);
-
 export default async function scheduledMonitorManagementHandler(
   request: Request,
   context: ManagementRequestContext = {},
@@ -266,7 +264,9 @@ export default async function scheduledMonitorManagementHandler(
   return runScheduledMonitorManagementRequest(request, context);
 }
 
-export { handler };
+// Keep this entry point on the modern Fetch-handler boundary. Exporting a
+// Lambda-compatible `handler` alongside the default export makes Netlify pick
+// the legacy runtime, which does not provide the Blob context used by getStore.
 export {
   MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
   readRequestBodyCapped,

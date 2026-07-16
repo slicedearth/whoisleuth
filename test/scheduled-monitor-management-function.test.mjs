@@ -11,6 +11,7 @@ import {
 } from '../lib/scheduled-monitor-configuration.mts';
 import { MANAGEMENT_ERROR_CODES } from '../lib/scheduled-monitor-management.mts';
 import { SCHEDULED_MONITOR_UNAVAILABLE_CODE } from '../lib/scheduled-monitor-runtime.mts';
+import scheduledMonitorManagementHandler, * as scheduledMonitorManagementModule from '../netlify/functions/scheduled-monitor-management.mts';
 import {
   MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
   readRequestBodyCapped,
@@ -83,6 +84,11 @@ class FakeBlobStore {
     return { modified: true, etag };
   }
 }
+
+test('exports only the modern Fetch handler as the deployment boundary', () => {
+  assert.equal(typeof scheduledMonitorManagementHandler, 'function');
+  assert.equal(Object.hasOwn(scheduledMonitorManagementModule, 'handler'), false);
+});
 
 test('the canonical API route maps only to the authenticated management function', async () => {
   const config = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
