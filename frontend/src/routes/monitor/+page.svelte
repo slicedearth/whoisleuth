@@ -6,10 +6,8 @@
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
   import CaseFilters from '$lib/components/CaseFilters.svelte';
+  import CaseList from '$lib/components/CaseList.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
-  import CaseReportExport from '$lib/components/CaseReportExport.svelte';
-  import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
@@ -18,7 +16,7 @@
   import { deleteWatchlist, exportWatchlists, fieldLabels, formatValue, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
-    importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase, sourceLabel, statusLabel, type CaseRecord
+    importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase, statusLabel, type CaseRecord
   } from '$lib/cases';
   import { loadCampaigns } from '$lib/campaigns';
   import { loadDetectionRules } from '$lib/detection-rules';
@@ -114,42 +112,7 @@
   {#if cases.length}
     <CaseFilters status={statusFilter} setStatus={(value)=>statusFilter=value} disposition={dispositionFilter} setDisposition={(value)=>dispositionFilter=value} search={caseSearch} setSearch={(value)=>caseSearch=value} sort={caseSort} setSort={(value)=>caseSort=value} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={clearCaseFilters} matchedCount={filteredCases.length} totalCount={cases.length} />
 
-    <section class="case-list">
-      {#each filteredCases as record (record.id)}
-        <article class="case card" class:open={expandedId===record.id}>
-          <button class="case-head" aria-expanded={expandedId===record.id} aria-controls={`case-body-${record.id}`} onclick={()=>expand(record)}>
-            <span class="case-domain"><strong>{record.domain}</strong>{#if record.notes.length}<small>{record.notes.length} note{record.notes.length===1?'':'s'}</small>{/if}</span>
-            <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
-            <span class="updated">{date(record.updatedAt)}</span>
-          </button>
-          {#if record.tags.length}<div class="tag-row">{#each record.tags as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
-          {#if expandedId===record.id}
-            <div class="case-body" id={`case-body-${record.id}`}>
-              <div class="field-grid">
-                <label class="field">Status<select value={record.status} onchange={(event)=>setStatus(record,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-                <label class="field">Disposition<select value={record.disposition} onchange={(event)=>setDisposition(record,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-              </div>
-              <form class="tags-edit" onsubmit={(event)=>{event.preventDefault();saveTags(record);}}>
-                <label class="field" for={`tags-${record.id}`}>Tags <small>comma separated</small></label>
-                <div><input id={`tags-${record.id}`} bind:value={tagDraft} placeholder="phishing, active-campaign" autocomplete="off"><button class="btn" type="submit">Save tags</button></div>
-              </form>
-              <form class="note-edit" onsubmit={(event)=>{event.preventDefault();addNote(record);}}>
-                <label class="field" for={`note-${record.id}`}>Add note</label>
-                <textarea id={`note-${record.id}`} bind:value={noteDraft} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
-                <button class="btn" type="submit" disabled={!noteDraft.trim()}>Add note</button>
-              </form>
-              {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{date(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
-              <CaseRelationships {record} records={cases} onselect={expand} />
-              {#key record.id}<EvidenceTimeline {record} />{/key}
-              {#key record.id}<CaseReportExport {record} onmessage={(value)=>caseMessage=value} />{/key}
-              <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {date(record.createdAt)}</span></div>
-              <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button class="btn danger" onclick={()=>removeCase(record)}>Delete case</button></div>
-            </div>
-          {/if}
-        </article>
-      {/each}
-      {#if !filteredCases.length}<p class="count">No cases match the current filters.</p>{/if}
-    </section>
+    <CaseList records={filteredCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} {expand} {setStatus} {setDisposition} {saveTags} {addNote} {removeCase} setMessage={(value)=>caseMessage=value} formatDate={date} />
   {:else}
     <section class="empty-state card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}
@@ -198,43 +161,11 @@
   .events li span,.events li small{color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
   .no-change{color:var(--muted);font-size:var(--text-xs)}
   .wl-toolbar{padding:16px}
-  .count{margin:12px 2px;color:var(--muted);font-size:var(--text-xs)}
-  .case-list{display:grid;gap:10px}
-  .case{padding:0;overflow:hidden}
-  .case.open{border-color:var(--accent)}
-  .case-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left;cursor:pointer}
-  .case-head:hover .case-domain strong{color:var(--accent)}
-  .case-domain{display:flex;flex-direction:column;gap:3px;min-width:0}
-  .case-domain strong{overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
-  .case-domain small,.updated{color:var(--muted);font-size:var(--text-2xs)}
-  .badges{display:flex;flex-wrap:wrap;gap:6px}
-  .badge.status-escalated{color:var(--danger);border-color:rgba(255,107,107,.4)}
-  .badge.status-resolved{color:var(--accent2)}
-  .badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}
-  .badge.disposition-suspicious{color:var(--amber)}
-  .badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
-  .tag-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 14px}
-  .tag{padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .case-body{display:grid;gap:14px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}
-  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .tags-edit>div{display:flex;gap:8px;margin-top:6px}
-  .tags-edit input{flex:1;min-height:var(--control-h)}
-  .note-edit textarea{width:100%;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  .note-edit button{margin-top:8px}
-  .notes{display:grid;gap:8px;margin:0;padding:0;list-style:none}
-  .notes li{display:grid;gap:5px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .notes time{color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .notes p{margin:0;font-size:var(--text-sm);line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}
-  .case-meta{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:var(--text-2xs)}
-  .case-actions{display:flex;flex-wrap:wrap;gap:8px}
   @media(max-width:800px){
     .history .section-head{display:block}
     .history .section-head .toolbar{margin-top:12px}
     .table-wrap{margin-inline:calc(-1 * var(--card-pad));padding-inline:var(--card-pad)}
     .events li{grid-template-columns:1fr}
     .event-head small{width:100%;margin:0}
-    .case-head{grid-template-columns:1fr;gap:7px}
-    .updated{order:3}
-    .field-grid{grid-template-columns:1fr}
   }
 </style>
