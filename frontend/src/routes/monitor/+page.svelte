@@ -3,6 +3,9 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import PageHeading from '$lib/components/PageHeading.svelte';
+  import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
+  import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
+  import CaseFilters from '$lib/components/CaseFilters.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
@@ -83,13 +86,7 @@
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Monitor" title="Investigation workspace" description="Organize cases, review relationships, test local detection rules, and compare watchlist changes over time." />
 
-<div class="views" role="tablist" aria-label="Monitor views">
-  <button role="tab" id="tab-cases" aria-selected={view==='cases'} aria-controls="panel-cases" class:active={view==='cases'} onclick={()=>view='cases'}>Cases <span>{cases.length}</span></button>
-  <button role="tab" id="tab-campaigns" aria-selected={view==='campaigns'} aria-controls="panel-campaigns" class:active={view==='campaigns'} onclick={()=>view='campaigns'}>Campaigns <span>{campaignCount}</span></button>
-  <button role="tab" id="tab-relationships" aria-selected={view==='relationships'} aria-controls="panel-relationships" class:active={view==='relationships'} onclick={()=>view='relationships'}>Relationships <span>{relationshipCount}</span></button>
-  <button role="tab" id="tab-rules" aria-selected={view==='rules'} aria-controls="panel-rules" class:active={view==='rules'} onclick={()=>view='rules'}>Custom rules <span>{customRuleCount}</span></button>
-  <button role="tab" id="tab-watchlists" aria-selected={view==='watchlists'} aria-controls="panel-watchlists" class:active={view==='watchlists'} onclick={()=>view='watchlists'}>Watchlists <span>{names.length}</span></button>
-</div>
+<MonitorViewTabs {view} counts={{cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
 
 {#if view==='campaigns'}
 <div id="panel-campaigns" role="tabpanel" aria-labelledby="tab-campaigns">
@@ -112,24 +109,10 @@
 
 {#if view==='cases'}
 <div id="panel-cases" role="tabpanel" aria-labelledby="tab-cases">
-  <section class="case-toolbar card">
-    <form class="track" onsubmit={(event)=>{event.preventDefault();trackDomain();}}>
-      <label for="new-case">Track a domain</label>
-      <div><input id="new-case" bind:value={newDomain} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!newDomain.trim()}>Open or create case</button></div>
-    </form>
-    <div class="top-actions toolbar"><button class="btn" onclick={downloadCases} disabled={!cases.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label></div>
-  </section>
-  {#if caseMessage}<p class="message" role="status" aria-live="polite">{caseMessage}</p>{/if}
+  <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} {downloadCases} {importCaseFile} message={caseMessage} />
 
   {#if cases.length}
-    <section class="case-filters card">
-      <label class="field">Status<select bind:value={statusFilter}><option value="">All statuses</option>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-      <label class="field">Disposition<select bind:value={dispositionFilter}><option value="">All dispositions</option>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-      <label class="field search">Search<input bind:value={caseSearch} placeholder="Domain or tag" autocomplete="off"></label>
-      <label class="field">Sort<select bind:value={caseSort}><option value="updated">Recently updated</option><option value="domain">Domain</option><option value="status">Status</option></select></label>
-      <button class="btn" onclick={clearCaseFilters} disabled={!statusFilter&&!dispositionFilter&&!caseSearch}>Clear</button>
-    </section>
-    <p class="count">{filteredCases.length} of {cases.length} case{cases.length===1?'':'s'} shown</p>
+    <CaseFilters status={statusFilter} setStatus={(value)=>statusFilter=value} disposition={dispositionFilter} setDisposition={(value)=>dispositionFilter=value} search={caseSearch} setSearch={(value)=>caseSearch=value} sort={caseSort} setSort={(value)=>caseSort=value} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={clearCaseFilters} matchedCount={filteredCases.length} totalCount={cases.length} />
 
     <section class="case-list">
       {#each filteredCases as record (record.id)}
@@ -193,11 +176,6 @@
 {/if}
 
 <style>
-  .views{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgba(15,17,21,.5)}
-  .views button{display:flex;gap:7px;align-items:center;min-height:38px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:600 var(--text-xs) var(--mono)}
-  .views button:hover{color:var(--text)}
-  .views button.active{color:var(--accent2);border-color:rgba(126,224,168,.45);background:rgba(126,224,168,.08)}
-  .views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
   .message{color:var(--accent);font-size:var(--text-sm)}
   .watchlists,.history{padding:var(--card-pad)}
   .changed{color:var(--danger);font-weight:700}
@@ -219,14 +197,7 @@
   .events li strong{overflow-wrap:anywhere}
   .events li span,.events li small{color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
   .no-change{color:var(--muted);font-size:var(--text-xs)}
-  .wl-toolbar,.case-toolbar,.case-filters{padding:16px}
-  .case-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end}
-  .track>label{display:block;margin-bottom:6px;color:var(--text);font:600 var(--text-xs) var(--mono)}
-  .track>div{display:flex;gap:8px}
-  .track input{min-width:230px;min-height:42px}
-  .case-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:14px}
-  .case-filters .search{flex:1;min-width:170px}
-  .case-filters input{min-height:var(--control-h)}
+  .wl-toolbar{padding:16px}
   .count{margin:12px 2px;color:var(--muted);font-size:var(--text-xs)}
   .case-list{display:grid;gap:10px}
   .case{padding:0;overflow:hidden}
@@ -262,9 +233,6 @@
     .table-wrap{margin-inline:calc(-1 * var(--card-pad));padding-inline:var(--card-pad)}
     .events li{grid-template-columns:1fr}
     .event-head small{width:100%;margin:0}
-    .case-toolbar{flex-direction:column;align-items:stretch}
-    .track>div{flex-direction:column}
-    .track input{min-width:0}
     .case-head{grid-template-columns:1fr;gap:7px}
     .updated{order:3}
     .field-grid{grid-template-columns:1fr}
