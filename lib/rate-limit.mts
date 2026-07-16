@@ -115,6 +115,15 @@ const LOGIN_RATE_LIMIT: Readonly<RateLimitConfig> = { limit: 10, windowMs: 5 * 6
 // as abuse.
 const API_RATE_LIMIT: Readonly<RateLimitConfig> = { limit: 1000, windowMs: 60 * 1000 };
 
+// Hosted-watchlist management performs strongly consistent Blob reads and
+// conditional writes rather than high-volume registry lookups. Keep a much
+// smaller authenticated-session burst budget so a signed-in client cannot
+// accidentally consume free-tier storage operations at Bulk-scan rates.
+const SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT: Readonly<RateLimitConfig> = {
+  limit: 60,
+  windowMs: 60 * 1000,
+};
+
 export {
   checkRateLimit,
   trustsForwardedHeaders,
@@ -122,6 +131,7 @@ export {
   getClientIp,
   LOGIN_RATE_LIMIT,
   API_RATE_LIMIT,
+  SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
 };
 
 export type {

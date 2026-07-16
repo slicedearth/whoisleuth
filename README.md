@@ -49,7 +49,7 @@ duplicated between the two.
 | **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates; supplement them with structured Certificate Transparency matches. | Candidate generation is local. Certificate Transparency is an explicit hosted search and its timestamps are public-log observations, not proof of site activity or maliciousness. |
 | **Bulk** | Triage a list of domains with filters, score explanations, CSV export, scan-local relationships, and fast/deep profiles. | Each domain is a separately budgeted lookup. Fast mode avoids WHOIS and deep website/TLS collection; deep mode costs more requests and time. |
 | **Brands** | Keep browser-local official-domain profiles, posture settings, allowlists, and optional page-identity baselines. | Profiles stay in that browser. A posture audit and baseline capture run only when explicitly requested. |
-| **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local; there are no accounts, server-side projects, background jobs, automatic reports, or automatic notifications. |
+| **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local by default. An optional Netlify worker can retain only encrypted compact scheduled-watchlist state when explicitly configured; there are no accounts, automatic reports, or automatic notifications. |
 | **Demo** | Walk through a representative brand-to-case workflow using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production browser stores. |
 
 The application is intentionally an analyst workbench rather than an autonomous
@@ -626,6 +626,49 @@ covered by the provider's community terms or an appropriate paid agreement.
   checks; larger watchlists remain available for fast registration monitoring.
   Timeline entries can be filtered to changed checks only and are included
   in the existing JSON backup/export.
+- **Optional hosted monitoring worker**: Netlify deployments include a private
+  scheduled function that polls every five minutes, but it is a no-op unless
+  `WHOISLEUTH_SCHEDULED_MONITORING` is explicitly enabled with a valid
+  32-byte Base64 `WHOISLEUTH_SCHEDULED_MONITOR_KEY` and a bounded
+  `WHOISLEUTH_SCHEDULED_MONITOR_NAMESPACE`. The function has no production URL.
+  Set these values for the **Production** deploy context only. Automatic runs
+  and authenticated management are accepted only by the published deploy;
+  preview or branch-deploy code is rejected before Blob construction even if
+  its configuration was inherited accidentally.
+  When ready, it opens the site-wide `whoisleuth-scheduled-monitor` Blob store,
+  decrypts one bounded state envelope in memory, and processes at most two
+  existing fast compact lookups and eight internal deliveries within a
+  24-second soft budget. Durable progress is an encrypted cursor; provider
+  outages, inconclusive observations, conflicts, and deadlines remain explicit
+  and cannot erase an earlier conclusive baseline. Ordinary watchlists are not
+  copied automatically. Monitor exposes a separate **Scheduled watchlists**
+  card only when the capability report confirms that hosted monitoring is
+  ready. A signed-in user must deliberately select a browser-local watchlist
+  before scheduling it, and can pause/resume it, replace its hosted snapshot,
+  restore the compact hosted snapshot to the current browser, or delete only
+  the hosted copy. These actions use the authenticated
+  `/api/scheduled-monitor` route; mutations require a same-origin request and
+  request bodies are capped at 1 MiB. Because the app has one shared login
+  rather than individual roles, every signed-in user can view and manage the
+  same hosted scheduled-watchlist state.
+
+  Capacity admission is derived from the fixed schedule and cycle ceiling:
+  4,032 theoretical lookups per week, with at most 3,024 admitted and 25%
+  reserved for delayed or resumed work. A new or resumed schedule that would
+  exceed that admitted rate is rejected without changing stored state. This
+  is a processing ceiling, not a promise that upstream registries will answer.
+
+  The five-minute schedule itself can use 8,640 function invocations in a
+  30-day month or 8,928 in a 31-day month, including no-op invocations while the
+  feature is disabled. Blob reads, writes, and domain lookups occur only when
+  the complete enable configuration is valid. Scheduled intervals are targets,
+  not guarantees: bounded work is resumed by later invocations when several
+  lists are due or upstream services are slow. To roll back lookup and storage
+  activity, set `WHOISLEUTH_SCHEDULED_MONITORING=0` (or remove it) and redeploy.
+  Disabling the worker does not delete its encrypted Blob; remove that object
+  deliberately from the Netlify Blobs page only when its retained history is
+  no longer required. Removing the function's schedule is required to reclaim
+  the no-op invocation allowance as well.
 - Use **Search Certificate Transparency logs** to find hostnames with a
   publicly-issued TLS certificate matching a brand keyword - catches
   lookalikes the typosquat generator's fixed permutations would never guess,
@@ -793,8 +836,12 @@ Functions:
   full 2000-domain fast bulk scan without breaking normal use, while still
   capping a scripted flood well below what upstream registries would treat as
   abuse.
+- `/api/scheduled-monitor` - 60 authenticated management requests per minute
+  per warm runtime and signed session, in addition to the general API limit.
+  This lower ceiling protects strongly consistent Blob reads and conditional
+  writes from accidental Bulk-rate use.
 
-Exceeding either limit returns `429` with a `Retry-After` header. The limiter
+Exceeding these limits returns `429` with a `Retry-After` header. The limiter
 is in-memory: on `server.mts` (one long-lived process) it applies globally; on
 Netlify Functions each container has its own memory, so it only limits bursts
 within a single warm container rather than across the whole deployment - a

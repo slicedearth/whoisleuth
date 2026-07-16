@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { onMount } from 'svelte';
+  import { getContext, onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
@@ -8,22 +8,26 @@
   import CaseFilters from '$lib/components/CaseFilters.svelte';
   import CaseList from '$lib/components/CaseList.svelte';
   import WatchlistWorkspace from '$lib/components/WatchlistWorkspace.svelte';
+  import HostedWatchlistManager from '$lib/components/HostedWatchlistManager.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
   import { buildCaseRelationships } from '$lib/analysis/case-relationships.js';
-  import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type Watchlists } from '$lib/watchlists';
+  import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
     importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase, statusLabel, type CaseRecord
   } from '$lib/cases';
   import { loadCampaigns } from '$lib/campaigns';
   import { loadDetectionRules } from '$lib/detection-rules';
+  import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '$lib/capabilities';
 
   type View = 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   let view=$state<View>('watchlists');
+  const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
+  const scheduledCapability=$derived(featureCapability(capabilityReport?.()||null,'scheduled_monitoring'));
 
   // --- Watchlists ---
   let watchlists=$state<Watchlists>({});let selected=$state('');let changedOnly=$state(false);let message=$state('');
@@ -35,6 +39,7 @@
   function downloadWatchlists(){try{exportWatchlists();}catch(cause){message=cause instanceof Error?cause.message:'Could not export watchlists.';}}
   async function rescan(name:string){const current=watchlists[name];if(!current)return;const candidates=current.results.map(record=>({domain:String(record.domain),source:name,mutationTypes:Array.isArray(record.mutationTypes)?record.mutationTypes:[]}));saveCandidateHandoff('watchlist',candidates);await goto('/bulk?source=watchlist');}
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_IMPORT_BYTES)throw new Error('Watchlist imports are limited to 2 MB.');const result=importWatchlists(JSON.parse(await file.text()));const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit watchlist${result.skipped===1?'':'s'}`:'';message=`Imported ${result.added} new and ${result.updated} updated watchlists${skipped}.`;refresh();}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
+  function restoreHostedWatchlist(name:string,hostedEntry:WatchlistEntry){const all=loadWatchlists();const existing=Object.keys(all).find(candidate=>candidate.toLowerCase()===name.toLowerCase());if(existing&&existing!==name)delete all[existing];Object.defineProperty(all,name,{value:hostedEntry,writable:true,enumerable:true,configurable:true});writeWatchlists(all);refresh();}
 
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
@@ -123,5 +128,6 @@
 {#if view==='watchlists'}
 <div id="panel-watchlists" role="tabpanel" aria-labelledby="tab-watchlists">
   <WatchlistWorkspace {watchlists} {names} {entry} {selected} setSelected={(value)=>selected=value} {history} {changedOnly} setChangedOnly={(value)=>changedOnly=value} {message} {downloadWatchlists} {importFile} {clearAll} {rescan} {remove} formatDate={date} />
+  <HostedWatchlistManager capability={scheduledCapability} localWatchlists={watchlists} localNames={names} restoreHosted={restoreHostedWatchlist} formatDate={date} />
 </div>
 {/if}
