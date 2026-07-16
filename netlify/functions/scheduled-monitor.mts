@@ -10,7 +10,6 @@ import {
 } from '../../lib/scheduled-monitor-runtime.mts';
 import {
   SCHEDULED_MONITOR_STORE_NAME,
-  SCHEDULED_MONITOR_TRIGGER_INTERVAL_MINUTES,
 } from '../../lib/scheduled-monitor-configuration.mts';
 import type { NetlifyBlobStore } from '../../lib/scheduled-monitor-netlify-store.mts';
 import type { RuntimeOptions } from '../../lib/scheduled-monitor-runtime.mts';
@@ -25,7 +24,7 @@ type ScheduledFunctionOptions = Omit<RuntimeOptions, 'blobStore'> & {
   deploy?: ScheduledDeployContext | null;
 };
 
-const SCHEDULED_MONITOR_CRON = `*/${SCHEDULED_MONITOR_TRIGGER_INTERVAL_MINUTES} * * * *`;
+const SCHEDULED_MONITOR_CRON = '*/5 * * * *';
 
 async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {}) {
   if (options.deploy?.published === false) {
@@ -60,8 +59,10 @@ export default async function scheduledMonitorHandler(
 }
 
 export const config = {
-  schedule: SCHEDULED_MONITOR_CRON,
-};
+  // Netlify extracts schedules statically at build time, so this must remain a
+  // direct literal rather than a computed or imported value.
+  schedule: '*/5 * * * *',
+} as const satisfies { schedule: typeof SCHEDULED_MONITOR_CRON };
 
 export {
   runScheduledMonitorFunction,
