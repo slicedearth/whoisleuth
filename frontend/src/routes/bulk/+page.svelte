@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getContext, onMount } from 'svelte';
+  import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
   import { abuseAction, outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
@@ -121,7 +122,7 @@
 </script>
 
 <svelte:head><title>Bulk analysis · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Assess</p><h1>Bulk analysis</h1><p>Scan multiple domains, prioritise findings, and retry inconclusive results.</p></div></section>
+<PageHeading eyebrow="Assess" title="Bulk analysis" description="Scan multiple domains, prioritise findings, and retry inconclusive results." />
 <section class="queue card">
   {#if lookupDisabled}<p class="feature-disabled" role="note">{lookupDisabled.reason||'Lookup is disabled by deployment policy.'}</p>{/if}
   {#if !lookupDisabled&&scanLimitations.length}<p class="feature-disabled" role="note">Some {mode} scan sources are disabled by deployment policy: {scanLimitations.map((item)=>item.id.replaceAll('_',' ')).join(', ')}. {mode==='deep'?'Saved evidence will not claim a complete deep scan.':'Results will identify unevaluated evidence.'}</p>{/if}

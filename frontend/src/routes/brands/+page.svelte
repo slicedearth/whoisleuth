@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getContext } from 'svelte';
+  import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfileId, deleteProfile, exportProfiles, importProfiles, loadProfiles, MAX_PROFILE_IMPORT_BYTES, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.js';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
@@ -25,7 +26,7 @@
 </script>
 
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Protect</p><h1>Brand profiles</h1><p>Define official domains, trusted partners, allowlists, and security posture checks.</p></div><div class="top-actions toolbar"><button class="primary" onclick={clearForm}>New profile</button><button class="btn" onclick={exportProfiles} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></section>
+<PageHeading eyebrow="Protect" title="Brand profiles" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button class="primary" onclick={clearForm}>New profile</button><button class="btn" onclick={exportProfiles} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></PageHeading>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 {#if profiles.length}<section class="profiles">{#each profiles as profile}<article class="profile card" class:active={profile.id===activeId}><header class="section-head"><div><p class="eyebrow">{profile.id===activeId?'Active profile':'Saved profile'}</p><h2>{profile.name}</h2></div><input type="radio" name="active-profile" aria-label={`Set ${profile.name} active`} checked={profile.id===activeId} onchange={()=>activate(profile.id)}></header><p>{profile.officialDomains.length} official domain{profile.officialDomains.length===1?'':'s'} · {profile.approvedPartnerDomains.length} trusted partner{profile.approvedPartnerDomains.length===1?'':'s'} · {profile.allowlistedDomains.length} allowlisted domain{profile.allowlistedDomains.length===1?'':'s'}</p><div class="chips">{#each profile.officialDomains.slice(0,6) as domain}<span class="chip wrap">{domain}</span>{/each}</div>{#if profile.pageBaseline}<p class="baseline-status"><strong>Page baseline</strong><span>{profile.pageBaseline.domain} · {profile.pageBaseline.complete?'Complete':'Partial'} · {baselineDate(profile.pageBaseline.observedAt)}</span></p>{:else}<p class="baseline-status"><strong>Page baseline</strong><span>Not captured</span></p>{/if}<footer class="toolbar"><button class="btn" onclick={()=>edit(profile)}>Edit</button><button class="btn danger" onclick={()=>remove(profile)}>Delete</button></footer></article>{/each}</section>{:else}<section class="empty-state card"><h2>No brand profiles saved</h2><p>Create a profile to establish official domains and trusted infrastructure.</p></section>{/if}
 
@@ -74,7 +75,7 @@
   .checks p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .checks pre{overflow:auto;font-size:var(--text-2xs)}
   @media(max-width:750px){
-    .heading .toolbar{margin-top:14px}
+    .top-actions{margin-top:14px}
     .profiles,.form-grid,.checks{grid-template-columns:1fr}
     .wide{grid-column:auto}
     .identity-actions{align-items:stretch;flex-direction:column}

@@ -2,6 +2,9 @@
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
   import { page } from '$app/state';
+  import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
+  import LookupForm from '$lib/components/LookupForm.svelte';
+  import PageHeading from '$lib/components/PageHeading.svelte';
   import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
@@ -113,7 +116,6 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const intelligenceOptionCount=$derived(Number(externalIntelligenceSupported)+Number(malwareHostIntelligenceSupported)+Number(malwareIocIntelligenceSupported));
   const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const caseEvidence=$derived({
@@ -198,49 +200,41 @@
   function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField)values.push({label:'Password field',tone:'warn'});if(availability.phishingLanguageMatch)values.push({label:'Phishing language',tone:'danger',detail:availability.phishingLanguageMatch});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const age=fmtAge(availability.domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiry=fmtExpiresIn(availability.expiresInDays);if(expiry)values.push({label:expiry,tone:availability.expiresInDays<=60?'warn':'neutral'});if(availability.privacyProtected!==null&&availability.privacyProtected!==undefined)values.push({label:formatPrivacyCell(availability.privacyProtected),tone:availability.privacyProtected?'warn':'good'});if(availability.activityStatus)values.push({label:formatActivityCell(availability.activityStatus,availability.hasMx,availability.hasSpf,availability.hasDmarc),tone:availability.activityStatus==='active'?'good':availability.activityStatus==='parked'?'warn':'neutral',detail:availability.websiteProbeDetail});return values;}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
+  function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return[
+    {href:'#overview',label:'Overview'},
+    ...(hasWebEvidence?[{href:'#web-evidence' as const,label:'Web & DNS'}]:[]),
+    {href:'#registry',label:'Registry'},
+    ...(threatIntelligenceProviders.length?[{href:'#external-intelligence' as const,label:'External intel'}]:[]),
+    ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
+    {href:'#raw-data',label:'Raw data'},
+  ];}
   async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');const response=await fetch(`/api/lookup?${params}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Investigate</p><h1>Lookup</h1><p>Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains.</p></div></section>
-<form class="search card" onsubmit={submit}>
-  {#if lookupDisabled}<p class="feature-disabled" role="note">{lookupDisabled.reason||'Lookup is disabled by deployment policy.'}</p>{/if}
-  {#if !lookupDisabled&&lookupLimitations.length}<p class="feature-disabled" role="note">Some lookup sources are disabled by deployment policy: {lookupLimitations.map((item)=>item.id.replaceAll('_',' ')).join(', ')}. Results will identify unevaluated evidence.</p>{/if}
-  <label class="search-label" for="query">Domain, IP address, ASN, or domain list</label>
-  <div class="input-row"><div class="query-field"><textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2"></textarea>{#if query}<button type="button" class="clear" aria-label="Clear query" onclick={()=>query=''}>×</button>{/if}</div><button class="primary" disabled={loading||!entries.length||Boolean(lookupDisabled)}>{loading?'Looking up…':entries.length>1?`Open ${Math.min(entries.length,2000)} in Bulk`:'Run lookup'}</button></div>
-  <p class="input-help">{entries.length>1?`${entries.length} unique entries detected. Multiple entries continue in Bulk${parsedInput.duplicates?`; ${parsedInput.duplicates} duplicate${parsedInput.duplicates===1?'':'s'} removed`:''}.`:'Separate multiple domains with commas, semicolons, tabs, or new lines.'}</p>
-  {#if intelligenceOptionCount}
-    <fieldset class="intelligence-options">
-      <legend>Optional third-party intelligence</legend>
-      <p class="intelligence-hint">Each selected source receives only the registrable domain for a deep single-domain lookup. Nothing is submitted for scanning or reporting, and provider verdicts never affect availability.</p>
-      {#if externalIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeExternalIntelligence} disabled={entries.length>1}> <span><strong>Search archived URLscan verdicts</strong> Sends only the registrable domain to the optional third-party search API. It does not submit the domain for scanning.</span></label>
-      {/if}
-      {#if malwareHostIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareHostIntelligence} disabled={entries.length>1}> <span><strong>Search malware-distribution records</strong> Sends only the registrable domain to the optional URLhaus host API. It searches existing records and does not submit a URL or sample.</span></label>
-      {/if}
-      {#if malwareIocIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareIocIntelligence} disabled={entries.length>1}> <span><strong>Search malware infrastructure records</strong> Sends only the registrable domain to the optional ThreatFox search API. It searches retained indicators and does not submit an IOC, URL, or sample.</span></label>
-      {/if}
-    </fieldset>
-  {/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-</form>
+<PageHeading eyebrow="Investigate" title="Lookup" description="Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains." />
+<LookupForm
+  bind:query
+  {loading}
+  entryCount={entries.length}
+  duplicateCount={parsedInput.duplicates}
+  {lookupDisabled}
+  {lookupLimitations}
+  {externalIntelligenceSupported}
+  {malwareHostIntelligenceSupported}
+  {malwareIocIntelligenceSupported}
+  bind:includeExternalIntelligence
+  bind:includeMalwareHostIntelligence
+  bind:includeMalwareIocIntelligence
+  {error}
+  onsubmit={submit}
+/>
 
 {#if result}
   <section class="result-root" id="result">
     <div class="result-head"><div><p class="eyebrow">Result</p><h2>{show(result.registrableDomain||result.query)}</h2>{#if result.isSubdomain}<p>Showing registry data for {result.registrableDomain}; submitted hostname: {result.inputHostname}.</p>{/if}</div><div class="result-actions"><span class="chip info">{show(availability.state)}</span><button class="btn" onclick={downloadEvidence}>Export evidence JSON</button></div></div>
 
-    <div class="local-nav-shell">
-      <nav class="local-nav" aria-label="Result sections">
-        <a href="#overview">Overview</a>
-        {#if hasWebEvidence}<a href="#web-evidence">Web &amp; DNS</a>{/if}
-        <a href="#registry">Registry</a>
-        {#if threatIntelligenceProviders.length}<a href="#external-intelligence">External intel</a>{/if}
-        {#if hasCaseSection}<a href="#case-response">Case &amp; response</a>{/if}
-        <a href="#raw-data">Raw data</a>
-      </nav>
-    </div>
+    <LocalSectionNav label="Result sections" links={resultSectionLinks()} />
 
     <section class="result-section" id="overview" aria-labelledby="overview-title">
       <h3 id="overview-title">Overview</h3>
@@ -527,19 +521,6 @@
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
-  .search{padding:var(--card-pad)}
-  .search-label{display:block;margin-bottom:9px;font:700 var(--text-sm) var(--mono)}
-  .input-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
-  .query-field{position:relative;min-width:0}
-  .query-field textarea{display:block;width:100%;min-height:54px;padding:14px 48px 10px 12px;background:rgba(15,17,21,.78);font-family:var(--mono);font-size:var(--text-sm)}
-  .clear{position:absolute;right:7px;top:9px;width:34px;height:34px;border:0;background:none;font-size:1.25rem}
-  .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .intelligence-options{margin:14px 0 0;padding:12px 14px 14px;border:1px solid var(--border);border-radius:var(--radius-md)}
-  .intelligence-options legend{padding:0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .intelligence-hint{margin:0 0 10px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .intelligence-option{margin:8px 0 0}
-  .intelligence-option span{color:var(--muted)}
-
   .result-head{display:flex;align-items:end;justify-content:space-between;gap:12px 20px;margin:30px 0 0}
   .result-head h2{margin:0;font:700 clamp(1.5rem,3.4vw,2rem) var(--mono);letter-spacing:-.03em;overflow-wrap:anywhere}
   .result-head p{margin:6px 0 0;color:var(--muted);font-size:var(--text-xs)}
@@ -682,8 +663,7 @@
     .scores{margin-top:12px}
   }
   @media(max-width:650px){
-    .input-row,.score-details{grid-template-columns:1fr}
-    .input-row .primary{min-height:44px}
+    .score-details{grid-template-columns:1fr}
     .result-head{align-items:flex-start;flex-direction:column}
     .result-actions{width:100%}
     .scores{display:grid;grid-template-columns:1fr 1fr}

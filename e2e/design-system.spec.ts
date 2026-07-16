@@ -211,3 +211,21 @@ test('every workspace renders without page-level overflow at narrow and wide wid
     }
   }
 });
+
+test('workspace pages expose one consistent primary heading', async ({ page }) => {
+  for (const [path, title, eyebrow] of [
+    ['/', 'Investigate domains. Protect brands.', 'Domain intelligence console'],
+    ['/lookup', 'Lookup', 'Investigate'],
+    ['/discover', 'Candidate discovery', 'Discover'],
+    ['/bulk', 'Bulk analysis', 'Assess'],
+    ['/monitor', 'Investigation workspace', 'Monitor'],
+    ['/brands', 'Brand profiles', 'Protect'],
+    ['/privacy', 'Privacy policy', 'Policy'],
+  ]) {
+    await page.goto(path);
+    const heading = page.locator('.heading');
+    await expect(heading).toHaveCount(1);
+    await expect(heading.getByRole('heading', { level: 1, name: title })).toBeVisible();
+    await expect(heading.locator('.eyebrow')).toHaveText(eyebrow);
+  }
+});

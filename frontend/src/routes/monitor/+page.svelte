@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import PageHeading from '$lib/components/PageHeading.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
@@ -80,7 +81,7 @@
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Monitor</p><h1>Investigation workspace</h1><p>Organize cases, review relationships, test local detection rules, and compare watchlist changes over time.</p></div></section>
+<PageHeading eyebrow="Monitor" title="Investigation workspace" description="Organize cases, review relationships, test local detection rules, and compare watchlist changes over time." />
 
 <div class="views" role="tablist" aria-label="Monitor views">
   <button role="tab" id="tab-cases" aria-selected={view==='cases'} aria-controls="panel-cases" class:active={view==='cases'} onclick={()=>view='cases'}>Cases <span>{cases.length}</span></button>

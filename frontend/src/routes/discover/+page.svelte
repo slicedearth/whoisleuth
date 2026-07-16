@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
+  import PageHeading from '$lib/components/PageHeading.svelte';
   import {
     DEFAULT_GENERATION_PRESET,
     DEFAULT_KEYBOARD_LAYOUT,
@@ -299,7 +300,7 @@
 </script>
 
 <svelte:head><title>Discover · WHOISleuth</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Discover</p><h1>Candidate discovery</h1><p>Generate explainable lookalikes, explore defensive registrations, and search public Certificate Transparency logs.</p></div></section>
+<PageHeading eyebrow="Discover" title="Candidate discovery" description="Generate explainable lookalikes, explore defensive registrations, and search public Certificate Transparency logs." />
 
 <section class="controls card">
   {#if mode==='certificate-transparency'&&ctDisabled}<p class="feature-disabled" role="note">{ctDisabled.reason||'Certificate Transparency search is disabled by deployment policy.'}</p>{/if}

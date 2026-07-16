@@ -1,8 +1,10 @@
+<script lang="ts">
+  import PageHeading from '$lib/components/PageHeading.svelte';
+</script>
+
 <svelte:head><title>Privacy policy · WHOISleuth</title></svelte:head>
 
-<section class="heading">
-  <div><p class="eyebrow">Policy</p><h1>Privacy policy</h1><p>How this deployment processes registry data, local investigation state, and session information.</p></div><a class="btn back" href="/">← Back to app</a>
-</section>
+<PageHeading eyebrow="Policy" title="Privacy policy" description="How this deployment processes registry data, local investigation state, and session information."><a class="btn back" href="/">← Back to app</a></PageHeading>
 
 <article class="policy card">
   <p><em>Last updated: 15 July 2026</em></p>

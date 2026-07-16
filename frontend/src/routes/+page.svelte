@@ -1,6 +1,9 @@
-<script lang="ts">import { workspaces } from '$lib/workspaces';</script>
+<script lang="ts">
+  import PageHeading from '$lib/components/PageHeading.svelte';
+  import { workspaces } from '$lib/workspaces';
+</script>
 <svelte:head><title>WHOISleuth · Domain intelligence</title></svelte:head>
-<section class="heading"><div><p class="eyebrow">Domain intelligence console</p><h1>Investigate domains. Protect brands.</h1><p>Combine RDAP, WHOIS, DNS, website signals, and Certificate Transparency data to find, assess, monitor, and respond to suspicious domains.</p></div></section>
+<PageHeading eyebrow="Domain intelligence console" title="Investigate domains. Protect brands." description="Combine RDAP, WHOIS, DNS, website signals, and Certificate Transparency data to find, assess, monitor, and respond to suspicious domains." />
 <div class="grid">{#each workspaces as item,i}<a class="card" href={item.href}><span>0{i+1}</span><h2>{item.label}</h2><p>{item.detail}</p><strong>Open →</strong></a>{/each}</div>
 <style>
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
