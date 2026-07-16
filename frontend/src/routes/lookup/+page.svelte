@@ -5,6 +5,7 @@
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
+  import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
@@ -13,6 +14,7 @@
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
+  import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
@@ -475,32 +477,7 @@
     {#if threatIntelligenceProviders.length}
       <section class="result-section" id="external-intelligence" aria-labelledby="external-intelligence-title">
         <h3 id="external-intelligence-title">External intelligence</h3>
-        <section class="threat-intelligence evidence-card card" aria-labelledby="threat-intelligence-title">
-          <header class="section-head"><div><p class="eyebrow">External intelligence</p><h4 id="threat-intelligence-title">Archived provider verdicts</h4></div><span>Separately attributed</span></header>
-          <p class="card-note">These are bounded third-party observations, not proof that the domain is safe, malicious, active, or controlled by any party. They never affect availability. A lone publisher contributes no Risk points; only qualifying records corroborated across at least two independent publisher families can add one bounded, explainable factor.</p>
-          {#if externalRiskContext.eligibleProviderCount}
-            <p class="callout warn external-risk-context">
-              {#if externalRiskContext.contribution}
-                Risk context: {externalRiskContext.independentPublisherCount} independent publisher families contributed +{externalRiskContext.contribution} under model v{risk?.modelVersion??'—'}.
-              {:else}
-                Risk context: {externalRiskContext.eligibleProviderCount} qualifying provider observation{externalRiskContext.eligibleProviderCount===1?'':'s'} represented {externalRiskContext.independentPublisherCount} publisher family; no points were added because independent corroboration was absent.
-              {/if}
-              {#if externalRiskContext.freshestAgeDays!==null} Newest qualifying record age: {externalRiskContext.freshestAgeDays} day{externalRiskContext.freshestAgeDays===1?'':'s'}.{/if}
-              {#if externalRiskContext.unknownAgeProviderCount} {externalRiskContext.unknownAgeProviderCount} qualifying provider observation{externalRiskContext.unknownAgeProviderCount===1?' has':'s have'} unknown age.{/if}
-            </p>
-          {/if}
-          {#each threatIntelligenceProviders as provider}
-            {@const providerIdentity=rec(provider.provider)}
-            {@const providerObservation=rec(provider.observation)}
-            {@const findings=Array.isArray(provider.findings)?provider.findings.map(rec):[]}
-            <article>
-              <div class="threat-source"><strong>{show(providerIdentity.label)}</strong><span class="chip {provider.state==='error'||provider.state==='unavailable'||provider.state==='rate_limited'?'danger':provider.state==='success'?'info':''}">{show(provider.state)}</span></div>
-              {#if provider.detail}<p>{show(provider.detail)}</p>{/if}
-              {#if findings.length}<ul>{#each findings as finding}<li class="callout warn"><div><strong>{show(finding.category)}</strong><span>{[finding.providerVerdict,finding.lastObservedAt?formatDate(finding.lastObservedAt):null].filter(Boolean).join(' · ')}</span></div>{#if finding.detail}<p>{show(finding.detail)}</p>{/if}{#if finding.referenceUrl}<a href={finding.referenceUrl} target="_blank" rel="noopener">View attributed provider record</a>{/if}</li>{/each}</ul>{/if}
-              {#if Array.isArray(providerObservation.limitations)&&providerObservation.limitations.length}<details class="disclosure"><summary>Limitations</summary><ul class="limitation-list">{#each providerObservation.limitations as limitation}<li>{show(limitation)}</li>{/each}</ul></details>{/if}
-            </article>
-          {/each}
-        </section>
+        <LookupExternalIntelligence providers={threatIntelligenceProviders} riskContext={externalRiskContext} riskModelVersion={risk?.modelVersion ?? null} showValue={show} {formatDate} />
       </section>
     {/if}
 
@@ -508,26 +485,7 @@
       <section class="result-section" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
 
-        {#if caseDomain}
-          <section class="case-card evidence-card card">
-            <div class="case-intro section-head"><div><p class="eyebrow">Investigation</p><h4>Analyst case</h4></div>{#if caseRecord}<div class="case-badges"><span class={`badge status-${caseRecord.status}`}>{caseStatusLabel(caseRecord.status)}</span><span class={`badge disposition-${caseRecord.disposition}`}>{caseDispositionLabel(caseRecord.disposition)}</span></div>{/if}</div>
-            {#if caseRecord}
-              <div class="case-body">
-                <form class="note-edit" onsubmit={(event)=>{event.preventDefault();addLookupNote();}}>
-                  <label class="field" for="case-note">Add note</label>
-                  <textarea id="case-note" bind:value={caseNote} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
-                  <div class="case-actions"><button class="btn" type="submit" disabled={!caseNote.trim()}>Add note</button><a href={`/monitor?case=${encodeURIComponent(caseRecord.id)}`}>Open in Monitor →</a></div>
-                </form>
-                <p class="case-hint">{caseRecord.notes.length} note{caseRecord.notes.length===1?'':'s'} · manage status, disposition, and tags in Monitor. Cases are stored only in this browser.</p>
-              </div>
-            {:else}
-              <div class="case-body"><p class="case-hint">No case for {caseDomain} yet.</p><button class="primary" onclick={openLookupCase}>Create case</button></div>
-            {/if}
-            {#if caseStatus}<p class="case-status" role="status" aria-live="polite">{caseStatus}</p>{/if}
-          </section>
-        {/if}
-
-        {#if outreach||abuse}<section class="response evidence-card card"><div class="section-head"><div><p class="eyebrow">Respond</p><h4>Human-reviewed drafts</h4></div></div><p class="card-note">Nothing is sent automatically. Review and edit every message before sending it.</p><div class="response-actions">{#if outreach}<article><strong>Acquisition outreach</strong><span>{outreach.email}</span><div><a class="btn small" href={outreach.mailto}>Open email draft</a><button class="btn small" onclick={()=>copyDraft(outreach.body,'outreach draft')}>Copy text</button></div></article>{/if}{#if abuse}<article><strong>Abuse report</strong><span>{abuse.email}</span><div><a class="btn small danger" href={abuse.mailto}>Open report draft</a><button class="btn small" onclick={()=>copyDraft(abuse.body,'abuse report')}>Copy text</button></div></article>{/if}</div>{#if draftStatus}<p class="draft-status" aria-live="polite">{draftStatus}</p>{/if}</section>{/if}
+        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuse} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
       </section>
     {/if}
 
@@ -557,47 +515,8 @@
   .finding-list strong{display:block;color:var(--text);font-size:var(--text-xs)}
   .finding-list span{display:block;margin-top:3px}
 
-  .evidence-card .disclosure ul{display:grid;gap:7px;margin:10px 12px;padding-left:18px}
-  .evidence-card .disclosure li{font-size:var(--text-xs);overflow-wrap:anywhere}
-  .case-badges{display:flex;flex-wrap:wrap;gap:6px}
-  .badge.status-escalated,.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}
-  .badge.status-resolved,.badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
-  .badge.disposition-suspicious{color:var(--amber)}
-  .case-body{margin-top:12px}
-  .note-edit textarea{width:100%;margin-top:6px;font-size:var(--text-sm)}
-  .case-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
-  .case-actions a{color:var(--accent);font:600 var(--text-xs) var(--mono)}
-  .case-body>.primary{margin-top:10px}
-  .case-hint,.case-status{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .case-status{color:var(--accent)}
-
-  .response-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-top:12px}
-  .response-actions article{padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .response-actions strong,.response-actions span{display:block}
-  .response-actions strong{font-size:var(--text-sm)}
-  .response-actions span{margin-top:5px;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
-  .response-actions article>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
-  .draft-status{margin:10px 0 0;color:var(--accent);font-size:var(--text-xs)}
-
   .raw{padding:0;overflow:hidden}
-
-  .threat-intelligence>article{margin-top:12px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .threat-source{display:flex;justify-content:space-between;gap:10px;align-items:start}
-  .threat-source strong{font-size:var(--text-sm)}
-  .threat-source .chip{text-transform:capitalize}
-  .threat-intelligence article>p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
-  .threat-intelligence article ul{display:grid;gap:8px;margin:10px 0 0;padding:0;list-style:none}
-  .threat-intelligence li.callout{margin:0;overflow-wrap:anywhere}
-  .threat-intelligence li>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 10px}
-  .threat-intelligence li>div strong{color:var(--text);font-size:var(--text-xs)}
-  .threat-intelligence li span{color:var(--muted);font-size:var(--text-2xs)}
-  .threat-intelligence li p{margin:5px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .threat-intelligence li a{display:inline-block;margin-top:6px;color:var(--accent);font-size:var(--text-xs);text-decoration:underline}
-  .limitation-list li{color:var(--muted);font-size:var(--text-xs)}
 
   .raw pre{max-height:520px;overflow:auto;margin:0;padding:var(--card-pad);border-top:1px solid var(--border);font-size:var(--text-xs)}
 
-  @media(max-width:650px){
-    .threat-source{flex-direction:column;gap:6px}
-  }
 </style>
