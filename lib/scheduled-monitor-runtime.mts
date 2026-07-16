@@ -33,6 +33,7 @@ type RuntimeOptions = {
   now?: () => number;
   randomUUID?: () => string;
 };
+type RepositoryRuntimeOptions = Pick<RuntimeOptions, 'env' | 'blobStore'>;
 
 const SCHEDULED_MONITOR_UNAVAILABLE_CODE = 'SCHEDULED_MONITOR_UNAVAILABLE';
 
@@ -49,6 +50,27 @@ function unavailableRun(reason: string) {
   return async () => {
     throw new ScheduledMonitorUnavailableError(reason);
   };
+}
+
+function createScheduledMonitorRepository(options: RepositoryRuntimeOptions = {}) {
+  const env = options.env === undefined ? process.env : options.env;
+  const configuration = scheduledMonitorRuntimeConfiguration(env);
+  if (configuration.status !== 'ready') {
+    throw new ScheduledMonitorUnavailableError(
+      configuration.reason || 'Scheduled monitoring is unavailable.',
+    );
+  }
+  if (!options.blobStore) {
+    throw new ScheduledMonitorUnavailableError('Scheduled monitoring Blob storage is unavailable.');
+  }
+  const source = env as EnvironmentInput;
+  return new ScheduledMonitorRepository({
+    rawStore: createNetlifyBlobVersionedTextStore(options.blobStore),
+    encryptionKey: String(source[KEY_ENV]),
+    namespace: String(source[NAMESPACE_ENV]),
+    emptyState: emptyScheduledMonitorState,
+    normalizeState: normalizeScheduledMonitorState,
+  });
 }
 
 function createScheduledMonitorRuntime(options: RuntimeOptions = {}) {
@@ -98,13 +120,7 @@ function createScheduledMonitorRuntime(options: RuntimeOptions = {}) {
       featurePolicy,
     });
   });
-  const repository = new ScheduledMonitorRepository({
-    rawStore: createNetlifyBlobVersionedTextStore(options.blobStore),
-    encryptionKey: String(source[KEY_ENV]),
-    namespace: String(source[NAMESPACE_ENV]),
-    emptyState: emptyScheduledMonitorState,
-    normalizeState: normalizeScheduledMonitorState,
-  });
+  const repository = createScheduledMonitorRepository({ env, blobStore: options.blobStore });
   return {
     ...configuration,
     run: () => runScheduledMonitorCycle({
@@ -118,6 +134,7 @@ function createScheduledMonitorRuntime(options: RuntimeOptions = {}) {
 
 export {
   createScheduledMonitorRuntime,
+  createScheduledMonitorRepository,
   ENABLE_ENV,
   KEY_ENV,
   NAMESPACE_ENV,
@@ -125,4 +142,4 @@ export {
   SCHEDULED_MONITOR_UNAVAILABLE_CODE,
   ScheduledMonitorUnavailableError,
 };
-export type { RuntimeConfiguration, RuntimeOptions, RuntimeStatus };
+export type { RepositoryRuntimeOptions, RuntimeConfiguration, RuntimeOptions, RuntimeStatus };

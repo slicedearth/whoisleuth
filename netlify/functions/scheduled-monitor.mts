@@ -8,6 +8,10 @@ import {
   createScheduledMonitorRuntime,
   scheduledMonitorRuntimeConfiguration,
 } from '../../lib/scheduled-monitor-runtime.mts';
+import {
+  SCHEDULED_MONITOR_STORE_NAME,
+  SCHEDULED_MONITOR_TRIGGER_INTERVAL_MINUTES,
+} from '../../lib/scheduled-monitor-configuration.mts';
 import type { NetlifyBlobStore } from '../../lib/scheduled-monitor-netlify-store.mts';
 import type { RuntimeOptions } from '../../lib/scheduled-monitor-runtime.mts';
 
@@ -21,8 +25,7 @@ type ScheduledFunctionOptions = Omit<RuntimeOptions, 'blobStore'> & {
   deploy?: ScheduledDeployContext | null;
 };
 
-const SCHEDULED_MONITOR_STORE_NAME = 'whoisleuth-scheduled-monitor';
-const SCHEDULED_MONITOR_CRON = '*/5 * * * *';
+const SCHEDULED_MONITOR_CRON = `*/${SCHEDULED_MONITOR_TRIGGER_INTERVAL_MINUTES} * * * *`;
 
 async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {}) {
   if (options.deploy?.published === false) {

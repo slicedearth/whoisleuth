@@ -182,11 +182,20 @@ all.
   is written to the site-wide Netlify Blob store; Netlify stores the ciphertext
   and ordinary object metadata, while its function runtime necessarily
   processes the decrypted state transiently to run requested public lookups.
-  The worker has no public route. Disabling it stops Blob and lookup work but
-  does not delete existing ciphertext; the operator must remove that Blob
-  deliberately when its history is no longer required. Replacing or losing the
-  encryption key without migrating the state makes the retained ciphertext
-  unreadable.
+  The scheduled worker has no public route. A separate authenticated management
+  route lets a signed-in user deliberately schedule a browser-local watchlist,
+  read the bounded hosted projection, pause/resume it, replace its hosted
+  snapshot, restore that compact snapshot into the current browser, or delete
+  the hosted copy. Mutations require a same-origin request and request bodies
+  are capped at 1 MiB. This deployment uses one shared login and has no
+  per-user roles or audit identities, so every person given that login can view
+  and manage the same hosted scheduled-watchlist state. Restoring a snapshot
+  creates or replaces a browser-local watchlist only after explicit
+  confirmation. Disabling the worker stops Blob and lookup work but does not
+  delete existing ciphertext; the operator or an authenticated user must
+  remove hosted state deliberately when its history is no longer required.
+  Replacing or losing the encryption key without migrating the state makes the
+  retained ciphertext unreadable.
 - **CSV/JSON exports**: downloaded directly to your device. Campaign exports
   contain campaign labels, descriptions, domain membership, timestamps, and
   stated interpretation limits; they do not include case evidence or notes.

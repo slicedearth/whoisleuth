@@ -640,8 +640,23 @@ covered by the provider's community terms or an appropriate paid agreement.
   existing fast compact lookups and eight internal deliveries within a
   24-second soft budget. Durable progress is an encrypted cursor; provider
   outages, inconclusive observations, conflicts, and deadlines remain explicit
-  and cannot erase an earlier conclusive baseline. The current frontend does
-  not yet expose controls that copy a browser watchlist into this store.
+  and cannot erase an earlier conclusive baseline. Ordinary watchlists are not
+  copied automatically. Monitor exposes a separate **Scheduled watchlists**
+  card only when the capability report confirms that hosted monitoring is
+  ready. A signed-in user must deliberately select a browser-local watchlist
+  before scheduling it, and can pause/resume it, replace its hosted snapshot,
+  restore the compact hosted snapshot to the current browser, or delete only
+  the hosted copy. These actions use the authenticated
+  `/api/scheduled-monitor` route; mutations require a same-origin request and
+  request bodies are capped at 1 MiB. Because the app has one shared login
+  rather than individual roles, every signed-in user can view and manage the
+  same hosted scheduled-watchlist state.
+
+  Capacity admission is derived from the fixed schedule and cycle ceiling:
+  4,032 theoretical lookups per week, with at most 3,024 admitted and 25%
+  reserved for delayed or resumed work. A new or resumed schedule that would
+  exceed that admitted rate is rejected without changing stored state. This
+  is a processing ceiling, not a promise that upstream registries will answer.
 
   The five-minute schedule itself can use 8,640 function invocations in a
   30-day month or 8,928 in a 31-day month, including no-op invocations while the
@@ -821,8 +836,12 @@ Functions:
   full 2000-domain fast bulk scan without breaking normal use, while still
   capping a scripted flood well below what upstream registries would treat as
   abuse.
+- `/api/scheduled-monitor` - 60 authenticated management requests per minute
+  per warm runtime and signed session, in addition to the general API limit.
+  This lower ceiling protects strongly consistent Blob reads and conditional
+  writes from accidental Bulk-rate use.
 
-Exceeding either limit returns `429` with a `Retry-After` header. The limiter
+Exceeding these limits returns `429` with a `Retry-After` header. The limiter
 is in-memory: on `server.mts` (one long-lived process) it applies globally; on
 Netlify Functions each container has its own memory, so it only limits bursts
 within a single warm container rather than across the whole deployment - a

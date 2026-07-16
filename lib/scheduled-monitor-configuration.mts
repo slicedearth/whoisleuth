@@ -17,6 +17,8 @@ type RuntimeConfiguration = {
 const ENABLE_ENV = 'WHOISLEUTH_SCHEDULED_MONITORING';
 const KEY_ENV = 'WHOISLEUTH_SCHEDULED_MONITOR_KEY';
 const NAMESPACE_ENV = 'WHOISLEUTH_SCHEDULED_MONITOR_NAMESPACE';
+const SCHEDULED_MONITOR_STORE_NAME = 'whoisleuth-scheduled-monitor';
+const SCHEDULED_MONITOR_TRIGGER_INTERVAL_MINUTES = 5;
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 const FALSE_VALUES = new Set(['', '0', 'false', 'no', 'off']);
 
@@ -76,6 +78,8 @@ export {
   ENABLE_ENV,
   KEY_ENV,
   NAMESPACE_ENV,
+  SCHEDULED_MONITOR_STORE_NAME,
+  SCHEDULED_MONITOR_TRIGGER_INTERVAL_MINUTES,
   scheduledMonitorRuntimeConfiguration,
 };
 export type { EnvironmentInput, RuntimeConfiguration, RuntimeStatus };
