@@ -38,7 +38,7 @@
 
 <fieldset class="export-controls">
   <legend>Case evidence package</legend>
-  <label class="export-notes">
+  <label class="export-notes choice">
     <input type="checkbox" bind:checked={includeNotes}>
     <span>
       Include analyst notes
@@ -46,19 +46,16 @@
     </span>
   </label>
   <div class="export-actions">
-    <button type="button" onclick={() => exportReport('json')}>Export JSON</button>
-    <button type="button" onclick={() => exportReport('md')}>Export Markdown</button>
+    <button type="button" class="btn" onclick={() => exportReport('json')}>Export JSON</button>
+    <button type="button" class="btn" onclick={() => exportReport('md')}>Export Markdown</button>
   </div>
 </fieldset>
 
 <style>
-  .export-controls { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 13px; border: 1px solid var(--border); border-radius: 9px; }
-  legend { padding: 0 6px; color: var(--muted); font-size: .66rem; }
-  .export-notes { display: flex; gap: 9px; align-items: start; min-width: 0; font-size: .7rem; }
-  .export-notes input { width: 16px; min-height: auto; flex: 0 0 auto; margin-top: 2px; padding: 0; }
-  .export-notes span { min-width: 0; overflow-wrap: anywhere; }
-  .export-notes small { display: block; margin-top: 3px; color: var(--muted); font-size: .62rem; line-height: 1.45; }
+  .export-controls { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  legend { padding: 0 6px; color: var(--text); font: 700 var(--text-xs) var(--mono); }
+  .export-notes span { font-size: var(--text-sm); }
+  .export-notes small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
   .export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .export-actions button { min-height: 36px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-raised); font-size: .68rem; }
-  @media (max-width: 460px) { .export-actions button { flex: 1 1 130px; } }
+  @media (max-width: 460px) { .export-actions .btn { flex: 1 1 130px; } }
 </style>

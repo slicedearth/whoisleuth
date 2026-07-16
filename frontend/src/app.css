@@ -8,6 +8,7 @@
   --panel: #171a21;
   --panel-raised: #1c2029;
   --border: #2a2e39;
+  --border-strong: #3a4050;
   --text: #e6e8ee;
   --muted: #8b93a7;
   --accent: #5eb3ff;
@@ -15,6 +16,19 @@
   --danger: #ff6b6b;
   --amber: #f2b84b;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+  /* Type scale. --text-2xs is reserved for uppercase micro-labels that carry
+     letter-spacing; running text and data values use --text-xs and up. */
+  --text-2xs: .68rem;
+  --text-xs: .74rem;
+  --text-sm: .8rem;
+  --text-md: .875rem;
+
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 13px;
+  --card-pad: clamp(16px, 2.2vw, 22px);
+  --control-h: 38px;
 }
 
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
@@ -40,7 +54,232 @@ button { cursor: pointer; }
 button, select { font-family: var(--mono); }
 input, select, textarea { caret-color: var(--accent2); }
 
-.shell { display: grid; grid-template-columns: 272px minmax(0,1fr); min-height: 100vh; }
+/* ---------- Form controls ----------
+   Text-like fields get the boxed treatment; checkboxes and radios keep their
+   native size so a bare <input type="checkbox"> can never inflate into a
+   44px-tall text box again. */
+select, textarea,
+input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="url"], [type="number"], [type="tel"], :not([type])) {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+input:where([type="text"], [type="search"], [type="password"], [type="email"], [type="url"], [type="number"], [type="tel"], :not([type])) {
+  min-height: 44px;
+  padding: 0 12px;
+}
+select { min-height: var(--control-h); padding: 0 10px; }
+textarea { padding: 10px 12px; resize: vertical; }
+input[type="checkbox"], input[type="radio"] {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent2);
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,179,255,.28); outline: none; }
+input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-shadow: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A selectable checkbox/radio row: native control aligned to the first line
+   of its label text, with a comfortable touch target from the row padding. */
+.choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-height: 24px;
+  cursor: pointer;
+}
+.choice > input { margin-top: 1px; }
+.choice > span { min-width: 0; font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
+.choice > span > strong { display: block; color: var(--text); font-size: var(--text-sm); }
+.choice > span > small { color: var(--muted); font-size: var(--text-xs); }
+
+.field { display: block; font: 600 var(--text-xs) var(--mono); color: var(--text); }
+.field > input, .field > select, .field > textarea { display: block; margin-top: 6px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.field > small { color: var(--muted); font-weight: 400; }
+
+/* ---------- Buttons ----------
+   .btn is the neutral secondary action. .primary stays the single
+   high-contrast call to action. .danger marks destructive intent. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: var(--control-h);
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-raised);
+  color: var(--text);
+  font: 600 var(--text-xs) var(--mono);
+  cursor: pointer;
+  text-align: center;
+}
+.btn:hover:not(:disabled), .btn:focus-visible:not(:disabled) { border-color: var(--border-strong); background: #232837; }
+.btn.small { min-height: 32px; padding: 0 10px; font-size: var(--text-2xs); }
+.btn[aria-pressed="true"], .btn.active { color: var(--accent2); border-color: rgba(126,224,168,.55); background: rgba(126,224,168,.07); }
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid #78bdff;
+  border-radius: var(--radius-sm);
+  color: #07101c;
+  background: linear-gradient(135deg,#75c2ff,#4a9ff3);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 750;
+}
+.primary:hover:not(:disabled) { background: linear-gradient(135deg,#8ccbff,#5babf6); }
+/* A disabled .primary must not just be dimmed: the generic button:disabled
+   opacity fades this button's dark text on its bright gradient toward the dark
+   page background, leaving the label muddy and hard to read. Give it an
+   explicit muted-panel treatment instead - clearly inactive, still legible. */
+.primary:disabled { opacity: 1; background: var(--panel-raised); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+button.danger, a.danger, .btn.danger {
+  color: var(--danger);
+  border-color: rgba(255,107,107,.34);
+  background: rgba(255,107,107,.05);
+}
+button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-color: rgba(255,107,107,.6); background: rgba(255,107,107,.1); }
+
+/* A label that wraps a hidden file input and behaves like a .btn. */
+.file-btn { position: relative; cursor: pointer; }
+.file-btn input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.file-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ---------- Chips and badges ---------- */
+.chip, .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font: 600 var(--text-2xs) var(--mono);
+  white-space: nowrap;
+}
+.chip.good, .badge.good { color: var(--accent2); border-color: rgba(126,224,168,.4); background: rgba(126,224,168,.05); }
+.chip.info, .badge.info { color: var(--accent); border-color: rgba(94,179,255,.4); background: rgba(94,179,255,.05); }
+.chip.warn, .badge.warn { color: var(--amber); border-color: rgba(242,184,75,.4); background: rgba(242,184,75,.05); }
+.chip.danger, .badge.danger { color: var(--danger); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.05); }
+.chip.wrap { white-space: normal; overflow-wrap: anywhere; }
+
+/* ---------- Callouts ----------
+   One left-border note treatment for provenance limits, partial evidence,
+   and cautions, replacing the per-route amber boxes. */
+.callout {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(255,255,255,.02);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.callout.warn { border-left-color: var(--amber); background: rgba(242,184,75,.05); }
+.callout.warn strong { color: var(--amber); }
+.callout.good { border-left-color: var(--accent2); background: rgba(126,224,168,.05); }
+.callout.danger { border-left-color: var(--danger); background: rgba(255,107,107,.05); }
+.callout.info { border-left-color: var(--accent); background: rgba(94,179,255,.05); }
+.feature-disabled { margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid var(--amber); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: rgba(242,184,75,.05); color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
+
+/* ---------- Stat tiles ----------
+   Labelled fact tiles used for diagnostics, registry summaries, and the
+   DNS/HTTP/TLS/page evidence grids. auto-fill keeps large desktop widths
+   filled and stacks cleanly on narrow screens without extra media queries. */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.stat-grid > * {
+  min-width: 0;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.stat-grid small { display: block; color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.stat-grid strong { display: block; margin-top: 6px; font-size: var(--text-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.stat-grid p { margin: 5px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
+
+/* ---------- Cards, sections, disclosures ---------- */
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: rgba(23,26,33,.96); box-shadow: 0 6px 24px rgba(0,0,0,.22); }
+a.card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+a.card:hover, a.card:focus-visible { border-color: rgba(94,179,255,.65); box-shadow: 0 8px 28px rgba(0,0,0,.3), inset 0 1px rgba(126,224,168,.08); transform: translateY(-2px); }
+.card > summary { list-style: none; }
+.card > summary::-webkit-details-marker { display: none; }
+.card > summary::before { content: "❯"; display: inline-block; margin-right: 9px; color: var(--accent2); font: 700 .72rem var(--mono); transition: transform .15s ease; }
+.card[open] > summary::before { transform: rotate(90deg); }
+details.card > summary { padding: 15px var(--card-pad); cursor: pointer; font: 700 var(--text-sm) var(--mono); }
+details.card > summary:hover { color: var(--accent); }
+
+/* Header row inside a card/section: title block left, status right. */
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; align-items: start; }
+.section-head h2, .section-head h3 { margin: 0; font-size: 1.02rem; }
+.section-head .eyebrow { margin: 0 0 3px; }
+.section-head > span:last-child:not(.chip):not(.badge) { color: var(--accent); font: 600 var(--text-2xs) var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+.section-head > span.partial { color: var(--amber); }
+
+/* Nested disclosure inside an evidence card. */
+.disclosure { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.disclosure > summary { padding: 10px 12px; cursor: pointer; font: 700 var(--text-xs) var(--mono); }
+.disclosure > summary:hover { color: var(--accent); }
+.disclosure[open] > summary { border-bottom: 1px solid var(--border); }
+.disclosure > :not(summary) { margin: 10px 12px; }
+
+/* ---------- Tables ---------- */
+.table-wrap { min-width: 0; overflow-x: auto; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+.table-wrap th, .table-wrap td { padding: 11px 10px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; }
+.table-wrap thead th { color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+/* ---------- Toolbars and empty states ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.empty-state { display: grid; min-height: 240px; place-content: center; gap: 6px; padding: 30px; text-align: center; }
+.empty-state h2, .empty-state h3 { margin: 0; }
+.empty-state p { margin: 0; color: var(--muted); max-width: 46ch; }
+.empty-state a { color: var(--accent); font-weight: 700; }
+
+/* Route-scoped status line announced via aria-live. */
+.status { color: var(--muted); font-size: var(--text-xs); }
+
+/* ---------- Local section navigation ----------
+   Sticky in-page anchors for long evidence results. Scrolls horizontally on
+   narrow screens instead of wrapping into a tall block. */
+.local-nav-shell {
+  position: sticky;
+  top: 8px;
+  z-index: 15;
+  max-width: 100%;
+  margin: 16px 0 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(15,17,21,.94);
+  backdrop-filter: blur(6px);
+}
+.local-nav { display: flex; max-width: 100%; gap: 4px; margin: 0; padding: 5px; overflow-x: auto; }
+.local-nav a { flex: 0 0 auto; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .04em; white-space: nowrap; }
+.local-nav a:hover, .local-nav a:focus-visible { color: var(--text); background: rgba(94,179,255,.09); }
+.result-section { scroll-margin-top: 72px; }
+@media (max-width: 900px) {
+  .local-nav-shell { top: 70px; }
+  .result-section { scroll-margin-top: 134px; }
+}
+@media (max-width: 600px) {
+  .local-nav-shell { position: relative; top: auto; }
+  .result-section { scroll-margin-top: 72px; }
+}
+
+/* ---------- Application shell ---------- */
+.shell { display: grid; grid-template-columns: 264px minmax(0,1fr); min-height: 100vh; }
 aside {
   position: sticky;
   top: 0;
@@ -54,8 +293,8 @@ aside {
 }
 .terminal-strip { display: flex; align-items: center; gap: 8px; min-height: 39px; padding: 9px 14px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.03); }
 .terminal-strip .prompt-sigil { flex: 0 0 auto; color: var(--accent2); font: .78rem var(--mono); text-shadow: 0 0 6px rgba(126,224,168,.5); }
-.terminal-strip span:not(.prompt-sigil) { min-width: 0; overflow: hidden; color: var(--muted); font: .67rem var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.brand { display: flex; gap: 11px; align-items: center; margin: 22px 18px 0; }
+.terminal-strip span:not(.prompt-sigil) { min-width: 0; overflow: hidden; color: var(--muted); font: var(--text-2xs) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.brand { display: flex; gap: 11px; align-items: center; margin: 20px 16px 0; }
 .brand span span, .brand strong, .brand small, nav a strong, nav a small { display: block; }
 .brand strong { font: 700 1.13rem var(--mono); letter-spacing: -.02em; }
 .brand strong::after, .shell > header > a > strong::after { content: ""; display: inline-block; width: .48em; height: .95em; margin-left: .18em; background: var(--accent2); box-shadow: 0 0 8px rgba(126,224,168,.5); vertical-align: -.14em; animation: brand-cursor-blink 1.1s steps(1, end) infinite; }
@@ -64,57 +303,46 @@ aside {
    visible, not hidden; the media query below also disables it outright. */
 @keyframes brand-cursor-blink { 0%, 55% { opacity: 1; } 55.01%, 99.99% { opacity: 0; } 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .brand strong::after, .shell > header > a > strong::after { animation: none; opacity: 1; } }
-.brand small, nav a small { color: var(--muted); font-size: .68rem; }
+.brand small, nav a small { color: var(--muted); font-size: var(--text-2xs); line-height: 1.4; }
 .mark { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; }
 .mark img { display: block; width: 100%; height: 100%; }
 .mark.small { width: 33px; height: 33px; }
 
-nav { margin: 34px 18px 0; }
-.eyebrow { color: var(--accent2); font: 700 .68rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-nav a { position: relative; display: block; margin: 5px 0; padding: 10px 11px 10px 20px; border: 1px solid transparent; border-radius: 8px; }
-nav a::before { content: ""; position: absolute; left: 7px; top: 11px; color: var(--accent2); font: 700 .72rem var(--mono); }
+nav { margin: 30px 16px 0; }
+.eyebrow { color: var(--accent2); font: 700 var(--text-2xs) var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+nav a { position: relative; display: block; margin: 5px 0; padding: 10px 11px 10px 22px; border: 1px solid transparent; border-radius: var(--radius-sm); }
+nav a::before { content: ""; position: absolute; left: 8px; top: 11px; color: var(--accent2); font: 700 .72rem var(--mono); }
 nav a.active::before { content: "❯"; text-shadow: 0 0 6px rgba(126,224,168,.45); }
-nav a:hover, nav a.active { border-color: var(--border); background: rgba(94,179,255,.08); }
+nav a:hover, nav a.active { border-color: var(--border); background: rgba(94,179,255,.07); }
 nav a.active { border-left-color: var(--accent2); }
 nav a.active strong { color: var(--accent); }
-.session { display: flex; gap: 12px; align-items: center; margin: auto 18px 18px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font: .7rem var(--mono); }
+nav a strong { font: 650 var(--text-md) var(--mono); }
+nav a small { margin-top: 2px; }
+.session { display: flex; gap: 12px; align-items: center; margin: auto 16px 16px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font: var(--text-2xs) var(--mono); }
 .session span { min-width: 0; flex: 1 1 auto; margin-right: auto; overflow: visible; text-overflow: clip; white-space: nowrap; }
 .session button { flex: 0 0 auto; padding: 0; border: 0; color: var(--text); background: none; white-space: nowrap; }
 
-.site-footer { margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font: .68rem var(--mono); }
+.site-footer { margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font: var(--text-2xs) var(--mono); }
 .site-footer p { margin: 0; max-width: 78ch; line-height: 1.65; }
 .site-footer .credit { margin-top: 10px; }
 .site-footer a { color: var(--accent); }
 .site-footer a:hover { color: var(--text); }
 
-main { width: min(1180px,100%); margin: auto; padding: 46px clamp(24px,4vw,58px) 80px; }
+main { width: min(1220px,100%); margin: auto; padding: 38px clamp(24px,4vw,58px) 72px; }
 .public-content { width: min(960px,100%); }
 header { display: none; }
-.heading { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 26px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+
+/* Page heading: compact identity band rather than a display headline. */
+.heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 24px; align-items: end; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
 .heading .eyebrow::before { content: "// "; color: var(--muted); }
-.heading h1 { margin: 0; font: 700 clamp(1.8rem,3.6vw,2.8rem) var(--mono); letter-spacing: -.045em; }
+.heading h1 { margin: 2px 0 0; font: 700 clamp(1.45rem,2.6vw,1.95rem) var(--mono); letter-spacing: -.035em; }
 .heading p:not(.eyebrow), .muted { color: var(--muted); line-height: 1.55; }
-.feature-disabled { margin: 0 0 12px; padding: 9px 11px; border-left: 3px solid #f2b84b; background: rgba(242,184,75,.04); color: var(--muted); font-size: .68rem; }
-.card { border: 1px solid var(--border); border-radius: 10px; background: rgba(23,26,33,.96); box-shadow: 0 6px 24px rgba(0,0,0,.22); }
-a.card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
-a.card:hover, a.card:focus-visible { border-color: rgba(94,179,255,.65); box-shadow: 0 8px 28px rgba(0,0,0,.3), inset 0 1px rgba(126,224,168,.08); transform: translateY(-2px); }
-.card > summary { list-style: none; }
-.card > summary::-webkit-details-marker { display: none; }
-.card > summary::before { content: "❯"; display: inline-block; margin-right: 9px; color: var(--accent2); font: 700 .72rem var(--mono); transition: transform .15s ease; }
-.card[open] > summary::before { transform: rotate(90deg); }
+.heading > div > p:not(.eyebrow) { margin: 6px 0 0; max-width: 78ch; font-size: var(--text-md); }
+
 .center { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
 .login { width: min(430px,100%); padding: 34px; }
-.login::before { content: "guest@whoisleuth — authentication"; display: block; margin: -34px -34px 28px; padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); background: rgba(255,255,255,.03); font: .67rem var(--mono); }
-.login label { display: block; margin: 22px 0 7px; }
-.login input, input, select, textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
-.login input, input { min-height: 44px; padding: 0 13px; }
-input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,179,255,.28); outline: none; }
-.primary { min-height: 42px; padding: 0 16px; border: 1px solid #78bdff; border-radius: 8px; color: #07101c; background: linear-gradient(135deg,#75c2ff,#4a9ff3); font-family: var(--mono); font-weight: 750; }
-/* A disabled .primary must not just be dimmed: the generic button:disabled
-   opacity fades this button's dark text on its bright gradient toward the dark
-   page background, leaving the label muddy and hard to read. Give it an
-   explicit muted-panel treatment instead - clearly inactive, still legible. */
-.primary:disabled { opacity: 1; background: var(--panel-raised); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+.login::before { content: "guest@whoisleuth — authentication"; display: block; margin: -34px -34px 28px; padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); background: rgba(255,255,255,.03); font: var(--text-2xs) var(--mono); }
+.login label { display: block; margin: 22px 0 7px; font: 600 var(--text-sm) var(--mono); }
 .login .primary { width: 100%; margin-top: 16px; }
 .error { color: var(--danger); }
 
@@ -122,29 +350,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   .shell { display: block; padding-top: 62px; }
   header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; height: 62px; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--border); background: rgba(15,17,21,.96); }
   header a { display: flex; gap: 10px; align-items: center; font-family: var(--mono); }
-  header button { width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+  header button { width: 40px; height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
   aside { position: fixed; inset: 0 auto auto 0; width: min(310px,86vw); height: 100dvh; padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; transform: translateX(-105%); transition: transform .18s; }
   aside .brand { display: none; }
   aside .session { flex: 0 0 auto; margin-bottom: 0; }
   .open aside { transform: none; }
   .scrim { position: fixed; inset: 0; z-index: 10; border: 0; background: rgba(0,0,0,.7); }
-  main { padding: 34px 20px 64px; }
+  main { padding: 30px 20px 64px; }
 }
 
 @media (max-width: 600px) {
   .heading { display: block; }
+  .heading > div + * { margin-top: 14px; }
   .login { padding: 26px 20px; }
   .login::before { margin: -26px -20px 24px; }
-}
-
-/* Bulk's local neutral-button rule is intentionally broad. Keep its primary
-   scan action on the high-contrast blue treatment once the action is ready. */
-.queue .queue-actions > button.primary:not(:disabled) {
-  border-color: #78bdff;
-  color: #06111d;
-  background: linear-gradient(135deg,#75c2ff,#4a9ff3);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), 0 0 18px rgba(74,159,243,.16);
-  font-weight: 800;
 }
 
 @media (max-width: 700px) {
@@ -167,7 +386,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
     grid-template-columns: repeat(3,minmax(0,1fr));
     padding: 13px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     background: var(--panel);
   }
   .results-table tr.error-row { background: rgba(255,107,107,.035); }
@@ -183,9 +402,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
     display: block;
     margin-bottom: 4px;
     color: var(--muted);
-    font-size: .56rem;
-    font-weight: 700;
-    letter-spacing: .08em;
+    font: 600 .62rem var(--mono);
+    letter-spacing: .07em;
     text-transform: uppercase;
   }
   .results-table td:first-child {

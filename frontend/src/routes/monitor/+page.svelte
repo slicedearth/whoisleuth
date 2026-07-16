@@ -116,17 +116,17 @@
       <label for="new-case">Track a domain</label>
       <div><input id="new-case" bind:value={newDomain} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!newDomain.trim()}>Open or create case</button></div>
     </form>
-    <div class="top-actions"><button onclick={downloadCases} disabled={!cases.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label></div>
+    <div class="top-actions toolbar"><button class="btn" onclick={downloadCases} disabled={!cases.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label></div>
   </section>
   {#if caseMessage}<p class="message" role="status" aria-live="polite">{caseMessage}</p>{/if}
 
   {#if cases.length}
     <section class="case-filters card">
-      <label>Status<select bind:value={statusFilter}><option value="">All statuses</option>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-      <label>Disposition<select bind:value={dispositionFilter}><option value="">All dispositions</option>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-      <label class="search">Search<input bind:value={caseSearch} placeholder="Domain or tag" autocomplete="off"></label>
-      <label>Sort<select bind:value={caseSort}><option value="updated">Recently updated</option><option value="domain">Domain</option><option value="status">Status</option></select></label>
-      <button onclick={clearCaseFilters} disabled={!statusFilter&&!dispositionFilter&&!caseSearch}>Clear</button>
+      <label class="field">Status<select bind:value={statusFilter}><option value="">All statuses</option>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+      <label class="field">Disposition<select bind:value={dispositionFilter}><option value="">All dispositions</option>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+      <label class="field search">Search<input bind:value={caseSearch} placeholder="Domain or tag" autocomplete="off"></label>
+      <label class="field">Sort<select bind:value={caseSort}><option value="updated">Recently updated</option><option value="domain">Domain</option><option value="status">Status</option></select></label>
+      <button class="btn" onclick={clearCaseFilters} disabled={!statusFilter&&!dispositionFilter&&!caseSearch}>Clear</button>
     </section>
     <p class="count">{filteredCases.length} of {cases.length} case{cases.length===1?'':'s'} shown</p>
 
@@ -142,24 +142,24 @@
           {#if expandedId===record.id}
             <div class="case-body" id={`case-body-${record.id}`}>
               <div class="field-grid">
-                <label>Status<select value={record.status} onchange={(event)=>setStatus(record,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-                <label>Disposition<select value={record.disposition} onchange={(event)=>setDisposition(record,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+                <label class="field">Status<select value={record.status} onchange={(event)=>setStatus(record,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_STATUSES as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+                <label class="field">Disposition<select value={record.disposition} onchange={(event)=>setDisposition(record,(event.currentTarget as HTMLSelectElement).value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
               </div>
               <form class="tags-edit" onsubmit={(event)=>{event.preventDefault();saveTags(record);}}>
-                <label for={`tags-${record.id}`}>Tags <small>comma separated</small></label>
-                <div><input id={`tags-${record.id}`} bind:value={tagDraft} placeholder="phishing, active-campaign" autocomplete="off"><button type="submit">Save tags</button></div>
+                <label class="field" for={`tags-${record.id}`}>Tags <small>comma separated</small></label>
+                <div><input id={`tags-${record.id}`} bind:value={tagDraft} placeholder="phishing, active-campaign" autocomplete="off"><button class="btn" type="submit">Save tags</button></div>
               </form>
               <form class="note-edit" onsubmit={(event)=>{event.preventDefault();addNote(record);}}>
-                <label for={`note-${record.id}`}>Add note</label>
+                <label class="field" for={`note-${record.id}`}>Add note</label>
                 <textarea id={`note-${record.id}`} bind:value={noteDraft} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
-                <button type="submit" disabled={!noteDraft.trim()}>Add note</button>
+                <button class="btn" type="submit" disabled={!noteDraft.trim()}>Add note</button>
               </form>
               {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{date(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
               <CaseRelationships {record} records={cases} onselect={expand} />
               {#key record.id}<EvidenceTimeline {record} />{/key}
               {#key record.id}<CaseReportExport {record} onmessage={(value)=>caseMessage=value} />{/key}
               <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {date(record.createdAt)}</span></div>
-              <div class="case-actions"><a href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button class="danger" onclick={()=>removeCase(record)}>Delete case</button></div>
+              <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button class="btn danger" onclick={()=>removeCase(record)}>Delete case</button></div>
             </div>
           {/if}
         </article>
@@ -167,32 +167,105 @@
       {#if !filteredCases.length}<p class="count">No cases match the current filters.</p>{/if}
     </section>
   {:else}
-    <section class="empty card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
+    <section class="empty-state card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}
 </div>
 {/if}
 
 {#if view==='watchlists'}
 <div id="panel-watchlists" role="tabpanel" aria-labelledby="tab-watchlists">
-  <section class="wl-toolbar card"><div class="top-actions"><button onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label>Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label><button class="danger" onclick={clearAll} disabled={!names.length}>Clear all</button></div></section>
+  <section class="wl-toolbar card"><div class="top-actions toolbar"><button class="btn" onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label><button class="btn danger" onclick={clearAll} disabled={!names.length}>Clear all</button></div></section>
   {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
   {#if names.length}
-    <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each names as name}{@const item=watchlists[name]}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount||0)>0}>{latest?.changeCount||0}</span></td><td>{date(item.updatedAt)}</td><td><div class="actions"><button onclick={()=>rescan(name)}>Rescan in Bulk</button><button onclick={()=>{selected=name;changedOnly=false}}>History</button><button class="danger" onclick={()=>remove(name)}>Delete</button></div></td></tr>{/each}</tbody></table></div></section>
+    <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each names as name}{@const item=watchlists[name]}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount||0)>0}>{latest?.changeCount||0}</span></td><td>{date(item.updatedAt)}</td><td><div class="actions toolbar"><button class="btn small" onclick={()=>rescan(name)}>Rescan in Bulk</button><button class="btn small" onclick={()=>{selected=name;changedOnly=false}}>History</button><button class="btn small danger" onclick={()=>remove(name)}>Delete</button></div></td></tr>{/each}</tbody></table></div></section>
   {:else}
-    <section class="empty card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a browser-local monitoring timeline.</p><a href="/bulk">Open Bulk analysis →</a></section>
+    <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a browser-local monitoring timeline.</p><a href="/bulk">Open Bulk analysis →</a></section>
   {/if}
 
   {#if entry}
-    <section class="history card"><header><div><p class="eyebrow">History</p><h2>{selected}</h2><p>{entry.history.length} retained check{entry.history.length===1?'':'s'} · {entry.results.length} domain{entry.results.length===1?'':'s'}</p></div><div><button class:active={changedOnly} aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Material changes only</button><button onclick={()=>selected=''}>Close</button></div></header>
+    <section class="history card"><header class="section-head"><div><p class="eyebrow">History</p><h2>{selected}</h2><p>{entry.history.length} retained check{entry.history.length===1?'':'s'} · {entry.results.length} domain{entry.results.length===1?'':'s'}</p></div><div class="toolbar"><button class="btn" class:active={changedOnly} aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Material changes only</button><button class="btn" onclick={()=>selected=''}>Close</button></div></header>
       <div class="events">{#each [...history].reverse() as event}<article><div class="event-head"><time datetime={event.checkedAt}>{date(event.checkedAt)}</time><span>{event.mode} scan</span><strong class:changed={event.changeCount>0}>{event.changeCount} change{event.changeCount===1?'':'s'}</strong><small>{event.conclusiveCount}/{event.resultCount} conclusive</small></div>{#if event.changes.length}<ul>{#each event.changes as change}<li class={change.tone}><strong>{change.domain}</strong><span>{fieldLabels[change.field]||change.field}</span><small>{formatValue(change.before,change.field)} → {formatValue(change.after,change.field)}</small></li>{/each}</ul>{:else}<p class="no-change">No material changes detected.</p>{/if}{#if event.omittedChanges}<p class="no-change">{event.omittedChanges} additional changes omitted to keep storage bounded.</p>{/if}</article>{/each}</div>
     </section>
   {/if}
 </div>
 {/if}
 
-<style>.views{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}.views button{display:flex;gap:7px;align-items:center;min-height:40px;padding:0 15px;border:1px solid var(--border);border-radius:9px;background:var(--panel-raised);font-size:.74rem}.views button.active{color:var(--accent);border-color:var(--accent)}.views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:.62rem}
-.top-actions,.actions,.history header>div:last-child{display:flex;flex-wrap:wrap;gap:7px}.top-actions button,.top-actions label,.actions button,.history button{min-height:38px;padding:0 11px;border:1px solid var(--border);border-radius:9px;background:var(--panel-raised);font-size:.7rem}.top-actions label{display:grid;place-items:center;cursor:pointer}.top-actions input{display:none}.danger{color:var(--danger)}.message{color:var(--accent)}.watchlists,.history{padding:22px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.74rem}th,td{padding:12px 9px;border-top:1px solid var(--border);text-align:left}th{color:var(--muted);font-size:.64rem;text-transform:uppercase}.changed{color:var(--danger)}.empty{display:grid;min-height:300px;place-content:center;padding:30px;text-align:center}.empty p,.history header p,.no-change{color:var(--muted)}.empty a{color:var(--accent);font-weight:700}.history{margin-top:16px}.history header{display:flex;justify-content:space-between;gap:16px}.history h2{margin:0}.history header p{margin:5px 0}.history button.active{color:var(--accent);border-color:#7ee0a8}.events{display:grid;gap:10px;margin-top:18px}.events article{padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}.event-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.event-head span,.event-head strong{padding:5px 7px;border:1px solid var(--border);border-radius:99px;font-size:.65rem;text-transform:capitalize}.event-head small{margin-left:auto;color:var(--muted)}ul{display:grid;gap:6px;margin:14px 0 0;padding:0;list-style:none}li{display:grid;grid-template-columns:minmax(150px,1fr) 120px minmax(180px,1fr);gap:10px;padding:8px;border-left:3px solid var(--border);font-size:.7rem}li.danger{border-color:var(--danger)}li.warn{border-color:#f2b84b}li.good{border-color:var(--accent)}li span,li small{color:var(--muted)}
-.wl-toolbar,.case-toolbar,.case-filters{padding:16px}.case-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end}.track label,.case-filters label{display:block;color:var(--muted);font-size:.66rem}.track>div{display:flex;gap:8px;margin-top:5px}.track input{min-width:200px}.track input,.case-filters input,.case-filters select,.tags-edit input,.note-edit textarea,.field-grid select{min-height:38px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}.track button,.case-filters button,.tags-edit button,.note-edit button{min-height:38px;padding:0 13px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised);font-size:.7rem}.case-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:14px}.case-filters .search{flex:1;min-width:150px}.case-filters .search input{width:100%}.count{margin:12px 2px;color:var(--muted);font-size:.7rem}
-.case-list{display:grid;gap:10px}.case{padding:0;overflow:hidden}.case.open{border-color:var(--accent)}.case-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left}.case-domain{display:flex;flex-direction:column;gap:3px;min-width:0}.case-domain strong{overflow-wrap:anywhere}.case-domain small,.updated{color:var(--muted);font-size:.64rem}.badges{display:flex;flex-wrap:wrap;gap:6px}.badge{padding:4px 9px;border:1px solid var(--border);border-radius:99px;font-size:.62rem;white-space:nowrap}.badge.status-escalated{color:var(--danger);border-color:rgba(255,107,107,.4)}.badge.status-resolved{color:var(--accent2)}.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}.badge.disposition-suspicious{color:#f2b84b}.badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}.tag-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 14px}.tag{padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:.62rem}.case-body{display:grid;gap:14px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field-grid label,.tags-edit label,.note-edit label{display:block;color:var(--muted);font-size:.66rem;margin-bottom:5px}.field-grid select{width:100%}.tags-edit>div{display:flex;gap:8px}.tags-edit input{flex:1}.note-edit textarea{width:100%;resize:vertical}.note-edit button{margin-top:8px}.notes{display:grid;gap:8px;margin:0;padding:0;list-style:none}.notes li{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel-raised)}.notes time{color:var(--muted);font-size:.62rem}.notes p{margin:0;font-size:.72rem;overflow-wrap:anywhere;white-space:pre-wrap}.case-meta{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:.64rem}.case-actions{display:flex;flex-wrap:wrap;gap:8px}.case-actions a,.case-actions button{min-height:36px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel-raised);font-size:.68rem}.case-actions a{color:var(--accent)}
-@media(max-width:800px){.heading{align-items:start;flex-direction:column}.history header{display:block}.history header>div:last-child{margin-top:12px}.table-wrap{margin-inline:-22px;padding-inline:22px}li{grid-template-columns:1fr} .event-head small{width:100%;margin:0}.case-toolbar{flex-direction:column;align-items:stretch}.track>div{flex-direction:column}.track input{min-width:0}.case-head{grid-template-columns:1fr;gap:7px}.updated{order:3}.field-grid{grid-template-columns:1fr}}</style>
+<style>
+  .views{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgba(15,17,21,.5)}
+  .views button{display:flex;gap:7px;align-items:center;min-height:38px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:600 var(--text-xs) var(--mono)}
+  .views button:hover{color:var(--text)}
+  .views button.active{color:var(--accent2);border-color:rgba(126,224,168,.45);background:rgba(126,224,168,.08)}
+  .views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
+  .message{color:var(--accent);font-size:var(--text-sm)}
+  .watchlists,.history{padding:var(--card-pad)}
+  .changed{color:var(--danger);font-weight:700}
+  .history{margin-top:16px}
+  .history h2{margin:0}
+  .history .section-head p:not(.eyebrow){margin:5px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .events{display:grid;gap:10px;margin-top:18px}
+  .events article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .event-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .event-head span,.event-head strong{padding:4px 9px;border:1px solid var(--border);border-radius:99px;font:600 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .event-head strong.changed{border-color:rgba(255,107,107,.4)}
+  .event-head time{font-size:var(--text-xs)}
+  .event-head small{margin-left:auto;color:var(--muted);font-size:var(--text-2xs)}
+  .events ul{display:grid;gap:6px;margin:14px 0 0;padding:0;list-style:none}
+  .events li{display:grid;grid-template-columns:minmax(150px,1fr) 130px minmax(180px,1fr);gap:10px;padding:8px 10px;border-left:3px solid var(--border);font-size:var(--text-xs)}
+  .events li.danger{border-color:var(--danger)}
+  .events li.warn{border-color:var(--amber)}
+  .events li.good{border-color:var(--accent2)}
+  .events li strong{overflow-wrap:anywhere}
+  .events li span,.events li small{color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
+  .no-change{color:var(--muted);font-size:var(--text-xs)}
+  .wl-toolbar,.case-toolbar,.case-filters{padding:16px}
+  .case-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end}
+  .track>label{display:block;margin-bottom:6px;color:var(--text);font:600 var(--text-xs) var(--mono)}
+  .track>div{display:flex;gap:8px}
+  .track input{min-width:230px;min-height:42px}
+  .case-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:14px}
+  .case-filters .search{flex:1;min-width:170px}
+  .case-filters input{min-height:var(--control-h)}
+  .count{margin:12px 2px;color:var(--muted);font-size:var(--text-xs)}
+  .case-list{display:grid;gap:10px}
+  .case{padding:0;overflow:hidden}
+  .case.open{border-color:var(--accent)}
+  .case-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left;cursor:pointer}
+  .case-head:hover .case-domain strong{color:var(--accent)}
+  .case-domain{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .case-domain strong{overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
+  .case-domain small,.updated{color:var(--muted);font-size:var(--text-2xs)}
+  .badges{display:flex;flex-wrap:wrap;gap:6px}
+  .badge.status-escalated{color:var(--danger);border-color:rgba(255,107,107,.4)}
+  .badge.status-resolved{color:var(--accent2)}
+  .badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}
+  .badge.disposition-suspicious{color:var(--amber)}
+  .badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
+  .tag-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 14px}
+  .tag{padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .case-body{display:grid;gap:14px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}
+  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tags-edit>div{display:flex;gap:8px;margin-top:6px}
+  .tags-edit input{flex:1;min-height:var(--control-h)}
+  .note-edit textarea{width:100%;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .note-edit button{margin-top:8px}
+  .notes{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+  .notes li{display:grid;gap:5px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .notes time{color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .notes p{margin:0;font-size:var(--text-sm);line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}
+  .case-meta{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:var(--text-2xs)}
+  .case-actions{display:flex;flex-wrap:wrap;gap:8px}
+  @media(max-width:800px){
+    .history .section-head{display:block}
+    .history .section-head .toolbar{margin-top:12px}
+    .table-wrap{margin-inline:calc(-1 * var(--card-pad));padding-inline:var(--card-pad)}
+    .events li{grid-template-columns:1fr}
+    .event-head small{width:100%;margin:0}
+    .case-toolbar{flex-direction:column;align-items:stretch}
+    .track>div{flex-direction:column}
+    .track input{min-width:0}
+    .case-head{grid-template-columns:1fr;gap:7px}
+    .updated{order:3}
+    .field-grid{grid-template-columns:1fr}
+  }
+</style>

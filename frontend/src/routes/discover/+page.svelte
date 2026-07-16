@@ -303,15 +303,15 @@
 
 <section class="controls card">
   {#if mode==='certificate-transparency'&&ctDisabled}<p class="feature-disabled" role="note">{ctDisabled.reason||'Certificate Transparency search is disabled by deployment policy.'}</p>{/if}
-  {#if profile}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button onclick={useProfile}>Use profile defaults</button></div>{/if}
+  {#if profile}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button class="btn small" onclick={useProfile}>Use profile defaults</button></div>{/if}
   <div class="modes" role="tablist" aria-label="Discovery method">
     <button role="tab" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
     <button role="tab" aria-selected={mode==='keyword'} tabindex={mode==='keyword'?0:-1} class:active={mode==='keyword'} onclick={()=>selectMode('keyword')} onkeydown={tabKeydown}>Name ideas</button>
     <button role="tab" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
   </div>
   <div class="fields">
-    <label>{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Brand or certificate keyword' : 'Brand or domain'}<input bind:value={seed} maxlength={mode==='certificate-transparency'?undefined:MAX_GENERATION_INPUT_LENGTH} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
-    {#if mode!=='certificate-transparency'}<label>TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
+    <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Brand or certificate keyword' : 'Brand or domain'}<input bind:value={seed} maxlength={mode==='certificate-transparency'?undefined:MAX_GENERATION_INPUT_LENGTH} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
+    {#if mode!=='certificate-transparency'}<label class="field">TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
     <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
   </div>
   {#if mode==='typosquat'}
@@ -330,7 +330,7 @@
       {/each}
     </div>
     <div class="generation-options">
-      <label>
+      <label class="field">
         Keyboard layout
         <select
           value={keyboardLayout}
@@ -360,19 +360,19 @@
           {@const latest = entry.history.at(-1)}
           <article>
             <div><strong>{entry.query}</strong><small>{entry.domains.length} baseline domain{entry.domains.length===1?'':'s'} · {entry.history.length} retained check{entry.history.length===1?'':'s'}</small><small>Last checked {historyDate(entry.updatedAt)}{latest?.newCount ? ` · ${latest.newCount} new` : ''}</small>{#if entry.history.length}<details class="ct-checks"><summary>View check history</summary><ol>{#each [...entry.history].reverse() as event}<li><time datetime={event.checkedAt}>{historyDate(event.checkedAt)}</time><span>{event.resultCount} result{event.resultCount===1?'':'s'} · {event.newCount} new{event.truncated?' · capped':''}</span></li>{/each}</ol></details>{/if}</div>
-            <div><button aria-label={`Use ${entry.query} certificate search`} onclick={()=>useHistoryEntry(entry)}>Use</button><button class="danger" aria-label={`Delete ${entry.query} certificate history`} onclick={()=>deleteHistoryEntry(entry)}>Delete</button></div>
+            <div><button class="btn small" aria-label={`Use ${entry.query} certificate search`} onclick={()=>useHistoryEntry(entry)}>Use</button><button class="btn small danger" aria-label={`Delete ${entry.query} certificate history`} onclick={()=>deleteHistoryEntry(entry)}>Delete</button></div>
           </article>
         {/each}
       </div>
-      <button class="danger ct-clear-history" onclick={deleteAllHistory}>Clear all certificate history</button>
+      <button class="btn small danger ct-clear-history" onclick={deleteAllHistory}>Clear all certificate history</button>
     </details>
   {/if}
 </section>
 
 {#if candidates.length}
   <section class="results card">
-    <header><div><p class="eyebrow">Candidates</p><h2>{selected.size} selected of {candidates.length}</h2></div><button class="primary" onclick={sendToBulk} disabled={!selected.size}>Continue to Bulk</button></header>
-    <div class="toolbar"><input bind:value={filter} aria-label="Filter candidates" placeholder={ctResultKind==='structured'?'Filter by domain or observed hostname':'Filter candidates'}>{#if ctResultKind==='structured' && ctPreviousCheckedAt}<button class:active={ctNewOnly} aria-pressed={ctNewOnly} onclick={()=>ctNewOnly=!ctNewOnly}>New only · {ctNewDomains.size}</button>{/if}<button onclick={()=>selectVisible(true)}>Select visible</button><button onclick={()=>selectVisible(false)}>Clear visible</button></div>
+    <header class="section-head"><div><p class="eyebrow">Candidates</p><h2>{selected.size} selected of {candidates.length}</h2></div><button class="primary" onclick={sendToBulk} disabled={!selected.size}>Continue to Bulk</button></header>
+    <div class="toolbar results-toolbar"><input bind:value={filter} aria-label="Filter candidates" placeholder={ctResultKind==='structured'?'Filter by domain or observed hostname':'Filter candidates'}>{#if ctResultKind==='structured' && ctPreviousCheckedAt}<button class="btn" class:active={ctNewOnly} aria-pressed={ctNewOnly} onclick={()=>ctNewOnly=!ctNewOnly}>New only · {ctNewDomains.size}</button>{/if}<button class="btn" onclick={()=>selectVisible(true)}>Select visible</button><button class="btn" onclick={()=>selectVisible(false)}>Clear visible</button></div>
     {#if ctResultKind==='legacy'}<p class="ct-legacy" role="note">Detailed certificate provenance was unavailable for this search; showing observed hostnames only.</p>{/if}
     <div class="candidate-list">
       {#each visible.slice(0, 300) as candidate, i (candidate.domain)}
@@ -402,4 +402,74 @@
   </section>
 {/if}
 
-<style>.controls{padding:22px}.profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-4px 0 16px;padding:10px 12px;border:1px solid rgba(126,224,168,.3);border-radius:10px;background:rgba(126,224,168,.04);color:var(--muted);font-size:.72rem}.profile-context strong{color:var(--text)}.profile-context button{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--accent)}.modes{display:flex;gap:6px;margin-bottom:20px}.modes button,.toolbar button{padding:8px 12px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--panel)}.modes button.active,.toolbar button.active{color:var(--accent);border-color:#7ee0a8;background:rgba(94,179,255,.1)}.fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}.fields label{font-size:.72rem;font-weight:700}.fields input{display:block;margin-top:7px}.generation-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.generation-presets button{min-width:0;padding:10px 11px;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--muted);text-align:left}.generation-presets button:hover{border-color:rgba(126,224,168,.55)}.generation-presets button.active{border-color:var(--accent);background:rgba(126,224,168,.08);box-shadow:inset 3px 0 0 var(--accent)}.generation-presets strong,.generation-presets small{display:block}.generation-presets strong{color:var(--text);font-size:.72rem}.generation-presets button.active strong{color:var(--accent)}.generation-presets small{margin-top:4px;font-size:.62rem;line-height:1.45}.generation-options{display:flex;align-items:end;gap:12px;margin-top:10px}.generation-options label{min-width:150px;color:var(--text);font-size:.68rem;font-weight:700}.generation-options select{display:block;width:100%;margin-top:6px}.generation-options span{padding-bottom:9px;color:var(--muted);font-size:.64rem}.generation-estimate,.generation-limits{margin:9px 0 0;color:var(--muted);font-size:.66rem}.generation-estimate{color:var(--text)}.status{color:var(--muted);font-size:.78rem}.ct-history-notice{color:#f2b84b;font-size:.7rem}.ct-history{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}.ct-history>summary{color:var(--accent);cursor:pointer;font-size:.7rem}.ct-history-list{display:grid;gap:7px;margin-top:10px}.ct-history article{display:flex;justify-content:space-between;gap:12px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}.ct-history article strong,.ct-history article small{display:block}.ct-history article strong{overflow-wrap:anywhere}.ct-history article small{margin-top:3px;color:var(--muted);font-size:.62rem}.ct-history article>div:last-child{display:flex;gap:5px;align-items:center}.ct-history button{min-height:32px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--panel-raised);font-size:.64rem}.ct-checks{margin-top:7px}.ct-checks summary{color:var(--accent);cursor:pointer;font-size:.62rem}.ct-checks ol{display:grid;gap:4px;margin:6px 0 0;padding-left:18px}.ct-checks li{font-size:.6rem}.ct-checks li span{display:block;color:var(--muted)}.ct-clear-history{margin-top:9px}.results{margin-top:16px;padding:22px}.results header{display:flex;justify-content:space-between;align-items:end;gap:16px}.results h2{margin:0}.toolbar{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);gap:8px;margin:18px 0 12px}.candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}.candidate{display:flex;gap:10px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}.candidate.has-ct{align-items:flex-start}.candidate input{width:16px;min-height:auto;margin-top:2px}.candidate-body{flex:1;min-width:0}.candidate-body label{display:block;min-width:0;cursor:pointer}.candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere}.candidate small{display:block;margin-top:4px;color:var(--muted);font-size:.65rem;text-transform:capitalize}.ct-new{display:inline-block;margin-top:6px;padding:3px 7px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent);font-size:.6rem}.ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}.ct-stat{color:var(--muted);font-size:.63rem}.ct-stat time{color:var(--text)}.ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-hosts code{padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:.62rem;overflow-wrap:anywhere;min-width:0}.ct-hosts details{width:100%}.ct-hosts summary{color:var(--accent);font-size:.63rem;cursor:pointer}.ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ct-legacy{margin:0 0 12px;color:var(--muted);font-size:.7rem}.limit{color:var(--muted);font-size:.72rem}@media(max-width:700px){.fields,.toolbar,.candidate-list,.generation-presets{grid-template-columns:1fr}.generation-options{align-items:stretch;flex-direction:column;gap:4px}.generation-options label{width:100%}.generation-options span{padding-bottom:0}.modes{overflow:auto}.profile-context,.ct-history article{align-items:flex-start;flex-direction:column}.ct-history article>div:last-child{width:100%}.results header{display:block}.results header button{margin-top:14px}}</style>
+<style>
+  .controls{padding:var(--card-pad)}
+  .profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:9px 9px 9px 12px;border:1px solid rgba(126,224,168,.3);border-radius:var(--radius-md);background:rgba(126,224,168,.04);color:var(--muted);font-size:var(--text-xs)}
+  .profile-context strong{color:var(--text)}
+  .modes{display:flex;gap:6px;margin-bottom:18px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgba(15,17,21,.5)}
+  .modes button{flex:1 1 auto;min-height:38px;padding:8px 12px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:600 var(--text-xs) var(--mono)}
+  .modes button:hover{color:var(--text)}
+  .modes button.active{color:var(--accent2);border-color:rgba(126,224,168,.45);background:rgba(126,224,168,.08)}
+  .fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}
+  .generation-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+  .generation-presets button{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);color:var(--muted);text-align:left}
+  .generation-presets button:hover{border-color:rgba(126,224,168,.55)}
+  .generation-presets button.active{border-color:var(--accent2);background:rgba(126,224,168,.08);box-shadow:inset 3px 0 0 var(--accent2)}
+  .generation-presets strong,.generation-presets small{display:block}
+  .generation-presets strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
+  .generation-presets button.active strong{color:var(--accent2)}
+  .generation-presets small{margin-top:4px;font-size:var(--text-2xs);line-height:1.5}
+  .generation-options{display:flex;align-items:end;gap:12px;margin-top:10px}
+  .generation-options label{min-width:170px}
+  .generation-options span{padding-bottom:10px;color:var(--muted);font-size:var(--text-xs)}
+  .generation-estimate,.generation-limits{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .generation-estimate{color:var(--text)}
+  .ct-history-notice{color:var(--amber);font-size:var(--text-xs)}
+  .ct-history{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+  .ct-history>summary{color:var(--accent);cursor:pointer;font:600 var(--text-xs) var(--mono)}
+  .ct-history-list{display:grid;gap:7px;margin-top:10px}
+  .ct-history article{display:flex;justify-content:space-between;gap:12px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .ct-history article strong,.ct-history article small{display:block}
+  .ct-history article strong{overflow-wrap:anywhere;font-size:var(--text-sm)}
+  .ct-history article small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
+  .ct-history article>div:last-child{display:flex;gap:5px;align-items:center}
+  .ct-checks{margin-top:7px}
+  .ct-checks summary{color:var(--accent);cursor:pointer;font-size:var(--text-2xs)}
+  .ct-checks ol{display:grid;gap:4px;margin:6px 0 0;padding-left:18px}
+  .ct-checks li{font-size:var(--text-2xs)}
+  .ct-checks li span{display:block;color:var(--muted)}
+  .ct-clear-history{margin-top:9px}
+  .results{margin-top:16px;padding:var(--card-pad)}
+  .results h2{margin:0}
+  .results-toolbar{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);margin:16px 0 12px}
+  .candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}
+  .candidate{display:flex;gap:10px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .candidate.has-ct{align-items:flex-start}
+  .candidate input{margin-top:2px}
+  .candidate-body{flex:1;min-width:0}
+  .candidate-body label{display:block;min-width:0;cursor:pointer}
+  .candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere;font-size:var(--text-sm)}
+  .candidate small{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-2xs);text-transform:capitalize}
+  .ct-new{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent2);font:600 var(--text-2xs) var(--mono)}
+  .ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}
+  .ct-stat{color:var(--muted);font-size:var(--text-2xs)}
+  .ct-stat time{color:var(--text)}
+  .ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .ct-hosts code{padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:var(--text-2xs);overflow-wrap:anywhere;min-width:0}
+  .ct-hosts details{width:100%}
+  .ct-hosts summary{color:var(--accent);font-size:var(--text-2xs);cursor:pointer}
+  .ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .ct-legacy{margin:0 0 12px;color:var(--muted);font-size:var(--text-xs)}
+  .limit{color:var(--muted);font-size:var(--text-xs)}
+  @media(max-width:700px){
+    .fields,.results-toolbar,.candidate-list,.generation-presets{grid-template-columns:1fr}
+    .generation-options{align-items:stretch;flex-direction:column;gap:4px}
+    .generation-options label{width:100%;min-width:0}
+    .generation-options span{padding-bottom:0}
+    .modes{overflow:auto}
+    .profile-context,.ct-history article{align-items:flex-start;flex-direction:column}
+    .ct-history article>div:last-child{width:100%}
+    .results .section-head{display:block}
+    .results .section-head button{margin-top:14px;width:100%}
+  }
+</style>

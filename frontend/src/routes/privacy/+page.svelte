@@ -1,7 +1,7 @@
 <svelte:head><title>Privacy policy · WHOISleuth</title></svelte:head>
 
 <section class="heading">
-  <div><p class="eyebrow">Policy</p><h1>Privacy policy</h1><p>How this deployment processes registry data, local investigation state, and session information.</p></div><a class="back" href="/">← Back to app</a>
+  <div><p class="eyebrow">Policy</p><h1>Privacy policy</h1><p>How this deployment processes registry data, local investigation state, and session information.</p></div><a class="btn back" href="/">← Back to app</a>
 </section>
 
 <article class="policy card">
@@ -69,5 +69,5 @@
   .policy a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
   .policy code{padding:2px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text)}
   .policy li+li{margin-top:.35rem}
-  .back{align-self:start;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel);font:700 .72rem var(--mono)}
+  .back{align-self:start}
 </style>
