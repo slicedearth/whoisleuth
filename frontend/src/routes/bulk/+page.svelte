@@ -1,7 +1,10 @@
 <script lang="ts">
   import { getContext, onMount } from 'svelte';
   import BulkResultsTable from '$lib/components/BulkResultsTable.svelte';
+  import BulkCoverage from '$lib/components/BulkCoverage.svelte';
+  import BulkRelationships from '$lib/components/BulkRelationships.svelte';
   import BulkScanQueue from '$lib/components/BulkScanQueue.svelte';
+  import BulkShortlist from '$lib/components/BulkShortlist.svelte';
   import BulkTriageControls from '$lib/components/BulkTriageControls.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
@@ -202,36 +205,13 @@
     />
   </section>
 
-  {#if relationshipSummary.groups.length}<section class="relationships card" aria-labelledby="relationship-title"><header class="section-head"><div><p class="eyebrow">Relationship evidence</p><h2 id="relationship-title">{relationshipSummary.groups.length} observed relationship{relationshipSummary.groups.length===1?'':'s'}</h2></div>{#if relationshipSummary.truncated}<span class="partial">Partial result</span>{/if}</header><p class="relationship-intro">Compare bounded observations already collected by this scan. These are investigation pivots, not ownership or maliciousness conclusions.</p><div class="relationship-list">{#each relationshipSummary.groups as relationship}<article><div><strong>{relationship.label}</strong><span>{relationship.domains.length} domain{relationship.domains.length===1?'':'s'}</span></div><small>{relationship.method}</small>{#if relationship.value}<code>{relationship.value}</code>{/if}<p>{relationship.description}</p><p>{relationship.domains.join(' · ')}</p><button class="btn small" onclick={()=>loadDomains(relationship.domains)}>Load related domain{relationship.domains.length===1?'':'s'}</button></article>{/each}</div><details class="relationship-limitations"><summary>Interpretation limits</summary>{#each relationshipSummary.limitations as limitation}<p>{limitation}</p>{/each}</details></section>{/if}
-  {#if coverage}<section class="coverage card"><header class="section-head"><div><p class="eyebrow">Defensive registration</p><h2>Coverage · {coverage.summary.coveragePercent}%</h2></div><button class="btn" onclick={exportCoverage}>Export coverage CSV</button></header><div class="coverage-summary"><span class="chip">Generated {coverage.summary.total}</span><span class="chip good">Protected {coverage.summary.protected}</span><span class="chip danger">Registered {coverage.summary.registered}</span><span class="chip warn">Available {coverage.summary.available}</span><span class="chip">Unknown {coverage.summary.unknown}</span></div><div class="coverage-tables"><div><h3>By mutation</h3><div class="table-wrap"><table><thead><tr><th>Group</th><th>Protected</th><th>Registered</th><th>Available</th><th>Unknown</th><th>Actions</th></tr></thead><tbody>{#each coverage.mutationGroups as group}<tr><td>{group.label}</td><td>{group.protected}</td><td>{group.registered}</td><td>{group.available}</td><td>{group.unknown}</td><td><button class="btn small" onclick={()=>loadDomains(group.actionableDomains)} disabled={!group.actionableDomains.length}>Load gaps</button></td></tr>{/each}</tbody></table></div></div><div><h3>By TLD</h3><div class="table-wrap"><table><thead><tr><th>Group</th><th>Protected</th><th>Registered</th><th>Available</th><th>Unknown</th><th>Actions</th></tr></thead><tbody>{#each coverage.tldGroups as group}<tr><td>{group.label}</td><td>{group.protected}</td><td>{group.registered}</td><td>{group.available}</td><td>{group.unknown}</td><td><button class="btn small" onclick={()=>loadDomains(group.actionableDomains)} disabled={!group.actionableDomains.length}>Load gaps</button></td></tr>{/each}</tbody></table></div></div></div></section>{/if}
+  <BulkRelationships groups={relationshipSummary.groups} truncated={relationshipSummary.truncated} limitations={relationshipSummary.limitations} {loadDomains} />
+  <BulkCoverage {coverage} {exportCoverage} {loadDomains} />
 {/if}
 
-<section class="shortlist card"><header class="section-head"><div><p class="eyebrow">Saved</p><h2>Shortlist · {shortlist.length}</h2></div><div class="toolbar">{#if shortlist.length}<button class="btn" onclick={loadShortlisted}>Load for scan</button><button class="btn" onclick={downloadShortlist}>Export JSON</button>{/if}<label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importShortlistFile}></label>{#if shortlist.length}<button class="btn danger" onclick={removeAllShortlisted}>Clear shortlist</button>{/if}</div></header>{#if shortlistStatus}<p role="status" aria-live="polite">{shortlistStatus}</p>{/if}{#if shortlist.length}<div class="shortlist-items">{#each shortlist as item}<span>{item.domain}</span>{/each}</div>{:else}<p>No shortlisted domains yet. Star a Bulk result to save it locally.</p>{/if}</section>
+<BulkShortlist domains={shortlist.map((item)=>item.domain)} status={shortlistStatus} {loadShortlisted} {downloadShortlist} {importShortlistFile} {removeAllShortlisted} />
 
 <style>
   .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
-  .relationships,.shortlist,.coverage{margin-top:16px;padding:var(--card-pad)}
-  .relationships h2,.shortlist h2,.coverage h2{margin:0}
-  .relationship-intro,.relationship-limitations p{color:var(--muted);font-size:var(--text-xs)}
-  .relationship-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
-  .relationship-list article{padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .relationship-list article>div{display:flex;justify-content:space-between;gap:8px}
-  .relationship-list article>div strong{font-size:var(--text-sm)}
-  .relationship-list span,.relationship-list p,.relationship-list small,.shortlist>p{color:var(--muted);font-size:var(--text-xs)}
-  .relationship-list small,.relationship-list code{display:block;margin-top:5px;overflow-wrap:anywhere}
-  .relationship-list code{color:var(--accent);font-size:var(--text-xs);font-family:var(--mono)}
-  .relationship-list p{overflow-wrap:anywhere}
-  .relationship-list button{margin-top:8px}
-  .relationship-limitations{margin-top:12px}
-  .relationship-limitations summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}
-  .shortlist-items,.coverage-summary{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-  .shortlist-items span{padding:6px 9px;border:1px solid var(--border);border-radius:99px;font:600 var(--text-2xs) var(--mono)}
-  .coverage-tables{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
-  .coverage-tables>div{min-width:0}
-  .coverage-tables h3{font:700 var(--text-sm) var(--mono)}
-  @media(max-width:700px){
-    .relationship-list,.coverage-tables{grid-template-columns:1fr}
-    .coverage .table-wrap{max-width:100%;margin-inline:0;padding-inline:0;overflow-x:auto}
-  }
 </style>

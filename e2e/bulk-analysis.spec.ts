@@ -289,3 +289,55 @@ test('deep results present bounded relationship evidence including exact native 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
+
+test('candidate handoff presents defensive coverage actions and export', async ({ page }) => {
+  await page.evaluate(() => {
+    sessionStorage.setItem('whoisleuth:candidate-handoff:v1', JSON.stringify({
+      version: 1,
+      createdAt: '2026-07-16T00:00:00.000Z',
+      source: 'typosquat',
+      candidates: [
+        { domain: 'login-example.example', source: 'official.example', mutationTypes: ['dictionary'] },
+        { domain: 'secure-example.example', source: 'official.example', mutationTypes: ['dictionary'] },
+      ],
+    }));
+  });
+  await page.reload();
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          domain,
+          state: domain.startsWith('login-') ? 'registered' : 'available',
+          confidence: 'high',
+        },
+        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  await runBulkScan(page, ['login-example.example', 'secure-example.example']);
+  const coverage = page.locator('section.coverage');
+  await expect(coverage.getByRole('heading', { name: 'Coverage · 0%' })).toBeVisible();
+  await expect(coverage).toContainText('Generated 2');
+  await expect(coverage).toContainText('Registered 1');
+  await expect(coverage).toContainText('Available 1');
+  await expect(coverage.getByText('Impersonation term', { exact: true })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await coverage.getByRole('button', { name: 'Export coverage CSV' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^defensive-registration-coverage-\d{4}-\d{2}-\d{2}\.csv$/);
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const content = await readFile(path!, 'utf8');
+  expect(content).toContain('mutation,Impersonation term,2,0,1,1,0,0');
+
+  await coverage.getByRole('button', { name: 'Load gaps' }).first().click();
+  await expect(page.locator('#domains')).toHaveValue('login-example.example\nsecure-example.example');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
