@@ -19,12 +19,56 @@ type ScheduledDeployContext = {
   context?: unknown;
   published?: unknown;
 };
+type ScheduledMonitorCycleResult = {
+  status: unknown;
+  stopReason: unknown;
+  processedDeliveries: unknown;
+  lookupDeliveries: unknown;
+  deferredDeliveries: unknown;
+};
 type ScheduledFunctionOptions = Omit<RuntimeOptions, 'blobStore'> & {
   blobStoreFactory?: BlobStoreFactory;
   deploy?: ScheduledDeployContext | null;
 };
 
 const SCHEDULED_MONITOR_CRON = '*/5 * * * *';
+const SCHEDULED_MONITOR_LOG_SCHEMA = 'whoisleuth.scheduled-monitor-cycle';
+const SCHEDULED_MONITOR_LOG_VERSION = 1;
+const MAX_LOG_STATUS_LENGTH = 40;
+const MAX_LOG_COUNT = 100;
+const LOG_CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+
+function boundedLogString(value: unknown): string | null {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= MAX_LOG_STATUS_LENGTH
+    && !LOG_CONTROL_RE.test(value)
+    ? value
+    : null;
+}
+
+function boundedLogCount(value: unknown): number | null {
+  return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= MAX_LOG_COUNT
+    ? Number(value)
+    : null;
+}
+
+function scheduledMonitorLogRecord(
+  result: ScheduledMonitorCycleResult,
+  deploy: ScheduledDeployContext | null | undefined,
+) {
+  return {
+    schema: SCHEDULED_MONITOR_LOG_SCHEMA,
+    version: SCHEDULED_MONITOR_LOG_VERSION,
+    status: boundedLogString(result.status),
+    stopReason: boundedLogString(result.stopReason),
+    processedDeliveries: boundedLogCount(result.processedDeliveries),
+    lookupDeliveries: boundedLogCount(result.lookupDeliveries),
+    deferredDeliveries: boundedLogCount(result.deferredDeliveries),
+    deployContext: boundedLogString(deploy?.context),
+    published: typeof deploy?.published === 'boolean' ? deploy.published : null,
+  };
+}
 
 async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {}) {
   if (options.deploy?.published === false) {
@@ -55,12 +99,16 @@ export default async function scheduledMonitorHandler(
   _request: Request,
   context: { deploy?: ScheduledDeployContext } = {},
 ): Promise<void> {
-  await runScheduledMonitorFunction({ deploy: context.deploy });
+  const result = await runScheduledMonitorFunction({ deploy: context.deploy });
+  console.info(JSON.stringify(scheduledMonitorLogRecord(result, context.deploy)));
 }
 
 export {
   runScheduledMonitorFunction,
+  scheduledMonitorLogRecord,
   SCHEDULED_MONITOR_CRON,
+  SCHEDULED_MONITOR_LOG_SCHEMA,
+  SCHEDULED_MONITOR_LOG_VERSION,
   SCHEDULED_MONITOR_STORE_NAME,
 };
 export type { BlobStoreFactory, ScheduledDeployContext, ScheduledFunctionOptions };

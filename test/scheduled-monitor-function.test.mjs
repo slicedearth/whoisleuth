@@ -4,7 +4,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   runScheduledMonitorFunction,
+  scheduledMonitorLogRecord,
   SCHEDULED_MONITOR_CRON,
+  SCHEDULED_MONITOR_LOG_SCHEMA,
+  SCHEDULED_MONITOR_LOG_VERSION,
   SCHEDULED_MONITOR_STORE_NAME,
 } from '../netlify/functions/scheduled-monitor.mts';
 import {
@@ -54,6 +57,81 @@ test('the production worker has a fixed bounded schedule and private store name'
   assert.equal(SCHEDULED_MONITOR_STORE_NAME.includes('/'), false);
   assert.equal(SCHEDULED_MONITOR_STORE_NAME.includes(':'), false);
   assert.ok(Buffer.byteLength(SCHEDULED_MONITOR_STORE_NAME, 'utf8') <= 64);
+});
+
+test('worker logs expose bounded cycle provenance without watchlist data', () => {
+  const record = scheduledMonitorLogRecord({
+    status: 'partial',
+    stopReason: 'complete',
+    processedDeliveries: 3,
+    lookupDeliveries: 1,
+    deferredDeliveries: 0,
+    watchlistName: 'Hosted smoke test',
+    domain: 'private.invalid',
+  }, {
+    context: 'production',
+    published: true,
+  });
+  assert.deepEqual(record, {
+    schema: SCHEDULED_MONITOR_LOG_SCHEMA,
+    version: SCHEDULED_MONITOR_LOG_VERSION,
+    status: 'partial',
+    stopReason: 'complete',
+    processedDeliveries: 3,
+    lookupDeliveries: 1,
+    deferredDeliveries: 0,
+    deployContext: 'production',
+    published: true,
+  });
+  assert.equal(JSON.stringify(record).includes('private.invalid'), false);
+  assert.equal(JSON.stringify(record).includes('Hosted smoke test'), false);
+});
+
+test('worker logs keep missing or malformed deploy metadata explicit', () => {
+  const result = {
+    status: 'idle',
+    stopReason: 'complete',
+    processedDeliveries: 1,
+    lookupDeliveries: 0,
+    deferredDeliveries: 0,
+  };
+  assert.deepEqual(scheduledMonitorLogRecord(result, undefined), {
+    schema: SCHEDULED_MONITOR_LOG_SCHEMA,
+    version: SCHEDULED_MONITOR_LOG_VERSION,
+    ...result,
+    deployContext: null,
+    published: null,
+  });
+  assert.deepEqual(scheduledMonitorLogRecord(result, {
+    context: { unexpected: true },
+    published: 'true',
+  }), {
+    schema: SCHEDULED_MONITOR_LOG_SCHEMA,
+    version: SCHEDULED_MONITOR_LOG_VERSION,
+    ...result,
+    deployContext: null,
+    published: null,
+  });
+  assert.deepEqual(scheduledMonitorLogRecord({
+    status: `idle\nprivate.invalid`,
+    stopReason: 'x'.repeat(41),
+    processedDeliveries: -1,
+    lookupDeliveries: 101,
+    deferredDeliveries: 0.5,
+  }, {
+    context: 'production\tprivate.invalid',
+    published: false,
+  }), {
+    schema: SCHEDULED_MONITOR_LOG_SCHEMA,
+    version: SCHEDULED_MONITOR_LOG_VERSION,
+    status: null,
+    stopReason: null,
+    processedDeliveries: null,
+    lookupDeliveries: null,
+    deferredDeliveries: null,
+    deployContext: null,
+    published: false,
+  });
 });
 
 test('the deployment config registers the worker with a directly analyzable cron', async () => {
