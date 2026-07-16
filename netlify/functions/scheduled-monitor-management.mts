@@ -30,11 +30,26 @@ import type { NetlifyBlobStore } from '../../lib/scheduled-monitor-netlify-store
 import type { EnvironmentInput } from '../../lib/scheduled-monitor-configuration.mts';
 
 type BlobStoreFactory = (name: string) => NetlifyBlobStore;
+type ManagementDeployContext = {
+  context?: unknown;
+  published?: unknown;
+};
+type ManagementRequestContext = {
+  deploy?: ManagementDeployContext | null;
+};
 type ManagementFunctionOptions = {
   env?: EnvironmentInput | null;
   blobStoreFactory?: BlobStoreFactory;
   now?: () => number;
   randomUUID?: () => string;
+};
+type BoundedRequestBody = {
+  status: 'ok';
+  body: string;
+} | {
+  status: 'invalid_encoding';
+} | {
+  status: 'too_large';
 };
 
 const MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES = 1024 * 1024;
@@ -89,6 +104,65 @@ function managementErrorResponse(error: unknown) {
     error: 'Scheduled monitoring storage is temporarily unavailable.',
     errorCode: SCHEDULED_MONITOR_UNAVAILABLE_CODE,
   }, NO_STORE_HEADERS);
+}
+
+function nonPublishedDeployResponse() {
+  return json(503, {
+    error: 'Hosted monitoring management is available only on the published deployment.',
+    errorCode: SCHEDULED_MONITOR_UNAVAILABLE_CODE,
+  }, NO_STORE_HEADERS);
+}
+
+function requestTooLargeResponse() {
+  return json(413, {
+    error: 'Scheduled monitoring requests are limited to 1 MiB.',
+    errorCode: 'REQUEST_TOO_LARGE',
+  }, NO_STORE_HEADERS);
+}
+
+async function readRequestBodyCapped(
+  request: Request,
+  maxBytes = MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
+): Promise<BoundedRequestBody> {
+  const declaredLength = request.headers.get('content-length');
+  if (declaredLength && /^\d+$/u.test(declaredLength)) {
+    const parsedLength = Number(declaredLength);
+    if (!Number.isSafeInteger(parsedLength) || parsedLength > maxBytes) {
+      return { status: 'too_large' };
+    }
+  }
+  if (!request.body) return { status: 'ok', body: '' };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return { status: 'too_large' };
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return { status: 'ok', body: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
+  } catch {
+    return { status: 'invalid_encoding' };
+  }
+}
+
+function toWebResponse(response: ReturnType<typeof json>) {
+  return new Response(response.body, {
+    status: response.statusCode,
+    headers: response.headers,
+  });
 }
 
 async function runScheduledMonitorManagementFunction(
@@ -151,11 +225,57 @@ async function runScheduledMonitorManagementFunction(
   }
 }
 
+async function runScheduledMonitorManagementRequest(
+  request: Request,
+  context: ManagementRequestContext = {},
+  options: ManagementFunctionOptions = {},
+) {
+  // Site-wide Blob stores are shared across deploy contexts. Require positive
+  // published-deploy provenance before reading the request body, authenticating
+  // it, or constructing a store so inherited preview credentials cannot expose
+  // or mutate production monitoring state.
+  if (context.deploy?.published !== true) {
+    return toWebResponse(nonPublishedDeployResponse());
+  }
+  const bodyResult = request.method === 'POST'
+    ? await readRequestBodyCapped(request)
+    : { status: 'ok' as const, body: '' };
+  if (bodyResult.status === 'too_large') {
+    return toWebResponse(requestTooLargeResponse());
+  }
+  if (bodyResult.status === 'invalid_encoding') {
+    return toWebResponse(json(400, {
+      error: 'Invalid request body',
+      errorCode: MANAGEMENT_ERROR_CODES.INVALID_REQUEST,
+    }, NO_STORE_HEADERS));
+  }
+  const event: NetlifyFunctionEvent = {
+    httpMethod: request.method,
+    headers: Object.fromEntries(request.headers.entries()),
+    body: request.method === 'POST' ? bodyResult.body : null,
+  };
+  return toWebResponse(await runScheduledMonitorManagementFunction(event, options));
+}
+
 const handler = (event: NetlifyFunctionEvent) => runScheduledMonitorManagementFunction(event);
+
+export default async function scheduledMonitorManagementHandler(
+  request: Request,
+  context: ManagementRequestContext = {},
+) {
+  return runScheduledMonitorManagementRequest(request, context);
+}
 
 export { handler };
 export {
   MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
+  readRequestBodyCapped,
   runScheduledMonitorManagementFunction,
+  runScheduledMonitorManagementRequest,
 };
-export type { BlobStoreFactory, ManagementFunctionOptions };
+export type {
+  BlobStoreFactory,
+  ManagementDeployContext,
+  ManagementFunctionOptions,
+  ManagementRequestContext,
+};

@@ -13,7 +13,9 @@ import { MANAGEMENT_ERROR_CODES } from '../lib/scheduled-monitor-management.mts'
 import { SCHEDULED_MONITOR_UNAVAILABLE_CODE } from '../lib/scheduled-monitor-runtime.mts';
 import {
   MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
+  readRequestBodyCapped,
   runScheduledMonitorManagementFunction,
+  runScheduledMonitorManagementRequest,
 } from '../netlify/functions/scheduled-monitor-management.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'scheduled-management-test-password';
@@ -125,6 +127,74 @@ test('disabled configuration fails closed without constructing or reading a Blob
   assert.equal(body.errorCode, SCHEDULED_MONITOR_UNAVAILABLE_CODE);
   assert.match(body.error, /not enabled/i);
   assert.equal(constructions, 0);
+});
+
+test('the web boundary rejects non-published and missing deploy provenance before Blob construction', async () => {
+  let constructions = 0;
+  const options = {
+    env: readyEnv(),
+    blobStoreFactory: () => { constructions += 1; return new FakeBlobStore(); },
+  };
+  for (const context of [{ deploy: { context: 'deploy-preview', published: false } }, {}]) {
+    const response = await runScheduledMonitorManagementRequest(new Request(
+      'https://console.example/api/scheduled-monitor',
+      { headers: authenticatedHeaders() },
+    ), context, options);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal((await response.json()).errorCode, SCHEDULED_MONITOR_UNAVAILABLE_CODE);
+  }
+  assert.equal(constructions, 0);
+});
+
+test('the published web boundary preserves authenticated management behavior', async () => {
+  let constructions = 0;
+  const response = await runScheduledMonitorManagementRequest(new Request(
+    'https://console.example/api/scheduled-monitor',
+    { headers: authenticatedHeaders() },
+  ), { deploy: { context: 'production', published: true } }, {
+    env: readyEnv(),
+    blobStoreFactory: () => { constructions += 1; return new FakeBlobStore(); },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  assert.deepEqual((await response.json()).state.watchlists, []);
+  assert.equal(constructions, 1);
+});
+
+test('the web boundary caps declared and streamed request bodies before Blob construction', async () => {
+  const declared = await runScheduledMonitorManagementRequest(new Request(
+    'https://console.example/api/scheduled-monitor',
+    {
+      method: 'POST',
+      headers: authenticatedHeaders({
+        'content-length': String(MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES + 1),
+      }),
+      body: '{}',
+    },
+  ), { deploy: { published: true } }, {
+    env: readyEnv(),
+    blobStoreFactory: () => { throw new Error('Blob construction must not occur'); },
+  });
+  assert.equal(declared.status, 413);
+
+  const chunk = new Uint8Array(600 * 1024);
+  const streamed = await readRequestBodyCapped(new Request(
+    'https://console.example/api/scheduled-monitor',
+    {
+      method: 'POST',
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(chunk);
+          controller.enqueue(chunk);
+          controller.close();
+        },
+      }),
+      duplex: 'half',
+    },
+  ));
+  assert.equal(streamed.status, 'too_large');
 });
 
 test('invalid and oversized bodies fail before Blob construction', async () => {

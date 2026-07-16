@@ -632,9 +632,9 @@ covered by the provider's community terms or an appropriate paid agreement.
   32-byte Base64 `WHOISLEUTH_SCHEDULED_MONITOR_KEY` and a bounded
   `WHOISLEUTH_SCHEDULED_MONITOR_NAMESPACE`. The function has no production URL.
   Set these values for the **Production** deploy context only. Automatic runs
-  occur only for the published deploy, and a manual invocation of preview or
-  branch-deploy code is rejected before Blob construction even if its
-  configuration was inherited accidentally.
+  and authenticated management are accepted only by the published deploy;
+  preview or branch-deploy code is rejected before Blob construction even if
+  its configuration was inherited accidentally.
   When ready, it opens the site-wide `whoisleuth-scheduled-monitor` Blob store,
   decrypts one bounded state envelope in memory, and processes at most two
   existing fast compact lookups and eight internal deliveries within a
