@@ -104,6 +104,17 @@ describe('installed CLI process boundary', () => {
     assert.ok(document.candidates.length > 0);
   });
 
+  test('registry capability coverage runs through the executable as an offline catalogue view', () => {
+    const result = runBinary(['registry-support', 'portal.example.uk', '--json']);
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, '');
+    const document = JSON.parse(result.stdout);
+    assert.equal(document.schema, 'whoisleuth.cli.registry-support');
+    assert.equal(document.suffix, 'uk');
+    assert.equal(document.profile.explicitSuffixProfile, true);
+    assert.equal(document.interpretation.liveReachability, 'not_tested');
+  });
+
   test('saved lookup comparison is a real-process offline transformation', () => {
     const result = runBinary(['compare', '--json'], JSON.stringify(savedLookup()));
     assert.equal(result.status, 0);

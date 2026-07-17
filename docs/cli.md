@@ -18,6 +18,7 @@ node bin/whoisleuth.mts discover example.com --preset common --jsonl
 node bin/whoisleuth.mts posture example.com --selectors selector1,selector2 --json
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
+node bin/whoisleuth.mts registry-support example.uk --json
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -44,6 +45,10 @@ requests used by a deep web lookup.
 Only one query is accepted by `lookup`. Multiple-input processing belongs to
 the explicit `bulk` command rather than being silently inferred by `lookup`.
 Standard input is capped at 4 KiB and must contain one non-empty line.
+
+`registry-support` is an offline catalogue view. It accepts one domain, bare
+suffix, or leading-dot suffix as an argument or on stdin and makes no network
+request. Its output is described below.
 
 ## Deployment boundary
 
@@ -105,8 +110,25 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
-`http`, `tls`, `compare`, and `export`. Additional export formats are added as
+`http`, `tls`, `registry-support`, `compare`, and `export`. Additional export formats are added as
 separate bounded increments rather than exposing incomplete aliases.
+
+## Registry capability coverage
+
+`registry-support` projects the embedded, versioned registry compatibility
+catalogue for one domain or suffix. It distinguishes an explicit
+fixture-backed or access-documented suffix profile from the generic IANA
+discovery profile and reports the RDAP and WHOIS discovery/access paths,
+WHOIS query and parser profiles, any bounded fallback, fixture scenarios,
+verification references, documentation references, and the catalogue's
+limitation.
+
+Terminal output is bounded and control-safe. `--json` emits version 1 of the
+`whoisleuth.cli.registry-support` schema. Unknown but syntactically valid
+suffixes retain the generic `discovery_only` profile; malformed input exits
+with code 2. The command never probes a registry or tests current reachability.
+Coverage is context only and cannot decide registration, availability,
+ownership, safety, or maliciousness.
 
 ## Bulk lookup
 

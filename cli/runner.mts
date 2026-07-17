@@ -7,6 +7,7 @@ import { classifyQuery } from '../lib/classify.mts';
 import { searchCertificateTransparency } from '../lib/ct-search.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
+import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
 import { CliUsageError, parseCliArguments } from './arguments.mts';
 import {
@@ -49,10 +50,12 @@ import {
   formatTerminalHttp,
   formatTerminalLookup,
   formatTerminalPosture,
+  formatTerminalRegistrySupport,
   formatTerminalTls,
 } from './formatters/terminal.mts';
 import { buildHttpProbeResult } from './http.mts';
 import { normalizePostureSelectors } from './posture.mts';
+import { buildRegistrySupportDocument } from './registry-support.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } from './saved-lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 
@@ -72,6 +75,7 @@ Usage:
   whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
+  whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]
   whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]
   whoisleuth export [lookup.json] [--markdown|--html|--compact]
   whoisleuth --help
@@ -80,6 +84,7 @@ Usage:
 Lookup defaults to fast mode. Deep mode must be requested explicitly and may
 perform WHOIS, website, DNS, and TLS work through the shared bounded pipeline.
 Machine-readable output is written to stdout; diagnostics are written to stderr.
+Registry support is an offline catalogue view and never tests live reachability.
 `;
 
 type WritableLike = { write(value: string): unknown };
@@ -124,6 +129,21 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
     const args = parseCliArguments(argv);
     if (args.action === 'help') { write(stdout, HELP); return EXIT_CODES.SUCCESS; }
     if (args.action === 'version') { write(stdout, `${VERSION}\n`); return EXIT_CODES.SUCCESS; }
+
+    if (args.action === 'registry-support') {
+      failureLabel = 'Registry support';
+      const readInput = dependencies.readStdin || (() => readStdinBounded(dependencies.stdin || process.stdin));
+      const requestedInput = args.target || await readInput();
+      if (!requestedInput) throw new CliUsageError('registry-support requires one domain or suffix as an argument or on stdin.');
+      const lookupCapability = dependencies.registryCapabilityFor || registryCapabilityFor;
+      const capability = lookupCapability(requestedInput);
+      if (!capability) throw new CliUsageError('registry-support requires a valid domain or suffix.');
+      const now = dependencies.now ? dependencies.now() : new Date().toISOString();
+      const catalogueVersion = dependencies.registryCapabilitiesVersion || REGISTRY_CAPABILITIES_VERSION;
+      const document = buildRegistrySupportDocument(requestedInput, capability, catalogueVersion, now);
+      if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalRegistrySupport(document));
+      return EXIT_CODES.SUCCESS;
+    }
 
     if (args.action === 'compare') {
       failureLabel = 'Registry comparison';

@@ -66,6 +66,46 @@ function formatTerminalLookup(document: TerminalRecord): string {
   return `${lines.join('\n')}\n`;
 }
 
+function formatTerminalRegistrySupport(document: TerminalRecord): string {
+  const profile = document.profile && typeof document.profile === 'object' ? document.profile : {};
+  const rdap = profile.rdap && typeof profile.rdap === 'object' ? profile.rdap : {};
+  const whois = profile.whois && typeof profile.whois === 'object' ? profile.whois : {};
+  const verification = document.verification && typeof document.verification === 'object'
+    ? document.verification
+    : {};
+  const fixtures = Array.isArray(verification.fixtureScenarios) ? verification.fixtureScenarios : [];
+  const files = Array.isArray(verification.files) ? verification.files : [];
+  const documentation = Array.isArray(verification.documentationUrls) ? verification.documentationUrls : [];
+  const supportLabel = (value: unknown) => titleCase(safeTerminalValue(value, 'unknown').replaceAll('-', '_'));
+  const lines = [
+    `Input          ${safeTerminalValue(document.requestedInput)}`,
+    `Suffix         .${safeTerminalValue(document.suffix)}`,
+    `Catalogue      Version ${safeTerminalValue(document.catalogueVersion, '0')}`,
+    `Profile        ${profile.explicitSuffixProfile ? 'Explicit suffix profile' : 'Generic IANA discovery profile'}`,
+    `Profile ID     ${safeTerminalValue(profile.id)}`,
+    `Registry class ${supportLabel(profile.registryClass)}`,
+    `Coverage       ${supportLabel(profile.coverageState)}`,
+    `RDAP discovery ${registryAccessProfileLabel(rdap.discovery)}`,
+    `RDAP access    ${registryAccessProfileLabel(rdap.accessProfile)}`,
+    `WHOIS discovery ${registryAccessProfileLabel(whois.discovery)}`,
+    `WHOIS access   ${registryAccessProfileLabel(whois.accessProfile)}`,
+    `WHOIS query    ${supportLabel(whois.queryProfile)}`,
+    `WHOIS scope    ${supportLabel(whois.queryScope)}`,
+    `WHOIS encoding ${supportLabel(whois.encodingProfile)}`,
+    `WHOIS parser   ${supportLabel(whois.parserProfile)}`,
+    `Fallback       ${profile.fallbackProfile ? supportLabel(profile.fallbackProfile) : 'None'}`,
+    `Fixture states ${fixtures.length ? fixtures.map((value: unknown) => supportLabel(value)).join(', ') : 'None documented'}`,
+  ];
+  for (const file of files) lines.push(`Verified by    ${safeTerminalValue(file)}`);
+  for (const url of documentation) lines.push(`Documentation  ${safeTerminalValue(url)}`);
+  lines.push(
+    `Limitation     ${safeTerminalValue(document.limitation)}`,
+    '',
+    safeTerminalValue(document.interpretation?.statement),
+  );
+  return `${lines.join('\n')}\n`;
+}
+
 function formatTerminalBulk(items: TerminalBulkItem[], metadata: TerminalBulkMetadata): string {
   const lines = items.map((item) => {
     if (!item.ok) return `! ${safeTerminalValue(item.query)} — ${safeTerminalValue(item.error, 'Lookup failed')}`;
@@ -350,6 +390,7 @@ export {
   formatTerminalHttp,
   formatTerminalLookup,
   formatTerminalPosture,
+  formatTerminalRegistrySupport,
   formatTerminalTls,
   safeTerminalValue,
 };

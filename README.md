@@ -319,7 +319,9 @@ compact-storage boundary, and lookup evidence schema are documented in the
   [capability matrix](docs/registry-compatibility.md). IANA RDAP bootstrap and
   WHOIS referrals remain authoritative discovery; fixture-backed parser and
   fallback profiles do not claim current live-registry reachability or field
-  publication.
+  publication. The local CLI can inspect this catalogue offline with
+  `registry-support <domain-or-suffix>` without making a registry request or
+  turning coverage metadata into an availability or safety claim.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
