@@ -25,5 +25,6 @@ setup('authenticate', async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   expect(isAllowedRequestOrigin(response.url())).toBe(true);
   expect(response.url()).toBe(`${BASE_URL}/api/login`);
+  expect(response.headers()['cache-control']).toBe('no-store');
   await request.storageState({ path: authFile });
 });

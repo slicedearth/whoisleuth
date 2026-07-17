@@ -84,6 +84,11 @@ app.use((req: RequestLike, res: ResponseLike, next: Next) => {
   next();
 });
 
+app.use('/api', (_req: RequestLike, res: ResponseLike, next: Next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 // Serve the prerendered Svelte workspace. `npm start` builds it first;
 // `extensions` lets routes such as /lookup resolve lookup.html without a
 // catch-all SPA rewrite, so unknown paths still return a real 404.

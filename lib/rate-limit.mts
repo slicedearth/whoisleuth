@@ -66,6 +66,12 @@ function trustsForwardedHeaders(
   return Boolean(env && (env.NETLIFY === 'true' || env.NETLIFY === '1' || env.TRUST_PROXY === '1'));
 }
 
+function isNetlifyRuntime(
+  env: EnvironmentInput | null | undefined = process.env,
+): boolean {
+  return Boolean(env && (env.NETLIFY === 'true' || env.NETLIFY === '1'));
+}
+
 function getForwardedProtocol(
   headers: HeaderInput | null | undefined,
   env: EnvironmentInput | null | undefined = process.env,
@@ -86,10 +92,15 @@ function getClientIp(
   const h = headers || {};
   if (!trustsForwardedHeaders(env)) return fallback || 'unknown';
 
-  // Netlify's own edge-assigned client IP - authoritative, not something a
-  // client can forge, so it takes priority over X-Forwarded-For below.
-  const nfIp = h['x-nf-client-connection-ip'] || h['client-ip'];
-  if (nfIp) return nfIp;
+  // Netlify's own edge-assigned client IP is authoritative inside that
+  // runtime, so it takes priority over X-Forwarded-For there. Do not consult
+  // this header (or the non-standard Client-IP header) for a generic trusted
+  // proxy: common reverse proxies overwrite X-Forwarded-For but may pass
+  // unfamiliar client-supplied headers through unchanged.
+  if (isNetlifyRuntime(env)) {
+    const nfIp = h['x-nf-client-connection-ip'];
+    if (nfIp) return nfIp;
+  }
 
   // Each hop *appends* to the end of X-Forwarded-For, so with exactly one
   // trusted proxy in front of this app, the *last* entry is the one that

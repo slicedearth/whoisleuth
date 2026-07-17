@@ -15,6 +15,7 @@ describe('Netlify JSON responses', () => {
     assert.equal(response.headers['Referrer-Policy'], 'strict-origin-when-cross-origin');
     assert.equal(response.headers['Permissions-Policy'], 'camera=(), microphone=(), geolocation=()');
     assert.equal(response.headers['Strict-Transport-Security'], 'max-age=31536000');
+    assert.equal(response.headers['Cache-Control'], 'no-store');
   });
 
   test('preserve additional headers and deliberate overrides', () => {
@@ -26,5 +27,6 @@ describe('Netlify JSON responses', () => {
     assert.equal(response.headers['Retry-After'], '30');
     assert.equal(response.headers['X-Frame-Options'], 'SAMEORIGIN');
     assert.equal(response.headers['X-Content-Type-Options'], 'nosniff');
+    assert.equal(response.headers['Cache-Control'], 'no-store');
   });
 });

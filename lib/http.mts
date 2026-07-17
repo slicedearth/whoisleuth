@@ -24,6 +24,7 @@ function json(
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
       'Strict-Transport-Security': 'max-age=31536000',
+      'Cache-Control': 'no-store',
       ...extraHeaders,
     },
     body: JSON.stringify(body),

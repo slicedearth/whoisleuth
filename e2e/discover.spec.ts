@@ -71,6 +71,7 @@ test('certificate search exposes and enforces the shared bounded query contract'
 
   const missingResponse = await request.get('/api/ct-search');
   expect(missingResponse.status()).toBe(400);
+  expect(missingResponse.headers()['cache-control']).toBe('no-store');
   expect(await missingResponse.json()).toMatchObject({ errorCode: 'MISSING_QUERY' });
 
   const invalidResponse = await request.get(`/api/ct-search?q=${encodeURIComponent('x'.repeat(201))}`);

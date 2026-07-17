@@ -49,6 +49,7 @@ test('a concurrency circuit response degrades Lookup with a retryable message', 
 test('the capability endpoint reports honest in-memory concurrency scope', async ({ request }) => {
   const response = await request.get('/api/capabilities');
   expect(response.ok()).toBe(true);
+  expect(response.headers()['cache-control']).toBe('no-store');
   const body = await response.json();
   expect(body.controls).toEqual({
     concurrency: {
