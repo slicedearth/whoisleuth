@@ -145,6 +145,58 @@ test('machine document and terminal formatter preserve explicit source states', 
   assert.equal(document.generatedAt, '2026-07-14T00:00:00.000Z');
 });
 
+test('terminal lookup separately attributes represented registrar RDAP diagnostics', () => {
+  const result = lookupResult({
+    rdap: {
+      parsed: { domain: 'EXAMPLE.COM' },
+      registrarRdap: {
+        status: 'success',
+        data: { privateMarker: 'raw-registrar-payload' },
+        parsed: { entities: [{ contact: 'private-contact-marker' }] },
+      },
+    },
+    diagnostics: {
+      version: 4,
+      rdap: {
+        status: 'success',
+        endpoint: 'https://registry.invalid/domain/example.com',
+        registrar: {
+          status: 'success',
+          endpoint: 'https://registrar.invalid/domain/example.com',
+        },
+      },
+      whois: { status: 'success' },
+      availability: { status: 'complete' },
+    },
+  });
+  const document = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, result, '2026-07-14T00:00:00.000Z', 'deep');
+  const terminal = formatTerminalLookup(document);
+
+  assert.match(terminal, /Registrar RDAP Success/);
+  assert.match(terminal, /Registrar source https:\/\/registrar\.invalid\/domain\/example\.com/);
+  assert.doesNotMatch(terminal, /raw-registrar-payload|private-contact-marker/);
+});
+
+test('terminal lookup preserves registrar skip states and omits absent diagnostics', () => {
+  const skipped = lookupResult({
+    diagnostics: {
+      version: 4,
+      rdap: {
+        status: 'success',
+        endpoint: 'https://registry.invalid/domain/example.com',
+        registrar: { status: 'skipped', endpoint: null },
+      },
+      whois: { status: 'skipped' },
+      availability: { status: 'complete' },
+    },
+  });
+  const skippedDocument = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, skipped, '2026-07-14T00:00:00.000Z');
+  assert.match(formatTerminalLookup(skippedDocument), /Registrar RDAP Skipped/);
+
+  const absentDocument = buildCliLookupDocument('AS65536', { type: 'asn', value: 'AS65536' }, lookupResult(), '2026-07-14T00:00:00.000Z');
+  assert.doesNotMatch(formatTerminalLookup(absentDocument), /Registrar/);
+});
+
 test('terminal values strip controls and stay bounded', () => {
   const result = safeTerminalValue(`hello\nworld\u0000${'x'.repeat(500)}`);
   assert.doesNotMatch(result, /[\x00-\x1f\x7f]/);

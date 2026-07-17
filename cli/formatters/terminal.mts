@@ -48,6 +48,11 @@ function formatTerminalLookup(document: TerminalRecord): string {
   }
   lines.push(`RDAP           ${titleCase(document.diagnostics?.rdap?.status)}`);
   if (document.diagnostics?.rdap?.endpoint) lines.push(`RDAP source    ${safeTerminalValue(document.diagnostics.rdap.endpoint)}`);
+  const registrarRdap = document.diagnostics?.rdap?.registrar;
+  if (registrarRdap) {
+    lines.push(`Registrar RDAP ${titleCase(registrarRdap.status)}`);
+    if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
+  }
   lines.push(`WHOIS          ${titleCase(document.diagnostics?.whois?.status)}`);
   return `${lines.join('\n')}\n`;
 }

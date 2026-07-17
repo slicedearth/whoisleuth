@@ -81,6 +81,13 @@ The complete document also carries the normalized `rdap`, `whois`,
 orchestrator. Machine output goes to stdout. Usage and lookup errors go to
 stderr, so redirected JSON is not mixed with diagnostics.
 
+Human-readable domain lookup output separately shows the registrar RDAP status
+and endpoint whenever the shared lookup diagnostics represent that follow-up.
+Deep mode may report success, unsupported, not found, or an explicit failure;
+fast mode reports the existing skipped state. IP, ASN, and lookup responses
+without registrar diagnostics remain unchanged. These source states are
+provenance only and do not decide availability or imply safety.
+
 ## Exit codes
 
 | Code | Meaning |
