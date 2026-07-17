@@ -234,6 +234,14 @@ function comparisonStatusLabel(status: unknown): string {
     whois_unavailable: 'WHOIS unavailable',
     rdap_incomplete: 'RDAP incomplete',
     whois_incomplete: 'WHOIS incomplete',
+    registry_only: 'Registry only',
+    registrar_only: 'Registrar only',
+    registry_redacted: 'Registry redacted',
+    registrar_redacted: 'Registrar redacted',
+    registry_unavailable: 'Registry unavailable',
+    registrar_unavailable: 'Registrar unavailable',
+    registry_incomplete: 'Registry incomplete',
+    registrar_incomplete: 'Registrar incomplete',
   };
   return labels[String(status)] || titleCase(status);
 }
@@ -261,6 +269,39 @@ function formatTerminalCompare(document: TerminalRecord): string {
       lines.push(`[${comparisonStatusLabel(field.status).toUpperCase()}] ${safeTerminalValue(field.label)}`);
       lines.push(`  RDAP   ${safeTerminalValue(field.rdapDisplay)}`);
       lines.push(`  WHOIS  ${safeTerminalValue(field.whoisDisplay)}`);
+    }
+  }
+  const registrarComparison = document.registrarPublicationComparison
+    && typeof document.registrarPublicationComparison === 'object'
+    ? document.registrarPublicationComparison
+    : null;
+  if (registrarComparison) {
+    const publicationFields = Array.isArray(registrarComparison.fields) ? registrarComparison.fields : [];
+    const publicationCounts = registrarComparison.counts && typeof registrarComparison.counts === 'object'
+      ? registrarComparison.counts
+      : {};
+    const publicationHealth = registrarComparison.sourceHealth && typeof registrarComparison.sourceHealth === 'object'
+      ? registrarComparison.sourceHealth
+      : {};
+    const publicationDifferences = publicationFields.length - (Number(publicationCounts.equivalent) || 0);
+    lines.push(
+      '',
+      'Registry / registrar RDAP publication',
+      `Registry RDAP  ${comparisonStatusLabel(publicationHealth.registry?.status)}`,
+      `Registrar RDAP ${comparisonStatusLabel(publicationHealth.registrar?.status)}`,
+      `Compared       ${safeTerminalValue(publicationFields.length, '0')} field${publicationFields.length === 1 ? '' : 's'}`,
+      `Equivalent     ${safeTerminalValue(publicationCounts.equivalent, '0')}`,
+      `Differences    ${safeTerminalValue(publicationDifferences, '0')}`,
+      '',
+    );
+    if (!publicationFields.length) {
+      lines.push('Neither RDAP publication exposed a comparable normalized field.');
+    } else {
+      for (const field of publicationFields) {
+        lines.push(`[${comparisonStatusLabel(field.status).toUpperCase()}] ${safeTerminalValue(field.label)}`);
+        lines.push(`  Registry   ${safeTerminalValue(field.registryDisplay)}`);
+        lines.push(`  Registrar  ${safeTerminalValue(field.registrarDisplay)}`);
+      }
     }
   }
   lines.push('', 'Comparison is source reconciliation, not an availability or ownership decision.');

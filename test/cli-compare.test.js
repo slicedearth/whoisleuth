@@ -85,6 +85,30 @@ function lookupDocument(overrides = {}) {
   };
 }
 
+function withRegistrarPublication(source, overrides = {}) {
+  source.rdap.registrarRdap = {
+    status: 'success',
+    data: { privateContact: 'must not enter comparison output' },
+    parsed: {
+      domain: 'EXAMPLE.TEST',
+      handle: 'REGISTRAR-SPECIFIC-HANDLE',
+      registrar: { name: 'Example Registrar LLC' },
+      registrarIanaId: '9999',
+      lifecycle: {
+        createdDate: '2025-01-01',
+        createdDateIso: '2025-01-01T00:00:00.000Z',
+      },
+      dnssec: 'secure',
+      statuses: ['transfer prohibited'],
+      nameservers: ['ns1.example.test'],
+      entitiesByRole: { abuse: [{ email: 'private@example.test' }] },
+    },
+    ...overrides,
+  };
+  source.diagnostics.rdap.registrar = { status: source.rdap.registrarRdap.status };
+  return source;
+}
+
 async function comparisonModule() {
   return import('../lib/registry-comparison.mts');
 }
@@ -112,14 +136,19 @@ describe('comparison CLI arguments', () => {
 
 describe('comparison input boundary', () => {
   test('parses and projects only the normalized fields needed by comparison', () => {
-    const source = lookupDocument();
+    const source = withRegistrarPublication(lookupDocument());
     const before = structuredClone(source);
     const parsed = parseCliLookupDocument(JSON.stringify(source));
     assert.equal(parsed.query, 'example.test');
     assert.equal(parsed.rdapParsed.registrar.name, 'Example Registrar, LLC');
     assert.equal(parsed.whoisParsed.registrar, 'Example Registrar LLC');
+    assert.equal(parsed.registrarRdapRepresented, true);
+    assert.equal(parsed.registrarRdapStatus, 'success');
+    assert.equal(parsed.registrarRdapParsed.registrar.name, 'Example Registrar LLC');
     assert.equal(Object.hasOwn(parsed.rdapParsed, 'data'), false);
     assert.equal(JSON.stringify(parsed).includes('payload must not be copied'), false);
+    assert.equal(JSON.stringify(parsed).includes('REGISTRAR-SPECIFIC-HANDLE'), false);
+    assert.equal(JSON.stringify(parsed).includes('private@example.test'), false);
     assert.deepEqual(source, before);
   });
 
@@ -177,6 +206,14 @@ describe('comparison input boundary', () => {
     const event = lookupDocument();
     event.rdap.parsed.events = ['invalid'];
     assert.throws(() => parseCliLookupDocument(JSON.stringify(event)), /must be an object/);
+
+    const registrar = withRegistrarPublication(lookupDocument());
+    registrar.rdap.registrarRdap.parsed = [];
+    assert.throws(() => parseCliLookupDocument(JSON.stringify(registrar)), /registrarRdap\.parsed must be an object/);
+
+    const mismatched = withRegistrarPublication(lookupDocument());
+    mismatched.diagnostics.rdap.registrar.status = 'error';
+    assert.throws(() => parseCliLookupDocument(JSON.stringify(mismatched)), /statuses do not match/);
   });
 
   test('bounded stream reader stops after the configured byte limit', async () => {
@@ -193,15 +230,54 @@ describe('comparison output', () => {
   });
 
   test('reports equivalent normalized values and material conflicts without raw payloads', async () => {
-    const source = lookupDocument();
+    const source = withRegistrarPublication(lookupDocument());
     source.whois.parsed.registrar = 'Different Registrar';
     const parsed = parseCliLookupDocument(JSON.stringify(source));
     const shared = await comparisonModule();
-    const result = compareLookupDocument(parsed, shared.compareRegistrySources);
+    const result = compareLookupDocument(parsed, shared.compareRegistrySources, shared.compareRdapPublications);
     assert.equal(result.counts.conflict, 1);
     assert.ok(result.counts.equivalent >= 7);
     assert.equal(result.fields.find((item) => item.label === 'Registrar').status, 'conflict');
+    assert.equal(result.registrarPublicationComparison.fields.find((item) => item.label === 'Statuses').status, 'equivalent');
+    assert.equal(result.registrarPublicationComparison.counts.conflict, 0);
     assert.equal(JSON.stringify(result).includes('payload must not be copied'), false);
+    assert.equal(JSON.stringify(result).includes('privateContact'), false);
+  });
+
+  test('keeps absent and unavailable registrar publications explicit and neutral', async () => {
+    const shared = await comparisonModule();
+    const absent = compareLookupDocument(
+      parseCliLookupDocument(JSON.stringify(lookupDocument())),
+      shared.compareRegistrySources,
+      shared.compareRdapPublications,
+    );
+    assert.equal(absent.registrarPublicationComparison, null);
+
+    const unavailableSource = withRegistrarPublication(lookupDocument(), {
+      status: 'unsupported',
+      parsed: null,
+      detail: 'No eligible registrar RDAP link was published.',
+    });
+    const unavailable = compareLookupDocument(
+      parseCliLookupDocument(JSON.stringify(unavailableSource)),
+      shared.compareRegistrySources,
+      shared.compareRdapPublications,
+    );
+    assert.equal(unavailable.registrarPublicationComparison.counts.conflict, 0);
+    assert.ok(unavailable.registrarPublicationComparison.counts.registrar_unavailable > 0);
+  });
+
+  test('requires the registrar comparison dependency only when the source was represented', async () => {
+    const shared = await comparisonModule();
+    const represented = parseCliLookupDocument(JSON.stringify(withRegistrarPublication(lookupDocument())));
+    assert.throws(
+      () => compareLookupDocument(represented, shared.compareRegistrySources),
+      /Registrar RDAP comparison dependency is required/,
+    );
+    assert.doesNotThrow(() => compareLookupDocument(
+      parseCliLookupDocument(JSON.stringify(lookupDocument())),
+      shared.compareRegistrySources,
+    ));
   });
 
   test('treats fast-mode WHOIS omission as unavailable rather than publication absence', async () => {
@@ -222,22 +298,29 @@ describe('comparison output', () => {
     const before = structuredClone(result);
     const document = buildCliCompareDocument(result, '2026-07-14T07:00:00.000Z');
     assert.equal(document.schema, 'whoisleuth.cli.compare');
-    assert.equal(document.version, 1);
+    assert.equal(document.version, 2);
     assert.equal(document.generatedAt, '2026-07-14T07:00:00.000Z');
     assert.deepEqual(result, before);
   });
 
   test('renders bounded source health, summary, values, and interpretation warning', async () => {
-    const source = lookupDocument();
+    const source = withRegistrarPublication(lookupDocument());
     source.whois.parsed.registrar = 'Different Registrar';
     const shared = await comparisonModule();
-    const result = compareLookupDocument(parseCliLookupDocument(JSON.stringify(source)), shared.compareRegistrySources);
+    const result = compareLookupDocument(
+      parseCliLookupDocument(JSON.stringify(source)),
+      shared.compareRegistrySources,
+      shared.compareRdapPublications,
+    );
     const output = formatTerminalCompare(buildCliCompareDocument(result));
     assert.match(output, /RDAP source\s+Success/);
     assert.match(output, /WHOIS source\s+Complete/);
     assert.match(output, /\[CONFLICT\] Registrar/);
     assert.match(output, /RDAP\s+Example Registrar, LLC/);
     assert.match(output, /WHOIS\s+Different Registrar/);
+    assert.match(output, /Registry \/ registrar RDAP publication/);
+    assert.match(output, /Registrar RDAP Success/);
+    assert.match(output, /\[EQUIVALENT\] Statuses/);
     assert.match(output, /not an availability or ownership decision/);
   });
 });
@@ -257,8 +340,10 @@ describe('comparison CLI runner', () => {
     assert.equal(lookupCalls, 0);
     const document = JSON.parse(stdout.value());
     assert.equal(document.schema, 'whoisleuth.cli.compare');
+    assert.equal(document.version, 2);
     assert.equal(document.lookupGeneratedAt, '2026-07-14T06:00:00.000Z');
     assert.equal(document.generatedAt, '2026-07-14T07:00:00.000Z');
+    assert.equal(document.registrarPublicationComparison, null);
     assert.equal(stdout.value().includes('payload must not be copied'), false);
   });
 

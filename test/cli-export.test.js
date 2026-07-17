@@ -217,6 +217,7 @@ describe('lookup evidence export conversion', () => {
 
     const unsupportedStatus = savedLookup();
     unsupportedStatus.rdap.registrarRdap.status = 'complete';
+    unsupportedStatus.diagnostics.rdap.registrar.status = 'complete';
     assert.throws(
       () => buildCliEvidenceExport(JSON.stringify(unsupportedStatus), { buildLookupEvidence() {} }),
       /rdap\.registrarRdap\.status is unsupported/

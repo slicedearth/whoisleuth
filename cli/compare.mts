@@ -42,12 +42,21 @@ type CliLookupComparisonInput = {
   whoisStatus: string;
   rdapParsed: ProjectedSource;
   whoisParsed: ProjectedSource;
+  registrarRdapRepresented: boolean;
+  registrarRdapStatus: string | null;
+  registrarRdapParsed: ProjectedSource;
 };
 
 type RegistryComparison = (
   rdap: ProjectedSource,
   whois: ProjectedSource,
   status: { rdapStatus: string; whoisStatus: string },
+) => UnknownRecord;
+
+type RdapPublicationComparison = (
+  registry: ProjectedSource,
+  registrar: ProjectedSource,
+  status: { registryStatus: string; registrarStatus: string | null },
 ) => UnknownRecord;
 
 async function readCompareInputBounded(
@@ -128,20 +137,43 @@ function projectRdapSource(value: unknown, prefix = 'rdap.parsed'): ProjectedSou
   };
 }
 
-function validateCliRegistrarPublicationInput(document: SavedLookupDocument): void {
+function projectCliRegistrarPublicationInput(document: SavedLookupDocument): {
+  represented: boolean;
+  status: string | null;
+  parsed: ProjectedSource;
+} {
   const rdap = objectOrNull(document.rdap);
   const registrar = objectOrNull(rdap?.registrarRdap);
-  if (!registrar) return;
-  if (typeof registrar.status !== 'string' || !REGISTRAR_RDAP_STATUSES.has(registrar.status)) {
+  const rdapDiagnostics = objectOrNull(document.diagnostics?.rdap);
+  const registrarDiagnostics = objectOrNull(rdapDiagnostics?.registrar);
+  if (!registrar && !registrarDiagnostics) {
+    return { represented: false, status: null, parsed: {} };
+  }
+  const sourceStatus = registrar?.status;
+  const diagnosticStatus = registrarDiagnostics?.status;
+  if (sourceStatus !== undefined && diagnosticStatus !== undefined && sourceStatus !== diagnosticStatus) {
+    throw new CliUsageError('Registrar RDAP source and diagnostic statuses do not match.');
+  }
+  const status = sourceStatus ?? diagnosticStatus;
+  if (typeof status !== 'string' || !REGISTRAR_RDAP_STATUSES.has(status)) {
     throw new CliUsageError('rdap.registrarRdap.status is unsupported.');
   }
-  const parsed = objectOrNull(registrar.parsed);
-  if (registrar.status === 'success' && !parsed) {
+  if (registrar?.parsed !== null && registrar?.parsed !== undefined && !objectOrNull(registrar.parsed)) {
+    throw new CliUsageError('rdap.registrarRdap.parsed must be an object when present.');
+  }
+  const parsed = objectOrNull(registrar?.parsed);
+  if (status === 'success' && !parsed) {
     throw new CliUsageError('Successful registrar RDAP input is missing normalized parsed data.');
   }
-  if (registrar.parsed !== null && registrar.parsed !== undefined) {
-    projectRdapSource(parsed, 'rdap.registrarRdap.parsed');
-  }
+  const projected = projectRdapSource(parsed, 'rdap.registrarRdap.parsed');
+  delete projected.handle;
+  const projectedRegistrar = objectOrNull(projected.registrar);
+  if (projectedRegistrar) delete projectedRegistrar.handle;
+  return {
+    represented: true,
+    status,
+    parsed: projected,
+  };
 }
 
 function projectWhoisSource(value: unknown): ProjectedSource {
@@ -174,6 +206,7 @@ function projectCliLookupComparisonInput(document: SavedLookupDocument): CliLook
   const whoisStatus = document.diagnostics.whois.status;
   const rdapParsed = objectOrNull(document.rdap?.parsed);
   const whoisParsed = objectOrNull(document.whois?.parsed);
+  const registrarPublication = projectCliRegistrarPublicationInput(document);
   return {
     query: document.query,
     registrableDomain: document.registrableDomain,
@@ -183,12 +216,16 @@ function projectCliLookupComparisonInput(document: SavedLookupDocument): CliLook
     whoisStatus,
     rdapParsed: projectRdapSource(rdapParsed),
     whoisParsed: projectWhoisSource(whoisParsed),
+    registrarRdapRepresented: registrarPublication.represented,
+    registrarRdapStatus: registrarPublication.status,
+    registrarRdapParsed: registrarPublication.parsed,
   };
 }
 
 function compareLookupDocument(
   input: CliLookupComparisonInput,
   compareRegistrySources: RegistryComparison,
+  compareRdapPublications?: RdapPublicationComparison,
 ): UnknownRecord {
   if (typeof compareRegistrySources !== 'function') {
     throw new TypeError('Registry comparison dependency is required.');
@@ -197,12 +234,22 @@ function compareLookupDocument(
     rdapStatus: input.rdapStatus,
     whoisStatus: input.whoisStatus,
   });
+  if (input.registrarRdapRepresented && typeof compareRdapPublications !== 'function') {
+    throw new TypeError('Registrar RDAP comparison dependency is required.');
+  }
+  const registrarPublicationComparison = input.registrarRdapRepresented
+    ? compareRdapPublications!(input.rdapParsed, input.registrarRdapParsed, {
+      registryStatus: input.rdapStatus,
+      registrarStatus: input.registrarRdapStatus,
+    })
+    : null;
   return {
     query: input.query,
     registrableDomain: input.registrableDomain,
     lookupGeneratedAt: input.lookupGeneratedAt,
     lookupMode: input.lookupMode,
     ...comparison,
+    registrarPublicationComparison,
   };
 }
 
@@ -216,7 +263,12 @@ export {
   compareLookupDocument,
   parseCliLookupDocument,
   projectCliLookupComparisonInput,
-  validateCliRegistrarPublicationInput,
   readCompareInputBounded,
 };
-export type { CliLookupComparisonInput, ProjectedSource, RegistryComparison, SourceLifecycle };
+export type {
+  CliLookupComparisonInput,
+  ProjectedSource,
+  RdapPublicationComparison,
+  RegistryComparison,
+  SourceLifecycle,
+};

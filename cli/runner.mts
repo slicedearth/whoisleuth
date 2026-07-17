@@ -142,7 +142,11 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       const parsed = parseCliLookupDocument(input);
       const loadComparison = dependencies.loadRegistryComparison || (() => import('../lib/registry-comparison.mts'));
       const comparisonModule = await loadComparison();
-      const result = compareLookupDocument(parsed, comparisonModule.compareRegistrySources);
+      const result = compareLookupDocument(
+        parsed,
+        comparisonModule.compareRegistrySources,
+        comparisonModule.compareRdapPublications,
+      );
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
       const document = buildCliCompareDocument(result, now);
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalCompare(document));

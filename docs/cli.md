@@ -186,16 +186,22 @@ exists.
 ## Registry-source comparison
 
 `compare` reads one version-1 `whoisleuth.cli.lookup` domain document from a
-file or stdin and reconciles its normalized registry RDAP and WHOIS fields. It
-does not repeat the lookup, contact the hosted deployment, or treat a conflict
-as a command failure. Use a deep lookup when both sources are wanted; a fast
-lookup deliberately records WHOIS as skipped, and comparison preserves that
-state as unavailable rather than misreporting RDAP-only publication.
+file or stdin and emits a version-2 `whoisleuth.cli.compare` document. Its
+primary comparison reconciles normalized registry RDAP and WHOIS fields. When
+the saved deep lookup also represents the optional registrar RDAP follow-up,
+an additional sibling comparison reconciles the portable registry and
+registrar RDAP publication fields. The command does not repeat the lookup,
+contact the hosted deployment, or treat a conflict as a command failure. Use a
+deep lookup when multiple sources are wanted; a fast lookup deliberately
+records WHOIS as skipped, and comparison preserves that state as unavailable
+rather than misreporting RDAP-only publication.
 
 Input is capped at 8 MiB and must retain the lookup schema, mode, source
 diagnostics, and normalized parsed source sections. Per-value, list, and event
-bounds are revalidated because saved JSON is treated as untrusted input. Raw
-RDAP JSON, WHOIS response bodies, availability evidence, and unrelated lookup
+bounds are revalidated because saved JSON is treated as untrusted input. A
+successful registrar source must include a normalized object and agree with
+its diagnostic status. Raw RDAP JSON, registrar contacts and source-specific
+handles, WHOIS response bodies, availability evidence, and unrelated lookup
 fields are not copied into the comparison result.
 
 Terminal and versioned JSON output cover domain identity, registry object ID,
@@ -220,9 +226,11 @@ are mutually exclusive.
 The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
 The export retains query context, source diagnostics, normalized registry data,
-raw RDAP JSON, the raw WHOIS referral chain, availability analysis, and the
-shared registry-source comparison. Registrar RDAP raw data remains excluded by
-the established evidence schema; its bounded diagnostics are retained.
+raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
+and the shared registry-source comparison. Registrar RDAP raw data, contacts,
+entities, links, notices, and source-specific handles remain excluded; schema
+version 12 retains only its normalized portable-field comparison and explicit
+source-health states.
 
 Markdown output summarizes query context, assessment state, registry sources,
 source reconciliation, network observations, and collection diagnostics. It

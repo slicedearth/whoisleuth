@@ -1,4 +1,4 @@
-import { projectCliLookupComparisonInput, validateCliRegistrarPublicationInput } from './compare.mts';
+import { projectCliLookupComparisonInput } from './compare.mts';
 import { parseSavedLookupDocument } from './saved-lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 
@@ -25,7 +25,6 @@ function buildCliEvidenceExport(
   // model. Raw source payloads are retained deliberately, but remain bounded
   // by the saved-document byte ceiling and are never interpreted here.
   projectCliLookupComparisonInput(source);
-  validateCliRegistrarPublicationInput(source);
   if (!evidenceModule || typeof evidenceModule.buildLookupEvidence !== 'function') {
     throw new TypeError('Lookup evidence export dependency is required.');
   }

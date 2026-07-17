@@ -32,6 +32,17 @@ function savedLookup() {
         nameservers: ['NS1.EXAMPLE.TEST'],
       },
       data: { objectClassName: 'domain', fixtureSecret: 'raw JSON only' },
+      registrarRdap: {
+        status: 'success',
+        data: { registrarSecret: 'must not enter portable comparison output' },
+        parsed: {
+          domain: 'example.test',
+          registrar: { name: 'Example Registrar' },
+          statuses: ['active'],
+          nameservers: ['ns1.example.test'],
+          entitiesByRole: { abuse: [{ email: 'private@example.test' }] },
+        },
+      },
     },
     whois: {
       parsed: {
@@ -46,7 +57,7 @@ function savedLookup() {
     availability: { applicable: true, domain: 'example.test', state: 'registered', confidence: 'high' },
     diagnostics: {
       version: 4,
-      rdap: { status: 'success' },
+      rdap: { status: 'success', registrar: { status: 'success' } },
       whois: { status: 'complete' },
       availability: { status: 'complete' },
     },
@@ -99,8 +110,11 @@ describe('installed CLI process boundary', () => {
     assert.equal(result.stderr, '');
     const document = JSON.parse(result.stdout);
     assert.equal(document.schema, 'whoisleuth.cli.compare');
+    assert.equal(document.version, 2);
     assert.equal(document.counts.conflict, 0);
-    assert.doesNotMatch(result.stdout, /fixtureSecret|fixture response body/);
+    assert.equal(document.registrarPublicationComparison.counts.conflict, 0);
+    assert.ok(document.registrarPublicationComparison.counts.equivalent > 0);
+    assert.doesNotMatch(result.stdout, /fixtureSecret|fixture response body|registrarSecret|private@example/);
   });
 
   test('JSON, Markdown, and HTML evidence formats preserve their process contracts', () => {
