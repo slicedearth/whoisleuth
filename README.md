@@ -50,7 +50,7 @@ duplicated between the two.
 | **Bulk** | Triage a list of domains with filters, score explanations, CSV export, scan-local relationships, and fast/deep profiles. | Each domain is a separately budgeted lookup. Fast mode avoids WHOIS and deep website/TLS collection; deep mode costs more requests and time. |
 | **Brands** | Keep browser-local official-domain profiles, posture settings, allowlists, and optional page-identity baselines. | Profiles stay in that browser. A posture audit and baseline capture run only when explicitly requested. |
 | **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local by default. An optional Netlify worker can retain only encrypted compact scheduled-watchlist state when explicitly configured; there are no accounts, automatic reports, or automatic notifications. |
-| **Demo** | Walk through a representative brand-to-case workflow using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production browser stores. |
+| **Demo** | Walk through representative Dashboard, Brands, Discover, Bulk, Lookup, and Monitor interfaces using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production browser stores. |
 
 The application is intentionally an analyst workbench rather than an autonomous
 scanner or enforcement system. Scores, similarity, relationships, and generated
@@ -811,19 +811,29 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
 
 ### Public synthetic demo
 
-The unauthenticated `/demo` route presents one bounded fictional workflow from
-brand definition through candidate discovery, triage, evidence review, and a
-synthetic case export. It uses fixed fixtures on reserved domains and makes no
-live registry, DNS, website, certificate, Netlify Function, or other analysis
-request. Demo progress is kept only in `sessionStorage` under
+The unauthenticated `/demo` route presents representative, guided versions of
+Dashboard, Brands, Discover, Bulk, Lookup, and Monitor. The fictional workflow
+moves from a bounded profile and official-site baseline through candidate
+generation, explainable triage, separately attributed evidence, an isolated
+case, a later observation, material-change filtering, and report export. It
+uses fixed fixtures on reserved domains and makes no live registry, DNS,
+website, certificate, Netlify Function, or other analysis request. Demo
+progress is kept only in `sessionStorage` under
 `whoisleuth:synthetic-demo:v1`; it never reads or writes production Brand
 Profiles, candidates, cases, campaigns, watchlists, or history, and **Reset
 demo** removes the tab-scoped record.
 
-Demo exports use the distinct `whoisleuth.synthetic-demo-case` schema, carry
-`synthetic: true`, and include an explicit warning that they are not live
-findings, evidence packages, or abuse reports. The demo is a representative
-product walkthrough rather than a shadow implementation of every workspace.
+Demo exports use version 2 of the distinct
+`whoisleuth.synthetic-demo-case` schema, carry `synthetic: true`, retain only
+the fixed attributed fixtures and synthetic observation timeline, and include
+an explicit warning that they are not live findings, evidence packages, or
+abuse reports. The demo remains a representative product walkthrough rather
+than a shadow implementation of every workspace. Its fixture adapters feed the
+same read-only profile, score, relationship, registry, DNS, HTTP, TLS, and
+evidence-timeline components used by the protected console. Existing
+represented surfaces therefore inherit component-level UI and accessibility
+changes, while genuinely new workspaces are added to the guided scenario
+deliberately instead of being exposed automatically.
 
 ### Public overview and protected console
 

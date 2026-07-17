@@ -101,10 +101,12 @@ default (see the README), so many lookups return no personal data at all.
   values, attempt errors, and redirect inventories are not copied into
   browser-local investigation stores.
 - **Public synthetic demo** - the unauthenticated demo uses fixed fictional
-  fixtures on reserved domains and performs no live analysis request. Its
-  progress is isolated to the current tab's `sessionStorage` under
-  `whoisleuth:synthetic-demo:v1`, never enters production browser-local stores,
-  and is removed by the demo reset action or when that tab session ends. Any
+  fixtures on reserved domains to represent Dashboard, Brands, Discover, Bulk,
+  Lookup, and Monitor without performing a live analysis request. Its bounded
+  stage flags, selected fixture identifier, synthetic case status/note, and
+  follow-up state are isolated to the current tab's `sessionStorage` under
+  `whoisleuth:synthetic-demo:v1`, never enter production browser-local stores,
+  and are removed by the demo reset action or when that tab session ends. Any
   downloaded demo package is explicitly marked as synthetic and is not a live
   finding or evidence report.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
