@@ -14,6 +14,8 @@ const registryHop = (server, lines) => ({ server, response: lines.join('\n') });
 module.exports = [
   {
     name: 'generic thin gTLD referral chain',
+    capabilityProfile: 'iana-generic',
+    scenario: 'registered',
     chain: [
       rootHop('TEST', 'whois.registry.invalid'),
       registryHop('whois.registry.invalid', [
@@ -48,6 +50,8 @@ module.exports = [
   },
   {
     name: 'legacy education registry with indented contacts',
+    capabilityProfile: 'educause-indented',
+    scenario: 'registered',
     chain: [
       rootHop('EDU', 'whois.education.invalid'),
       registryHop('whois.education.invalid', [
@@ -84,6 +88,8 @@ module.exports = [
   },
   {
     name: 'FRED registry with contact handle indirection',
+    capabilityProfile: 'fred-contact-indirection',
+    scenario: 'registered',
     chain: [
       rootHop('CZ', 'whois.fred.invalid'),
       registryHop('whois.fred.invalid', [
@@ -115,6 +121,8 @@ module.exports = [
   },
   {
     name: 'dot-leader registry with host-name nameservers',
+    capabilityProfile: 'dot-leader',
+    scenario: 'registered',
     chain: [
       rootHop('KR', 'whois.kr.invalid'),
       registryHop('whois.kr.invalid', [
@@ -139,6 +147,8 @@ module.exports = [
   },
   {
     name: 'prefixed dot-leader registry with bare server section',
+    capabilityProfile: 'prefixed-dot-leader',
+    scenario: 'registered',
     chain: [
       rootHop('TR', 'whois.tr.invalid'),
       registryHop('whois.tr.invalid', [
@@ -165,6 +175,8 @@ module.exports = [
   },
   {
     name: 'alternate domain labels with a bare nameserver section',
+    capabilityProfile: 'alternate-labels',
+    scenario: 'registered',
     chain: [
       rootHop('IT', 'whois.it.invalid'),
       registryHop('whois.it.invalid', [
@@ -195,6 +207,8 @@ module.exports = [
   },
   {
     name: 'eligibility-based registry contact data',
+    capabilityProfile: 'eligibility-contact',
+    scenario: 'registered',
     chain: [
       rootHop('AU', 'whois.au.invalid'),
       registryHop('whois.au.invalid', [
@@ -219,6 +233,8 @@ module.exports = [
   },
   {
     name: 'bracketed registry response',
+    capabilityProfile: 'bracketed-bilingual',
+    scenario: 'registered',
     chain: [
       rootHop('JP', 'whois.jp.invalid'),
       registryHop('whois.jp.invalid', [
@@ -243,6 +259,8 @@ module.exports = [
   },
   {
     name: 'authoritative unregistered response',
+    capabilityProfile: 'iana-generic',
+    scenario: 'not_found',
     chain: [
       rootHop('TEST', 'whois.registry.invalid'),
       registryHop('whois.registry.invalid', ['No entries found for this query.']),
@@ -256,6 +274,8 @@ module.exports = [
   },
   {
     name: 'registry throttling remains inconclusive',
+    capabilityProfile: 'iana-generic',
+    scenario: 'rate_limited',
     chain: [
       rootHop('TEST', 'whois.registry.invalid'),
       registryHop('whois.registry.invalid', [

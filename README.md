@@ -308,6 +308,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   prefixes are accepted only for the requested address family and malformed
   neighbouring entries are discarded; status, event, and CIDR caps are
   disclosed in normalized results and the Lookup view.
+- Registry compatibility is tracked conservatively in a versioned
+  [capability matrix](docs/registry-compatibility.md). IANA RDAP bootstrap and
+  WHOIS referrals remain authoritative discovery; fixture-backed parser and
+  fallback profiles do not claim current live-registry reachability or field
+  publication.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
