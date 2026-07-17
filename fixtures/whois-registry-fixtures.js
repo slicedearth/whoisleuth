@@ -120,6 +120,28 @@ module.exports = [
     },
   },
   {
+    name: 'domain and ACE query registry response',
+    capabilityProfile: 'denic-domain-ace',
+    scenario: 'registered',
+    chain: [
+      rootHop('DE', 'whois.de.invalid'),
+      registryHop('whois.de.invalid', [
+        'Domain: example.de',
+        'Status: connect',
+        'Changed: 2026-01-02T03:04:05+00:00',
+        'Nserver: ns1.example.invalid',
+        'Nserver: ns2.example.invalid',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'example.de',
+      updatedDate: '2026-01-02T03:04:05+00:00',
+      nameservers: ['ns1.example.invalid', 'ns2.example.invalid'],
+      statuses: ['connect'],
+    },
+  },
+  {
     name: 'dot-leader registry with host-name nameservers',
     capabilityProfile: 'dot-leader',
     scenario: 'registered',

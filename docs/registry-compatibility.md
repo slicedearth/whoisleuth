@@ -3,8 +3,11 @@
 WHOISleuth discovers domain RDAP services through the live IANA DNS bootstrap
 registry and starts WHOIS referral chains at `whois.iana.org`. Those discovery
 mechanisms remain the source of truth. The compatibility metadata in
-`lib/registry-capabilities.mts` is descriptive: it does not replace an IANA
-endpoint, alter a query, select an encoding, or decide whether a domain exists.
+`lib/registry-capabilities.mts` cannot replace an IANA endpoint or decide
+whether a domain exists. A fixture-backed profile may format only the first
+WHOIS query sent to the registry referred by IANA; later referrals always
+receive the canonical plain domain. Every hop records the applied query profile
+and response encoding without duplicating the query value in the response.
 
 ## Coverage states
 
@@ -16,12 +19,13 @@ endpoint, alter a query, select an encoding, or decide whether a domain exists.
   fallback profile already implemented by WHOISleuth. It does not prove current
   live-registry availability, policy, completeness, or deployment reachability.
 
-The version 1 explicit matrix is:
+The version 2 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback profile | Fixture coverage |
 | --- | --- | --- |
 | `.au` | Eligibility and contact fields | Registered |
 | `.cz` | FRED contact-handle indirection | Registered |
+| `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
 | `.edu` | Indented contact blocks | Registered |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
@@ -43,7 +47,10 @@ dialect, authority semantics, and covered outcomes in the capability registry.
 Then add fixture cases for registered, unregistered, partial or redacted,
 rate-limited, and malformed responses where those states can be represented.
 
-Production integration is a separate change. It must preserve IANA discovery
-as the default, use existing SSRF-safe transport and byte/time bounds, keep the
-source separately attributed, and leave failed or unsupported enrichment
-inconclusive. Live registries are never contacted by automated tests.
+Production integration must preserve IANA discovery, use existing SSRF-safe
+transport and byte/time bounds, keep the source separately attributed, and
+leave failed or unsupported enrichment inconclusive. Query profiles are scoped
+to the first registry referral and require a fixture plus authoritative
+protocol documentation. A non-UTF-8 response decoder additionally requires
+fixture evidence before it can replace the default UTF-8 profile. Live
+registries are never contacted by automated tests.

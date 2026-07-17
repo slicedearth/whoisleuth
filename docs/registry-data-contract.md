@@ -307,6 +307,12 @@ One chain shares a 25-second deadline; each hop has a 12-second DNS/connect/body
 ceiling, tries at most three validated public addresses, and caps its response
 at 200,000 bytes.
 
+Each hop records `queryProfile` and `responseEncoding` provenance. The IANA root
+and any referral after the first registry hop receive the canonical plain
+domain. A suffix-specific, fixture-backed adapter may format only the first
+query sent to the registry that IANA referred; it cannot select the endpoint,
+extend the referral depth, or affect existence authority.
+
 `parseWhoisChain` exposes compatibility scalars and normalized structures:
 
 - `registrationStatus`: `registered`, `not_found`, or `inconclusive`.

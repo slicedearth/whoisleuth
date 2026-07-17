@@ -1,7 +1,6 @@
-// Descriptive registry compatibility metadata. This module intentionally does
-// not participate in live RDAP/WHOIS routing: IANA bootstrap and referral
-// discovery remain authoritative until an independently tested adapter is
-// explicitly integrated into the transport path.
+// Registry compatibility metadata. IANA bootstrap and referral discovery
+// remain authoritative. Explicit query profiles may alter only the first
+// referred registry query after a fixture-backed adapter is integrated.
 
 import { domainToASCII } from 'node:url';
 
@@ -14,7 +13,8 @@ type RegistryCapability = {
   registryClass: RegistryClass;
   rdapDiscovery: 'iana-bootstrap';
   whoisDiscovery: 'iana-referral';
-  whoisQueryProfile: 'plain-domain';
+  whoisQueryProfile: 'plain-domain' | 'denic-domain-ace';
+  whoisQueryScope: 'first-referral';
   whoisEncodingProfile: 'utf-8';
   whoisParserProfile: string;
   fallbackProfile: 'gt-registry-web' | null;
@@ -28,7 +28,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 1;
+const REGISTRY_CAPABILITIES_VERSION = 2;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -48,6 +48,7 @@ const DEFAULT_CAPABILITY = freezeCapability({
   rdapDiscovery: 'iana-bootstrap',
   whoisDiscovery: 'iana-referral',
   whoisQueryProfile: 'plain-domain',
+  whoisQueryScope: 'first-referral',
   whoisEncodingProfile: 'utf-8',
   whoisParserProfile: 'generic-colon',
   fallbackProfile: null,
@@ -65,6 +66,11 @@ const EXPLICIT_CAPABILITIES = [
   {
     id: 'fred-contact-indirection', suffixes: ['cz'], registryClass: 'country-code',
     whoisParserProfile: 'fred-contact-indirection', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'denic-domain-ace', suffixes: ['de'], registryClass: 'country-code',
+    whoisQueryProfile: 'denic-domain-ace', whoisParserProfile: 'alternate-labels',
+    fixtureScenarios: ['registered'],
   },
   {
     id: 'educause-indented', suffixes: ['edu'], registryClass: 'generic',
@@ -97,7 +103,8 @@ const EXPLICIT_CAPABILITIES = [
   fallbackProfile: entry.fallbackProfile || null,
   rdapDiscovery: 'iana-bootstrap',
   whoisDiscovery: 'iana-referral',
-  whoisQueryProfile: 'plain-domain',
+  whoisQueryProfile: entry.whoisQueryProfile || 'plain-domain',
+  whoisQueryScope: 'first-referral',
   whoisEncodingProfile: 'utf-8',
   coverageState: 'fixture_verified',
   verificationFiles: entry.verificationFiles || ['fixtures/whois-registry-fixtures.js'],

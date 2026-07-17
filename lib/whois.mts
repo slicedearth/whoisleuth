@@ -7,6 +7,7 @@ import net from 'node:net';
 import { cached } from './lookup-cache.mts';
 import { safeFetch, readTextCapped, resolvePublicAddresses } from './safe-fetch.mts';
 import { registryDateIso } from './registry-dates.mts';
+import { registryCapabilityFor } from './registry-capabilities.mts';
 
 type UnknownRecord = Record<string, any>;
 type PublicAddressRecord = { address: string; family: number };
@@ -14,6 +15,8 @@ type WhoisHop = {
   server: string;
   address?: string | null;
   queriedAt: string;
+  queryProfile?: string;
+  responseEncoding?: string;
   response?: string;
   error?: string;
 };
@@ -57,6 +60,24 @@ const MAX_GT_REGISTRY_HTML_BYTES = 500000;
 const MAX_WHOIS_FIELD_LENGTH = 1000;
 const MAX_WHOIS_NAMESERVERS = 200;
 const MAX_WHOIS_STATUSES = 100;
+
+function whoisTransportForHop(domain: string, hop: number): {
+  query: string;
+  queryProfile: 'plain-domain' | 'denic-domain-ace';
+  responseEncoding: 'utf-8';
+} {
+  const capability = registryCapabilityFor(domain);
+  const queryProfile = hop === 1
+    && capability?.whoisQueryScope === 'first-referral'
+    && capability.whoisQueryProfile === 'denic-domain-ace'
+    ? 'denic-domain-ace'
+    : 'plain-domain';
+  return {
+    query: queryProfile === 'denic-domain-ace' ? `-T dn,ace ${domain}` : domain,
+    queryProfile,
+    responseEncoding: capability?.whoisEncodingProfile || 'utf-8',
+  };
+}
 
 function errorMessage(value: unknown, fallback: string): string {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
@@ -361,12 +382,15 @@ async function buildWhoisChainUncached(
   for (let hop = 0; hop < 6; hop += 1) {
     if (visited.has(currentServer.toLowerCase())) break;
     visited.add(currentServer.toLowerCase());
+    const transport = whoisTransportForHop(queryStr, hop);
 
     const remainingMs = chainDeadlineMs - (now() - startedAt);
     if (remainingMs <= 0) {
       chain.push({
         server: currentServer,
         queriedAt: new Date().toISOString(),
+        queryProfile: transport.queryProfile,
+        responseEncoding: transport.responseEncoding,
         error: 'WHOIS referral chain exceeded the total time limit',
       });
       break;
@@ -376,16 +400,29 @@ async function buildWhoisChainUncached(
     let address: string | null = null;
     const queriedAt = new Date().toISOString();
     try {
-      text = await queryWhois(currentServer, queryStr, {
+      text = await queryWhois(currentServer, transport.query, {
         timeoutMs: Math.min(10000, remainingMs),
         totalDeadlineMs: Math.min(WHOIS_HOP_DEADLINE_MS, remainingMs),
         onAddressSelected: (selected) => { address = selected; },
       });
     } catch (err) {
-      chain.push({ server: currentServer, queriedAt, error: errorMessage(err, 'WHOIS request failed') });
+      chain.push({
+        server: currentServer,
+        queriedAt,
+        queryProfile: transport.queryProfile,
+        responseEncoding: transport.responseEncoding,
+        error: errorMessage(err, 'WHOIS request failed'),
+      });
       break;
     }
-    chain.push({ server: currentServer, address, queriedAt, response: text });
+    chain.push({
+      server: currentServer,
+      address,
+      queriedAt,
+      queryProfile: transport.queryProfile,
+      responseEncoding: transport.responseEncoding,
+      response: text,
+    });
 
     const referral = extractReferral(text);
     if (!referral || referral.toLowerCase() === currentServer.toLowerCase()) break;
@@ -399,6 +436,8 @@ async function buildWhoisChainUncached(
         chain.push({
           server: 'www.gt (registry website - .gt has no WHOIS:43 server)',
           queriedAt: new Date().toISOString(),
+          queryProfile: 'gt-registry-web',
+          responseEncoding: 'utf-8',
           response: formatGtResultAsText(queryStr, gtResult),
         });
       }

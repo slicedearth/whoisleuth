@@ -15,11 +15,11 @@ const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 1);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 2);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
-    assert.deepEqual(first.map((row) => row.suffixes[0]), ['au', 'cz', 'edu', 'gt', 'it', 'jp', 'kr', 'tr']);
+    assert.deepEqual(first.map((row) => row.suffixes[0]), ['au', 'cz', 'de', 'edu', 'gt', 'it', 'jp', 'kr', 'tr']);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
 
@@ -97,11 +97,15 @@ describe('registry capability metadata', () => {
     }
   });
 
-  test('describes metadata only and does not expose endpoints or query overrides', () => {
+  test('keeps discovery authoritative and exposes only approved query profiles', () => {
     for (const capability of listRegistryCapabilities()) {
       assert.equal(capability.rdapDiscovery, 'iana-bootstrap');
       assert.equal(capability.whoisDiscovery, 'iana-referral');
-      assert.equal(capability.whoisQueryProfile, 'plain-domain');
+      assert.equal(
+        capability.whoisQueryProfile,
+        capability.id === 'denic-domain-ace' ? 'denic-domain-ace' : 'plain-domain',
+      );
+      assert.equal(capability.whoisQueryScope, 'first-referral');
       assert.equal(capability.whoisEncodingProfile, 'utf-8');
       assert.equal('endpoint' in capability, false);
       assert.equal('queryTemplate' in capability, false);
