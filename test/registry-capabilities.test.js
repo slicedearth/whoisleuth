@@ -7,6 +7,7 @@ const { resolve } = require('node:path');
 
 const {
   REGISTRY_CAPABILITIES_VERSION,
+  registryAccessDiagnosticFor,
   registryCapabilityFor,
   registryCompatibilityMatrix,
   listRegistryCapabilities,
@@ -15,11 +16,11 @@ const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 3);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 4);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
-    assert.deepEqual(first.map((row) => row.suffixes[0]), ['au', 'cz', 'de', 'edu', 'gt', 'it', 'jp', 'kr', 'tr']);
+    assert.deepEqual(first.map((row) => row.suffixes[0]), ['au', 'cz', 'de', 'edu', 'es', 'gt', 'it', 'jp', 'kr', 'tr', 'vn']);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
 
@@ -61,22 +62,48 @@ describe('registry capability metadata', () => {
     first[0].suffixes.push('invalid');
     first[0].fixtureScenarios.push('invented');
     first[0].verificationFiles.push('invented');
+    first[0].documentationUrls.push('https://invalid.example');
     first[0].limitation = 'changed';
 
     const second = listRegistryCapabilities();
     assert.equal(second[0].suffixes.includes('invalid'), false);
     assert.equal(second[0].fixtureScenarios.includes('invented'), false);
     assert.equal(second[0].verificationFiles.includes('invented'), false);
+    assert.equal(second[0].documentationUrls.includes('https://invalid.example'), false);
     assert.notEqual(second[0].limitation, 'changed');
   });
 
-  test('points every declared profile at an existing verification source', () => {
+  test('points every declared profile at a local fixture or bounded authoritative documentation', () => {
     for (const capability of listRegistryCapabilities()) {
-      assert.ok(capability.verificationFiles.length > 0, `${capability.id}: verification files`);
+      assert.ok(capability.verificationFiles.length > 0 || capability.documentationUrls.length > 0, `${capability.id}: verification sources`);
       for (const file of capability.verificationFiles) {
         assert.equal(existsSync(resolve(__dirname, '..', file)), true, `${capability.id}: ${file}`);
       }
+      for (const url of capability.documentationUrls) {
+        const parsed = new URL(url);
+        assert.equal(parsed.protocol, 'https:', `${capability.id}: ${url}`);
+        assert.ok(parsed.hostname.length > 0 && url.length <= 300, `${capability.id}: ${url}`);
+        assert.doesNotMatch(url, /[\u0000-\u001f\u007f]/, `${capability.id}: ${url}`);
+      }
     }
+  });
+
+  test('describes restricted and unpublished registry access without making an authority claim', () => {
+    const es = registryAccessDiagnosticFor('example.es');
+    assert.deepEqual(es, {
+      suffix: 'es',
+      coverageState: 'access_documented',
+      whoisAccessProfile: 'source-ip-authorization-required',
+      rdapAccessProfile: 'no-iana-service',
+      limitation: 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.',
+      authority: 'context_only',
+    });
+    const vn = registryAccessDiagnosticFor('example.vn');
+    assert.equal(vn.whoisAccessProfile, 'no-iana-service');
+    assert.equal(vn.rdapAccessProfile, 'no-iana-service');
+    assert.match(vn.limitation, /official browser lookup is not integrated/i);
+    assert.equal(registryAccessDiagnosticFor('example.com'), null);
+    assert.equal(registryAccessDiagnosticFor('bad\n'), null);
   });
 
   test('keeps suffixes and profile identifiers unique', () => {
@@ -111,6 +138,8 @@ describe('registry capability metadata', () => {
       );
       assert.equal(capability.whoisQueryScope, 'first-referral');
       assert.equal(capability.whoisEncodingProfile, 'utf-8');
+      assert.ok(['iana-referral', 'source-ip-authorization-required', 'no-iana-service'].includes(capability.whoisAccessProfile));
+      assert.ok(['iana-bootstrap', 'no-iana-service'].includes(capability.rdapAccessProfile));
       assert.equal('endpoint' in capability, false);
       assert.equal('queryTemplate' in capability, false);
     }

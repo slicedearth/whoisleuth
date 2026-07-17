@@ -4,9 +4,11 @@
 
 import { domainToASCII } from 'node:url';
 
-type CoverageState = 'discovery_only' | 'fixture_verified';
+type CoverageState = 'discovery_only' | 'access_documented' | 'fixture_verified';
 type RegistryClass = 'country-code' | 'generic' | 'unknown';
 type WhoisQueryProfile = 'plain-domain' | 'denic-domain-ace' | 'jprs-domain-english';
+type WhoisAccessProfile = 'iana-referral' | 'source-ip-authorization-required' | 'no-iana-service';
+type RdapAccessProfile = 'iana-bootstrap' | 'no-iana-service';
 
 type RegistryCapability = {
   id: string;
@@ -19,9 +21,12 @@ type RegistryCapability = {
   whoisEncodingProfile: 'utf-8';
   whoisParserProfile: string;
   fallbackProfile: 'gt-registry-web' | null;
+  whoisAccessProfile: WhoisAccessProfile;
+  rdapAccessProfile: RdapAccessProfile;
   coverageState: CoverageState;
   fixtureScenarios: string[];
   verificationFiles: string[];
+  documentationUrls: string[];
   limitation: string;
 };
 
@@ -29,16 +34,19 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 3;
+const REGISTRY_CAPABILITIES_VERSION = 4;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
 const FIXTURE_LIMITATION = 'Synthetic fixtures verify the current parser profile; they do not prove current live-registry reachability, policy, or field publication.';
+const ES_ACCESS_LIMITATION = 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.';
+const VN_ACCESS_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.';
 
 function freezeCapability(capability: RegistryCapability): Readonly<RegistryCapability> {
   Object.freeze(capability.suffixes);
   Object.freeze(capability.fixtureScenarios);
   Object.freeze(capability.verificationFiles);
+  Object.freeze(capability.documentationUrls);
   return Object.freeze(capability);
 }
 
@@ -53,9 +61,12 @@ const DEFAULT_CAPABILITY = freezeCapability({
   whoisEncodingProfile: 'utf-8',
   whoisParserProfile: 'generic-colon',
   fallbackProfile: null,
+  whoisAccessProfile: 'iana-referral',
+  rdapAccessProfile: 'iana-bootstrap',
   coverageState: 'discovery_only',
   fixtureScenarios: ['registered', 'not_found', 'rate_limited'],
   verificationFiles: ['fixtures/whois-registry-fixtures.js'],
+  documentationUrls: [],
   limitation: DISCOVERY_LIMITATION,
 });
 
@@ -76,6 +87,17 @@ const EXPLICIT_CAPABILITIES = [
   {
     id: 'educause-indented', suffixes: ['edu'], registryClass: 'generic',
     whoisParserProfile: 'indented-contact-blocks', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'source-ip-authorized-whois', suffixes: ['es'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'source-ip-authorization-required',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/es.html',
+      'https://www.dominios.es/es/sobre-dominios/valores-anadidos/whois-43',
+    ],
+    limitation: ES_ACCESS_LIMITATION,
   },
   {
     id: 'gt-registry-web', suffixes: ['gt'], registryClass: 'country-code',
@@ -100,6 +122,17 @@ const EXPLICIT_CAPABILITIES = [
     id: 'prefixed-dot-leader', suffixes: ['tr'], registryClass: 'country-code',
     whoisParserProfile: 'prefixed-dot-leader-and-bare-nameservers', fixtureScenarios: ['registered'],
   },
+  {
+    id: 'no-iana-registry-service', suffixes: ['vn'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/vn.html',
+      'https://whois.vnnic.vn/',
+    ],
+    limitation: VN_ACCESS_LIMITATION,
+  },
 ].map((entry) => freezeCapability({
   ...entry,
   fallbackProfile: entry.fallbackProfile || null,
@@ -108,9 +141,12 @@ const EXPLICIT_CAPABILITIES = [
   whoisQueryProfile: entry.whoisQueryProfile || 'plain-domain',
   whoisQueryScope: 'first-referral',
   whoisEncodingProfile: 'utf-8',
-  coverageState: 'fixture_verified',
+  whoisAccessProfile: entry.whoisAccessProfile || 'iana-referral',
+  rdapAccessProfile: entry.rdapAccessProfile || 'iana-bootstrap',
+  coverageState: entry.coverageState || 'fixture_verified',
   verificationFiles: entry.verificationFiles || ['fixtures/whois-registry-fixtures.js'],
-  limitation: FIXTURE_LIMITATION,
+  documentationUrls: entry.documentationUrls || [],
+  limitation: entry.limitation || FIXTURE_LIMITATION,
 } as RegistryCapability));
 
 const CAPABILITY_BY_SUFFIX = new Map<string, Readonly<RegistryCapability>>();
@@ -130,6 +166,21 @@ function cloneCapability(
     suffixes: [...suffixes],
     fixtureScenarios: [...capability.fixtureScenarios],
     verificationFiles: [...capability.verificationFiles],
+    documentationUrls: [...capability.documentationUrls],
+  };
+}
+
+function registryAccessDiagnosticFor(value: unknown) {
+  const capability = registryCapabilityFor(value);
+  if (!capability || (capability.whoisAccessProfile === 'iana-referral'
+    && capability.rdapAccessProfile === 'iana-bootstrap')) return null;
+  return {
+    suffix: capability.suffixes[0],
+    coverageState: capability.coverageState,
+    whoisAccessProfile: capability.whoisAccessProfile,
+    rdapAccessProfile: capability.rdapAccessProfile,
+    limitation: capability.limitation,
+    authority: 'context_only' as const,
   };
 }
 
@@ -178,5 +229,12 @@ export {
   registryCapabilityFor,
   registryCompatibilityMatrix,
   listRegistryCapabilities,
+  registryAccessDiagnosticFor,
 };
-export type { RegistryCapability, RegistryCompatibilityRow, WhoisQueryProfile };
+export type {
+  RdapAccessProfile,
+  RegistryCapability,
+  RegistryCompatibilityRow,
+  WhoisAccessProfile,
+  WhoisQueryProfile,
+};

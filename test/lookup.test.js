@@ -55,7 +55,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 4);
+    assert.equal(result.diagnostics.version, 5);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
@@ -151,6 +151,50 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result, 'whois'), false);
   });
 
+  test('adds non-authoritative registry-access context without changing source work or availability', async () => {
+    const classifiedEs = {
+      type: 'domain', value: 'example.es', inputHostname: 'example.es',
+      registrableDomain: 'example.es', isSubdomain: false,
+    };
+    const calls = { rdap: 0, whois: 0, availability: 0 };
+    const availability = { state: 'unknown', confidence: 'low', detail: 'Registry sources were inconclusive.' };
+    const result = await runUnifiedLookup(classifiedEs, {
+      fetchRdapRecord: async () => { calls.rdap += 1; return null; },
+      buildWhoisChain: async () => { calls.whois += 1; return []; },
+      checkDomainAvailability: async () => { calls.availability += 1; return availability; },
+    });
+
+    assert.deepEqual(calls, { rdap: 1, whois: 1, availability: 1 });
+    assert.deepEqual(result.availability, {
+      applicable: true, domain: 'example.es', inputHostname: 'example.es',
+      registrableDomain: 'example.es', isSubdomain: false, ...availability,
+    });
+    assert.equal(result.diagnostics.version, 5);
+    assert.deepEqual(result.diagnostics.registryAccess, {
+      suffix: 'es', coverageState: 'access_documented',
+      whoisAccessProfile: 'source-ip-authorization-required',
+      rdapAccessProfile: 'no-iana-service',
+      limitation: 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.',
+      authority: 'context_only',
+    });
+  });
+
+  test('omits registry-access context from compact and ordinary lookup diagnostics', async () => {
+    const common = {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
+    };
+    const classifiedVn = {
+      type: 'domain', value: 'example.vn', inputHostname: 'example.vn',
+      registrableDomain: 'example.vn', isSubdomain: false,
+    };
+    const compact = await runUnifiedLookup(classifiedVn, { ...common, compact: true });
+    const ordinary = await runUnifiedLookup(classifiedDomain, common);
+    assert.equal(Object.hasOwn(compact.diagnostics, 'registryAccess'), false);
+    assert.equal(Object.hasOwn(ordinary.diagnostics, 'registryAccess'), false);
+  });
+
   test('fast lookups skip WHOIS while reusing RDAP for availability', async () => {
     const rdapRecord = {
       rdapServer: 'https://rdap.example/domain/example.com',
@@ -208,7 +252,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(registrarCalls, 1);
     assert.equal(result.rdap.registrarRdap.status, 'success');
     assert.equal(result.rdap.parsed, rdapRecord.parsed);
-    assert.equal(result.diagnostics.version, 4);
+    assert.equal(result.diagnostics.version, 5);
     assert.deepEqual(result.diagnostics.rdap.registrar, {
       status: 'success',
       endpoint: 'https://registrar.example/domain/example.com',

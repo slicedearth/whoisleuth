@@ -14,6 +14,7 @@
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
+  import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
@@ -76,6 +77,7 @@
   const rdapParsed=$derived(rec(rdap.parsed));
   const whoisParsed=$derived(rec(whois.parsed));
   const diagnostics=$derived(rec(result?.diagnostics));
+  const registryAccess=$derived(rec(diagnostics.registryAccess));
   const threatIntelligence=$derived(rec(result?.threatIntelligence));
   const threatIntelligenceProviders=$derived(Array.isArray(threatIntelligence.providers)?threatIntelligence.providers.map(rec):[]);
   const dnsEvidence=$derived(rec(availability.dns));
@@ -456,6 +458,10 @@
 
     <section class="result-section" id="registry" aria-labelledby="registry-title">
       <h3 id="registry-title">Registry sources</h3>
+
+      {#if registryAccess.suffix}
+        <RegistryAccessNotice access={registryAccess} />
+      {/if}
 
       <div class="evidence-component"><LookupRegistrySources
         comparisonSummary={`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`}

@@ -239,6 +239,52 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
   }
 });
 
+test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const suffix = new URL(route.request().url()).searchParams.get('q')?.endsWith('.vn') ? 'vn' : 'es';
+    const isEs = suffix === 'es';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: `example.${suffix}`, type: 'domain', registrableDomain: `example.${suffix}`,
+        availability: { state: 'unknown', confidence: 'low', domain: `example.${suffix}`, detail: 'Registry sources were inconclusive.' },
+        rdap: { error: 'No RDAP registry found for this query via IANA bootstrap' },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: {
+          version: 5,
+          registryAccess: {
+            suffix, coverageState: 'access_documented',
+            whoisAccessProfile: isEs ? 'source-ip-authorization-required' : 'no-iana-service',
+            rdapAccessProfile: 'no-iana-service', authority: 'context_only',
+            limitation: isEs
+              ? 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.'
+              : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
+          },
+          rdap: { status: 'unsupported' }, whois: { status: 'partial' }, availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await page.locator('#query').fill('example.es');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const notice = page.getByRole('region', { name: '.ES collection constraints' });
+  await expect(notice.getByText('Restricted access')).toBeVisible();
+  await expect(notice.getByText('Source-IP authorization required')).toBeVisible();
+  await expect(notice.getByText(/does not decide registration, availability, safety, or maliciousness/i)).toBeVisible();
+
+  await page.locator('#query').fill('example.vn');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const vnNotice = page.getByRole('region', { name: '.VN collection constraints' });
+  await expect(vnNotice.getByText('Service not published')).toBeVisible();
+  await expect(vnNotice.getByText('No service published by IANA')).toHaveCount(2);
+  await expect(vnNotice.getByText(/official browser lookup is not integrated/i)).toBeVisible();
+
+  await page.setViewportSize({ width: 360, height: 780 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('optional external intelligence searches are explicit, attributed, and mobile-safe', async ({ page }) => {
   await page.route('**/api/capabilities', async (route) => route.fulfill({
     status: 200,

@@ -323,8 +323,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   provenance, and stable source error codes. HTTP errors retain the existing
   human-readable `error` and add a machine-readable `errorCode` such as
   `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
-  clients do not need to match message text. Diagnostics version 4 adds an
-  optional separately-attributed registrar RDAP child beneath the RDAP source.
+  clients do not need to match message text. Diagnostics version 5 retains the
+  separately-attributed registrar RDAP child and can add non-authoritative
+  registry-access context for suffixes whose machine services are restricted
+  or not published through IANA. This context is omitted from compact Bulk
+  responses and never changes availability or scoring.
 - Clients that only need the derived assessment can add `compact=1` to
   `/api/lookup`. This retains `availability` and `diagnostics` while omitting
   raw RDAP and WHOIS payloads; Bulk uses this mode to bound browser memory and

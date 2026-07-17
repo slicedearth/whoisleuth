@@ -151,12 +151,15 @@ HTTP `429`, `errorCode: NETWORK_USAGE_LIMITED`, a bounded `Retry-After`, and a
 30-day window is fixed and UTC-epoch-aligned; it is not a calendar month,
 rolling window, or hosting-provider billing statement.
 
-## Diagnostics version 4
+## Diagnostics version 5
 
-`diagnostics.version` is `4`. Version 4 retains the version-3 source fields,
-including the explicit `disabled` state and `FEATURE_DISABLED` code, and adds
-an optional `diagnostics.rdap.registrar` child for the separately attributed
-registrar follow-up. Consumers that do not recognize version 4 must fail
+`diagnostics.version` is `5`. Version 5 retains the version-4 source fields,
+including the optional separately attributed registrar RDAP child, and adds an
+optional `diagnostics.registryAccess` object to non-compact domain responses.
+That object records a documented machine-access constraint or the absence of
+an IANA-published service for the suffix. It is static context only, performs
+no network work, is omitted from compact Bulk responses, and is never consulted
+by availability or scoring. Consumers that do not recognize version 5 must fail
 conservatively rather than reinterpret a disabled, skipped, unsupported, or
 failed source as upstream absence. The source objects use explicit status
 values:

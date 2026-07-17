@@ -10,6 +10,7 @@ import { fetchRdapRecord, fetchRegistrarRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { OPERATION_BUDGET_ERROR_CODE } from './operation-budget.mts';
 import { checkDomainAvailability } from './availability.mts';
+import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import { FEATURE_DISABLED_ERROR_CODE, featureDecision, networkFeaturePolicy } from './feature-policy.mts';
 import { lookupUrlscanDomain, URLSCAN_PROVIDER } from './urlscan-intelligence.mts';
@@ -57,7 +58,7 @@ type AvailabilityEnvelope = {
   [key: string]: unknown;
 };
 
-const LOOKUP_DIAGNOSTICS_VERSION = 4;
+const LOOKUP_DIAGNOSTICS_VERSION = 5;
 const LOOKUP_ERROR_CODES = Object.freeze({
   AUTH_REQUIRED: 'AUTH_REQUIRED',
   RATE_LIMITED: 'RATE_LIMITED',
@@ -265,9 +266,16 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? 'not_applicable'
     : !availabilityEnabled ? 'disabled'
     : availabilityResult.status === 'rejected' ? 'error' : 'complete';
+  // This is static access-policy context only. It performs no network work and
+  // is deliberately excluded from compact Bulk responses and from every
+  // availability input.
+  const registryAccess = classified.type === 'domain' && !compact
+    ? registryAccessDiagnosticFor(classified.value)
+    : null;
 
   const diagnostics = {
     version: LOOKUP_DIAGNOSTICS_VERSION,
+    ...(registryAccess ? { registryAccess } : {}),
     rdap: {
       status: rdapStatus,
       errorCode: rdapStatus === 'disabled'

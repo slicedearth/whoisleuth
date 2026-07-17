@@ -18,20 +18,25 @@ and response encoding without duplicating the query value in the response.
 - **Fixture verified** means synthetic, bounded fixtures exercise a parser or
   fallback profile already implemented by WHOISleuth. It does not prove current
   live-registry availability, policy, completeness, or deployment reachability.
+- **Access documented** means an authoritative registry or IANA source documents
+  a machine-access constraint or publishes no machine endpoint. It describes
+  collection conditions only and is never evidence about domain availability.
 
-The version 3 explicit matrix is:
+The version 4 explicit matrix is:
 
-| Suffix | Current WHOIS parser/fallback profile | Fixture coverage |
+| Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
 | `.au` | Eligibility and contact fields | Registered |
 | `.cz` | FRED contact-handle indirection | Registered |
 | `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
 | `.edu` | Indented contact blocks | Registered |
+| `.es` | Plain WHOIS syntax; registry requires advance source-IP authorization; IANA publishes no RDAP service | Access documented |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
+| `.vn` | IANA publishes no domain WHOIS or RDAP service; official browser lookup is not integrated | Access documented |
 
 The exceptional query formats are grounded in the registries' own protocol
 guidance: the [`.de` WHOIS service guide](https://www.denic.de/en/services/whois-service/)
@@ -39,6 +44,16 @@ documents the domain-and-ACE query type, while the [`.jp` command-line
 guide](https://jprs.jp/about/dom-search/jprs-whois/whois-guide-usage.html)
 documents `/e` as the English-output suffix. The automated suite represents
 both with synthetic responses and never contacts either registry.
+
+The [IANA `.es` delegation record](https://www.iana.org/domains/root/db/es.html)
+publishes WHOIS but no RDAP service, while the registry's
+[port-43 policy](https://www.dominios.es/es/sobre-dominios/valores-anadidos/whois-43)
+requires the querying source IP to be registered in advance and applies strict
+rate limits. The [IANA `.vn` delegation record](https://www.iana.org/domains/root/db/vn.html)
+publishes neither domain WHOIS nor RDAP; VNNIC provides an
+[official browser lookup](https://whois.vnnic.vn/) that is deliberately not
+scraped or treated as a machine endpoint. These access states explain missing
+registry evidence but do not establish that a domain is unregistered or safe.
 
 Generic fixtures also verify registered, authoritative-not-found, and
 rate-limited WHOIS states. RDAP normalization has separate fixture coverage for
