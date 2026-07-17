@@ -19,7 +19,7 @@ for (const viewport of VIEWPORTS) {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
     test('drawer opens with a safely-placed session action and no overflow', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/lookup');
 
       // Exactly one visible WHOISleuth logo/title (the header's, not the
       // drawer's - aside .brand is display:none below 900px) so there's only
@@ -79,7 +79,7 @@ for (const viewport of VIEWPORTS) {
     });
 
     test('closing the drawer updates aria-expanded, and the footer links to Privacy', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/lookup');
 
       const shell = page.locator('.shell');
       const toggle = page.getByRole('button', { name: 'Toggle navigation' });

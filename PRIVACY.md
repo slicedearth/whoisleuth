@@ -9,11 +9,11 @@ publishing it to anyone you share `SITE_PASSWORD` with.
 
 Looking up a domain returns whatever registrant contact data (name,
 organisation, email, phone, address) the domain's registry or sponsoring
-registrar chooses to expose in its public RDAP/WHOIS response. This tool
-doesn't collect anything beyond that - it's a client for data those sources
-already publish, not a separate data-gathering system. Most sources redact
-this by default (see the README), so many lookups return no personal data at
-all.
+registrar chooses to expose in its public RDAP/WHOIS response. This tool relays
+data those sources already publish rather than building a separate registrant
+database. Other bounded technical and application data processed by optional
+features is described below. Most registry sources redact contact data by
+default (see the README), so many lookups return no personal data at all.
 
 ## Where that data goes
 
@@ -228,6 +228,16 @@ The signed session cookie is stateless and valid for up to 30 days. Signing
 out removes it from that browser but does not revoke a captured copy; the
 operator must rotate `SESSION_SECRET` (or the shared password when it is also
 used for signing) to invalidate all outstanding sessions before expiry.
+
+## Audience measurement
+
+This template does not assume that audience measurement is enabled. Deployments
+should avoid advertising, behavioural profiling, and cross-site tracking. If an
+operator introduces privacy-preserving audience measurement, it should be
+limited to public pages and documented here before use, including its provider,
+data fields, retention, and available controls. Protected-route activity,
+lookup terms, query strings, saved evidence, and session identifiers should
+remain outside that measurement surface.
 
 ## Legal basis for processing
 

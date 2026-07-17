@@ -15,11 +15,22 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const consoleTexts: string[] = [];
   page.on('console', (message) => consoleTexts.push(message.text()));
 
+  let publicSessionRequests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/session') publicSessionRequests += 1;
+  });
+
   await page.goto('/');
+  await expect(page.getByRole('heading', { name: /Investigate domains\./ })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Explore synthetic demo' })).toBeVisible();
+  expect(publicSessionRequests).toBe(0);
+
+  await page.goto('/lookup');
+  await expect(page).toHaveURL(/\/login\?next=%2Flookup$/u);
 
   const loginForm = page.locator('form.login');
   await expect(loginForm).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Sign in to WHOISleuth' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Continue to WHOISleuth.' })).toBeVisible();
   const passwordField = page.getByLabel('Password');
   const signInButton = page.getByRole('button', { name: 'Sign in' });
   await expect(signInButton).toBeDisabled();
@@ -30,7 +41,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
 
   await expect(page.locator('.shell')).toBeVisible();
   await expect(loginForm).not.toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Investigate domains. Protect brands.' })).toBeVisible();
+  await expect(page).toHaveURL('/lookup');
+  await expect(page.getByRole('heading', { name: 'Lookup' })).toBeVisible();
   const backendStatus = page.getByText('Backend · Express', { exact: true });
   await expect(backendStatus).toBeVisible();
   await expect(backendStatus).toHaveCSS('white-space', 'nowrap');
@@ -45,6 +57,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
   await signOutButton.click();
 
+  await expect(page).toHaveURL('/login');
   await expect(loginForm).toBeVisible();
   await expect(page.locator('.shell')).not.toBeVisible();
 
@@ -53,4 +66,18 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const pageText = await page.locator('body').innerText();
   expect(pageText).not.toContain(TEST_SITE_PASSWORD);
   expect(consoleTexts.join('\n')).not.toContain(TEST_SITE_PASSWORD);
+});
+
+test('all investigation workspaces require sign-in and unsafe return targets are ignored', async ({ page }) => {
+  for (const path of ['/lookup', '/discover', '/bulk', '/monitor', '/brands']) {
+    await page.goto(path);
+    await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);
+    await expect(page.locator('form.login')).toBeVisible();
+  }
+
+  await page.goto('/login?next=https%3A%2F%2Foutside.invalid%2Fcapture');
+  await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/lookup');
+  await expect(page.getByRole('heading', { name: 'Lookup' })).toBeVisible();
 });

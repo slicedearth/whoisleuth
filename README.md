@@ -125,16 +125,18 @@ npm install
 SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret npm start
 ```
 
-Then open **http://localhost:3000** in a browser and enter that password.
+Then open **http://localhost:3000** for the public product overview, or
+**http://localhost:3000/login** to enter the protected console.
 
-The whole tool sits behind a shared-password gate - `SITE_PASSWORD` is
-required, and every investigation API route rejects requests without a valid
-session regardless of whether the frontend gate is showing. Login and session
-status remain the narrow unauthenticated exceptions needed to enter the tool.
-There's no per-user
-login, just one password shared with whoever you want to have access; anyone
-without it sees only the password prompt. Pick something you're comfortable
-sharing with those people, not a password reused elsewhere.
+The overview, privacy policy, sign-in page, and isolated synthetic demo are
+public and make no live investigation request. The Lookup, Discover, Bulk,
+Monitor, and Brands workspaces sit behind a shared-password gate:
+`SITE_PASSWORD` is required, and every investigation API route rejects
+requests without a valid session regardless of which frontend file a visitor
+can retrieve. Login and session status remain the narrow unauthenticated API
+exceptions needed to enter the console. There's no per-user login, just one
+password shared with whoever you want to have access. Pick something you're
+comfortable sharing with those people, not a password reused elsewhere.
 
 `SESSION_SECRET` should be a separate random value (for example, 32 random
 bytes encoded as hex). It signs session cookies without turning a captured
@@ -822,6 +824,21 @@ Demo exports use the distinct `whoisleuth.synthetic-demo-case` schema, carry
 `synthetic: true`, and include an explicit warning that they are not live
 findings, evidence packages, or abuse reports. The demo is a representative
 product walkthrough rather than a shadow implementation of every workspace.
+
+### Public overview and protected console
+
+The unauthenticated `/` route describes the product, evidence model, privacy
+posture, and five investigation workspaces without reading deployment
+capabilities or calling an analysis API. `/login` accepts the shared deployment
+password and returns only to a known protected workspace; arbitrary or
+off-origin return targets are ignored. Direct anonymous navigation to Lookup,
+Discover, Bulk, Monitor, or Brands is redirected to sign-in, while the backend
+continues to enforce authentication independently on every protected API.
+The public surface is designed around data minimisation, without advertising
+profiles or cross-site tracking. Any deployment-specific audience measurement
+belongs only on public routes and must be described in that deployment's
+privacy notice; protected-route activity and investigation inputs remain out
+of scope.
 
 ## Rate limiting
 

@@ -114,9 +114,9 @@ test('malformed or unsupported capability reports degrade conservatively', async
     contentType: 'application/json',
     body: JSON.stringify({ version: 99, authoritative: true, features: [{ id: 'lookup', status: 'supported' }] }),
   }));
-  await page.goto('/');
+  await page.goto('/lookup');
   await expect(page.getByText('Backend unavailable', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Investigate domains. Protect brands.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lookup' })).toBeVisible();
 });
 
 test('the serverless runtime label fits the desktop session row without truncation', async ({ page }) => {
@@ -125,7 +125,7 @@ test('the serverless runtime label fits the desktop session row without truncati
     contentType: 'application/json',
     body: JSON.stringify({ version: 1, runtime: 'netlify', authoritative: true, features: [] }),
   }));
-  await page.goto('/');
+  await page.goto('/lookup');
 
   const backendStatus = page.getByText('Backend · Netlify', { exact: true });
   await expect(backendStatus).toBeVisible();

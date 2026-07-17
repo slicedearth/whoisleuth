@@ -1,31 +1,22 @@
 <script lang="ts">
-  import { page } from '$app/state';
-  import { onMount, setContext } from 'svelte';
-  import { workspaces } from '$lib/workspaces';
-  import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import '../app.css';
+
   let { children } = $props();
-  let session = $state<'checking'|'authenticated'|'anonymous'|'unavailable'>('checking');
-  let password = $state(''); let error = $state(''); let busy = $state(false); let navOpen = $state(false);
-  let capabilities=$state<CapabilityReport|null>(null);let capabilitiesChecked=$state(false);
-  const demoPage=$derived(page.url.pathname==='/demo');
-  setContext(CAPABILITY_CONTEXT, () => capabilities);
-  onMount(() => {if(demoPage)session='anonymous';else void checkSession();});
-  async function loadCapabilityReport(){capabilitiesChecked=false;capabilities=await fetchCapabilities();capabilitiesChecked=true;}
-  async function checkSession(){ session='checking'; try{const r=await fetch('/api/session'); if(!r.ok) throw new Error(); session=(await r.json()).authenticated?'authenticated':'anonymous';if(session==='authenticated')await loadCapabilityReport();}catch{session='unavailable';}}
-  async function login(e:SubmitEvent){e.preventDefault();busy=true;error='';try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||'Sign-in failed');session='authenticated';password='';await loadCapabilityReport();}catch(e){error=e instanceof Error?e.message:'Sign-in failed';}finally{busy=false;}}
-  async function logout(){try{await fetch('/api/logout',{method:'POST'});}finally{session='anonymous';}}
-  function toggleNavigation(event:MouseEvent){event.preventDefault();event.stopPropagation();navOpen=!navOpen;}
-  function handleKeydown(event:KeyboardEvent){if(event.key==='Escape'&&navOpen)navOpen=false;}
-  function runtimeLabel(){return capabilities?.runtime==='netlify'?'Netlify':capabilities?.runtime==='express'?'Express':'Hosted';}
-  function capabilityStatus(){return capabilitiesChecked?(capabilities?`Backend · ${runtimeLabel()}`:'Backend unavailable'):'Checking backend…';}
-  function capabilityStatusDetail(){return capabilitiesChecked?(capabilities?`Hosted network capabilities reported by the ${runtimeLabel()} runtime.`:'The backend capability report is unavailable.'):'Checking the backend capability report.';}
 </script>
-<svelte:window onkeydown={handleKeydown}/>
-{#if session==='checking'}<div class="center"><div class="mark"><img src="/favicon.svg" alt=""></div><p>Opening console…</p></div>
-{:else if demoPage}<main class="public-content" id="main-content">{@render children()}</main>
-{:else if session==='anonymous'&&page.url.pathname==='/privacy'}<main class="public-content" id="main-content">{@render children()}</main>
-{:else if session==='anonymous'}<div class="center"><form class="login card" onsubmit={login}><div class="mark"><img src="/favicon.svg" alt=""></div><p class="eyebrow">Protected console</p><h1>Sign in to WHOISleuth</h1><p class="muted">Enter the deployment password to access investigation tools.</p><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" bind:value={password}>{#if error}<p class="error" role="alert">{error}</p>{/if}<button class="primary" disabled={busy||!password}>{busy?'Signing in…':'Sign in'}</button><p class="login-links"><a href="/demo">Try the synthetic demo</a><span aria-hidden="true">·</span><a href="/privacy">Privacy</a></p></form></div>
-{:else if session==='unavailable'}<div class="center"><section class="login card"><h1>Session service unavailable</h1><button class="primary" onclick={checkSession}>Retry</button></section></div>
-{:else}<div class="shell" class:open={navOpen}><header><a href="/"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a><button aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="workspace-navigation" onclick={toggleNavigation}>☰</button></header><aside id="workspace-navigation"><div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth — console</span></div><a class="brand" href="/"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a><nav aria-label="Tools"><p class="eyebrow">Tools</p>{#each workspaces as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav><div class="session"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span><button onclick={logout}>Sign out</button></div></aside>{#if navOpen}<button class="scrim" aria-label="Close navigation" onclick={()=>navOpen=false}></button>{/if}<main id="main-content" tabindex="-1">{@render children()}<footer class="site-footer"><p>WHOISleuth uses <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap data</a> to query relevant registry services and can also check public DNS, Certificate Transparency, and website endpoints. Missing registrant fields often reflect registry redaction rather than a lookup failure.</p><p class="credit">© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="/privacy">Privacy</a></p></footer></main></div>{/if}
-<style>:global(html){scroll-behavior:smooth}:global(button),:global(a),:global(input),:global(select),:global(textarea),:global(summary){outline-offset:3px}:global(:focus-visible){outline:2px solid var(--accent)}:global(button:disabled){cursor:not-allowed;opacity:.58}.login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}.login-links a{color:var(--accent)}:global(main header){display:flex}@media(max-width:900px){:global(main header){position:static;inset:auto;z-index:auto;height:auto;padding:0;border:0;background:transparent}:global(main header button){width:auto;height:auto}}@media(prefers-reduced-motion:reduce){:global(html){scroll-behavior:auto}:global(*),:global(*::before),:global(*::after){scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}</style>
+
+<svelte:head>
+  <meta name="theme-color" content="#0f1115">
+</svelte:head>
+
+{@render children()}
+
+<style>
+  :global(html){scroll-behavior:smooth}
+  :global(button),:global(a),:global(input),:global(select),:global(textarea),:global(summary){outline-offset:3px}
+  :global(:focus-visible){outline:2px solid var(--accent)}
+  :global(button:disabled){cursor:not-allowed;opacity:.58}
+  @media(prefers-reduced-motion:reduce){
+    :global(html){scroll-behavior:auto}
+    :global(*),:global(*::before),:global(*::after){scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
+  }
+</style>

@@ -98,7 +98,7 @@ app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'imm
   maxAge: '1y',
 }));
 app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
-app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/', '/privacy/', '/demo/'], (req: RequestLike, res: ResponseLike) => {
+app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/', '/privacy/', '/demo/', '/login/'], (req: RequestLike, res: ResponseLike) => {
   res.redirect(308, req.path.slice(0, -1));
 });
 app.use(express.json({ limit: '1mb' }));

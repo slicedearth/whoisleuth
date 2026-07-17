@@ -219,9 +219,8 @@ test('every workspace renders without page-level overflow at narrow and wide wid
   }
 });
 
-test('workspace pages expose one consistent primary heading', async ({ page }) => {
+test('protected workspace pages expose one consistent primary heading', async ({ page }) => {
   for (const [path, title, eyebrow] of [
-    ['/', 'Investigate domains. Protect brands.', 'Domain intelligence console'],
     ['/lookup', 'Lookup', 'Investigate'],
     ['/discover', 'Candidate discovery', 'Discover'],
     ['/bulk', 'Bulk analysis', 'Assess'],
