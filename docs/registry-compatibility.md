@@ -19,7 +19,7 @@ and response encoding without duplicating the query value in the response.
   fallback profile already implemented by WHOISleuth. It does not prove current
   live-registry availability, policy, completeness, or deployment reachability.
 
-The version 2 explicit matrix is:
+The version 3 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback profile | Fixture coverage |
 | --- | --- | --- |
@@ -29,9 +29,16 @@ The version 2 explicit matrix is:
 | `.edu` | Indented contact blocks | Registered |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
-| `.jp` | Bracketed bilingual fields | Registered |
+| `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
+
+The exceptional query formats are grounded in the registries' own protocol
+guidance: the [`.de` WHOIS service guide](https://www.denic.de/en/services/whois-service/)
+documents the domain-and-ACE query type, while the [`.jp` command-line
+guide](https://jprs.jp/about/dom-search/jprs-whois/whois-guide-usage.html)
+documents `/e` as the English-output suffix. The automated suite represents
+both with synthetic responses and never contacts either registry.
 
 Generic fixtures also verify registered, authoritative-not-found, and
 rate-limited WHOIS states. RDAP normalization has separate fixture coverage for

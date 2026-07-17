@@ -254,7 +254,7 @@ module.exports = [
     },
   },
   {
-    name: 'bracketed registry response',
+    name: 'bracketed English registry response',
     capabilityProfile: 'bracketed-bilingual',
     scenario: 'registered',
     chain: [

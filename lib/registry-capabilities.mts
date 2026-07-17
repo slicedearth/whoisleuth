@@ -6,6 +6,7 @@ import { domainToASCII } from 'node:url';
 
 type CoverageState = 'discovery_only' | 'fixture_verified';
 type RegistryClass = 'country-code' | 'generic' | 'unknown';
+type WhoisQueryProfile = 'plain-domain' | 'denic-domain-ace' | 'jprs-domain-english';
 
 type RegistryCapability = {
   id: string;
@@ -13,7 +14,7 @@ type RegistryCapability = {
   registryClass: RegistryClass;
   rdapDiscovery: 'iana-bootstrap';
   whoisDiscovery: 'iana-referral';
-  whoisQueryProfile: 'plain-domain' | 'denic-domain-ace';
+  whoisQueryProfile: WhoisQueryProfile;
   whoisQueryScope: 'first-referral';
   whoisEncodingProfile: 'utf-8';
   whoisParserProfile: string;
@@ -28,7 +29,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 2;
+const REGISTRY_CAPABILITIES_VERSION = 3;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -88,7 +89,8 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'bracketed-bilingual', suffixes: ['jp'], registryClass: 'country-code',
-    whoisParserProfile: 'bracketed-bilingual', fixtureScenarios: ['registered'],
+    whoisQueryProfile: 'jprs-domain-english', whoisParserProfile: 'bracketed-bilingual',
+    fixtureScenarios: ['registered'],
   },
   {
     id: 'dot-leader', suffixes: ['kr'], registryClass: 'country-code',
@@ -177,4 +179,4 @@ export {
   registryCompatibilityMatrix,
   listRegistryCapabilities,
 };
-export type { RegistryCapability, RegistryCompatibilityRow };
+export type { RegistryCapability, RegistryCompatibilityRow, WhoisQueryProfile };

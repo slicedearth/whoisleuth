@@ -7,7 +7,7 @@ import net from 'node:net';
 import { cached } from './lookup-cache.mts';
 import { safeFetch, readTextCapped, resolvePublicAddresses } from './safe-fetch.mts';
 import { registryDateIso } from './registry-dates.mts';
-import { registryCapabilityFor } from './registry-capabilities.mts';
+import { registryCapabilityFor, type WhoisQueryProfile } from './registry-capabilities.mts';
 
 type UnknownRecord = Record<string, any>;
 type PublicAddressRecord = { address: string; family: number };
@@ -61,19 +61,24 @@ const MAX_WHOIS_FIELD_LENGTH = 1000;
 const MAX_WHOIS_NAMESERVERS = 200;
 const MAX_WHOIS_STATUSES = 100;
 
+const WHOIS_QUERY_FORMATTERS: Record<WhoisQueryProfile, (domain: string) => string> = {
+  'plain-domain': (domain) => domain,
+  'denic-domain-ace': (domain) => `-T dn,ace ${domain}`,
+  'jprs-domain-english': (domain) => `${domain}/e`,
+};
+
 function whoisTransportForHop(domain: string, hop: number): {
   query: string;
-  queryProfile: 'plain-domain' | 'denic-domain-ace';
+  queryProfile: WhoisQueryProfile;
   responseEncoding: 'utf-8';
 } {
   const capability = registryCapabilityFor(domain);
   const queryProfile = hop === 1
     && capability?.whoisQueryScope === 'first-referral'
-    && capability.whoisQueryProfile === 'denic-domain-ace'
-    ? 'denic-domain-ace'
+    ? capability.whoisQueryProfile
     : 'plain-domain';
   return {
-    query: queryProfile === 'denic-domain-ace' ? `-T dn,ace ${domain}` : domain,
+    query: WHOIS_QUERY_FORMATTERS[queryProfile](domain),
     queryProfile,
     responseEncoding: capability?.whoisEncodingProfile || 'utf-8',
   };

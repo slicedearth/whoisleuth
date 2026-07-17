@@ -31,9 +31,9 @@ describe('WHOIS referral query profiles', () => {
     assert.deepEqual(chain.map((hop) => hop.responseEncoding), ['utf-8', 'utf-8', 'utf-8']);
   });
 
-  test('leaves fixture-verified parser profiles on the plain-domain query', async () => {
+  test('requests English output only from the first .jp registry referral', async () => {
     const calls = [];
-    await buildWhoisChainUncached('example.jp', {
+    const chain = await buildWhoisChainUncached('example.jp', {
       whoisQuery: async (server, query) => {
         calls.push({ server, query });
         return server === 'whois.iana.org'
@@ -44,7 +44,26 @@ describe('WHOIS referral query profiles', () => {
 
     assert.deepEqual(calls, [
       { server: 'whois.iana.org', query: 'example.jp' },
-      { server: 'whois.jp.invalid', query: 'example.jp' },
+      { server: 'whois.jp.invalid', query: 'example.jp/e' },
+    ]);
+    assert.deepEqual(chain.map((hop) => hop.queryProfile), ['plain-domain', 'jprs-domain-english']);
+    assert.deepEqual(chain.map((hop) => hop.responseEncoding), ['utf-8', 'utf-8']);
+  });
+
+  test('leaves parser-only capability profiles on the plain-domain query', async () => {
+    const calls = [];
+    await buildWhoisChainUncached('example.kr', {
+      whoisQuery: async (server, query) => {
+        calls.push({ server, query });
+        return server === 'whois.iana.org'
+          ? 'domain: KR\nrefer: whois.kr.invalid\n'
+          : 'Domain Name................: example.kr\n';
+      },
+    });
+
+    assert.deepEqual(calls, [
+      { server: 'whois.iana.org', query: 'example.kr' },
+      { server: 'whois.kr.invalid', query: 'example.kr' },
     ]);
   });
 
