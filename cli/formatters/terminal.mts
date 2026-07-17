@@ -1,15 +1,11 @@
+import { registryAccessProfileLabel } from '../registry-access.mts';
+
 const MAX_TERMINAL_VALUE_LENGTH = 240;
 const MAX_CT_TERMINAL_MATCHES = 100;
 const MAX_CT_TERMINAL_HOSTNAMES = 5;
 const MAX_DISCOVER_TERMINAL_CANDIDATES = 200;
 const MAX_POSTURE_TERMINAL_RECORDS = 5;
 const MAX_TLS_TERMINAL_ALT_NAMES = 10;
-const REGISTRY_ACCESS_PROFILE_LABELS: Record<string, string> = {
-  'iana-bootstrap': 'IANA bootstrap discovery',
-  'iana-referral': 'IANA referral discovery',
-  'no-iana-service': 'No service published by IANA',
-  'source-ip-authorization-required': 'Source-IP authorization required',
-};
 
 // Terminal documents have different versioned shapes. Every scalar crosses
 // safeTerminalValue before display, while the runner supplies bounded arrays.
@@ -36,12 +32,6 @@ function safeTerminalValue(value: unknown, fallback = '—'): string {
 function titleCase(value: unknown): string {
   const text = safeTerminalValue(value, 'unknown').replaceAll('_', ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function registryAccessProfileLabel(value: unknown): string {
-  return typeof value === 'string' && REGISTRY_ACCESS_PROFILE_LABELS[value]
-    ? REGISTRY_ACCESS_PROFILE_LABELS[value]
-    : 'Unknown';
 }
 
 function formatTerminalLookup(document: TerminalRecord): string {

@@ -422,6 +422,11 @@ and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
 forms, active links, or external resources and includes a restrictive embedded
 Content Security Policy. The versioned JSON package remains the authoritative
 machine-readable export when complete captured source material is required.
+When schema-version 12 JSON retains a version-5 `diagnostics.registryAccess`
+object, both readable formats include its bounded suffix, WHOIS and RDAP access
+profiles, and limitation in collection diagnostics. This remains collection
+context only and cannot decide registration, availability, ownership, safety,
+or maliciousness.
 
 Lookup evidence is a downloadable report contract, not a browser-local case
 storage schema. Consumers must check `schema` and `schemaVersion`; an unknown

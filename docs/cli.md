@@ -250,6 +250,9 @@ source reconciliation, network observations, and collection diagnostics. It
 escapes all upstream text as untrusted content, bounds displayed values and
 lists, and deliberately omits raw RDAP JSON and full WHOIS response bodies.
 Use JSON when the complete evidence package or machine processing is required.
+When a version-5 lookup records a documented registry-access constraint, both
+Markdown and HTML include that context in collection diagnostics without
+changing its non-authoritative interpretation.
 
 HTML uses the same bounded summary model as Markdown. The generated document
 contains inline styling for screen and print, but no scripts, forms, active

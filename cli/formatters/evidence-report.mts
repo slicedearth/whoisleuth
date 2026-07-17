@@ -1,3 +1,5 @@
+import { registryAccessProfileLabel } from '../registry-access.mts';
+
 const MAX_REPORT_VALUE_LENGTH = 300;
 const MAX_REPORT_LIST_ITEMS = 50;
 const MAX_REPORT_COMPARISON_FIELDS = 20;
@@ -89,6 +91,7 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
   const whoisDiagnostics = objectOrEmpty(diagnostics.whois);
   const availabilityDiagnostics = objectOrEmpty(diagnostics.availability);
   const registrarRdapDiagnostics = objectOrEmpty(rdapDiagnostics.registrar);
+  const registryAccess = objectOrEmpty(diagnostics.registryAccess);
   const sources = objectOrEmpty(report.sources);
   const rdap = objectOrEmpty(sources.rdap);
   const whois = objectOrEmpty(sources.whois);
@@ -113,6 +116,16 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
   const tlsValidity = objectOrEmpty(tls.validity);
   const tlsCertificate = objectOrEmpty(tls.certificate);
   const titleTarget = query.registrableDomain || query.submitted || 'Unknown domain';
+  const registryAccessSuffix = diagnostics.version === 5 && registryAccess.authority === 'context_only'
+    && typeof registryAccess.suffix === 'string'
+    ? cleanReportText(registryAccess.suffix, '')
+    : '';
+  const registryAccessFields: ReportField[] = registryAccessSuffix ? [
+    reportField('Registry access suffix', `.${registryAccessSuffix}`),
+    reportField('WHOIS access', registryAccessProfileLabel(registryAccess.whoisAccessProfile)),
+    reportField('RDAP access', registryAccessProfileLabel(registryAccess.rdapAccessProfile)),
+    reportField('Registry access note', registryAccess.limitation),
+  ] : [];
 
   const groups = {
     registryRdap: {
@@ -261,11 +274,15 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
       reportField('Registrar RDAP', displayLabel(registrarRdapDiagnostics.status)),
       reportField('WHOIS', displayLabel(whoisDiagnostics.status)),
       reportField('Availability', displayLabel(availabilityDiagnostics.status)),
+      ...registryAccessFields,
     ],
     limitations: [
       'This report summarizes point-in-time observations and registry publications. It does not prove ownership, activity, availability, or maliciousness.',
       'Missing, skipped, partial, unsupported, or failed sources are inconclusive rather than negative evidence.',
       'Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package and may contain public contact data.',
+      ...(registryAccessFields.length ? [
+        'Registry access constraints describe collection reachability only. They do not decide registration, availability, ownership, safety, or maliciousness.',
+      ] : []),
     ],
   };
 }

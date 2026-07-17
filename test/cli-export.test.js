@@ -111,6 +111,20 @@ function savedLookup(overrides = {}) {
   };
 }
 
+function withRegistryAccess(source = savedLookup(), overrides = {}) {
+  source.diagnostics.version = 5;
+  source.diagnostics.registryAccess = {
+    suffix: 'zz',
+    coverageState: 'access_documented',
+    whoisAccessProfile: 'source-ip-authorization-required',
+    rdapAccessProfile: 'no-iana-service',
+    limitation: 'Registry collection requires documented source authorization.',
+    authority: 'context_only',
+    ...overrides,
+  };
+  return source;
+}
+
 async function evidenceModule() {
   return import('../lib/evidence-export.mts');
 }
@@ -176,6 +190,12 @@ describe('lookup evidence export conversion', () => {
     assert.equal(JSON.stringify(result).includes('privateNestedValue'), false);
     assert.equal(JSON.stringify(result).includes('ignoredTopLevelValue'), false);
     assert.deepEqual(source, before);
+  });
+
+  test('retains bounded registry-access diagnostics already present in the lookup contract', async () => {
+    const source = withRegistryAccess();
+    const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
+    assert.deepEqual(result.diagnostics.registryAccess, source.diagnostics.registryAccess);
   });
 
   test('preserves partial source states in analysis instead of inventing conflicts', async () => {
@@ -263,7 +283,23 @@ describe('lookup evidence Markdown rendering', () => {
     assert.match(markdown, /Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package/);
     assert.doesNotMatch(markdown, /publicContact|privateNestedValue|private-registrar/);
     assert.doesNotMatch(markdown, /Registrant Email/);
+    assert.doesNotMatch(markdown, /Registry access suffix/);
     assert.equal(markdown.endsWith('\n'), true);
+  });
+
+  test('renders bounded context-only registry access diagnostics', async () => {
+    const source = withRegistryAccess(savedLookup(), {
+      limitation: `Restricted <script>alert(1)</script> [details](https://malicious.invalid) ${'x'.repeat(500)}`,
+    });
+    const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
+    const markdown = formatLookupEvidenceMarkdown(result);
+
+    assert.match(markdown, /Registry access suffix/);
+    assert.match(markdown, /WHOIS access:\*\* Source\\-IP authorization required/);
+    assert.match(markdown, /RDAP access:\*\* No service published by IANA/);
+    assert.match(markdown, /Registry access constraints describe collection reachability only/);
+    assert.doesNotMatch(markdown, /<script>|\]\(https:\/\//i);
+    assert.doesNotMatch(markdown, /x{301}/);
   });
 
   test('escapes untrusted Markdown, HTML, bare-link, and email syntax', () => {
@@ -319,7 +355,22 @@ describe('lookup evidence HTML rendering', () => {
     assert.doesNotMatch(html, /<script\b/i);
     assert.doesNotMatch(html, /<a\b/i);
     assert.doesNotMatch(html, /publicContact|Registrant Email|privateNestedValue|private-registrar/);
+    assert.doesNotMatch(html, /Registry access suffix/);
     assert.equal(html.endsWith('\n'), true);
+  });
+
+  test('renders registry access context as escaped static HTML diagnostics', async () => {
+    const source = withRegistryAccess(savedLookup(), {
+      limitation: 'Restricted <script>alert(1)</script> collection context.',
+    });
+    const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
+    const html = formatLookupEvidenceHtml(result);
+
+    assert.match(html, /Registry access suffix/);
+    assert.match(html, /Source-IP authorization required/);
+    assert.match(html, /No service published by IANA/);
+    assert.match(html, /Restricted &lt;script&gt;alert\(1\)&lt;\/script&gt; collection context\./);
+    assert.doesNotMatch(html, /<script>alert/);
   });
 
   test('escapes hostile source values rather than creating HTML elements or attributes', async () => {
