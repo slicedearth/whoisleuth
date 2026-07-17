@@ -321,7 +321,9 @@ compact-storage boundary, and lookup evidence schema are documented in the
   fallback profiles do not claim current live-registry reachability or field
   publication. The local CLI can inspect this catalogue offline with
   `registry-support <domain-or-suffix>` without making a registry request or
-  turning coverage metadata into an availability or safety claim.
+  turning coverage metadata into an availability or safety claim. Authenticated
+  deployments expose the same embedded catalogue in the **Registry support**
+  reference workspace, with local text and coverage filters only.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,

@@ -54,7 +54,7 @@ test('the dashboard launches every workspace and links back to the public homepa
   await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'View public homepage' })).toHaveAttribute('href', '/');
   await expect(page.locator('.quick-card')).toHaveCount(3);
-  await expect(page.locator('.workspace-card')).toHaveCount(5);
+  await expect(page.locator('.workspace-card')).toHaveCount(6);
 
   for (const [name, href] of [
     ['Lookup', '/lookup'],
@@ -62,6 +62,7 @@ test('the dashboard launches every workspace and links back to the public homepa
     ['Bulk', '/bulk'],
     ['Monitor', '/monitor'],
     ['Brands', '/brands'],
+    ['Registry support', '/registry-support'],
   ]) {
     await expect(page.locator('.workspace-card').filter({ hasText: name }).first()).toHaveAttribute('href', href);
   }

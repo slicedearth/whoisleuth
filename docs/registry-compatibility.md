@@ -71,6 +71,12 @@ thick and thin domain objects plus IPv4, IPv6, and autonomous-system objects;
 suffix coverage remains dynamic because TLD managers publish their services in
 the IANA bootstrap registry.
 
+Authenticated users can browse the same explicit matrix in the **Registry
+support** console reference. Its text and coverage filters run locally over the
+embedded catalogue and make no registry or application API request. The page
+does not test current reachability and does not turn compatibility metadata
+into a registration, availability, ownership, safety, or maliciousness claim.
+
 ## Adding a registry adapter
 
 An exceptional adapter should be added only after a sanitized fixture proves a

@@ -52,7 +52,10 @@ describe('registry capability metadata', () => {
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {
-    for (const input of [null, '', '..au', 'example..au', '127.0.0.1', '.123', `${'a'.repeat(250)}.au`, 'au\n']) {
+    for (const input of [
+      null, '', '..au', 'example..au', '127.0.0.1', '.123', `${'a'.repeat(250)}.au`, 'au\n',
+      '//com', 'user@com', 'com/path', 'com:443',
+    ]) {
       assert.equal(registryCapabilityFor(input), null, String(input));
     }
   });

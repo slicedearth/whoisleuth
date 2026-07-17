@@ -12,4 +12,8 @@ export const workspaces = [
   { href: '/brands', label: 'Brands', detail: 'Manage profiles, allowlists, and posture' }
 ];
 
-export const consoleDestinations = [dashboard, ...workspaces];
+export const referenceWorkspaces = [
+  { href: '/registry-support', label: 'Registry support', detail: 'Review fixture-backed compatibility and access constraints' },
+];
+
+export const consoleDestinations = [dashboard, ...workspaces, ...referenceWorkspaces];

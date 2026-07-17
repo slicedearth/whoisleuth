@@ -4,7 +4,7 @@
   import { loadProfiles } from '$lib/brand-profiles';
   import { loadCases } from '$lib/cases';
   import { loadWatchlists } from '$lib/watchlists';
-  import { workspaces } from '$lib/workspaces';
+  import { referenceWorkspaces, workspaces } from '$lib/workspaces';
 
   const quickActions = [
     { href: '/lookup', label: 'Run a lookup', detail: 'Inspect a domain, IP address, or ASN across separately attributed sources.' },
@@ -48,6 +48,23 @@
         <h3>{action.label}</h3>
         <p>{action.detail}</p>
         <strong>Open <span aria-hidden="true">→</span></strong>
+      </a>
+    {/each}
+  </div>
+</section>
+
+<section class="dashboard-section" aria-labelledby="reference-title">
+  <div class="section-intro">
+    <p class="eyebrow">Reference</p>
+    <h2 id="reference-title">Collection support</h2>
+    <p>Review implemented compatibility coverage without running a registry query.</p>
+  </div>
+  <div class="workspace-grid">
+    {#each referenceWorkspaces as item}
+      <a class="workspace-card card" href={item.href}>
+        <span aria-hidden="true">REF</span>
+        <div><h3>{item.label}</h3><p>{item.detail}.</p></div>
+        <strong aria-hidden="true">→</strong>
       </a>
     {/each}
   </div>

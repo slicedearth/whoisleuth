@@ -2,8 +2,6 @@
 // remain authoritative. Explicit query profiles may alter only the first
 // referred registry query after a fixture-backed adapter is integrated.
 
-import { domainToASCII } from 'node:url';
-
 type CoverageState = 'discovery_only' | 'access_documented' | 'fixture_verified';
 type RegistryClass = 'country-code' | 'generic' | 'unknown';
 type WhoisQueryProfile = 'plain-domain' | 'denic-domain-ace' | 'jprs-domain-english';
@@ -204,8 +202,16 @@ function canonicalSuffix(value: unknown): string | null {
   if (trimmed.startsWith('.')) trimmed = trimmed.slice(1);
   if (trimmed.endsWith('.')) trimmed = trimmed.slice(0, -1);
   if (trimmed.startsWith('.') || trimmed.endsWith('.')) return null;
-  if (!trimmed) return null;
-  const ascii = domainToASCII(trimmed);
+  if (!trimmed || /[\s\\/%@:?#]/u.test(trimmed)) return null;
+  let ascii = '';
+  try {
+    const parsed = new URL(`http://${trimmed}`);
+    if (parsed.username || parsed.password || parsed.port || parsed.pathname !== '/'
+      || parsed.search || parsed.hash) return null;
+    ascii = parsed.hostname;
+  } catch {
+    return null;
+  }
   if (!ascii || ascii.length > MAX_CAPABILITY_INPUT_LENGTH) return null;
   const labels = ascii.toLowerCase().split('.');
   if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return null;
