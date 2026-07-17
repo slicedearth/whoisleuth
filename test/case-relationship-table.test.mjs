@@ -38,6 +38,11 @@ describe('case relationship table projection', () => {
     assert.deepEqual(result.rows, []);
     assert.equal(result.totalRelationships, 0);
     assert.equal(result.matchingRelationships, 0);
+    assert.equal(result.currentPage, 1);
+    assert.equal(result.pageCount, 1);
+    assert.equal(result.pageSize, MAX_RELATIONSHIP_TABLE_ROWS);
+    assert.equal(result.rangeStart, 0);
+    assert.equal(result.rangeEnd, 0);
     assert.equal(result.truncated, false);
     assert.deepEqual(result.filters, { type: 'all', query: '', sort: 'type', direction: 'asc' });
   });
@@ -110,7 +115,7 @@ describe('case relationship table projection', () => {
     assert.equal(result.truncated, true);
   });
 
-  test('caps table rows after filtering and sorting', () => {
+  test('paginates table rows after filtering and sorting without reporting ordinary pages as partial', () => {
     const cases = [];
     for (let index = 0; index < MAX_RELATIONSHIP_TABLE_ROWS + 2; index++) {
       cases.push(
@@ -118,11 +123,27 @@ describe('case relationship table projection', () => {
         caseRecord(`b-${index}`, `b-${index}.invalid`, snapshot({ nameservers: [`ns-${index}.invalid`] })),
       );
     }
-    const result = buildCaseRelationshipTable(cases);
-    assert.equal(result.totalRelationships, MAX_RELATIONSHIP_TABLE_ROWS + 2);
-    assert.equal(result.matchingRelationships, MAX_RELATIONSHIP_TABLE_ROWS + 2);
-    assert.equal(result.rows.length, MAX_RELATIONSHIP_TABLE_ROWS);
-    assert.equal(result.truncated, true);
+    const first = buildCaseRelationshipTable(cases);
+    assert.equal(first.totalRelationships, MAX_RELATIONSHIP_TABLE_ROWS + 2);
+    assert.equal(first.matchingRelationships, MAX_RELATIONSHIP_TABLE_ROWS + 2);
+    assert.equal(first.rows.length, MAX_RELATIONSHIP_TABLE_ROWS);
+    assert.equal(first.currentPage, 1);
+    assert.equal(first.pageCount, 2);
+    assert.equal(first.rangeStart, 1);
+    assert.equal(first.rangeEnd, MAX_RELATIONSHIP_TABLE_ROWS);
+    assert.equal(first.truncated, false);
+
+    const second = buildCaseRelationshipTable(cases, { page: 2 });
+    assert.equal(second.rows.length, 2);
+    assert.equal(second.currentPage, 2);
+    assert.equal(second.pageCount, 2);
+    assert.equal(second.rangeStart, MAX_RELATIONSHIP_TABLE_ROWS + 1);
+    assert.equal(second.rangeEnd, MAX_RELATIONSHIP_TABLE_ROWS + 2);
+    assert.equal(second.truncated, false);
+
+    assert.equal(buildCaseRelationshipTable(cases, { page: 99 }).currentPage, 2);
+    assert.equal(buildCaseRelationshipTable(cases, { page: 0 }).currentPage, 1);
+    assert.equal(buildCaseRelationshipTable(cases, { page: 1.5 }).currentPage, 1);
   });
 
   test('a restrictive filter can reduce an otherwise capped table cleanly', () => {

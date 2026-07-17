@@ -589,8 +589,10 @@ covered by the provider's community terms or an appropriate paid agreement.
   mutation groups without changing the global safety limits. A live upper-bound
   estimate shows the possible candidate count before validity filtering and
   deduplication; it allocates no candidate objects and makes no network
-  requests. Network lookups begin only after selected candidates are handed to
-  Bulk and scanned.
+  requests. Filtered candidates are paginated locally at 100 per page rather
+  than hiding matches beyond a display cap; selection can still apply to every
+  matching candidate before the retained selection is handed to Bulk. Network
+  lookups begin only when those selected candidates are scanned.
 - Adjacent-key substitution and insertion can use **QWERTY, AZERTY, or
   QWERTZ** geometry. QWERTY remains the compatibility default; changing the
   layout clears any previously generated set so the visible results always
@@ -747,10 +749,10 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
   remain common explanations.
 - The **Relationships** tab presents those same bounded comparisons in a
   semantic table with search, relationship-family filtering, stable sorting,
-  explicit partial-result labels, and direct case pivots. The projection shows
-  at most 50 relationships and 20 case links per row, transforms into labelled
-  stacked rows on narrow screens, and creates no new request, score, or stored
-  relationship record.
+  pagination, explicit partial-result labels, and direct case pivots. Each page
+  shows up to 50 relationships and each row shows up to 20 case links; the
+  table transforms into labelled stacked rows on narrow screens and creates no
+  new request, score, or stored relationship record.
 - The **Campaigns** tab groups existing cases into bounded browser-local
   investigations. Each campaign retains only a name, optional description,
   and up to 50 normalized case domains; it does not duplicate case evidence,

@@ -2,17 +2,24 @@
   import type { CaseRecord } from '$lib/cases';
   import { buildCaseRelationships } from '$lib/analysis/case-relationships.js';
   import { projectCaseRelationshipTable } from '$lib/analysis/case-relationship-table.js';
+  import Pagination from '$lib/components/Pagination.svelte';
 
   let { records, onselect }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void}=$props();
   let type=$state('all');
   let query=$state('');
   let sort=$state('type');
   let direction=$state('asc');
+  let page=$state(1);
   const relationships=$derived(buildCaseRelationships(records));
-  const table=$derived(projectCaseRelationshipTable(relationships,{type,query,sort,direction}));
+  const table=$derived(projectCaseRelationshipTable(relationships,{type,query,sort,direction,page}));
 
   function openCase(id:string){const target=records.find((record)=>record.id===id);if(target)onselect?.(target);}
-  function clear(){type='all';query='';sort='type';direction='asc';}
+  function setQuery(value:string){query=value;page=1;}
+  function setType(value:string){type=value;page=1;}
+  function setSort(value:string){sort=value;page=1;}
+  function toggleDirection(){direction=direction==='asc'?'desc':'asc';page=1;}
+  function setPage(value:number){page=Math.min(table.pageCount,Math.max(1,Math.trunc(value)));}
+  function clear(){type='all';query='';sort='type';direction='asc';page=1;}
 </script>
 
 <section class="relationship-workspace" aria-labelledby="case-relationship-table-title">
@@ -23,14 +30,14 @@
 
   <fieldset class="relationship-filters card">
     <legend>Relationship table controls</legend>
-    <label class="field search">Search<input bind:value={query} maxlength="100" placeholder="Value, method, or case domain" autocomplete="off"></label>
-    <label class="field">Relationship<select bind:value={type}><option value="all">All relationships</option><option value="nameserver_set">Nameserver sets</option><option value="http_final_origin">Final website origins</option></select></label>
-    <label class="field">Sort<select bind:value={sort}><option value="type">Relationship</option><option value="value">Observed value</option><option value="member_count">Case count</option></select></label>
-    <button type="button" class="btn" aria-label={direction==='asc'?'Ascending, switch to descending':'Descending, switch to ascending'} onclick={()=>direction=direction==='asc'?'desc':'asc'}>{direction==='asc'?'Ascending':'Descending'}</button>
+    <label class="field search">Search<input value={query} oninput={(event)=>setQuery(event.currentTarget.value)} maxlength="100" placeholder="Value, method, or case domain" autocomplete="off"></label>
+    <label class="field">Relationship<select value={type} onchange={(event)=>setType(event.currentTarget.value)}><option value="all">All relationships</option><option value="nameserver_set">Nameserver sets</option><option value="http_final_origin">Final website origins</option></select></label>
+    <label class="field">Sort<select value={sort} onchange={(event)=>setSort(event.currentTarget.value)}><option value="type">Relationship</option><option value="value">Observed value</option><option value="member_count">Case count</option></select></label>
+    <button type="button" class="btn" aria-label={direction==='asc'?'Ascending, switch to descending':'Descending, switch to ascending'} onclick={toggleDirection}>{direction==='asc'?'Ascending':'Descending'}</button>
     <button type="button" class="btn" onclick={clear} disabled={type==='all'&&!query&&sort==='type'&&direction==='asc'}>Clear</button>
   </fieldset>
 
-  <p class="result-count" role="status" aria-live="polite">Showing {table.rows.length} of {table.matchingRelationships} matching relationship{table.matchingRelationships===1?'':'s'} from {table.totalRelationships} observed.</p>
+  <p class="result-count" role="status" aria-live="polite">{#if table.rows.length}Showing {table.rangeStart}–{table.rangeEnd} of {table.matchingRelationships} matching relationship{table.matchingRelationships===1?'':'s'} from {table.totalRelationships} observed.{:else}No matching relationships from {table.totalRelationships} observed.{/if}</p>
 
   {#if table.rows.length}
     <div class="table-wrap">
@@ -49,11 +56,12 @@
         </tbody>
       </table>
     </div>
+    <Pagination currentPage={table.currentPage} pageCount={table.pageCount} {setPage} ariaLabel="Case relationship pages" />
   {:else}
     <section class="empty-state card"><h3>{table.totalRelationships?'No relationships match these filters':'No cross-case relationships yet'}</h3><p>{table.totalRelationships?'Clear or broaden the filters to see other observed relationships.':'Capture comparable evidence in at least two cases to create an investigation pivot.'}</p></section>
   {/if}
 
-  <details id="relationship-table-limit"><summary>Interpretation and coverage limits</summary>{#each table.limitations as limitation}<p>{limitation}</p>{/each}<p>The table displays at most 50 relationships and 20 case pivots per row. Partial-result labels disclose when source or presentation caps apply.</p></details>
+  <details id="relationship-table-limit"><summary>Interpretation and coverage limits</summary>{#each table.limitations as limitation}<p>{limitation}</p>{/each}<p>Each page displays up to 50 relationships and each row displays up to 20 case pivots. Partial-result labels disclose source or per-row safety caps; ordinary pagination is not a partial result.</p></details>
 </section>
 
 <style>

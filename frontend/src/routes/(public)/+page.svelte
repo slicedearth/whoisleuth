@@ -56,16 +56,14 @@
   <div class="build-grid"><div><strong>TypeScript + SvelteKit</strong><span>Accessible multi-workspace frontend</span></div><div><strong>Bounded network processing</strong><span>Timeouts, caps, SSRF and rebinding defenses</span></div><div><strong>Fixture-driven verification</strong><span>Registry behavior tested without live network calls</span></div><div><strong>Portable deployment</strong><span>Express and optional Netlify execution paths</span></div></div>
 </section>
 
-<section class="closing card"><div><p class="eyebrow">See the workflow</p><h2>Explore safely, then open the console when you need live evidence.</h2></div><div><a class="btn" href="/demo">View synthetic demo</a><a class="primary" href="/login">Sign in</a></div></section>
-
 <style>
   .hero{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(390px,.92fr);gap:clamp(34px,7vw,82px);align-items:center;padding:18px 0 90px}
   .hero h1{max-width:760px;margin:.35rem 0 1rem;font:750 clamp(2.6rem,6.5vw,5.4rem)/.97 var(--mono);letter-spacing:-.075em}
   .hero h1 span{color:var(--accent)}
   .lede{max-width:68ch;color:var(--muted);font-size:clamp(1rem,1.7vw,1.16rem);line-height:1.7}
   .hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
-  .hero-actions a,.closing a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:var(--radius-sm);font:750 var(--text-xs) var(--mono)}
-  .hero-actions .primary,.closing .primary{color:#07101c;background:linear-gradient(135deg,#75c2ff,#4a9ff3)}
+  .hero-actions a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:var(--radius-sm);font:750 var(--text-xs) var(--mono)}
+  .hero-actions .primary{color:#07101c;background:linear-gradient(135deg,#75c2ff,#4a9ff3)}
   .access-note{display:flex;align-items:center;gap:8px;margin:16px 0 0;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .access-note span{color:var(--accent2);text-shadow:0 0 8px rgba(126,224,168,.65)}
   .terminal-preview{overflow:hidden;background:#11141a;box-shadow:0 28px 80px rgba(0,0,0,.3)}
@@ -78,12 +76,11 @@
   .state{display:inline-block;width:68px;margin-right:7px;font:700 var(--text-2xs) var(--mono)}.state.observed{color:var(--accent2)}.state.separate{color:var(--accent)}.state.review{color:var(--amber)}.state.neutral{color:var(--muted)}
   .terminal-body .terminal-note{color:#68707f;line-height:1.55}
   .workflow,.evidence,.build{padding:72px 0;border-top:1px solid var(--border)}
-  .section-intro{max-width:780px;margin-bottom:30px}.section-intro h2,.principles h2,.closing h2{margin:.3rem 0 .7rem;font:700 clamp(1.65rem,3.5vw,2.55rem) var(--mono);letter-spacing:-.045em}.section-intro>p:not(.eyebrow),.principles p{color:var(--muted);line-height:1.65}
+  .section-intro{max-width:780px;margin-bottom:30px}.section-intro h2,.principles h2{margin:.3rem 0 .7rem;font:700 clamp(1.65rem,3.5vw,2.55rem) var(--mono);letter-spacing:-.045em}.section-intro>p:not(.eyebrow),.principles p{color:var(--muted);line-height:1.65}
   .workspace-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.workspace-grid article{display:flex;min-width:0;min-height:220px;flex-direction:column;padding:20px}.workspace-grid article>span{color:var(--accent2);font:700 var(--text-2xs) var(--mono)}.workspace-grid h3{margin:18px 0 8px;font:700 1.05rem var(--mono)}.workspace-grid p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.workspace-grid a{margin-top:auto;padding-top:22px;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .evidence-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}.evidence-grid article{display:flex;gap:13px}.evidence-grid article>span{color:var(--accent2);font:700 1.1rem var(--mono)}.evidence-grid h3{margin:0 0 8px;font:700 1rem var(--mono)}.evidence-grid p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.65}
   .principles{display:grid;grid-template-columns:1.15fr .85fr;gap:50px;margin:35px 0;padding:clamp(24px,5vw,46px)}.principles ul{display:grid;gap:10px;margin:0;padding:0;list-style:none}.principles li{padding:11px 12px;border-left:2px solid var(--accent2);background:rgba(126,224,168,.035);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .build-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--border)}.build-grid div{display:grid;gap:7px;padding:18px;background:var(--bg)}.build-grid strong{font:700 var(--text-xs) var(--mono)}.build-grid span{color:var(--muted);font-size:var(--text-2xs);line-height:1.55}
-  .closing{display:flex;align-items:center;justify-content:space-between;gap:30px;margin-top:35px;padding:clamp(24px,5vw,42px)}.closing h2{max-width:760px;margin-bottom:0}.closing>div:last-child{display:flex;flex:none;gap:8px}
   @media(max-width:980px){.hero{grid-template-columns:1fr}.terminal-preview{max-width:650px}.workspace-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-grid article:last-child{grid-column:span 2}.build-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:680px){.hero{padding-bottom:62px}.hero h1{font-size:clamp(2.3rem,13vw,3.5rem)}.terminal-body dl div{grid-template-columns:1fr}.workspace-grid,.evidence-grid,.principles,.build-grid{grid-template-columns:1fr}.workspace-grid article:last-child{grid-column:auto}.workspace-grid article{min-height:0}.closing{align-items:flex-start;flex-direction:column}.closing>div:last-child{width:100%}.closing a{flex:1}}
+  @media(max-width:680px){.hero{padding-bottom:62px}.hero h1{font-size:clamp(2.3rem,13vw,3.5rem)}.terminal-body dl div{grid-template-columns:1fr}.workspace-grid,.evidence-grid,.principles,.build-grid{grid-template-columns:1fr}.workspace-grid article:last-child{grid-column:auto}.workspace-grid article{min-height:0}}
 </style>

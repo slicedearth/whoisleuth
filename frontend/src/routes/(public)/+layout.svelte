@@ -42,7 +42,6 @@
     <nav aria-label="Public navigation">
       <a class:active={page.url.pathname==='/' } aria-current={page.url.pathname==='/'?'page':undefined} href="/">Overview</a>
       <a class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>
-      <a class:active={page.url.pathname==='/privacy'} aria-current={page.url.pathname==='/privacy'?'page':undefined} href="/privacy">Privacy</a>
       <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} href={authenticated?'/dashboard':'/login'}>Open console</a>
       {#if authenticated}<button class="sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>{/if}
       {#if logoutError}<span class="session-error" role="status">{logoutError}</span>{/if}

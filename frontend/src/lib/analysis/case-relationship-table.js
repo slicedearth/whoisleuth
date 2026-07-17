@@ -1,6 +1,7 @@
 // Pure presentation projection for the Monitor relationship table. The source
 // comparison remains case-relationships.js; this layer only applies bounded
-// filtering, sorting, and per-row member caps for an accessible table.
+// filtering, sorting, pagination, and per-row member caps for an accessible
+// table.
 
 import { buildCaseRelationships } from './case-relationships.js';
 
@@ -27,6 +28,10 @@ function normalizeOption(value, allowed, fallback) {
   return typeof value === 'string' && allowed.has(value) ? value : fallback;
 }
 
+function normalizePage(value) {
+  return Number.isSafeInteger(value) && value > 0 ? value : 1;
+}
+
 function searchable(group) {
   return [group.label, group.method, group.value, ...group.cases.map((item) => item.domain)]
     .join('\u0000')
@@ -46,7 +51,7 @@ function compareRows(left, right, sort) {
 
 /**
  * @param {unknown} rawCases
- * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown}} [rawOptions]
+ * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,page?:unknown}} [rawOptions]
  */
 export function buildCaseRelationshipTable(rawCases, rawOptions = {}) {
   return projectCaseRelationshipTable(buildCaseRelationships(rawCases), rawOptions);
@@ -57,13 +62,14 @@ export function buildCaseRelationshipTable(rawCases, rawOptions = {}) {
  * summary. Components can derive the summary from case records once, then use
  * this inexpensive projection for interactive filtering and sorting.
  * @param {ReturnType<typeof buildCaseRelationships>} summary
- * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown}} [rawOptions]
+ * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,page?:unknown}} [rawOptions]
  */
 export function projectCaseRelationshipTable(summary, rawOptions = {}) {
   const type = normalizeOption(rawOptions.type, TYPES, 'all');
   const query = normalizeQuery(rawOptions.query);
   const sort = normalizeOption(rawOptions.sort, SORTS, 'type');
   const direction = normalizeOption(rawOptions.direction, DIRECTIONS, 'asc');
+  const requestedPage = normalizePage(rawOptions.page);
 
   const filtered = summary.groups.filter((group) => (
     (type === 'all' || group.type === type)
@@ -78,8 +84,11 @@ export function projectCaseRelationshipTable(summary, rawOptions = {}) {
     return direction === 'desc' ? -compared : compared;
   });
 
-  let truncated = summary.truncated || sorted.length > MAX_RELATIONSHIP_TABLE_ROWS;
-  const rows = sorted.slice(0, MAX_RELATIONSHIP_TABLE_ROWS).map((row) => {
+  const pageCount = Math.max(1, Math.ceil(sorted.length / MAX_RELATIONSHIP_TABLE_ROWS));
+  const currentPage = Math.min(requestedPage, pageCount);
+  const pageStart = (currentPage - 1) * MAX_RELATIONSHIP_TABLE_ROWS;
+  let truncated = summary.truncated;
+  const rows = sorted.slice(pageStart, pageStart + MAX_RELATIONSHIP_TABLE_ROWS).map((row) => {
     const omittedCases = Math.max(0, row.cases.length - MAX_RELATIONSHIP_TABLE_MEMBERS);
     if (omittedCases) truncated = true;
     return {
@@ -94,6 +103,11 @@ export function projectCaseRelationshipTable(summary, rawOptions = {}) {
     rows,
     totalRelationships: summary.groups.length,
     matchingRelationships: filtered.length,
+    currentPage,
+    pageCount,
+    pageSize: MAX_RELATIONSHIP_TABLE_ROWS,
+    rangeStart: rows.length ? pageStart + 1 : 0,
+    rangeEnd: pageStart + rows.length,
     truncated,
     filters: { type, query, sort, direction },
     limitations: summary.limitations,

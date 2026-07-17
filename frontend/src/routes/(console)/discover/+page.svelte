@@ -28,6 +28,7 @@
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz';
+  const DISCOVER_PAGE_SIZE = 100;
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
   let keyboardLayout = $state<KeyboardLayoutId>(DEFAULT_KEYBOARD_LAYOUT as KeyboardLayoutId);
@@ -49,6 +50,7 @@
   let ctPreviousCheckedAt = $state<string|null>(null);
   let ctNewOnly = $state(false);
   let ctHistoryNotice = $state('');
+  let page = $state(1);
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const ctDisabled=$derived(disabledCapability(capabilityReport?.()||null,'certificate_transparency'));
   // Monotonic request token: a slower, older CT response can never overwrite a
@@ -76,6 +78,9 @@
   const maxTldTextLength = 2_048;
 
   const visible = $derived(candidates.filter((c) => ctCandidateMatchesFilter(c, filter) && (!ctNewOnly || ctNewDomains.has(c.domain))));
+  const pageCount = $derived(Math.max(1, Math.ceil(visible.length / DISCOVER_PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const pagedVisible = $derived(visible.slice((currentPage - 1) * DISCOVER_PAGE_SIZE, currentPage * DISCOVER_PAGE_SIZE));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
 
   onMount(() => { profile = activeProfile(); ctHistory = loadCtHistory(); });
@@ -138,6 +143,7 @@
     status = '';
     error = '';
     filter = '';
+    page = 1;
   }
 
   function selectGenerationPreset(next: GenerationPresetId) {
@@ -169,6 +175,7 @@
     status = message;
     error = '';
     filter = '';
+    page = 1;
   }
 
   function withoutAllowlisted(next: Candidate[]) {
@@ -184,7 +191,7 @@
     status = `Loaded discovery defaults from ${profile.name}.`;
   }
 
-  function selectMode(next:Mode){cancelCtSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();status='';error='';ctResultKind=null;resetCtComparison();}
+  function selectMode(next:Mode){cancelCtSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();status='';error='';ctResultKind=null;page=1;resetCtComparison();}
   function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;event.preventDefault();selectMode(order[index]);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
 
   function generate() {
@@ -319,14 +326,28 @@
     selected = next;
   }
 
-  function selectVisible(checked: boolean) {
+  function selectMatching(checked: boolean) {
     const next = new Set(selected);
     for (const candidate of visible) checked ? next.add(candidate.domain) : next.delete(candidate.domain);
     selected = next;
   }
 
+  function setFilter(value: string) {
+    filter = value;
+    page = 1;
+  }
+
+  function toggleNewOnly() {
+    ctNewOnly = !ctNewOnly;
+    page = 1;
+  }
+
+  function setPage(value: number) {
+    page = Math.min(pageCount, Math.max(1, Math.trunc(value)));
+  }
+
   function candidateDisplayRows() {
-    return visible.slice(0, 300).map((candidate) => ({
+    return pagedVisible.map((candidate) => ({
       domain: candidate.domain,
       mutationLabel: candidate.mutationTypes.map((type) => mutationLabels[type] || type.replaceAll('_', ' ')).join(' · '),
       selected: selected.has(candidate.domain),
@@ -393,16 +414,20 @@
     candidateCount={candidates.length}
     continueToBulk={sendToBulk}
     {filter}
-    setFilter={(value)=>filter=value}
+    {setFilter}
     structured={ctResultKind==='structured'}
     previousCheckedAt={ctPreviousCheckedAt}
     newOnly={ctNewOnly}
     newCount={ctNewDomains.size}
-    toggleNewOnly={()=>ctNewOnly=!ctNewOnly}
-    {selectVisible}
+    {toggleNewOnly}
+    {selectMatching}
     legacy={ctResultKind==='legacy'}
     rows={candidateDisplayRows()}
     visibleCount={visible.length}
+    {currentPage}
+    {pageCount}
+    pageSize={DISCOVER_PAGE_SIZE}
+    {setPage}
     toggleCandidate={toggle}
   />
 {/if}

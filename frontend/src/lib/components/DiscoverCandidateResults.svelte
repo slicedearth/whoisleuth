@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Pagination from '$lib/components/Pagination.svelte';
+
   type CertificateEvidence = {
     certificateCount: number;
     firstObservedAt: string | null;
@@ -24,10 +26,14 @@
     newOnly,
     newCount,
     toggleNewOnly,
-    selectVisible,
+    selectMatching,
     legacy,
     rows,
     visibleCount,
+    currentPage,
+    pageCount,
+    pageSize,
+    setPage,
     toggleCandidate,
   }: {
     selectedCount: number;
@@ -40,10 +46,14 @@
     newOnly: boolean;
     newCount: number;
     toggleNewOnly: () => void;
-    selectVisible: (selected: boolean) => void;
+    selectMatching: (selected: boolean) => void;
     legacy: boolean;
     rows: CandidateRow[];
     visibleCount: number;
+    currentPage: number;
+    pageCount: number;
+    pageSize: number;
+    setPage: (page: number) => void;
     toggleCandidate: (domain: string) => void;
   } = $props();
 </script>
@@ -53,8 +63,8 @@
   <div class="toolbar results-toolbar">
     <input value={filter} oninput={(event) => setFilter(event.currentTarget.value)} aria-label="Filter candidates" placeholder={structured ? 'Filter by domain or observed hostname' : 'Filter candidates'}>
     {#if structured && previousCheckedAt}<button class="btn" class:active={newOnly} aria-pressed={newOnly} onclick={toggleNewOnly}>New only · {newCount}</button>{/if}
-    <button class="btn" onclick={() => selectVisible(true)}>Select visible</button>
-    <button class="btn" onclick={() => selectVisible(false)}>Clear visible</button>
+    <button class="btn" onclick={() => selectMatching(true)}>Select matching</button>
+    <button class="btn" onclick={() => selectMatching(false)}>Clear matching</button>
   </div>
   {#if legacy}<p class="ct-legacy" role="note">Detailed certificate provenance was unavailable for this search; showing observed hostnames only.</p>{/if}
   <div class="candidate-list">
@@ -81,7 +91,12 @@
       </div>
     {/each}
   </div>
-  {#if visibleCount > rows.length}<p class="limit">Showing the first {rows.length} matching candidates. Refine the filter to inspect the remainder.</p>{/if}
+  {#if visibleCount}
+    <p class="page-summary" role="status" aria-live="polite">Showing {(currentPage - 1) * pageSize + 1}–{(currentPage - 1) * pageSize + rows.length} of {visibleCount} matching candidate{visibleCount === 1 ? '' : 's'}.</p>
+  {:else}
+    <p class="page-summary" role="status">No candidates match the current filters.</p>
+  {/if}
+  <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Discover candidate pages" />
 </section>
 
 <style>
@@ -106,7 +121,7 @@
   .ct-hosts summary{color:var(--accent);cursor:pointer;font-size:var(--text-2xs)}
   .ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
   .ct-legacy{margin:0 0 12px;color:var(--muted);font-size:var(--text-xs)}
-  .limit{color:var(--muted);font-size:var(--text-xs)}
+  .page-summary{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
   @media(max-width:700px){
     .results-toolbar,.candidate-list{grid-template-columns:1fr}
     .results .section-head{display:block}

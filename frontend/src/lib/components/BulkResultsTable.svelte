@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Pagination from '$lib/components/Pagination.svelte';
+
   type SortKey = 'domain' | 'risk' | 'opportunity';
   type CaseOption = { value: string; label: string };
   type DraftAction = { mailto: string; body: string };
@@ -85,7 +87,7 @@
     </tbody>
   </table>
 </div>
-{#if pageCount > 1}<div class="pagination" role="navigation" aria-label="Bulk result pages"><button class="btn small" onclick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>Previous</button><span>Page {currentPage} of {pageCount}</span><button class="btn small" onclick={() => setPage(Math.min(pageCount, currentPage + 1))} disabled={currentPage === pageCount}>Next</button></div>{/if}
+<Pagination {currentPage} {pageCount} {setPage} ariaLabel="Bulk result pages" />
 {#if draftStatus}<p class="draft-status" aria-live="polite">{draftStatus}</p>{/if}
 {#if caseStatus}<p class="draft-status" role="status" aria-live="polite">{caseStatus}</p>{/if}
 
@@ -112,15 +114,12 @@
   .draft-actions{display:grid;grid-template-columns:auto auto;gap:4px;align-items:center}
   .draft-actions a,.draft-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:600 var(--text-2xs) var(--mono);text-align:center}
   .draft-actions a.danger{border-color:rgba(255,107,107,.34);background:rgba(255,107,107,.05)}
-  .pagination{display:flex;justify-content:flex-end;align-items:center;gap:10px}
-  .pagination span{color:var(--muted);font-size:var(--text-xs)}
   .draft-status{color:var(--accent)!important;font-size:var(--text-xs)}
   .case-cell{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
   .case-disp{min-height:32px;padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}
   .case-open{color:var(--accent);font-size:var(--text-2xs);font-weight:700}
   .case-track{white-space:nowrap}
   @media(max-width:700px){
-    .pagination{justify-content:space-between}
     .table-wrap{margin-inline:calc(-1 * var(--card-pad));padding-inline:var(--card-pad)}
   }
 </style>

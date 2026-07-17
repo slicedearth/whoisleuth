@@ -23,6 +23,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Investigate domains\./ })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Explore synthetic demo' })).toBeVisible();
+  await expect(page.locator('.public-header').getByRole('link', { name: 'Privacy' })).toHaveCount(0);
+  await expect(page.locator('.public-footer').getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
+  await expect(page.getByText('See the workflow', { exact: true })).toHaveCount(0);
   await expect.poll(() => publicSessionRequests).toBe(1);
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);

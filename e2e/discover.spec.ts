@@ -79,7 +79,8 @@ test('certificate search exposes and enforces the shared bounded query contract'
   expect(await invalidResponse.json()).toMatchObject({ errorCode: 'INVALID_CT_QUERY' });
 });
 
-test('lookalike generation discloses and enforces its candidate limits', async ({ page }) => {
+test('lookalike generation discloses its limits and paginates every retained candidate', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const tlds = Array.from({ length: 25 }, (_, index) =>
     `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
   );
@@ -90,8 +91,22 @@ test('lookalike generation discloses and enforces its candidate limits', async (
 
   await expect(page.getByRole('heading', { name: '2000 selected of 2000' })).toBeVisible();
   await expect(page.locator('.status')).toContainText('Generation limits were reached');
-  await expect(page.locator('.candidate')).toHaveCount(300);
-  await expect(page.locator('.limit')).toContainText('first 300 matching candidates');
+  await expect(page.locator('.candidate')).toHaveCount(100);
+  await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
+
+  const pagination = page.getByRole('navigation', { name: 'Discover candidate pages' });
+  await expect(pagination).toContainText('Page 1 of 20');
+  await expect(pagination.getByRole('button', { name: 'Previous' })).toBeDisabled();
+  await pagination.getByRole('button', { name: 'Next' }).click();
+  await expect(pagination).toContainText('Page 2 of 20');
+  await expect(page.locator('.candidate')).toHaveCount(100);
+  await expect(page.getByRole('status').filter({ hasText: 'Showing 101–200 of 2000 matching candidates' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('textbox', { name: 'Filter candidates' }).fill('login-acme.aa');
+  await expect(page.locator('.candidate strong')).toHaveText(['login-acme.aa']);
+  await expect(page.getByRole('navigation', { name: 'Discover candidate pages' })).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Showing 1–1 of 1 matching candidate' })).toBeVisible();
 });
 
 test('lookalike presets expose a live upper-bound estimate and clear stale results', async ({ page }) => {

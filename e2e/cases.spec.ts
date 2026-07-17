@@ -1051,6 +1051,39 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  test('paginates every retained relationship and resets the page when filtering', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    const records = Array.from({ length: 52 }, (_, index) => {
+      const suffix = String(index).padStart(2, '0');
+      const nameserver = `ns-${suffix}.pagination.invalid`;
+      return [
+        caseRecord({ id: `page-a-${suffix}`, domain: `page-a-${suffix}.invalid`, evidenceHistory: [snapshot({ nameservers: [nameserver] })] }),
+        caseRecord({ id: `page-b-${suffix}`, domain: `page-b-${suffix}.invalid`, evidenceHistory: [snapshot({ nameservers: [nameserver] })] }),
+      ];
+    }).flat();
+    await openRelationshipTable(page, records);
+
+    const table = page.getByRole('table', { name: 'Cross-case relationships from latest browser-local case evidence' });
+    const pagination = page.getByRole('navigation', { name: 'Case relationship pages' });
+    await expect(table.getByRole('row')).toHaveCount(51);
+    await expect(pagination).toContainText('Page 1 of 2');
+    await expect(pagination.getByRole('button', { name: 'Previous' })).toBeDisabled();
+
+    await pagination.getByRole('button', { name: 'Next' }).click();
+    await expect(table.getByRole('row')).toHaveCount(3);
+    await expect(pagination).toContainText('Page 2 of 2');
+    await expect(pagination.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await expect(page.locator('.result-count')).toContainText('Showing 51–52 of 52 matching relationships');
+    await expect(page.locator('.relationship-workspace')).not.toContainText('Partial result');
+    await expectNoHorizontalOverflow(page);
+
+    await page.locator('.relationship-filters .search input').fill('ns-00.pagination.invalid');
+    await expect(table.getByRole('row')).toHaveCount(2);
+    await expect(table).toContainText('ns-00.pagination.invalid');
+    await expect(page.getByRole('navigation', { name: 'Case relationship pages' })).toHaveCount(0);
+    await expect(page.locator('.result-count')).toContainText('Showing 1–1 of 1 matching relationship');
+  });
+
   test('inspects evidence-backed graph nodes with keyboard case pivots', async ({ page }) => {
     const http = {
       httpSummaryVersion: 1,
