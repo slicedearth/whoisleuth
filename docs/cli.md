@@ -19,6 +19,7 @@ node bin/whoisleuth.mts posture example.com --selectors selector1,selector2 --js
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
+node bin/whoisleuth.mts risk-calibrate calibration.json --json
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -62,8 +63,8 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-and `export` operations make no network requests and write their results only
-to local stdout unless the user redirects them to a file.
+`risk-calibrate`, and `export` operations make no network requests and write
+their results only to local stdout unless the user redirects them to a file.
 
 ## Output
 
@@ -110,8 +111,9 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
-`http`, `tls`, `registry-support`, `compare`, and `export`. Additional export formats are added as
-separate bounded increments rather than exposing incomplete aliases.
+`http`, `tls`, `registry-support`, `risk-calibrate`, `compare`, and `export`.
+Additional export formats are added as separate bounded increments rather than
+exposing incomplete aliases.
 
 ## Registry capability coverage
 
@@ -129,6 +131,48 @@ suffixes retain the generic `discovery_only` profile; malformed input exits
 with code 2. The command never probes a registry or tests current reachability.
 Coverage is context only and cannot decide registration, availability,
 ownership, safety, or maliciousness.
+
+## Offline Risk calibration
+
+`risk-calibrate` replays a versioned analyst-labelled fixture dataset through
+the exact Risk model shared with the web application. It does not perform a
+lookup, contact the hosted deployment, persist the dataset, alter model weights,
+choose a threshold, or tune the model automatically. The report compares fixed
+thresholds from 40 through 90 and identifies 70 as the current review band.
+
+Input is capped at 2 MiB and 500 records. Each record requires a unique bounded
+ID, an ASCII DNS hostname, one existing analyst disposition, and a strict
+whitelist of current scoring inputs. Unknown fields are discarded; arrays,
+strings, ages, booleans, provider records, and external findings are revalidated
+and bounded before scoring. The accepted dataset envelope is:
+
+```json
+{
+  "schema": "whoisleuth.risk-calibration-dataset",
+  "version": 1,
+  "records": [
+    {
+      "id": "fixture-1",
+      "domain": "login.example.test",
+      "analystDisposition": "confirmed_abuse",
+      "evidence": {
+        "availability": "registered",
+        "mutationTypes": ["dictionary"],
+        "hasPasswordField": true
+      }
+    }
+  ]
+}
+```
+
+`confirmed_abuse` is treated as a positive calibration label; `false_positive`
+and `expected` are negative labels. `unreviewed`, `suspicious`, and
+`closed_no_action` remain contextual and are excluded from threshold quality
+metrics, as are records for which Risk is not applicable. Terminal output caps
+its record list at 100 while `--json` retains the complete bounded report,
+factor breakdowns, score bands, and per-threshold confusion metrics. Analyst
+dispositions and heuristic scores are review context: neither proves
+maliciousness or safety.
 
 ## Bulk lookup
 

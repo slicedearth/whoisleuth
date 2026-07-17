@@ -482,6 +482,13 @@ covered by the provider's community terms or an appropriate paid agreement.
   before explicit versioning remain readable, but watchlist and case timelines
   do not treat a difference between unversioned and versioned scores as a
   change in the observed domain.
+- The local CLI can replay a bounded, versioned analyst-labelled fixture set
+  through the same shared Risk model with `risk-calibrate [dataset.json]`.
+  This offline report compares fixed review thresholds and factor breakdowns;
+  it makes no request, changes no weight or threshold, persists nothing, and
+  does not treat an analyst disposition or heuristic score as proof of
+  maliciousness or safety. See [the CLI guide](docs/cli.md#offline-risk-calibration)
+  for the input contract and limits.
 
 ### Brand protection & monitoring
 

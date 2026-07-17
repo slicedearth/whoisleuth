@@ -115,6 +115,33 @@ describe('installed CLI process boundary', () => {
     assert.equal(document.interpretation.liveReachability, 'not_tested');
   });
 
+  test('Risk calibration runs through the executable as an offline fixture replay', () => {
+    const input = {
+      schema: 'whoisleuth.risk-calibration-dataset',
+      version: 1,
+      records: [{
+        id: 'fixture-1',
+        domain: 'login.example.test',
+        analystDisposition: 'confirmed_abuse',
+        evidence: {
+          availability: 'registered',
+          mutationTypes: ['dictionary'],
+          faviconMatch: true,
+          phishingLanguageMatch: 'verify account',
+          hasPasswordField: true,
+        },
+      }],
+    };
+    const result = runBinary(['risk-calibrate', '--json'], JSON.stringify(input));
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, '');
+    const document = JSON.parse(result.stdout);
+    assert.equal(document.schema, 'whoisleuth.cli.risk-calibration');
+    assert.equal(document.riskModelVersion, 5);
+    assert.equal(document.interpretation.networkRequests, false);
+    assert.match(document.interpretation.statement, /does not.*prove maliciousness or safety/i);
+  });
+
   test('saved lookup comparison is a real-process offline transformation', () => {
     const result = runBinary(['compare', '--json'], JSON.stringify(savedLookup()));
     assert.equal(result.status, 0);

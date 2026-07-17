@@ -9,6 +9,7 @@ import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from
 import { runUnifiedLookup } from '../lib/lookup.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
 import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
+import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { CliUsageError, parseCliArguments } from './arguments.mts';
 import {
   MAX_BULK_INPUT_BYTES,
@@ -51,11 +52,18 @@ import {
   formatTerminalLookup,
   formatTerminalPosture,
   formatTerminalRegistrySupport,
+  formatTerminalRiskCalibration,
   formatTerminalTls,
 } from './formatters/terminal.mts';
 import { buildHttpProbeResult } from './http.mts';
 import { normalizePostureSelectors } from './posture.mts';
 import { buildRegistrySupportDocument } from './registry-support.mts';
+import {
+  MAX_RISK_CALIBRATION_INPUT_BYTES,
+  buildRiskCalibrationReport,
+  parseRiskCalibrationDataset,
+  readRiskCalibrationInputBounded,
+} from './risk-calibration.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES, readSavedLookupInputBounded } from './saved-lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 
@@ -76,6 +84,7 @@ Usage:
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
   whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]
+  whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]
   whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]
   whoisleuth export [lookup.json] [--markdown|--html|--compact]
   whoisleuth --help
@@ -85,6 +94,7 @@ Lookup defaults to fast mode. Deep mode must be requested explicitly and may
 perform WHOIS, website, DNS, and TLS work through the shared bounded pipeline.
 Machine-readable output is written to stdout; diagnostics are written to stderr.
 Registry support is an offline catalogue view and never tests live reachability.
+Risk calibration is an offline fixture replay and never changes the scoring model.
 `;
 
 type WritableLike = { write(value: string): unknown };
@@ -142,6 +152,30 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       const catalogueVersion = dependencies.registryCapabilitiesVersion || REGISTRY_CAPABILITIES_VERSION;
       const document = buildRegistrySupportDocument(requestedInput, capability, catalogueVersion, now);
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalRegistrySupport(document));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'risk-calibrate') {
+      failureLabel = 'Risk calibration';
+      let input: string;
+      try {
+        input = dependencies.readRiskCalibrationInput
+          ? await dependencies.readRiskCalibrationInput(args.source)
+          : await readRiskCalibrationInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, MAX_RISK_CALIBRATION_INPUT_BYTES);
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read Risk calibration input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('risk-calibrate requires one dataset JSON file or a dataset on stdin.');
+      const dataset = parseRiskCalibrationDataset(input);
+      const report = buildRiskCalibrationReport(dataset, dependencies.explainRiskScore || explainRiskScore, {
+        generatedAt: dependencies.now ? dependencies.now() : new Date().toISOString(),
+        modelVersion: dependencies.riskModelVersion || RISK_MODEL_VERSION,
+        reviewThreshold: dependencies.riskReviewThreshold || RISK_REVIEW_THRESHOLD,
+      });
+      if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(report) : formatTerminalRiskCalibration(report));
       return EXIT_CODES.SUCCESS;
     }
 

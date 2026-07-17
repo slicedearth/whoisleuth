@@ -6,6 +6,7 @@ const MAX_CT_TERMINAL_HOSTNAMES = 5;
 const MAX_DISCOVER_TERMINAL_CANDIDATES = 200;
 const MAX_POSTURE_TERMINAL_RECORDS = 5;
 const MAX_TLS_TERMINAL_ALT_NAMES = 10;
+const MAX_RISK_CALIBRATION_TERMINAL_RECORDS = 100;
 
 // Terminal documents have different versioned shapes. Every scalar crosses
 // safeTerminalValue before display, while the runner supplies bounded arrays.
@@ -376,12 +377,44 @@ function formatTerminalCompare(document: TerminalRecord): string {
   return `${lines.join('\n')}\n`;
 }
 
+function formatTerminalRiskCalibration(document: TerminalRecord): string {
+  const summary = document.summary && typeof document.summary === 'object' ? document.summary : {};
+  const bands = summary.scoreBands && typeof summary.scoreBands === 'object' ? summary.scoreBands : {};
+  const thresholds = Array.isArray(document.thresholds) ? document.thresholds : [];
+  const records = Array.isArray(document.records) ? document.records : [];
+  const visible = records.slice(0, MAX_RISK_CALIBRATION_TERMINAL_RECORDS);
+  const lines = [
+    `Risk model     v${safeTerminalValue(document.riskModelVersion)}`,
+    `Review band    ${safeTerminalValue(document.currentReviewThreshold)}+`,
+    `Records        ${safeTerminalValue(summary.total, '0')}`,
+    `Metric labels  ${safeTerminalValue((Number(summary.positive) || 0) + (Number(summary.negative) || 0), '0')}`,
+    `Excluded       ${safeTerminalValue(summary.excluded, '0')}`,
+    `Score bands    0-39 ${safeTerminalValue(bands['0_39'], '0')} · 40-69 ${safeTerminalValue(bands['40_69'], '0')} · 70-100 ${safeTerminalValue(bands['70_100'], '0')} · not scored ${safeTerminalValue(bands.not_scored, '0')}`,
+    '',
+    'Threshold replay',
+  ];
+  for (const threshold of thresholds) {
+    lines.push(
+      `${String(safeTerminalValue(threshold.threshold)).padStart(3)}+  TP ${safeTerminalValue(threshold.truePositive, '0')}  FP ${safeTerminalValue(threshold.falsePositive, '0')}  TN ${safeTerminalValue(threshold.trueNegative, '0')}  FN ${safeTerminalValue(threshold.falseNegative, '0')}  precision ${safeTerminalValue(threshold.precision)}  recall ${safeTerminalValue(threshold.recall)}`,
+    );
+  }
+  lines.push('', 'Records');
+  for (const record of visible) {
+    const score = record.score === null ? 'not scored' : String(record.score);
+    lines.push(`${safeTerminalValue(record.id)}  ${safeTerminalValue(record.domain)}  ${titleCase(record.analystDisposition)}  ${score}`);
+  }
+  if (records.length > visible.length) lines.push(`… ${records.length - visible.length} additional records omitted from terminal output; use --json for the complete bounded report.`);
+  lines.push('', safeTerminalValue(document.interpretation?.statement));
+  return `${lines.join('\n')}\n`;
+}
+
 export {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
   MAX_DISCOVER_TERMINAL_CANDIDATES,
   MAX_POSTURE_TERMINAL_RECORDS,
   MAX_TLS_TERMINAL_ALT_NAMES,
+  MAX_RISK_CALIBRATION_TERMINAL_RECORDS,
   MAX_TERMINAL_VALUE_LENGTH,
   formatTerminalBulk,
   formatTerminalCompare,
@@ -391,6 +424,7 @@ export {
   formatTerminalLookup,
   formatTerminalPosture,
   formatTerminalRegistrySupport,
+  formatTerminalRiskCalibration,
   formatTerminalTls,
   safeTerminalValue,
 };
