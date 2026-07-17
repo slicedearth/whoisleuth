@@ -2,17 +2,17 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { workspaces } from '$lib/workspaces';
+  import { consoleDestinations } from '$lib/workspaces';
 
   let password=$state('');
   let error=$state('');
   let busy=$state(false);
   let checking=$state(true);
-  const allowedTargets=new Set(workspaces.map((item)=>item.href));
+  const allowedTargets=new Set(consoleDestinations.map((item)=>item.href));
 
   function returnTarget(){
     const requested=page.url.searchParams.get('next');
-    return requested&&allowedTargets.has(requested)?requested:'/lookup';
+    return requested&&allowedTargets.has(requested)?requested:'/dashboard';
   }
 
   onMount(()=>{void checkSession();});

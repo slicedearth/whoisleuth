@@ -23,7 +23,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Investigate domains\./ })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Explore synthetic demo' })).toBeVisible();
-  expect(publicSessionRequests).toBe(0);
+  await expect.poll(() => publicSessionRequests).toBe(1);
+  await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 
   await page.goto('/lookup');
   await expect(page).toHaveURL(/\/login\?next=%2Flookup$/u);
@@ -55,7 +57,26 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(signOutButton).toBeVisible();
   await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
-  await signOutButton.click();
+
+  const dashboardLink = page.getByRole('link', { name: 'WHOISleuth dashboard' });
+  await expect(dashboardLink).toBeVisible();
+  await expect(dashboardLink).toHaveAttribute('href', '/dashboard');
+  await dashboardLink.click();
+  await expect(page).toHaveURL('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
+  await page.getByRole('link', { name: 'View public homepage' }).click();
+  await expect(page.getByRole('heading', { name: /Investigate domains\./ })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  const publicSignOutButton = page.getByRole('button', { name: 'Sign out' });
+  await expect(publicSignOutButton).toBeVisible();
+  await expect(publicSignOutButton).toHaveCSS('white-space', 'nowrap');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const signOutBox = await publicSignOutButton.boundingBox();
+  expect(signOutBox).not.toBeNull();
+  expect(signOutBox!.x).toBeGreaterThanOrEqual(0);
+  expect(signOutBox!.x + signOutBox!.width).toBeLessThanOrEqual(390);
+  expect(await page.locator('html').evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(390);
+  await publicSignOutButton.click();
 
   await expect(page).toHaveURL('/login');
   await expect(loginForm).toBeVisible();
@@ -68,8 +89,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
   expect(consoleTexts.join('\n')).not.toContain(TEST_SITE_PASSWORD);
 });
 
-test('all investigation workspaces require sign-in and unsafe return targets are ignored', async ({ page }) => {
-  for (const path of ['/lookup', '/discover', '/bulk', '/monitor', '/brands']) {
+test('the dashboard and all investigation workspaces require sign-in and unsafe return targets are ignored', async ({ page }) => {
+  for (const path of ['/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/brands']) {
     await page.goto(path);
     await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);
     await expect(page.locator('form.login')).toBeVisible();
@@ -78,6 +99,6 @@ test('all investigation workspaces require sign-in and unsafe return targets are
   await page.goto('/login?next=https%3A%2F%2Foutside.invalid%2Fcapture');
   await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL('/lookup');
-  await expect(page.getByRole('heading', { name: 'Lookup' })).toBeVisible();
+  await expect(page).toHaveURL('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
 });

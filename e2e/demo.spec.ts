@@ -3,10 +3,11 @@ import { expectNoHorizontalOverflow } from './helpers';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test('completes the public synthetic workflow without API or production-store access', async ({ page }) => {
-  const apiRequests: string[] = [];
+test('completes the public synthetic workflow without investigation requests or production-store access', async ({ page }) => {
+  const apiRequestPaths: string[] = [];
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(request.url());
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/')) apiRequestPaths.push(pathname);
   });
 
   await page.goto('/demo');
@@ -44,7 +45,7 @@ test('completes the public synthetic workflow without API or production-store ac
   await page.getByRole('button', { name: 'Reset demo' }).click();
   await expect(page.getByRole('heading', { name: 'Define the protected brand' })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('whoisleuth:synthetic-demo:v1'))).toBeNull();
-  expect(apiRequests).toEqual([]);
+  expect(apiRequestPaths).toEqual(['/api/session', '/api/session']);
 });
 
 test('keeps the public demo usable without mobile overflow', async ({ page }) => {

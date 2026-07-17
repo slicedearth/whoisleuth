@@ -207,7 +207,7 @@ test('long untrusted values wrap inside result tiles without page overflow', asy
 });
 
 test('every workspace renders without page-level overflow at narrow and wide widths', async ({ page }) => {
-  for (const path of ['/', '/lookup', '/discover', '/bulk', '/monitor', '/brands']) {
+  for (const path of ['/', '/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/brands']) {
     await page.goto(path);
     for (const size of [
       { width: 320, height: 640 },
@@ -221,6 +221,7 @@ test('every workspace renders without page-level overflow at narrow and wide wid
 
 test('protected workspace pages expose one consistent primary heading', async ({ page }) => {
   for (const [path, title, eyebrow] of [
+    ['/dashboard', 'Investigation dashboard', 'Console'],
     ['/lookup', 'Lookup', 'Investigate'],
     ['/discover', 'Candidate discovery', 'Discover'],
     ['/bulk', 'Bulk analysis', 'Assess'],

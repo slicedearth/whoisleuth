@@ -1,7 +1,39 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { onMount } from 'svelte';
 
   let { children } = $props();
+  let authenticated = $state(false);
+  let signingOut = $state(false);
+  let logoutError = $state('');
+
+  onMount(() => { void checkSession(); });
+
+  async function checkSession(){
+    try{
+      const response=await fetch('/api/session',{cache:'no-store'});
+      authenticated=response.ok&&(await response.json()).authenticated===true;
+    }catch{
+      authenticated=false;
+    }
+  }
+
+  async function logout(){
+    if(signingOut)return;
+    signingOut=true;
+    logoutError='';
+    try{
+      const response=await fetch('/api/logout',{method:'POST'});
+      if(!response.ok)throw new Error();
+      authenticated=false;
+      await goto('/login',{replaceState:true});
+    }catch{
+      logoutError='Sign out failed. Try again.';
+    }finally{
+      signingOut=false;
+    }
+  }
 </script>
 
 <div class="public-shell">
@@ -11,7 +43,9 @@
       <a class:active={page.url.pathname==='/' } aria-current={page.url.pathname==='/'?'page':undefined} href="/">Overview</a>
       <a class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>
       <a class:active={page.url.pathname==='/privacy'} aria-current={page.url.pathname==='/privacy'?'page':undefined} href="/privacy">Privacy</a>
-      <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} href="/login">Open console</a>
+      <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} href={authenticated?'/dashboard':'/login'}>Open console</a>
+      {#if authenticated}<button class="sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>{/if}
+      {#if logoutError}<span class="session-error" role="status">{logoutError}</span>{/if}
     </nav>
   </header>
 
@@ -33,10 +67,12 @@
   .public-brand strong::after{content:"";display:inline-block;width:.46em;height:.9em;margin-left:.18em;background:var(--accent2);box-shadow:0 0 8px rgba(126,224,168,.5);vertical-align:-.12em;animation:public-cursor 1.1s steps(1,end) infinite}
   .public-brand small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
   nav{display:flex;align-items:center;gap:5px;margin:0}
-  nav a{position:static;margin:0;padding:9px 11px;border:1px solid transparent;color:var(--muted);font:700 var(--text-xs) var(--mono);white-space:nowrap}
+  nav a,nav button{position:static;width:auto;min-height:0;margin:0;padding:9px 11px;border:1px solid transparent;border-radius:0;color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
   nav a::before{content:none}
-  nav a:hover,nav a.active{border-color:var(--border);color:var(--text);background:rgba(94,179,255,.07)}
+  nav a:hover,nav a.active,nav button:hover{border-color:var(--border);color:var(--text);background:rgba(94,179,255,.07)}
   nav a.console-link{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
+  nav button.sign-out{color:var(--muted)}
+  nav .session-error{color:var(--danger);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
   .public-content{width:100%;margin:0;padding:clamp(44px,7vw,82px) 0 72px}
   .public-footer{display:flex;justify-content:space-between;gap:30px;padding:22px 0 30px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono);line-height:1.6}
   .public-footer p{max-width:72ch;margin:0}
@@ -46,7 +82,7 @@
   @media(prefers-reduced-motion:reduce){.public-brand strong::after{animation:none}}
   @media(max-width:720px){
     .public-header{align-items:flex-start;flex-direction:column;gap:14px}
-    nav{width:100%;padding-bottom:2px;overflow-x:auto}
+    nav{width:100%;flex-wrap:wrap;padding-bottom:2px}
     nav a{flex:0 0 auto}
     .public-content{padding-top:38px}
     .public-footer{align-items:flex-start;flex-direction:column}

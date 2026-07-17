@@ -829,11 +829,18 @@ product walkthrough rather than a shadow implementation of every workspace.
 
 The unauthenticated `/` route describes the product, evidence model, privacy
 posture, and five investigation workspaces without reading deployment
-capabilities or calling an analysis API. `/login` accepts the shared deployment
-password and returns only to a known protected workspace; arbitrary or
-off-origin return targets are ignored. Direct anonymous navigation to Lookup,
-Discover, Bulk, Monitor, or Brands is redirected to sign-in, while the backend
-continues to enforce authentication independently on every protected API.
+capabilities or calling an analysis API. The public layout reads only the
+existing boolean session-status endpoint so an authenticated visitor can open
+the console or sign out from a public page. Authenticated visitors land on a
+protected dashboard that links to all five investigation workspaces and shows
+only bounded counts derived from browser-local cases, watchlists, and profiles.
+The protected WHOISleuth brand returns to that dashboard; the dashboard keeps
+the public homepage available as a separate, clearly labelled destination.
+`/login` accepts the shared deployment password and returns only to a known
+protected workspace; arbitrary or off-origin return targets are ignored.
+Direct anonymous navigation to the dashboard, Lookup, Discover, Bulk, Monitor,
+or Brands is redirected to sign-in, while the backend continues to enforce
+authentication independently on every protected API.
 The public surface is designed around data minimisation, without advertising
 profiles or cross-site tracking. Any deployment-specific audience measurement
 belongs only on public routes and must be described in that deployment's

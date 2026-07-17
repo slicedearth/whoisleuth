@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
-  import { workspaces } from '$lib/workspaces';
+  import { consoleDestinations } from '$lib/workspaces';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
 
   let { children } = $props();
@@ -15,7 +15,7 @@
   onMount(() => { void checkSession(); });
 
   function signInTarget(){
-    const path = workspaces.some((item) => item.href === page.url.pathname) ? page.url.pathname : '/lookup';
+    const path = consoleDestinations.some((item) => item.href === page.url.pathname) ? page.url.pathname : '/dashboard';
     return `/login?next=${encodeURIComponent(path)}`;
   }
 
@@ -59,11 +59,11 @@
   <div class="center"><section class="login card"><h1>Session service unavailable</h1><p class="muted">The protected console could not confirm your session.</p><button class="primary" onclick={checkSession}>Retry</button><p class="login-links"><a href="/">Return home</a></p></section></div>
 {:else}
   <div class="shell" class:open={navOpen}>
-    <header><a href="/lookup"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a><button aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="workspace-navigation" onclick={toggleNavigation}>☰</button></header>
+    <header><a href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a><button aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="workspace-navigation" onclick={toggleNavigation}>☰</button></header>
     <aside id="workspace-navigation">
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth — console</span></div>
-      <a class="brand" href="/lookup"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
-      <nav aria-label="Tools"><p class="eyebrow">Tools</p>{#each workspaces as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
+      <a class="brand" href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
+      <nav aria-label="Console"><p class="eyebrow">Console</p>{#each consoleDestinations as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <div class="session"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span><button onclick={logout}>Sign out</button></div>
     </aside>
     {#if navOpen}<button class="scrim" aria-label="Close navigation" onclick={()=>navOpen=false}></button>{/if}

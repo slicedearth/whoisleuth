@@ -27,6 +27,7 @@ for (const viewport of VIEWPORTS) {
       // authenticated shell before counting so this assertion cannot race the
       // client-side session check after navigation.
       await expect(page.locator('.shell > header strong', { hasText: 'WHOISleuth' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'WHOISleuth dashboard' })).toHaveAttribute('href', '/dashboard');
       const visibleBrandCount = await page
         .locator('strong', { hasText: 'WHOISleuth' })
         .evaluateAll((els) => els.filter((el) => (el as HTMLElement).offsetParent !== null).length);
