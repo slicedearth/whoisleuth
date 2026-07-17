@@ -171,13 +171,23 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
       rdap: {
         upstreamStatus: 200,
         rdapServer: 'https://registry.example/domain/registrar-source.example',
-        parsed: { domain: 'REGISTRAR-SOURCE.EXAMPLE', entitiesByRole: {} },
+        parsed: {
+          domain: 'REGISTRAR-SOURCE.EXAMPLE', handle: 'registry-object-handle',
+          registrar: { name: 'Example Registrar' }, registrarIanaId: '999',
+          lifecycle: { createdDate: '2025-01-01T00:00:00Z', expiryDate: '2030-01-01T00:00:00Z' },
+          dnssec: 'signed', statuses: ['clientTransferProhibited'],
+          nameservers: ['NS2.REGISTRAR-SOURCE.EXAMPLE.', 'ns1.registrar-source.example'], entitiesByRole: {},
+        },
         registrarRdap: {
           status: 'success', detail: null,
           endpoint: 'https://registrar.example/very/long/path/domain/registrar-source.example',
           transportSecurity: 'https', upstreamStatus: 200, fetchedAt: '2026-07-14T01:02:03.000Z',
           parsed: {
-            objectClassName: 'domain', domain: 'REGISTRAR-SOURCE.EXAMPLE', statuses: ['active'],
+            objectClassName: 'domain', domain: 'registrar-source.example', handle: 'registrar-object-handle',
+            registrar: { name: 'EXAMPLE REGISTRAR' }, registrarIanaId: '999',
+            lifecycle: { createdDate: '2025-01-01', expiryDate: '2031-01-01' },
+            dnssec: 'secure', statuses: ['client transfer prohibited'],
+            nameservers: ['NS1.REGISTRAR-SOURCE.EXAMPLE.', 'ns2.registrar-source.example'],
             entitiesByRole: {
               abuse: [{ name: 'Registrar abuse desk', organizations: [], emails: ['abuse@registrar.example'], phones: [], addresses: [], publicIds: [], links: [] }],
             },
@@ -203,6 +213,13 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
   await summary.press('Enter');
   await expect(section).toHaveAttribute('open', '');
   await expect(section.getByText(/Published by the sponsoring registrar's RDAP service, not the registry/)).toBeVisible();
+  const comparison = section.locator('.publication-comparison');
+  await expect(comparison.getByText(/1 conflicts · 0 source-only · 0 redacted · 0 unavailable\/incomplete · 7 equivalent/)).toBeVisible();
+  await expect(comparison.getByText(/difference can reflect update timing or disclosure policy/)).toBeVisible();
+  await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2030-01-01T00:00:00Z');
+  await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2031-01-01');
+  await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('Conflict');
+  await expect(comparison.getByText('Registry object ID', { exact: true })).toHaveCount(0);
   await expect(section.getByText('REGISTRAR-SOURCE.EXAMPLE', { exact: true })).toBeVisible();
   await section.getByText('Published contacts · 1 role').click();
   await expect(section.getByText('Email: abuse@registrar.example')).toBeVisible();

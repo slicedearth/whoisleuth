@@ -11,6 +11,14 @@
     assessment: string;
     tone: string;
   };
+  type PublicationComparisonRow = {
+    label: string;
+    registryValue: string;
+    registrarValue: string;
+    status: string;
+    assessment: string;
+    tone: string;
+  };
   type ContactRole = { role: string; contacts: Array<{ identity: string; details: string[] }> };
 
   let {
@@ -49,6 +57,8 @@
       error: boolean;
       success: boolean;
       parsed: JsonRecord;
+      comparisonSummary?: string;
+      comparisonRows?: PublicationComparisonRow[];
     };
   } = $props();
 </script>
@@ -96,7 +106,15 @@
       {#if registrar.detail}<span>{registrar.detail}</span>{/if}
       <p>Published by the sponsoring registrar's RDAP service, not the registry. Registrar-published contacts are relationship evidence, not proof of ownership.</p>
     </div>
-    {#if registrar.success}<RdapDomainSource parsed={registrar.parsed} source="Registrar" />
+    {#if registrar.success}
+      {#if registrar.comparisonRows?.length}
+        <section class="publication-comparison" aria-labelledby="registrar-publication-comparison-title">
+          <h4 id="registrar-publication-comparison-title">{registrar.comparisonSummary}</h4>
+          <p>These remain separate publications. A difference can reflect update timing or disclosure policy and does not by itself establish that either source is incorrect.</p>
+          <div class="table-wrap"><table><thead><tr><th>Field</th><th>Registry RDAP</th><th>Registrar RDAP</th><th>Assessment</th></tr></thead><tbody>{#each registrar.comparisonRows || [] as row}<tr class:conflict={row.status === 'conflict'}><th scope="row">{row.label}</th><td>{row.registryValue}</td><td>{row.registrarValue}</td><td><span class={`chip ${row.tone}`}>{row.assessment}</span></td></tr>{/each}</tbody></table></div>
+        </section>
+      {/if}
+      <RdapDomainSource parsed={registrar.parsed} source="Registrar" />
     {:else}<p class:error={registrar.error} class="registrar-state">{registrar.stateDetail}</p>{/if}
   </details>
 {/if}
@@ -127,6 +145,12 @@
   .registrar-provenance strong{font-family:var(--mono)}
   .registrar-provenance span,.registrar-provenance p{color:var(--muted)}
   .registrar-provenance p{margin:4px 0 0;line-height:1.5}
+  .publication-comparison{margin:0 var(--card-pad) 16px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+  .publication-comparison h4{margin:0;padding:11px 12px;border-bottom:1px solid var(--border);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}
+  .publication-comparison p{margin:0;padding:10px 12px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .publication-comparison .table-wrap{border-top:1px solid var(--border)}
+  .publication-comparison tr.conflict{background:rgba(255,107,107,.03)}
+  .publication-comparison .chip{white-space:normal}
   .registrar-state{margin:0;padding:0 var(--card-pad) var(--card-pad);color:var(--muted);font-size:var(--text-xs)}
   .registrar-state.error{color:var(--danger)}
   @media(max-width:650px){

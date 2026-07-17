@@ -27,7 +27,7 @@
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
-  import { compareRegistrySources } from '$lib/analysis/registry-comparison.js';
+  import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.js';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import {
@@ -43,6 +43,7 @@
   type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; transportSecurity?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null; attempts?:Array<{outcome?:string}> };
   type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
   type ComparisonField = { label:string; status:string; rdapDisplay:string; whoisDisplay:string };
+  type RdapPublicationField = { label:string; status:string; registryDisplay:string; registrarDisplay:string };
 
   let query=$state('');
   let loading=$state(false);
@@ -110,6 +111,7 @@
   const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
   const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>Array.isArray(whoisParsed.contactsByRole?.[role])&&whoisParsed.contactsByRole[role].length));
   const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed,{rdapStatus:diagnostics.rdap?.status,whoisStatus:diagnostics.whois?.status}):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0,rdap_unavailable:0,whois_unavailable:0,rdap_incomplete:0,whois_incomplete:0}});
+  const registrarPublicationComparison=$derived(result?.type==='domain'?compareRdapPublications(rdapParsed,registrarRdapParsed,{registryStatus:diagnostics.rdap?.status,registrarStatus:registrarRdap.status}):{fields:[],counts:{equivalent:0,conflict:0,registry_only:0,registrar_only:0,registry_redacted:0,registrar_redacted:0,registry_unavailable:0,registrar_unavailable:0,registry_incomplete:0,registrar_incomplete:0}});
   const idnAnalysis=$derived(result?.type==='domain'?analyzeDomainIdn(String(result?.registrableDomain||availability.domain||''),profile?.officialDomains||[]):null);
   const profileSignals=$derived.by(()=>{
     return matchProfileSignals(String(availability.domain||result?.registrableDomain||''),availability,profile);
@@ -222,6 +224,7 @@
     components:Array.isArray(pageComparison.components)?pageComparison.components.map((item:any)=>({label:String(item.label),method:String(item.method),outcome:String(item.outcome),detail:String(item.detail),status:String(item.status),sharedValues:stringList(item.sharedValues)})):[],
   };}
   function assessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',rdap_only:'RDAP only',whois_only:'WHOIS only',rdap_redacted:'RDAP redacted',whois_redacted:'WHOIS redacted',rdap_unavailable:'RDAP unavailable',whois_unavailable:'WHOIS unavailable',rdap_incomplete:'RDAP incomplete',whois_incomplete:'WHOIS incomplete'} as Record<string,string>)[status]||status;}
+  function publicationAssessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',registry_only:'Registry only',registrar_only:'Registrar only',registry_redacted:'Registry redacted',registrar_redacted:'Registrar redacted',registry_unavailable:'Registry unavailable',registrar_unavailable:'Registrar unavailable',registry_incomplete:'Registry incomplete',registrar_incomplete:'Registrar incomplete'} as Record<string,string>)[status]||status;}
   function diagnosticLabel(source:SourceStatus){return source.status?source.status.replaceAll('_',' '):'unknown';}
   function attemptSummary(source:SourceStatus){return Array.isArray(source.attempts)&&source.attempts.length?`attempts: ${source.attempts.map((item)=>String(item.outcome||'unknown').replaceAll('_',' ')).join(' → ')}`:null;}
   function diagnosticDetail(source:SourceStatus){return[source.endpoint,source.transportSecurity==='http'?'transport: cleartext HTTP':null,source.httpStatus?`HTTP ${source.httpStatus}`:null,attemptSummary(source),source.resultState?`result: ${source.resultState}`:null,source.errorCode,source.authoritativeHop?`authoritative: ${show(source.authoritativeHop)}`:null,source.failedHop?`failed: ${show(source.failedHop)}`:null,source.fetchedAt?`fetched ${formatDate(source.fetchedAt)}`:null,source.queriedAt?`queried ${formatDate(source.queriedAt)}`:null].filter(Boolean).join(' · ')||'No additional source detail';}
@@ -241,6 +244,14 @@
     status:field.status,
     assessment:assessment(field.status),
     tone:field.status==='conflict'?'danger':field.status==='equivalent'?'good':['rdap_unavailable','whois_unavailable','rdap_incomplete','whois_incomplete'].includes(field.status)?'warn':'',
+  }));}
+  function registrarPublicationRows(){return registrarPublicationComparison.fields.map((field:RdapPublicationField)=>({
+    label:field.label,
+    registryValue:field.registryDisplay,
+    registrarValue:field.registrarDisplay,
+    status:field.status,
+    assessment:publicationAssessment(field.status),
+    tone:field.status==='conflict'?'danger':field.status==='equivalent'?'good':['registry_unavailable','registrar_unavailable','registry_incomplete','registrar_incomplete'].includes(field.status)?'warn':'',
   }));}
   function rdapPartialDetail(){if(!rdapParsed.serverTruncated)return'';const reasons=stringList(rdapParsed.serverTruncationReasons);return`The registry reported that some RDAP data was omitted.${reasons.length?` ${reasons.join(' · ')}.`:''}`;}
   function rdapSourceRows(){const rows:Array<{label:string;value:string;datetime?:string}>=[];if(result?.type==='ipv4'||result?.type==='ipv6')rows.push(
@@ -296,6 +307,8 @@
     error:registrarRdap.status==='error',
     success:registrarRdap.status==='success',
     parsed:registrarRdapParsed,
+    comparisonSummary:`Registry / registrar publication comparison · ${registrarPublicationComparison.counts.conflict} conflicts · ${registrarPublicationComparison.counts.registry_only+registrarPublicationComparison.counts.registrar_only} source-only · ${registrarPublicationComparison.counts.registry_redacted+registrarPublicationComparison.counts.registrar_redacted} redacted · ${registrarPublicationComparison.counts.registry_unavailable+registrarPublicationComparison.counts.registrar_unavailable+registrarPublicationComparison.counts.registry_incomplete+registrarPublicationComparison.counts.registrar_incomplete} unavailable/incomplete · ${registrarPublicationComparison.counts.equivalent} equivalent`,
+    comparisonRows:registrarPublicationRows(),
   };}
   function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:String(record)).join(' · ');}
   function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}

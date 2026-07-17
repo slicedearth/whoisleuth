@@ -266,6 +266,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   request when the registry object publishes a complete registrar RDAP domain
   link. Registrar data is displayed as a separate attributed source and is
   never merged into registry fields or used for availability or Risk scoring.
+  When both RDAP publications succeed, Lookup also compares their portable
+  domain, registrar, lifecycle, DNSSEC, status, and nameserver fields without
+  treating source-specific handles, contacts, or publication differences as
+  an authority decision.
   The follow-up is omitted from fast and compact Bulk work, and unsupported or
   failed registrar responses remain neutral source states.
 - Structured domain results retain registry object IDs, registrar IANA IDs,

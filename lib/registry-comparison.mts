@@ -22,6 +22,7 @@ type FieldStatus =
   | 'rdap_unavailable' | 'whois_unavailable'
   | 'rdap_incomplete' | 'whois_incomplete';
 type RegistryComparisonOptions = { rdapStatus?: unknown; whoisStatus?: unknown };
+type RdapPublicationComparisonOptions = { registryStatus?: unknown; registrarStatus?: unknown };
 type SourceHealth = {
   rdapStatus: unknown;
   whoisStatus: unknown;
@@ -248,6 +249,92 @@ export function compareRegistrySources(
     sourceHealth: {
       rdap: { status: sourceHealth.rdapStatus, condition: sourceHealth.rdapCondition },
       whois: { status: sourceHealth.whoisStatus, condition: sourceHealth.whoisCondition },
+    },
+  };
+}
+
+const RDAP_PUBLICATION_STATUS = {
+  equivalent: 'equivalent',
+  conflict: 'conflict',
+  rdap_only: 'registry_only',
+  whois_only: 'registrar_only',
+  rdap_redacted: 'registry_redacted',
+  whois_redacted: 'registrar_redacted',
+  rdap_unavailable: 'registry_unavailable',
+  whois_unavailable: 'registrar_unavailable',
+  rdap_incomplete: 'registry_incomplete',
+  whois_incomplete: 'registrar_incomplete',
+} as const;
+
+type RdapPublicationStatus = typeof RDAP_PUBLICATION_STATUS[keyof typeof RDAP_PUBLICATION_STATUS];
+
+// Registrar RDAP is a separately attributed publication, not a replacement
+// for the registry object. Reuse the established pairwise normalization while
+// adapting only fields with portable semantics across both RDAP publishers.
+// Source-specific object handles and contact inventories stay out of conflict
+// classification because different identifiers and disclosure policies are
+// expected at each layer.
+export function compareRdapPublications(
+  registryParsed: LooseRecord | null | undefined,
+  registrarParsed: LooseRecord | null | undefined,
+  options: RdapPublicationComparisonOptions = {},
+) {
+  const registry = registryParsed || {};
+  const registrar = registrarParsed || {};
+  const registrarLifecycle = registrar.lifecycle || {};
+  const comparison = compareRegistrySources(
+    { ...registry, handle: null },
+    {
+      domainName: registrar.domain,
+      registrar: registrarValue(registrar.registrar),
+      registrarIanaId: registrar.registrarIanaId,
+      createdDate: registrarLifecycle.createdDate,
+      createdDateIso: registrarLifecycle.createdDateIso,
+      expiryDate: registrarLifecycle.expiryDate,
+      expiryDateIso: registrarLifecycle.expiryDateIso,
+      updatedDate: registrarLifecycle.updatedDate,
+      updatedDateIso: registrarLifecycle.updatedDateIso,
+      dnssec: registrar.dnssec,
+      statuses: registrar.statuses,
+      nameservers: registrar.nameservers,
+    },
+    {
+      rdapStatus: options.registryStatus,
+      whoisStatus: options.registrarStatus,
+    },
+  );
+
+  const counts: Record<RdapPublicationStatus, number> = {
+    equivalent: 0,
+    conflict: 0,
+    registry_only: 0,
+    registrar_only: 0,
+    registry_redacted: 0,
+    registrar_redacted: 0,
+    registry_unavailable: 0,
+    registrar_unavailable: 0,
+    registry_incomplete: 0,
+    registrar_incomplete: 0,
+  };
+  const fields = comparison.fields.map((field) => {
+    const status = RDAP_PUBLICATION_STATUS[field.status];
+    counts[status] += 1;
+    return {
+      label: field.label,
+      status,
+      registryState: field.rdapState,
+      registrarState: field.whoisState,
+      registryDisplay: field.rdapDisplay,
+      registrarDisplay: field.whoisDisplay,
+    };
+  });
+
+  return {
+    fields,
+    counts,
+    sourceHealth: {
+      registry: comparison.sourceHealth.rdap,
+      registrar: comparison.sourceHealth.whois,
     },
   };
 }

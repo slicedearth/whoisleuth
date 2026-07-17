@@ -218,3 +218,77 @@ describe('compareRegistrySources', () => {
     });
   });
 });
+
+describe('compareRdapPublications', () => {
+  test('reuses normalized domain, lifecycle, status, and nameserver comparisons', () => {
+    const result = comparison.compareRdapPublications(
+      {
+        domain: 'EXAMPLE.TEST',
+        handle: 'registry-specific-handle',
+        lifecycle: { createdDate: '2025-04-03T00:00:00Z' },
+        statuses: ['client transfer prohibited'],
+        nameservers: ['NS2.EXAMPLE.TEST.', 'ns1.example.test'],
+      },
+      {
+        domain: 'example.test',
+        handle: 'registrar-specific-handle',
+        lifecycle: { createdDate: '2025-04-03' },
+        statuses: ['clientTransferProhibited'],
+        nameservers: ['NS1.EXAMPLE.TEST.', 'ns2.example.test'],
+      },
+      { registryStatus: 'success', registrarStatus: 'success' },
+    );
+
+    assert.equal(result.fields.every((item) => item.status === 'equivalent'), true);
+    assert.equal(result.fields.some((item) => item.label === 'Registry object ID'), false);
+    assert.equal(result.counts.equivalent, 4);
+    assert.deepEqual(result.sourceHealth, {
+      registry: { status: 'success', condition: 'complete' },
+      registrar: { status: 'success', condition: 'complete' },
+    });
+  });
+
+  test('preserves both publications when a portable field conflicts', () => {
+    const result = comparison.compareRdapPublications(
+      { domain: 'example.test', lifecycle: { expiryDate: '2030-01-01' } },
+      { domain: 'example.test', lifecycle: { expiryDate: '2031-01-01' } },
+    );
+    const expiry = field(result, 'Expires');
+    assert.equal(expiry.status, 'conflict');
+    assert.equal(expiry.registryDisplay, '2030-01-01');
+    assert.equal(expiry.registrarDisplay, '2031-01-01');
+    assert.equal(result.counts.conflict, 1);
+  });
+
+  test('distinguishes source-only and redacted publication states', () => {
+    const result = comparison.compareRdapPublications(
+      { domain: 'example.test', dnssec: 'signed', registrar: { name: 'Data Protected' } },
+      { domain: 'example.test', dnssec: null, registrar: { name: 'Example Registrar' } },
+    );
+    assert.equal(field(result, 'DNSSEC').status, 'registry_only');
+    assert.equal(field(result, 'Registrar').status, 'registry_redacted');
+    assert.equal(result.counts.registrar_only, 0);
+  });
+
+  test('keeps unavailable registrar publication distinct from an absent value', () => {
+    const result = comparison.compareRdapPublications(
+      { domain: 'example.test', dnssec: 'signed' },
+      {},
+      { registryStatus: 'success', registrarStatus: 'error' },
+    );
+    assert.equal(field(result, 'Domain').status, 'registrar_unavailable');
+    assert.equal(field(result, 'DNSSEC').status, 'registrar_unavailable');
+    assert.equal(result.counts.registry_only, 0);
+    assert.equal(result.counts.registrar_unavailable, 2);
+  });
+
+  test('does not mutate either RDAP publication', () => {
+    const registry = { domain: 'example.test', handle: 'registry-handle', statuses: ['active'] };
+    const registrar = { domain: 'example.test', handle: 'registrar-handle', statuses: ['active'] };
+    const beforeRegistry = structuredClone(registry);
+    const beforeRegistrar = structuredClone(registrar);
+    comparison.compareRdapPublications(registry, registrar);
+    assert.deepEqual(registry, beforeRegistry);
+    assert.deepEqual(registrar, beforeRegistrar);
+  });
+});
