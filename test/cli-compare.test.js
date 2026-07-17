@@ -12,6 +12,8 @@ const {
   MAX_COMPARE_EVENTS,
   MAX_COMPARE_INPUT_BYTES,
   MAX_COMPARE_LIST_ITEMS,
+  MAX_COMPARE_REGISTRY_ACCESS_LIMITATION_LENGTH,
+  MAX_COMPARE_REGISTRY_ACCESS_SUFFIX_LENGTH,
   MAX_COMPARE_STRING_LENGTH,
   compareLookupDocument,
   parseCliLookupDocument,
@@ -109,6 +111,20 @@ function withRegistrarPublication(source, overrides = {}) {
   return source;
 }
 
+function withRegistryAccess(source = lookupDocument(), overrides = {}) {
+  source.diagnostics.version = 5;
+  source.diagnostics.registryAccess = {
+    suffix: 'zz',
+    coverageState: 'access_documented',
+    whoisAccessProfile: 'source-ip-authorization-required',
+    rdapAccessProfile: 'no-iana-service',
+    limitation: 'Registry collection requires documented source authorization.',
+    authority: 'context_only',
+    ...overrides,
+  };
+  return source;
+}
+
 async function comparisonModule() {
   return import('../lib/registry-comparison.mts');
 }
@@ -150,6 +166,56 @@ describe('comparison input boundary', () => {
     assert.equal(JSON.stringify(parsed).includes('REGISTRAR-SPECIFIC-HANDLE'), false);
     assert.equal(JSON.stringify(parsed).includes('private@example.test'), false);
     assert.deepEqual(source, before);
+  });
+
+  test('projects only bounded version-5 context-only registry access diagnostics', () => {
+    const source = withRegistryAccess();
+    source.diagnostics.registryAccess.privateDetail = 'must not enter comparison output';
+    const before = structuredClone(source);
+    const parsed = parseCliLookupDocument(JSON.stringify(source));
+
+    assert.deepEqual(parsed.registryAccess, {
+      suffix: 'zz',
+      coverageState: 'access_documented',
+      whoisAccessProfile: 'source-ip-authorization-required',
+      rdapAccessProfile: 'no-iana-service',
+      limitation: 'Registry collection requires documented source authorization.',
+      authority: 'context_only',
+    });
+    assert.equal(JSON.stringify(parsed).includes('privateDetail'), false);
+    assert.deepEqual(source, before);
+  });
+
+  test('rejects malformed version-5 registry access context at the saved-document boundary', () => {
+    const invalidValues = [
+      { registryAccess: [], pattern: /must be an object/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, authority: 'authoritative' }, pattern: /authority is unsupported/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, coverageState: 'fixture_verified' }, pattern: /coverageState is unsupported/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, suffix: `a${'-a'.repeat(MAX_COMPARE_REGISTRY_ACCESS_SUFFIX_LENGTH)}` }, pattern: /suffix is invalid/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, suffix: 'bad.suffix' }, pattern: /suffix is invalid/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, whoisAccessProfile: 'invented' }, pattern: /whoisAccessProfile is unsupported/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, whoisAccessProfile: 'iana-bootstrap' }, pattern: /whoisAccessProfile is unsupported/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, rdapAccessProfile: 'invented' }, pattern: /rdapAccessProfile is unsupported/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, rdapAccessProfile: 'iana-referral' }, pattern: /rdapAccessProfile is unsupported/ },
+      { registryAccess: { ...withRegistryAccess().diagnostics.registryAccess, limitation: 'x'.repeat(MAX_COMPARE_REGISTRY_ACCESS_LIMITATION_LENGTH + 1) }, pattern: /limitation is invalid/ },
+    ];
+    for (const { registryAccess, pattern } of invalidValues) {
+      const source = lookupDocument({
+        diagnostics: {
+          version: 5,
+          rdap: { status: 'success' },
+          whois: { status: 'complete' },
+          registryAccess,
+        },
+      });
+      assert.throws(() => parseCliLookupDocument(JSON.stringify(source)), pattern);
+    }
+  });
+
+  test('ignores registry access fields outside the version-5 diagnostic contract', () => {
+    const source = withRegistryAccess();
+    source.diagnostics.version = 4;
+    assert.equal(parseCliLookupDocument(JSON.stringify(source)).registryAccess, null);
   });
 
   test('accepts a leading JSON BOM and explicit unavailable source states', () => {
@@ -298,13 +364,15 @@ describe('comparison output', () => {
     const before = structuredClone(result);
     const document = buildCliCompareDocument(result, '2026-07-14T07:00:00.000Z');
     assert.equal(document.schema, 'whoisleuth.cli.compare');
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.equal(document.generatedAt, '2026-07-14T07:00:00.000Z');
     assert.deepEqual(result, before);
   });
 
   test('renders bounded source health, summary, values, and interpretation warning', async () => {
-    const source = withRegistrarPublication(lookupDocument());
+    const source = withRegistryAccess(withRegistrarPublication(lookupDocument()), {
+      limitation: `Restricted\ncollection ${'x'.repeat(270)}`,
+    });
     source.whois.parsed.registrar = 'Different Registrar';
     const shared = await comparisonModule();
     const result = compareLookupDocument(
@@ -322,6 +390,21 @@ describe('comparison output', () => {
     assert.match(output, /Registrar RDAP Success/);
     assert.match(output, /\[EQUIVALENT\] Statuses/);
     assert.match(output, /not an availability or ownership decision/);
+    assert.match(output, /Registry access \.zz/);
+    assert.match(output, /WHOIS access\s+Source-IP authorization required/);
+    assert.match(output, /RDAP access\s+No service published by IANA/);
+    assert.match(output, /Registry access describes collection reachability only/);
+    assert.doesNotMatch(output, /Restricted\ncollection|x{241}/);
+  });
+
+  test('keeps ordinary comparisons free of access-context output', async () => {
+    const shared = await comparisonModule();
+    const result = compareLookupDocument(
+      parseCliLookupDocument(JSON.stringify(lookupDocument())),
+      shared.compareRegistrySources,
+    );
+    assert.equal(Object.hasOwn(result, 'registryAccess'), false);
+    assert.doesNotMatch(formatTerminalCompare(buildCliCompareDocument(result)), /Registry access|Access note/);
   });
 });
 
@@ -332,7 +415,7 @@ describe('comparison CLI runner', () => {
     const code = await runCli(['compare', '--json'], {
       stdout: stdout.stream,
       stderr: capture().stream,
-      stdin: Readable.from([JSON.stringify(lookupDocument())]),
+      stdin: Readable.from([JSON.stringify(withRegistryAccess())]),
       runUnifiedLookup: async () => { lookupCalls++; },
       now: () => '2026-07-14T07:00:00.000Z',
     });
@@ -340,10 +423,11 @@ describe('comparison CLI runner', () => {
     assert.equal(lookupCalls, 0);
     const document = JSON.parse(stdout.value());
     assert.equal(document.schema, 'whoisleuth.cli.compare');
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.equal(document.lookupGeneratedAt, '2026-07-14T06:00:00.000Z');
     assert.equal(document.generatedAt, '2026-07-14T07:00:00.000Z');
     assert.equal(document.registrarPublicationComparison, null);
+    assert.equal(document.registryAccess.authority, 'context_only');
     assert.equal(stdout.value().includes('payload must not be copied'), false);
   });
 

@@ -110,7 +110,7 @@ describe('installed CLI process boundary', () => {
     assert.equal(result.stderr, '');
     const document = JSON.parse(result.stdout);
     assert.equal(document.schema, 'whoisleuth.cli.compare');
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.equal(document.counts.conflict, 0);
     assert.equal(document.registrarPublicationComparison.counts.conflict, 0);
     assert.ok(document.registrarPublicationComparison.counts.equivalent > 0);

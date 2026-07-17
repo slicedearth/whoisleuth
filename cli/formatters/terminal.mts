@@ -264,6 +264,9 @@ function formatTerminalCompare(document: TerminalRecord): string {
   const fields = Array.isArray(document.fields) ? document.fields : [];
   const counts = document.counts && typeof document.counts === 'object' ? document.counts : {};
   const sourceHealth = document.sourceHealth && typeof document.sourceHealth === 'object' ? document.sourceHealth : {};
+  const registryAccess = document.registryAccess && typeof document.registryAccess === 'object'
+    ? document.registryAccess
+    : null;
   const differenceCount = fields.length - (Number(counts.equivalent) || 0);
   const lines = [
     `Query          ${safeTerminalValue(document.query || document.registrableDomain)}`,
@@ -274,8 +277,16 @@ function formatTerminalCompare(document: TerminalRecord): string {
     `Compared       ${safeTerminalValue(fields.length, '0')} field${fields.length === 1 ? '' : 's'}`,
     `Equivalent     ${safeTerminalValue(counts.equivalent, '0')}`,
     `Differences    ${safeTerminalValue(differenceCount, '0')}`,
-    '',
   ];
+  if (registryAccess) {
+    lines.push(
+      `Registry access .${safeTerminalValue(registryAccess.suffix)}`,
+      `WHOIS access   ${registryAccessProfileLabel(registryAccess.whoisAccessProfile)}`,
+      `RDAP access    ${registryAccessProfileLabel(registryAccess.rdapAccessProfile)}`,
+      `Access note    ${safeTerminalValue(registryAccess.limitation)}`,
+    );
+  }
+  lines.push('');
   if (!fields.length) {
     lines.push('Neither source published a comparable normalized field.');
   } else {
@@ -319,6 +330,9 @@ function formatTerminalCompare(document: TerminalRecord): string {
     }
   }
   lines.push('', 'Comparison is source reconciliation, not an availability or ownership decision.');
+  if (registryAccess) {
+    lines.push('Registry access describes collection reachability only; it does not decide registration, availability, ownership, safety, or maliciousness.');
+  }
   return `${lines.join('\n')}\n`;
 }
 

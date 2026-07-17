@@ -1,5 +1,9 @@
 import { CliUsageError } from './arguments.mts';
 import {
+  isRdapRegistryAccessProfile,
+  isWhoisRegistryAccessProfile,
+} from './registry-access.mts';
+import {
   MAX_SAVED_LOOKUP_INPUT_BYTES,
   MAX_SAVED_LOOKUP_STRING_LENGTH,
   SAVED_LOOKUP_SCHEMA,
@@ -16,6 +20,8 @@ const MAX_COMPARE_INPUT_BYTES = MAX_SAVED_LOOKUP_INPUT_BYTES;
 const MAX_COMPARE_STRING_LENGTH = MAX_SAVED_LOOKUP_STRING_LENGTH;
 const MAX_COMPARE_LIST_ITEMS = 200;
 const MAX_COMPARE_EVENTS = 100;
+const MAX_COMPARE_REGISTRY_ACCESS_LIMITATION_LENGTH = MAX_COMPARE_STRING_LENGTH;
+const MAX_COMPARE_REGISTRY_ACCESS_SUFFIX_LENGTH = 63;
 const REGISTRAR_RDAP_STATUSES = new Set([
   'success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled',
 ]);
@@ -33,6 +39,15 @@ type SourceLifecycle = {
 
 type ProjectedSource = UnknownRecord;
 
+type RegistryAccessContext = {
+  suffix: string;
+  coverageState: 'access_documented';
+  whoisAccessProfile: string;
+  rdapAccessProfile: string;
+  limitation: string;
+  authority: 'context_only';
+};
+
 type CliLookupComparisonInput = {
   query: string;
   registrableDomain: string;
@@ -45,6 +60,7 @@ type CliLookupComparisonInput = {
   registrarRdapRepresented: boolean;
   registrarRdapStatus: string | null;
   registrarRdapParsed: ProjectedSource;
+  registryAccess: RegistryAccessContext | null;
 };
 
 type RegistryComparison = (
@@ -88,6 +104,43 @@ function boundedSourceList(value: unknown, field: string): string[] {
   return value
     .map((item, index) => boundedSourceString(item, `${field}[${index}]`))
     .filter((item): item is string => item !== null);
+}
+
+function projectRegistryAccessContext(diagnostics: UnknownRecord): RegistryAccessContext | null {
+  const value = diagnostics.registryAccess;
+  if (value === null || value === undefined) return null;
+  if (diagnostics.version !== 5) return null;
+  const context = objectOrNull(value);
+  if (!context) throw new CliUsageError('diagnostics.registryAccess must be an object when present.');
+  if (context.authority !== 'context_only') {
+    throw new CliUsageError('diagnostics.registryAccess.authority is unsupported.');
+  }
+  if (context.coverageState !== 'access_documented') {
+    throw new CliUsageError('diagnostics.registryAccess.coverageState is unsupported.');
+  }
+  if (typeof context.suffix !== 'string'
+    || context.suffix.length > MAX_COMPARE_REGISTRY_ACCESS_SUFFIX_LENGTH
+    || !/^(?=.*[a-z])[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(context.suffix)) {
+    throw new CliUsageError('diagnostics.registryAccess.suffix is invalid.');
+  }
+  if (!isWhoisRegistryAccessProfile(context.whoisAccessProfile)) {
+    throw new CliUsageError('diagnostics.registryAccess.whoisAccessProfile is unsupported.');
+  }
+  if (!isRdapRegistryAccessProfile(context.rdapAccessProfile)) {
+    throw new CliUsageError('diagnostics.registryAccess.rdapAccessProfile is unsupported.');
+  }
+  if (typeof context.limitation !== 'string' || !context.limitation.trim()
+    || context.limitation.length > MAX_COMPARE_REGISTRY_ACCESS_LIMITATION_LENGTH) {
+    throw new CliUsageError('diagnostics.registryAccess.limitation is invalid.');
+  }
+  return {
+    suffix: context.suffix,
+    coverageState: context.coverageState,
+    whoisAccessProfile: context.whoisAccessProfile,
+    rdapAccessProfile: context.rdapAccessProfile,
+    limitation: context.limitation,
+    authority: context.authority,
+  };
 }
 
 function projectLifecycle(value: unknown, prefix: string): SourceLifecycle {
@@ -202,6 +255,7 @@ function parseCliLookupDocument(text: unknown): CliLookupComparisonInput {
 }
 
 function projectCliLookupComparisonInput(document: SavedLookupDocument): CliLookupComparisonInput {
+  const diagnostics = document.diagnostics;
   const rdapStatus = document.diagnostics.rdap.status;
   const whoisStatus = document.diagnostics.whois.status;
   const rdapParsed = objectOrNull(document.rdap?.parsed);
@@ -219,6 +273,7 @@ function projectCliLookupComparisonInput(document: SavedLookupDocument): CliLook
     registrarRdapRepresented: registrarPublication.represented,
     registrarRdapStatus: registrarPublication.status,
     registrarRdapParsed: registrarPublication.parsed,
+    registryAccess: projectRegistryAccessContext(diagnostics),
   };
 }
 
@@ -250,6 +305,7 @@ function compareLookupDocument(
     lookupMode: input.lookupMode,
     ...comparison,
     registrarPublicationComparison,
+    ...(input.registryAccess ? { registryAccess: input.registryAccess } : {}),
   };
 }
 
@@ -259,6 +315,8 @@ export {
   MAX_COMPARE_EVENTS,
   MAX_COMPARE_INPUT_BYTES,
   MAX_COMPARE_LIST_ITEMS,
+  MAX_COMPARE_REGISTRY_ACCESS_LIMITATION_LENGTH,
+  MAX_COMPARE_REGISTRY_ACCESS_SUFFIX_LENGTH,
   MAX_COMPARE_STRING_LENGTH,
   compareLookupDocument,
   parseCliLookupDocument,
@@ -270,5 +328,6 @@ export type {
   ProjectedSource,
   RdapPublicationComparison,
   RegistryComparison,
+  RegistryAccessContext,
   SourceLifecycle,
 };

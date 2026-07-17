@@ -199,7 +199,7 @@ exists.
 ## Registry-source comparison
 
 `compare` reads one version-1 `whoisleuth.cli.lookup` domain document from a
-file or stdin and emits a version-2 `whoisleuth.cli.compare` document. Its
+file or stdin and emits a version-3 `whoisleuth.cli.compare` document. Its
 primary comparison reconciles normalized registry RDAP and WHOIS fields. When
 the saved deep lookup also represents the optional registrar RDAP follow-up,
 an additional sibling comparison reconciles the portable registry and
@@ -216,6 +216,13 @@ successful registrar source must include a normalized object and agree with
 its diagnostic status. Raw RDAP JSON, registrar contacts and source-specific
 handles, WHOIS response bodies, availability evidence, and unrelated lookup
 fields are not copied into the comparison result.
+
+When the saved Lookup contains valid version-5, context-only registry-access
+diagnostics, version 3 retains their bounded suffix, access profiles, and
+limitation. Terminal output labels the same collection context explicitly.
+It explains source reachability only and cannot decide registration,
+availability, ownership, safety, or maliciousness. Older documents and saved
+lookups without that context do not gain a registry-access field.
 
 Terminal and versioned JSON output cover domain identity, registry object ID,
 registrar, registrar IANA ID, lifecycle dates, DNSSEC, statuses, and name

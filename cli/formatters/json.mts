@@ -7,7 +7,7 @@ const CLI_DISCOVER_SCHEMA_VERSION = 1;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
 const CLI_HTTP_SCHEMA_VERSION = 1;
 const CLI_TLS_SCHEMA_VERSION = 1;
-const CLI_COMPARE_SCHEMA_VERSION = 2;
+const CLI_COMPARE_SCHEMA_VERSION = 3;
 
 type DiscoverCandidate = {
   domain: unknown;
