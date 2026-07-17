@@ -112,6 +112,15 @@ default (see the README), so many lookups return no personal data at all.
   and are removed by the demo reset action or when that tab session ends. Any
   downloaded demo package is explicitly marked as synthetic and is not a live
   finding or evidence report.
+- **Guided investigation navigation**: an authenticated user can optionally
+  start a guide for one canonical domain from the dashboard. The guide keeps
+  only schema version 1, that domain, creation/update timestamps, and up to four
+  opened-stage identifiers in the current tab's `sessionStorage` under
+  `whoisleuth:investigation-guide:v1`. It is not sent to the server, copied to
+  persistent browser stores, exported, or treated as evidence completion. It
+  only prefills existing workspace controls and never starts a lookup, search,
+  scan, or Monitor action. **End guide** removes the record, and closing the tab
+  session removes it with the rest of that tab's session storage.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
   the domain through the public-address guard and opens one direct TLS
   connection to one validated address while retaining the domain as SNI.

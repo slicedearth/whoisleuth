@@ -876,6 +876,12 @@ existing boolean session-status endpoint so an authenticated visitor can open
 the console or sign out from a public page. Authenticated visitors land on a
 protected dashboard that links to all five investigation workspaces and shows
 only bounded counts derived from browser-local cases, watchlists, and profiles.
+From that dashboard, an optional guided investigation can keep one canonical
+domain and a bounded list of opened workflow stages in the current tab's
+`sessionStorage`. It prefills Lookup and Discover while moving through the
+existing workspaces, but never starts a lookup, candidate generation, Bulk
+scan, or Monitor action. An opened-stage marker records navigation only, not
+evidence collection or review, and **End guide** removes the tab-scoped record.
 The protected WHOISleuth brand returns to that dashboard; the dashboard keeps
 the public homepage available as a separate, clearly labelled destination.
 `/login` accepts the shared deployment password and returns only to a known

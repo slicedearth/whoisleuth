@@ -24,6 +24,7 @@
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.js';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
+  import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.js';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all';
@@ -83,7 +84,12 @@
   const pagedVisible = $derived(visible.slice((currentPage - 1) * DISCOVER_PAGE_SIZE, currentPage * DISCOVER_PAGE_SIZE));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
 
-  onMount(() => { profile = activeProfile(); ctHistory = loadCtHistory(); });
+  onMount(() => {
+    profile = activeProfile();
+    ctHistory = loadCtHistory();
+    const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
+    if (guidedDomain) seed = guidedDomain;
+  });
 
   function resetCtComparison() {
     ctNewDomains = new Set();

@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { loadProfiles } from '$lib/brand-profiles';
   import { loadCases } from '$lib/cases';
   import { loadWatchlists } from '$lib/watchlists';
   import { referenceWorkspaces, workspaces } from '$lib/workspaces';
+  import { investigationGuideHref, startInvestigationGuide } from '$lib/investigation-guide';
 
   const quickActions = [
     { href: '/lookup', label: 'Run a lookup', detail: 'Inspect a domain, IP address, or ASN across separately attributed sources.' },
@@ -13,6 +15,8 @@
   ];
 
   let counts = $state({ cases: 0, openCases: 0, watchlists: 0, profiles: 0 });
+  let guideDomain = $state('');
+  let guideError = $state('');
 
   function refreshLocalSummary() {
     const cases = loadCases();
@@ -25,6 +29,17 @@
   }
 
   onMount(refreshLocalSummary);
+
+  async function startGuide(event:SubmitEvent) {
+    event.preventDefault();
+    guideError = '';
+    try {
+      const guide = startInvestigationGuide(guideDomain);
+      await goto(investigationGuideHref('lookup', guide.domain));
+    } catch (cause) {
+      guideError = cause instanceof Error ? cause.message : 'Could not start the guided investigation.';
+    }
+  }
 </script>
 
 <svelte:head>
@@ -35,6 +50,23 @@
 <PageHeading eyebrow="Console" title="Investigation dashboard" description="Start a focused task or continue work retained in this browser.">
   <a class="btn" href="/">View public homepage</a>
 </PageHeading>
+
+<section class="guide-launcher card" aria-labelledby="guide-launcher-title">
+  <div>
+    <p class="eyebrow">Guided workflow</p>
+    <h2 id="guide-launcher-title">Follow one domain across the investigation workspaces</h2>
+    <p>Start in Lookup, then move through Discover, Bulk, and Monitor with the same domain kept as tab-scoped navigation context.</p>
+  </div>
+  <form onsubmit={startGuide}>
+    <label for="guide-domain">Domain</label>
+    <div class="guide-input">
+      <input id="guide-domain" bind:value={guideDomain} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="example.test">
+      <button class="primary" type="submit">Start guide</button>
+    </div>
+    {#if guideError}<p class="error" role="alert">{guideError}</p>{/if}
+    <p class="guide-note">Starting the guide does not scan anything. Each workspace runs only when you choose its action.</p>
+  </form>
+</section>
 
 <section class="dashboard-section" aria-labelledby="quick-actions-title">
   <div class="section-intro">
@@ -106,6 +138,16 @@
 </section>
 
 <style>
+  .guide-launcher{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:24px;margin-top:28px;padding:21px}
+  .guide-launcher h2{margin:4px 0 7px;font:700 var(--text-lg) var(--mono)}
+  .guide-launcher>div>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
+  .guide-launcher form{align-self:center;min-width:0}
+  .guide-launcher label{display:block;margin-bottom:6px;font:700 var(--text-xs) var(--mono)}
+  .guide-input{display:flex;gap:7px;min-width:0}
+  .guide-input input{min-width:0;flex:1}
+  .guide-input button{flex:none;white-space:nowrap}
+  .guide-note{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .guide-launcher .error{margin:7px 0 0}
   .dashboard-section{margin-top:34px}
   .section-intro{max-width:760px;margin-bottom:14px}
   .section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}
@@ -126,5 +168,6 @@
   .workspace-card h3{margin:0;font:700 var(--text-md) var(--mono)}
   .workspace-card p{margin:4px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .workspace-card>strong{color:var(--accent);font:700 var(--text-lg) var(--mono)}
-  @media(max-width:760px){.quick-grid,.local-grid,.workspace-grid{grid-template-columns:1fr}.quick-card{min-height:180px}}
+  @media(max-width:760px){.guide-launcher,.quick-grid,.local-grid,.workspace-grid{grid-template-columns:1fr}.quick-card{min-height:180px}}
+  @media(max-width:460px){.guide-input{align-items:stretch;flex-direction:column}.guide-input button{width:100%}}
 </style>
