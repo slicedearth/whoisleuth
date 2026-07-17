@@ -73,9 +73,11 @@ the IANA bootstrap registry.
 
 Authenticated users can browse the same explicit matrix in the **Registry
 support** console reference. Its text and coverage filters run locally over the
-embedded catalogue and make no registry or application API request. The page
-does not test current reachability and does not turn compatibility metadata
-into a registration, availability, ownership, safety, or maliciousness claim.
+embedded catalogue, and its local inspector resolves one domain or suffix to an
+explicit profile or the generic IANA discovery-only fallback. Neither feature
+makes a registry or application API request. The page does not test current
+reachability and does not turn compatibility metadata into a registration,
+availability, ownership, safety, or maliciousness claim.
 
 ## Adding a registry adapter
 

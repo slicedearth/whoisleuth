@@ -61,6 +61,48 @@ test('profile details preserve provenance and safe external-link behavior', asyn
   }
 });
 
+test('the local inspector explains explicit and generic suffix support without a request', async ({ page }) => {
+  const unexpectedApiRequests: string[] = [];
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) unexpectedApiRequests.push(pathname);
+  });
+  await page.goto('/registry-support');
+
+  const input = page.getByRole('searchbox', { name: 'Domain or suffix', exact: true });
+  await input.fill('.com');
+  await page.getByRole('button', { name: 'Inspect support' }).click();
+  const result = page.locator('.inspection-card');
+  await expect(result).toContainText('Generic fallback');
+  await expect(result).toContainText('.com');
+  await expect(result).toContainText('Discovery only');
+  await expect(result).toContainText('IANA bootstrap discovery');
+
+  await input.fill('portal.example.uk');
+  await page.getByRole('button', { name: 'Inspect support' }).click();
+  await expect(result).toContainText('Explicit suffix profile');
+  await expect(result).toContainText('.uk');
+
+  await input.fill('https://example.invalid/path');
+  await page.getByRole('button', { name: 'Inspect support' }).click();
+  await expect(page.getByRole('heading', { name: 'Unsupported input format' })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear' }).click();
+  await expect(page.locator('.inspection-output')).toHaveCount(0);
+  await expect(input).toHaveValue('');
+  expect(unexpectedApiRequests).toEqual([]);
+});
+
+test('the inspector normalizes an IDN suffix and remains mobile-safe', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/registry-support');
+  await page.getByRole('searchbox', { name: 'Domain or suffix', exact: true }).fill('example.测试');
+  await page.getByRole('button', { name: 'Inspect support' }).click();
+
+  await expect(page.locator('.inspection-card')).toContainText('.xn--0zwm56d');
+  await expect(page.locator('.inspection-card')).toContainText('Generic fallback');
+  await expectNoHorizontalOverflow(page);
+});
+
 test('the registry-support reference remains readable without horizontal overflow on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/registry-support');

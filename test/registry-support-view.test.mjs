@@ -4,8 +4,10 @@ import test from 'node:test';
 
 import {
   MAX_REGISTRY_SUPPORT_FILTER_LENGTH,
+  MAX_REGISTRY_SUPPORT_LOOKUP_LENGTH,
   MAX_REGISTRY_SUPPORT_ROWS,
   filterRegistrySupportRows,
+  inspectRegistrySupport,
   registryAccessLabel,
   registryCoverageLabel,
   registrySupportCatalogue,
@@ -37,6 +39,43 @@ test('returns independent catalogue rows rather than exposing shared mutable arr
   const second = registrySupportCatalogue();
   assert.equal(second.rows[0].suffixes[0], 'au');
   assert.equal(second.rows[0].fixtureScenarios.includes('changed'), false);
+});
+
+test('inspects explicit and generic suffix support through the shared catalogue', () => {
+  const explicit = inspectRegistrySupport('portal.example.uk');
+  assert.equal(explicit.state, 'resolved');
+  assert.equal(explicit.profile.explicitSuffixProfile, true);
+  assert.deepEqual(explicit.profile.suffixes, ['uk']);
+
+  const generic = inspectRegistrySupport('.com');
+  assert.equal(generic.state, 'resolved');
+  assert.equal(generic.profile.explicitSuffixProfile, false);
+  assert.deepEqual(generic.profile.suffixes, ['com']);
+  assert.equal(generic.profile.coverageState, 'discovery_only');
+  assert.equal(generic.profile.rdapDiscovery, 'iana-bootstrap');
+  assert.equal(generic.profile.whoisDiscovery, 'iana-referral');
+});
+
+test('normalizes IDN suffixes while keeping malformed and empty inspection states explicit', () => {
+  const idn = inspectRegistrySupport('example.测试');
+  assert.equal(idn.state, 'resolved');
+  assert.deepEqual(idn.profile.suffixes, ['xn--0zwm56d']);
+  assert.equal(idn.profile.explicitSuffixProfile, false);
+
+  assert.deepEqual(inspectRegistrySupport('   '), { state: 'empty', profile: null });
+  for (const value of [null, 'https://example.invalid/path', 'example.invalid:443', 'bad\n.invalid', 'a'.repeat(MAX_REGISTRY_SUPPORT_LOOKUP_LENGTH + 1)]) {
+    assert.deepEqual(inspectRegistrySupport(value), { state: 'invalid', profile: null });
+  }
+});
+
+test('returns a defensive inspection profile rather than shared mutable catalogue data', () => {
+  const first = inspectRegistrySupport('.uk');
+  first.profile.suffixes[0] = 'changed';
+  first.profile.fixtureScenarios.push('changed');
+
+  const second = inspectRegistrySupport('.uk');
+  assert.deepEqual(second.profile.suffixes, ['uk']);
+  assert.equal(second.profile.fixtureScenarios.includes('changed'), false);
 });
 
 test('filters registry profiles by suffix, capability text, and explicit coverage state', () => {

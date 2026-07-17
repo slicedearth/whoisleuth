@@ -1,10 +1,12 @@
 import {
   REGISTRY_CAPABILITIES_VERSION,
+  registryCapabilityFor,
   registryCompatibilityMatrix,
 } from '../../../../lib/registry-capabilities.mts';
 
 export const MAX_REGISTRY_SUPPORT_ROWS = 500;
 export const MAX_REGISTRY_SUPPORT_FILTER_LENGTH = 100;
+export const MAX_REGISTRY_SUPPORT_LOOKUP_LENGTH = 253;
 
 const COVERAGE_LABELS = Object.freeze({
   discovery_only: 'Discovery only',
@@ -56,6 +58,20 @@ export function registrySupportCatalogue() {
       fallbacks: rows.filter((row) => Boolean(row.fallbackProfile)).length,
     },
   };
+}
+
+/** @param {unknown} value */
+export function inspectRegistrySupport(value) {
+  if (typeof value !== 'string' || value.length > MAX_REGISTRY_SUPPORT_LOOKUP_LENGTH
+    || /[\u0000-\u001f\u007f]/.test(value)) {
+    return { state: 'invalid', profile: null };
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return { state: 'empty', profile: null };
+  const profile = registryCapabilityFor(trimmed);
+  return profile
+    ? { state: 'resolved', profile }
+    : { state: 'invalid', profile: null };
 }
 
 /**
