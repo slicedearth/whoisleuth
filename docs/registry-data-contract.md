@@ -392,10 +392,15 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `11`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `12`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 11 retains optional bounded, versioned browser-side
+registry comparison. Version 12 additionally retains the bounded portable-field
+comparison between registry and registrar RDAP publications when that follow-up
+was represented. It preserves both normalized source display values and source
+health while excluding the registrar raw object, contacts, entities, links,
+notices, and source-specific handles. Version 11 added optional bounded,
+versioned browser-side
 IDN/script/confusable analysis, additive network-observation provenance supplied
 by deep Lookup, and bounded HTTP response/redirect, page-identity, DNS, and TLS
 evidence derived from the requested collection. URL query strings are

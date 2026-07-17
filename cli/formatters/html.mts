@@ -1,5 +1,5 @@
 import { buildLookupEvidenceReport, cleanReportText } from './evidence-report.mts';
-import type { ComparisonField, LookupEvidenceReport, ReportField, ReportGroup } from './evidence-report.mts';
+import type { ComparisonField, LookupEvidenceReport, PublicationComparisonField, ReportField, ReportGroup } from './evidence-report.mts';
 
 function escapeHtml(value: unknown, fallback = 'Not reported'): string {
   return cleanReportText(value, fallback)
@@ -22,6 +22,14 @@ function renderComparison(comparison: { fields: ComparisonField[]; omitted: numb
     ? `<p class="omission">${escapeHtml(comparison.omitted)} additional comparison fields omitted.</p>`
     : '';
   return `<div class="table-scroll"><table><caption>Normalized registry publication comparison</caption><thead><tr><th scope="col">Field</th><th scope="col">Result</th><th scope="col">RDAP</th><th scope="col">WHOIS</th></tr></thead><tbody>${rows}</tbody></table></div>${omitted}`;
+}
+
+function renderRegistrarComparison(comparison: { fields: PublicationComparisonField[]; omitted: number }): string {
+  const rows = comparison.fields.map((field) => `<tr><th scope="row">${escapeHtml(field.label)}</th><td><span class="status">${escapeHtml(field.status)}</span></td><td>${escapeHtml(field.registry)}</td><td>${escapeHtml(field.registrar)}</td></tr>`).join('');
+  const omitted = comparison.omitted
+    ? `<p class="omission">${escapeHtml(comparison.omitted)} additional comparison fields omitted.</p>`
+    : '';
+  return `<div class="table-scroll"><table><caption>Normalized registry and registrar RDAP publication comparison</caption><thead><tr><th scope="col">Field</th><th scope="col">Result</th><th scope="col">Registry RDAP</th><th scope="col">Registrar RDAP</th></tr></thead><tbody>${rows}</tbody></table></div>${omitted}`;
 }
 
 function formatLookupEvidenceHtml(document: unknown): string {
@@ -54,6 +62,7 @@ function formatLookupEvidenceHtml(document: unknown): string {
   <section class="block"><h2>Assessment</h2>${renderFields(report.assessment)}</section>
   <section class="block"><h2>Registry sources</h2>${renderGroups(report.registryGroups)}</section>
   <section class="block"><h2>Registry-source comparison</h2>${renderFields(report.comparison.health)}${renderComparison(report.comparison)}</section>
+  ${report.registrarComparison.fields.length ? `<section class="block"><h2>Registry / registrar RDAP comparison</h2>${renderFields(report.registrarComparison.health)}${renderRegistrarComparison(report.registrarComparison)}</section>` : ''}
   <section class="block"><h2>Network evidence</h2>${renderGroups(report.networkGroups)}</section>
   <section class="block"><h2>Collection diagnostics</h2>${renderFields(report.diagnostics)}</section>
   <section class="block"><h2>Limitations</h2><ul>${report.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>
@@ -65,3 +74,4 @@ function formatLookupEvidenceHtml(document: unknown): string {
 }
 
 export { escapeHtml, formatLookupEvidenceHtml };
+export type { ComparisonField, LookupEvidenceReport, PublicationComparisonField, ReportField, ReportGroup };

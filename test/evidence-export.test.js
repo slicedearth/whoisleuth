@@ -24,8 +24,16 @@ function fixtureResponse() {
       }],
       parsed: {
         domain: 'EXAMPLE.COM',
+        handle: 'REGISTRY-OBJECT',
         registrar: { name: 'Example Registrar' },
+        registrarIanaId: '999',
         nameservers: ['NS1.EXAMPLE'],
+        lifecycle: {
+          createdDate: '2020-01-01T00:00:00Z',
+          expiryDate: '2030-01-01T00:00:00Z',
+        },
+        dnssec: 'signed',
+        statuses: ['clientTransferProhibited'],
         linksTruncated: true,
         noticesTruncated: false,
         events: [{ action: 'registration', date: '2020-01-01T00:00:00Z' }],
@@ -34,7 +42,13 @@ function fixtureResponse() {
       registrarRdap: {
         status: 'success', endpoint: 'https://registrar.example/domain/example.com',
         data: { ldhName: 'EXAMPLE.COM', privateTestValue: 'not part of the structured export' },
-        parsed: { domain: 'EXAMPLE.COM' },
+        parsed: {
+          domain: 'EXAMPLE.COM', handle: 'REGISTRAR-OBJECT',
+          registrar: { name: 'EXAMPLE REGISTRAR' }, registrarIanaId: '999',
+          lifecycle: { createdDate: '2020-01-01', expiryDate: '2031-01-01' },
+          dnssec: 'secure', statuses: ['client transfer prohibited'], nameservers: ['ns1.example.'],
+          entitiesByRole: { abuse: [{ email: 'private-nested@example.test' }] },
+        },
       },
     },
     whois: {
@@ -151,7 +165,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 11);
+    assert.equal(result.schemaVersion, 12);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -185,6 +199,16 @@ describe('lookup evidence export', () => {
     assert.deepEqual(result.analysis.availability.pageIdentity.fingerprints.resourceHosts.values, ['cdn.example']);
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
+    assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 1);
+    assert.equal(result.analysis.registrarPublicationComparison.counts.equivalent, 7);
+    assert.equal(result.analysis.registrarPublicationComparison.sourceHealth.registry.status, 'success');
+    assert.equal(result.analysis.registrarPublicationComparison.sourceHealth.registrar.status, 'success');
+    const expiry = result.analysis.registrarPublicationComparison.fields.find((field) => field.label === 'Expires');
+    assert.equal(expiry.registryDisplay, '2030-01-01T00:00:00Z');
+    assert.equal(expiry.registrarDisplay, '2031-01-01');
+    assert.equal(result.analysis.registrarPublicationComparison.fields.some((field) => field.label === 'Registry object ID'), false);
+    assert.equal(JSON.stringify(result).includes('REGISTRAR-OBJECT'), false);
+    assert.equal(JSON.stringify(result).includes('private-nested@example.test'), false);
     assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
   });
 
@@ -200,7 +224,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 11);
+    assert.equal(result.schemaVersion, 12);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });
@@ -236,6 +260,29 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.registryComparison.counts.whois_only, 0);
     assert.equal(result.analysis.registryComparison.sourceHealth.rdap.condition, 'unavailable');
     assert.equal(result.analysis.registryComparison.sourceHealth.whois.condition, 'incomplete');
+  });
+
+  test('keeps an unavailable registrar publication neutral instead of inventing a discrepancy', () => {
+    const response = fixtureResponse();
+    response.rdap.registrarRdap = {
+      status: 'unsupported',
+      detail: 'The registry did not publish an eligible registrar RDAP link.',
+    };
+    response.diagnostics.rdap.registrar = { status: 'unsupported' };
+    const result = evidence.buildLookupEvidence(response);
+
+    assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 0);
+    assert.equal(result.analysis.registrarPublicationComparison.counts.registry_only, 0);
+    assert.ok(result.analysis.registrarPublicationComparison.counts.registrar_unavailable > 0);
+    assert.equal(result.analysis.registrarPublicationComparison.sourceHealth.registrar.condition, 'unavailable');
+  });
+
+  test('uses null when no registrar publication follow-up was represented', () => {
+    const response = fixtureResponse();
+    delete response.rdap.registrarRdap;
+    delete response.diagnostics.rdap.registrar;
+    const result = evidence.buildLookupEvidence(response);
+    assert.equal(result.analysis.registrarPublicationComparison, null);
   });
 
   test('creates a bounded, filesystem-safe filename', () => {

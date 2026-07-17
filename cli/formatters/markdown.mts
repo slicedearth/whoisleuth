@@ -4,7 +4,7 @@ import {
   buildLookupEvidenceReport,
   cleanReportText,
 } from './evidence-report.mts';
-import type { ComparisonField, LookupEvidenceReport, ReportField, ReportGroup } from './evidence-report.mts';
+import type { ComparisonField, LookupEvidenceReport, PublicationComparisonField, ReportField, ReportGroup } from './evidence-report.mts';
 
 function escapeMarkdownValue(value: unknown, fallback = 'Not reported'): string {
   return cleanReportText(value, fallback)
@@ -50,6 +50,14 @@ function formatLookupEvidenceMarkdown(document: unknown): string {
     }
     if (report.comparison.omitted) lines.push(`- ${report.comparison.omitted} additional comparison fields omitted.`);
   }
+  if (report.registrarComparison.fields.length) {
+    lines.push('', '## Registry / registrar RDAP comparison');
+    appendFields(lines, report.registrarComparison.health);
+    for (const field of report.registrarComparison.fields) {
+      lines.push(`- **${escapeMarkdownValue(field.label)} — ${escapeMarkdownValue(field.status)}:** Registry RDAP ${escapeMarkdownValue(field.registry)}; registrar RDAP ${escapeMarkdownValue(field.registrar)}`);
+    }
+    if (report.registrarComparison.omitted) lines.push(`- ${report.registrarComparison.omitted} additional comparison fields omitted.`);
+  }
   lines.push('', '## Network evidence');
   appendGroups(lines, report.networkGroups);
   lines.push('', '## Collection diagnostics');
@@ -69,4 +77,4 @@ export {
   escapeMarkdownValue,
   formatLookupEvidenceMarkdown,
 };
-export type { ComparisonField, LookupEvidenceReport, ReportField, ReportGroup };
+export type { ComparisonField, LookupEvidenceReport, PublicationComparisonField, ReportField, ReportGroup };

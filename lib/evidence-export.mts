@@ -1,10 +1,18 @@
-import { compareRegistrySources } from './registry-comparison.mts';
+import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 11;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 12;
 
 type LooseRecord = Record<string, any>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
+
+const REGISTRAR_RDAP_STATUSES = new Set([
+  'success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled',
+]);
+
+function recordOrNull(value: unknown): LooseRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as LooseRecord : null;
+}
 
 function cloneJson(value: unknown): unknown {
   if (value === undefined) return null;
@@ -45,6 +53,24 @@ function whoisSource(whois: LooseRecord | null | undefined) {
   };
 }
 
+function registrarPublicationComparison(body: LooseRecord, registryParsed: LooseRecord | null) {
+  const rdap = recordOrNull(body.rdap);
+  const registrar = recordOrNull(rdap?.registrarRdap);
+  const rdapDiagnostics = recordOrNull(body.diagnostics?.rdap);
+  const registrarDiagnostics = recordOrNull(rdapDiagnostics?.registrar);
+  if (!registrar && !registrarDiagnostics) return null;
+
+  const reportedStatus = registrar?.status ?? registrarDiagnostics?.status;
+  const parsed = recordOrNull(registrar?.parsed);
+  const registrarStatus = REGISTRAR_RDAP_STATUSES.has(reportedStatus)
+    ? (reportedStatus === 'success' && !parsed ? 'partial' : reportedStatus)
+    : 'error';
+  return compareRdapPublications(registryParsed, parsed, {
+    registryStatus: rdapDiagnostics?.status,
+    registrarStatus,
+  });
+}
+
 export function buildLookupEvidence(response: LooseRecord | null | undefined, options: LookupEvidenceOptions = {}) {
   const { generatedAt = new Date().toISOString(), idnAnalysis = null } = options;
   const body = response || {};
@@ -74,6 +100,7 @@ export function buildLookupEvidence(response: LooseRecord | null | undefined, op
         rdapStatus: body.diagnostics?.rdap?.status,
         whoisStatus: body.diagnostics?.whois?.status,
       }),
+      registrarPublicationComparison: registrarPublicationComparison(body, rdapParsed),
     },
   };
 }

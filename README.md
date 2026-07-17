@@ -269,7 +269,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   When both RDAP publications succeed, Lookup also compares their portable
   domain, registrar, lifecycle, DNSSEC, status, and nameserver fields without
   treating source-specific handles, contacts, or publication differences as
-  an authority decision.
+  an authority decision. The deliberate structured Lookup evidence export
+  retains that normalized comparison with both source values and source-health
+  states, while continuing to exclude the registrar raw object, contacts,
+  entities, links, notices, and source-specific handles.
   The follow-up is omitted from fast and compact Bulk work, and unsupported or
   failed registrar responses remain neutral source states.
 - Structured domain results retain registry object IDs, registrar IANA IDs,
@@ -497,7 +500,7 @@ covered by the provider's community terms or an appropriate paid agreement.
   explicitly versioned because upstream confusable data can evolve; the
   curated subset is not an exhaustive registry-variant or visual-similarity
   database. Lookup evidence
-  schema version 11 retains the analysis supplied to the export; Bulk CSV
+  schema version 12 retains the analysis supplied to the export; Bulk CSV
   exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it

@@ -33,8 +33,11 @@ default (see the README), so many lookups return no personal data at all.
   availability or scoring. Fast and compact Bulk requests do not perform the
   follow-up, and registrar RDAP is not copied into browser-local watchlists,
   cases, or other compact stores. The deliberate raw unified-response view can
-  contain it; the structured Lookup evidence export retains only its bounded
-  source diagnostics in this version.
+  contain it. The structured Lookup evidence export can retain the normalized
+  portable-field comparison between registry and registrar publications,
+  including both displayed source values and source-health states, but excludes
+  the registrar raw object, contacts, entities, links, notices, and
+  source-specific handles.
 - **Optional archived-verdict search**: if the operator explicitly enables the
   URLscan adapter and a user selects it for a deep single-domain Lookup, the
   server sends only the canonical registrable domain to URLscan's Search API.

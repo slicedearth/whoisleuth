@@ -248,6 +248,25 @@ describe('compareRdapPublications', () => {
     });
   });
 
+  test('treats portable registrar lock statuses as equivalent to client-set registry statuses', () => {
+    const result = comparison.compareRdapPublications(
+      { statuses: ['client delete prohibited', 'clientTransferProhibited'] },
+      { statuses: ['delete prohibited', 'transfer prohibited'] },
+    );
+
+    assert.equal(field(result, 'Statuses').status, 'equivalent');
+    assert.equal(result.counts.conflict, 0);
+  });
+
+  test('keeps registry-set locks distinct from generic registrar lock statuses', () => {
+    const result = comparison.compareRdapPublications(
+      { statuses: ['serverDeleteProhibited'] },
+      { statuses: ['delete prohibited'] },
+    );
+
+    assert.equal(field(result, 'Statuses').status, 'conflict');
+  });
+
   test('preserves both publications when a portable field conflicts', () => {
     const result = comparison.compareRdapPublications(
       { domain: 'example.test', lifecycle: { expiryDate: '2030-01-01' } },

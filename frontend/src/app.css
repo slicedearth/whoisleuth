@@ -351,9 +351,9 @@ header { display: none; }
   header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; height: 62px; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--border); background: rgba(15,17,21,.96); }
   header a { display: flex; gap: 10px; align-items: center; font-family: var(--mono); }
   header button { width: 40px; height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
-  aside { position: fixed; inset: 0 auto auto 0; width: min(310px,86vw); height: 100dvh; padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; transform: translateX(-105%); transition: transform .18s; }
+  aside { position: fixed; inset: 0 auto auto 0; width: min(310px,86vw); height: 100dvh; padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); transform: translateX(-105%); transition: transform .18s; }
   aside .brand { display: none; }
-  aside .session { flex: 0 0 auto; margin-bottom: 0; }
+  aside .session { flex: 0 0 auto; margin-bottom: 0; scroll-margin-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); }
   .open aside { transform: none; }
   .scrim { position: fixed; inset: 0; z-index: 10; border: 0; background: rgba(0,0,0,.7); }
   main { padding: 30px 20px 64px; }

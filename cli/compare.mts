@@ -16,6 +16,9 @@ const MAX_COMPARE_INPUT_BYTES = MAX_SAVED_LOOKUP_INPUT_BYTES;
 const MAX_COMPARE_STRING_LENGTH = MAX_SAVED_LOOKUP_STRING_LENGTH;
 const MAX_COMPARE_LIST_ITEMS = 200;
 const MAX_COMPARE_EVENTS = 100;
+const REGISTRAR_RDAP_STATUSES = new Set([
+  'success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled',
+]);
 const LOOKUP_SCHEMA = SAVED_LOOKUP_SCHEMA;
 const LOOKUP_SCHEMA_VERSION = SAVED_LOOKUP_SCHEMA_VERSION;
 
@@ -93,36 +96,52 @@ function projectLifecycle(value: unknown, prefix: string): SourceLifecycle {
   };
 }
 
-function projectRdapSource(value: unknown): ProjectedSource {
+function projectRdapSource(value: unknown, prefix = 'rdap.parsed'): ProjectedSource {
   const source = objectOrNull(value) || {};
   const registrar = objectOrNull(source.registrar);
   const events = source.events === null || source.events === undefined ? [] : source.events;
-  if (!Array.isArray(events)) throw new CliUsageError('rdap.parsed.events must be an array when present.');
+  if (!Array.isArray(events)) throw new CliUsageError(`${prefix}.events must be an array when present.`);
   if (events.length > MAX_COMPARE_EVENTS) {
-    throw new CliUsageError('rdap.parsed.events exceeds the comparison item limit.');
+    throw new CliUsageError(`${prefix}.events exceeds the comparison item limit.`);
   }
   return {
-    domain: boundedSourceString(source.domain, 'rdap.parsed.domain'),
-    handle: boundedSourceString(source.handle, 'rdap.parsed.handle'),
+    domain: boundedSourceString(source.domain, `${prefix}.domain`),
+    handle: boundedSourceString(source.handle, `${prefix}.handle`),
     registrar: registrar ? {
-      name: boundedSourceString(registrar.name, 'rdap.parsed.registrar.name'),
-      org: boundedSourceString(registrar.org, 'rdap.parsed.registrar.org'),
-      handle: boundedSourceString(registrar.handle, 'rdap.parsed.registrar.handle'),
-    } : boundedSourceString(source.registrar, 'rdap.parsed.registrar'),
-    registrarIanaId: boundedSourceString(source.registrarIanaId, 'rdap.parsed.registrarIanaId'),
-    lifecycle: projectLifecycle(source.lifecycle, 'rdap.parsed.lifecycle'),
+      name: boundedSourceString(registrar.name, `${prefix}.registrar.name`),
+      org: boundedSourceString(registrar.org, `${prefix}.registrar.org`),
+      handle: boundedSourceString(registrar.handle, `${prefix}.registrar.handle`),
+    } : boundedSourceString(source.registrar, `${prefix}.registrar`),
+    registrarIanaId: boundedSourceString(source.registrarIanaId, `${prefix}.registrarIanaId`),
+    lifecycle: projectLifecycle(source.lifecycle, `${prefix}.lifecycle`),
     events: events.map((event, index) => {
       const item = objectOrNull(event);
-      if (!item) throw new CliUsageError(`rdap.parsed.events[${index}] must be an object.`);
+      if (!item) throw new CliUsageError(`${prefix}.events[${index}] must be an object.`);
       return {
-        action: boundedSourceString(item.action, `rdap.parsed.events[${index}].action`),
-        date: boundedSourceString(item.date, `rdap.parsed.events[${index}].date`),
+        action: boundedSourceString(item.action, `${prefix}.events[${index}].action`),
+        date: boundedSourceString(item.date, `${prefix}.events[${index}].date`),
       };
     }),
-    dnssec: boundedSourceString(source.dnssec, 'rdap.parsed.dnssec'),
-    statuses: boundedSourceList(source.statuses, 'rdap.parsed.statuses'),
-    nameservers: boundedSourceList(source.nameservers, 'rdap.parsed.nameservers'),
+    dnssec: boundedSourceString(source.dnssec, `${prefix}.dnssec`),
+    statuses: boundedSourceList(source.statuses, `${prefix}.statuses`),
+    nameservers: boundedSourceList(source.nameservers, `${prefix}.nameservers`),
   };
+}
+
+function validateCliRegistrarPublicationInput(document: SavedLookupDocument): void {
+  const rdap = objectOrNull(document.rdap);
+  const registrar = objectOrNull(rdap?.registrarRdap);
+  if (!registrar) return;
+  if (typeof registrar.status !== 'string' || !REGISTRAR_RDAP_STATUSES.has(registrar.status)) {
+    throw new CliUsageError('rdap.registrarRdap.status is unsupported.');
+  }
+  const parsed = objectOrNull(registrar.parsed);
+  if (registrar.status === 'success' && !parsed) {
+    throw new CliUsageError('Successful registrar RDAP input is missing normalized parsed data.');
+  }
+  if (registrar.parsed !== null && registrar.parsed !== undefined) {
+    projectRdapSource(parsed, 'rdap.registrarRdap.parsed');
+  }
 }
 
 function projectWhoisSource(value: unknown): ProjectedSource {
@@ -197,6 +216,7 @@ export {
   compareLookupDocument,
   parseCliLookupDocument,
   projectCliLookupComparisonInput,
+  validateCliRegistrarPublicationInput,
   readCompareInputBounded,
 };
 export type { CliLookupComparisonInput, ProjectedSource, RegistryComparison, SourceLifecycle };

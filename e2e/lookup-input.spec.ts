@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { readFile } from 'node:fs/promises';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -186,7 +187,7 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
             objectClassName: 'domain', domain: 'registrar-source.example', handle: 'registrar-object-handle',
             registrar: { name: 'EXAMPLE REGISTRAR' }, registrarIanaId: '999',
             lifecycle: { createdDate: '2025-01-01', expiryDate: '2031-01-01' },
-            dnssec: 'secure', statuses: ['client transfer prohibited'],
+            dnssec: 'secure', statuses: ['transfer prohibited'],
             nameservers: ['NS1.REGISTRAR-SOURCE.EXAMPLE.', 'ns2.registrar-source.example'],
             entitiesByRole: {
               abuse: [{ name: 'Registrar abuse desk', organizations: [], emails: ['abuse@registrar.example'], phones: [], addresses: [], publicIds: [], links: [] }],
@@ -219,10 +220,23 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2030-01-01T00:00:00Z');
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2031-01-01');
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('Conflict');
+  await expect(comparison.getByRole('row', { name: /Statuses/ })).toContainText('Equivalent');
   await expect(comparison.getByText('Registry object ID', { exact: true })).toHaveCount(0);
   await expect(section.getByText('REGISTRAR-SOURCE.EXAMPLE', { exact: true })).toBeVisible();
   await section.getByText('Published contacts · 1 role').click();
   await expect(section.getByText('Email: abuse@registrar.example')).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export evidence JSON' }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
+  expect(exported.schemaVersion).toBe(12);
+  expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
+  expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
+  expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
+  expect(JSON.stringify(exported)).not.toContain('abuse@registrar.example');
 
   await page.setViewportSize({ width: 360, height: 780 });
   await expectNoHorizontalOverflow(page);

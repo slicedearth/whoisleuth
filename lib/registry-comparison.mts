@@ -21,7 +21,11 @@ type FieldStatus =
   | 'rdap_redacted' | 'whois_redacted'
   | 'rdap_unavailable' | 'whois_unavailable'
   | 'rdap_incomplete' | 'whois_incomplete';
-type RegistryComparisonOptions = { rdapStatus?: unknown; whoisStatus?: unknown };
+type RegistryComparisonOptions = {
+  rdapStatus?: unknown;
+  whoisStatus?: unknown;
+  statusNormalizer?: (value: unknown) => string | null;
+};
 type RdapPublicationComparisonOptions = { registryStatus?: unknown; registrarStatus?: unknown };
 type SourceHealth = {
   rdapStatus: unknown;
@@ -102,6 +106,17 @@ function normalizeStatus(value: unknown): string | null {
   return typeof value === 'string'
     ? value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
     : null;
+}
+
+// Some registrar RDAP services publish the portable RDAP status vocabulary
+// (for example "transfer prohibited") while the registry publishes the
+// corresponding client-set EPP status ("client transfer prohibited"). Treat
+// those client-set forms as equivalent across RDAP publications, but retain
+// the server prefix because a registry-set lock is materially different.
+function normalizeRdapPublicationStatus(value: unknown): string | null {
+  const normalized = normalizeStatus(value);
+  if (!normalized) return null;
+  return normalized.replace(/^client(?=(?:delete|renew|transfer|update)prohibited$)/, '');
 }
 
 function normalizeNameserver(value: unknown): string | null {
@@ -215,6 +230,7 @@ export function compareRegistrySources(
     rdapCondition: sourceCondition(options.rdapStatus),
     whoisCondition: sourceCondition(options.whoisStatus),
   };
+  const statusNormalizer = options.statusNormalizer || normalizeStatus;
   const dateField = (label: string, field: string, fallbackAction: string) => {
     const rdapValue = rdapLifecycleDate(rdap, field, fallbackAction);
     const whoisValue = whois[field] || whois.lifecycle?.[field] || null;
@@ -232,7 +248,7 @@ export function compareRegistrySources(
     dateField('Expires', 'expiryDate', 'expiration'),
     dateField('Last updated', 'updatedDate', 'last changed'),
     compareField('DNSSEC', rdap.dnssec, whois.dnssec, normalizeDnssec, sourceHealth),
-    compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, normalizeStatus), sourceHealth),
+    compareField('Statuses', rdap.statuses, whois.statuses, (values) => normalizeSet(values, statusNormalizer), sourceHealth),
     compareField('Name servers', rdap.nameservers, whois.nameservers, (values) => normalizeSet(values, normalizeNameserver), sourceHealth),
   ].filter((field) => field !== null);
 
@@ -301,6 +317,7 @@ export function compareRdapPublications(
     {
       rdapStatus: options.registryStatus,
       whoisStatus: options.registrarStatus,
+      statusNormalizer: normalizeRdapPublicationStatus,
     },
   );
 

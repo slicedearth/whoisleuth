@@ -6,6 +6,7 @@ type UnknownRecord = Record<string, unknown>;
 type ReportField = { label: string; value: string };
 type ReportGroup = { title: string; fields: ReportField[] };
 type ComparisonField = { label: string; status: string; rdap: string; whois: string };
+type PublicationComparisonField = { label: string; status: string; registry: string; registrar: string };
 type LookupEvidenceReport = {
   title: string;
   notice: string;
@@ -14,6 +15,7 @@ type LookupEvidenceReport = {
   assessment: ReportField[];
   registryGroups: ReportGroup[];
   comparison: { health: ReportField[]; fields: ComparisonField[]; omitted: number };
+  registrarComparison: { health: ReportField[]; fields: PublicationComparisonField[]; omitted: number };
   networkGroups: ReportGroup[];
   diagnostics: ReportField[];
   limitations: string[];
@@ -98,6 +100,10 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
   const comparisonHealth = objectOrEmpty(comparison.sourceHealth);
   const rdapComparisonHealth = objectOrEmpty(comparisonHealth.rdap);
   const whoisComparisonHealth = objectOrEmpty(comparisonHealth.whois);
+  const registrarComparison = objectOrEmpty(analysis.registrarPublicationComparison);
+  const registrarComparisonHealth = objectOrEmpty(registrarComparison.sourceHealth);
+  const registryPublicationHealth = objectOrEmpty(registrarComparisonHealth.registry);
+  const registrarPublicationHealth = objectOrEmpty(registrarComparisonHealth.registrar);
   const dns = objectOrEmpty(availability.dns);
   const http = objectOrEmpty(availability.http);
   const httpResponse = objectOrEmpty(http.response);
@@ -194,6 +200,17 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
       };
     })
     : [];
+  const registrarComparisonFields: PublicationComparisonField[] = Array.isArray(registrarComparison.fields)
+    ? registrarComparison.fields.slice(0, MAX_REPORT_COMPARISON_FIELDS).map((value) => {
+      const item = objectOrEmpty(value);
+      return {
+        label: cleanReportText(item.label),
+        status: displayLabel(item.status),
+        registry: cleanReportText(item.registryDisplay),
+        registrar: cleanReportText(item.registrarDisplay),
+      };
+    })
+    : [];
 
   return {
     title: cleanReportText(titleTarget),
@@ -229,6 +246,14 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
       fields: comparisonFields,
       omitted: Math.max(0, (Array.isArray(comparison.fields) ? comparison.fields.length : 0) - comparisonFields.length),
     },
+    registrarComparison: {
+      health: [
+        reportField('Registry RDAP health', displayLabel(registryPublicationHealth.status)),
+        reportField('Registrar RDAP health', displayLabel(registrarPublicationHealth.status)),
+      ],
+      fields: registrarComparisonFields,
+      omitted: Math.max(0, (Array.isArray(registrarComparison.fields) ? registrarComparison.fields.length : 0) - registrarComparisonFields.length),
+    },
     networkGroups: [groups.dns, groups.website, groups.tls],
     diagnostics: [
       reportField('Diagnostics version', diagnostics.version),
@@ -252,4 +277,4 @@ export {
   buildLookupEvidenceReport,
   cleanReportText,
 };
-export type { ComparisonField, LookupEvidenceReport, ReportField, ReportGroup, UnknownRecord };
+export type { ComparisonField, LookupEvidenceReport, PublicationComparisonField, ReportField, ReportGroup, UnknownRecord };

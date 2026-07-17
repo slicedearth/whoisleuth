@@ -61,6 +61,13 @@ function savedLookup(overrides = {}) {
         status: 'success',
         endpoint: 'https://registrar.example.test/domain/example.test',
         data: { privateNestedValue: 'must not enter the established evidence schema' },
+        parsed: {
+          domain: 'example.test', handle: 'REGISTRAR-OBJECT',
+          registrar: { name: 'EXAMPLE REGISTRAR' },
+          lifecycle: { createdDate: '2025-01-01', expiryDate: '2031-01-01' },
+          statuses: ['active'], nameservers: ['ns1.example.test'],
+          entitiesByRole: { abuse: [{ email: 'private-registrar@example.test' }] },
+        },
       },
     },
     whois: {
@@ -153,7 +160,7 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 11);
+    assert.equal(result.schemaVersion, 12);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     assert.equal(result.query.submitted, 'login.example.test');
     assert.equal(result.query.registrableDomain, 'example.test');
@@ -162,6 +169,10 @@ describe('lookup evidence export conversion', () => {
     assert.equal(result.analysis.availability.tls.protocol, 'TLSv1.3');
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
+    assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 0);
+    assert.ok(result.analysis.registrarPublicationComparison.counts.equivalent > 0);
+    assert.equal(JSON.stringify(result).includes('REGISTRAR-OBJECT'), false);
+    assert.equal(JSON.stringify(result).includes('private-registrar@example.test'), false);
     assert.equal(JSON.stringify(result).includes('privateNestedValue'), false);
     assert.equal(JSON.stringify(result).includes('ignoredTopLevelValue'), false);
     assert.deepEqual(source, before);
@@ -187,11 +198,36 @@ describe('lookup evidence export conversion', () => {
     );
   });
 
+  test('rejects malformed registrar publication comparison fields before producing a package', async () => {
+    const source = savedLookup();
+    source.rdap.registrarRdap.parsed.nameservers = 'ns1.example.test';
+    assert.throws(
+      () => buildCliEvidenceExport(JSON.stringify(source), { buildLookupEvidence() {} }),
+      /rdap\.registrarRdap\.parsed\.nameservers must be an array/
+    );
+  });
+
+  test('rejects inconsistent registrar publication source states before producing a package', async () => {
+    const missingParsed = savedLookup();
+    missingParsed.rdap.registrarRdap.parsed = null;
+    assert.throws(
+      () => buildCliEvidenceExport(JSON.stringify(missingParsed), { buildLookupEvidence() {} }),
+      /Successful registrar RDAP input is missing normalized parsed data/
+    );
+
+    const unsupportedStatus = savedLookup();
+    unsupportedStatus.rdap.registrarRdap.status = 'complete';
+    assert.throws(
+      () => buildCliEvidenceExport(JSON.stringify(unsupportedStatus), { buildLookupEvidence() {} }),
+      /rdap\.registrarRdap\.status is unsupported/
+    );
+  });
+
   test('rejects an injected builder with the wrong report contract', () => {
     assert.throws(() => buildCliEvidenceExport(JSON.stringify(savedLookup()), {
       LOOKUP_EVIDENCE_SCHEMA: 'whoisleuth.lookup-evidence',
-      LOOKUP_EVIDENCE_SCHEMA_VERSION: 11,
-      buildLookupEvidence: () => ({ schema: 'other', schemaVersion: 11 }),
+      LOOKUP_EVIDENCE_SCHEMA_VERSION: 12,
+      buildLookupEvidence: () => ({ schema: 'other', schemaVersion: 12 }),
     }), /unsupported report contract/);
   });
 
@@ -219,9 +255,12 @@ describe('lookup evidence Markdown rendering', () => {
     assert.match(markdown, /### Registry RDAP/);
     assert.match(markdown, /### WHOIS/);
     assert.match(markdown, /## Registry-source comparison/);
+    assert.match(markdown, /## Registry \/ registrar RDAP comparison/);
+    assert.match(markdown, /Registry RDAP/);
+    assert.match(markdown, /registrar RDAP/);
     assert.match(markdown, /## Network evidence/);
     assert.match(markdown, /Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package/);
-    assert.doesNotMatch(markdown, /publicContact/);
+    assert.doesNotMatch(markdown, /publicContact|privateNestedValue|private-registrar/);
     assert.doesNotMatch(markdown, /Registrant Email/);
     assert.equal(markdown.endsWith('\n'), true);
   });
@@ -275,9 +314,10 @@ describe('lookup evidence HTML rendering', () => {
     assert.match(html, /<style>[\s\S]*@media print/);
     assert.match(html, /<main>[\s\S]*<h2>Registry sources<\/h2>/);
     assert.match(html, /<table>[\s\S]*Normalized registry publication comparison/);
+    assert.match(html, /Normalized registry and registrar RDAP publication comparison/);
     assert.doesNotMatch(html, /<script\b/i);
     assert.doesNotMatch(html, /<a\b/i);
-    assert.doesNotMatch(html, /publicContact|Registrant Email/);
+    assert.doesNotMatch(html, /publicContact|Registrant Email|privateNestedValue|private-registrar/);
     assert.equal(html.endsWith('\n'), true);
   });
 
