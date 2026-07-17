@@ -58,6 +58,7 @@ describe('registry capability metadata', () => {
   });
 
   test('returns defensive copies rather than mutable shared metadata', () => {
+    const expected = listRegistryCapabilities()[0];
     const first = listRegistryCapabilities();
     first[0].suffixes.push('invalid');
     first[0].fixtureScenarios.push('invented');
@@ -66,11 +67,7 @@ describe('registry capability metadata', () => {
     first[0].limitation = 'changed';
 
     const second = listRegistryCapabilities();
-    assert.equal(second[0].suffixes.includes('invalid'), false);
-    assert.equal(second[0].fixtureScenarios.includes('invented'), false);
-    assert.equal(second[0].verificationFiles.includes('invented'), false);
-    assert.equal(second[0].documentationUrls.includes('https://invalid.example'), false);
-    assert.notEqual(second[0].limitation, 'changed');
+    assert.deepEqual(second[0], expected);
   });
 
   test('points every declared profile at a local fixture or bounded authoritative documentation', () => {
