@@ -561,7 +561,7 @@ const RATE_LIMIT_RE = /rate.?limit|too many requests|quota exceeded|query limit|
 // Positive registration evidence: a field that only appears for a domain that
 // actually exists, carrying a non-empty value. The IANA root hop is excluded
 // by the caller (it describes the TLD delegation, not the queried domain).
-const POSITIVE_REGISTRATION_RE = /^[ \t*]*(?:Domain(?: Name)?|Registrar|Registrar WHOIS Server|Creation Date|Created(?: On)?|Registry Expiry Date|Registered|Name Server|nserver|Sponsoring Registrar)[ \t.]*:[ \t]*\S/im;
+const POSITIVE_REGISTRATION_RE = /^[ \t*]*(?:Domain(?: Name)?|Registrar|Registrar WHOIS Server|Creation Date|Created(?: On)?|Registry Expiry Date|Registered(?: On)?|Name Server|nserver|Sponsoring Registrar)[ \t.]*:[ \t]*\S/im;
 const POSITIVE_BRACKET_RE = /\[(?:Domain Name|Registrant|Name Server)\][ \t]*\S/i;
 
 function classifyHopEvidence(hop: WhoisHop, index: number): string {
@@ -624,6 +624,23 @@ function boundedWhoisValue(value: unknown, maxLength = MAX_WHOIS_FIELD_LENGTH) {
     value: normalized.slice(0, maxLength).trim() || null,
     truncated: normalized.length > maxLength,
   };
+}
+
+// Some sectioned registry responses put a field value on the next indented
+// line rather than beside the header, for example "Domain name:" followed by
+// the queried domain. Skip only leading blank lines, require indentation, and
+// retain one bounded scalar so a malformed response cannot make the section
+// absorb a following header or an arbitrary remainder of the response.
+function parseIndentedWhoisValue(text: string, headerRe: RegExp, maxLength: number) {
+  const headerMatch = text.match(headerRe);
+  if (!headerMatch) return null;
+  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length).split('\n').slice(0, 8);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    if (!/^[ \t]/.test(line)) return null;
+    return boundedWhoisValue(line, maxLength);
+  }
+  return null;
 }
 
 function whoisFieldLimit(key: string): number {
@@ -725,7 +742,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     createdDate: [
       /^[ \t*]*Creation Date[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Created(?: On)?[ \t.]*:[ \t]*(.+)$/im,
-      /^[ \t*]*Regist(?:ration|ered)(?: Time| Date)?[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Regist(?:ration|ered)(?: Time| Date| On)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Domain record activated[ \t.]*:[ \t]*(.+)$/im,
     ],
     expiryDate: [
@@ -851,6 +868,41 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
           if (bounded.truncated) truncatedFields.add(key);
           break;
         }
+      }
+    }
+
+    // Sectioned legacy port-43 responses use a distinctive pair of section
+    // headers and place several values on following indented lines. Gate the
+    // dialect on both markers so generic responses with one blank field are
+    // not reinterpreted. This is parser compatibility only: IANA still
+    // selects the endpoint and authority analysis remains unchanged.
+    const isSectionedRegistryResponse = !isRootHop
+      && /^[ \t]*Relevant dates[ \t]*:[ \t]*$/im.test(text)
+      && /^[ \t]*Registration status[ \t]*:[ \t]*$/im.test(text);
+    if (isSectionedRegistryResponse) {
+      for (const [key, headerRe] of [
+        ['domainName', /^[ \t]*Domain name[ \t]*:[ \t]*$/im],
+        ['registrantName', /^[ \t]*Registrant[ \t]*:[ \t]*$/im],
+        ['registrar', /^[ \t]*Registrar[ \t]*:[ \t]*$/im],
+      ] as const) {
+        if (fields[key]) continue;
+        const parsed = parseIndentedWhoisValue(text, headerRe, whoisFieldLimit(key));
+        if (!parsed?.value) continue;
+        fields[key] = parsed.value;
+        if (parsed.truncated) truncatedFields.add(key);
+      }
+      const registrationStatus = parseIndentedWhoisValue(
+        text,
+        /^[ \t]*Registration status[ \t]*:[ \t]*$/im,
+        160,
+      );
+      if (registrationStatus?.value) {
+        addBoundedWhoisSetValue(statuses, registrationStatus.value, {
+          maxEntries: MAX_WHOIS_STATUSES,
+          maxLength: 160,
+          field: 'statuses',
+          truncatedFields,
+        });
       }
     }
 

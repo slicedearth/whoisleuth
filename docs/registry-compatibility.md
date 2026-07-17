@@ -22,7 +22,7 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 4 explicit matrix is:
+The version 5 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -36,6 +36,7 @@ The version 4 explicit matrix is:
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
+| `.uk` | Sectioned indented domain, registrant, registrar, status, date, and nameserver fields | Registered, not found, malformed |
 | `.vn` | IANA publishes no domain WHOIS or RDAP service; official browser lookup is not integrated | Access documented |
 
 The exceptional query formats are grounded in the registries' own protocol
@@ -44,6 +45,15 @@ documents the domain-and-ACE query type, while the [`.jp` command-line
 guide](https://jprs.jp/about/dom-search/jprs-whois/whois-guide-usage.html)
 documents `/e` as the English-output suffix. The automated suite represents
 both with synthetic responses and never contacts either registry.
+
+The [`.uk` WHOIS instructions](https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/whois-basic-instructions/)
+document a sectioned port-43 response with indented domain, registrar,
+registration-status, date, and nameserver values. The registry now describes
+that WHOIS service as
+[end of life](https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/),
+so this profile preserves transitional response compatibility while RDAP
+remains the preferred source. It uses only the normal IANA referral path and
+existing request budgets; WHOISleuth does not automate the registry website.
 
 The [IANA `.es` delegation record](https://www.iana.org/domains/root/db/es.html)
 publishes WHOIS but no RDAP service, while the registry's

@@ -34,13 +34,14 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 4;
+const REGISTRY_CAPABILITIES_VERSION = 5;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
 const FIXTURE_LIMITATION = 'Synthetic fixtures verify the current parser profile; they do not prove current live-registry reachability, policy, or field publication.';
 const ES_ACCESS_LIMITATION = 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.';
 const VN_ACCESS_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.';
+const UK_TRANSITION_LIMITATION = 'Synthetic fixtures verify the documented sectioned port-43 response while that WHOIS service is phased out. RDAP remains the preferred registry source, and fixture coverage does not prove current reachability or field publication.';
 
 function freezeCapability(capability: RegistryCapability): Readonly<RegistryCapability> {
   Object.freeze(capability.suffixes);
@@ -121,6 +122,18 @@ const EXPLICIT_CAPABILITIES = [
   {
     id: 'prefixed-dot-leader', suffixes: ['tr'], registryClass: 'country-code',
     whoisParserProfile: 'prefixed-dot-leader-and-bare-nameservers', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'sectioned-registry-response', suffixes: ['uk'], registryClass: 'country-code',
+    whoisParserProfile: 'indented-section-values-and-bare-nameservers',
+    fixtureScenarios: ['registered', 'not_found', 'malformed'],
+    documentationUrls: [
+      'https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/',
+      'https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/whois-basic-instructions/',
+      'https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/whois-detailed-instructions/',
+      'https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/acceptable-use-policy/',
+    ],
+    limitation: UK_TRANSITION_LIMITATION,
   },
   {
     id: 'no-iana-registry-service', suffixes: ['vn'], registryClass: 'country-code',
