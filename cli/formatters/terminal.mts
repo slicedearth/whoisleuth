@@ -4,6 +4,12 @@ const MAX_CT_TERMINAL_HOSTNAMES = 5;
 const MAX_DISCOVER_TERMINAL_CANDIDATES = 200;
 const MAX_POSTURE_TERMINAL_RECORDS = 5;
 const MAX_TLS_TERMINAL_ALT_NAMES = 10;
+const REGISTRY_ACCESS_PROFILE_LABELS: Record<string, string> = {
+  'iana-bootstrap': 'IANA bootstrap discovery',
+  'iana-referral': 'IANA referral discovery',
+  'no-iana-service': 'No service published by IANA',
+  'source-ip-authorization-required': 'Source-IP authorization required',
+};
 
 // Terminal documents have different versioned shapes. Every scalar crosses
 // safeTerminalValue before display, while the runner supplies bounded arrays.
@@ -32,6 +38,12 @@ function titleCase(value: unknown): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function registryAccessProfileLabel(value: unknown): string {
+  return typeof value === 'string' && REGISTRY_ACCESS_PROFILE_LABELS[value]
+    ? REGISTRY_ACCESS_PROFILE_LABELS[value]
+    : 'Unknown';
+}
+
 function formatTerminalLookup(document: TerminalRecord): string {
   const lines = [
     `Query          ${safeTerminalValue(document.query)}`,
@@ -54,6 +66,13 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
   }
   lines.push(`WHOIS          ${titleCase(document.diagnostics?.whois?.status)}`);
+  const registryAccess = document.diagnostics?.registryAccess;
+  if (registryAccess) {
+    lines.push(`Registry access .${safeTerminalValue(registryAccess.suffix)}`);
+    lines.push(`WHOIS access   ${registryAccessProfileLabel(registryAccess.whoisAccessProfile)}`);
+    lines.push(`RDAP access    ${registryAccessProfileLabel(registryAccess.rdapAccessProfile)}`);
+    if (registryAccess.limitation) lines.push(`Access note    ${safeTerminalValue(registryAccess.limitation)}`);
+  }
   return `${lines.join('\n')}\n`;
 }
 

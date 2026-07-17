@@ -197,6 +197,58 @@ test('terminal lookup preserves registrar skip states and omits absent diagnosti
   assert.doesNotMatch(formatTerminalLookup(absentDocument), /Registrar/);
 });
 
+test('terminal lookup explains represented registry access constraints', () => {
+  const restricted = lookupResult({
+    diagnostics: {
+      version: 5,
+      registryAccess: {
+        suffix: 'es',
+        whoisAccessProfile: 'source-ip-authorization-required',
+        rdapAccessProfile: 'no-iana-service',
+        limitation: 'Registry collection requires documented source authorization.',
+        authority: 'context_only',
+      },
+      rdap: { status: 'unsupported', endpoint: null },
+      whois: { status: 'error' },
+      availability: { status: 'complete' },
+    },
+  });
+  const document = buildCliLookupDocument('restricted.invalid', { type: 'domain', value: 'restricted.invalid', registrableDomain: 'restricted.invalid' }, restricted, '2026-07-17T00:00:00.000Z', 'deep');
+  const terminal = formatTerminalLookup(document);
+
+  assert.match(terminal, /Registry access \.es/);
+  assert.match(terminal, /WHOIS access\s+Source-IP authorization required/);
+  assert.match(terminal, /RDAP access\s+No service published by IANA/);
+  assert.match(terminal, /Access note\s+Registry collection requires documented source authorization\./);
+});
+
+test('terminal registry access context remains bounded and absent by default', () => {
+  const constrained = lookupResult({
+    diagnostics: {
+      version: 5,
+      registryAccess: {
+        suffix: 'zz\ninvalid',
+        whoisAccessProfile: 'no-iana-service',
+        rdapAccessProfile: 'no-iana-service',
+        limitation: `No public machine service.\n${'x'.repeat(500)}`,
+        authority: 'context_only',
+      },
+      rdap: { status: 'unsupported', endpoint: null },
+      whois: { status: 'error' },
+      availability: { status: 'complete' },
+    },
+  });
+  const constrainedDocument = buildCliLookupDocument('unpublished.invalid', { type: 'domain', value: 'unpublished.invalid', registrableDomain: 'unpublished.invalid' }, constrained, '2026-07-17T00:00:00.000Z', 'deep');
+  const constrainedTerminal = formatTerminalLookup(constrainedDocument);
+  const accessNote = constrainedTerminal.split('\n').find((line) => line.startsWith('Access note'));
+
+  assert.doesNotMatch(constrainedTerminal, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+  assert.ok(accessNote.length <= 'Access note    '.length + 240);
+
+  const ordinaryDocument = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, lookupResult(), '2026-07-17T00:00:00.000Z');
+  assert.doesNotMatch(formatTerminalLookup(ordinaryDocument), /Registry access|WHOIS access|RDAP access|Access note/);
+});
+
 test('terminal values strip controls and stay bounded', () => {
   const result = safeTerminalValue(`hello\nworld\u0000${'x'.repeat(500)}`);
   assert.doesNotMatch(result, /[\x00-\x1f\x7f]/);

@@ -88,6 +88,12 @@ fast mode reports the existing skipped state. IP, ASN, and lookup responses
 without registrar diagnostics remain unchanged. These source states are
 provenance only and do not decide availability or imply safety.
 
+When diagnostics version 5 reports a documented registry collection
+constraint, terminal output also shows the suffix, WHOIS and RDAP access
+profiles, and the bounded limitation. This is static access-policy context: it
+does not make another request, and restricted, unpublished, or unavailable
+machine access is not evidence that a domain is unregistered or safe.
+
 ## Exit codes
 
 | Code | Meaning |
