@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Pagination from '$lib/components/Pagination.svelte';
   let {
     domains,
     status,
@@ -14,6 +15,14 @@
     importShortlistFile: (event: Event) => void | Promise<void>;
     removeAllShortlisted: () => void;
   } = $props();
+
+  const PAGE_SIZE=100;
+  let page=$state(1);
+  const pageCount=$derived(Math.max(1,Math.ceil(domains.length/PAGE_SIZE)));
+  const currentPage=$derived(Math.min(page,pageCount));
+  const pagedDomains=$derived(domains.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
+  function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
+  $effect(()=>{if(page>pageCount)page=pageCount;});
 </script>
 
 <section class="shortlist card">
@@ -26,7 +35,7 @@
     </div>
   </header>
   {#if status}<p role="status" aria-live="polite">{status}</p>{/if}
-  {#if domains.length}<div class="shortlist-items">{#each domains as domain}<span>{domain}</span>{/each}</div>{:else}<p>No shortlisted domains yet. Star a Bulk result to save it locally.</p>{/if}
+  {#if domains.length}<div class="shortlist-items">{#each pagedDomains as domain}<span>{domain}</span>{/each}</div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Shortlist pages" />{:else}<p>No shortlisted domains yet. Star a Bulk result to save it locally.</p>{/if}
 </section>
 
 <style>

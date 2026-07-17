@@ -2,6 +2,7 @@
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import {
     CASE_DISPOSITIONS,
     CASE_STATUSES,
@@ -27,6 +28,9 @@
     removeCase,
     setMessage,
     formatDate,
+    currentPage,
+    pageCount,
+    setPage,
   }: {
     records: CaseRecord[];
     allRecords: CaseRecord[];
@@ -43,6 +47,9 @@
     removeCase: (record: CaseRecord) => void;
     setMessage: (value: string) => void;
     formatDate: (value: string) => string;
+    currentPage: number;
+    pageCount: number;
+    setPage: (value: number) => void;
   } = $props();
 </script>
 
@@ -81,6 +88,7 @@
     </article>
   {/each}
   {#if !records.length}<p class="count">No cases match the current filters.</p>{/if}
+  <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Case pages" />
 </section>
 
 <style>

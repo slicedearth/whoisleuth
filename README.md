@@ -341,7 +341,9 @@ compact-storage boundary, and lookup evidence schema are documented in the
   report is server-authoritative, identifies the active concurrency provider
   and scope, and does not claim unimplemented scheduled capabilities.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
-  browser's local storage.
+  browser's local storage. The retained collection remains available to load,
+  export, or clear as a whole while its domain chips are displayed in pages of
+  100.
 
 ### Optional external threat-intelligence boundary
 
@@ -468,6 +470,8 @@ covered by the provider's community terms or an appropriate paid agreement.
   from the active profile and drops candidates already in its allowlist, and
   bulk/watchlist results mark any domain in the allowlist instead of
   treating your own domain as a lookalike.
+  Saved profiles are displayed in pages of 12; activating or saving a profile
+  brings its page into view without changing the bounded browser-local store.
 - Lookup and Bulk analyze internationalized domains locally in the browser.
   Unicode and DNS-safe ASCII forms are shown together, per-label writing
   scripts are identified, and a bounded, versioned visual skeleton can be
@@ -629,7 +633,9 @@ covered by the provider's community terms or an appropriate paid agreement.
   Deep watchlist rescans keep the same 200-domain safety limit as other deep
   checks; larger watchlists remain available for fast registration monitoring.
   Timeline entries can be filtered to changed checks only and are included
-  in the existing JSON backup/export.
+  in the existing JSON backup/export. The watchlist table displays 25 saved
+  lists per page while rescans, history, export, and clear actions continue to
+  operate on the intended record or complete collection.
 - **Optional hosted monitoring worker**: Netlify deployments include a private
   scheduled function that polls every five minutes, but it is a no-op unless
   `WHOISLEUTH_SCHEDULED_MONITORING` is explicitly enabled with a valid
@@ -739,7 +745,9 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
 - Monitor lets you filter by status and disposition, search by domain or tag,
   sort by recent activity, edit a case inline, and delete one with a
   confirmation. A case links back to a fresh **Look up** of its domain, and
-  Lookup/Bulk link forward into the matching Monitor record.
+  Lookup/Bulk link forward into the matching Monitor record. Filtered cases
+  are shown 25 per page; deep links and relationship pivots open the page that
+  contains the requested case.
 - Expanded cases also compare their latest compact evidence against the other
   cases already stored in that browser. Exact retained normalized nameserver
   sets and exact final HTTP(S) origins can become bounded cross-case
@@ -760,7 +768,9 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
   unavailable case so portable membership is not silently lost after a case
   deletion or import on another browser. Campaign membership is an analyst
   organization aid, not evidence of common ownership, coordination, intent,
-  or maliciousness.
+  or maliciousness. Campaigns are shown 10 per page and member domains 25 per
+  page; collection export/import and membership mutations still address the
+  complete bounded data set.
 - Campaign collection export/import uses a separate versioned JSON contract.
   Imports merge matching campaign IDs non-destructively: domain membership is
   unioned, while newer valid metadata wins. The store is limited to 50

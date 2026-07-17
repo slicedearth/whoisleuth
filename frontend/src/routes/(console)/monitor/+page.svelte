@@ -25,6 +25,7 @@
   import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '$lib/capabilities';
 
   type View = 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
+  const CASE_PAGE_SIZE=25;
   let view=$state<View>('watchlists');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const scheduledCapability=$derived(featureCapability(capabilityReport?.()||null,'scheduled_monitoring'));
@@ -43,6 +44,7 @@
 
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
+  let casePage=$state(1);
   let campaignCount=$state(0);
   let relationshipCount=$state(0);
   let customRuleCount=$state(0);
@@ -62,15 +64,20 @@
       return Date.parse(b.updatedAt)-Date.parse(a.updatedAt);
     });
   });
+  const casePageCount=$derived(Math.max(1,Math.ceil(filteredCases.length/CASE_PAGE_SIZE)));
+  const currentCasePage=$derived(Math.min(casePage,casePageCount));
+  const pagedCases=$derived(filteredCases.slice((currentCasePage-1)*CASE_PAGE_SIZE,currentCasePage*CASE_PAGE_SIZE));
+  function setCasePage(value:number){casePage=Math.min(casePageCount,Math.max(1,Math.trunc(value)));}
+  function showCasePage(record:CaseRecord){const index=filteredCases.findIndex(item=>item.id===record.id);if(index>=0)casePage=Math.floor(index/CASE_PAGE_SIZE)+1;}
   function refreshCases(){cases=loadCases();relationshipCount=buildCaseRelationships(cases).groups.length;if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
-  function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
-  function openRelatedCase(record:CaseRecord){view='cases';if(expandedId!==record.id)expand(record);}
+  function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
+  function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);}
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
-  function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=openCase({domain,source:'monitor'});refreshCases();newDomain='';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
-  function setStatus(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{status:value});refreshCases();caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
-  function setDisposition(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{disposition:value});refreshCases();caseMessage=`Marked ${record.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
-  function saveTags(record:CaseRecord){try{const{pruned}=editCase(record.id,{tags:tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean)});refreshCases();caseMessage=`Updated tags for ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
-  function addNote(record:CaseRecord){const body=noteDraft.trim();if(!body){caseMessage='A note cannot be empty.';return;}try{const{pruned}=addCaseNote(record.id,body);refreshCases();noteDraft='';caseMessage=`Added a note to ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';}}
+  function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=openCase({domain,source:'monitor'});refreshCases();newDomain='';showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
+  function setStatus(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{status:value});refreshCases();showCasePage(record);caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
+  function setDisposition(record:CaseRecord,value:string){try{const{pruned}=editCase(record.id,{disposition:value});refreshCases();showCasePage(record);caseMessage=`Marked ${record.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
+  function saveTags(record:CaseRecord){try{const{pruned}=editCase(record.id,{tags:tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean)});refreshCases();showCasePage(record);caseMessage=`Updated tags for ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
+  function addNote(record:CaseRecord){const body=noteDraft.trim();if(!body){caseMessage='A note cannot be empty.';return;}try{const{pruned}=addCaseNote(record.id,body);refreshCases();showCasePage(record);noteDraft='';caseMessage=`Added a note to ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';}}
   function downloadCases(){try{exportCases();}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export cases.';}}
   function removeCase(record:CaseRecord){if(!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))return;try{deleteCase(record.id);if(expandedId===record.id)expandedId='';refreshCases();caseMessage=`Deleted the case for ${record.domain}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the case.';}}
   function clearCaseFilters(){statusFilter='';dispositionFilter='';caseSearch='';}
@@ -79,7 +86,7 @@
   onMount(()=>{
     refresh();refreshCases();campaignCount=loadCampaigns().length;customRuleCount=loadDetectionRules().length;
     const focus=page.url.searchParams.get('case');
-    if(focus){view='cases';if(cases.some(record=>record.id===focus)){const target=cases.find(record=>record.id===focus)!;expandedId=focus;tagDraft=target.tags.join(', ');}}
+    if(focus){view='cases';if(cases.some(record=>record.id===focus)){const target=cases.find(record=>record.id===focus)!;showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');}}
     else if(page.url.searchParams.get('view')==='cases')view='cases';
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
     else if(page.url.searchParams.get('view')==='relationships')view='relationships';
@@ -116,9 +123,9 @@
   <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} {downloadCases} {importCaseFile} message={caseMessage} />
 
   {#if cases.length}
-    <CaseFilters status={statusFilter} setStatus={(value)=>statusFilter=value} disposition={dispositionFilter} setDisposition={(value)=>dispositionFilter=value} search={caseSearch} setSearch={(value)=>caseSearch=value} sort={caseSort} setSort={(value)=>caseSort=value} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={clearCaseFilters} matchedCount={filteredCases.length} totalCount={cases.length} />
+    <CaseFilters status={statusFilter} setStatus={(value)=>{statusFilter=value;casePage=1;}} disposition={dispositionFilter} setDisposition={(value)=>{dispositionFilter=value;casePage=1;}} search={caseSearch} setSearch={(value)=>{caseSearch=value;casePage=1;}} sort={caseSort} setSort={(value)=>{caseSort=value;casePage=1;}} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={()=>{clearCaseFilters();casePage=1;}} matchedCount={filteredCases.length} totalCount={cases.length} />
 
-    <CaseList records={filteredCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} {expand} {setStatus} {setDisposition} {saveTags} {addNote} {removeCase} setMessage={(value)=>caseMessage=value} formatDate={date} />
+    <CaseList records={pagedCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} {expand} {setStatus} {setDisposition} {saveTags} {addNote} {removeCase} setMessage={(value)=>caseMessage=value} formatDate={date} currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />
   {:else}
     <section class="empty-state card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}

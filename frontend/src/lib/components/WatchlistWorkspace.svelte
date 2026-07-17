@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Pagination from '$lib/components/Pagination.svelte';
   import {
     fieldLabels,
     formatValue,
@@ -40,13 +41,21 @@
     remove: (name: string) => void;
     formatDate: (value: string) => string;
   } = $props();
+
+  const PAGE_SIZE=25;
+  let page=$state(1);
+  const pageCount=$derived(Math.max(1,Math.ceil(names.length/PAGE_SIZE)));
+  const currentPage=$derived(Math.min(page,pageCount));
+  const pagedNames=$derived(names.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
+  function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
+  $effect(()=>{if(page>pageCount)page=pageCount;});
 </script>
 
 <section class="wl-toolbar card"><div class="top-actions toolbar"><button class="btn" onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label><button class="btn danger" onclick={clearAll} disabled={!names.length}>Clear all</button></div></section>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
 {#if names.length}
-  <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each names as name}{@const item=watchlists[name]}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td><td>{formatDate(item.updatedAt)}</td><td><div class="actions toolbar"><button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button><button class="btn small" onclick={() => { setSelected(name); setChangedOnly(false); }}>History</button><button class="btn small danger" onclick={() => remove(name)}>Delete</button></div></td></tr>{/each}</tbody></table></div></section>
+  <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each pagedNames as name}{@const item=watchlists[name]}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td><td>{formatDate(item.updatedAt)}</td><td><div class="actions toolbar"><button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button><button class="btn small" onclick={() => { setSelected(name); setChangedOnly(false); }}>History</button><button class="btn small danger" onclick={() => remove(name)}>Delete</button></div></td></tr>{/each}</tbody></table></div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" /></section>
 {:else}
   <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a browser-local monitoring timeline.</p><a href="/bulk">Open Bulk analysis →</a></section>
 {/if}

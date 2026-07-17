@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import type { CaseRecord } from '$lib/cases';
   import {
     addCampaignDomain,
@@ -22,10 +23,27 @@
   let descriptionDraft=$state('');
   let selectedDomain=$state('');
   let message=$state('');
+  let page=$state(1);
+  let memberPage=$state(1);
+
+  const PAGE_SIZE=10;
+  const MEMBER_PAGE_SIZE=25;
 
   const expanded=$derived(campaigns.find((campaign)=>campaign.id===expandedId)??null);
   const caseByDomain=$derived(new Map(records.map((record)=>[record.domain,record])));
   const availableCases=$derived(records.filter((record)=>!expanded?.domains.includes(record.domain)).sort((a,b)=>a.domain.localeCompare(b.domain)));
+  const pageCount=$derived(Math.max(1,Math.ceil(campaigns.length/PAGE_SIZE)));
+  const currentPage=$derived(Math.min(page,pageCount));
+  const pagedCampaigns=$derived(campaigns.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
+  const memberPageCount=$derived(Math.max(1,Math.ceil((expanded?.domains.length??0)/MEMBER_PAGE_SIZE)));
+  const currentMemberPage=$derived(Math.min(memberPage,memberPageCount));
+  const pagedMembers=$derived((expanded?.domains??[]).slice((currentMemberPage-1)*MEMBER_PAGE_SIZE,currentMemberPage*MEMBER_PAGE_SIZE));
+
+  function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
+  function setMemberPage(value:number){memberPage=Math.min(memberPageCount,Math.max(1,Math.trunc(value)));}
+  function showCampaign(id:string){const index=campaigns.findIndex((campaign)=>campaign.id===id);if(index>=0)page=Math.floor(index/PAGE_SIZE)+1;}
+  $effect(()=>{if(page>pageCount)page=pageCount;});
+  $effect(()=>{if(memberPage>memberPageCount)memberPage=memberPageCount;});
 
   function refresh(next=loadCampaigns()){
     campaigns=next;
@@ -34,23 +52,23 @@
   }
   function open(campaign:CampaignRecord){
     if(expandedId===campaign.id){expandedId='';return;}
-    expandedId=campaign.id;nameDraft=campaign.name;descriptionDraft=campaign.description;selectedDomain='';
+    showCampaign(campaign.id);expandedId=campaign.id;nameDraft=campaign.name;descriptionDraft=campaign.description;selectedDomain='';memberPage=1;
   }
   function create(){
     try{const result=createCampaign({name:newName});refresh(result.campaigns);const created=result.record;newName='';open(created);message=`Created campaign “${created.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not create the campaign.';}
   }
   function save(campaign:CampaignRecord){
-    try{refresh(editCampaign(campaign.id,{name:nameDraft,description:descriptionDraft}));const current=campaigns.find((item)=>item.id===campaign.id);if(current){nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
+    try{refresh(editCampaign(campaign.id,{name:nameDraft,description:descriptionDraft}));showCampaign(campaign.id);const current=campaigns.find((item)=>item.id===campaign.id);if(current){nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not update the campaign.';}
   }
   function add(campaign:CampaignRecord){
     if(!selectedDomain){message='Choose a case to add.';return;}
-    try{refresh(addCampaignDomain(campaign.id,selectedDomain));message=`Added ${selectedDomain} to “${campaign.name}”.`;selectedDomain='';}
+    try{refresh(addCampaignDomain(campaign.id,selectedDomain));showCampaign(campaign.id);message=`Added ${selectedDomain} to “${campaign.name}”.`;selectedDomain='';}
     catch(cause){message=cause instanceof Error?cause.message:'Could not add the case.';}
   }
   function removeDomain(campaign:CampaignRecord,domain:string){
-    try{refresh(removeCampaignDomain(campaign.id,domain));message=`Removed ${domain} from “${campaign.name}”.`;}
+    try{refresh(removeCampaignDomain(campaign.id,domain));showCampaign(campaign.id);message=`Removed ${domain} from “${campaign.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not remove the case.';}
   }
   function remove(campaign:CampaignRecord){
@@ -61,7 +79,7 @@
   function download(){try{exportCampaigns();message='Exported the campaign collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export campaigns.';}}
   async function importFile(event:Event){
     const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;
-    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=importCampaigns(JSON.parse(await file.text()));refresh(result.campaigns);message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
+    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=importCampaigns(JSON.parse(await file.text()));refresh(result.campaigns);page=1;memberPage=1;message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Campaign import failed.';}finally{input.value='';}
   }
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
@@ -82,7 +100,7 @@
   <p class="summary">{campaigns.length} browser-local campaign{campaigns.length===1?'':'s'} · domain membership only</p>
   <p class="privacy-note">Campaign exports include their labels and descriptions. Review the file before sharing it.</p>
   <section class="campaign-list">
-    {#each campaigns as campaign (campaign.id)}
+    {#each pagedCampaigns as campaign (campaign.id)}
       <article class="campaign card" class:open={expandedId===campaign.id}>
         <button class="campaign-head" type="button" aria-expanded={expandedId===campaign.id} aria-controls={`campaign-${campaign.id}`} onclick={()=>open(campaign)}>
           <span><strong>{campaign.name}</strong>{#if campaign.description}<small>{campaign.description}</small>{/if}</span>
@@ -101,7 +119,8 @@
             <section class="members" aria-label={`Cases in ${campaign.name}`}>
               <header><div><p class="eyebrow">Members</p><h3>{campaign.domains.length} case domain{campaign.domains.length===1?'':'s'}</h3></div></header>
               {#if campaign.domains.length}
-                <ul>{#each campaign.domains as domain}{@const linked=caseByDomain.get(domain)}<li><div><strong>{domain}</strong>{#if !linked}<small>Case unavailable in this browser</small>{/if}</div><div>{#if linked}<button class="btn small" type="button" onclick={()=>openCase(domain)}>Open case</button>{/if}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)}>Remove</button></div></li>{/each}</ul>
+                <ul>{#each pagedMembers as domain}{@const linked=caseByDomain.get(domain)}<li><div><strong>{domain}</strong>{#if !linked}<small>Case unavailable in this browser</small>{/if}</div><div>{#if linked}<button class="btn small" type="button" onclick={()=>openCase(domain)}>Open case</button>{/if}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)}>Remove</button></div></li>{/each}</ul>
+                <Pagination currentPage={currentMemberPage} pageCount={memberPageCount} setPage={setMemberPage} ariaLabel={`Case pages for ${campaign.name}`} />
               {:else}<p>No cases have been added to this campaign.</p>{/if}
             </section>
 
@@ -116,6 +135,7 @@
       </article>
     {/each}
   </section>
+  <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Campaign pages" />
 {:else}
   <section class="empty-state card"><h2>No campaigns yet</h2><p>Group existing analyst cases into a browser-local investigation without copying their evidence or notes.</p></section>
 {/if}
