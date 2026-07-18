@@ -22,7 +22,7 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 11 explicit matrix is:
+The version 12 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -31,17 +31,17 @@ The version 11 explicit matrix is:
 | `.ai` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.al` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.am` | Indented registrant and contact blocks with lifecycle, status, registrar, and DNS-server section | Registered |
-| `.ar` | Colon fields with registered, changed, and expiry timestamps | Registered |
+| `.ar` | Colon fields with registered, changed, and expiry timestamps | Registered, not found |
 | `.at` | Colon fields with compact date-time values | Registered, not found |
 | `.au` | Eligibility and contact fields | Registered |
 | `.ba` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.be` | Sectioned registrar and nameserver fields with textual registration dates | Registered |
-| `.bg` | Registry status, sectioned bare nameservers, and DNSSEC state | Registered |
+| `.bg` | Registry status, sectioned bare nameservers, and DNSSEC state | Registered, not found |
 | `.br` | Registry owner/contact handles, compact dates, status, and nameservers | Registered, not found |
 | `.by` | Colon fields with organisation identifier, lifecycle, registrar, and nameservers | Registered |
 | `.ca` | Standard colon fields with year-first slash dates | Registered, not found |
 | `.ch` | IANA-referred WHOIS may be policy-restricted; IANA publishes no RDAP service, and official web and non-standard-port Domain Check are not integrated | Access documented |
-| `.cl` | Named registrant and registrar fields with lifecycle dates and nameservers | Registered |
+| `.cl` | Named registrant and registrar fields with lifecycle dates and nameservers | Registered, not found |
 | `.cn` | CNNIC ROID, sponsoring registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
 | `.co` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.cy` | IANA publishes no domain WHOIS or RDAP service | Access documented |
@@ -49,15 +49,15 @@ The version 11 explicit matrix is:
 | `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
 | `.dk` | Punktum domain/DNS distinction, hostname nameservers, lifecycle, DNSSEC, and multi-word status | Registered |
 | `.edu` | Indented contact blocks | Registered |
-| `.ee` | Section-scoped domain, contacts, registrar, lifecycle, status, and nameservers | Registered |
+| `.ee` | Section-scoped domain, contacts, registrar, lifecycle, status, and nameservers | Registered, not found |
 | `.es` | Plain WHOIS syntax; registry requires advance source-IP authorization; IANA publishes no RDAP service | Access documented |
 | `.eu` | Sectioned registrar and nameserver fields | Registered, not found |
 | `.fi` | Dot-leader fields, dates, DNSSEC, registrar, status, and nameservers | Registered, not found |
 | `.fr` | AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered, not found |
 | `.gr` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
-| `.hk` | Sectioned domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
-| `.hr` | Standard colon lifecycle, registrar, contact, and nameserver fields | Registered |
+| `.hk` | Sectioned domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered, not found |
+| `.hr` | Standard colon lifecycle, registrar, contact, and nameserver fields | Registered, not found |
 | `.hu` | Minimal domain and record-created fields | Registered |
 | `.id` | PANDI domain ID, sponsoring registrar organisation, lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.ie` | Standard colon fields with registry/contact identifiers, lifecycle, status, DNSSEC, and nameservers | Registered, not found |
@@ -65,7 +65,7 @@ The version 11 explicit matrix is:
 | `.in` | Standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.io` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.ir` | IRNIC contact-handle indirection, nameservers, and separately typed role identifiers | Registered |
-| `.is` | ISNIC registrant-handle role resolution, lifecycle, DNSSEC, and nameservers | Registered |
+| `.is` | ISNIC registrant-handle role resolution, lifecycle, DNSSEC, and nameservers | Registered, not found |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.ke` | Standard colon fields with lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
@@ -73,7 +73,7 @@ The version 11 explicit matrix is:
 | `.kz` | Dot-leader lifecycle, registrar, multi-word status, and primary/secondary nameservers | Registered |
 | `.lt` | Tab-aligned lifecycle, registrar, status, and nameserver fields | Registered |
 | `.lu` | Hyphenated registrar fields, domain type, and nameservers | Registered |
-| `.lv` | Bracketed domain and holder sections with nameservers | Registered |
+| `.lv` | Bracketed domain and holder sections with nameservers | Registered, not found |
 | `.md` | Spaced domain label, lifecycle, domain state, DNSSEC, and nameservers | Registered |
 | `.me` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.mn` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
@@ -87,13 +87,13 @@ The version 11 explicit matrix is:
 | `.pl` | NASK sectioned nameservers and registrar with dotted lifecycle dates | Registered, malformed |
 | `.pt` | Domain, owner, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
 | `.ro` | Colon fields with one-word nameserver labels, lifecycle, registrar, and DNSSEC | Registered |
-| `.rs` | Multi-word status, local lifecycle timestamps, contacts, DNSSEC, and DNS nameserver fields | Registered |
+| `.rs` | Multi-word status, local lifecycle timestamps, contacts, DNSSEC, and DNS nameserver fields | Registered, not found |
 | `.ru` | TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered, not found |
 | `.sa` | Compact domain, registrant, DNSSEC, and nameserver fields | Registered |
 | `.se` | Registry state, holder handle, registrar, lifecycle, DNSSEC, and nameservers | Registered, not found |
 | `.sg` | Standard colon fields with day-month-name timestamps, status, DNSSEC, and nameservers | Registered |
-| `.si` | Domain, privacy-preserving holder, registrar, lifecycle, status, and nameserver fields | Registered |
-| `.sk` | Domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
+| `.si` | Domain, privacy-preserving holder, registrar, lifecycle, status, and nameserver fields | Registered, not found |
+| `.sk` | Domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered, not found |
 | `.th` | Holder organisation/address, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.tn` | Dot-leader domain, lifecycle, registrar, status, and DNSSEC fields | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
@@ -273,6 +273,28 @@ cache cannot become availability evidence. The fixture shapes are grounded in
 the registries' public WHOIS services and the official service or protocol
 material linked from the capability catalogue. Automated tests remain wholly
 offline and retain no third-party registration data.
+
+Version 12 adds a second authoritative negative-response batch for eleven
+existing ccTLD profiles: `.ar`, `.bg`, `.cl`, `.ee`, `.hk`, `.hr`, `.is`,
+`.lv`, `.rs`, `.si`, and `.sk`. Nine dialects remain inside the established
+bounded vocabulary for explicit not-found, no-entry, `Status: available`, or
+`Status: free` responses. The Argentine Spanish response and Hong Kong
+unregistered response are recognized only as complete lines; longer prose that
+contains the same words remains non-authoritative context.
+
+As with version 11, each synthetic response appears only at the IANA-referred
+registry hop. The fixtures add no endpoint overrides or network requests, and
+do not change fast, compact, or deep lookup budgets. A denied, empty,
+rate-limited, malformed, or undocumented response remains inconclusive, and
+automated verification never contacts a registry.
+
+Version 12 also hardens two legacy parser edges without broadening authority.
+Repeated Kazakhstan primary or secondary server lines are retained only up to
+the existing nameserver cap with explicit truncation, and indented legacy
+registrant headers are recognized case-insensitively like the adjacent contact
+roles. Bare numeric hyphen dates remain deliberately day-first for the
+currently profiled sources; a future month-first source requires a separately
+gated parser rather than changing that shared interpretation.
 
 For `.ch`, IANA still publishes the registry's port-43 referral, but the
 registry can deny ordinary clients and direct them to its

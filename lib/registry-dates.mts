@@ -101,9 +101,10 @@ function parseRegistryDate(input: unknown): Date | null {
       : null;
   }
 
-  // DD-MM-YYYY - an unambiguous day-first form published by ISOC-IL's
-  // legacy WHOIS service. The four-digit year in the final position keeps
-  // this distinct from the ISO year-first form handled below.
+  // DD-MM-YYYY - the day-first form published by the currently profiled
+  // registries that use bare numeric hyphen dates. A future month-first
+  // source must receive its own marker-gated parser rather than reusing this
+  // global shape. The four-digit final year remains distinct from ISO below.
   match = value.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (match) {
     const [, day, month, year] = match;

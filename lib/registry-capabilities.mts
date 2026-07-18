@@ -32,7 +32,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 11;
+const REGISTRY_CAPABILITIES_VERSION = 12;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -75,7 +75,7 @@ const DEFAULT_CAPABILITY = freezeCapability({
 const EXPLICIT_CAPABILITIES = [
   {
     id: 'nic-ar-colon', suffixes: ['ar'], registryClass: 'country-code',
-    whoisParserProfile: 'nic-ar-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'nic-ar-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://nic.ar/index.php/en/whois',
       'https://www.iana.org/domains/root/db/ar.html',
@@ -103,7 +103,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'register-bg-sectioned', suffixes: ['bg'], registryClass: 'country-code',
-    whoisParserProfile: 'register-bg-sectioned', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'register-bg-sectioned', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.register.bg/',
       'https://www.iana.org/domains/root/db/bg.html',
@@ -127,7 +127,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'nic-chile-colon', suffixes: ['cl'], registryClass: 'country-code',
-    whoisParserProfile: 'nic-chile-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'nic-chile-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.nic.cl/normativa/politica-publicacion-de-datos-cl.pdf',
       'https://www.iana.org/domains/root/db/cl.html',
@@ -204,7 +204,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'hkirc-sectioned', suffixes: ['hk'], registryClass: 'country-code',
-    whoisParserProfile: 'hkirc-sectioned', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'hkirc-sectioned', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: ['https://www.hkirc.hk/', 'https://www.iana.org/domains/root/db/hk.html'],
   },
   {
@@ -331,7 +331,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'eif-sectioned', suffixes: ['ee'], registryClass: 'country-code',
-    whoisParserProfile: 'eif-sectioned', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'eif-sectioned', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.internet.ee/domains/whois-terms-and-conditions',
       'https://www.internet.ee/registrar-portal/help-and-info/eif-s-information-systems-and-technical-conditions',
@@ -366,7 +366,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'carnet-icann-colon', suffixes: ['hr'], registryClass: 'country-code',
-    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://domene.hr/en/portal/home',
       'https://www.iana.org/domains/root/db/hr.html',
@@ -414,7 +414,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'isnic-handle-blocks', suffixes: ['is'], registryClass: 'country-code',
-    whoisParserProfile: 'isnic-handle-blocks', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'isnic-handle-blocks', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.isnic.is/en/about/copyright',
       'https://www.iana.org/domains/root/db/is.html',
@@ -451,7 +451,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'nic-lv-sectioned', suffixes: ['lv'], registryClass: 'country-code',
-    whoisParserProfile: 'nic-lv-sectioned', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'nic-lv-sectioned', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.nic.lv/whois?lang=en',
       'https://www.iana.org/domains/root/db/lv.html',
@@ -534,7 +534,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'rnids-colon', suffixes: ['rs'], registryClass: 'country-code',
-    whoisParserProfile: 'rnids-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'rnids-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.rnids.rs/en/domain-names',
       'https://www.iana.org/domains/root/db/rs.html',
@@ -567,7 +567,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'register-si-colon', suffixes: ['si'], registryClass: 'country-code',
-    whoisParserProfile: 'register-si-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'register-si-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.register.si/en/disclosure-of-information-about-a-si-domain-holder/',
       'https://www.iana.org/domains/root/db/si.html',
@@ -575,7 +575,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'sk-nic-colon', suffixes: ['sk'], registryClass: 'country-code',
-    whoisParserProfile: 'sk-nic-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'sk-nic-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://sk-nic.sk/en/faq-en/general/',
       'https://www.iana.org/domains/root/db/sk.html',

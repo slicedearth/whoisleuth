@@ -191,6 +191,21 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
     ]);
   });
 
+  test('accepts case variations in a legacy indented registrant header', () => {
+    const parsed = parseRegistry([
+      'Domain Name: EXAMPLE.EDU',
+      'registrant:',
+      '  Example University',
+      '  1 Example Way',
+      '  hostmaster@example.edu',
+      '',
+      'Name Server: NS1.EXAMPLE.EDU',
+    ].join('\n'));
+
+    assert.equal(parsed.registrantOrg, 'Example University');
+    assert.equal(parsed.registrantEmail, 'hostmaster@example.edu');
+  });
+
   test('discloses a capped oversized indented contact block', () => {
     const parsed = parseRegistry([
       'Domain Name: EXAMPLE.EDU',

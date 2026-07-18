@@ -38,6 +38,28 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.deepEqual(coveredProfiles, expectedProfiles);
   });
 
+  test('covers the version twelve authoritative-negative ccTLD batch', () => {
+    const expectedProfiles = [
+      'carnet-icann-colon',
+      'eif-sectioned',
+      'hkirc-sectioned',
+      'isnic-handle-blocks',
+      'nic-ar-colon',
+      'nic-chile-colon',
+      'nic-lv-sectioned',
+      'register-bg-sectioned',
+      'register-si-colon',
+      'rnids-colon',
+      'sk-nic-colon',
+    ];
+    const coveredProfiles = fixtures
+      .filter((fixture) => fixture.scenario === 'not_found'
+        && expectedProfiles.includes(fixture.capabilityProfile))
+      .map((fixture) => fixture.capabilityProfile)
+      .sort();
+    assert.deepEqual(coveredProfiles, expectedProfiles);
+  });
+
   test('does not unlock ambiguous aliases when registry marker sets are incomplete', () => {
     const parsed = parseWhoisChain([
       { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
@@ -149,6 +171,30 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.equal(parsed.nameservers.length, 200);
     assert.equal(parsed.nameservers[0], 'ns0.example.invalid');
     assert.equal(parsed.nameservers.at(-1), 'ns199.example.invalid');
+    assert.ok(parsed.fieldsTruncated.includes('nameservers'));
+  });
+
+  test('caps repeated Kazakhstan nameserver lines and discloses truncation', () => {
+    const nameservers = Array.from(
+      { length: 201 },
+      (_, index) => `Secondary server: ns${index}.example.invalid`,
+    );
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: KZ\nrefer: whois.kz.invalid\n' },
+      {
+        server: 'whois.kz.invalid',
+        response: [
+          'Domain Name: example.kz',
+          'Current Registar: Example Registrar',
+          'Primary server: primary.example.invalid',
+          ...nameservers,
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.nameservers.length, 200);
+    assert.equal(parsed.nameservers[0], 'primary.example.invalid');
+    assert.equal(parsed.nameservers.at(-1), 'ns198.example.invalid');
     assert.ok(parsed.fieldsTruncated.includes('nameservers'));
   });
 });

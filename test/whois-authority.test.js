@@ -129,6 +129,8 @@ describe('analyzeWhoisChainAuthority', () => {
         'Registrar: Example Registrar',
         'The registry search is free for technical use.',
         '% Diagnostics: nothing found in the secondary cache.',
+        'The domain has not been registered with the newsletter service.',
+        'Note: El dominio no se encuentra registrado en NIC Argentina.',
       ].join('\n'),
     };
     const a = analyzeWhoisChainAuthority([ianaHop, prose]);

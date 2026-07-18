@@ -24,7 +24,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v11')).toBeVisible();
+  await expect(page.getByText('Catalogue v12')).toBeVisible();
   await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('77');
   await expect(page.locator('tbody tr')).toHaveCount(77);
 

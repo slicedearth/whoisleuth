@@ -16,7 +16,7 @@ const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 11);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 12);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);

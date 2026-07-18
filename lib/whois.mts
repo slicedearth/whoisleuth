@@ -643,11 +643,15 @@ function parseIndentedContactBlock(text: string, headerRe: RegExp) {
 const NOT_FOUND_RE = /no match for|no match\b|not found|no data found|no entries found|domain not found|no object found|not registered|status\s*:\s*(?:available|free)\b|registered\s*:\s*(?:no|false)\b|is available for registration/i;
 
 // Some ccTLD registries publish terse, line-oriented availability responses
-// that would be unsafe to recognize as arbitrary prose. Keep these forms
-// anchored to the complete line: this accepts NIC.AT's percent-prefixed
-// response and SIDN's queried-domain response without treating sentences such
-// as "the service is free" or "nothing found in a cache" as registry evidence.
-const LINE_NOT_FOUND_RE = /^(?:[ \t]*%[ \t]*nothing found|[ \t]*[a-z0-9](?:[a-z0-9.-]{0,252})[ \t]+is free)[ \t]*$/im;
+// that would be unsafe to recognize as arbitrary prose. Keep each documented
+// form anchored to the complete line so surrounding descriptive text cannot
+// become registry evidence.
+const LINE_NOT_FOUND_PATTERNS = Object.freeze([
+  /^[ \t]*%[ \t]*nothing found[ \t]*$/im,
+  /^[ \t]*[a-z0-9](?:[a-z0-9.-]{0,252})[ \t]+is free[ \t]*$/im,
+  /^[ \t]*el dominio no se encuentra registrado en nic argentina[ \t]*$/im,
+  /^[ \t]*the domain has not been registered\.?[ \t]*$/im,
+]);
 
 // InternetNZ's documented .nz WHOIS protocol uses a numeric query_status
 // field rather than the generic prose above. Only 220 means that the queried
@@ -679,7 +683,7 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   if (RATE_LIMIT_RE.test(text)) return 'rate_limited';
   if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
   if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
-  if (NOT_FOUND_RE.test(text) || LINE_NOT_FOUND_RE.test(text)) return 'negative';
+  if (NOT_FOUND_RE.test(text) || LINE_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(text))) return 'negative';
   // Hop 0 is IANA's TLD delegation record, never evidence about the queried
   // domain itself.
   if (index > 0 && (POSITIVE_REGISTRATION_RE.test(text)
@@ -1401,14 +1405,16 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
         assignBoundedWhoisMatch(text, fields, 'updatedDate', /^[ \t]*Last modified[ \t.]*:[ \t]*(.+)$/im, truncatedFields);
         assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*Current Registar[ \t]*:[ \t]*(.+)$/im, truncatedFields);
         for (const pattern of [
-          /^[ \t]*Primary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/im,
-          /^[ \t]*Secondary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/im,
+          /^[ \t]*Primary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/gim,
+          /^[ \t]*Secondary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/gim,
         ]) {
-          const match = text.match(pattern);
-          if (match) addBoundedWhoisSetValue(nameservers, match[1], {
-            maxEntries: MAX_WHOIS_NAMESERVERS, maxLength: 253,
-            field: 'nameservers', truncatedFields,
-          });
+          for (const match of text.matchAll(pattern)) {
+            const result = addBoundedWhoisSetValue(nameservers, match[1], {
+              maxEntries: MAX_WHOIS_NAMESERVERS, maxLength: 253,
+              field: 'nameservers', truncatedFields,
+            });
+            if (result === 'capped') break;
+          }
         }
       }
 
@@ -1673,7 +1679,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // has no separate person name on .edu (registrants are institutions),
     // so its block's first line maps to the org, not a name.
     if (!isRootHop && !fields.registrantOrg && !fields.registrantName) {
-      const block = parseIndentedContactBlock(text, /^[ \t]*Registrant:[ \t]*$/m);
+      const block = parseIndentedContactBlock(text, /^[ \t]*Registrant:[ \t]*$/im);
       if (block) {
         if (block.name) fields.registrantOrg = block.name;
         if (block.address) fields.registrantAddress = block.address;
