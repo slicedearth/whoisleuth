@@ -62,32 +62,40 @@ const VERSION_15_ACCESS_SUFFIXES = [
   'ao', 'az', 'bb', 'bd', 'bs', 'bt', 'bz', 'cd', 'cg', 'ck',
   'cu', 'cw', 'dj', 'eg', 'et', 'fk', 'gm', 'gu', 'jo', 'kh',
 ];
+const VERSION_16_ACCESS_SUFFIXES = [
+  'aq', 'er', 'ga', 'gb', 'gw', 'jm', 'km', 'kp', 'kw', 'lc',
+  'lk', 'lr', 'mh', 'mp', 'mt', 'mv', 'ne', 'ni', 'np', 'nr',
+  'pa', 'ps', 'py', 'sl', 'sv', 'sz', 'tj', 'tt', 'va',
+  'xn--54b7fta0cc', 'xn--fzc2c9e2c', 'xn--node', 'xn--xkc2al3hye2a', 'zw',
+];
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 15);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 16);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'ac', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'ar', 'at', 'au', 'az', 'ba', 'bb',
+      'ac', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'at', 'au', 'az', 'ba', 'bb',
       'bd', 'be', 'bg', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cd', 'cg', 'ch',
       'ck', 'cl', 'cn', 'co', 'cu', 'cw', 'cy', 'cz', 'de', 'dj', 'dk', 'edu', 'ee',
-      'eg', 'es', 'et', 'eu', 'fi', 'fk', 'fr', 'gm', 'gr', 'gt', 'gu', 'hk', 'hr',
-      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'jo', 'jp', 'ke', 'kh',
-      'kr', 'kz', 'li', 'lt', 'lu', 'lv',
-      'md', 'me', 'mn', 'mx', 'my', 'nl', 'no', 'nz', 'ph', 'pk', 'pl', 'pm',
-      'pt', 're', 'ro', 'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sj', 'sk', 'su',
-      'tf', 'th', 'tn', 'tr', 'tw', 'ua', 'uk', 'us', 'vn', 'wf',
+      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fk', 'fr', 'ga', 'gb', 'gm', 'gr', 'gt',
+      'gu', 'gw', 'hk', 'hr',
+      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'jm', 'jo', 'jp', 'ke',
+      'kh', 'km', 'kp', 'kr', 'kw', 'kz', 'lc', 'li', 'lk', 'lr', 'lt', 'lu', 'lv',
+      'md', 'me', 'mh', 'mn', 'mp', 'mt', 'mv', 'mx', 'my', 'ne', 'ni', 'nl', 'no',
+      'np', 'nr', 'nz', 'pa', 'ph', 'pk', 'pl', 'pm', 'ps', 'pt', 'py', 're', 'ro',
+      'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sj', 'sk', 'sl', 'su', 'sv', 'sz', 'tf',
+      'th', 'tj', 'tn', 'tr', 'tt', 'tw', 'ua', 'uk', 'us', 'va', 'vn', 'wf',
       'xn--2scrj9c', 'xn--3e0b707e',
-      'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
+      'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--54b7fta0cc', 'xn--80ao21a',
       'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--e1a4c',
       'xn--fiqs8s', 'xn--fiqz9s',
-      'xn--fpcrj9c3d', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
+      'xn--fpcrj9c3d', 'xn--fzc2c9e2c', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
       'xn--h2brj9c8c', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
-      'xn--o3cw4h', 'xn--p1ai', 'xn--qxa6a', 'xn--qxam', 'xn--rvc1e0am3e',
-      'xn--s9brj9c', 'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o',
-      'yt', 'za',
+      'xn--node', 'xn--o3cw4h', 'xn--p1ai', 'xn--qxa6a', 'xn--qxam',
+      'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--xkc2al3hye2a', 'xn--xkc2dl3a5ee0h',
+      'xn--y9a3aq', 'xn--yfro4i67o', 'yt', 'za', 'zw',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
@@ -210,6 +218,46 @@ describe('registry capability metadata', () => {
       assert.equal(capability.coverageState, 'access_documented', suffix);
       assert.equal(capability.explicitSuffixProfile, true, suffix);
       assert.match(capability.limitation, /no domain WHOIS or RDAP service/i, suffix);
+      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      assert.equal(diagnostic.authority, 'context_only', suffix);
+      assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(diagnostic.rdapAccessProfile, 'no-iana-service', suffix);
+    }
+  });
+
+  test('completes version sixteen no-machine-service coverage as access context only', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+
+    for (const suffix of VERSION_16_ACCESS_SUFFIXES) {
+      const profile = profiles.get(`no-iana-machine-service-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.deepEqual(profile.suffixes, [suffix], suffix);
+      assert.equal(profile.coverageState, 'access_documented', suffix);
+      assert.equal(profile.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(profile.rdapAccessProfile, 'no-iana-service', suffix);
+      assert.deepEqual(profile.fixtureScenarios, [], suffix);
+      assert.deepEqual(profile.verificationFiles, [], suffix);
+      assert.deepEqual(
+        profile.documentationUrls,
+        [`https://www.iana.org/domains/root/db/${suffix}.html`],
+        suffix,
+      );
+
+      const inputs = [suffix];
+      if (suffix.startsWith('xn--')) {
+        const unicodeSuffix = domainToUnicode(suffix);
+        assert.notEqual(unicodeSuffix, suffix, suffix);
+        inputs.push(unicodeSuffix);
+      }
+      for (const input of inputs) {
+        const capability = registryCapabilityFor(`example.${input}`);
+        assert.equal(capability.id, profile.id, input);
+        assert.deepEqual(capability.suffixes, [suffix], input);
+        assert.equal(capability.registryClass, 'country-code', input);
+        assert.equal(capability.coverageState, 'access_documented', input);
+        assert.equal(capability.explicitSuffixProfile, true, input);
+        assert.match(capability.limitation, /no domain WHOIS or RDAP service/i, input);
+      }
       const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
       assert.equal(diagnostic.authority, 'context_only', suffix);
       assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);

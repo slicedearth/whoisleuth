@@ -40,7 +40,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 15;
+const REGISTRY_CAPABILITIES_VERSION = 16;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -55,6 +55,16 @@ const NORID_CLOSED_SUFFIX_LIMITATION = 'The registry has not opened this suffix 
 const VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   'ao', 'az', 'bb', 'bd', 'bs', 'bt', 'bz', 'cd', 'cg', 'ck',
   'cu', 'cw', 'dj', 'eg', 'et', 'fk', 'gm', 'gu', 'jo', 'kh',
+]);
+const VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
+  'aq', 'er', 'ga', 'gb', 'gw', 'jm', 'km', 'kp', 'kw', 'lc',
+  'lk', 'lr', 'mh', 'mp', 'mt', 'mv', 'ne', 'ni', 'np', 'nr',
+  'pa', 'ps', 'py', 'sl', 'sv', 'sz', 'tj', 'tt', 'va',
+  'xn--54b7fta0cc', 'xn--fzc2c9e2c', 'xn--node', 'xn--xkc2al3hye2a', 'zw',
+]);
+const NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
+  ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES,
+  ...VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES,
 ]);
 
 function freezeCapability(capability: RegistryCapability): Readonly<RegistryCapability> {
@@ -186,7 +196,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     documentationUrls: ['https://www.iana.org/domains/root/db/al.html'],
     limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
-  ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+  ...NO_IANA_MACHINE_SERVICE_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
     id: `no-iana-machine-service-${suffix}`,
     suffixes: [suffix],
     registryClass: 'country-code',
