@@ -17,19 +17,20 @@ import {
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 7);
-  assert.equal(catalogue.rows.length, 32);
+  assert.equal(catalogue.version, 8);
+  assert.equal(catalogue.rows.length, 42);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 32,
-    fixtureVerified: 30,
+    profiles: 42,
+    fixtureVerified: 40,
     accessDocumented: 2,
     fallbacks: 1,
   });
   assert.deepEqual(catalogue.rows.map((row) => row.suffixes[0]), [
-    'at', 'au', 'be', 'br', 'ca', 'cl', 'cz', 'de', 'edu', 'es', 'eu', 'fi',
-    'fr', 'gt', 'ie', 'in', 'it', 'jp', 'kr', 'mx', 'no', 'nz', 'pl', 'pt',
-    'ro', 'ru', 'se', 'sg', 'tr', 'uk', 'us', 'vn',
+    'ar', 'at', 'au', 'be', 'br', 'ca', 'cl', 'cn', 'cz', 'de', 'dk', 'edu',
+    'es', 'eu', 'fi', 'fr', 'gt', 'id', 'ie', 'il', 'in', 'it', 'jp', 'kr',
+    'mx', 'my', 'no', 'nz', 'pl', 'pt', 'ro', 'ru', 'se', 'sg', 'si', 'sk',
+    'tr', 'tw', 'ua', 'uk', 'us', 'vn',
   ]);
 });
 
@@ -39,7 +40,7 @@ test('returns independent catalogue rows rather than exposing shared mutable arr
   first.rows[0].fixtureScenarios.push('changed');
 
   const second = registrySupportCatalogue();
-  assert.equal(second.rows[0].suffixes[0], 'at');
+  assert.equal(second.rows[0].suffixes[0], 'ar');
   assert.equal(second.rows[0].fixtureScenarios.includes('changed'), false);
 });
 
@@ -88,6 +89,7 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   assert.deepEqual(filterRegistrySupportRows(rows, 'structured underscore', 'all').map((row) => row.suffixes[0]), ['nz']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'tci colon', 'all').map((row) => row.suffixes[0]), ['ru']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
+  assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
   assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['es', 'vn']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });

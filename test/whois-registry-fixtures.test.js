@@ -14,4 +14,27 @@ describe('WHOIS registry compatibility fixtures', () => {
       }
     });
   }
+
+  test('does not unlock ambiguous aliases when registry marker sets are incomplete', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: [
+          'Domain Name: EXAMPLE.TEST',
+          'ROID: SHOULD-NOT-PROMOTE',
+          'Expiration Time: 2030-01-02',
+          'Sponsoring Registrar Organization: SHOULD-NOT-PROMOTE',
+          'validity: 02-01-2030',
+          'Record created on: 2020-01-02',
+          'Registration Service Provider: SHOULD-NOT-PROMOTE',
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.registryDomainId, undefined);
+    assert.equal(parsed.registrar, undefined);
+    assert.equal(parsed.createdDate, undefined);
+    assert.equal(parsed.expiryDate, undefined);
+  });
 });

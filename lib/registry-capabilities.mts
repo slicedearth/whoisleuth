@@ -32,7 +32,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 7;
+const REGISTRY_CAPABILITIES_VERSION = 8;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -40,6 +40,7 @@ const FIXTURE_LIMITATION = 'Synthetic fixtures verify the current parser profile
 const ES_ACCESS_LIMITATION = 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.';
 const VN_ACCESS_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.';
 const UK_TRANSITION_LIMITATION = 'Synthetic fixtures verify the documented sectioned port-43 response while that WHOIS service is phased out. RDAP remains the preferred registry source, and fixture coverage does not prove current reachability or field publication.';
+const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profile. The registry limits public WHOIS use, prohibits abusive high-volume automation, and states that a missing record is not proof of availability; WHOISleuth retains bounded request controls and authority-aware interpretation.';
 
 function freezeCapability(capability: RegistryCapability): Readonly<RegistryCapability> {
   Object.freeze(capability.suffixes);
@@ -70,6 +71,14 @@ const DEFAULT_CAPABILITY = freezeCapability({
 });
 
 const EXPLICIT_CAPABILITIES = [
+  {
+    id: 'nic-ar-colon', suffixes: ['ar'], registryClass: 'country-code',
+    whoisParserProfile: 'nic-ar-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://nic.ar/index.php/en/whois',
+      'https://www.iana.org/domains/root/db/ar.html',
+    ],
+  },
   {
     id: 'nic-at-colon', suffixes: ['at'], registryClass: 'country-code',
     whoisParserProfile: 'nic-at-colon', fixtureScenarios: ['registered'],
@@ -115,6 +124,14 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
+    id: 'cnnic-colon', suffixes: ['cn'], registryClass: 'country-code',
+    whoisParserProfile: 'cnnic-roid-and-lifecycle', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www2.cnnic.cn/2/3/index.html',
+      'https://www.iana.org/domains/root/db/cn.html',
+    ],
+  },
+  {
     id: 'ustld-colon', suffixes: ['us'], registryClass: 'country-code',
     whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
     documentationUrls: [
@@ -130,6 +147,14 @@ const EXPLICIT_CAPABILITIES = [
     id: 'denic-domain-ace', suffixes: ['de'], registryClass: 'country-code',
     whoisQueryProfile: 'denic-domain-ace', whoisParserProfile: 'alternate-labels',
     fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'punktum-sectioned', suffixes: ['dk'], registryClass: 'country-code',
+    whoisParserProfile: 'punktum-domain-dns-and-hostname', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://punktum.dk/en/articles/additional-services',
+      'https://www.iana.org/domains/root/db/dk.html',
+    ],
   },
   {
     id: 'educause-indented', suffixes: ['edu'], registryClass: 'generic',
@@ -178,6 +203,22 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
+    id: 'pandi-colon', suffixes: ['id'], registryClass: 'country-code',
+    whoisParserProfile: 'pandi-domain-id-and-sponsor', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://pandi.id/public/files/2024/9/kebijakan-umum-nama-domain-versi-7-0-bilingual-1727681641.pdf',
+      'https://www.iana.org/domains/root/db/id.html',
+    ],
+  },
+  {
+    id: 'isoc-il-colon', suffixes: ['il'], registryClass: 'country-code',
+    whoisParserProfile: 'isoc-validity-and-multiword-status', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://en.isoc.org.il/whois',
+      'https://www.iana.org/domains/root/db/il.html',
+    ],
+  },
+  {
     id: 'alternate-labels', suffixes: ['it'], registryClass: 'country-code',
     whoisParserProfile: 'alternate-labels-and-bare-nameservers', fixtureScenarios: ['registered'],
   },
@@ -205,6 +246,15 @@ const EXPLICIT_CAPABILITIES = [
       'https://www.dominios.mx/whois/',
       'https://www.iana.org/domains/root/db/mx.html',
     ],
+  },
+  {
+    id: 'mynic-colon', suffixes: ['my'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://mynic.my/WHOIS',
+      'https://www.iana.org/domains/root/db/my.html',
+    ],
+    limitation: MY_ACCESS_LIMITATION,
   },
   {
     id: 'norid-dot-leader', suffixes: ['no'], registryClass: 'country-code',
@@ -282,8 +332,40 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
+    id: 'register-si-colon', suffixes: ['si'], registryClass: 'country-code',
+    whoisParserProfile: 'register-si-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.register.si/en/disclosure-of-information-about-a-si-domain-holder/',
+      'https://www.iana.org/domains/root/db/si.html',
+    ],
+  },
+  {
+    id: 'sk-nic-colon', suffixes: ['sk'], registryClass: 'country-code',
+    whoisParserProfile: 'sk-nic-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://sk-nic.sk/en/faq-en/general/',
+      'https://www.iana.org/domains/root/db/sk.html',
+    ],
+  },
+  {
     id: 'prefixed-dot-leader', suffixes: ['tr'], registryClass: 'country-code',
     whoisParserProfile: 'prefixed-dot-leader-and-bare-nameservers', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'twnic-colon', suffixes: ['tw'], registryClass: 'country-code',
+    whoisParserProfile: 'twnic-record-dates-and-provider', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.twnic.tw/dnservice/policy/?lang=en',
+      'https://www.iana.org/domains/root/db/tw.html',
+    ],
+  },
+  {
+    id: 'hostmaster-ua-colon', suffixes: ['ua'], registryClass: 'country-code',
+    whoisParserProfile: 'hostmaster-ua-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.hostmaster.ua/policy/Reglament_UA_1.0_EN.pdf',
+      'https://www.iana.org/domains/root/db/ua.html',
+    ],
   },
   {
     id: 'sectioned-registry-response', suffixes: ['uk'], registryClass: 'country-code',

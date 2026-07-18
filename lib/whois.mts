@@ -994,6 +994,26 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       && /^[ \t]*NORID Handle[ \t.]*:/im.test(text)
       && /^[ \t]*Registrar Handle[ \t.]*:/im.test(text)
       && /^[ \t]*Additional information[ \t]*:/im.test(text);
+    const isCnnic = !isRootHop
+      && /^[ \t]*ROID[ \t]*:/im.test(text)
+      && /^[ \t]*Sponsoring Registrar[ \t]*:/im.test(text)
+      && /^[ \t]*Registration Time[ \t]*:/im.test(text)
+      && /^[ \t]*Expiration Time[ \t]*:/im.test(text);
+    const isPunktum = !isRootHop
+      && /^[ \t]*Registration period[ \t]*:/im.test(text)
+      && /^[ \t]*VID[ \t]*:/im.test(text)
+      && /^[ \t]*Nameservers[ \t]*$/im.test(text);
+    const isPandi = !isRootHop
+      && /^[ \t]*Domain ID[ \t]*:/im.test(text)
+      && /^[ \t]*Sponsoring Registrar Organization[ \t]*:/im.test(text);
+    const isIsocIl = !isRootHop
+      && /^[ \t]*query[ \t]*:/im.test(text)
+      && /^[ \t]*reg-name[ \t]*:/im.test(text)
+      && /^[ \t]*validity[ \t]*:/im.test(text);
+    const isTwnic = !isRootHop
+      && /^[ \t]*Record created on[ \t]*:/im.test(text)
+      && /^[ \t]*Record expires on[ \t]*:/im.test(text)
+      && /^[ \t]*Registration Service Provider[ \t]*:/im.test(text);
 
     for (const [key, res] of Object.entries(patterns)) {
       // IANA's root hop describes the TLD and its operator, never a contact
@@ -1134,6 +1154,27 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       if (isNorid) {
         assignBoundedWhoisMatch(text, fields, 'registryDomainId', /^[ \t]*NORID Handle[ \t.]*:[ \t]*(.+)$/im, truncatedFields);
         assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*Registrar Handle[ \t.]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+
+      // These aliases are meaningful only inside their registry's
+      // distinctive response dialect. Keeping them marker-gated avoids
+      // treating generic contact IDs, validity text, or service-provider
+      // prose as domain-level evidence in unrelated WHOIS responses.
+      if (isCnnic) {
+        assignBoundedWhoisMatch(text, fields, 'registryDomainId', /^[ \t]*ROID[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'expiryDate', /^[ \t]*Expiration Time[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+      if (isPandi) {
+        assignBoundedWhoisMatch(text, fields, 'registryDomainId', /^[ \t]*Domain ID[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*Sponsoring Registrar Organization[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+      if (isIsocIl) {
+        assignBoundedWhoisMatch(text, fields, 'expiryDate', /^[ \t]*validity[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+      if (isTwnic) {
+        assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*Registration Service Provider[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'createdDate', /^[ \t]*Record created on[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'expiryDate', /^[ \t]*Record expires on[ \t]*:[ \t]*(.+)$/im, truncatedFields);
       }
     }
 
@@ -1326,9 +1367,15 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
         /^[ \t*]*nserver[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
         /^[ \t*]*Nameserver[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
         /^[ \t*]*Host Name[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
-        /^[ \t*]*DNS[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
         /^[ \t]*ns_name_\d{2}[ \t]*:[ \t]*([a-zA-Z0-9.\-]+)/gim
       );
+      // Punktum dk uses `DNS: example.dk` for the queried domain, then
+      // `Hostname:` inside its nameserver section. Other supported
+      // registries use `DNS:` for an actual nameserver, so switch aliases
+      // only when the full .dk marker set is present.
+      nsLinePatterns.push(isPunktum
+        ? /^[ \t*]*Hostname[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim
+        : /^[ \t*]*DNS[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim);
     }
     for (const re of nsLinePatterns) {
       for (const m of text.matchAll(re)) {
@@ -1348,10 +1395,10 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // (seen on .mx), and there's no reliable way to tell those apart from
     // the label alone - a missing status is safer than a wrong one.
     const statusRe = isRootHop
-      ? /^[ \t*]*Domain Status[ \t.]*:[ \t]*([a-zA-Z]+)/gim
-      : isDnsBelgium
-        ? /^[ \t*]*Status[ \t.]*:[ \t]*([^\r\n]+)/gim
-        : /^[ \t*]*(?:Domain Status|Status)[ \t.]*:[ \t]*([a-zA-Z]+)/gim;
+      ? /^[ \t*]*Domain Status[ \t.]*:[ \t]*([a-zA-Z][a-zA-Z0-9_-]*)/gim
+      : (isDnsBelgium || isPunktum || isIsocIl || isTwnic)
+        ? /^[ \t*]*(?:Domain Status|Status)[ \t.]*:[ \t]*([^\r\n]+)/gim
+        : /^[ \t*]*(?:Domain Status|Status)[ \t.]*:[ \t]*([a-zA-Z][a-zA-Z0-9_-]*)/gim;
     for (const m of text.matchAll(statusRe)) {
       if (addBoundedWhoisSetValue(statuses, m[1], {
         maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,

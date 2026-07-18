@@ -22,30 +22,36 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 7 explicit matrix is:
+The version 8 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
+| `.ar` | Colon fields with registered, changed, and expiry timestamps | Registered |
 | `.at` | Colon fields with compact date-time values | Registered |
 | `.au` | Eligibility and contact fields | Registered |
 | `.be` | Sectioned registrar and nameserver fields with textual registration dates | Registered |
 | `.br` | Registry owner/contact handles, compact dates, status, and nameservers | Registered |
 | `.ca` | Standard colon fields with year-first slash dates | Registered |
 | `.cl` | Named registrant and registrar fields with lifecycle dates and nameservers | Registered |
+| `.cn` | CNNIC ROID, sponsoring registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
 | `.cz` | FRED contact-handle indirection | Registered |
 | `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
+| `.dk` | Punktum domain/DNS distinction, hostname nameservers, lifecycle, DNSSEC, and multi-word status | Registered |
 | `.edu` | Indented contact blocks | Registered |
 | `.es` | Plain WHOIS syntax; registry requires advance source-IP authorization; IANA publishes no RDAP service | Access documented |
 | `.eu` | Sectioned registrar and nameserver fields | Registered |
 | `.fi` | Dot-leader fields, dates, DNSSEC, registrar, status, and nameservers | Registered |
 | `.fr` | AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
+| `.id` | PANDI domain ID, sponsoring registrar organisation, lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.ie` | Standard colon fields with registry/contact identifiers, lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.il` | ISOC-IL validity date, DNSSEC, nameservers, changed date, and multi-word status | Registered |
 | `.in` | Standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
 | `.mx` | Colon fields with an indented registrant block and nameserver section | Registered |
+| `.my` | Standard bounded domain, registrar, lifecycle, status, DNSSEC, and nameserver fields; public-query policy applies | Registered |
 | `.no` | Norid dot-leader fields with separately scoped domain and registrar handles | Registered |
 | `.nz` | Structured underscore fields, numeric registry states, contacts, dates, DNSSEC, and numbered nameservers | Registered, available, temporary failure, restricted/inconclusive |
 | `.pl` | NASK sectioned nameservers and registrar with dotted lifecycle dates | Registered, malformed |
@@ -54,7 +60,11 @@ The version 7 explicit matrix is:
 | `.ru` | TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered |
 | `.se` | Registry state, holder handle, registrar, lifecycle, DNSSEC, and nameservers | Registered |
 | `.sg` | Standard colon fields with day-month-name timestamps, status, DNSSEC, and nameservers | Registered |
+| `.si` | Domain, privacy-preserving holder, registrar, lifecycle, status, and nameserver fields | Registered |
+| `.sk` | Domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
+| `.tw` | TWNIC record dates, registration service provider, status, registrant, and nameservers | Registered |
+| `.ua` | Domain, registrar, source, lifecycle, status, and nameserver fields | Registered |
 | `.uk` | Sectioned indented domain, registrant, registrar, status, date, and nameserver fields | Registered, not found, malformed |
 | `.us` | Standard colon fields, registrar, lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.vn` | IANA publishes no domain WHOIS or RDAP service; official browser lookup is not integrated | Access documented |
@@ -126,6 +136,34 @@ exact port-43 response specification; the other sources establish public
 service and field expectations, while the sanitized fixtures test only the
 bounded parser behavior represented here. They do not prove current registry
 reachability, completeness, ownership, activity, safety, or maliciousness.
+
+Version 8 adds fixture-backed compatibility for `.ar`, `.cn`, `.dk`, `.id`,
+`.il`, `.my`, `.si`, `.sk`, `.tw`, and `.ua`. Distinctive aliases are enabled
+only by bounded marker sets: CNNIC `ROID`, PANDI `Domain ID`, ISOC-IL
+`validity`, and TWNIC record dates and service-provider fields cannot be
+promoted in unrelated responses. Punktum's `DNS:` line identifies the queried
+`.dk` domain rather than a nameserver, so the profile deliberately collects
+only its sectioned `Hostname:` values. The shared date parser adds the
+unambiguous day-first `DD-MM-YYYY` shape while retaining every raw source value,
+and token statuses now preserve bounded digits, underscores, and hyphens.
+
+The batch is grounded in official service, policy, or field-publication
+material for [`.ar`](https://nic.ar/index.php/en/whois),
+[`.cn`](https://www2.cnnic.cn/2/3/index.html),
+[`.dk`](https://punktum.dk/en/articles/additional-services),
+[`.id`](https://pandi.id/public/files/2024/9/kebijakan-umum-nama-domain-versi-7-0-bilingual-1727681641.pdf),
+[`.il`](https://en.isoc.org.il/whois),
+[`.my`](https://mynic.my/WHOIS),
+[`.si`](https://www.register.si/en/disclosure-of-information-about-a-si-domain-holder/),
+[`.sk`](https://sk-nic.sk/en/faq-en/general/),
+[`.tw`](https://www.twnic.tw/dnservice/policy/?lang=en), and
+[`.ua`](https://www.hostmaster.ua/policy/Reglament_UA_1.0_EN.pdf), plus their
+IANA delegation records for endpoint discovery. MYNIC's public policy limits
+query volume and warns that a missing result does not establish availability;
+WHOISleuth preserves bounded requests and authority-aware interpretation. As
+with every compatibility profile, sanitized fixtures prove parser behavior
+only, not current registry reachability, completeness, ownership, activity,
+safety, or maliciousness.
 
 The [`.uk` WHOIS instructions](https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/whois-basic-instructions/)
 document a sectioned port-43 response with indented domain, registrar,

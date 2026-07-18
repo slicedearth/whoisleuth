@@ -96,6 +96,15 @@ function parseRegistryDate(input: unknown): Date | null {
       : null;
   }
 
+  // DD-MM-YYYY - an unambiguous day-first form published by ISOC-IL's
+  // legacy WHOIS service. The four-digit year in the final position keeps
+  // this distinct from the ISO year-first form handled below.
+  match = value.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (match) {
+    const [, day, month, year] = match;
+    return utcDateFromParts(+year, +month, +day);
+  }
+
   // Ddd Mon DD YYYY[ HH:MM:SS] - the English textual form used by the
   // Belgian registry. Weekday text is presentation-only; the validated
   // calendar components determine the canonical UTC companion.
