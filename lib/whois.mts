@@ -3,6 +3,7 @@
 // server and the Netlify Functions.
 
 import net from 'node:net';
+import { domainToASCII, domainToUnicode } from 'node:url';
 
 import { cached } from './lookup-cache.mts';
 import { safeFetch, readTextCapped, resolvePublicAddresses } from './safe-fetch.mts';
@@ -60,11 +61,13 @@ const MAX_GT_REGISTRY_HTML_BYTES = 500000;
 const MAX_WHOIS_FIELD_LENGTH = 1000;
 const MAX_WHOIS_NAMESERVERS = 200;
 const MAX_WHOIS_STATUSES = 100;
+const WHOIS_DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 
 const WHOIS_QUERY_FORMATTERS: Record<WhoisQueryProfile, (domain: string) => string> = {
   'plain-domain': (domain) => domain,
   'denic-domain-ace': (domain) => `-T dn,ace ${domain}`,
   'jprs-domain-english': (domain) => `${domain}/e`,
+  'registry-domain-unicode': (domain) => domainToUnicode(domain),
 };
 
 function whoisTransportForHop(domain: string, hop: number): {
@@ -1293,9 +1296,15 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // generic parser and leaving endpoint discovery and authority untouched.
     if (!isRootHop) {
       if (isRegisterBg) {
-        const domain = text.match(/^[ \t]*DOMAIN NAME[ \t]*:[ \t]*([a-z0-9.-]+)/im);
-        if (domain) {
-          const bounded = boundedWhoisValue(domain[1], whoisFieldLimit('domainName'));
+        const domainLine = text.match(/^[ \t]*DOMAIN NAME[ \t]*:[ \t]*([^\r\n]+)/im);
+        if (domainLine) {
+          const boundedLine = domainLine[1].slice(0, MAX_WHOIS_FIELD_LENGTH);
+          const parenthesized = boundedLine.match(/\(([a-z0-9.-]{1,253})\)[ \t]*$/i)?.[1] || '';
+          const leadingAscii = boundedLine.match(/^([a-z0-9.-]{1,253})(?:[ \t]|$)/i)?.[1] || '';
+          const unicodeDomain = boundedLine.replace(/[ \t]+\([^\r\n()]{1,253}\)[ \t]*$/, '').trim();
+          const domain = [parenthesized, leadingAscii, domainToASCII(unicodeDomain)]
+            .find((candidate) => WHOIS_DOMAIN_RE.test(candidate));
+          const bounded = boundedWhoisValue(domain, whoisFieldLimit('domainName'));
           if (bounded.value) fields.domainName = bounded.value;
           if (bounded.truncated) truncatedFields.add('domainName');
         }

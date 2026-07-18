@@ -31,6 +31,7 @@ const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'monic-minimal-colon', suffixes: ['xn--mix891f'] },
   { id: 'isoc-il-idn-colon', suffixes: ['xn--4dbrk0ce'] },
   { id: 'irnic-idn-handle-blocks', suffixes: ['xn--mgba3a4f16a'] },
+  { id: 'identity-digital-colon-mn', suffixes: ['xn--l1acc'] },
   { id: 'mynic-idn-colon', suffixes: ['xn--mgbx4cd0ab'] },
   { id: 'nic-dz-idn-colon', suffixes: ['xn--lgbbat1ad8j'] },
   { id: 'nic-io-colon', suffixes: ['ac'] },
@@ -55,6 +56,7 @@ const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'nixi-arabic-colon', suffixes: ['xn--mgbbh1a', 'xn--mgbbh1a71e', 'xn--mgbgu82a'] },
   { id: 'nic-kz-dot-leader', suffixes: ['xn--80ao21a'] },
   { id: 'om-registry-colon', suffixes: ['xn--mgb9awbf'] },
+  { id: 'qatar-idn-colon', suffixes: ['xn--wgbl6a'] },
   { id: 'rnids-colon', suffixes: ['xn--90a3ac'] },
   { id: 'afnic-colon', suffixes: ['pm', 're', 'tf', 'wf', 'yt'] },
   { id: 'sgnic-colon', suffixes: ['xn--clchc0ea0b2g2a9gcd', 'xn--yfro4i67o'] },
@@ -126,41 +128,50 @@ const VERSION_22_NEGATIVE_SUFFIXES = [
   'xn--mgbah1a3hjkrd', 'xn--ogbpf8fl',
 ];
 const VERSION_22_RDAP_SUFFIXES = new Set(['gs', 'nf', 'sn']);
+const VERSION_23_NEGATIVE_SUFFIXES = ['bj', 'do'];
+const VERSION_23_UNVERIFIED_SUFFIXES = [
+  'bo', 'bw', 'cf', 'ge', 'gp', 'gq', 'hm', 'iq', 'pf', 'sb',
+  'sm', 'tk', 'tl', 'uy', 'vi', 'xn--90ae', 'xn--l1acc',
+  'xn--mgbtx2b', 'xn--wgbl6a', 'xn--ygbi2ammx',
+];
+const VERSION_23_RDAP_SUFFIXES = new Set(['vi']);
+const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl6a']);
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 22);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 24);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
       'ac', 'ad', 'ae', 'af', 'ag', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'aw', 'ax', 'az', 'ba', 'bb',
-      'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bm', 'bn', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cc', 'cd', 'cg', 'ch',
-      'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'dz', 'ec', 'edu', 'ee',
-      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm',
-      'gn', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hn', 'hr', 'ht',
-      'hu', 'id', 'ie', 'il', 'im', 'in', 'io', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke', 'kg',
+      'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bj', 'bm', 'bn', 'bo', 'br', 'bs', 'bt', 'bv', 'bw', 'by', 'bz', 'ca', 'cc', 'cd', 'cf', 'cg', 'ch',
+      'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'do', 'dz', 'ec', 'edu', 'ee',
+      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm',
+      'gn', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hm', 'hn', 'hr', 'ht',
+      'hu', 'id', 'ie', 'il', 'im', 'in', 'io', 'iq', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke', 'kg',
       'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu',
       'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mg', 'mh', 'mk', 'ml', 'mm', 'mn',
       'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz', 'na', 'nc', 'ne', 'nf', 'ng', 'ni', 'nl', 'no',
-      'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro',
-      'rs', 'ru', 'rw', 'sa', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sn', 'so', 'sr', 'ss', 'st', 'su', 'sv', 'sx', 'sy', 'sz',
-      'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tm', 'tn', 'to', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uz', 'va', 'vc', 've', 'vg', 'vn', 'vu', 'wf', 'ws',
+      'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pf', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro',
+      'rs', 'ru', 'rw', 'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'ss', 'st', 'su', 'sv', 'sx', 'sy', 'sz',
+      'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi', 'vn', 'vu', 'wf', 'ws',
       'xn--2scrj9c', 'xn--3e0b707e',
       'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--4dbrk0ce', 'xn--54b7fta0cc', 'xn--80ao21a',
-      'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--d1alf',
+      'xn--90a3ac', 'xn--90ae', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--d1alf',
       'xn--e1a4c', 'xn--fiqs8s', 'xn--fiqz9s',
       'xn--fpcrj9c3d', 'xn--fzc2c9e2c', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
       'xn--h2brj9c8c', 'xn--j1amh', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
-      'xn--lgbbat1ad8j', 'xn--mgb9awbf', 'xn--mgba3a4f16a', 'xn--mgbaam7a8h', 'xn--mgbah1a3hjkrd',
+      'xn--l1acc', 'xn--lgbbat1ad8j', 'xn--mgb9awbf', 'xn--mgba3a4f16a', 'xn--mgbaam7a8h', 'xn--mgbah1a3hjkrd',
       'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbbh1a', 'xn--mgbbh1a71e',
       'xn--mgbc0a9azcg', 'xn--mgbcpq6gpa1a', 'xn--mgberp4a5d4ar', 'xn--mgbgu82a',
-      'xn--mgbpl2fh', 'xn--mgbx4cd0ab', 'xn--mix891f', 'xn--node', 'xn--o3cw4h', 'xn--ogbpf8fl',
+      'xn--mgbpl2fh', 'xn--mgbtx2b', 'xn--mgbx4cd0ab', 'xn--mix891f', 'xn--node', 'xn--o3cw4h', 'xn--ogbpf8fl',
       'xn--p1ai', 'xn--pgbs0dh', 'xn--q7ce6a', 'xn--qxa6a', 'xn--qxam',
-      'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--wgbh1c', 'xn--xkc2al3hye2a',
-      'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o', 'ye', 'yt', 'za', 'zm', 'zw',
+      'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--wgbh1c', 'xn--wgbl6a', 'xn--xkc2al3hye2a',
+      'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o', 'xn--ygbi2ammx', 'ye', 'yt', 'za', 'zm', 'zw',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
+    assert.equal(first.filter((row) => row.registryClass === 'country-code').length, 309);
   });
 
   test('keeps the published compatibility table synchronized with the catalogue', () => {
@@ -228,7 +239,7 @@ describe('registry capability metadata', () => {
       }
     }
 
-    assert.equal(covered, 52);
+    assert.equal(covered, 54);
   });
 
   test('records version fourteen shared-operator suffixes with explicit provenance and coverage', () => {
@@ -541,6 +552,88 @@ describe('registry capability metadata', () => {
     }
   });
 
+  test('records the version twenty-three final 22 assigned ccTLD profiles', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+    const allSuffixes = [...VERSION_23_NEGATIVE_SUFFIXES, ...VERSION_23_UNVERIFIED_SUFFIXES];
+
+    assert.equal(allSuffixes.length, 22);
+    assert.equal(new Set(allSuffixes).size, 22);
+    for (const suffix of VERSION_23_NEGATIVE_SUFFIXES) {
+      const profile = profiles.get(`iana-cc-negative-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.deepEqual(profile.fixtureScenarios, ['not_found'], suffix);
+      assert.equal(profile.coverageState, 'fixture_verified', suffix);
+      assert.equal(profile.rdapAccessProfile, 'no-iana-service', suffix);
+      assert.match(profile.limitation, /registered-field compatibility is not claimed/i, suffix);
+    }
+    for (const suffix of VERSION_23_UNVERIFIED_SUFFIXES.filter(
+      (candidate) => !VERSION_24_PROMOTED_SUFFIXES.has(candidate),
+    )) {
+      const profile = profiles.get(`iana-referral-unverified-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.deepEqual(profile.suffixes, [suffix], suffix);
+      assert.deepEqual(profile.fixtureScenarios, [], suffix);
+      assert.deepEqual(profile.verificationFiles, [], suffix);
+      assert.equal(profile.coverageState, 'access_documented', suffix);
+      assert.equal(profile.whoisAccessProfile, 'iana-referral', suffix);
+      assert.equal(
+        profile.rdapAccessProfile,
+        VERSION_23_RDAP_SUFFIXES.has(suffix) ? 'iana-bootstrap' : 'no-iana-service',
+        suffix,
+      );
+      assert.match(profile.limitation, /response behavior is not fixture-verified/i, suffix);
+      assert.match(profile.limitation, /not evidence that the domain is unregistered/i, suffix);
+      assert.deepEqual(
+        profile.documentationUrls,
+        [`https://www.iana.org/domains/root/db/${suffix}.html`],
+        suffix,
+      );
+      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      if (VERSION_23_RDAP_SUFFIXES.has(suffix)) assert.equal(diagnostic, null, suffix);
+      else {
+        assert.equal(diagnostic?.coverageState, 'access_documented', suffix);
+        assert.equal(diagnostic?.rdapAccessProfile, 'no-iana-service', suffix);
+        assert.equal(diagnostic?.authority, 'context_only', suffix);
+      }
+    }
+  });
+
+  test('records the version twenty-four alternate-script depth promotions', () => {
+    const bulgarian = registryCapabilityFor('примерен-домейн.бг');
+    assert.equal(bulgarian.id, 'imena-bg-idn-sectioned');
+    assert.deepEqual(bulgarian.suffixes, ['xn--90ae']);
+    assert.equal(bulgarian.whoisQueryProfile, 'registry-domain-unicode');
+    assert.equal(bulgarian.whoisParserProfile, 'register-bg-sectioned');
+    assert.deepEqual(bulgarian.fixtureScenarios, ['registered', 'not_found']);
+    assert.equal(bulgarian.rdapAccessProfile, 'no-iana-service');
+
+    const mongolian = registryCapabilityFor('example.мон');
+    assert.equal(mongolian.id, 'identity-digital-colon-mn');
+    assert.deepEqual(mongolian.suffixes, ['xn--l1acc']);
+    assert.deepEqual(mongolian.fixtureScenarios, ['registered']);
+    assert.equal(mongolian.rdapAccessProfile, 'no-iana-service');
+    assert.match(mongolian.limitation, /exact shared IANA WHOIS service/i);
+
+    const qatari = registryCapabilityFor('example.قطر');
+    assert.equal(qatari.id, 'qatar-idn-colon');
+    assert.deepEqual(qatari.suffixes, ['xn--wgbl6a']);
+    assert.deepEqual(qatari.fixtureScenarios, ['registered', 'not_found']);
+    assert.equal(qatari.rdapAccessProfile, 'no-iana-service');
+
+    for (const suffix of VERSION_24_PROMOTED_SUFFIXES) {
+      const capability = registryCapabilityFor(`example.${suffix}`);
+      assert.equal(capability.coverageState, 'fixture_verified', suffix);
+      assert.equal(capability.explicitSuffixProfile, true, suffix);
+      assert.ok(
+        capability.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`),
+        `${suffix}: IANA provenance`,
+      );
+      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      assert.equal(diagnostic?.rdapAccessProfile, 'no-iana-service', suffix);
+      assert.equal(diagnostic?.authority, 'context_only', suffix);
+    }
+  });
+
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {
     for (const input of [
       null, '', '..au', 'example..au', '127.0.0.1', '.123', `${'a'.repeat(250)}.au`, 'au\n',
@@ -635,6 +728,7 @@ describe('registry capability metadata', () => {
   test('keeps discovery authoritative and exposes only approved query profiles', () => {
     const exceptionalProfiles = new Map([
       ['denic-domain-ace', 'denic-domain-ace'],
+      ['imena-bg-idn-sectioned', 'registry-domain-unicode'],
       ['bracketed-bilingual', 'jprs-domain-english'],
     ]);
     for (const capability of listRegistryCapabilities()) {

@@ -24,9 +24,9 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v22')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('288');
-  await expect(page.locator('tbody tr')).toHaveCount(288);
+  await expect(page.getByText('Catalogue v24')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('310');
+  await expect(page.locator('tbody tr')).toHaveCount(310);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -41,13 +41,18 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await expect(page.locator('tbody')).toContainText('.zm');
 
   await search.fill('iana cc negative');
-  await expect(page.locator('tbody tr')).toHaveCount(29);
+  await expect(page.locator('tbody tr')).toHaveCount(31);
   await expect(page.locator('tbody')).toContainText('.ag');
   await expect(page.locator('tbody')).toContainText('.vg');
 
+  await search.fill('iana referral unverified');
+  await expect(page.locator('tbody tr')).toHaveCount(17);
+  await expect(page.locator('tbody')).toContainText('.bo');
+  await expect(page.locator('tbody')).toContainText('.vi');
+
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(75);
+  await expect(page.locator('tbody tr')).toHaveCount(92);
   await expect(page.locator('tbody')).toContainText('.ao');
   await expect(page.locator('tbody')).toContainText('.ch');
   await expect(page.locator('tbody')).toContainText('.es');

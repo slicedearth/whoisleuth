@@ -21,6 +21,7 @@ const PARSER_FAMILY_ALIASES = [
   { profile: 'monic-minimal-colon', baseSuffix: 'mo', aliases: ['xn--mix891f'] },
   { profile: 'isoc-il-colon', baseSuffix: 'il', aliases: ['xn--4dbrk0ce'] },
   { profile: 'irnic-handle-blocks', baseSuffix: 'ir', aliases: ['xn--mgba3a4f16a'] },
+  { profile: 'identity-digital-colon-mn', baseSuffix: 'mn', aliases: ['xn--l1acc'] },
   { profile: 'mynic-colon', baseSuffix: 'my', aliases: ['xn--mgbx4cd0ab'] },
   { profile: 'nic-dz-colon', baseSuffix: 'dz', aliases: ['xn--lgbbat1ad8j'] },
   { profile: 'nic-io-colon', baseSuffix: 'io', aliases: ['ac'] },
@@ -149,7 +150,7 @@ describe('WHOIS registry compatibility fixtures', () => {
         covered += 1;
       }
     }
-    assert.equal(covered, 52);
+    assert.equal(covered, 53);
   });
 
   test('covers the version seventeen shared-service ccTLD batch', () => {
@@ -263,6 +264,33 @@ describe('WHOIS registry compatibility fixtures', () => {
         .map((fixture) => fixture.capabilityProfile).sort(),
       [...expectedProfiles].sort(),
     );
+  });
+
+  test('covers the version twenty-three authoritative-negative suffixes', () => {
+    const expectedProfiles = ['bj', 'do'].map((suffix) => `iana-cc-negative-${suffix}`);
+
+    assert.deepEqual(
+      fixtures.filter((fixture) => fixture.scenario === 'not_found'
+        && expectedProfiles.includes(fixture.capabilityProfile))
+        .map((fixture) => fixture.capabilityProfile).sort(),
+      expectedProfiles,
+    );
+  });
+
+  test('covers the version twenty-four alternate-script response depth', () => {
+    const expected = new Map([
+      ['imena-bg-idn-sectioned', ['not_found', 'registered']],
+      ['qatar-idn-colon', ['not_found', 'registered']],
+    ]);
+
+    for (const [profile, scenarios] of expected) {
+      assert.deepEqual(
+        fixtures.filter((fixture) => fixture.capabilityProfile === profile)
+          .map((fixture) => fixture.scenario).sort(),
+        scenarios,
+        profile,
+      );
+    }
   });
 
   test('does not promote no-data wording embedded in policy prose', () => {

@@ -4,7 +4,11 @@
 
 type CoverageState = 'discovery_only' | 'access_documented' | 'fixture_verified';
 type RegistryClass = 'country-code' | 'generic' | 'unknown';
-type WhoisQueryProfile = 'plain-domain' | 'denic-domain-ace' | 'jprs-domain-english';
+type WhoisQueryProfile =
+  | 'plain-domain'
+  | 'denic-domain-ace'
+  | 'jprs-domain-english'
+  | 'registry-domain-unicode';
 type WhoisAccessProfile = 'iana-referral' | 'registry-policy-restricted' | 'source-ip-authorization-required' | 'no-iana-service';
 type RdapAccessProfile = 'iana-bootstrap' | 'no-iana-service';
 
@@ -40,7 +44,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 22;
+const REGISTRY_CAPABILITIES_VERSION = 24;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -56,6 +60,8 @@ const SHARED_WHOIS_NO_RDAP_LIMITATION = 'Synthetic fixture reuse is limited to a
 const WHOIS_ONLY_FIXTURE_LIMITATION = 'Synthetic fixtures verify the current WHOIS parser profile. IANA publishes no RDAP bootstrap service for this suffix, and missing registry data is not evidence that the domain is unregistered.';
 const NEGATIVE_ONLY_FIXTURE_LIMITATION = 'Synthetic fixtures verify only the authoritative no-record dialect; registered-field compatibility is not claimed, and fixture coverage does not prove current live-registry reachability or policy.';
 const WHOIS_ONLY_NEGATIVE_FIXTURE_LIMITATION = 'Synthetic fixtures verify only the authoritative WHOIS no-record dialect; registered-field compatibility is not claimed, IANA publishes no RDAP bootstrap service, and missing registry data is not evidence that the domain is unregistered.';
+const UNVERIFIED_WHOIS_REFERRAL_LIMITATION = 'IANA publishes a domain WHOIS referral, but its response behavior is not fixture-verified. A failed, restricted, prohibited, reserved, or otherwise inconclusive response is not evidence that the domain is unregistered, and IANA publishes no RDAP bootstrap service for this suffix.';
+const UNVERIFIED_WHOIS_WITH_RDAP_LIMITATION = 'IANA publishes domain WHOIS and RDAP discovery, but the WHOIS response behavior is not fixture-verified. A failed, restricted, prohibited, reserved, or otherwise inconclusive WHOIS response is not evidence that the domain is unregistered; RDAP remains separately attributed.';
 const NORID_CLOSED_SUFFIX_LIMITATION = 'The registry has not opened this suffix for registrations, and IANA publishes no domain WHOIS or RDAP service. Missing registry data is contextual only and must not be interpreted as a live availability result.';
 const VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   'ao', 'az', 'bb', 'bd', 'bs', 'bt', 'bz', 'cd', 'cg', 'ck',
@@ -93,6 +99,21 @@ const VERSION_22_NEGATIVE_ONLY_SUFFIXES = Object.freeze([
   'xn--mgbah1a3hjkrd', 'xn--ogbpf8fl',
 ]);
 const VERSION_22_RDAP_SUFFIXES = Object.freeze(['gs', 'nf', 'sn']);
+const VERSION_23_NEGATIVE_ONLY_SUFFIXES = Object.freeze(['bj', 'do']);
+const VERSION_23_UNVERIFIED_REFERRAL_SUFFIXES = Object.freeze([
+  'bo', 'bw', 'cf', 'ge', 'gp', 'gq', 'hm', 'iq', 'pf', 'sb',
+  'sm', 'tk', 'tl', 'uy', 'vi', 'xn--90ae', 'xn--l1acc',
+  'xn--mgbtx2b', 'xn--wgbl6a', 'xn--ygbi2ammx',
+]);
+const VERSION_23_RDAP_SUFFIXES = Object.freeze(['vi']);
+const VERSION_24_PROMOTED_SUFFIXES = Object.freeze([
+  'xn--90ae', 'xn--l1acc', 'xn--wgbl6a',
+]);
+const CURRENT_UNVERIFIED_REFERRAL_SUFFIXES = Object.freeze(
+  VERSION_23_UNVERIFIED_REFERRAL_SUFFIXES.filter(
+    (suffix) => !VERSION_24_PROMOTED_SUFFIXES.includes(suffix),
+  ),
+);
 const NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES,
   ...VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES,
@@ -163,6 +184,14 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
       'https://www.register.bg/',
       'https://www.iana.org/domains/root/db/bg.html',
     ],
+  },
+  {
+    id: 'imena-bg-idn-sectioned', suffixes: ['xn--90ae'], registryClass: 'country-code',
+    whoisQueryProfile: 'registry-domain-unicode',
+    whoisParserProfile: 'register-bg-sectioned', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/xn--90ae.html'],
+    limitation: WHOIS_ONLY_FIXTURE_LIMITATION,
   },
   {
     id: 'registro-br-colon', suffixes: ['br'], registryClass: 'country-code',
@@ -270,6 +299,13 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
       ? FIXTURE_LIMITATION
       : WHOIS_ONLY_FIXTURE_LIMITATION,
   })),
+  {
+    id: 'qatar-idn-colon', suffixes: ['xn--wgbl6a'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/xn--wgbl6a.html'],
+    limitation: SHARED_WHOIS_NO_RDAP_LIMITATION,
+  },
   ...VERSION_21_CONTACT_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
     id: `iana-cc-contact-${suffix}`,
     suffixes: [suffix],
@@ -323,6 +359,31 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     limitation: VERSION_22_RDAP_SUFFIXES.includes(suffix)
       ? NEGATIVE_ONLY_FIXTURE_LIMITATION
       : WHOIS_ONLY_NEGATIVE_FIXTURE_LIMITATION,
+  })),
+  ...VERSION_23_NEGATIVE_ONLY_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+    id: `iana-cc-negative-${suffix}`,
+    suffixes: [suffix],
+    registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon',
+    fixtureScenarios: ['not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
+    limitation: WHOIS_ONLY_NEGATIVE_FIXTURE_LIMITATION,
+  })),
+  ...CURRENT_UNVERIFIED_REFERRAL_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+    id: `iana-referral-unverified-${suffix}`,
+    suffixes: [suffix],
+    registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'iana-referral',
+    rdapAccessProfile: VERSION_23_RDAP_SUFFIXES.includes(suffix)
+      ? 'iana-bootstrap'
+      : 'no-iana-service',
+    verificationFiles: [],
+    documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
+    limitation: VERSION_23_RDAP_SUFFIXES.includes(suffix)
+      ? UNVERIFIED_WHOIS_WITH_RDAP_LIMITATION
+      : UNVERIFIED_WHOIS_REFERRAL_LIMITATION,
   })),
   {
     id: 'no-iana-machine-service-ba', suffixes: ['ba'], registryClass: 'country-code',
@@ -409,9 +470,14 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     documentationUrls: ['https://www.iana.org/domains/root/db/me.html'],
   },
   {
-    id: 'identity-digital-colon-mn', suffixes: ['mn'], registryClass: 'country-code',
+    id: 'identity-digital-colon-mn', suffixes: ['mn', 'xn--l1acc'], registryClass: 'country-code',
     whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
-    documentationUrls: ['https://www.iana.org/domains/root/db/mn.html'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/mn.html',
+      'https://www.iana.org/domains/root/db/xn--l1acc.html',
+    ],
+    limitation: SHARED_WHOIS_NO_RDAP_LIMITATION,
   },
   {
     id: 'nic-pk-colon', suffixes: ['pk'], registryClass: 'country-code',

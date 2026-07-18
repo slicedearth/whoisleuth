@@ -341,12 +341,16 @@ compact-storage boundary, and lookup evidence schema are documented in the
   deployments expose the same embedded catalogue in the **Registry support**
   reference workspace, with local text and coverage filters plus an offline
   domain-or-suffix inspector for generic IANA discovery fallback.
-  Catalogue version 22 contains 288 explicit suffix rows: 213 fixture verified
-  and 75 access documented. Its latest 27-suffix batch verifies authoritative
-  no-record dialects only, without claiming registered-field compatibility,
-  while retaining the distinct WHOIS-only and RDAP-available service states
-  published by IANA. Fixture scenarios claim only the represented behavior and
-  make no automated registry requests.
+  Catalogue version 24 contains 310 explicit suffix rows: 218 fixture verified
+  and 92 access documented. It includes an explicit profile for every currently
+  assigned country-code delegation plus the existing `.edu` registry profile.
+  Its latest depth increment adds a registry-scoped Unicode query for the
+  Bulgarian IDN and reuses exact shared WHOIS-service fixtures for the
+  Mongolian and Qatari IDNs. Seventeen IANA-published referrals remain access
+  documented because unavailable, restricted, prohibited, reserved, or
+  otherwise inconclusive responses are not parser or availability evidence.
+  Fixture scenarios claim only the represented behavior and make no automated
+  registry requests.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,

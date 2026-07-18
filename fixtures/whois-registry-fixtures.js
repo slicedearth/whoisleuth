@@ -1565,6 +1565,31 @@ module.exports = [
     },
   },
   {
+    name: 'Bulgarian IDN registry response to a Unicode-domain query',
+    capabilityProfile: 'imena-bg-idn-sectioned',
+    scenario: 'registered',
+    chain: [
+      rootHop('XN--90AE', 'whois.xn--90ae.invalid'),
+      registryHop('whois.xn--90ae.invalid', [
+        'DOMAIN NAME: примерен-домейн.бг (xn----htbbacnmsehfifod.xn--90ae)',
+        'registration status: busy, active',
+        '',
+        'NAME SERVER INFORMATION:',
+        'ns1.example.invalid',
+        'ns2.example.invalid',
+        '',
+        'DNSSEC: inactive',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'xn----htbbacnmsehfifod.xn--90ae',
+      dnssec: 'inactive',
+      nameservers: ['ns1.example.invalid', 'ns2.example.invalid'],
+      statuses: ['busy, active'],
+    },
+  },
+  {
     name: 'Estonian registry response with scoped domain contact and registrar sections',
     capabilityProfile: 'eif-sectioned',
     scenario: 'registered',
@@ -2330,6 +2355,15 @@ module.exports = [
     ['DOMAIN NAME: available-example.bg (available-example.bg)', 'registration status: available'],
   ),
   authoritativeNotFoundFixture(
+    'Bulgarian IDN registry authoritative available response',
+    'imena-bg-idn-sectioned',
+    'XN--90AE',
+    [
+      'DOMAIN NAME: свободен-пример.бг (xn----9sbcjfbu6aggbqndb.xn--90ae)',
+      'registration status: available',
+    ],
+  ),
+  authoritativeNotFoundFixture(
     'Chilean registry authoritative not-found response',
     'nic-chile-colon',
     'CL',
@@ -2933,6 +2967,26 @@ module.exports = [
     tld,
     lines,
   )),
+  ...[
+    ['BJ', ['Domain Name: available-example.bj', 'Domain Status: No Object Found']],
+    ['DO', ['Domain Name: available-example.do', 'Domain Status: No Object Found']],
+  ].map(([tld, lines]) => authoritativeNotFoundFixture(
+    `Version twenty-three .${tld.toLowerCase()} authoritative not-found response`,
+    `iana-cc-negative-${tld.toLowerCase()}`,
+    tld,
+    lines,
+  )),
+  authoritativeNotFoundFixture(
+    'Qatari IDN registry authoritative no-data response',
+    'qatar-idn-colon',
+    'XN--WGBL6A',
+    ['No Data Found'],
+  ),
+  standardIcannFixture(
+    'Qatari IDN shared-service registry response',
+    'qatar-idn-colon',
+    'XN--WGBL6A',
+  ),
   {
     name: 'Omani registry compact colon response',
     capabilityProfile: 'om-registry-colon',

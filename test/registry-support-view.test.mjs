@@ -18,13 +18,13 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 22);
-  assert.equal(catalogue.rows.length, 288);
+  assert.equal(catalogue.version, 24);
+  assert.equal(catalogue.rows.length, 310);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 288,
-    fixtureVerified: 213,
-    accessDocumented: 75,
+    profiles: 310,
+    fixtureVerified: 218,
+    accessDocumented: 92,
     fallbacks: 1,
   });
   assert.deepEqual(
@@ -99,14 +99,14 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
   assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), [
-    'al', 'ao', 'aq', 'az', 'ba', 'bb', 'bd', 'bs', 'bt', 'bv', 'bz', 'cd', 'cg',
-    'ch', 'ck', 'cu', 'cw', 'cy', 'dj', 'eg', 'er', 'es', 'et', 'fk', 'ga', 'gb',
-    'gm', 'gr', 'gu', 'gw', 'jm', 'jo', 'kh', 'km', 'kp', 'kw', 'lc', 'li', 'lk',
-    'lr', 'mh', 'mp', 'mt', 'mv', 'na', 'ne', 'ni', 'np', 'nr', 'pa', 'ph', 'pn', 'ps', 'py',
-    'sj', 'sl', 'sv', 'sz', 'tj', 'tt', 'va', 'vn', 'xn--54b7fta0cc',
+    'al', 'ao', 'aq', 'az', 'ba', 'bb', 'bd', 'bo', 'bs', 'bt', 'bv', 'bw', 'bz', 'cd', 'cf', 'cg',
+    'ch', 'ck', 'cu', 'cw', 'cy', 'dj', 'eg', 'er', 'es', 'et', 'fk', 'ga', 'gb', 'ge',
+    'gm', 'gp', 'gq', 'gr', 'gu', 'gw', 'hm', 'iq', 'jm', 'jo', 'kh', 'km', 'kp', 'kw', 'lc', 'li', 'lk',
+    'lr', 'mh', 'mp', 'mt', 'mv', 'na', 'ne', 'ni', 'np', 'nr', 'pa', 'pf', 'ph', 'pn', 'ps', 'py',
+    'sb', 'sj', 'sl', 'sm', 'sv', 'sz', 'tj', 'tk', 'tl', 'tt', 'uy', 'va', 'vi', 'vn', 'xn--54b7fta0cc',
     'xn--fzc2c9e2c', 'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
-    'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--node', 'xn--qxam', 'xn--wgbh1c',
-    'xn--xkc2al3hye2a', 'za', 'zw',
+    'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--mgbtx2b', 'xn--node', 'xn--qxam', 'xn--wgbh1c',
+    'xn--xkc2al3hye2a', 'xn--ygbi2ammx', 'za', 'zw',
   ]);
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });

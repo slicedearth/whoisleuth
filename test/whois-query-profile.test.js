@@ -50,6 +50,38 @@ describe('WHOIS referral query profiles', () => {
     assert.deepEqual(chain.map((hop) => hop.responseEncoding), ['utf-8', 'utf-8']);
   });
 
+  test('sends a Unicode domain only to the Bulgarian IDN registry referral', async () => {
+    const calls = [];
+    const domain = 'xn----htbbacnmsehfifod.xn--90ae';
+    const responses = new Map([
+      ['whois.iana.org', 'domain: XN--90AE\nrefer: whois.registry.invalid\n'],
+      ['whois.registry.invalid', [
+        'DOMAIN NAME: примерен-домейн.бг (xn----htbbacnmsehfifod.xn--90ae)',
+        'registration status: busy, active',
+        'NAME SERVER INFORMATION:',
+        'ns1.example.invalid',
+        'whois: whois.registrar.invalid',
+      ].join('\n')],
+      ['whois.registrar.invalid', 'Domain Name: XN----HTBBACNMSEHFIFOD.XN--90AE\n'],
+    ]);
+    const chain = await buildWhoisChainUncached(domain, {
+      whoisQuery: async (server, query) => {
+        calls.push({ server, query });
+        return responses.get(server) || '';
+      },
+    });
+
+    assert.deepEqual(calls, [
+      { server: 'whois.iana.org', query: domain },
+      { server: 'whois.registry.invalid', query: 'примерен-домейн.бг' },
+      { server: 'whois.registrar.invalid', query: domain },
+    ]);
+    assert.deepEqual(chain.map((hop) => hop.queryProfile), [
+      'plain-domain', 'registry-domain-unicode', 'plain-domain',
+    ]);
+    assert.deepEqual(chain.map((hop) => hop.responseEncoding), ['utf-8', 'utf-8', 'utf-8']);
+  });
+
   test('leaves parser-only capability profiles on the plain-domain query', async () => {
     const calls = [];
     await buildWhoisChainUncached('example.kr', {
