@@ -16,13 +16,14 @@ const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 6);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 7);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'au', 'br', 'ca', 'cz', 'de', 'edu', 'es', 'fi', 'fr', 'gt', 'it', 'jp',
-      'kr', 'nz', 'pl', 'pt', 'ru', 'se', 'tr', 'uk', 'us', 'vn',
+      'at', 'au', 'be', 'br', 'ca', 'cl', 'cz', 'de', 'edu', 'es', 'eu', 'fi',
+      'fr', 'gt', 'ie', 'in', 'it', 'jp', 'kr', 'mx', 'no', 'nz', 'pl', 'pt',
+      'ro', 'ru', 'se', 'sg', 'tr', 'uk', 'us', 'vn',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });

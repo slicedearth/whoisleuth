@@ -655,6 +655,28 @@ function parseIndentedWhoisValue(text: string, headerRe: RegExp, maxLength: numb
   return null;
 }
 
+// A few registry formats place a small labelled record below a section
+// header, for example "Registrar:" followed by an indented "Name:" line.
+// Inspect only the next eight indented lines and require the exact requested
+// subfield so a URL or neighbouring section cannot be promoted accidentally.
+function parseIndentedWhoisSubfield(
+  text: string,
+  headerRe: RegExp,
+  subfieldRe: RegExp,
+  maxLength: number,
+) {
+  const headerMatch = text.match(headerRe);
+  if (!headerMatch) return null;
+  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length).split('\n').slice(0, 8);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    if (!/^[ \t]/.test(line)) return null;
+    const match = line.match(subfieldRe);
+    if (match) return boundedWhoisValue(match[1], maxLength);
+  }
+  return null;
+}
+
 function assignBoundedWhoisMatch(
   text: string,
   fields: ParsedWhoisRecord,
@@ -798,7 +820,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       /^[ \t*]*Updated Date[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Last Update(?:d)?(?: Date| On)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Last Modified[ \t.]*:[ \t]*(.+)$/im,
-      /^[ \t*]*Modified[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Modified(?: Date)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Modification Date[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*last-update[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Changed[ \t.]*:[ \t]*(.+)$/im,
@@ -961,6 +983,17 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // responses that they'd false-match that IANA hop too, so they're only
     // tried against later, registry-level hops.
     const isRootHop = hopIndex === 0;
+    const isDnsBelgium = !isRootHop
+      && /^%[^\r\n]*\.be Whois Server/im.test(text)
+      && /^[ \t]*Registered[ \t]*:/im.test(text);
+    const isEurid = !isRootHop
+      && /^[ \t]*Script[ \t]*:/im.test(text)
+      && /(?:^|\s)(?:www\.)?eurid\.eu(?:\s|\/|$)/im.test(text);
+    const isNorid = !isRootHop
+      && /^[ \t]*Domain Information[ \t]*$/im.test(text)
+      && /^[ \t]*NORID Handle[ \t.]*:/im.test(text)
+      && /^[ \t]*Registrar Handle[ \t.]*:/im.test(text)
+      && /^[ \t]*Additional information[ \t]*:/im.test(text);
 
     for (const [key, res] of Object.entries(patterns)) {
       // IANA's root hop describes the TLD and its operator, never a contact
@@ -1085,6 +1118,22 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
             if (result === 'added') found += 1;
           }
         }
+      }
+
+      if ((isDnsBelgium || isEurid) && !fields.registrar) {
+        const registrar = parseIndentedWhoisSubfield(
+          text,
+          /^[ \t]*Registrar[ \t]*:[ \t]*$/im,
+          /^[ \t]*Name[ \t]*:[ \t]*(.+)$/i,
+          whoisFieldLimit('registrar'),
+        );
+        if (registrar?.value) fields.registrar = registrar.value;
+        if (registrar?.truncated) truncatedFields.add('registrar');
+      }
+
+      if (isNorid) {
+        assignBoundedWhoisMatch(text, fields, 'registryDomainId', /^[ \t]*NORID Handle[ \t.]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*Registrar Handle[ \t.]*:[ \t]*(.+)$/im, truncatedFields);
       }
     }
 
@@ -1275,6 +1324,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     if (!isRootHop) {
       nsLinePatterns.push(
         /^[ \t*]*nserver[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
+        /^[ \t*]*Nameserver[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
         /^[ \t*]*Host Name[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
         /^[ \t*]*DNS[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
         /^[ \t]*ns_name_\d{2}[ \t]*:[ \t]*([a-zA-Z0-9.\-]+)/gim
@@ -1299,7 +1349,9 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // the label alone - a missing status is safer than a wrong one.
     const statusRe = isRootHop
       ? /^[ \t*]*Domain Status[ \t.]*:[ \t]*([a-zA-Z]+)/gim
-      : /^[ \t*]*(?:Domain Status|Status)[ \t.]*:[ \t]*([a-zA-Z]+)/gim;
+      : isDnsBelgium
+        ? /^[ \t*]*Status[ \t.]*:[ \t]*([^\r\n]+)/gim
+        : /^[ \t*]*(?:Domain Status|Status)[ \t.]*:[ \t]*([a-zA-Z]+)/gim;
     for (const m of text.matchAll(statusRe)) {
       if (addBoundedWhoisSetValue(statuses, m[1], {
         maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,

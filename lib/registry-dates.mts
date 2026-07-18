@@ -71,13 +71,13 @@ function parseRegistryDate(input: unknown): Date | null {
     return utcDateFromParts(+year, +month, +day);
   }
 
-  // YYYYMMDD with an optional Registro.br contact-reference suffix. The raw
-  // value remains available as provenance; only the leading calendar date is
-  // projected into the additive ISO companion.
-  match = value.match(/^(\d{4})(\d{2})(\d{2})(?:\s+#[0-9]{1,20})?$/);
+  // YYYYMMDD with an optional time or Registro.br contact-reference suffix.
+  // The raw value remains available as provenance while the validated date
+  // and optional clock time are projected into the additive ISO companion.
+  match = value.match(/^(\d{4})(\d{2})(\d{2})(?:\s+(\d{1,2}):(\d{2}):(\d{2})|\s+#[0-9]{1,20})?$/);
   if (match) {
-    const [, year, month, day] = match;
-    return utcDateFromParts(+year, +month, +day);
+    const [, year, month, day, hour, minute, second] = match;
+    return utcDateFromParts(+year, +month, +day, +(hour || 0), +(minute || 0), +(second || 0));
   }
 
   // YYYY-Mon-DD. - e.g. 1999-Feb-16.
@@ -85,6 +85,26 @@ function parseRegistryDate(input: unknown): Date | null {
   if (match) {
     const month = REGISTRY_MONTHS[match[2].toLowerCase()];
     return month ? utcDateFromParts(+match[1], month, +match[3]) : null;
+  }
+
+  // DD-Mon-YYYY[ HH:MM:SS] - used by several ICANN-style ccTLD services.
+  match = value.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
+  if (match) {
+    const month = REGISTRY_MONTHS[match[2].toLowerCase()];
+    return month
+      ? utcDateFromParts(+match[3], month, +match[1], +(match[4] || 0), +(match[5] || 0), +(match[6] || 0))
+      : null;
+  }
+
+  // Ddd Mon DD YYYY[ HH:MM:SS] - the English textual form used by the
+  // Belgian registry. Weekday text is presentation-only; the validated
+  // calendar components determine the canonical UTC companion.
+  match = value.match(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/i);
+  if (match) {
+    const month = REGISTRY_MONTHS[match[1].toLowerCase()];
+    return month
+      ? utcDateFromParts(+match[3], month, +match[2], +(match[4] || 0), +(match[5] || 0), +(match[6] || 0))
+      : null;
   }
 
   // ISO 8601-shaped dates and timestamps. A missing timezone is deliberately

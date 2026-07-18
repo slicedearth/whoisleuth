@@ -22,28 +22,38 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 6 explicit matrix is:
+The version 7 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
+| `.at` | Colon fields with compact date-time values | Registered |
 | `.au` | Eligibility and contact fields | Registered |
+| `.be` | Sectioned registrar and nameserver fields with textual registration dates | Registered |
 | `.br` | Registry owner/contact handles, compact dates, status, and nameservers | Registered |
 | `.ca` | Standard colon fields with year-first slash dates | Registered |
+| `.cl` | Named registrant and registrar fields with lifecycle dates and nameservers | Registered |
 | `.cz` | FRED contact-handle indirection | Registered |
 | `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
 | `.edu` | Indented contact blocks | Registered |
 | `.es` | Plain WHOIS syntax; registry requires advance source-IP authorization; IANA publishes no RDAP service | Access documented |
+| `.eu` | Sectioned registrar and nameserver fields | Registered |
 | `.fi` | Dot-leader fields, dates, DNSSEC, registrar, status, and nameservers | Registered |
 | `.fr` | AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
+| `.ie` | Standard colon fields with registry/contact identifiers, lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.in` | Standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
+| `.mx` | Colon fields with an indented registrant block and nameserver section | Registered |
+| `.no` | Norid dot-leader fields with separately scoped domain and registrar handles | Registered |
 | `.nz` | Structured underscore fields, numeric registry states, contacts, dates, DNSSEC, and numbered nameservers | Registered, available, temporary failure, restricted/inconclusive |
 | `.pl` | NASK sectioned nameservers and registrar with dotted lifecycle dates | Registered, malformed |
 | `.pt` | Domain, owner, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
+| `.ro` | Colon fields with one-word nameserver labels, lifecycle, registrar, and DNSSEC | Registered |
 | `.ru` | TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered |
 | `.se` | Registry state, holder handle, registrar, lifecycle, DNSSEC, and nameservers | Registered |
+| `.sg` | Standard colon fields with day-month-name timestamps, status, DNSSEC, and nameservers | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
 | `.uk` | Sectioned indented domain, registrant, registrar, status, date, and nameserver fields | Registered, not found, malformed |
 | `.us` | Standard colon fields, registrar, lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
@@ -88,6 +98,34 @@ and [`.us`](https://www.about.us/faqs), plus IANA delegation records for
 machine-service discovery. These sources describe the service and published
 data; the synthetic fixtures verify parser behavior only and make no live
 reachability or completeness claim.
+
+Version 7 adds fixture-backed compatibility for `.at`, `.be`, `.cl`, `.eu`,
+`.ie`, `.in`, `.mx`, `.no`, `.ro`, and `.sg`. The shared date parser now
+normalizes compact timestamps, day-month-name timestamps, and the bounded
+English textual registration date used by the Belgian fixture while retaining
+each source value unchanged. Sectioned registrar names are read only from an
+exact indented `Name` subfield, Belgian multi-word statuses remain intact, and
+Norid domain and registrar handles are interpreted only when the response has
+the documented domain-information markers. Nameserver handles are deliberately
+not promoted to hostnames. These are additive parsing changes: IANA discovery,
+referral authority, response limits, and availability decisions are unchanged.
+
+The batch is grounded in official service, policy, or field-publication
+material for [`.at`](https://www.nic.at/en/my-at-domain/domain-search/whois),
+[`.be`](https://www.dnsbelgium.be/en/our-role/registry-registrar-registrant),
+[`.cl`](https://www.nic.cl/normativa/politica-publicacion-de-datos-cl.pdf),
+[`.eu`](https://eurid.eu/d/22380/whois_policy_en.pdf),
+[`.ie`](https://www.weare.ie/wp-content/uploads/2023/12/WHOIS-Services-Policy-2023.pdf),
+[`.in`](https://www.registry.in/policies),
+[`.mx`](https://www.dominios.mx/whois/),
+[`.no`](https://teknisk.norid.no/uploads/2018/08/Whois_DAS_Interface_Specification.10e1.pdf),
+[`.ro`](https://www.rotld.ro/reguli-de-inregistrare/), and
+[`.sg`](https://www.sgnic.sg/docs/default-source/policies-and-agreements/whois-policy.pdf),
+plus their IANA delegation records for endpoint discovery. Norid publishes an
+exact port-43 response specification; the other sources establish public
+service and field expectations, while the sanitized fixtures test only the
+bounded parser behavior represented here. They do not prove current registry
+reachability, completeness, ownership, activity, safety, or maliciousness.
 
 The [`.uk` WHOIS instructions](https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/whois-basic-instructions/)
 document a sectioned port-43 response with indented domain, registrar,

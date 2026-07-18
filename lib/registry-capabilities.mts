@@ -32,7 +32,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 6;
+const REGISTRY_CAPABILITIES_VERSION = 7;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -71,8 +71,24 @@ const DEFAULT_CAPABILITY = freezeCapability({
 
 const EXPLICIT_CAPABILITIES = [
   {
+    id: 'nic-at-colon', suffixes: ['at'], registryClass: 'country-code',
+    whoisParserProfile: 'nic-at-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.nic.at/en/my-at-domain/domain-search/whois',
+      'https://www.iana.org/domains/root/db/at.html',
+    ],
+  },
+  {
     id: 'eligibility-contact', suffixes: ['au'], registryClass: 'country-code',
     whoisParserProfile: 'eligibility-contact', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'dns-belgium-sectioned', suffixes: ['be'], registryClass: 'country-code',
+    whoisParserProfile: 'sectioned-registrar-and-nameservers', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.dnsbelgium.be/en/our-role/registry-registrar-registrant',
+      'https://www.iana.org/domains/root/db/be.html',
+    ],
   },
   {
     id: 'registro-br-colon', suffixes: ['br'], registryClass: 'country-code',
@@ -88,6 +104,14 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: [
       'https://www.cira.ca/en/ca-domains/whois/',
       'https://www.iana.org/domains/root/db/ca.html',
+    ],
+  },
+  {
+    id: 'nic-chile-colon', suffixes: ['cl'], registryClass: 'country-code',
+    whoisParserProfile: 'nic-chile-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.nic.cl/normativa/politica-publicacion-de-datos-cl.pdf',
+      'https://www.iana.org/domains/root/db/cl.html',
     ],
   },
   {
@@ -123,10 +147,35 @@ const EXPLICIT_CAPABILITIES = [
     limitation: ES_ACCESS_LIMITATION,
   },
   {
+    id: 'eurid-sectioned', suffixes: ['eu'], registryClass: 'country-code',
+    whoisParserProfile: 'sectioned-registrar-and-nameservers', fixtureScenarios: ['registered', 'malformed'],
+    documentationUrls: [
+      'https://eurid.eu/en/knowledge-centre/rules-for-eu-domains/',
+      'https://eurid.eu/d/22380/whois_policy_en.pdf',
+      'https://www.iana.org/domains/root/db/eu.html',
+    ],
+  },
+  {
     id: 'gt-registry-web', suffixes: ['gt'], registryClass: 'country-code',
     whoisParserProfile: 'generic-colon', fallbackProfile: 'gt-registry-web',
     fixtureScenarios: ['registered', 'not_found', 'unavailable'],
     verificationFiles: ['test/whois-gt-fallback.test.js'],
+  },
+  {
+    id: 'weare-ie-colon', suffixes: ['ie'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.weare.ie/wp-content/uploads/2023/12/WHOIS-Services-Policy-2023.pdf',
+      'https://www.iana.org/domains/root/db/ie.html',
+    ],
+  },
+  {
+    id: 'nixi-colon', suffixes: ['in'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.registry.in/policies',
+      'https://www.iana.org/domains/root/db/in.html',
+    ],
   },
   {
     id: 'alternate-labels', suffixes: ['it'], registryClass: 'country-code',
@@ -148,6 +197,23 @@ const EXPLICIT_CAPABILITIES = [
   {
     id: 'dot-leader', suffixes: ['kr'], registryClass: 'country-code',
     whoisParserProfile: 'dot-leader', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'registry-mx-colon', suffixes: ['mx'], registryClass: 'country-code',
+    whoisParserProfile: 'contact-blocks-and-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.dominios.mx/whois/',
+      'https://www.iana.org/domains/root/db/mx.html',
+    ],
+  },
+  {
+    id: 'norid-dot-leader', suffixes: ['no'], registryClass: 'country-code',
+    whoisParserProfile: 'norid-handle-dot-leader', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://teknisk.norid.no/uploads/2018/08/Whois_DAS_Interface_Specification.10e1.pdf',
+      'https://www.norid.no/en/domeneoppslag/',
+      'https://www.iana.org/domains/root/db/no.html',
+    ],
   },
   {
     id: 'afnic-colon', suffixes: ['fr'], registryClass: 'country-code',
@@ -183,6 +249,14 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
+    id: 'rotld-colon', suffixes: ['ro'], registryClass: 'country-code',
+    whoisParserProfile: 'rotld-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.rotld.ro/reguli-de-inregistrare/',
+      'https://www.iana.org/domains/root/db/ro.html',
+    ],
+  },
+  {
     id: 'tci-colon', suffixes: ['ru'], registryClass: 'country-code',
     whoisParserProfile: 'tci-colon', fixtureScenarios: ['registered'],
     documentationUrls: [
@@ -196,6 +270,15 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: [
       'https://internetstiftelsen.se/domaner/registrera-ett-domannamn/regler-och-beskrivning-av-domannamnssokningar/',
       'https://www.iana.org/domains/root/db/se.html',
+    ],
+  },
+  {
+    id: 'sgnic-colon', suffixes: ['sg'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.sgnic.sg/docs/default-source/policies-and-agreements/whois-policy.pdf',
+      'https://www.sgnic.sg/technical-services/rdap',
+      'https://www.iana.org/domains/root/db/sg.html',
     ],
   },
   {
