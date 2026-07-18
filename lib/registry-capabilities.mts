@@ -32,17 +32,18 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 13;
+const REGISTRY_CAPABILITIES_VERSION = 14;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
 const FIXTURE_LIMITATION = 'Synthetic fixtures verify the current parser profile; they do not prove current live-registry reachability, policy, or field publication.';
 const ES_ACCESS_LIMITATION = 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.';
-const CH_ACCESS_LIMITATION = 'The registry may restrict ordinary port-43 clients and direct them to its official lookup. Its non-standard-port Domain Check is not integrated, and IANA publishes no RDAP service. Missing registry data is not evidence that the domain is unregistered.';
+const SWITCH_ACCESS_LIMITATION = 'The registry directs public domain searches to its official lookup. Its non-standard-port Domain Check is not integrated, and IANA publishes no RDAP service. Missing registry data is not evidence that the domain is unregistered.';
 const VN_ACCESS_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.';
 const UK_TRANSITION_LIMITATION = 'Synthetic fixtures verify the documented sectioned port-43 response while that WHOIS service is phased out. RDAP remains the preferred registry source, and fixture coverage does not prove current reachability or field publication.';
 const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profile. The registry limits public WHOIS use, prohibits abusive high-volume automation, and states that a missing record is not proof of availability; WHOISleuth retains bounded request controls and authority-aware interpretation.';
 const NO_IANA_MACHINE_SERVICE_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. Missing registry data is not evidence that the domain is unregistered.';
+const NORID_CLOSED_SUFFIX_LIMITATION = 'The registry has not opened this suffix for registrations, and IANA publishes no domain WHOIS or RDAP service. Missing registry data is contextual only and must not be interpreted as a live availability result.';
 
 function freezeCapability(capability: RegistryCapability): Readonly<RegistryCapability> {
   Object.freeze(capability.suffixes);
@@ -134,7 +135,7 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
-    id: 'switch-policy-restricted', suffixes: ['ch'], registryClass: 'country-code',
+    id: 'switch-policy-restricted', suffixes: ['ch', 'li'], registryClass: 'country-code',
     whoisParserProfile: 'generic-colon', fixtureScenarios: [],
     coverageState: 'access_documented', whoisAccessProfile: 'registry-policy-restricted',
     rdapAccessProfile: 'no-iana-service', verificationFiles: [],
@@ -142,8 +143,9 @@ const EXPLICIT_CAPABILITIES = [
       'https://www.nic.ch/whois/',
       'https://www.nic.ch/whois/domaincheck/',
       'https://www.iana.org/domains/root/db/ch.html',
+      'https://www.iana.org/domains/root/db/li.html',
     ],
-    limitation: CH_ACCESS_LIMITATION,
+    limitation: SWITCH_ACCESS_LIMITATION,
   },
   {
     id: 'aeda-colon', suffixes: ['ae'], registryClass: 'country-code',
@@ -203,11 +205,14 @@ const EXPLICIT_CAPABILITIES = [
     limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
   {
-    id: 'no-iana-machine-service-gr', suffixes: ['gr'], registryClass: 'country-code',
+    id: 'no-iana-machine-service-gr', suffixes: ['gr', 'xn--qxam'], registryClass: 'country-code',
     whoisParserProfile: 'generic-colon', fixtureScenarios: [],
     coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
     rdapAccessProfile: 'no-iana-service', verificationFiles: [],
-    documentationUrls: ['https://www.iana.org/domains/root/db/gr.html'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/gr.html',
+      'https://www.iana.org/domains/root/db/xn--qxam.html',
+    ],
     limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
   {
@@ -283,9 +288,12 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: ['https://www.ati.tn/', 'https://www.iana.org/domains/root/db/tn.html'],
   },
   {
-    id: 'nic-io-colon', suffixes: ['io'], registryClass: 'country-code',
+    id: 'nic-io-colon', suffixes: ['io', 'ac'], registryClass: 'country-code',
     whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
-    documentationUrls: ['https://www.iana.org/domains/root/db/io.html'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/io.html',
+      'https://www.iana.org/domains/root/db/ac.html',
+    ],
   },
   {
     id: 'nic-af-colon', suffixes: ['af'], registryClass: 'country-code',
@@ -538,6 +546,19 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
+    id: 'norid-closed-no-iana-service', suffixes: ['bv', 'sj'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: [
+      'https://www.norid.no/en/omnorid/',
+      'https://www.norid.no/en/omnorid/toppdomenet-bv/',
+      'https://www.iana.org/domains/root/db/bv.html',
+      'https://www.iana.org/domains/root/db/sj.html',
+    ],
+    limitation: NORID_CLOSED_SUFFIX_LIMITATION,
+  },
+  {
     id: 'sidn-sectioned', suffixes: ['nl'], registryClass: 'country-code',
     whoisParserProfile: 'sidn-sectioned', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
@@ -546,11 +567,16 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
-    id: 'afnic-colon', suffixes: ['fr'], registryClass: 'country-code',
+    id: 'afnic-colon', suffixes: ['fr', 'pm', 're', 'tf', 'wf', 'yt'], registryClass: 'country-code',
     whoisParserProfile: 'afnic-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.afnic.fr/en/domain-names-and-support/everything-there-is-to-know-about-domain-names/find-a-domain-name-or-a-holder-using-whois/',
       'https://www.iana.org/domains/root/db/fr.html',
+      'https://www.iana.org/domains/root/db/pm.html',
+      'https://www.iana.org/domains/root/db/re.html',
+      'https://www.iana.org/domains/root/db/tf.html',
+      'https://www.iana.org/domains/root/db/wf.html',
+      'https://www.iana.org/domains/root/db/yt.html',
     ],
   },
   {
@@ -614,12 +640,14 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
-    id: 'sgnic-colon', suffixes: ['sg'], registryClass: 'country-code',
+    id: 'sgnic-colon', suffixes: ['sg', 'xn--clchc0ea0b2g2a9gcd', 'xn--yfro4i67o'], registryClass: 'country-code',
     whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
     documentationUrls: [
       'https://www.sgnic.sg/docs/default-source/policies-and-agreements/whois-policy.pdf',
-      'https://www.sgnic.sg/technical-services/rdap',
+      'https://www.sgnic.sg/faq/being-a-registrar',
       'https://www.iana.org/domains/root/db/sg.html',
+      'https://www.iana.org/domains/root/db/xn--clchc0ea0b2g2a9gcd.html',
+      'https://www.iana.org/domains/root/db/xn--yfro4i67o.html',
     ],
   },
   {

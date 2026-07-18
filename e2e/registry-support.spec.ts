@@ -24,9 +24,9 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v13')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('104');
-  await expect(page.locator('tbody tr')).toHaveCount(104);
+  await expect(page.getByText('Catalogue v14')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('116');
+  await expect(page.locator('tbody tr')).toHaveCount(116);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -35,7 +35,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(9);
+  await expect(page.locator('tbody tr')).toHaveCount(13);
   await expect(page.locator('tbody')).toContainText('.ch');
   await expect(page.locator('tbody')).toContainText('.es');
   await expect(page.locator('tbody')).toContainText('.vn');
@@ -97,10 +97,10 @@ test('the local inspector explains explicit and generic suffix support without a
 test('the inspector resolves an explicit IDN suffix and remains mobile-safe', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/registry-support');
-  await page.getByRole('searchbox', { name: 'Domain or suffix', exact: true }).fill('example.中国');
+  await page.getByRole('searchbox', { name: 'Domain or suffix', exact: true }).fill('example.சிங்கப்பூர்');
   await page.getByRole('button', { name: 'Inspect support' }).click();
 
-  await expect(page.locator('.inspection-card')).toContainText('.xn--fiqs8s');
+  await expect(page.locator('.inspection-card')).toContainText('.xn--clchc0ea0b2g2a9gcd');
   await expect(page.locator('.inspection-card')).toContainText('Explicit suffix profile');
   await expectNoHorizontalOverflow(page);
 });

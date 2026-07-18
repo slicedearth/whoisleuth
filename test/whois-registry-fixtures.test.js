@@ -5,13 +5,14 @@ const assert = require('node:assert/strict');
 const { parseWhoisChain } = require('../lib/whois.mts');
 const fixtures = require('../fixtures/whois-registry-fixtures');
 
-const SHARED_ENDPOINT_FAMILIES = [
+const PARSER_FAMILY_ALIASES = [
   { profile: 'amnic-sectioned', baseSuffix: 'am', aliases: ['xn--y9a3aq'] },
   { profile: 'cctld-by-colon', baseSuffix: 'by', aliases: ['xn--90ais'] },
   { profile: 'cnnic-colon', baseSuffix: 'cn', aliases: ['xn--fiqs8s', 'xn--fiqz9s'] },
   { profile: 'dot-leader', baseSuffix: 'kr', aliases: ['xn--3e0b707e'] },
   { profile: 'eurid-sectioned', baseSuffix: 'eu', aliases: ['xn--e1a4c', 'xn--qxa6a'] },
   { profile: 'hkirc-sectioned', baseSuffix: 'hk', aliases: ['xn--j6w193g'] },
+  { profile: 'nic-io-colon', baseSuffix: 'io', aliases: ['ac'] },
   {
     profile: 'nixi-colon',
     baseSuffix: 'in',
@@ -32,6 +33,12 @@ const SHARED_ENDPOINT_FAMILIES = [
   },
   { profile: 'nic-kz-dot-leader', baseSuffix: 'kz', aliases: ['xn--80ao21a'] },
   { profile: 'rnids-colon', baseSuffix: 'rs', aliases: ['xn--90a3ac'] },
+  { profile: 'afnic-colon', baseSuffix: 'fr', aliases: ['pm', 're', 'tf', 'wf', 'yt'] },
+  {
+    profile: 'sgnic-colon',
+    baseSuffix: 'sg',
+    aliases: ['xn--clchc0ea0b2g2a9gcd', 'xn--yfro4i67o'],
+  },
   { profile: 'tci-colon', baseSuffix: 'ru', aliases: ['su', 'xn--p1ai'] },
   { profile: 'thnic-holder-colon', baseSuffix: 'th', aliases: ['xn--o3cw4h'] },
   { profile: 'twnic-colon', baseSuffix: 'tw', aliases: ['xn--kprw13d', 'xn--kpry57d'] },
@@ -96,9 +103,9 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.deepEqual(coveredProfiles, expectedProfiles);
   });
 
-  test('reuses each shared-endpoint registry fixture for its declared suffix aliases', () => {
+  test('reuses each independently documented parser fixture for its declared suffix aliases', () => {
     let covered = 0;
-    for (const family of SHARED_ENDPOINT_FAMILIES) {
+    for (const family of PARSER_FAMILY_ALIASES) {
       const fixture = fixtures.find((candidate) => candidate.capabilityProfile === family.profile
         && candidate.scenario === 'registered');
       assert.ok(fixture, `${family.profile}: registered fixture`);
@@ -125,7 +132,7 @@ describe('WHOIS registry compatibility fixtures', () => {
         covered += 1;
       }
     }
-    assert.equal(covered, 27);
+    assert.equal(covered, 35);
   });
 
   test('does not unlock ambiguous aliases when registry marker sets are incomplete', () => {

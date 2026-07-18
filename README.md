@@ -325,14 +325,16 @@ compact-storage boundary, and lookup evidence schema are documented in the
   [capability matrix](docs/registry-compatibility.md). IANA RDAP bootstrap and
   WHOIS referrals remain authoritative discovery; fixture-backed parser and
   fallback profiles do not claim current live-registry reachability or field
-  publication. Shared official WHOIS families retain suffix-correct profiles
-  for supported IDN A-labels, and Unicode suffix input resolves to the same
-  bounded fixture-backed family. Fixture scenarios distinguish registered,
-  authoritative not-found, temporary, restricted, and malformed responses where
-  the registry dialect is known; an undocumented or non-authoritative negative
-  remains inconclusive. The local CLI can inspect this catalogue offline with
-  `registry-support <domain-or-suffix>` without making a registry request or
-  turning coverage metadata into an availability or safety claim. Authenticated
+  publication. Independently documented operator families retain
+  suffix-correct profiles for supported ASCII and IDN suffixes, and Unicode
+  suffix input resolves to the same bounded fixture-backed family. Shared
+  management alone is not treated as parser evidence. Fixture scenarios
+  distinguish registered, authoritative not-found, temporary, restricted, and
+  malformed responses where the registry dialect is known; an undocumented or
+  non-authoritative negative remains inconclusive. The local CLI can inspect
+  this catalogue offline with `registry-support <domain-or-suffix>` without
+  making a registry request or turning coverage metadata into an availability
+  or safety claim. Authenticated
   deployments expose the same embedded catalogue in the **Registry support**
   reference workspace, with local text and coverage filters plus an offline
   domain-or-suffix inspector for generic IANA discovery fallback.

@@ -18,13 +18,13 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 13);
-  assert.equal(catalogue.rows.length, 104);
+  assert.equal(catalogue.version, 14);
+  assert.equal(catalogue.rows.length, 116);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 104,
-    fixtureVerified: 95,
-    accessDocumented: 9,
+    profiles: 116,
+    fixtureVerified: 103,
+    accessDocumented: 13,
     fallbacks: 1,
   });
   assert.deepEqual(
@@ -39,7 +39,7 @@ test('returns independent catalogue rows rather than exposing shared mutable arr
   first.rows[0].fixtureScenarios.push('changed');
 
   const second = registrySupportCatalogue();
-  assert.equal(second.rows[0].suffixes[0], 'ae');
+  assert.equal(second.rows[0].suffixes[0], 'ac');
   assert.equal(second.rows[0].fixtureScenarios.includes('changed'), false);
 });
 
@@ -59,10 +59,10 @@ test('inspects explicit and generic suffix support through the shared catalogue'
 });
 
 test('normalizes IDN suffixes while keeping malformed and empty inspection states explicit', () => {
-  const explicitIdn = inspectRegistrySupport('example.中国');
+  const explicitIdn = inspectRegistrySupport('example.சிங்கப்பூர்');
   assert.equal(explicitIdn.state, 'resolved');
-  assert.deepEqual(explicitIdn.profile.suffixes, ['xn--fiqs8s']);
-  assert.equal(explicitIdn.profile.id, 'cnnic-colon');
+  assert.deepEqual(explicitIdn.profile.suffixes, ['xn--clchc0ea0b2g2a9gcd']);
+  assert.equal(explicitIdn.profile.id, 'sgnic-colon');
   assert.equal(explicitIdn.profile.explicitSuffixProfile, true);
 
   const idn = inspectRegistrySupport('example.测试');
@@ -98,7 +98,7 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   );
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
-  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['al', 'ba', 'ch', 'cy', 'es', 'gr', 'ph', 'vn', 'za']);
+  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['al', 'ba', 'bv', 'ch', 'cy', 'es', 'gr', 'li', 'ph', 'sj', 'vn', 'xn--qxam', 'za']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });
 

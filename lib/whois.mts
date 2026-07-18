@@ -662,9 +662,11 @@ const NZ_NOT_FOUND_RE = /^[ \t]*query_status[ \t]*:[ \t]*220(?:\s|$)/im;
 const NZ_POSITIVE_RE = /^[ \t]*query_status[ \t]*:[ \t]*(?:200|210)(?:\s|$)/im;
 const NZ_TEMPORARY_FAILURE_RE = /^[ \t]*query_status[ \t]*:[ \t]*4\d{2}(?:\s|$)/im;
 
-// Rate-limit / soft-failure language. Detected separately from "not found" so
-// a throttled registrar can't read as "available".
-const RATE_LIMIT_RE = /rate.?limit|too many requests|quota exceeded|query limit|limit exceeded|number of .* exceeded|exceeded .* (?:queries|requests)|try again later|please try again|please wait|throttl|temporarily unavailable/i;
+// Rate-limit / soft-failure language. Explicit response lines take precedence
+// over "not found" so a throttled registrar cannot read as available. Keep the
+// match line-oriented: registry policy prose may describe throttling without
+// reporting that the current query was throttled.
+const RATE_LIMIT_LINE_RE = /^[ \t]*(?:[%#*;>-]+[ \t]*)?(?:(?:error|status)[ \t:.-]+)?(?:whois[ \t]+limit[ \t]+exceeded|query[ \t]+(?:rate[ \t-]*)?limit[ \t]+exceeded|(?:request|query)[ \t]+limit[ \t]+(?:exceeded|reached)|rate[ \t-]*limit(?:[ \t]+exceeded)?|too[ \t]+many[ \t]+(?:requests|queries)|quota[ \t]+exceeded|number[ \t]+of[^\r\n]{0,120}[ \t]+exceeded|(?:requests?|queries?)[ \t]+(?:are[ \t]+)?throttled|throttled|(?:service[ \t]+)?temporarily[ \t]+unavailable|(?:please[ \t]+)?try[ \t]+again[ \t]+later|please[ \t]+wait)\b[^\r\n]{0,240}$/im;
 
 // Positive registration evidence: a field that only appears for a domain that
 // actually exists, carrying a non-empty value. The IANA root hop is excluded
@@ -680,7 +682,7 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   // echoed "Domain Name:" line. Several registries echo the query before
   // saying "Status: available" or "Registered: no"; treating that echo as
   // positive evidence turns an unregistered domain into a registered one.
-  if (RATE_LIMIT_RE.test(text)) return 'rate_limited';
+  if (RATE_LIMIT_LINE_RE.test(text)) return 'rate_limited';
   if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
   if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
   if (NOT_FOUND_RE.test(text) || LINE_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(text))) return 'negative';

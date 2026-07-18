@@ -2370,4 +2370,42 @@ module.exports = [
       chainStatus: 'partial',
     },
   },
+  {
+    name: 'registry policy prose does not override registered evidence',
+    capabilityProfile: 'iana-generic',
+    scenario: 'registered',
+    chain: [
+      rootHop('TEST', 'whois.registry.invalid'),
+      registryHop('whois.registry.invalid', [
+        'Domain Name: EXAMPLE.TEST',
+        'Registrar: Example Registrar',
+        'Terms of Use: Queries may be throttled. If too many queries are sent, access may be temporarily unavailable.',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'registered',
+      domainName: 'EXAMPLE.TEST',
+      registrar: 'Example Registrar',
+      notFound: false,
+      chainStatus: 'complete',
+    },
+  },
+  {
+    name: 'registry policy prose does not override authoritative absence',
+    capabilityProfile: 'iana-generic',
+    scenario: 'not_found',
+    chain: [
+      rootHop('TEST', 'whois.registry.invalid'),
+      registryHop('whois.registry.invalid', [
+        'Domain not found.',
+        'Terms of Use: Queries may be throttled. If too many queries are sent, access may be temporarily unavailable.',
+      ]),
+    ],
+    expected: {
+      registrationStatus: 'not_found',
+      notFound: true,
+      notFoundSource: 'whois.registry.invalid',
+      chainStatus: 'complete',
+    },
+  },
 ];

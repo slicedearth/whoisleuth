@@ -22,6 +22,7 @@ const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'dot-leader', suffixes: ['xn--3e0b707e'] },
   { id: 'eurid-sectioned', suffixes: ['xn--e1a4c', 'xn--qxa6a'] },
   { id: 'hkirc-sectioned', suffixes: ['xn--j6w193g'] },
+  { id: 'nic-io-colon', suffixes: ['ac'] },
   {
     id: 'nixi-colon',
     suffixes: [
@@ -41,31 +42,45 @@ const SHARED_ENDPOINT_SUFFIXES = [
   },
   { id: 'nic-kz-dot-leader', suffixes: ['xn--80ao21a'] },
   { id: 'rnids-colon', suffixes: ['xn--90a3ac'] },
+  { id: 'afnic-colon', suffixes: ['pm', 're', 'tf', 'wf', 'yt'] },
+  { id: 'sgnic-colon', suffixes: ['xn--clchc0ea0b2g2a9gcd', 'xn--yfro4i67o'] },
   { id: 'tci-colon', suffixes: ['su', 'xn--p1ai'] },
   { id: 'thnic-holder-colon', suffixes: ['xn--o3cw4h'] },
   { id: 'twnic-colon', suffixes: ['xn--kprw13d', 'xn--kpry57d'] },
 ];
 
+const VERSION_14_SUFFIXES = [
+  { id: 'nic-io-colon', suffixes: ['ac'], coverageState: 'fixture_verified' },
+  { id: 'norid-closed-no-iana-service', suffixes: ['bv', 'sj'], coverageState: 'access_documented' },
+  { id: 'switch-policy-restricted', suffixes: ['li'], coverageState: 'access_documented' },
+  { id: 'afnic-colon', suffixes: ['pm', 're', 'tf', 'wf', 'yt'], coverageState: 'fixture_verified' },
+  { id: 'sgnic-colon', suffixes: ['xn--clchc0ea0b2g2a9gcd', 'xn--yfro4i67o'], coverageState: 'fixture_verified' },
+  { id: 'no-iana-machine-service-gr', suffixes: ['xn--qxam'], coverageState: 'access_documented' },
+];
+
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 13);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 14);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'ae', 'af', 'ai', 'al', 'am', 'ar', 'at', 'au', 'ba', 'be', 'bg', 'br',
-      'by', 'ca', 'ch', 'cl', 'cn', 'co', 'cy', 'cz', 'de', 'dk', 'edu', 'ee',
+      'ac', 'ae', 'af', 'ai', 'al', 'am', 'ar', 'at', 'au', 'ba', 'be', 'bg', 'br',
+      'bv', 'by', 'ca', 'ch', 'cl', 'cn', 'co', 'cy', 'cz', 'de', 'dk', 'edu', 'ee',
       'es', 'eu', 'fi', 'fr', 'gr', 'gt', 'hk', 'hr', 'hu', 'id', 'ie', 'il',
-      'in', 'io', 'ir', 'is', 'it', 'jp', 'ke', 'kr', 'kz', 'lt', 'lu', 'lv',
-      'md', 'me', 'mn', 'mx', 'my', 'nl', 'no', 'nz', 'ph', 'pk', 'pl', 'pt',
-      'ro', 'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sk', 'su', 'th', 'tn', 'tr',
-      'tw', 'ua', 'uk', 'us', 'vn', 'xn--2scrj9c', 'xn--3e0b707e',
+      'in', 'io', 'ir', 'is', 'it', 'jp', 'ke', 'kr', 'kz', 'li', 'lt', 'lu', 'lv',
+      'md', 'me', 'mn', 'mx', 'my', 'nl', 'no', 'nz', 'ph', 'pk', 'pl', 'pm',
+      'pt', 're', 'ro', 'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sj', 'sk', 'su',
+      'tf', 'th', 'tn', 'tr', 'tw', 'ua', 'uk', 'us', 'vn', 'wf',
+      'xn--2scrj9c', 'xn--3e0b707e',
       'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
-      'xn--90a3ac', 'xn--90ais', 'xn--e1a4c', 'xn--fiqs8s', 'xn--fiqz9s',
+      'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--e1a4c',
+      'xn--fiqs8s', 'xn--fiqz9s',
       'xn--fpcrj9c3d', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
       'xn--h2brj9c8c', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
-      'xn--o3cw4h', 'xn--p1ai', 'xn--qxa6a', 'xn--rvc1e0am3e',
-      'xn--s9brj9c', 'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'za',
+      'xn--o3cw4h', 'xn--p1ai', 'xn--qxa6a', 'xn--qxam', 'xn--rvc1e0am3e',
+      'xn--s9brj9c', 'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o',
+      'yt', 'za',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
@@ -127,7 +142,40 @@ describe('registry capability metadata', () => {
       }
     }
 
-    assert.equal(covered, 27);
+    assert.equal(covered, 35);
+  });
+
+  test('records version fourteen shared-operator suffixes with explicit provenance and coverage', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+    let covered = 0;
+
+    for (const family of VERSION_14_SUFFIXES) {
+      const profile = profiles.get(family.id);
+      assert.ok(profile, family.id);
+      for (const suffix of family.suffixes) {
+        const inputs = [suffix];
+        if (suffix.startsWith('xn--')) {
+          const unicodeSuffix = domainToUnicode(suffix);
+          assert.notEqual(unicodeSuffix, suffix, suffix);
+          inputs.push(unicodeSuffix);
+        }
+        for (const input of inputs) {
+          const capability = registryCapabilityFor(`example.${input}`);
+          assert.equal(capability.id, family.id, input);
+          assert.deepEqual(capability.suffixes, [suffix], input);
+          assert.equal(capability.registryClass, 'country-code', input);
+          assert.equal(capability.coverageState, family.coverageState, input);
+          assert.equal(capability.explicitSuffixProfile, true, input);
+        }
+        assert.ok(
+          profile.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`),
+          `${suffix}: IANA provenance`,
+        );
+        covered += 1;
+      }
+    }
+
+    assert.equal(covered, 12);
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {
@@ -189,6 +237,16 @@ describe('registry capability metadata', () => {
     assert.equal(gr.whoisAccessProfile, 'no-iana-service');
     assert.equal(gr.rdapAccessProfile, 'no-iana-service');
     assert.match(gr.limitation, /no domain WHOIS or RDAP service.*not evidence/i);
+    const li = registryAccessDiagnosticFor('example.li');
+    assert.equal(li.whoisAccessProfile, 'registry-policy-restricted');
+    assert.match(li.limitation, /official lookup.*not integrated.*no RDAP service/i);
+    const bv = registryAccessDiagnosticFor('example.bv');
+    assert.equal(bv.whoisAccessProfile, 'no-iana-service');
+    assert.equal(bv.rdapAccessProfile, 'no-iana-service');
+    assert.match(bv.limitation, /not opened.*no domain WHOIS or RDAP service.*live availability/i);
+    const greekIdn = registryAccessDiagnosticFor('example.ελ');
+    assert.equal(greekIdn.suffix, 'xn--qxam');
+    assert.match(greekIdn.limitation, /no domain WHOIS or RDAP service.*not evidence/i);
     assert.equal(registryAccessDiagnosticFor('example.com'), null);
     assert.equal(registryAccessDiagnosticFor('bad\n'), null);
   });
