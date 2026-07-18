@@ -22,6 +22,11 @@ const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'dot-leader', suffixes: ['xn--3e0b707e'] },
   { id: 'eurid-sectioned', suffixes: ['xn--e1a4c', 'xn--qxa6a'] },
   { id: 'hkirc-sectioned', suffixes: ['xn--j6w193g'] },
+  { id: 'identity-digital-shared-colon', suffixes: ['vc'] },
+  { id: 'lanic-icann-colon', suffixes: ['xn--q7ce6a'] },
+  { id: 'marnet-contact-indirection', suffixes: ['xn--d1alf'] },
+  { id: 'mediaserv-object-colon', suffixes: ['gf'] },
+  { id: 'monic-minimal-colon', suffixes: ['xn--mix891f'] },
   { id: 'nic-io-colon', suffixes: ['ac'] },
   {
     id: 'nixi-colon',
@@ -71,7 +76,7 @@ const VERSION_16_ACCESS_SUFFIXES = [
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 16);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 17);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -79,21 +84,22 @@ describe('registry capability metadata', () => {
       'ac', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'at', 'au', 'az', 'ba', 'bb',
       'bd', 'be', 'bg', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cd', 'cg', 'ch',
       'ck', 'cl', 'cn', 'co', 'cu', 'cw', 'cy', 'cz', 'de', 'dj', 'dk', 'edu', 'ee',
-      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fk', 'fr', 'ga', 'gb', 'gm', 'gr', 'gt',
-      'gu', 'gw', 'hk', 'hr',
+      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fk', 'fr', 'ga', 'gb', 'gf', 'gi', 'gm',
+      'gr', 'gt', 'gu', 'gw', 'hk', 'hr',
       'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'jm', 'jo', 'jp', 'ke',
-      'kh', 'km', 'kp', 'kr', 'kw', 'kz', 'lc', 'li', 'lk', 'lr', 'lt', 'lu', 'lv',
-      'md', 'me', 'mh', 'mn', 'mp', 'mt', 'mv', 'mx', 'my', 'ne', 'ni', 'nl', 'no',
+      'kh', 'km', 'kp', 'kr', 'kw', 'kz', 'la', 'lc', 'li', 'lk', 'lr', 'lt', 'lu',
+      'lv', 'md', 'me', 'mh', 'mk', 'mn',
+      'mo', 'mp', 'mq', 'mt', 'mv', 'mx', 'my', 'ne', 'ni', 'nl', 'no',
       'np', 'nr', 'nz', 'pa', 'ph', 'pk', 'pl', 'pm', 'ps', 'pt', 'py', 're', 'ro',
       'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sj', 'sk', 'sl', 'su', 'sv', 'sz', 'tf',
-      'th', 'tj', 'tn', 'tr', 'tt', 'tw', 'ua', 'uk', 'us', 'va', 'vn', 'wf',
+      'th', 'tj', 'tn', 'tr', 'tt', 'tw', 'ua', 'uk', 'us', 'va', 'vc', 'vn', 'wf',
       'xn--2scrj9c', 'xn--3e0b707e',
       'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--54b7fta0cc', 'xn--80ao21a',
-      'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--e1a4c',
-      'xn--fiqs8s', 'xn--fiqz9s',
+      'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--d1alf',
+      'xn--e1a4c', 'xn--fiqs8s', 'xn--fiqz9s',
       'xn--fpcrj9c3d', 'xn--fzc2c9e2c', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
       'xn--h2brj9c8c', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
-      'xn--node', 'xn--o3cw4h', 'xn--p1ai', 'xn--qxa6a', 'xn--qxam',
+      'xn--mix891f', 'xn--node', 'xn--o3cw4h', 'xn--p1ai', 'xn--q7ce6a', 'xn--qxa6a', 'xn--qxam',
       'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--xkc2al3hye2a', 'xn--xkc2dl3a5ee0h',
       'xn--y9a3aq', 'xn--yfro4i67o', 'yt', 'za', 'zw',
     ]);
@@ -157,7 +163,7 @@ describe('registry capability metadata', () => {
       }
     }
 
-    assert.equal(covered, 35);
+    assert.equal(covered, 40);
   });
 
   test('records version fourteen shared-operator suffixes with explicit provenance and coverage', () => {

@@ -12,6 +12,11 @@ const PARSER_FAMILY_ALIASES = [
   { profile: 'dot-leader', baseSuffix: 'kr', aliases: ['xn--3e0b707e'] },
   { profile: 'eurid-sectioned', baseSuffix: 'eu', aliases: ['xn--e1a4c', 'xn--qxa6a'] },
   { profile: 'hkirc-sectioned', baseSuffix: 'hk', aliases: ['xn--j6w193g'] },
+  { profile: 'identity-digital-shared-colon', baseSuffix: 'gi', aliases: ['vc'] },
+  { profile: 'lanic-icann-colon', baseSuffix: 'la', aliases: ['xn--q7ce6a'] },
+  { profile: 'marnet-contact-indirection', baseSuffix: 'mk', aliases: ['xn--d1alf'] },
+  { profile: 'mediaserv-object-colon', baseSuffix: 'mq', aliases: ['gf'] },
+  { profile: 'monic-minimal-colon', baseSuffix: 'mo', aliases: ['xn--mix891f'] },
   { profile: 'nic-io-colon', baseSuffix: 'io', aliases: ['ac'] },
   {
     profile: 'nixi-colon',
@@ -132,7 +137,66 @@ describe('WHOIS registry compatibility fixtures', () => {
         covered += 1;
       }
     }
-    assert.equal(covered, 35);
+    assert.equal(covered, 40);
+  });
+
+  test('covers the version seventeen shared-service ccTLD batch', () => {
+    const expectedProfiles = [
+      'identity-digital-shared-colon',
+      'lanic-icann-colon',
+      'marnet-contact-indirection',
+      'mediaserv-object-colon',
+      'monic-minimal-colon',
+    ];
+    for (const scenario of ['registered', 'not_found']) {
+      const coveredProfiles = fixtures
+        .filter((fixture) => fixture.scenario === scenario
+          && expectedProfiles.includes(fixture.capabilityProfile))
+        .map((fixture) => fixture.capabilityProfile)
+        .sort();
+      assert.deepEqual(coveredProfiles, expectedProfiles, scenario);
+    }
+  });
+
+  test('keeps MONIC record and nameserver aliases behind the complete marker set', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: [
+          'Domain Name: EXAMPLE.TEST',
+          'Record created on 2020-01-02 03:04:05',
+          'Domain name servers:',
+          'ns1.example.invalid',
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'registered');
+    assert.equal(parsed.createdDate, undefined);
+    assert.deepEqual(parsed.nameservers, []);
+  });
+
+  test('caps MONIC bare nameservers and discloses truncation', () => {
+    const nameservers = Array.from({ length: 205 }, (_, index) => `ns${index}.example.invalid`);
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: MO\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: [
+          '% Monic Whois Server Version 1.0',
+          'Domain Name: EXAMPLE.MO',
+          'Record created on 2020-01-02 03:04:05',
+          'Domain name servers:',
+          ...nameservers,
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.nameservers.length, 200);
+    assert.equal(parsed.nameservers[0], 'ns0.example.invalid');
+    assert.equal(parsed.nameservers.at(-1), 'ns199.example.invalid');
+    assert.ok(parsed.fieldsTruncated.includes('nameservers'));
   });
 
   test('does not unlock ambiguous aliases when registry marker sets are incomplete', () => {

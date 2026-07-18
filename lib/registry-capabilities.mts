@@ -40,7 +40,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 16;
+const REGISTRY_CAPABILITIES_VERSION = 17;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -731,6 +731,46 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
       'https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/acceptable-use-policy/',
     ],
     limitation: UK_TRANSITION_LIMITATION,
+  },
+  {
+    id: 'identity-digital-shared-colon', suffixes: ['gi', 'vc'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/gi.html',
+      'https://www.iana.org/domains/root/db/vc.html',
+    ],
+  },
+  {
+    id: 'mediaserv-object-colon', suffixes: ['gf', 'mq'], registryClass: 'country-code',
+    whoisParserProfile: 'mediaserv-object-colon', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/gf.html',
+      'https://www.iana.org/domains/root/db/mq.html',
+    ],
+  },
+  {
+    id: 'marnet-contact-indirection', suffixes: ['mk', 'xn--d1alf'], registryClass: 'country-code',
+    whoisParserProfile: 'fred-contact-indirection', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/mk.html',
+      'https://www.iana.org/domains/root/db/xn--d1alf.html',
+    ],
+  },
+  {
+    id: 'monic-minimal-colon', suffixes: ['mo', 'xn--mix891f'], registryClass: 'country-code',
+    whoisParserProfile: 'monic-minimal-colon', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/mo.html',
+      'https://www.iana.org/domains/root/db/xn--mix891f.html',
+    ],
+  },
+  {
+    id: 'lanic-icann-colon', suffixes: ['la', 'xn--q7ce6a'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/la.html',
+      'https://www.iana.org/domains/root/db/xn--q7ce6a.html',
+    ],
   },
   {
     id: 'no-iana-registry-service', suffixes: ['vn'], registryClass: 'country-code',

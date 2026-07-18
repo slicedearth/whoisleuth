@@ -1224,6 +1224,11 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       && /^[ \t]*NIC Whois server for cTLDs[ \t.]*:/im.test(text)
       && /^[ \t]*Domain name[ \t.]*:/im.test(text)
       && /^[ \t]*Creation date[ \t.]*:/im.test(text);
+    const isMonic = !isRootHop
+      && /^%[ \t]*Monic Whois Server Version[ \t]+\d/im.test(text)
+      && /^[ \t]*Domain Name[ \t]*:/im.test(text)
+      && /^[ \t]*Record created on[ \t]+[^:\r\n]/im.test(text)
+      && /^[ \t]*Domain name servers[ \t]*:[ \t]*$/im.test(text);
 
     for (const [key, res] of Object.entries(patterns)) {
       // IANA's root hop describes the TLD and its operator, never a contact
@@ -1442,6 +1447,22 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
         assignBoundedWhoisMatch(text, fields, 'registrantOrg', /^[ \t]*Domain Holder Organization[ \t]*:[ \t]*(.+)$/im, truncatedFields);
         assignBoundedWhoisMatch(text, fields, 'registrantCountry', /^[ \t]*Domain Holder Country[ \t]*:[ \t]*(.+)$/im, truncatedFields);
         assignBoundedWhoisMatch(text, fields, 'registrantStreet', /^[ \t]*Domain Holder Street[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+
+      if (isMonic) {
+        assignBoundedWhoisMatch(
+          text,
+          fields,
+          'createdDate',
+          /^[ \t]*Record created on[ \t]+(.+)$/im,
+          truncatedFields,
+        );
+        collectBareWhoisNameservers(
+          text,
+          /^[ \t]*Domain name servers[ \t]*:[ \t]*$/im,
+          nameservers,
+          truncatedFields,
+        );
       }
 
       const isRegistroBr = /^[ \t]*owner-c[ \t]*:/im.test(text)

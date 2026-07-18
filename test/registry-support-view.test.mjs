@@ -18,12 +18,12 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 16);
-  assert.equal(catalogue.rows.length, 170);
+  assert.equal(catalogue.version, 17);
+  assert.equal(catalogue.rows.length, 180);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 170,
-    fixtureVerified: 103,
+    profiles: 180,
+    fixtureVerified: 113,
     accessDocumented: 67,
     fallbacks: 1,
   });
