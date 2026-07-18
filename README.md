@@ -341,6 +341,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   deployments expose the same embedded catalogue in the **Registry support**
   reference workspace, with local text and coverage filters plus an offline
   domain-or-suffix inspector for generic IANA discovery fallback.
+  Catalogue version 20 contains 236 explicit suffix rows, including 25 newly
+  fixture-verified ccTLDs whose IANA records publish both WHOIS and RDAP. Those
+  fixtures cover registered parsing only; they add no negative availability
+  inference and make no automated registry requests.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,

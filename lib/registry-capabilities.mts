@@ -40,7 +40,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 19;
+const REGISTRY_CAPABILITIES_VERSION = 20;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -69,6 +69,11 @@ const VERSION_19_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--wgbh1c',
 ]);
 const VERSION_19_RDAP_ONLY_SUFFIXES = Object.freeze(['na', 'pn']);
+const VERSION_20_FIXTURE_SUFFIXES = Object.freeze([
+  'as', 'bm', 'cm', 'cv', 'cx', 'ec', 'fm', 'fo', 'gd', 'gy',
+  'hn', 'ht', 'ky', 'lb', 'mg', 'ml', 'ms', 'mu', 'ng', 'pw',
+  'rw', 'sd', 'sr', 'ss', 'to',
+]);
 const NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES,
   ...VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES,
@@ -223,6 +228,14 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     rdapAccessProfile: 'iana-bootstrap', verificationFiles: [],
     documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
     limitation: RDAP_ONLY_MACHINE_SERVICE_LIMITATION,
+  })),
+  ...VERSION_20_FIXTURE_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+    id: `iana-cc-colon-${suffix}`,
+    suffixes: [suffix],
+    registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon',
+    fixtureScenarios: ['registered'],
+    documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
   })),
   {
     id: 'no-iana-machine-service-ba', suffixes: ['ba'], registryClass: 'country-code',

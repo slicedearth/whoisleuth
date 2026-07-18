@@ -24,14 +24,20 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v19')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('211');
-  await expect(page.locator('tbody tr')).toHaveCount(211);
+  await expect(page.getByText('Catalogue v20')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('236');
+  await expect(page.locator('tbody tr')).toHaveCount(236);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await expect(page.locator('tbody tr')).toContainText('.dk');
+
+  await search.fill('iana cc colon');
+  await expect(page.locator('tbody tr')).toHaveCount(25);
+  await expect(page.locator('tbody')).toContainText('.as');
+  await expect(page.locator('tbody')).toContainText('.sr');
+  await expect(page.locator('tbody')).toContainText('.to');
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');

@@ -201,6 +201,25 @@ describe('WHOIS registry compatibility fixtures', () => {
     }
   });
 
+  test('covers the version twenty 25-suffix registered-response batch', () => {
+    const expectedProfiles = [
+      'iana-cc-colon-as', 'iana-cc-colon-bm', 'iana-cc-colon-cm', 'iana-cc-colon-cv',
+      'iana-cc-colon-cx', 'iana-cc-colon-ec', 'iana-cc-colon-fm', 'iana-cc-colon-fo',
+      'iana-cc-colon-gd', 'iana-cc-colon-gy', 'iana-cc-colon-hn', 'iana-cc-colon-ht',
+      'iana-cc-colon-ky', 'iana-cc-colon-lb', 'iana-cc-colon-mg', 'iana-cc-colon-ml',
+      'iana-cc-colon-ms', 'iana-cc-colon-mu', 'iana-cc-colon-ng', 'iana-cc-colon-pw',
+      'iana-cc-colon-rw', 'iana-cc-colon-sd', 'iana-cc-colon-sr', 'iana-cc-colon-ss',
+      'iana-cc-colon-to',
+    ];
+    const coveredProfiles = fixtures
+      .filter((fixture) => fixture.scenario === 'registered'
+        && expectedProfiles.includes(fixture.capabilityProfile))
+      .map((fixture) => fixture.capabilityProfile)
+      .sort();
+
+    assert.deepEqual(coveredProfiles, expectedProfiles);
+  });
+
   test('does not promote no-data wording embedded in policy prose', () => {
     const parsed = parseWhoisChain([
       { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
