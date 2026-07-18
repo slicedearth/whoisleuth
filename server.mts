@@ -101,9 +101,21 @@ app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'imm
   maxAge: '1y',
 }));
 app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
-app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/', '/privacy/', '/demo/', '/login/'], (req: RequestLike, res: ResponseLike) => {
-  res.redirect(308, req.path.slice(0, -1));
-});
+const canonicalRouteRedirects = [
+  ['/lookup/', '/lookup'],
+  ['/discover/', '/discover'],
+  ['/bulk/', '/bulk'],
+  ['/monitor/', '/monitor'],
+  ['/brands/', '/brands'],
+  ['/privacy/', '/privacy'],
+  ['/demo/', '/demo'],
+  ['/login/', '/login'],
+] as const;
+for (const [sourcePath, canonicalPath] of canonicalRouteRedirects) {
+  app.get(sourcePath, (_req: RequestLike, res: ResponseLike) => {
+    res.redirect(308, canonicalPath);
+  });
+}
 
 // True when the request actually arrived over HTTPS - directly, or via a
 // reverse proxy that sets the standard forwarded-proto header - so the
