@@ -5,6 +5,7 @@
   import { consoleDestinations } from '$lib/workspaces';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import InvestigationGuide from '$lib/components/InvestigationGuide.svelte';
+  import ThemeSelector from '$lib/components/ThemeSelector.svelte';
 
   let { children } = $props();
   let session = $state<'checking'|'authenticated'|'unavailable'>('checking');
@@ -65,7 +66,7 @@
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth — console</span></div>
       <a class="brand" href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
       <nav aria-label="Console"><p class="eyebrow">Console</p>{#each consoleDestinations as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
-      <div class="session"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span><button onclick={logout}>Sign out</button></div>
+      <div class="session"><ThemeSelector /><div class="session-row"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span><button onclick={logout}>Sign out</button></div></div>
     </aside>
     {#if navOpen}<button class="scrim" aria-label="Close navigation" onclick={()=>navOpen=false}></button>{/if}
     <main id="main-content" tabindex="-1"><InvestigationGuide />{@render children()}<footer class="site-footer"><p>WHOISleuth uses <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap data</a> to query relevant registry services and can also check public DNS, Certificate Transparency, and website endpoints. Missing registrant fields often reflect registry redaction rather than a lookup failure.</p><p class="credit">© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="/privacy">Privacy</a></p></footer></main>

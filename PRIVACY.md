@@ -171,6 +171,10 @@ default (see the README), so many lookups return no personal data at all.
 - **Brand Profiles / Shortlist / Watchlist / Campaigns / Certificate search
   history**: saved in your own browser's `localStorage`, not on the server -
   only visible to whoever is using that browser.
+  The appearance selector can also retain one bounded `dark`, `light`, or
+  `system` preference under `whoisleuth:theme:v1`. It is never sent to the
+  server or included in exports; without a saved value the site uses Dark,
+  while System follows the browser's operating-system preference.
   Campaigns retain a bounded label, optional description, and normalized case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.
@@ -185,7 +189,7 @@ default (see the README), so many lookups return no personal data at all.
   Cleared via each entry's **Remove**/**Delete** button, the **Clear all**
   button in either panel, the campaign deletion controls, the deletion controls
   under **Previous certificate searches**, or by clearing the browser's site
-  data.
+  data. Clearing site data also removes the saved appearance preference.
 - **Optional hosted scheduled monitoring**: disabled by default. When the
   operator explicitly enables the Netlify worker and a scheduled watchlist is
   present, it retains the bounded watchlist name, canonical domains, interval,

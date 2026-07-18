@@ -36,6 +36,10 @@ so it can run either as a traditional always-on Node/Express server
 (`server.mts`) or as Netlify Functions (`netlify/functions/`) with no logic
 duplicated between the two.
 
+The public site and protected console share a Dark, Light, or System appearance
+selector. Dark remains the default, and an explicit preference stays only in
+that browser's local storage.
+
 <p align="center">
   <a href="https://whoisleuth.com/demo"><strong>Explore the public synthetic demo →</strong></a><br />
   <sub>Fixed fictional data · no sign-in · no live registry, DNS, website, or hosted analysis request</sub>

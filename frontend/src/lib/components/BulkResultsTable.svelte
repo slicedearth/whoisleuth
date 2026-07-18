@@ -110,11 +110,11 @@
   .ct-source-detail time{color:var(--text)}
   .state{color:var(--accent);text-transform:capitalize}
   .high{color:var(--danger);font-weight:800}
-  .error-row{background:rgba(255,107,107,.03)}
-  .trusted-row{background:rgba(126,224,168,.03)}
+  .error-row{background:rgb(var(--danger-rgb) / .03)}
+  .trusted-row{background:rgb(var(--accent2-rgb) / .03)}
   .draft-actions{display:grid;grid-template-columns:auto auto;gap:4px;align-items:center}
   .draft-actions a,.draft-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:600 var(--text-2xs) var(--mono);text-align:center}
-  .draft-actions a.danger{border-color:rgba(255,107,107,.34);background:rgba(255,107,107,.05)}
+  .draft-actions a.danger{border-color:rgb(var(--danger-rgb) / .34);background:rgb(var(--danger-rgb) / .05)}
   .draft-status{color:var(--accent)!important;font-size:var(--text-xs)}
   .case-cell{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
   .case-disp{min-height:32px;padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}

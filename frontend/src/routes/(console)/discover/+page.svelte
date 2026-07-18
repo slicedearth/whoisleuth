@@ -434,12 +434,12 @@
 
 <style>
   .controls{padding:var(--card-pad)}
-  .profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:9px 9px 9px 12px;border:1px solid rgba(126,224,168,.3);border-radius:var(--radius-md);background:rgba(126,224,168,.04);color:var(--muted);font-size:var(--text-xs)}
+  .profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:9px 9px 9px 12px;border:1px solid rgb(var(--accent2-rgb) / .3);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .04);color:var(--muted);font-size:var(--text-xs)}
   .profile-context strong{color:var(--text)}
-  .modes{display:flex;gap:6px;margin-bottom:18px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgba(15,17,21,.5)}
+  .modes{display:flex;gap:6px;margin-bottom:18px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .5)}
   .modes button{flex:1 1 auto;min-height:38px;padding:8px 12px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:600 var(--text-xs) var(--mono)}
   .modes button:hover{color:var(--text)}
-  .modes button.active{color:var(--accent2);border-color:rgba(126,224,168,.45);background:rgba(126,224,168,.08)}
+  .modes button.active{color:var(--accent2);border-color:rgb(var(--accent2-rgb) / .45);background:rgb(var(--accent2-rgb) / .08)}
   .fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,.7fr) auto;gap:10px;align-items:end}
   .generation-limits{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .ct-history-notice{color:var(--amber);font-size:var(--text-xs)}

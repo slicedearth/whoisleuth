@@ -67,8 +67,8 @@
 <style>
   .generation-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
   .generation-presets button{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);color:var(--muted);text-align:left}
-  .generation-presets button:hover{border-color:rgba(126,224,168,.55)}
-  .generation-presets button.active{border-color:var(--accent2);background:rgba(126,224,168,.08);box-shadow:inset 3px 0 0 var(--accent2)}
+  .generation-presets button:hover{border-color:rgb(var(--accent2-rgb) / .55)}
+  .generation-presets button.active{border-color:var(--accent2);background:rgb(var(--accent2-rgb) / .08);box-shadow:inset 3px 0 0 var(--accent2)}
   .generation-presets strong,.generation-presets small{display:block}
   .generation-presets strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
   .generation-presets button.active strong{color:var(--accent2)}

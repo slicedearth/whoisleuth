@@ -122,7 +122,7 @@
 <style>
   .comparison,.sources>details,.registrar-rdap{padding:0;overflow:hidden}
   .comparison .table-wrap{border-top:1px solid var(--border)}
-  .comparison tr.conflict{background:rgba(255,107,107,.03)}
+  .comparison tr.conflict{background:rgb(var(--danger-rgb) / .03)}
   .comparison .chip{white-space:normal}
   .sources{display:grid;gap:12px}
   .comparison+.sources{margin-top:12px}
@@ -149,7 +149,7 @@
   .publication-comparison h4{margin:0;padding:11px 12px;border-bottom:1px solid var(--border);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}
   .publication-comparison p{margin:0;padding:10px 12px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .publication-comparison .table-wrap{border-top:1px solid var(--border)}
-  .publication-comparison tr.conflict{background:rgba(255,107,107,.03)}
+  .publication-comparison tr.conflict{background:rgb(var(--danger-rgb) / .03)}
   .publication-comparison .chip{white-space:normal}
   .registrar-state{margin:0;padding:0 var(--card-pad) var(--card-pad);color:var(--muted);font-size:var(--text-xs)}
   .registrar-state.error{color:var(--danger)}

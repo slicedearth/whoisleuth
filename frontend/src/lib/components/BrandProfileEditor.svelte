@@ -24,7 +24,7 @@
   .form{margin-top:16px;padding:var(--card-pad)}
   .form h2{margin:0}
   .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}
-  .form-grid textarea{min-height:82px;background:rgba(15,17,21,.78)}
+  .form-grid textarea{min-height:82px;background:rgb(var(--bg-rgb) / .78)}
   .wide{grid-column:span 2}
   .identity-capture{min-width:0;margin:4px 0 0;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md)}
   .identity-capture legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}

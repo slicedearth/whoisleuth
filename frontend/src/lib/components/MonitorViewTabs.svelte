@@ -27,9 +27,9 @@
 </div>
 
 <style>
-  .views{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgba(15,17,21,.5)}
+  .views{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .5)}
   .views button{display:flex;gap:7px;align-items:center;min-height:38px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:600 var(--text-xs) var(--mono)}
   .views button:hover{color:var(--text)}
-  .views button.active{color:var(--accent2);border-color:rgba(126,224,168,.45);background:rgba(126,224,168,.08)}
+  .views button.active{color:var(--accent2);border-color:rgb(var(--accent2-rgb) / .45);background:rgb(var(--accent2-rgb) / .08)}
   .views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
 </style>

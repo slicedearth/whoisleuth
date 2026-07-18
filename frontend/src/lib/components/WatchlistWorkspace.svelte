@@ -78,7 +78,7 @@
   .events article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .event-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .event-head span,.event-head strong{padding:4px 9px;border:1px solid var(--border);border-radius:99px;font:600 var(--text-2xs) var(--mono);text-transform:capitalize}
-  .event-head strong.changed{border-color:rgba(255,107,107,.4)}
+  .event-head strong.changed{border-color:rgb(var(--danger-rgb) / .4)}
   .event-head time{font-size:var(--text-xs)}
   .event-head small{margin-left:auto;color:var(--muted);font-size:var(--text-2xs)}
   .events ul{display:grid;gap:6px;margin:14px 0 0;padding:0;list-style:none}

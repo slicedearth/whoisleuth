@@ -102,9 +102,9 @@
   .case-domain strong{overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
   .case-domain small,.updated{color:var(--muted);font-size:var(--text-2xs)}
   .badges{display:flex;flex-wrap:wrap;gap:6px}
-  .badge.status-escalated{color:var(--danger);border-color:rgba(255,107,107,.4)}
+  .badge.status-escalated{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}
   .badge.status-resolved{color:var(--accent2)}
-  .badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}
+  .badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}
   .badge.disposition-suspicious{color:var(--amber)}
   .badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
   .tag-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 14px}

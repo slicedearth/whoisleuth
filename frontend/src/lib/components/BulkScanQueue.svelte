@@ -65,13 +65,13 @@
 
 <style>
   .queue{padding:var(--card-pad)}
-  .profile-context{margin-top:0;padding:10px 12px;border:1px solid rgba(126,224,168,.3);border-radius:var(--radius-md);background:rgba(126,224,168,.04);color:var(--muted);font-size:var(--text-xs)}
+  .profile-context{margin-top:0;padding:10px 12px;border:1px solid rgb(var(--accent2-rgb) / .3);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .04);color:var(--muted);font-size:var(--text-xs)}
   .profile-context strong{color:var(--text)}
   .handoff{margin-top:0;color:var(--accent);font-size:var(--text-sm)}
   .queue-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
   .queue-title{font:700 var(--text-sm) var(--mono)}
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  textarea{width:100%;min-height:150px;padding:12px;background:rgba(15,17,21,.78);font-family:var(--mono);font-size:var(--text-sm)}
+  textarea{width:100%;min-height:150px;padding:12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
   .queue-actions{display:flex;gap:9px;align-items:end;margin-top:12px}
   .queue-actions .field{margin-right:auto}
   .queue-actions select{min-width:220px;min-height:42px}

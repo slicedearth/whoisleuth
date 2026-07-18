@@ -4,10 +4,6 @@
   let { children } = $props();
 </script>
 
-<svelte:head>
-  <meta name="theme-color" content="#0f1115">
-</svelte:head>
-
 {@render children()}
 
 <style>

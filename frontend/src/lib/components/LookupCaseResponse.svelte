@@ -55,7 +55,7 @@
   .evidence-card{padding:var(--card-pad)}
   .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .case-badges{display:flex;flex-wrap:wrap;gap:6px}
-  .badge.status-escalated,.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgba(255,107,107,.4)}
+  .badge.status-escalated,.badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}
   .badge.status-resolved,.badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
   .badge.disposition-suspicious{color:var(--amber)}
   .case-body{margin-top:12px}

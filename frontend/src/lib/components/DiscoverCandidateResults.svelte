@@ -108,12 +108,12 @@
   .candidate-body label{display:block;min-width:0;cursor:pointer}
   .candidate strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere;font-size:var(--text-sm)}
   .candidate small{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-2xs);text-transform:capitalize}
-  .ct-new{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid rgba(126,224,168,.45);border-radius:99px;color:var(--accent2);font:600 var(--text-2xs) var(--mono)}
+  .ct-new{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid rgb(var(--accent2-rgb) / .45);border-radius:99px;color:var(--accent2);font:600 var(--text-2xs) var(--mono)}
   .ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}
   .ct-stat{color:var(--muted);font-size:var(--text-2xs)}
   .ct-stat time{color:var(--text)}
   .ct-hosts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-  .ct-hosts code{min-width:0;padding:2px 6px;overflow-wrap:anywhere;border:1px solid var(--border);border-radius:6px;background:rgba(15,17,21,.5);font-size:var(--text-2xs)}
+  .ct-hosts code{min-width:0;padding:2px 6px;overflow-wrap:anywhere;border:1px solid var(--border);border-radius:6px;background:rgb(var(--bg-rgb) / .5);font-size:var(--text-2xs)}
   .ct-hosts details{width:100%}
   .ct-hosts summary{color:var(--accent);cursor:pointer;font-size:var(--text-2xs)}
   .ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}

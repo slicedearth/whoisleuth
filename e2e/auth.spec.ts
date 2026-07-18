@@ -32,10 +32,13 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
   const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(publicNavigation).toHaveCSS('display', 'grid');
+  await expect(publicNavigation).toHaveCSS('display', 'flex');
+  await expect(publicNavigation).toHaveCSS('flex-wrap', 'nowrap');
+  await expect(page.locator('.public-brand .brand-copy')).toBeVisible();
+  await expect(publicNavigation.getByRole('link', { name: 'Overview' })).not.toBeVisible();
   const anonymousConsoleLinkBox = await publicNavigation.getByRole('link', { name: 'Open console' }).boundingBox();
   expect(anonymousConsoleLinkBox).not.toBeNull();
-  expect(anonymousConsoleLinkBox!.width).toBeGreaterThan(300);
+  expect(anonymousConsoleLinkBox!.x + anonymousConsoleLinkBox!.width).toBeLessThanOrEqual(390);
   await page.setViewportSize({ width: 1280, height: 800 });
 
   await page.goto('/lookup');
@@ -82,10 +85,19 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(publicSignOutButton).toBeVisible();
   await expect(publicSignOutButton).toHaveCSS('white-space', 'nowrap');
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(publicNavigation).toHaveCSS('display', 'grid');
-  await expect(publicNavigation).toHaveCSS('grid-template-columns', /.+ .+/);
+  await expect(publicNavigation).toHaveCSS('display', 'flex');
+  await expect(publicNavigation).toHaveCSS('flex-wrap', 'nowrap');
+  const demoBox = await publicNavigation.getByRole('link', { name: 'Demo' }).boundingBox();
+  const themeBox = await publicNavigation.getByRole('button', { name: 'Colour theme' }).boundingBox();
+  const consoleBox = await publicNavigation.getByRole('link', { name: 'Open console' }).boundingBox();
   const signOutBox = await publicSignOutButton.boundingBox();
+  expect(demoBox).not.toBeNull();
+  expect(themeBox).not.toBeNull();
+  expect(consoleBox).not.toBeNull();
   expect(signOutBox).not.toBeNull();
+  const menuTops = [demoBox!.y, themeBox!.y, consoleBox!.y, signOutBox!.y];
+  const menuBottoms = [demoBox!.y + demoBox!.height, themeBox!.y + themeBox!.height, consoleBox!.y + consoleBox!.height, signOutBox!.y + signOutBox!.height];
+  expect(Math.max(...menuTops)).toBeLessThan(Math.min(...menuBottoms));
   expect(signOutBox!.x).toBeGreaterThanOrEqual(0);
   expect(signOutBox!.x + signOutBox!.width).toBeLessThanOrEqual(390);
   expect(await page.locator('html').evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(390);

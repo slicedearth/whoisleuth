@@ -29,7 +29,7 @@
 <style>
   .profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
   .profile{min-width:0;display:flex;flex-direction:column;padding:20px}
-  .profile.active{border-color:rgba(126,224,168,.55)}
+  .profile.active{border-color:rgb(var(--accent2-rgb) / .55)}
   .profile h2{margin:0}
   .profile>p{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .chips{display:flex;flex-wrap:wrap;gap:5px;margin:12px 0}

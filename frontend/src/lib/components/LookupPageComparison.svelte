@@ -56,8 +56,8 @@
   .comparison-context strong{color:var(--text)}
   .page-comparison-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:13px}
   .page-comparison-grid article{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .page-comparison-grid article.comparison-same{border-color:rgba(126,224,168,.3)}
-  .page-comparison-grid article.comparison-overlap{border-color:rgba(242,184,75,.35)}
+  .page-comparison-grid article.comparison-same{border-color:rgb(var(--accent2-rgb) / .3)}
+  .page-comparison-grid article.comparison-overlap{border-color:rgb(var(--amber-rgb) / .35)}
   .page-comparison-grid article>div{display:flex;align-items:start;justify-content:space-between;gap:8px}
   .page-comparison-grid small{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase;letter-spacing:.05em}
   .page-comparison-grid article>div>span{color:var(--muted);font-size:var(--text-2xs);text-align:right}
