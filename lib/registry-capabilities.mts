@@ -32,7 +32,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 12;
+const REGISTRY_CAPABILITIES_VERSION = 13;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -156,9 +156,13 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: ['https://www.iana.org/domains/root/db/ai.html'],
   },
   {
-    id: 'amnic-sectioned', suffixes: ['am'], registryClass: 'country-code',
+    id: 'amnic-sectioned', suffixes: ['am', 'xn--y9a3aq'], registryClass: 'country-code',
     whoisParserProfile: 'amnic-sectioned', fixtureScenarios: ['registered'],
-    documentationUrls: ['https://www.amnic.net/', 'https://www.iana.org/domains/root/db/am.html'],
+    documentationUrls: [
+      'https://www.amnic.net/',
+      'https://www.iana.org/domains/root/db/am.html',
+      'https://www.iana.org/domains/root/db/xn--y9a3aq.html',
+    ],
   },
   {
     id: 'no-iana-machine-service-al', suffixes: ['al'], registryClass: 'country-code',
@@ -177,9 +181,13 @@ const EXPLICIT_CAPABILITIES = [
     limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
   {
-    id: 'cctld-by-colon', suffixes: ['by'], registryClass: 'country-code',
+    id: 'cctld-by-colon', suffixes: ['by', 'xn--90ais'], registryClass: 'country-code',
     whoisParserProfile: 'cctld-by-colon', fixtureScenarios: ['registered'],
-    documentationUrls: ['https://cctld.by/', 'https://www.iana.org/domains/root/db/by.html'],
+    documentationUrls: [
+      'https://cctld.by/',
+      'https://www.iana.org/domains/root/db/by.html',
+      'https://www.iana.org/domains/root/db/xn--90ais.html',
+    ],
   },
   {
     id: 'registry-co-colon', suffixes: ['co'], registryClass: 'country-code',
@@ -203,9 +211,13 @@ const EXPLICIT_CAPABILITIES = [
     limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
   {
-    id: 'hkirc-sectioned', suffixes: ['hk'], registryClass: 'country-code',
+    id: 'hkirc-sectioned', suffixes: ['hk', 'xn--j6w193g'], registryClass: 'country-code',
     whoisParserProfile: 'hkirc-sectioned', fixtureScenarios: ['registered', 'not_found'],
-    documentationUrls: ['https://www.hkirc.hk/', 'https://www.iana.org/domains/root/db/hk.html'],
+    documentationUrls: [
+      'https://www.hkirc.hk/',
+      'https://www.iana.org/domains/root/db/hk.html',
+      'https://www.iana.org/domains/root/db/xn--j6w193g.html',
+    ],
   },
   {
     id: 'irnic-handle-blocks', suffixes: ['ir'], registryClass: 'country-code',
@@ -218,9 +230,13 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: ['https://kenic.or.ke/', 'https://www.iana.org/domains/root/db/ke.html'],
   },
   {
-    id: 'nic-kz-dot-leader', suffixes: ['kz'], registryClass: 'country-code',
+    id: 'nic-kz-dot-leader', suffixes: ['kz', 'xn--80ao21a'], registryClass: 'country-code',
     whoisParserProfile: 'nic-kz-dot-leader', fixtureScenarios: ['registered'],
-    documentationUrls: ['https://nic.kz/', 'https://www.iana.org/domains/root/db/kz.html'],
+    documentationUrls: [
+      'https://nic.kz/',
+      'https://www.iana.org/domains/root/db/kz.html',
+      'https://www.iana.org/domains/root/db/xn--80ao21a.html',
+    ],
   },
   {
     id: 'dns-lu-hyphenated', suffixes: ['lu'], registryClass: 'country-code',
@@ -253,9 +269,13 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: ['https://nic.sa/', 'https://www.iana.org/domains/root/db/sa.html'],
   },
   {
-    id: 'thnic-holder-colon', suffixes: ['th'], registryClass: 'country-code',
+    id: 'thnic-holder-colon', suffixes: ['th', 'xn--o3cw4h'], registryClass: 'country-code',
     whoisParserProfile: 'thnic-holder-colon', fixtureScenarios: ['registered'],
-    documentationUrls: ['https://www.thnic.co.th/', 'https://www.iana.org/domains/root/db/th.html'],
+    documentationUrls: [
+      'https://www.thnic.co.th/',
+      'https://www.iana.org/domains/root/db/th.html',
+      'https://www.iana.org/domains/root/db/xn--o3cw4h.html',
+    ],
   },
   {
     id: 'ati-tn-dot-leader', suffixes: ['tn'], registryClass: 'country-code',
@@ -289,11 +309,13 @@ const EXPLICIT_CAPABILITIES = [
     limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
   {
-    id: 'cnnic-colon', suffixes: ['cn'], registryClass: 'country-code',
+    id: 'cnnic-colon', suffixes: ['cn', 'xn--fiqs8s', 'xn--fiqz9s'], registryClass: 'country-code',
     whoisParserProfile: 'cnnic-roid-and-lifecycle', fixtureScenarios: ['registered'],
     documentationUrls: [
       'https://www2.cnnic.cn/2/3/index.html',
       'https://www.iana.org/domains/root/db/cn.html',
+      'https://www.iana.org/domains/root/db/xn--fiqs8s.html',
+      'https://www.iana.org/domains/root/db/xn--fiqz9s.html',
     ],
   },
   {
@@ -350,12 +372,14 @@ const EXPLICIT_CAPABILITIES = [
     limitation: ES_ACCESS_LIMITATION,
   },
   {
-    id: 'eurid-sectioned', suffixes: ['eu'], registryClass: 'country-code',
+    id: 'eurid-sectioned', suffixes: ['eu', 'xn--e1a4c', 'xn--qxa6a'], registryClass: 'country-code',
     whoisParserProfile: 'sectioned-registrar-and-nameservers', fixtureScenarios: ['registered', 'not_found', 'malformed'],
     documentationUrls: [
       'https://eurid.eu/en/knowledge-centre/rules-for-eu-domains/',
       'https://eurid.eu/d/22380/whois_policy_en.pdf',
       'https://www.iana.org/domains/root/db/eu.html',
+      'https://www.iana.org/domains/root/db/xn--e1a4c.html',
+      'https://www.iana.org/domains/root/db/xn--qxa6a.html',
     ],
   },
   {
@@ -389,11 +413,37 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
-    id: 'nixi-colon', suffixes: ['in'], registryClass: 'country-code',
+    id: 'nixi-colon', suffixes: [
+      'in',
+      'xn--2scrj9c',
+      'xn--3hcrj9c',
+      'xn--45br5cyl',
+      'xn--45brj9c',
+      'xn--fpcrj9c3d',
+      'xn--gecrj9c',
+      'xn--h2breg3eve',
+      'xn--h2brj9c',
+      'xn--h2brj9c8c',
+      'xn--rvc1e0am3e',
+      'xn--s9brj9c',
+      'xn--xkc2dl3a5ee0h',
+    ], registryClass: 'country-code',
     whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
     documentationUrls: [
       'https://www.registry.in/policies',
       'https://www.iana.org/domains/root/db/in.html',
+      'https://www.iana.org/domains/root/db/xn--2scrj9c.html',
+      'https://www.iana.org/domains/root/db/xn--3hcrj9c.html',
+      'https://www.iana.org/domains/root/db/xn--45br5cyl.html',
+      'https://www.iana.org/domains/root/db/xn--45brj9c.html',
+      'https://www.iana.org/domains/root/db/xn--fpcrj9c3d.html',
+      'https://www.iana.org/domains/root/db/xn--gecrj9c.html',
+      'https://www.iana.org/domains/root/db/xn--h2breg3eve.html',
+      'https://www.iana.org/domains/root/db/xn--h2brj9c.html',
+      'https://www.iana.org/domains/root/db/xn--h2brj9c8c.html',
+      'https://www.iana.org/domains/root/db/xn--rvc1e0am3e.html',
+      'https://www.iana.org/domains/root/db/xn--s9brj9c.html',
+      'https://www.iana.org/domains/root/db/xn--xkc2dl3a5ee0h.html',
     ],
   },
   {
@@ -438,8 +488,12 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
-    id: 'dot-leader', suffixes: ['kr'], registryClass: 'country-code',
+    id: 'dot-leader', suffixes: ['kr', 'xn--3e0b707e'], registryClass: 'country-code',
     whoisParserProfile: 'dot-leader', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/kr.html',
+      'https://www.iana.org/domains/root/db/xn--3e0b707e.html',
+    ],
   },
   {
     id: 'domreg-lt-colon', suffixes: ['lt'], registryClass: 'country-code',
@@ -533,19 +587,22 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
-    id: 'rnids-colon', suffixes: ['rs'], registryClass: 'country-code',
+    id: 'rnids-colon', suffixes: ['rs', 'xn--90a3ac'], registryClass: 'country-code',
     whoisParserProfile: 'rnids-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.rnids.rs/en/domain-names',
       'https://www.iana.org/domains/root/db/rs.html',
+      'https://www.iana.org/domains/root/db/xn--90a3ac.html',
     ],
   },
   {
-    id: 'tci-colon', suffixes: ['ru'], registryClass: 'country-code',
+    id: 'tci-colon', suffixes: ['ru', 'su', 'xn--p1ai'], registryClass: 'country-code',
     whoisParserProfile: 'tci-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://cctld.ru/en/service/whois/',
       'https://www.iana.org/domains/root/db/ru.html',
+      'https://www.iana.org/domains/root/db/su.html',
+      'https://www.iana.org/domains/root/db/xn--p1ai.html',
     ],
   },
   {
@@ -586,11 +643,13 @@ const EXPLICIT_CAPABILITIES = [
     whoisParserProfile: 'prefixed-dot-leader-and-bare-nameservers', fixtureScenarios: ['registered'],
   },
   {
-    id: 'twnic-colon', suffixes: ['tw'], registryClass: 'country-code',
+    id: 'twnic-colon', suffixes: ['tw', 'xn--kprw13d', 'xn--kpry57d'], registryClass: 'country-code',
     whoisParserProfile: 'twnic-record-dates-and-provider', fixtureScenarios: ['registered'],
     documentationUrls: [
       'https://www.twnic.tw/dnservice/policy/?lang=en',
       'https://www.iana.org/domains/root/db/tw.html',
+      'https://www.iana.org/domains/root/db/xn--kprw13d.html',
+      'https://www.iana.org/domains/root/db/xn--kpry57d.html',
     ],
   },
   {
@@ -703,7 +762,12 @@ function registryCapabilityFor(value: unknown): RegistryCompatibilityRow | null 
   const suffix = canonicalSuffix(value);
   if (!suffix) return null;
   const capability = CAPABILITY_BY_SUFFIX.get(suffix);
-  if (capability) return { ...cloneCapability(capability), explicitSuffixProfile: true };
+  if (capability) {
+    return {
+      ...cloneCapability(capability, { suffixes: [suffix] }),
+      explicitSuffixProfile: true,
+    };
+  }
   return {
     ...cloneCapability(DEFAULT_CAPABILITY, { suffixes: [suffix] }),
     explicitSuffixProfile: false,

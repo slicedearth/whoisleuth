@@ -24,9 +24,9 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v12')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('77');
-  await expect(page.locator('tbody tr')).toHaveCount(77);
+  await expect(page.getByText('Catalogue v13')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('104');
+  await expect(page.locator('tbody tr')).toHaveCount(104);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -94,14 +94,14 @@ test('the local inspector explains explicit and generic suffix support without a
   expect(unexpectedApiRequests).toEqual([]);
 });
 
-test('the inspector normalizes an IDN suffix and remains mobile-safe', async ({ page }) => {
+test('the inspector resolves an explicit IDN suffix and remains mobile-safe', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/registry-support');
-  await page.getByRole('searchbox', { name: 'Domain or suffix', exact: true }).fill('example.测试');
+  await page.getByRole('searchbox', { name: 'Domain or suffix', exact: true }).fill('example.中国');
   await page.getByRole('button', { name: 'Inspect support' }).click();
 
-  await expect(page.locator('.inspection-card')).toContainText('.xn--0zwm56d');
-  await expect(page.locator('.inspection-card')).toContainText('Generic fallback');
+  await expect(page.locator('.inspection-card')).toContainText('.xn--fiqs8s');
+  await expect(page.locator('.inspection-card')).toContainText('Explicit suffix profile');
   await expectNoHorizontalOverflow(page);
 });
 

@@ -4,6 +4,7 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { existsSync } = require('node:fs');
 const { resolve } = require('node:path');
+const { domainToUnicode } = require('node:url');
 
 const {
   REGISTRY_CAPABILITIES_VERSION,
@@ -14,9 +15,40 @@ const {
 } = require('../lib/registry-capabilities.mts');
 const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
+const SHARED_ENDPOINT_SUFFIXES = [
+  { id: 'amnic-sectioned', suffixes: ['xn--y9a3aq'] },
+  { id: 'cctld-by-colon', suffixes: ['xn--90ais'] },
+  { id: 'cnnic-colon', suffixes: ['xn--fiqs8s', 'xn--fiqz9s'] },
+  { id: 'dot-leader', suffixes: ['xn--3e0b707e'] },
+  { id: 'eurid-sectioned', suffixes: ['xn--e1a4c', 'xn--qxa6a'] },
+  { id: 'hkirc-sectioned', suffixes: ['xn--j6w193g'] },
+  {
+    id: 'nixi-colon',
+    suffixes: [
+      'xn--2scrj9c',
+      'xn--3hcrj9c',
+      'xn--45br5cyl',
+      'xn--45brj9c',
+      'xn--fpcrj9c3d',
+      'xn--gecrj9c',
+      'xn--h2breg3eve',
+      'xn--h2brj9c',
+      'xn--h2brj9c8c',
+      'xn--rvc1e0am3e',
+      'xn--s9brj9c',
+      'xn--xkc2dl3a5ee0h',
+    ],
+  },
+  { id: 'nic-kz-dot-leader', suffixes: ['xn--80ao21a'] },
+  { id: 'rnids-colon', suffixes: ['xn--90a3ac'] },
+  { id: 'tci-colon', suffixes: ['su', 'xn--p1ai'] },
+  { id: 'thnic-holder-colon', suffixes: ['xn--o3cw4h'] },
+  { id: 'twnic-colon', suffixes: ['xn--kprw13d', 'xn--kpry57d'] },
+];
+
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 12);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 13);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -26,8 +58,14 @@ describe('registry capability metadata', () => {
       'es', 'eu', 'fi', 'fr', 'gr', 'gt', 'hk', 'hr', 'hu', 'id', 'ie', 'il',
       'in', 'io', 'ir', 'is', 'it', 'jp', 'ke', 'kr', 'kz', 'lt', 'lu', 'lv',
       'md', 'me', 'mn', 'mx', 'my', 'nl', 'no', 'nz', 'ph', 'pk', 'pl', 'pt',
-      'ro', 'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sk', 'th', 'tn', 'tr', 'tw',
-      'ua', 'uk', 'us', 'vn', 'za',
+      'ro', 'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sk', 'su', 'th', 'tn', 'tr',
+      'tw', 'ua', 'uk', 'us', 'vn', 'xn--2scrj9c', 'xn--3e0b707e',
+      'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
+      'xn--90a3ac', 'xn--90ais', 'xn--e1a4c', 'xn--fiqs8s', 'xn--fiqz9s',
+      'xn--fpcrj9c3d', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
+      'xn--h2brj9c8c', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
+      'xn--o3cw4h', 'xn--p1ai', 'xn--qxa6a', 'xn--rvc1e0am3e',
+      'xn--s9brj9c', 'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'za',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
@@ -57,6 +95,39 @@ describe('registry capability metadata', () => {
     const capability = registryCapabilityFor('example.测试');
     assert.deepEqual(capability.suffixes, ['xn--0zwm56d']);
     assert.equal(capability.explicitSuffixProfile, false);
+  });
+
+  test('resolves shared-endpoint ASCII and IDN suffixes to suffix-correct profiles', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+    let covered = 0;
+
+    for (const family of SHARED_ENDPOINT_SUFFIXES) {
+      const profile = profiles.get(family.id);
+      assert.ok(profile, family.id);
+      for (const suffix of family.suffixes) {
+        const inputs = [suffix];
+        if (suffix.startsWith('xn--')) {
+          const unicodeSuffix = domainToUnicode(suffix);
+          assert.notEqual(unicodeSuffix, suffix, suffix);
+          inputs.push(unicodeSuffix);
+        }
+        for (const input of inputs) {
+          const capability = registryCapabilityFor(`example.${input}`);
+          assert.equal(capability.id, family.id, input);
+          assert.deepEqual(capability.suffixes, [suffix], input);
+          assert.equal(capability.registryClass, 'country-code', input);
+          assert.equal(capability.coverageState, 'fixture_verified', input);
+          assert.equal(capability.explicitSuffixProfile, true, input);
+        }
+        assert.ok(
+          profile.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`),
+          `${suffix}: IANA provenance`,
+        );
+        covered += 1;
+      }
+    }
+
+    assert.equal(covered, 27);
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {

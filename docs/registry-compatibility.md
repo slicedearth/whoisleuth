@@ -22,7 +22,7 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 12 explicit matrix is:
+The version 13 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -94,6 +94,7 @@ The version 12 explicit matrix is:
 | `.sg` | Standard colon fields with day-month-name timestamps, status, DNSSEC, and nameservers | Registered |
 | `.si` | Domain, privacy-preserving holder, registrar, lifecycle, status, and nameserver fields | Registered, not found |
 | `.sk` | Domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered, not found |
+| `.su` | Shared TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered, not found |
 | `.th` | Holder organisation/address, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.tn` | Dot-leader domain, lifecycle, registrar, status, and DNSSEC fields | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
@@ -102,6 +103,32 @@ The version 12 explicit matrix is:
 | `.uk` | Sectioned indented domain, registrant, registrar, status, date, and nameserver fields | Registered, not found, malformed |
 | `.us` | Standard colon fields, registrar, lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.vn` | IANA publishes no domain WHOIS or RDAP service; official browser lookup is not integrated | Access documented |
+| `.xn--2scrj9c` (`.ಭಾರತ`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--3e0b707e` (`.한국`) | Shared KISA dot-leader fields and host-name nameservers | Registered |
+| `.xn--3hcrj9c` (`.ଭାରତ`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--45br5cyl` (`.ভাৰত`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--45brj9c` (`.ভারত`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--80ao21a` (`.қаз`) | Shared NIC.KZ dot-leader lifecycle, registrar, status, and nameserver fields | Registered |
+| `.xn--90a3ac` (`.срб`) | Shared RNIDS multi-word status, lifecycle, contact, DNSSEC, and nameserver fields | Registered, not found |
+| `.xn--90ais` (`.бел`) | Shared Belarusian organisation identifier, lifecycle, registrar, and nameserver fields | Registered |
+| `.xn--e1a4c` (`.ею`) | Shared EURid sectioned registrar and nameserver fields | Registered, not found |
+| `.xn--fiqs8s` (`.中国`) | Shared CNNIC ROID, sponsoring registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
+| `.xn--fiqz9s` (`.中國`) | Shared CNNIC ROID, sponsoring registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
+| `.xn--fpcrj9c3d` (`.భారత్`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--gecrj9c` (`.ભારત`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--h2breg3eve` (`.भारतम्`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--h2brj9c` (`.भारत`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--h2brj9c8c` (`.भारोत`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--j6w193g` (`.香港`) | Shared HKIRC sectioned domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered, not found |
+| `.xn--kprw13d` (`.台湾`) | Shared TWNIC record dates, service provider, status, registrant, and nameserver fields | Registered |
+| `.xn--kpry57d` (`.台灣`) | Shared TWNIC record dates, service provider, status, registrant, and nameserver fields | Registered |
+| `.xn--o3cw4h` (`.ไทย`) | Shared THNIC holder, lifecycle, registrar, status, DNSSEC, and nameserver fields | Registered |
+| `.xn--p1ai` (`.рф`) | Shared TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered, not found |
+| `.xn--qxa6a` (`.ευ`) | Shared EURid sectioned registrar and nameserver fields | Registered, not found |
+| `.xn--rvc1e0am3e` (`.ഭാരതം`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--s9brj9c` (`.ਭਾਰਤ`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--xkc2dl3a5ee0h` (`.இந்தியா`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--y9a3aq` (`.հայ`) | Shared AMNIC registrant/contact blocks with lifecycle, status, registrar, and DNS servers | Registered |
 | `.za` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 
 The exceptional query formats are grounded in the registries' own protocol
@@ -295,6 +322,16 @@ registrant headers are recognized case-insensitively like the adjacent contact
 roles. Bare numeric hyphen dates remain deliberately day-first for the
 currently profiled sources; a future month-first source requires a separately
 gated parser rather than changing that shared interpretation.
+
+Version 13 extends twelve existing fixture-backed registry families to 27
+additional active country-code suffixes. Twenty-six are IDN A-labels, and
+`.su` shares the same published WHOIS endpoint as the existing `.ru` family.
+Each added suffix has its own IANA delegation reference, resolves from Unicode
+or A-label input to a suffix-correct catalogue row, and reuses the bounded
+parser fixture for the same official WHOIS endpoint. The catalogue does not
+hard-code those endpoints: live discovery still follows IANA bootstrap and
+referral data, and fixture coverage does not claim current reachability or
+field completeness.
 
 For `.ch`, IANA still publishes the registry's port-43 referral, but the
 registry can deny ordinary clients and direct them to its

@@ -5,6 +5,42 @@ const assert = require('node:assert/strict');
 const { parseWhoisChain } = require('../lib/whois.mts');
 const fixtures = require('../fixtures/whois-registry-fixtures');
 
+const SHARED_ENDPOINT_FAMILIES = [
+  { profile: 'amnic-sectioned', baseSuffix: 'am', aliases: ['xn--y9a3aq'] },
+  { profile: 'cctld-by-colon', baseSuffix: 'by', aliases: ['xn--90ais'] },
+  { profile: 'cnnic-colon', baseSuffix: 'cn', aliases: ['xn--fiqs8s', 'xn--fiqz9s'] },
+  { profile: 'dot-leader', baseSuffix: 'kr', aliases: ['xn--3e0b707e'] },
+  { profile: 'eurid-sectioned', baseSuffix: 'eu', aliases: ['xn--e1a4c', 'xn--qxa6a'] },
+  { profile: 'hkirc-sectioned', baseSuffix: 'hk', aliases: ['xn--j6w193g'] },
+  {
+    profile: 'nixi-colon',
+    baseSuffix: 'in',
+    aliases: [
+      'xn--2scrj9c',
+      'xn--3hcrj9c',
+      'xn--45br5cyl',
+      'xn--45brj9c',
+      'xn--fpcrj9c3d',
+      'xn--gecrj9c',
+      'xn--h2breg3eve',
+      'xn--h2brj9c',
+      'xn--h2brj9c8c',
+      'xn--rvc1e0am3e',
+      'xn--s9brj9c',
+      'xn--xkc2dl3a5ee0h',
+    ],
+  },
+  { profile: 'nic-kz-dot-leader', baseSuffix: 'kz', aliases: ['xn--80ao21a'] },
+  { profile: 'rnids-colon', baseSuffix: 'rs', aliases: ['xn--90a3ac'] },
+  { profile: 'tci-colon', baseSuffix: 'ru', aliases: ['su', 'xn--p1ai'] },
+  { profile: 'thnic-holder-colon', baseSuffix: 'th', aliases: ['xn--o3cw4h'] },
+  { profile: 'twnic-colon', baseSuffix: 'tw', aliases: ['xn--kprw13d', 'xn--kpry57d'] },
+];
+
+function escaped(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 describe('WHOIS registry compatibility fixtures', () => {
   for (const fixture of fixtures) {
     test(fixture.name, () => {
@@ -58,6 +94,38 @@ describe('WHOIS registry compatibility fixtures', () => {
       .map((fixture) => fixture.capabilityProfile)
       .sort();
     assert.deepEqual(coveredProfiles, expectedProfiles);
+  });
+
+  test('reuses each shared-endpoint registry fixture for its declared suffix aliases', () => {
+    let covered = 0;
+    for (const family of SHARED_ENDPOINT_FAMILIES) {
+      const fixture = fixtures.find((candidate) => candidate.capabilityProfile === family.profile
+        && candidate.scenario === 'registered');
+      assert.ok(fixture, `${family.profile}: registered fixture`);
+      const baseDomain = fixture.expected.domainName;
+      assert.match(baseDomain, new RegExp(`\\.${escaped(family.baseSuffix)}$`, 'i'));
+
+      for (const alias of family.aliases) {
+        const aliasDomain = baseDomain.replace(
+          new RegExp(`${escaped(family.baseSuffix)}$`, 'i'),
+          alias,
+        );
+        const chain = fixture.chain.map((hop) => ({
+          ...hop,
+          response: hop.response
+            .replace(new RegExp(escaped(baseDomain), 'gi'), aliasDomain)
+            .replace(
+              new RegExp(`(^domain:\\s*)${escaped(family.baseSuffix)}(\\s*$)`, 'gim'),
+              `$1${alias}$2`,
+            ),
+        }));
+        const parsed = parseWhoisChain(chain);
+        assert.equal(parsed.registrationStatus, 'registered', alias);
+        assert.equal(parsed.domainName, aliasDomain, alias);
+        covered += 1;
+      }
+    }
+    assert.equal(covered, 27);
   });
 
   test('does not unlock ambiguous aliases when registry marker sets are incomplete', () => {
