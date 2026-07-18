@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
+  import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { consoleDestinations } from '$lib/workspaces';
 
   let password=$state('');
@@ -40,7 +41,12 @@
   }
 </script>
 
-<svelte:head><title>Sign in · WHOISleuth</title><meta name="description" content="Sign in to the protected WHOISleuth investigation console."></svelte:head>
+<PublicSeo
+  title="Sign in | WHOISleuth"
+  description="Sign in to the protected WHOISleuth investigation console."
+  path="/login"
+  indexable={false}
+/>
 
 <section class="login-view" aria-labelledby="login-title">
   <div class="login-copy"><p class="eyebrow">Protected console</p><h1 id="login-title">Continue to WHOISleuth.</h1><p>The public overview and synthetic demo make no live investigation request. Sign in to use registry, DNS, certificate, website, monitoring, and brand-analysis tools.</p><a href="/demo">Explore the synthetic demo first <span aria-hidden="true">→</span></a></div>

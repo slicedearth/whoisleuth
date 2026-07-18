@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /.netlify/functions/
+
+Sitemap: https://whoisleuth.com/sitemap.xml

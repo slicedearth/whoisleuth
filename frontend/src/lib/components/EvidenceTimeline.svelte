@@ -125,7 +125,7 @@
       {/each}
     </ol>
     {#if changedOnly && visibleTimeline.length===1 && timeline.length>1}
-      <p class="timeline-filter-note">{filteredIncomparable?'No reliable comparable changes matched — some observations differ materially but their scan depth or risk model prevents field-level comparison.':'No reliable comparable changes matched.'}</p>
+      <p class="timeline-filter-note">{filteredIncomparable?'No reliable comparable changes matched. Some observations differ materially, but their scan depth or risk model prevents field-level comparison.':'No reliable comparable changes matched.'}</p>
     {/if}
   {/if}
 </section>

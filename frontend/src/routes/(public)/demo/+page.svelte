@@ -8,6 +8,7 @@
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
+  import PublicSeo from '$lib/components/PublicSeo.svelte';
   import {
     buildSyntheticDemoExport, createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
     normalizeSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_PROFILE,
@@ -71,7 +72,11 @@
   function exportCase(){const payload=buildSyntheticDemoExport(demoState,new Date().toISOString());const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download='whoisleuth-synthetic-demo-case.json';anchor.click();URL.revokeObjectURL(url);message='Synthetic case report created. It is clearly marked as demonstration data.';}
 </script>
 
-<svelte:head><title>Synthetic demo · WHOISleuth</title><meta name="description" content="Explore a representative synthetic WHOISleuth investigation without live lookups."></svelte:head>
+<PublicSeo
+  title="Domain investigation demo | WHOISleuth"
+  description="Explore a representative WHOISleuth investigation with fixed synthetic evidence and no live target requests."
+  path="/demo"
+/>
 
 <section class="demo-hero">
   <p class="eyebrow">Public synthetic demo</p>
@@ -120,7 +125,7 @@
 {:else if view==='lookup'&&selected&&lookupView}
   <section class="demo-panel" aria-labelledby="lookup-heading">
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
-    <p>The production Lookup components render the synthetic view model below. Each source remains separately attributed, and inconclusive enrichment stays explicit rather than becoming evidence of absence or safety.</p>
+    <p>The production Lookup components render the synthetic view model below. Each source remains separately attributed. Inconclusive enrichment stays explicit and is never treated as evidence of absence or safety.</p>
     <div class="shared-evidence"><LookupAssessment {...lookupView.assessment} /></div>
     <div class="shared-evidence"><LookupRegistrySources {...lookupView.registry} /></div>
     <div class="shared-evidence"><LookupDnsEvidence {...lookupView.dns} /></div>

@@ -1,25 +1,33 @@
 <script lang="ts">
+  import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { workspaces } from '$lib/workspaces';
 
+  const workflowOrder = ['/brands', '/discover', '/bulk', '/lookup', '/monitor'];
+  const homepageWorkspaces = workflowOrder
+    .map((path) => workspaces.find((workspace) => workspace.href === path))
+    .filter((workspace): workspace is (typeof workspaces)[number] => Boolean(workspace));
+
   const evidenceSources = [
-    ['Registry intelligence','RDAP and WHOIS remain separately attributed, with authority-aware availability decisions.'],
-    ['Infrastructure signals','DNS, certificates, mail posture, HTTP behavior, and page identity add bounded context.'],
-    ['Analyst workflow','Shortlists, watchlists, cases, timelines, relationships, and evidence exports support review.'],
+    ['Registration sources','WHOIS and RDAP remain separate, and only authoritative sources determine registration status.'],
+    ['Infrastructure signals','DNS, certificate, mail, HTTP and page signals add context without overriding registration evidence.'],
+    ['Investigation records','Shortlists, cases, timelines, relationships and exports keep the investigation reviewable.'],
   ];
 </script>
 
-<svelte:head>
-  <title>WHOISleuth · Domain intelligence and brand investigation</title>
-  <meta name="description" content="Investigate domains with separately attributed RDAP, WHOIS, DNS, certificate, website, and analyst evidence.">
-</svelte:head>
+<PublicSeo
+  title="WHOISleuth | WHOIS, RDAP and domain intelligence"
+  description="Investigate domains with separately attributed WHOIS, RDAP, DNS, certificate and website evidence in one explainable workflow."
+  path="/"
+  website
+/>
 
 <section class="hero">
   <div class="hero-copy">
     <p class="eyebrow">Domain intelligence workbench</p>
     <h1>Investigate domains.<br><span>Preserve the evidence trail.</span></h1>
-    <p class="lede">WHOISleuth brings registration, infrastructure, certificate, website, and brand context into one explainable investigation workflow—without turning an unavailable source into a claim of safety or absence.</p>
+    <p class="lede">WHOISleuth brings WHOIS, RDAP, DNS, certificate, website and brand evidence into one investigation workspace. Every result shows its source, and missing data stays inconclusive.</p>
     <div class="hero-actions"><a class="primary" href="/login">Open protected console</a><a class="btn" href="/demo">Explore synthetic demo</a></div>
-    <p class="access-note"><span aria-hidden="true">●</span> Public overview · Password-protected investigation tools</p>
+    <p class="access-note"><span aria-hidden="true">●</span> Public overview · Investigation tools require sign-in</p>
   </div>
   <div class="terminal-preview card" aria-label="Example WHOISleuth evidence summary">
     <div class="terminal-bar"><span class="terminal-window-red"></span><span class="terminal-window-yellow"></span><span class="terminal-window-green"></span><code>lookup --deep example.test</code></div>
@@ -31,28 +39,28 @@
         <div><dt>Website</dt><dd><span class="state review">review</span> Redirect observed</dd></div>
         <div><dt>Interpretation</dt><dd><span class="state neutral">bounded</span> Analyst review required</dd></div>
       </dl>
-      <p class="terminal-note">// provenance retained; missing data remains inconclusive</p>
+      <p class="terminal-note">// sources stay separate; missing data stays inconclusive</p>
     </div>
   </div>
 </section>
 
 <section class="workflow" id="features" aria-labelledby="workflow-title">
-  <div class="section-intro"><p class="eyebrow">Investigation workflow</p><h2 id="workflow-title">From a single lookup to monitored evidence.</h2><p>Five focused workspaces share bounded evidence without collapsing distinct sources into one unexplained answer.</p></div>
-  <div class="workspace-grid">{#each workspaces as item,index}<article class="card"><span>0{index+1}</span><h3>{item.label}</h3><p>{item.detail}.</p><a href="/login?next={encodeURIComponent(item.href)}">Open after sign-in <span aria-hidden="true">→</span></a></article>{/each}</div>
+  <div class="section-intro"><p class="eyebrow">Investigation workflow</p><h2 id="workflow-title">Move from discovery to evidence review and monitoring.</h2><p>Use five connected workspaces to define a brand, find candidates, compare related infrastructure, investigate individual targets and track changes over time.</p></div>
+  <div class="workspace-grid">{#each homepageWorkspaces as item,index}<article class="card"><span>0{index+1}</span><h3>{item.label}</h3><p>{item.detail}.</p><a href="/login?next={encodeURIComponent(item.href)}">Open after sign-in <span aria-hidden="true">→</span></a></article>{/each}</div>
 </section>
 
 <section class="evidence" aria-labelledby="evidence-title">
-  <div class="section-intro"><p class="eyebrow">Designed for defensible analysis</p><h2 id="evidence-title">Evidence stays attributed and explainable.</h2></div>
+  <div class="section-intro"><p class="eyebrow">Evidence model</p><h2 id="evidence-title">See what each source actually reported.</h2></div>
   <div class="evidence-grid">{#each evidenceSources as source}<article><span aria-hidden="true">+</span><div><h3>{source[0]}</h3><p>{source[1]}</p></div></article>{/each}</div>
 </section>
 
 <section class="principles card" aria-labelledby="principles-title">
-  <div><p class="eyebrow">Privacy-conscious by default</p><h2 id="principles-title">Local investigation state. Deliberate hosted features.</h2><p>Ordinary profiles, cases, watchlists, campaigns, and search baselines stay in the browser. Optional hosted monitoring is separately enabled and stores only bounded application-encrypted compact evidence.</p></div>
-  <ul><li>No advertising profiles or cross-site tracking</li><li>Synthetic public demo makes no live lookup request</li><li>Raw registry payloads stay out of compact stores</li><li>Failures remain explicit instead of becoming negative findings</li></ul>
+  <div><p class="eyebrow">Privacy and storage</p><h2 id="principles-title">Browser-local by default. Hosted monitoring by choice.</h2><p>Profiles, cases, watchlists, campaigns and search baselines stay in your browser. If hosted monitoring is enabled, only compact application-encrypted evidence is stored for scheduled checks.</p></div>
+  <ul><li>No advertising profiles or cross-site tracking</li><li>The public demo uses fixed synthetic data</li><li>Compact stores exclude raw registry responses</li><li>Failed checks remain inconclusive</li></ul>
 </section>
 
 <section class="build" aria-labelledby="build-title">
-  <div class="section-intro"><p class="eyebrow">Engineering</p><h2 id="build-title">Built as an investigation system, not a lookup form.</h2></div>
+  <div class="section-intro"><p class="eyebrow">Engineering</p><h2 id="build-title">Built for reliable investigations.</h2></div>
   <div class="build-grid"><div><strong>TypeScript + SvelteKit</strong><span>Accessible multi-workspace frontend</span></div><div><strong>Bounded network processing</strong><span>Timeouts, caps, SSRF and rebinding defenses</span></div><div><strong>Fixture-driven verification</strong><span>Registry behavior tested without live network calls</span></div><div><strong>Portable deployment</strong><span>Express and optional Netlify execution paths</span></div></div>
 </section>
 

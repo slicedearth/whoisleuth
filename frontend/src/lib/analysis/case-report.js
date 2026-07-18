@@ -24,7 +24,7 @@ const APPLICATION_NAME = 'WHOISleuth';
 const LIMITATIONS_TEXT = [
   'This report contains normalized browser-local observations from WHOISleuth analyst cases.',
   'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks.',
-  'Absence of a signal (e.g. no MX record observed) does not prove nonexistence — it may not have been evaluated.',
+  'Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated.',
   'Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes.',
   'Scan-depth and risk-model gates prevent misleading comparisons; "incomparable" means observations differ materially but one or more fields cannot be compared reliably.',
   'Generated locally in the browser. Review the package before sharing it.',
@@ -324,7 +324,7 @@ function buildMarkdown(report) {
       const snap = entry.snapshot;
       const index = i + 1;
 
-      lines.push(`### ${index}. ${entry.isBaseline ? 'Baseline' : 'Observation'} — ${escapeMarkdownInline(snap.capturedAt)}`);
+      lines.push(`### ${index}. ${entry.isBaseline ? 'Baseline' : 'Observation'}: ${escapeMarkdownInline(snap.capturedAt)}`);
       lines.push('');
 
       if (entry.hasRepeatedObservation) {
