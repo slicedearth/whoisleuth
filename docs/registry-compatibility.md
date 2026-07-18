@@ -22,7 +22,7 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 14 explicit matrix is:
+The version 15 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -32,32 +32,50 @@ The version 14 explicit matrix is:
 | `.ai` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.al` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.am` | Indented registrant and contact blocks with lifecycle, status, registrar, and DNS-server section | Registered |
+| `.ao` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ar` | Colon fields with registered, changed, and expiry timestamps | Registered, not found |
 | `.at` | Colon fields with compact date-time values | Registered, not found |
 | `.au` | Eligibility and contact fields | Registered |
+| `.az` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ba` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.bb` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.bd` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.be` | Sectioned registrar and nameserver fields with textual registration dates | Registered |
 | `.bg` | Registry status, sectioned bare nameservers, and DNSSEC state | Registered, not found |
 | `.br` | Registry owner/contact handles, compact dates, status, and nameservers | Registered, not found |
+| `.bs` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.bt` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.bv` | Registration is not open and IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.by` | Colon fields with organisation identifier, lifecycle, registrar, and nameservers | Registered |
+| `.bz` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ca` | Standard colon fields with year-first slash dates | Registered, not found |
+| `.cd` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.cg` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ch` | IANA-referred WHOIS may be policy-restricted; IANA publishes no RDAP service, and official web and non-standard-port Domain Check are not integrated | Access documented |
+| `.ck` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.cl` | Named registrant and registrar fields with lifecycle dates and nameservers | Registered, not found |
 | `.cn` | CNNIC ROID, sponsoring registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
 | `.co` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
+| `.cu` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.cw` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.cy` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.cz` | FRED contact-handle indirection | Registered, not found |
 | `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
+| `.dj` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.dk` | Punktum domain/DNS distinction, hostname nameservers, lifecycle, DNSSEC, and multi-word status | Registered |
 | `.edu` | Indented contact blocks | Registered |
 | `.ee` | Section-scoped domain, contacts, registrar, lifecycle, status, and nameservers | Registered, not found |
+| `.eg` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.es` | Plain WHOIS syntax; registry requires advance source-IP authorization; IANA publishes no RDAP service | Access documented |
+| `.et` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.eu` | Sectioned registrar and nameserver fields | Registered, not found |
 | `.fi` | Dot-leader fields, dates, DNSSEC, registrar, status, and nameservers | Registered, not found |
+| `.fk` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.fr` | AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered, not found |
+| `.gm` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gr` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
+| `.gu` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.hk` | Sectioned domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered, not found |
 | `.hr` | Standard colon lifecycle, registrar, contact, and nameserver fields | Registered, not found |
 | `.hu` | Minimal domain and record-created fields | Registered |
@@ -69,8 +87,10 @@ The version 14 explicit matrix is:
 | `.ir` | IRNIC contact-handle indirection, nameservers, and separately typed role identifiers | Registered |
 | `.is` | ISNIC registrant-handle role resolution, lifecycle, DNSSEC, and nameservers | Registered, not found |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
+| `.jo` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.ke` | Standard colon fields with lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
+| `.kh` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
 | `.kz` | Dot-leader lifecycle, registrar, multi-word status, and primary/secondary nameservers | Registered |
 | `.li` | Official registry lookup and non-standard-port Domain Check are not integrated; IANA publishes no RDAP service | Access documented |
@@ -408,6 +428,16 @@ query-limit errors still take precedence over echoed domain fields, while
 policy prose no longer overrides positive or authoritative not-found evidence.
 This changes interpretation only; request budgets, endpoint discovery, and
 stored evidence remain unchanged.
+
+Version 15 records 20 additional active country-code suffixes for which the
+current IANA root records publish neither a domain WHOIS server nor an RDAP
+bootstrap service: `.ao`, `.az`, `.bb`, `.bd`, `.bs`, `.bt`, `.bz`, `.cd`,
+`.cg`, `.ck`, `.cu`, `.cw`, `.dj`, `.eg`, `.et`, `.fk`, `.gm`, `.gu`, `.jo`,
+and `.kh`. Each row links to its suffix-specific IANA delegation record and is
+classified as access documented, not fixture verified. WHOISleuth does not
+substitute a registry website or registration URL for a machine endpoint.
+Missing registry evidence for these suffixes therefore remains inconclusive
+and cannot decide availability, ownership, activity, safety, or maliciousness.
 
 Generic fixtures also verify registered, authoritative-not-found, and
 rate-limited WHOIS states. RDAP normalization has separate fixture coverage for

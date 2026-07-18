@@ -58,17 +58,24 @@ const VERSION_14_SUFFIXES = [
   { id: 'no-iana-machine-service-gr', suffixes: ['xn--qxam'], coverageState: 'access_documented' },
 ];
 
+const VERSION_15_ACCESS_SUFFIXES = [
+  'ao', 'az', 'bb', 'bd', 'bs', 'bt', 'bz', 'cd', 'cg', 'ck',
+  'cu', 'cw', 'dj', 'eg', 'et', 'fk', 'gm', 'gu', 'jo', 'kh',
+];
+
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 14);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 15);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'ac', 'ae', 'af', 'ai', 'al', 'am', 'ar', 'at', 'au', 'ba', 'be', 'bg', 'br',
-      'bv', 'by', 'ca', 'ch', 'cl', 'cn', 'co', 'cy', 'cz', 'de', 'dk', 'edu', 'ee',
-      'es', 'eu', 'fi', 'fr', 'gr', 'gt', 'hk', 'hr', 'hu', 'id', 'ie', 'il',
-      'in', 'io', 'ir', 'is', 'it', 'jp', 'ke', 'kr', 'kz', 'li', 'lt', 'lu', 'lv',
+      'ac', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'ar', 'at', 'au', 'az', 'ba', 'bb',
+      'bd', 'be', 'bg', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cd', 'cg', 'ch',
+      'ck', 'cl', 'cn', 'co', 'cu', 'cw', 'cy', 'cz', 'de', 'dj', 'dk', 'edu', 'ee',
+      'eg', 'es', 'et', 'eu', 'fi', 'fk', 'fr', 'gm', 'gr', 'gt', 'gu', 'hk', 'hr',
+      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'jo', 'jp', 'ke', 'kh',
+      'kr', 'kz', 'li', 'lt', 'lu', 'lv',
       'md', 'me', 'mn', 'mx', 'my', 'nl', 'no', 'nz', 'ph', 'pk', 'pl', 'pm',
       'pt', 're', 'ro', 'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sj', 'sk', 'su',
       'tf', 'th', 'tn', 'tr', 'tw', 'ua', 'uk', 'us', 'vn', 'wf',
@@ -176,6 +183,38 @@ describe('registry capability metadata', () => {
     }
 
     assert.equal(covered, 12);
+  });
+
+  test('records version fifteen no-machine-service suffixes as access context only', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+
+    for (const suffix of VERSION_15_ACCESS_SUFFIXES) {
+      const profile = profiles.get(`no-iana-machine-service-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.deepEqual(profile.suffixes, [suffix], suffix);
+      assert.equal(profile.coverageState, 'access_documented', suffix);
+      assert.equal(profile.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(profile.rdapAccessProfile, 'no-iana-service', suffix);
+      assert.deepEqual(profile.fixtureScenarios, [], suffix);
+      assert.deepEqual(profile.verificationFiles, [], suffix);
+      assert.deepEqual(
+        profile.documentationUrls,
+        [`https://www.iana.org/domains/root/db/${suffix}.html`],
+        suffix,
+      );
+
+      const capability = registryCapabilityFor(`example.${suffix}`);
+      assert.equal(capability.id, profile.id, suffix);
+      assert.deepEqual(capability.suffixes, [suffix], suffix);
+      assert.equal(capability.registryClass, 'country-code', suffix);
+      assert.equal(capability.coverageState, 'access_documented', suffix);
+      assert.equal(capability.explicitSuffixProfile, true, suffix);
+      assert.match(capability.limitation, /no domain WHOIS or RDAP service/i, suffix);
+      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      assert.equal(diagnostic.authority, 'context_only', suffix);
+      assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(diagnostic.rdapAccessProfile, 'no-iana-service', suffix);
+    }
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {

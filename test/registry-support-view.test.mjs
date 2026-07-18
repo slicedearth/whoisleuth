@@ -18,13 +18,13 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 14);
-  assert.equal(catalogue.rows.length, 116);
+  assert.equal(catalogue.version, 15);
+  assert.equal(catalogue.rows.length, 136);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 116,
+    profiles: 136,
     fixtureVerified: 103,
-    accessDocumented: 13,
+    accessDocumented: 33,
     fallbacks: 1,
   });
   assert.deepEqual(
@@ -98,7 +98,11 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   );
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
-  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['al', 'ba', 'bv', 'ch', 'cy', 'es', 'gr', 'li', 'ph', 'sj', 'vn', 'xn--qxam', 'za']);
+  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), [
+    'al', 'ao', 'az', 'ba', 'bb', 'bd', 'bs', 'bt', 'bv', 'bz', 'cd', 'cg', 'ch',
+    'ck', 'cu', 'cw', 'cy', 'dj', 'eg', 'es', 'et', 'fk', 'gm', 'gr', 'gu', 'jo',
+    'kh', 'li', 'ph', 'sj', 'vn', 'xn--qxam', 'za',
+  ]);
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });
 

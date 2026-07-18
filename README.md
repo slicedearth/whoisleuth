@@ -328,7 +328,10 @@ compact-storage boundary, and lookup evidence schema are documented in the
   publication. Independently documented operator families retain
   suffix-correct profiles for supported ASCII and IDN suffixes, and Unicode
   suffix input resolves to the same bounded fixture-backed family. Shared
-  management alone is not treated as parser evidence. Fixture scenarios
+  management alone is not treated as parser evidence. Suffixes whose current
+  IANA records publish neither domain WHOIS nor RDAP are identified as access
+  context only; WHOISleuth does not scrape a registry website or interpret the
+  missing machine service as domain availability. Fixture scenarios
   distinguish registered, authoritative not-found, temporary, restricted, and
   malformed responses where the registry dialect is known; an undocumented or
   non-authoritative negative remains inconclusive. The local CLI can inspect

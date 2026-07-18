@@ -32,7 +32,15 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 14;
+type RegistryCapabilitySeed = Pick<
+  RegistryCapability,
+  'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
+> & Partial<Omit<
+  RegistryCapability,
+  'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
+>>;
+
+const REGISTRY_CAPABILITIES_VERSION = 15;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -44,6 +52,10 @@ const UK_TRANSITION_LIMITATION = 'Synthetic fixtures verify the documented secti
 const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profile. The registry limits public WHOIS use, prohibits abusive high-volume automation, and states that a missing record is not proof of availability; WHOISleuth retains bounded request controls and authority-aware interpretation.';
 const NO_IANA_MACHINE_SERVICE_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. Missing registry data is not evidence that the domain is unregistered.';
 const NORID_CLOSED_SUFFIX_LIMITATION = 'The registry has not opened this suffix for registrations, and IANA publishes no domain WHOIS or RDAP service. Missing registry data is contextual only and must not be interpreted as a live availability result.';
+const VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
+  'ao', 'az', 'bb', 'bd', 'bs', 'bt', 'bz', 'cd', 'cg', 'ck',
+  'cu', 'cw', 'dj', 'eg', 'et', 'fk', 'gm', 'gu', 'jo', 'kh',
+]);
 
 function freezeCapability(capability: RegistryCapability): Readonly<RegistryCapability> {
   Object.freeze(capability.suffixes);
@@ -73,7 +85,7 @@ const DEFAULT_CAPABILITY = freezeCapability({
   limitation: DISCOVERY_LIMITATION,
 });
 
-const EXPLICIT_CAPABILITIES = [
+const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
   {
     id: 'nic-ar-colon', suffixes: ['ar'], registryClass: 'country-code',
     whoisParserProfile: 'nic-ar-colon', fixtureScenarios: ['registered', 'not_found'],
@@ -174,6 +186,16 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: ['https://www.iana.org/domains/root/db/al.html'],
     limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
+  ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+    id: `no-iana-machine-service-${suffix}`,
+    suffixes: [suffix],
+    registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
+    limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
+  })),
   {
     id: 'no-iana-machine-service-ba', suffixes: ['ba'], registryClass: 'country-code',
     whoisParserProfile: 'generic-colon', fixtureScenarios: [],
@@ -711,7 +733,9 @@ const EXPLICIT_CAPABILITIES = [
     ],
     limitation: VN_ACCESS_LIMITATION,
   },
-].map((entry) => freezeCapability({
+];
+
+const EXPLICIT_CAPABILITIES = EXPLICIT_CAPABILITY_SEEDS.map((entry) => freezeCapability({
   ...entry,
   fallbackProfile: entry.fallbackProfile || null,
   rdapDiscovery: 'iana-bootstrap',
