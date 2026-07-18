@@ -10,6 +10,14 @@ function request(headers, password = process.env.SITE_PASSWORD) {
   return handler({ httpMethod: 'POST', headers, body: JSON.stringify({ password }) });
 }
 
+function rawRequest(body) {
+  return handler({
+    httpMethod: 'POST',
+    headers: { origin: 'https://example.com', host: 'example.com' },
+    body,
+  });
+}
+
 describe('login handler origin enforcement', () => {
   test('accepts a same-origin login and returns transport security headers', async () => {
     const response = await request({ origin: 'https://example.com', host: 'example.com' });
@@ -32,5 +40,23 @@ describe('login handler origin enforcement', () => {
     const response = await request({ host: 'example.com' });
     assert.equal(response.statusCode, 200);
     assert.match(response.headers['Set-Cookie'], /wrt_session=/);
+  });
+
+  test('returns a stable JSON error for malformed request bodies', async () => {
+    const response = await rawRequest('{bad');
+    assert.equal(response.statusCode, 400);
+    assert.deepEqual(JSON.parse(response.body), {
+      error: 'Invalid request body',
+      errorCode: 'INVALID_REQUEST_BODY',
+    });
+  });
+
+  test('rejects request bodies over one MiB before parsing them', async () => {
+    const response = await rawRequest(JSON.stringify({ password: 'x'.repeat(1024 * 1024) }));
+    assert.equal(response.statusCode, 413);
+    assert.deepEqual(JSON.parse(response.body), {
+      error: 'Request bodies are limited to 1 MiB.',
+      errorCode: 'REQUEST_TOO_LARGE',
+    });
   });
 });

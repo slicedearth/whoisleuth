@@ -1,7 +1,11 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { json } = require('../lib/http.mts');
+const {
+  MAX_API_JSON_BODY_BYTES,
+  apiErrorResponseFor,
+  json,
+} = require('../lib/http.mts');
 
 describe('Netlify JSON responses', () => {
   test('include the API security headers emitted by the Express server', () => {
@@ -28,5 +32,24 @@ describe('Netlify JSON responses', () => {
     assert.equal(response.headers['X-Frame-Options'], 'SAMEORIGIN');
     assert.equal(response.headers['X-Content-Type-Options'], 'nosniff');
     assert.equal(response.headers['Cache-Control'], 'no-store');
+  });
+
+  test('defines a one MiB API request-body boundary', () => {
+    assert.equal(MAX_API_JSON_BODY_BYTES, 1024 * 1024);
+  });
+
+  test('maps request-body failures without echoing exception details', () => {
+    assert.deepEqual(apiErrorResponseFor({ type: 'entity.parse.failed', message: 'private parser detail' }), {
+      statusCode: 400,
+      body: { error: 'Invalid request body', errorCode: 'INVALID_REQUEST_BODY' },
+    });
+    assert.deepEqual(apiErrorResponseFor({ type: 'entity.too.large', stack: 'private stack' }), {
+      statusCode: 413,
+      body: { error: 'Request bodies are limited to 1 MiB.', errorCode: 'REQUEST_TOO_LARGE' },
+    });
+    assert.deepEqual(apiErrorResponseFor(new Error('private failure detail')), {
+      statusCode: 500,
+      body: { error: 'Internal server error', errorCode: 'INTERNAL_ERROR' },
+    });
   });
 });

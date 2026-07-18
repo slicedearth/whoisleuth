@@ -894,6 +894,9 @@ The protected WHOISleuth brand returns to that dashboard; the dashboard keeps
 the public homepage available as a separate, clearly labelled destination.
 `/login` accepts the shared deployment password and returns only to a known
 protected workspace; arbitrary or off-origin return targets are ignored.
+Login JSON is capped at 1 MiB in both runtimes. Malformed and oversized bodies
+receive bounded JSON errors with `INVALID_REQUEST_BODY` or `REQUEST_TOO_LARGE`
+codes; parser exceptions and internal paths are never returned to the client.
 Direct anonymous navigation to the dashboard, Lookup, Discover, Bulk, Monitor,
 or Brands is redirected to sign-in, while the backend continues to enforce
 authentication independently on every protected API.

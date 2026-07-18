@@ -33,6 +33,7 @@ import {
 } from './lib/operation-budget.mts';
 import { featureDisabledError, networkFeaturePolicy } from './lib/feature-policy.mts';
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './lib/feature-policy.mts';
+import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor } from './lib/http.mts';
 
 type RequestLike = {
   protocol: string;
@@ -45,6 +46,7 @@ type RequestLike = {
 };
 
 type ResponseLike = {
+  headersSent?: boolean;
   setHeader: (name: string, value: string) => unknown;
   status: (statusCode: number) => ResponseLike;
   json: (body: unknown) => unknown;
@@ -52,6 +54,7 @@ type ResponseLike = {
 };
 
 type Next = () => void;
+type ErrorNext = (error?: unknown) => void;
 type RateLimitOptions = Readonly<{ limit: number; windowMs: number }>;
 type OperationTarget = ReturnType<typeof operationBudgetTargetFor>;
 
@@ -101,7 +104,6 @@ app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
 app.get(['/lookup/', '/discover/', '/bulk/', '/monitor/', '/brands/', '/privacy/', '/demo/', '/login/'], (req: RequestLike, res: ResponseLike) => {
   res.redirect(308, req.path.slice(0, -1));
 });
-app.use(express.json({ limit: '1mb' }));
 
 // True when the request actually arrived over HTTPS - directly, or via a
 // reverse proxy that sets the standard forwarded-proto header - so the
@@ -142,6 +144,7 @@ function rateLimit(scope: string, opts: RateLimitOptions) {
 
 const loginRateLimit = rateLimit('login', LOGIN_RATE_LIMIT);
 const apiRateLimit = rateLimit('api', API_RATE_LIMIT);
+const parseApiJson = express.json({ limit: MAX_API_JSON_BODY_BYTES });
 
 function requireFeature(feature: NetworkFeatureId) {
   return (req: RequestLike, res: ResponseLike, next: Next) => {
@@ -174,7 +177,7 @@ async function withExpressOperationBudget<T>(
 app.post('/api/login', (req: RequestLike, res: ResponseLike, next: Next) => {
   if (!isTrustedLoginOrigin(req.headers)) return res.status(403).json({ error: 'Cross-site request blocked' });
   next();
-}, loginRateLimit, (req: RequestLike, res: ResponseLike) => {
+}, loginRateLimit, parseApiJson, (req: RequestLike, res: ResponseLike) => {
   const password = recordValue(req.body, 'password') || '';
   if (!checkPassword(password)) {
     return res.status(401).json({ error: 'Incorrect password' });
@@ -382,6 +385,17 @@ app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain
   });
 });
 
+// Keep API failures inside the same bounded JSON contract as ordinary route
+// responses. Body-parser errors otherwise reach Express's HTML error page and
+// may expose stack traces and filesystem paths outside production mode.
+function apiErrorHandler(error: unknown, _req: RequestLike, res: ResponseLike, next: ErrorNext) {
+  if (res.headersSent) return next(error);
+  const response = apiErrorResponseFor(error);
+  return res.status(response.statusCode).json(response.body);
+}
+
+app.use('/api', apiErrorHandler);
+
 function startServer() {
   return app.listen(PORT, (error: Error | undefined) => {
     if (error) throw error;
@@ -393,4 +407,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requireAuth, rateLimit, requireFeature, startServer };
+export { app, isHttps, usesSecureCookies, requireAuth, rateLimit, requireFeature, apiErrorHandler, startServer };
