@@ -51,15 +51,8 @@
   status = 200
   force = true
 
-[[redirects]]
-  from = "/api/login"
-  to = "/.netlify/functions/login"
-  status = 200
-  force = true
-  [redirects.rate_limit]
-    window_limit = 10
-    window_size = 180
-    aggregate_by = ["ip", "domain"]
+# The login function exports its own /api/login path and function-level rate
+# limit. Its custom path removes the default direct function endpoint.
 
 [[redirects]]
   from = "/api/logout"

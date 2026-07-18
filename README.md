@@ -936,13 +936,16 @@ is in-memory: on `server.mts` (one long-lived process) it applies globally; on
 Netlify Functions each container has its own memory, so it only limits bursts
 within a single warm container rather than across the whole deployment - a
 cheap first line of defense, not a substitute for a shared store (e.g. Redis)
-under sustained distributed abuse. Netlify deployments additionally apply
-its edge-enforced, per-IP rate limiting to the canonical `/api/login` and
-`/api/lookup` paths. Those two rules use the code-based allowance available
-on all Netlify plans and protect the password gate and the main high-volume
-scan path before a function container is invoked.
-Requests made directly to `/.netlify/functions/*` do not pass through those
-path-specific edge rules. The function-level limiter still applies, but it is
+under sustained distributed abuse. Netlify deployments additionally use the
+two code-based, per-IP rules available on the Legacy Free plan. Login is mapped
+to `/api/login` and rate-limited in the function's exported configuration, so
+the provider's default direct login-function endpoint is no longer available
+as a bypass. The main high-volume `/api/lookup` path retains its redirect-level
+edge rule. Confirm that both rules are reported as applied during Netlify's
+deployment post-processing; an invalid code-based rule does not necessarily
+fail the deployment.
+Other requests made directly to `/.netlify/functions/*` do not pass through the
+lookup path's edge rule. Their function-level limiter still applies, but it is
 container-local; deployments that need durable protection against distributed
 abuse should add a shared rate-limit store or platform-level traffic controls.
 

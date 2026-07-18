@@ -5,7 +5,11 @@
 
 import { getStore } from '@netlify/blobs';
 import { isTrustedOrigin } from '../../lib/auth.mts';
-import { json } from '../../lib/http.mts';
+import {
+  json,
+  netlifyJsonToResponse,
+  readRequestTextCapped,
+} from '../../lib/http.mts';
 import { guardNetlifyNetworkRequest } from '../../lib/netlify-network-guard.mts';
 import {
   checkRateLimit,
@@ -43,15 +47,6 @@ type ManagementFunctionOptions = {
   now?: () => number;
   randomUUID?: () => string;
 };
-type BoundedRequestBody = {
-  status: 'ok';
-  body: string;
-} | {
-  status: 'invalid_encoding';
-} | {
-  status: 'too_large';
-};
-
 const MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES = 1024 * 1024;
 const NO_STORE_HEADERS = Object.freeze({ 'Cache-Control': 'no-store' });
 const MANAGEMENT_STATUS = Object.freeze({
@@ -118,51 +113,6 @@ function requestTooLargeResponse() {
     error: 'Scheduled monitoring requests are limited to 1 MiB.',
     errorCode: 'REQUEST_TOO_LARGE',
   }, NO_STORE_HEADERS);
-}
-
-async function readRequestBodyCapped(
-  request: Request,
-  maxBytes = MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
-): Promise<BoundedRequestBody> {
-  const declaredLength = request.headers.get('content-length');
-  if (declaredLength && /^\d+$/u.test(declaredLength)) {
-    const parsedLength = Number(declaredLength);
-    if (!Number.isSafeInteger(parsedLength) || parsedLength > maxBytes) {
-      return { status: 'too_large' };
-    }
-  }
-  if (!request.body) return { status: 'ok', body: '' };
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    totalBytes += value.byteLength;
-    if (totalBytes > maxBytes) {
-      await reader.cancel().catch(() => {});
-      return { status: 'too_large' };
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return { status: 'ok', body: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
-  } catch {
-    return { status: 'invalid_encoding' };
-  }
-}
-
-function toWebResponse(response: ReturnType<typeof json>) {
-  return new Response(response.body, {
-    status: response.statusCode,
-    headers: response.headers,
-  });
 }
 
 async function runScheduledMonitorManagementFunction(
@@ -235,16 +185,16 @@ async function runScheduledMonitorManagementRequest(
   // it, or constructing a store so inherited preview credentials cannot expose
   // or mutate production monitoring state.
   if (context.deploy?.published !== true) {
-    return toWebResponse(nonPublishedDeployResponse());
+    return netlifyJsonToResponse(nonPublishedDeployResponse());
   }
   const bodyResult = request.method === 'POST'
-    ? await readRequestBodyCapped(request)
+    ? await readRequestTextCapped(request, MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES)
     : { status: 'ok' as const, body: '' };
   if (bodyResult.status === 'too_large') {
-    return toWebResponse(requestTooLargeResponse());
+    return netlifyJsonToResponse(requestTooLargeResponse());
   }
   if (bodyResult.status === 'invalid_encoding') {
-    return toWebResponse(json(400, {
+    return netlifyJsonToResponse(json(400, {
       error: 'Invalid request body',
       errorCode: MANAGEMENT_ERROR_CODES.INVALID_REQUEST,
     }, NO_STORE_HEADERS));
@@ -254,7 +204,7 @@ async function runScheduledMonitorManagementRequest(
     headers: Object.fromEntries(request.headers.entries()),
     body: request.method === 'POST' ? bodyResult.body : null,
   };
-  return toWebResponse(await runScheduledMonitorManagementFunction(event, options));
+  return netlifyJsonToResponse(await runScheduledMonitorManagementFunction(event, options));
 }
 
 export default async function scheduledMonitorManagementHandler(
@@ -269,7 +219,6 @@ export default async function scheduledMonitorManagementHandler(
 // the legacy runtime, which does not provide the Blob context used by getStore.
 export {
   MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
-  readRequestBodyCapped,
   runScheduledMonitorManagementFunction,
   runScheduledMonitorManagementRequest,
 };

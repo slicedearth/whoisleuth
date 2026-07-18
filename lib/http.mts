@@ -28,6 +28,15 @@ type NetlifyJsonResponse = {
   body: string | undefined;
 };
 
+type BoundedRequestText = {
+  status: 'ok';
+  body: string;
+} | {
+  status: 'invalid_encoding';
+} | {
+  status: 'too_large';
+};
+
 function apiRequestErrorResponse(errorCode: ApiRequestErrorCode): ApiRequestErrorResponse {
   if (errorCode === API_REQUEST_ERROR_CODES.INVALID_REQUEST_BODY) {
     return {
@@ -81,16 +90,71 @@ function json(
   };
 }
 
+// Modern Netlify Fetch handlers receive a streaming Request rather than the
+// already-buffered Lambda event used by the older entry points. Enforce the
+// same byte boundary before retaining the complete body, reject malformed
+// UTF-8 deterministically, and share the implementation across every modern
+// request boundary that accepts JSON.
+async function readRequestTextCapped(
+  request: Request,
+  maxBytes = MAX_API_JSON_BODY_BYTES,
+): Promise<BoundedRequestText> {
+  const declaredLength = request.headers.get('content-length');
+  if (declaredLength && /^\d+$/u.test(declaredLength)) {
+    const parsedLength = Number(declaredLength);
+    if (!Number.isSafeInteger(parsedLength) || parsedLength > maxBytes) {
+      return { status: 'too_large' };
+    }
+  }
+  if (!request.body) return { status: 'ok', body: '' };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return { status: 'too_large' };
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return { status: 'ok', body: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
+  } catch {
+    return { status: 'invalid_encoding' };
+  }
+}
+
+function netlifyJsonToResponse(response: NetlifyJsonResponse): Response {
+  return new Response(response.body, {
+    status: response.statusCode,
+    headers: response.headers,
+  });
+}
+
 export {
   API_REQUEST_ERROR_CODES,
   MAX_API_JSON_BODY_BYTES,
   apiErrorResponseFor,
   apiRequestErrorResponse,
   json,
+  netlifyJsonToResponse,
+  readRequestTextCapped,
 };
 export type {
   ApiRequestErrorCode,
   ApiRequestErrorResponse,
+  BoundedRequestText,
   NetlifyJsonResponse,
   NetlifyResponseHeaders,
 };

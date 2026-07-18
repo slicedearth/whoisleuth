@@ -11,10 +11,10 @@ import {
 } from '../lib/scheduled-monitor-configuration.mts';
 import { MANAGEMENT_ERROR_CODES } from '../lib/scheduled-monitor-management.mts';
 import { SCHEDULED_MONITOR_UNAVAILABLE_CODE } from '../lib/scheduled-monitor-runtime.mts';
+import { readRequestTextCapped } from '../lib/http.mts';
 import scheduledMonitorManagementHandler, * as scheduledMonitorManagementModule from '../netlify/functions/scheduled-monitor-management.mts';
 import {
   MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
-  readRequestBodyCapped,
   runScheduledMonitorManagementFunction,
   runScheduledMonitorManagementRequest,
 } from '../netlify/functions/scheduled-monitor-management.mts';
@@ -186,7 +186,7 @@ test('the web boundary caps declared and streamed request bodies before Blob con
   assert.equal(declared.status, 413);
 
   const chunk = new Uint8Array(600 * 1024);
-  const streamed = await readRequestBodyCapped(new Request(
+  const streamed = await readRequestTextCapped(new Request(
     'https://console.example/api/scheduled-monitor',
     {
       method: 'POST',
@@ -199,7 +199,7 @@ test('the web boundary caps declared and streamed request bodies before Blob con
       }),
       duplex: 'half',
     },
-  ));
+  ), MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES);
   assert.equal(streamed.status, 'too_large');
 });
 
