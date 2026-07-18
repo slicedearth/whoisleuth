@@ -248,12 +248,43 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.equal(registeredProfiles.length + negativeProfiles.length, 25);
   });
 
+  test('covers the version twenty-two 27-suffix authoritative-negative batch', () => {
+    const expectedProfiles = [
+      'ag', 'aw', 'ax', 'bi', 'bn', 'ci', 'gh', 'gn', 'gs',
+      'im', 'ki', 'ma', 'mz', 'nf', 'pr', 'sc', 'sh', 'sn',
+      'so', 'tc', 'td', 'tg', 'tm', 'vu', 'xn--j1amh',
+      'xn--mgbah1a3hjkrd', 'xn--ogbpf8fl',
+    ].map((suffix) => `iana-cc-negative-${suffix}`);
+
+    assert.equal(expectedProfiles.length, 27);
+    assert.deepEqual(
+      fixtures.filter((fixture) => fixture.scenario === 'not_found'
+        && expectedProfiles.includes(fixture.capabilityProfile))
+        .map((fixture) => fixture.capabilityProfile).sort(),
+      [...expectedProfiles].sort(),
+    );
+  });
+
   test('does not promote no-data wording embedded in policy prose', () => {
     const parsed = parseWhoisChain([
       { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
       {
         server: 'whois.registry.invalid',
         response: 'Policy notice: No Data Found is shown only when an object is absent.',
+      },
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'inconclusive');
+    assert.equal(parsed.notFound, false);
+    assert.equal(parsed.chainStatus, 'partial');
+  });
+
+  test('keeps available-for-purchase wording behind the complete response line', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: 'Policy notice: Domain example.test is available for purchase only after release.',
       },
     ]);
 

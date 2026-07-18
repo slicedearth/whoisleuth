@@ -655,6 +655,7 @@ const LINE_NOT_FOUND_PATTERNS = Object.freeze([
   /^[ \t]*no record found for[ \t]+'[a-z0-9.-]{1,253}'\.?[ \t]*$/im,
   /^[ \t]*no data found[ \t]*$/im,
   /^[ \t]*>>[ \t]*no data found for domain[ \t]*:[ \t]*[a-z0-9.-]{1,253}[ \t]*$/im,
+  /^[ \t]*domain[ \t]+[a-z0-9.-]{1,253}[ \t]+is available for purchase[ \t]*$/im,
 ]);
 
 // InternetNZ's documented .nz WHOIS protocol uses a numeric query_status

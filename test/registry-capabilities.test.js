@@ -2,7 +2,7 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
-const { existsSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { domainToUnicode } = require('node:url');
 
@@ -119,41 +119,56 @@ const VERSION_21_NEGATIVE_SUFFIXES = ['nc', 'vg'];
 const VERSION_21_RDAP_SUFFIXES = new Set([
   'fj', 'kg', 'ly', 'pg', 'tv', 'tz', 'uz', 'vg', 'ye', 'zm',
 ]);
+const VERSION_22_NEGATIVE_SUFFIXES = [
+  'ag', 'aw', 'ax', 'bi', 'bn', 'ci', 'gh', 'gn', 'gs',
+  'im', 'ki', 'ma', 'mz', 'nf', 'pr', 'sc', 'sh', 'sn',
+  'so', 'tc', 'td', 'tg', 'tm', 'vu', 'xn--j1amh',
+  'xn--mgbah1a3hjkrd', 'xn--ogbpf8fl',
+];
+const VERSION_22_RDAP_SUFFIXES = new Set(['gs', 'nf', 'sn']);
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 21);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 22);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'ac', 'ad', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'az', 'ba', 'bb',
-      'bd', 'be', 'bf', 'bg', 'bh', 'bm', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cc', 'cd', 'cg', 'ch',
-      'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'dz', 'ec', 'edu', 'ee',
-      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'gf', 'gg', 'gi', 'gl', 'gm',
-      'gr', 'gt', 'gu', 'gw', 'gy', 'hk', 'hn', 'hr', 'ht',
-      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke', 'kg',
-      'kh', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu',
-      'lv', 'ly', 'mc', 'md', 'me', 'mg', 'mh', 'mk', 'ml', 'mm', 'mn',
-      'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'na', 'nc', 'ne', 'ng', 'ni', 'nl', 'no',
-      'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro',
-      'rs', 'ru', 'rw', 'sa', 'sd', 'se', 'sg', 'si', 'sj', 'sk', 'sl', 'sr', 'ss', 'st', 'su', 'sv', 'sx', 'sy', 'sz', 'tf',
-      'th', 'tj', 'tn', 'to', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uz', 'va', 'vc', 've', 'vg', 'vn', 'wf', 'ws',
+      'ac', 'ad', 'ae', 'af', 'ag', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'aw', 'ax', 'az', 'ba', 'bb',
+      'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bm', 'bn', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cc', 'cd', 'cg', 'ch',
+      'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'dz', 'ec', 'edu', 'ee',
+      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm',
+      'gn', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hn', 'hr', 'ht',
+      'hu', 'id', 'ie', 'il', 'im', 'in', 'io', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke', 'kg',
+      'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu',
+      'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mg', 'mh', 'mk', 'ml', 'mm', 'mn',
+      'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz', 'na', 'nc', 'ne', 'nf', 'ng', 'ni', 'nl', 'no',
+      'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro',
+      'rs', 'ru', 'rw', 'sa', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sn', 'so', 'sr', 'ss', 'st', 'su', 'sv', 'sx', 'sy', 'sz',
+      'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tm', 'tn', 'to', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uz', 'va', 'vc', 've', 'vg', 'vn', 'vu', 'wf', 'ws',
       'xn--2scrj9c', 'xn--3e0b707e',
       'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--4dbrk0ce', 'xn--54b7fta0cc', 'xn--80ao21a',
       'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--d1alf',
       'xn--e1a4c', 'xn--fiqs8s', 'xn--fiqz9s',
       'xn--fpcrj9c3d', 'xn--fzc2c9e2c', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
-      'xn--h2brj9c8c', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
-      'xn--lgbbat1ad8j', 'xn--mgb9awbf', 'xn--mgba3a4f16a', 'xn--mgbaam7a8h',
+      'xn--h2brj9c8c', 'xn--j1amh', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
+      'xn--lgbbat1ad8j', 'xn--mgb9awbf', 'xn--mgba3a4f16a', 'xn--mgbaam7a8h', 'xn--mgbah1a3hjkrd',
       'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbbh1a', 'xn--mgbbh1a71e',
       'xn--mgbc0a9azcg', 'xn--mgbcpq6gpa1a', 'xn--mgberp4a5d4ar', 'xn--mgbgu82a',
-      'xn--mgbpl2fh', 'xn--mgbx4cd0ab', 'xn--mix891f', 'xn--node', 'xn--o3cw4h',
+      'xn--mgbpl2fh', 'xn--mgbx4cd0ab', 'xn--mix891f', 'xn--node', 'xn--o3cw4h', 'xn--ogbpf8fl',
       'xn--p1ai', 'xn--pgbs0dh', 'xn--q7ce6a', 'xn--qxa6a', 'xn--qxam',
       'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--wgbh1c', 'xn--xkc2al3hye2a',
       'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o', 'ye', 'yt', 'za', 'zm', 'zw',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
+  });
+
+  test('keeps the published compatibility table synchronized with the catalogue', () => {
+    const markdown = readFileSync(resolve(__dirname, '..', 'docs', 'registry-compatibility.md'), 'utf8');
+    const documentedSuffixes = Array.from(markdown.matchAll(/^\| `\.([^`]+)`/gm), (match) => match[1]);
+    const catalogueSuffixes = registryCompatibilityMatrix().map((row) => row.suffixes[0]);
+
+    assert.deepEqual(documentedSuffixes, catalogueSuffixes);
   });
 
   test('resolves a domain, a suffix, case, and one terminal root dot', () => {
@@ -491,6 +506,33 @@ describe('registry capability metadata', () => {
     for (const suffix of allSuffixes) {
       const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
       if (VERSION_21_RDAP_SUFFIXES.has(suffix)) assert.equal(diagnostic, null, suffix);
+      else {
+        assert.equal(diagnostic?.suffix, suffix, suffix);
+        assert.equal(diagnostic?.rdapAccessProfile, 'no-iana-service', suffix);
+        assert.equal(diagnostic?.authority, 'context_only', suffix);
+      }
+    }
+  });
+
+  test('records the version twenty-two 27-suffix authoritative-negative batch', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+
+    assert.equal(VERSION_22_NEGATIVE_SUFFIXES.length, 27);
+    assert.equal(new Set(VERSION_22_NEGATIVE_SUFFIXES).size, 27);
+    for (const suffix of VERSION_22_NEGATIVE_SUFFIXES) {
+      const profile = profiles.get(`iana-cc-negative-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.deepEqual(profile.suffixes, [suffix], suffix);
+      assert.equal(profile.whoisParserProfile, 'generic-colon', suffix);
+      assert.deepEqual(profile.fixtureScenarios, ['not_found'], suffix);
+      assert.match(profile.limitation, /registered-field compatibility is not claimed/i, suffix);
+      assert.equal(
+        profile.rdapAccessProfile,
+        VERSION_22_RDAP_SUFFIXES.has(suffix) ? 'iana-bootstrap' : 'no-iana-service',
+        suffix,
+      );
+      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      if (VERSION_22_RDAP_SUFFIXES.has(suffix)) assert.equal(diagnostic, null, suffix);
       else {
         assert.equal(diagnostic?.suffix, suffix, suffix);
         assert.equal(diagnostic?.rdapAccessProfile, 'no-iana-service', suffix);
