@@ -20,6 +20,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
       - name: Run tests
         run: npm test
       - name: Run type checks
