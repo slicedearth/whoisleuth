@@ -694,6 +694,13 @@ function hasSectionedRegistrationEvidence(text: string): boolean {
   return Boolean(domain?.value && status?.value);
 }
 
+function hasNicKgRegistrationEvidence(text: string): boolean {
+  return /^% This is the \.kg ccTLD Whois server[ \t]*$/im.test(text)
+    && /^[ \t]*Domain[ \t]+[a-z0-9.-]+[ \t]+\([A-Z][A-Z0-9_-]*\)[ \t]*$/im.test(text)
+    && /^[ \t]*Record created[ \t]*:[ \t]*\S/im.test(text)
+    && /^[ \t]*Name servers in the listed order[ \t]*:[ \t]*$/im.test(text);
+}
+
 function classifyHopEvidence(hop: WhoisHop, index: number): string {
   if (hop.error) return 'error';
   const text = hop.response || '';
@@ -710,7 +717,8 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   // domain itself.
   if (index > 0 && (POSITIVE_REGISTRATION_RE.test(text)
     || POSITIVE_BRACKET_RE.test(text) || NZ_POSITIVE_RE.test(text)
-    || hasSectionedRegistrationEvidence(text))) return 'positive';
+    || hasSectionedRegistrationEvidence(text)
+    || hasNicKgRegistrationEvidence(text))) return 'positive';
   return 'inconclusive';
 }
 
@@ -1250,6 +1258,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       && /^[ \t]*Domain Name[ \t]*:/im.test(text)
       && /^[ \t]*Record created on[ \t]+[^:\r\n]/im.test(text)
       && /^[ \t]*Domain name servers[ \t]*:[ \t]*$/im.test(text);
+    const isNicKg = !isRootHop && hasNicKgRegistrationEvidence(text);
 
     for (const [key, res] of Object.entries(patterns)) {
       // IANA's root hop describes the TLD and its operator, never a contact
@@ -1481,6 +1490,50 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
         collectBareWhoisNameservers(
           text,
           /^[ \t]*Domain name servers[ \t]*:[ \t]*$/im,
+          nameservers,
+          truncatedFields,
+        );
+      }
+
+      if (isNicKg) {
+        const domainHeader = text.match(
+          /^[ \t]*Domain[ \t]+([a-z0-9.-]+)[ \t]+\(([A-Z][A-Z0-9_-]*)\)[ \t]*$/im,
+        );
+        if (domainHeader) {
+          const domain = boundedWhoisValue(domainHeader[1], whoisFieldLimit('domainName'));
+          if (domain.value) fields.domainName = domain.value;
+          if (domain.truncated) truncatedFields.add('domainName');
+          addBoundedWhoisSetValue(statuses, domainHeader[2], {
+            maxEntries: MAX_WHOIS_STATUSES,
+            maxLength: 160,
+            field: 'statuses',
+            truncatedFields,
+          });
+        }
+        assignBoundedWhoisMatch(
+          text,
+          fields,
+          'createdDate',
+          /^[ \t]*Record created[ \t]*:[ \t]*(.+)$/im,
+          truncatedFields,
+        );
+        assignBoundedWhoisMatch(
+          text,
+          fields,
+          'updatedDate',
+          /^[ \t]*Record last updated on[ \t]*:[ \t]*(.+)$/im,
+          truncatedFields,
+        );
+        assignBoundedWhoisMatch(
+          text,
+          fields,
+          'expiryDate',
+          /^[ \t]*Record expires on[ \t]*:[ \t]*(.+)$/im,
+          truncatedFields,
+        );
+        collectBareWhoisNameservers(
+          text,
+          /^[ \t]*Name servers in the listed order[ \t]*:[ \t]*$/im,
           nameservers,
           truncatedFields,
         );

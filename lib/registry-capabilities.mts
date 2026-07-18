@@ -40,7 +40,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 20;
+const REGISTRY_CAPABILITIES_VERSION = 21;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -53,6 +53,7 @@ const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profi
 const NO_IANA_MACHINE_SERVICE_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. Missing registry data is not evidence that the domain is unregistered.';
 const RDAP_ONLY_MACHINE_SERVICE_LIMITATION = 'IANA publishes an RDAP bootstrap service but no domain WHOIS referral for this suffix. Missing WHOIS data is contextual only and is not evidence that the domain is unregistered.';
 const SHARED_WHOIS_NO_RDAP_LIMITATION = 'Synthetic fixture reuse is limited to an exact shared IANA WHOIS service. IANA publishes no RDAP bootstrap service for this suffix, and missing registry data is not evidence that the domain is unregistered.';
+const WHOIS_ONLY_FIXTURE_LIMITATION = 'Synthetic fixtures verify the current WHOIS parser profile. IANA publishes no RDAP bootstrap service for this suffix, and missing registry data is not evidence that the domain is unregistered.';
 const NORID_CLOSED_SUFFIX_LIMITATION = 'The registry has not opened this suffix for registrations, and IANA publishes no domain WHOIS or RDAP service. Missing registry data is contextual only and must not be interpreted as a live availability result.';
 const VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   'ao', 'az', 'bb', 'bd', 'bs', 'bt', 'bz', 'cd', 'cg', 'ck',
@@ -74,6 +75,15 @@ const VERSION_20_FIXTURE_SUFFIXES = Object.freeze([
   'hn', 'ht', 'ky', 'lb', 'mg', 'ml', 'ms', 'mu', 'ng', 'pw',
   'rw', 'sd', 'sr', 'ss', 'to',
 ]);
+const VERSION_21_STANDARD_SUFFIXES = Object.freeze([
+  'bf', 'dm', 'fj', 'kn', 'ly', 'mr', 'pe', 'pg', 'qa',
+  'st', 'sx', 'sy', 'tv', 'ug', 'uz', 'ws', 'ye', 'zm',
+]);
+const VERSION_21_CONTACT_SUFFIXES = Object.freeze(['mw', 'tz', 've']);
+const VERSION_21_RDAP_SUFFIXES = Object.freeze([
+  'fj', 'kg', 'ly', 'pg', 'tv', 'tz', 'uz', 'vg', 'ye', 'zm',
+]);
+const VERSION_21_NEGATIVE_ONLY_SUFFIXES = Object.freeze(['nc', 'vg']);
 const NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES,
   ...VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES,
@@ -236,6 +246,60 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     whoisParserProfile: 'icann-style-colon',
     fixtureScenarios: ['registered'],
     documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
+  })),
+  ...VERSION_21_STANDARD_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+    id: `iana-cc-colon-${suffix}`,
+    suffixes: [suffix],
+    registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon',
+    fixtureScenarios: ['registered'],
+    rdapAccessProfile: VERSION_21_RDAP_SUFFIXES.includes(suffix)
+      ? 'iana-bootstrap'
+      : 'no-iana-service',
+    documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
+    limitation: VERSION_21_RDAP_SUFFIXES.includes(suffix)
+      ? FIXTURE_LIMITATION
+      : WHOIS_ONLY_FIXTURE_LIMITATION,
+  })),
+  ...VERSION_21_CONTACT_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+    id: `iana-cc-contact-${suffix}`,
+    suffixes: [suffix],
+    registryClass: 'country-code',
+    whoisParserProfile: 'contact-indirection',
+    fixtureScenarios: ['registered'],
+    rdapAccessProfile: VERSION_21_RDAP_SUFFIXES.includes(suffix)
+      ? 'iana-bootstrap'
+      : 'no-iana-service',
+    documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
+    limitation: VERSION_21_RDAP_SUFFIXES.includes(suffix)
+      ? FIXTURE_LIMITATION
+      : WHOIS_ONLY_FIXTURE_LIMITATION,
+  })),
+  {
+    id: 'internetstiftelsen-nu-colon', suffixes: ['nu'], registryClass: 'country-code',
+    whoisParserProfile: 'internetstiftelsen-colon', fixtureScenarios: ['registered'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/nu.html'],
+    limitation: WHOIS_ONLY_FIXTURE_LIMITATION,
+  },
+  {
+    id: 'nic-kg-sectioned', suffixes: ['kg'], registryClass: 'country-code',
+    whoisParserProfile: 'nic-kg-sectioned', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/kg.html'],
+  },
+  ...VERSION_21_NEGATIVE_ONLY_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
+    id: `iana-cc-negative-${suffix}`,
+    suffixes: [suffix],
+    registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon',
+    fixtureScenarios: ['not_found'],
+    rdapAccessProfile: VERSION_21_RDAP_SUFFIXES.includes(suffix)
+      ? 'iana-bootstrap'
+      : 'no-iana-service',
+    documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
+    limitation: VERSION_21_RDAP_SUFFIXES.includes(suffix)
+      ? FIXTURE_LIMITATION
+      : WHOIS_ONLY_FIXTURE_LIMITATION,
   })),
   {
     id: 'no-iana-machine-service-ba', suffixes: ['ba'], registryClass: 'country-code',

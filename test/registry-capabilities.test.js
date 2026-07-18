@@ -110,26 +110,35 @@ const VERSION_20_FIXTURE_SUFFIXES = [
   'hn', 'ht', 'ky', 'lb', 'mg', 'ml', 'ms', 'mu', 'ng', 'pw',
   'rw', 'sd', 'sr', 'ss', 'to',
 ];
+const VERSION_21_STANDARD_SUFFIXES = [
+  'bf', 'dm', 'fj', 'kn', 'ly', 'mr', 'pe', 'pg', 'qa',
+  'st', 'sx', 'sy', 'tv', 'ug', 'uz', 'ws', 'ye', 'zm',
+];
+const VERSION_21_CONTACT_SUFFIXES = ['mw', 'tz', 've'];
+const VERSION_21_NEGATIVE_SUFFIXES = ['nc', 'vg'];
+const VERSION_21_RDAP_SUFFIXES = new Set([
+  'fj', 'kg', 'ly', 'pg', 'tv', 'tz', 'uz', 'vg', 'ye', 'zm',
+]);
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 20);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 21);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
       'ac', 'ad', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'az', 'ba', 'bb',
-      'bd', 'be', 'bg', 'bh', 'bm', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cc', 'cd', 'cg', 'ch',
-      'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dz', 'ec', 'edu', 'ee',
-      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'gf', 'gg', 'gi', 'gl', 'gm',
+      'bd', 'be', 'bf', 'bg', 'bh', 'bm', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cc', 'cd', 'cg', 'ch',
+      'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'dz', 'ec', 'edu', 'ee',
+      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'gf', 'gg', 'gi', 'gl', 'gm',
       'gr', 'gt', 'gu', 'gw', 'gy', 'hk', 'hn', 'hr', 'ht',
-      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke',
-      'kh', 'km', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu',
-      'lv', 'mc', 'md', 'me', 'mg', 'mh', 'mk', 'ml', 'mm', 'mn',
-      'mo', 'mp', 'mq', 'ms', 'mt', 'mu', 'mv', 'mx', 'my', 'na', 'ne', 'ng', 'ni', 'nl', 'no',
-      'np', 'nr', 'nz', 'om', 'pa', 'ph', 'pk', 'pl', 'pm', 'pn', 'ps', 'pt', 'pw', 'py', 're', 'ro',
-      'rs', 'ru', 'rw', 'sa', 'sd', 'se', 'sg', 'si', 'sj', 'sk', 'sl', 'sr', 'ss', 'su', 'sv', 'sz', 'tf',
-      'th', 'tj', 'tn', 'to', 'tr', 'tt', 'tw', 'ua', 'uk', 'us', 'va', 'vc', 'vn', 'wf',
+      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke', 'kg',
+      'kh', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu',
+      'lv', 'ly', 'mc', 'md', 'me', 'mg', 'mh', 'mk', 'ml', 'mm', 'mn',
+      'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'na', 'nc', 'ne', 'ng', 'ni', 'nl', 'no',
+      'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro',
+      'rs', 'ru', 'rw', 'sa', 'sd', 'se', 'sg', 'si', 'sj', 'sk', 'sl', 'sr', 'ss', 'st', 'su', 'sv', 'sx', 'sy', 'sz', 'tf',
+      'th', 'tj', 'tn', 'to', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uz', 'va', 'vc', 've', 'vg', 'vn', 'wf', 'ws',
       'xn--2scrj9c', 'xn--3e0b707e',
       'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--4dbrk0ce', 'xn--54b7fta0cc', 'xn--80ao21a',
       'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--d1alf',
@@ -142,7 +151,7 @@ describe('registry capability metadata', () => {
       'xn--mgbpl2fh', 'xn--mgbx4cd0ab', 'xn--mix891f', 'xn--node', 'xn--o3cw4h',
       'xn--p1ai', 'xn--pgbs0dh', 'xn--q7ce6a', 'xn--qxa6a', 'xn--qxam',
       'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--wgbh1c', 'xn--xkc2al3hye2a',
-      'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o', 'yt', 'za', 'zw',
+      'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o', 'ye', 'yt', 'za', 'zm', 'zw',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
@@ -429,6 +438,65 @@ describe('registry capability metadata', () => {
     }
 
     assert.equal(VERSION_20_FIXTURE_SUFFIXES.length, 25);
+  });
+
+  test('records the version twenty-one 25-suffix fixture-backed service batch', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+
+    for (const suffix of VERSION_21_STANDARD_SUFFIXES) {
+      const profile = profiles.get(`iana-cc-colon-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.deepEqual(profile.suffixes, [suffix], suffix);
+      assert.equal(profile.whoisParserProfile, 'icann-style-colon', suffix);
+      assert.deepEqual(profile.fixtureScenarios, ['registered'], suffix);
+      assert.equal(
+        profile.rdapAccessProfile,
+        VERSION_21_RDAP_SUFFIXES.has(suffix) ? 'iana-bootstrap' : 'no-iana-service',
+        suffix,
+      );
+    }
+
+    for (const suffix of VERSION_21_CONTACT_SUFFIXES) {
+      const profile = profiles.get(`iana-cc-contact-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.equal(profile.whoisParserProfile, 'contact-indirection', suffix);
+      assert.deepEqual(profile.fixtureScenarios, ['registered'], suffix);
+    }
+
+    assert.equal(profiles.get('internetstiftelsen-nu-colon').rdapAccessProfile, 'no-iana-service');
+    assert.deepEqual(profiles.get('internetstiftelsen-nu-colon').fixtureScenarios, ['registered']);
+    assert.equal(profiles.get('nic-kg-sectioned').rdapAccessProfile, 'iana-bootstrap');
+    assert.deepEqual(profiles.get('nic-kg-sectioned').fixtureScenarios, ['registered']);
+
+    for (const suffix of VERSION_21_NEGATIVE_SUFFIXES) {
+      const profile = profiles.get(`iana-cc-negative-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.deepEqual(profile.fixtureScenarios, ['not_found'], suffix);
+      assert.equal(
+        profile.rdapAccessProfile,
+        VERSION_21_RDAP_SUFFIXES.has(suffix) ? 'iana-bootstrap' : 'no-iana-service',
+        suffix,
+      );
+    }
+
+    const allSuffixes = [
+      ...VERSION_21_STANDARD_SUFFIXES,
+      ...VERSION_21_CONTACT_SUFFIXES,
+      'nu',
+      'kg',
+      ...VERSION_21_NEGATIVE_SUFFIXES,
+    ];
+    assert.equal(allSuffixes.length, 25);
+    assert.equal(new Set(allSuffixes).size, 25);
+    for (const suffix of allSuffixes) {
+      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      if (VERSION_21_RDAP_SUFFIXES.has(suffix)) assert.equal(diagnostic, null, suffix);
+      else {
+        assert.equal(diagnostic?.suffix, suffix, suffix);
+        assert.equal(diagnostic?.rdapAccessProfile, 'no-iana-service', suffix);
+        assert.equal(diagnostic?.authority, 'context_only', suffix);
+      }
+    }
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {

@@ -220,6 +220,34 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.deepEqual(coveredProfiles, expectedProfiles);
   });
 
+  test('covers the version twenty-one 25-suffix registered and negative-response batch', () => {
+    const registeredProfiles = [
+      'iana-cc-colon-bf', 'iana-cc-colon-dm', 'iana-cc-colon-fj',
+      'iana-cc-colon-kn', 'iana-cc-colon-ly', 'iana-cc-colon-mr',
+      'iana-cc-colon-pe', 'iana-cc-colon-pg', 'iana-cc-colon-qa',
+      'iana-cc-colon-st', 'iana-cc-colon-sx', 'iana-cc-colon-sy',
+      'iana-cc-colon-tv', 'iana-cc-colon-ug', 'iana-cc-colon-uz',
+      'iana-cc-colon-ws', 'iana-cc-colon-ye', 'iana-cc-colon-zm',
+      'iana-cc-contact-mw', 'iana-cc-contact-tz', 'iana-cc-contact-ve',
+      'internetstiftelsen-nu-colon', 'nic-kg-sectioned',
+    ];
+    const negativeProfiles = ['iana-cc-negative-nc', 'iana-cc-negative-vg'];
+
+    assert.deepEqual(
+      fixtures.filter((fixture) => fixture.scenario === 'registered'
+        && registeredProfiles.includes(fixture.capabilityProfile))
+        .map((fixture) => fixture.capabilityProfile).sort(),
+      [...registeredProfiles].sort(),
+    );
+    assert.deepEqual(
+      fixtures.filter((fixture) => fixture.scenario === 'not_found'
+        && negativeProfiles.includes(fixture.capabilityProfile))
+        .map((fixture) => fixture.capabilityProfile).sort(),
+      [...negativeProfiles].sort(),
+    );
+    assert.equal(registeredProfiles.length + negativeProfiles.length, 25);
+  });
+
   test('does not promote no-data wording embedded in policy prose', () => {
     const parsed = parseWhoisChain([
       { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
@@ -316,6 +344,46 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.equal(parsed.nameservers.length, 200);
     assert.equal(parsed.nameservers[0], 'ns0.example.invalid');
     assert.equal(parsed.nameservers.at(-1), 'ns199.example.invalid');
+    assert.ok(parsed.fieldsTruncated.includes('nameservers'));
+  });
+
+  test('keeps Kyrgyz registry aliases behind the complete marker set', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: KG\nrefer: whois.kg.invalid\n' },
+      {
+        server: 'whois.kg.invalid',
+        response: [
+          'Domain EXAMPLE.KG (ACTIVE)',
+          'Record created: Mon May 16 08:46:41 2011',
+          'Name servers in the listed order:',
+          'NS1.EXAMPLE.INVALID',
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'inconclusive');
+    assert.equal(parsed.domainName, undefined);
+    assert.equal(parsed.createdDate, undefined);
+    assert.deepEqual(parsed.nameservers, []);
+  });
+
+  test('caps Kyrgyz registry bare nameservers and discloses truncation', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: KG\nrefer: whois.kg.invalid\n' },
+      {
+        server: 'whois.kg.invalid',
+        response: [
+          '% This is the .kg ccTLD Whois server',
+          'Domain EXAMPLE.KG (ACTIVE)',
+          'Record created: Mon May 16 08:46:41 2011',
+          'Name servers in the listed order:',
+          ...Array.from({ length: 205 }, (_, index) => `ns${index}.example.invalid`),
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'registered');
+    assert.equal(parsed.nameservers.length, 200);
     assert.ok(parsed.fieldsTruncated.includes('nameservers'));
   });
 

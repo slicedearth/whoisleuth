@@ -22,7 +22,7 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 20 explicit matrix is:
+The version 21 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -44,6 +44,7 @@ The version 20 explicit matrix is:
 | `.bb` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.bd` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.be` | Sectioned registrar and nameserver fields with textual registration dates | Registered |
+| `.bf` | Standard colon fields with registry identity, lifecycle, registrar, status, and nameservers; IANA publishes no RDAP service | Registered |
 | `.bg` | Registry status, sectioned bare nameservers, and DNSSEC state | Registered, not found |
 | `.bh` | Standard colon fields with lifecycle, registrar, contacts, status, and nameservers; IANA publishes no RDAP service | Registered, not found |
 | `.bm` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
@@ -73,6 +74,7 @@ The version 20 explicit matrix is:
 | `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
 | `.dj` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.dk` | Punktum domain/DNS distinction, hostname nameservers, lifecycle, DNSSEC, and multi-word status | Registered |
+| `.dm` | Standard colon fields with registry identity, lifecycle, registrar, status, and nameservers; IANA publishes no RDAP service | Registered |
 | `.dz` | Compact colon fields with registrar and contact roles; IANA publishes no RDAP service | Registered, not found |
 | `.ec` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.edu` | Indented contact blocks | Registered |
@@ -83,6 +85,7 @@ The version 20 explicit matrix is:
 | `.et` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.eu` | Sectioned registrar and nameserver fields | Registered, not found |
 | `.fi` | Dot-leader fields, dates, DNSSEC, registrar, status, and nameservers | Registered, not found |
+| `.fj` | Standard colon fields with lifecycle, registrar, status, and nameservers; IANA RDAP is also available | Registered |
 | `.fk` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.fm` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.fo` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
@@ -118,8 +121,10 @@ The version 20 explicit matrix is:
 | `.jo` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.ke` | Standard colon fields with lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
+| `.kg` | Marker-gated sectioned domain status, record lifecycle, and bounded bare nameservers; IANA RDAP is also available | Registered |
 | `.kh` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.km` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.kn` | Standard colon fields with registry identity, lifecycle, registrar, status, and nameservers; IANA publishes no RDAP service | Registered |
 | `.kp` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
 | `.kw` | IANA publishes no domain WHOIS or RDAP service | Access documented |
@@ -135,6 +140,7 @@ The version 20 explicit matrix is:
 | `.lt` | Tab-aligned lifecycle, registrar, status, and nameserver fields | Registered |
 | `.lu` | Hyphenated registrar fields, domain type, and nameservers | Registered |
 | `.lv` | Bracketed domain and holder sections with nameservers | Registered, not found |
+| `.ly` | Standard colon fields with registry identity, lifecycle, registrar, status, and nameservers; IANA RDAP is also available | Registered |
 | `.mc` | Aligned colon fields with lifecycle, registrar, status, DNSSEC, and nameservers; IANA publishes no RDAP service | Registered, not found |
 | `.md` | Spaced domain label, lifecycle, domain state, DNSSEC, and nameservers | Registered |
 | `.me` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
@@ -147,13 +153,16 @@ The version 20 explicit matrix is:
 | `.mo` | Shared MONIC domain, record-created timestamp, and nameserver section | Registered, not found |
 | `.mp` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.mq` | Shared MediaServ object fields with changed date and nameservers | Registered, not found |
+| `.mr` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA publishes no RDAP service | Registered |
 | `.ms` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.mt` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.mu` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.mv` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.mw` | Contact-handle indirection with lifecycle, registrar, and nameservers; IANA publishes no RDAP service | Registered |
 | `.mx` | Colon fields with an indented registrant block and nameserver section | Registered |
 | `.my` | Standard bounded domain, registrar, lifecycle, status, DNSSEC, and nameserver fields; public-query policy applies | Registered |
 | `.na` | IANA publishes RDAP but no domain WHOIS referral | Access documented |
+| `.nc` | Authoritative registry no-entry response; registered-field parsing is not claimed | Not found |
 | `.ne` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ng` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.ni` | IANA publishes no domain WHOIS or RDAP service | Access documented |
@@ -161,9 +170,12 @@ The version 20 explicit matrix is:
 | `.no` | Norid dot-leader fields with separately scoped domain and registrar handles | Registered, not found |
 | `.np` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.nr` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.nu` | Shared Internetstiftelsen state, holder, lifecycle, registrar, DNSSEC, and nameserver fields; IANA publishes no RDAP service | Registered |
 | `.nz` | Structured underscore fields, numeric registry states, contacts, dates, DNSSEC, and numbered nameservers | Registered, available, temporary failure, restricted/inconclusive |
 | `.om` | Standard colon fields with registry identity, registrar, registrant, and nameservers; IANA publishes no RDAP service | Registered, not found |
 | `.pa` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.pe` | Standard colon fields with registrar, status, registrant, and nameservers; IANA publishes no RDAP service | Registered |
+| `.pg` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.ph` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.pk` | Compact domain, lifecycle, status, and nameserver fields | Registered |
 | `.pl` | NASK sectioned nameservers and registrar with dotted lifecycle dates | Registered, malformed |
@@ -173,6 +185,7 @@ The version 20 explicit matrix is:
 | `.pt` | Domain, owner, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
 | `.pw` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.py` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.qa` | Aligned colon fields with modified date, registrar, status, and nameservers; IANA publishes no RDAP service | Registered |
 | `.re` | Shared AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered, not found |
 | `.ro` | Colon fields with one-word nameserver labels, lifecycle, registrar, and DNSSEC | Registered |
 | `.rs` | Multi-word status, local lifecycle timestamps, contacts, DNSSEC, and DNS nameserver fields | Registered, not found |
@@ -188,8 +201,11 @@ The version 20 explicit matrix is:
 | `.sl` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.sr` | Colon fields with lifecycle, sponsoring registrar, status, contacts, and nameservers; IANA RDAP is also available | Registered |
 | `.ss` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
+| `.st` | Standard colon fields with lifecycle, registrar, status, and nameservers; IANA publishes no RDAP service | Registered |
 | `.su` | Shared TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered, not found |
 | `.sv` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.sx` | Standard colon fields with registry identity, lifecycle, registrar, status, and contacts; IANA publishes no RDAP service | Registered |
+| `.sy` | Standard colon fields with lifecycle, sponsoring registrar, status, DNSSEC, and nameservers; IANA publishes no RDAP service | Registered |
 | `.sz` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.tf` | Shared AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered, not found |
 | `.th` | Holder organisation/address, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
@@ -198,14 +214,21 @@ The version 20 explicit matrix is:
 | `.to` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
 | `.tt` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.tv` | Standard colon fields with registry identity, lifecycle, registrar, and status; IANA RDAP is also available | Registered |
 | `.tw` | TWNIC record dates, registration service provider, status, registrant, and nameservers | Registered |
+| `.tz` | Contact-handle indirection with lifecycle, registrar, and nameservers; IANA RDAP is also available | Registered |
 | `.ua` | Domain, registrar, source, lifecycle, status, and nameserver fields | Registered |
+| `.ug` | Aligned colon fields with lifecycle, status, contacts, and nameservers; IANA publishes no RDAP service | Registered |
 | `.uk` | Sectioned indented domain, registrant, registrar, status, date, and nameserver fields | Registered, not found, malformed |
 | `.us` | Standard colon fields, registrar, lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
+| `.uz` | Standard colon fields with lifecycle, registrar, status, and nameservers; IANA RDAP is also available | Registered |
 | `.va` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.vc` | Shared standard colon fields with lifecycle, registrar, status, DNSSEC, and nameservers | Registered, not found |
+| `.ve` | Contact-handle indirection with lifecycle, registrar, and nameservers; IANA publishes no RDAP service | Registered |
+| `.vg` | Authoritative registry object-missing response with separate RDAP availability; registered-field parsing is not claimed | Not found |
 | `.vn` | IANA publishes no domain WHOIS or RDAP service; official browser lookup is not integrated | Access documented |
 | `.wf` | Shared AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered, not found |
+| `.ws` | Standard colon fields with registry identity, lifecycle, registrar, contacts, and status; IANA publishes no RDAP service | Registered |
 | `.xn--2scrj9c` (`.ಭಾರತ`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.xn--3e0b707e` (`.한국`) | Shared KISA dot-leader fields and host-name nameservers | Registered |
 | `.xn--3hcrj9c` (`.ଭାରତ`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
@@ -259,8 +282,10 @@ The version 20 explicit matrix is:
 | `.xn--xkc2dl3a5ee0h` (`.இந்தியா`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.xn--y9a3aq` (`.հայ`) | Shared AMNIC registrant/contact blocks with lifecycle, status, registrar, and DNS servers | Registered |
 | `.xn--yfro4i67o` (`.新加坡`) | Shared SGNIC standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.ye` | Standard colon fields with registrar and nameservers; IANA RDAP is also available | Registered |
 | `.yt` | Shared AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered, not found |
 | `.za` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.zm` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.zw` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 
 The exceptional query formats are grounded in the registries' own protocol
@@ -618,6 +643,26 @@ without network access. They establish deterministic parsing of a registered
 response only. No authoritative absence dialect is claimed for this batch, so
 an empty, denied, timed-out, malformed, or undocumented response remains
 inconclusive and cannot decide availability.
+
+Version 21 adds another 25 active country-code delegations while narrowing
+each claim to its represented fixture state. Twenty-three profiles cover
+registered responses for `.bf`, `.dm`, `.fj`, `.kg`, `.kn`, `.ly`, `.mr`,
+`.mw`, `.nu`, `.pe`, `.pg`, `.qa`, `.st`, `.sx`, `.sy`, `.tv`, `.tz`, `.ug`,
+`.uz`, `.ve`, `.ws`, `.ye`, and `.zm`. The `.nc` and `.vg` profiles cover only
+their authoritative object-missing responses; they do not claim registered
+field compatibility. Current IANA metadata records RDAP for ten members of the
+batch and WHOIS-only access for the other fifteen without transferring service
+availability between suffixes.
+
+Most registered fixtures reuse bounded standard-colon or contact-indirection
+parsing. `.nu` exercises the existing holder and registry-state family. The
+`.kg` response needs one marker-gated adapter for its unlabelled
+`Domain NAME (STATUS)` header, textual record dates, and bare nameserver
+section. That adapter requires the registry banner, domain header, creation
+line, and nameserver heading together; incomplete lookalikes remain
+inconclusive. Its nameserver collection retains the existing 200-entry cap and
+explicit truncation state. All fixtures are sanitized, reserved, offline, and
+retain no sampled registration data.
 
 Generic fixtures also verify registered, authoritative-not-found, and
 rate-limited WHOIS states. RDAP normalization has separate fixture coverage for
