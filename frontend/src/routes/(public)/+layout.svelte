@@ -69,7 +69,7 @@
   .public-brand small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
   nav{--public-nav-control-h:38px;display:flex;align-items:center;gap:5px;margin:0}
   nav a,nav button{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h);min-height:var(--public-nav-control-h);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
-  nav :global(.theme-selector){height:var(--public-nav-control-h);margin:0 5px}
+  nav :global(.theme-selector){height:var(--public-nav-control-h);margin:0 5px;font-size:var(--text-xs)}
   nav :global(.theme-control),nav :global(.theme-trigger){height:100%}
   nav :global(.theme-trigger){min-height:100%;font-size:var(--text-xs)}
   nav a::before{content:none}

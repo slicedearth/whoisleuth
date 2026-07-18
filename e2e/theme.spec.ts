@@ -30,6 +30,12 @@ test('dark remains the default and is disclosed by the public selector', async (
   await expect(page.locator('.terminal-window-red')).toHaveCSS('background-color', 'rgb(255, 107, 107)');
   await expect(page.locator('.terminal-window-yellow')).toHaveCSS('background-color', 'rgb(242, 184, 75)');
   await expect(page.locator('.terminal-window-green')).toHaveCSS('background-color', 'rgb(126, 224, 168)');
+
+  const navFontSizes = await page.locator('.public-header').evaluate((header) => ({
+    navigation: getComputedStyle(header.querySelector('a[href="/demo"]')!).fontSize,
+    themeLabel: getComputedStyle(header.querySelector('.theme-selector > span')!).fontSize,
+  }));
+  expect(navFontSizes.themeLabel).toBe(navFontSizes.navigation);
 });
 
 test('light preference applies before reload and persists across public pages', async ({ page }) => {
