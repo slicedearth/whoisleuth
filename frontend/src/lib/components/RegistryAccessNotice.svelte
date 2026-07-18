@@ -5,13 +5,15 @@
   const suffix = $derived(text(access.suffix).toUpperCase());
   const whoisLabel = $derived(access.whoisAccessProfile === 'source-ip-authorization-required'
     ? 'Source-IP authorization required'
-    : access.whoisAccessProfile === 'no-iana-service'
-      ? 'No service published by IANA'
-      : 'IANA referral discovery');
+    : access.whoisAccessProfile === 'registry-policy-restricted'
+      ? 'Registry policy restricted'
+      : access.whoisAccessProfile === 'no-iana-service'
+        ? 'No service published by IANA'
+        : 'IANA referral discovery');
   const rdapLabel = $derived(access.rdapAccessProfile === 'no-iana-service'
     ? 'No service published by IANA'
     : 'IANA bootstrap discovery');
-  const stateLabel = $derived(access.whoisAccessProfile === 'source-ip-authorization-required'
+  const stateLabel = $derived(['source-ip-authorization-required', 'registry-policy-restricted'].includes(String(access.whoisAccessProfile))
     ? 'Restricted access'
     : 'Service not published');
 </script>

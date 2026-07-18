@@ -143,6 +143,19 @@ describe('registry-support runner', () => {
     assert.doesNotMatch(stdout.value(), /Domain is (?:unregistered|safe)/);
   });
 
+  test('renders registry-policy restrictions from the actual catalogue', async () => {
+    const stdout = capture();
+    const code = await runCli(['registry-support', '.ch'], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      now: () => '2026-07-18T00:00:00.000Z',
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.match(stdout.value(), /Suffix\s+\.ch/);
+    assert.match(stdout.value(), /Registry policy restricted/);
+    assert.match(stdout.value(), /missing registry data is not evidence/i);
+  });
+
   test('quiet mode performs validation without writing output', async () => {
     const stdout = capture();
     const code = await runCli(['registry-support', 'uk', '--quiet'], {

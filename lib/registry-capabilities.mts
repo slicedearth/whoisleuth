@@ -5,7 +5,7 @@
 type CoverageState = 'discovery_only' | 'access_documented' | 'fixture_verified';
 type RegistryClass = 'country-code' | 'generic' | 'unknown';
 type WhoisQueryProfile = 'plain-domain' | 'denic-domain-ace' | 'jprs-domain-english';
-type WhoisAccessProfile = 'iana-referral' | 'source-ip-authorization-required' | 'no-iana-service';
+type WhoisAccessProfile = 'iana-referral' | 'registry-policy-restricted' | 'source-ip-authorization-required' | 'no-iana-service';
 type RdapAccessProfile = 'iana-bootstrap' | 'no-iana-service';
 
 type RegistryCapability = {
@@ -32,12 +32,13 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 8;
+const REGISTRY_CAPABILITIES_VERSION = 9;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
 const FIXTURE_LIMITATION = 'Synthetic fixtures verify the current parser profile; they do not prove current live-registry reachability, policy, or field publication.';
 const ES_ACCESS_LIMITATION = 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.';
+const CH_ACCESS_LIMITATION = 'The registry may restrict ordinary port-43 clients and direct them to its official lookup. Its non-standard-port Domain Check is not integrated, and IANA publishes no RDAP service. Missing registry data is not evidence that the domain is unregistered.';
 const VN_ACCESS_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.';
 const UK_TRANSITION_LIMITATION = 'Synthetic fixtures verify the documented sectioned port-43 response while that WHOIS service is phased out. RDAP remains the preferred registry source, and fixture coverage does not prove current reachability or field publication.';
 const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profile. The registry limits public WHOIS use, prohibits abusive high-volume automation, and states that a missing record is not proof of availability; WHOISleuth retains bounded request controls and authority-aware interpretation.';
@@ -100,6 +101,14 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
+    id: 'register-bg-sectioned', suffixes: ['bg'], registryClass: 'country-code',
+    whoisParserProfile: 'register-bg-sectioned', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.register.bg/',
+      'https://www.iana.org/domains/root/db/bg.html',
+    ],
+  },
+  {
     id: 'registro-br-colon', suffixes: ['br'], registryClass: 'country-code',
     whoisParserProfile: 'registro-br-colon', fixtureScenarios: ['registered'],
     documentationUrls: [
@@ -122,6 +131,18 @@ const EXPLICIT_CAPABILITIES = [
       'https://www.nic.cl/normativa/politica-publicacion-de-datos-cl.pdf',
       'https://www.iana.org/domains/root/db/cl.html',
     ],
+  },
+  {
+    id: 'switch-policy-restricted', suffixes: ['ch'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'registry-policy-restricted',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: [
+      'https://www.nic.ch/whois/',
+      'https://www.nic.ch/whois/domaincheck/',
+      'https://www.iana.org/domains/root/db/ch.html',
+    ],
+    limitation: CH_ACCESS_LIMITATION,
   },
   {
     id: 'cnnic-colon', suffixes: ['cn'], registryClass: 'country-code',
@@ -161,6 +182,15 @@ const EXPLICIT_CAPABILITIES = [
     whoisParserProfile: 'indented-contact-blocks', fixtureScenarios: ['registered'],
   },
   {
+    id: 'eif-sectioned', suffixes: ['ee'], registryClass: 'country-code',
+    whoisParserProfile: 'eif-sectioned', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.internet.ee/domains/whois-terms-and-conditions',
+      'https://www.internet.ee/registrar-portal/help-and-info/eif-s-information-systems-and-technical-conditions',
+      'https://www.iana.org/domains/root/db/ee.html',
+    ],
+  },
+  {
     id: 'source-ip-authorized-whois', suffixes: ['es'], registryClass: 'country-code',
     whoisParserProfile: 'generic-colon', fixtureScenarios: [],
     coverageState: 'access_documented', whoisAccessProfile: 'source-ip-authorization-required',
@@ -185,6 +215,22 @@ const EXPLICIT_CAPABILITIES = [
     whoisParserProfile: 'generic-colon', fallbackProfile: 'gt-registry-web',
     fixtureScenarios: ['registered', 'not_found', 'unavailable'],
     verificationFiles: ['test/whois-gt-fallback.test.js'],
+  },
+  {
+    id: 'carnet-icann-colon', suffixes: ['hr'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://domene.hr/en/portal/home',
+      'https://www.iana.org/domains/root/db/hr.html',
+    ],
+  },
+  {
+    id: 'iszt-minimal-colon', suffixes: ['hu'], registryClass: 'country-code',
+    whoisParserProfile: 'iszt-minimal-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.domain.hu/domain-search/',
+      'https://www.iana.org/domains/root/db/hu.html',
+    ],
   },
   {
     id: 'weare-ie-colon', suffixes: ['ie'], registryClass: 'country-code',
@@ -219,6 +265,14 @@ const EXPLICIT_CAPABILITIES = [
     ],
   },
   {
+    id: 'isnic-handle-blocks', suffixes: ['is'], registryClass: 'country-code',
+    whoisParserProfile: 'isnic-handle-blocks', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.isnic.is/en/about/copyright',
+      'https://www.iana.org/domains/root/db/is.html',
+    ],
+  },
+  {
     id: 'alternate-labels', suffixes: ['it'], registryClass: 'country-code',
     whoisParserProfile: 'alternate-labels-and-bare-nameservers', fixtureScenarios: ['registered'],
   },
@@ -238,6 +292,22 @@ const EXPLICIT_CAPABILITIES = [
   {
     id: 'dot-leader', suffixes: ['kr'], registryClass: 'country-code',
     whoisParserProfile: 'dot-leader', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'domreg-lt-colon', suffixes: ['lt'], registryClass: 'country-code',
+    whoisParserProfile: 'domreg-lt-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.domreg.lt/en/faq/for-domain-registrants/how-to-access-public-information-on-domains/',
+      'https://www.iana.org/domains/root/db/lt.html',
+    ],
+  },
+  {
+    id: 'nic-lv-sectioned', suffixes: ['lv'], registryClass: 'country-code',
+    whoisParserProfile: 'nic-lv-sectioned', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.nic.lv/whois?lang=en',
+      'https://www.iana.org/domains/root/db/lv.html',
+    ],
   },
   {
     id: 'registry-mx-colon', suffixes: ['mx'], registryClass: 'country-code',
@@ -263,6 +333,14 @@ const EXPLICIT_CAPABILITIES = [
       'https://teknisk.norid.no/uploads/2018/08/Whois_DAS_Interface_Specification.10e1.pdf',
       'https://www.norid.no/en/domeneoppslag/',
       'https://www.iana.org/domains/root/db/no.html',
+    ],
+  },
+  {
+    id: 'sidn-sectioned', suffixes: ['nl'], registryClass: 'country-code',
+    whoisParserProfile: 'sidn-sectioned', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.sidn.nl/en/nl-domain-name/looking-up-a-domain-name',
+      'https://www.iana.org/domains/root/db/nl.html',
     ],
   },
   {
@@ -304,6 +382,14 @@ const EXPLICIT_CAPABILITIES = [
     documentationUrls: [
       'https://www.rotld.ro/reguli-de-inregistrare/',
       'https://www.iana.org/domains/root/db/ro.html',
+    ],
+  },
+  {
+    id: 'rnids-colon', suffixes: ['rs'], registryClass: 'country-code',
+    whoisParserProfile: 'rnids-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.rnids.rs/en/domain-names',
+      'https://www.iana.org/domains/root/db/rs.html',
     ],
   },
   {

@@ -30,6 +30,13 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect.poll(() => publicSessionRequests).toBe(1);
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+  const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(publicNavigation).toHaveCSS('display', 'grid');
+  const anonymousConsoleLinkBox = await publicNavigation.getByRole('link', { name: 'Open console' }).boundingBox();
+  expect(anonymousConsoleLinkBox).not.toBeNull();
+  expect(anonymousConsoleLinkBox!.width).toBeGreaterThan(300);
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   await page.goto('/lookup');
   await expect(page).toHaveURL(/\/login\?next=%2Flookup$/u);
@@ -75,6 +82,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(publicSignOutButton).toBeVisible();
   await expect(publicSignOutButton).toHaveCSS('white-space', 'nowrap');
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(publicNavigation).toHaveCSS('display', 'grid');
+  await expect(publicNavigation).toHaveCSS('grid-template-columns', /.+ .+/);
   const signOutBox = await publicSignOutButton.boundingBox();
   expect(signOutBox).not.toBeNull();
   expect(signOutBox!.x).toBeGreaterThanOrEqual(0);

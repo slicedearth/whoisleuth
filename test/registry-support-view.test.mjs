@@ -18,13 +18,13 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 8);
-  assert.equal(catalogue.rows.length, 42);
+  assert.equal(catalogue.version, 9);
+  assert.equal(catalogue.rows.length, 52);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 42,
-    fixtureVerified: 40,
-    accessDocumented: 2,
+    profiles: 52,
+    fixtureVerified: 49,
+    accessDocumented: 3,
     fallbacks: 1,
   });
   assert.deepEqual(
@@ -89,7 +89,7 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   assert.deepEqual(filterRegistrySupportRows(rows, 'tci colon', 'all').map((row) => row.suffixes[0]), ['ru']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
-  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['es', 'vn']);
+  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['ch', 'es', 'vn']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });
 
@@ -118,6 +118,7 @@ test('renders stable human-readable labels for known and unknown catalogue value
   assert.equal(registryCoverageLabel('fixture_verified'), 'Fixture verified');
   assert.equal(registryCoverageLabel('other'), 'Unknown');
   assert.equal(registryAccessLabel('iana-bootstrap'), 'IANA bootstrap discovery');
+  assert.equal(registryAccessLabel('registry-policy-restricted'), 'Registry policy restricted');
   assert.equal(registryAccessLabel(null), 'Unknown');
   assert.equal(registrySupportLabel('jprs-domain-english'), 'Jprs Domain English');
   assert.equal(registrySupportLabel('\u0000'), 'Unknown');

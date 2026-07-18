@@ -52,6 +52,27 @@ test('results stay a sortable table at desktop width', async ({ page }) => {
   await expectNoHorizontalOverflow(page);
 });
 
+test('long domains retain a readable table column and wrap safely in mobile cards', async ({ page }) => {
+  const domain = `long-${'b'.repeat(58)}`;
+  await page.setViewportSize({ width: 1024, height: 844 });
+  await runBulkScan(page, [domain]);
+
+  const row = page.locator('.results-table tbody tr');
+  const domainValue = row.locator('td[data-label="Domain"] strong');
+  const desktopDomainBox = await boundingBox(domainValue);
+  const desktopRowBox = await boundingBox(row);
+  expect(desktopDomainBox.width).toBeGreaterThanOrEqual(190);
+  expect(desktopRowBox.height).toBeLessThan(350);
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileDomainBox = await boundingBox(domainValue);
+  const mobileRowBox = await boundingBox(row);
+  expect(mobileDomainBox.width).toBeGreaterThan(200);
+  expect(mobileRowBox.height).toBeLessThan(500);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('results become labelled stacked cards at mobile width, with compact and full-width fields', async ({ page }) => {
   const domains = invalidDomains(5);
   await runBulkScan(page, domains);

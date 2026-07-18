@@ -16,15 +16,16 @@ const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 8);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 9);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'ar', 'at', 'au', 'be', 'br', 'ca', 'cl', 'cn', 'cz', 'de', 'dk', 'edu',
-      'es', 'eu', 'fi', 'fr', 'gt', 'id', 'ie', 'il', 'in', 'it', 'jp', 'kr',
-      'mx', 'my', 'no', 'nz', 'pl', 'pt', 'ro', 'ru', 'se', 'sg', 'si', 'sk',
-      'tr', 'tw', 'ua', 'uk', 'us', 'vn',
+      'ar', 'at', 'au', 'be', 'bg', 'br', 'ca', 'ch', 'cl', 'cn', 'cz', 'de',
+      'dk', 'edu', 'ee', 'es', 'eu', 'fi', 'fr', 'gt', 'hr', 'hu', 'id', 'ie',
+      'il', 'in', 'is', 'it', 'jp', 'kr', 'lt', 'lv', 'mx', 'my', 'nl', 'no',
+      'nz', 'pl', 'pt', 'ro', 'rs', 'ru', 'se', 'sg', 'si', 'sk', 'tr', 'tw',
+      'ua', 'uk', 'us', 'vn',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
@@ -107,6 +108,10 @@ describe('registry capability metadata', () => {
     assert.equal(vn.whoisAccessProfile, 'no-iana-service');
     assert.equal(vn.rdapAccessProfile, 'no-iana-service');
     assert.match(vn.limitation, /official browser lookup is not integrated/i);
+    const ch = registryAccessDiagnosticFor('example.ch');
+    assert.equal(ch.whoisAccessProfile, 'registry-policy-restricted');
+    assert.equal(ch.rdapAccessProfile, 'no-iana-service');
+    assert.match(ch.limitation, /non-standard-port.*not integrated.*no RDAP service/i);
     assert.equal(registryAccessDiagnosticFor('example.com'), null);
     assert.equal(registryAccessDiagnosticFor('bad\n'), null);
   });
@@ -143,7 +148,7 @@ describe('registry capability metadata', () => {
       );
       assert.equal(capability.whoisQueryScope, 'first-referral');
       assert.equal(capability.whoisEncodingProfile, 'utf-8');
-      assert.ok(['iana-referral', 'source-ip-authorization-required', 'no-iana-service'].includes(capability.whoisAccessProfile));
+      assert.ok(['iana-referral', 'registry-policy-restricted', 'source-ip-authorization-required', 'no-iana-service'].includes(capability.whoisAccessProfile));
       assert.ok(['iana-bootstrap', 'no-iana-service'].includes(capability.rdapAccessProfile));
       assert.equal('endpoint' in capability, false);
       assert.equal('queryTemplate' in capability, false);

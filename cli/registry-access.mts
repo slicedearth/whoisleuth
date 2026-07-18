@@ -2,11 +2,13 @@ const REGISTRY_ACCESS_PROFILE_LABELS: Readonly<Record<string, string>> = Object.
   'iana-bootstrap': 'IANA bootstrap discovery',
   'iana-referral': 'IANA referral discovery',
   'no-iana-service': 'No service published by IANA',
+  'registry-policy-restricted': 'Registry policy restricted',
   'source-ip-authorization-required': 'Source-IP authorization required',
 });
 const WHOIS_REGISTRY_ACCESS_PROFILES = new Set([
   'iana-referral',
   'no-iana-service',
+  'registry-policy-restricted',
   'source-ip-authorization-required',
 ]);
 const RDAP_REGISTRY_ACCESS_PROFILES = new Set([

@@ -280,7 +280,7 @@ details.card > summary:hover { color: var(--accent); }
 
 /* ---------- Application shell ---------- */
 .shell { display: grid; grid-template-columns: 264px minmax(0,1fr); min-height: 100vh; }
-aside {
+.shell > aside {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -330,7 +330,7 @@ nav a small { margin-top: 2px; }
 
 main { width: min(1220px,100%); margin: auto; padding: 38px clamp(24px,4vw,58px) 72px; }
 .public-content { width: min(960px,100%); }
-header { display: none; }
+.shell > header { display: none; }
 
 /* Page heading: compact identity band rather than a display headline. */
 .heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 24px; align-items: end; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
@@ -348,13 +348,13 @@ header { display: none; }
 
 @media (max-width: 900px) {
   .shell { display: block; padding-top: 62px; }
-  header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; height: 62px; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--border); background: rgba(15,17,21,.96); }
-  header a { display: flex; gap: 10px; align-items: center; font-family: var(--mono); }
-  header button { width: 40px; height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
-  aside { position: fixed; inset: 0 auto auto 0; width: min(310px,86vw); height: 100dvh; padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); transform: translateX(-105%); transition: transform .18s; }
-  aside .brand { display: none; }
-  aside .session { flex: 0 0 auto; margin-bottom: 0; scroll-margin-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); }
-  .open aside { transform: none; }
+  .shell > header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; height: 62px; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--border); background: rgba(15,17,21,.96); }
+  .shell > header a { display: flex; gap: 10px; align-items: center; font-family: var(--mono); }
+  .shell > header button { width: 40px; height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
+  .shell > aside { position: fixed; inset: 0 auto auto 0; width: min(310px,86vw); height: 100dvh; padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); transform: translateX(-105%); transition: transform .18s; }
+  .shell > aside .brand { display: none; }
+  .shell > aside .session { flex: 0 0 auto; margin-bottom: 0; scroll-margin-bottom: max(72px,calc(env(safe-area-inset-bottom) + 24px)); }
+  .shell.open > aside { transform: none; }
   .scrim { position: fixed; inset: 0; z-index: 10; border: 0; background: rgba(0,0,0,.7); }
   main { padding: 30px 20px 64px; }
 }

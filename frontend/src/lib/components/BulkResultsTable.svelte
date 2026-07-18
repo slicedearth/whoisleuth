@@ -95,6 +95,7 @@
   .sort{min-height:auto;min-width:0;padding:0;border:0;background:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}
   .domain{display:flex;gap:7px}
   .star{min-width:24px;min-height:24px;padding:0;border:0;background:none;color:var(--amber);font-size:1rem;cursor:pointer}
+  .domain-content{min-width:200px}
   .domain-content,td strong,td small{display:block;max-width:300px;overflow-wrap:anywhere}
   td strong{font-size:var(--text-sm)}
   td small{margin-top:4px;color:var(--danger);font-size:var(--text-2xs)}
@@ -121,5 +122,6 @@
   .case-track{white-space:nowrap}
   @media(max-width:700px){
     .table-wrap{margin-inline:calc(-1 * var(--card-pad));padding-inline:var(--card-pad)}
+    .domain-content{min-width:0}
   }
 </style>

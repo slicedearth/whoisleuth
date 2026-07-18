@@ -18,6 +18,7 @@ const ACCESS_LABELS = Object.freeze({
   'iana-bootstrap': 'IANA bootstrap discovery',
   'iana-referral': 'IANA referral discovery',
   'no-iana-service': 'No service published by IANA',
+  'registry-policy-restricted': 'Registry policy restricted',
   'source-ip-authorization-required': 'Source-IP authorization required',
 });
 

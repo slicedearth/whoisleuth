@@ -7,6 +7,10 @@ const REGISTRY_MONTHS: Readonly<Record<string, number>> = Object.freeze({
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
   jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 });
+const REGISTRY_MONTH_NAMES: Readonly<Record<string, number>> = Object.freeze({
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+});
 
 function utcDateFromParts(
   year: number,
@@ -37,10 +41,11 @@ function parseRegistryDate(input: unknown): Date | null {
   // The documented .nz WHOIS examples place one space before the RFC3339
   // `T` separator. Canonicalize that registry-specific presentation quirk
   // before applying the existing strict ISO-shaped parser.
-  const value = input.trim().replace(
-    /^(\d{4}-\d{2}-\d{2})[ ]+[Tt](?=\d{2}:)/,
-    '$1T',
-  );
+  const value = input.trim()
+    .replace(/^(\d{4}-\d{2}-\d{2})[ ]+[Tt](?=\d{2}:)/, '$1T')
+    // The .ee WHOIS service separates an otherwise ISO-shaped numeric
+    // timezone from its clock with one space.
+    .replace(/^(\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?)[ ]+([+-]\d{2}:?\d{2})$/, '$1$2');
   if (!value) return null;
 
   // DD.MM.YYYY[ HH:MM:SS] - e.g. 14.03.2024 10:46:48
@@ -114,6 +119,15 @@ function parseRegistryDate(input: unknown): Date | null {
     return month
       ? utcDateFromParts(+match[3], month, +match[2], +(match[4] || 0), +(match[5] || 0), +(match[6] || 0))
       : null;
+  }
+
+  // Month DD YYYY - ISNIC publishes English month names with variable
+  // spacing and no timezone. Keep the accepted shape narrow and accept only
+  // the twelve exact English names from a fixed table.
+  match = value.match(/^([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{4})$/);
+  if (match) {
+    const month = REGISTRY_MONTH_NAMES[match[1].toLowerCase()];
+    return month ? utcDateFromParts(+match[3], month, +match[2]) : null;
   }
 
   // ISO 8601-shaped dates and timestamps. A missing timezone is deliberately

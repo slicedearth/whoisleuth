@@ -75,9 +75,4 @@
 <style>
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
-  :global(main header){display:flex}
-  @media(max-width:900px){
-    :global(main header){position:static;inset:auto;z-index:auto;height:auto;padding:0;border:0;background:transparent}
-    :global(main header button){width:auto;height:auto}
-  }
 </style>

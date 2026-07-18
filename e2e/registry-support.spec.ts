@@ -24,9 +24,9 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v8')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('42');
-  await expect(page.locator('tbody tr')).toHaveCount(42);
+  await expect(page.getByText('Catalogue v9')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('52');
+  await expect(page.locator('tbody tr')).toHaveCount(52);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -35,7 +35,8 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(2);
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await expect(page.locator('tbody')).toContainText('.ch');
   await expect(page.locator('tbody')).toContainText('.es');
   await expect(page.locator('tbody')).toContainText('.vn');
 
@@ -106,6 +107,27 @@ test('the inspector normalizes an IDN suffix and remains mobile-safe', async ({ 
 test('the registry-support reference remains readable without horizontal overflow on a narrow viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/registry-support');
+
+  const workspaceNavigation = page.locator('#workspace-navigation');
+  const interpretation = page.locator('main .interpretation');
+  await expect(workspaceNavigation).toHaveCSS('position', 'fixed');
+  await expect(interpretation).toHaveCSS('position', 'static');
+  await page.getByRole('button', { name: 'Toggle navigation' }).click();
+  await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(workspaceNavigation).toHaveCSS('transform', 'none');
+  await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: 'Registry support' })).toBeVisible();
+  await expect(interpretation).toHaveCSS('position', 'static');
+  await expect(interpretation).toHaveCSS('transform', 'none');
+  await page.getByRole('button', { name: 'Toggle navigation' }).click();
+  await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
+
+  const sectionIntros = page.locator('.section-intro');
+  await expect(sectionIntros).toHaveCount(2);
+  await expect(sectionIntros.first()).toHaveCSS('display', 'block');
+  for (const heading of await sectionIntros.getByRole('heading').all()) {
+    const box = await heading.boundingBox();
+    expect(box?.width).toBeGreaterThan(200);
+  }
 
   await expect(page.getByLabel('Suffix or capability')).toBeVisible();
   await expect(page.locator('#coverage-filter')).toBeVisible();

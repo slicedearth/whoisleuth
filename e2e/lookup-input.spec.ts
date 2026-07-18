@@ -272,8 +272,10 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
 
 test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => {
-    const suffix = new URL(route.request().url()).searchParams.get('q')?.endsWith('.vn') ? 'vn' : 'es';
+    const query = new URL(route.request().url()).searchParams.get('q') || '';
+    const suffix = query.endsWith('.vn') ? 'vn' : query.endsWith('.ch') ? 'ch' : 'es';
     const isEs = suffix === 'es';
+    const isCh = suffix === 'ch';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -286,11 +288,15 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
           version: 5,
           registryAccess: {
             suffix, coverageState: 'access_documented',
-            whoisAccessProfile: isEs ? 'source-ip-authorization-required' : 'no-iana-service',
+            whoisAccessProfile: isEs
+              ? 'source-ip-authorization-required'
+              : isCh ? 'registry-policy-restricted' : 'no-iana-service',
             rdapAccessProfile: 'no-iana-service', authority: 'context_only',
             limitation: isEs
               ? 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.'
-              : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
+              : isCh
+                ? 'The registry may restrict ordinary port-43 clients and direct them to its official lookup. Its non-standard-port Domain Check is not integrated, and IANA publishes no RDAP service. Missing registry data is not evidence that the domain is unregistered.'
+                : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
           },
           rdap: { status: 'unsupported' }, whois: { status: 'partial' }, availability: { status: 'complete' },
         },
@@ -304,6 +310,13 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(notice.getByText('Restricted access')).toBeVisible();
   await expect(notice.getByText('Source-IP authorization required')).toBeVisible();
   await expect(notice.getByText(/does not decide registration, availability, safety, or maliciousness/i)).toBeVisible();
+
+  await page.locator('#query').fill('example.ch');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const chNotice = page.getByRole('region', { name: '.CH collection constraints' });
+  await expect(chNotice.getByText('Restricted access')).toBeVisible();
+  await expect(chNotice.getByText('Registry policy restricted')).toBeVisible();
+  await expect(chNotice.getByText('No service published by IANA')).toBeVisible();
 
   await page.locator('#query').fill('example.vn');
   await page.getByRole('button', { name: 'Run lookup' }).click();

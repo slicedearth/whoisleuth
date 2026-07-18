@@ -87,4 +87,10 @@
     .public-footer{align-items:flex-start;flex-direction:column}
     .public-footer p:last-child{text-align:left}
   }
+  @media(max-width:520px){
+    nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+    nav a,nav button{display:flex;width:100%;min-height:38px;align-items:center;justify-content:center;text-align:center}
+    nav .console-link:last-child{grid-column:1 / -1}
+    nav .session-error{grid-column:1 / -1}
+  }
 </style>
