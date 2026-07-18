@@ -22,20 +22,6 @@ async function seed(page: import('@playwright/test').Page, value: unknown) {
   await page.reload();
 }
 
-test('a legacy shortlist remains readable and migrates only after an explicit mutation', async ({ page }) => {
-  await seed(page, [record('keep.invalid')]);
-  await expect(page.getByRole('heading', { name: 'Shortlist · 1' })).toBeVisible();
-  await expect(page.getByText('keep.invalid', { exact: true })).toBeVisible();
-
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Clear shortlist' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Shortlist cleared' })).toBeVisible();
-  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY);
-  expect(stored.schema).toBe('whoisleuth.shortlist');
-  expect(stored.version).toBe(2);
-  expect(stored.entries).toEqual([]);
-});
-
 test('a future shortlist schema is never overwritten by an older app', async ({ page }) => {
   const future = { schema: 'whoisleuth.shortlist', version: 99, entries: [record('future.invalid')], futureMetadata: { retain: true } };
   await seed(page, future);
@@ -51,9 +37,9 @@ test('a future shortlist schema is never overwritten by an older app', async ({ 
 });
 
 test('a shortlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
-  const legacy = [record('priority.invalid')];
+  const previous = { schema: 'whoisleuth.shortlist', version: 2, entries: [record('priority.invalid')] };
   await page.goto('/bulk');
-  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: SHORTLIST_KEY, stored: legacy });
+  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: SHORTLIST_KEY, stored: previous });
   await page.addInitScript((shortlistKey) => {
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
@@ -67,5 +53,5 @@ test('a shortlist quota failure reports a stable message and preserves the previ
   await page.getByRole('button', { name: 'Clear shortlist' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Browser storage may be full or unavailable' })).toBeVisible();
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY);
-  expect(stored).toEqual(legacy);
+  expect(stored).toEqual(previous);
 });

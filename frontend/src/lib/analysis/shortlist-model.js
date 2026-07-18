@@ -87,7 +87,7 @@ export function normalizeShortlistRecord(raw, options = {}) {
   };
 }
 
-/** Legacy arrays remain readable but are not rewritten merely by loading them. */
+/** Normalize an internal record collection or current stored envelope. */
 export function normalizeShortlistStore(raw) {
   const source = entryList(raw);
   const byDomain = new Map();
@@ -119,10 +119,9 @@ export function serializeShortlistStore(records) {
 }
 
 function validateImport(raw) {
-  if (Array.isArray(raw)) return;
   const value = plainRecord(raw);
   if (!value || value.schema !== SHORTLIST_SCHEMA || !Array.isArray(value.entries)) {
-    throw new Error('Expected a shortlist export or a legacy JSON array.');
+    throw new Error('Expected a current WHOISleuth shortlist export.');
   }
 }
 
@@ -131,6 +130,9 @@ export function mergeShortlistStores(localRaw, importedRaw) {
   const importedVersion = shortlistStoreVersion(importedRaw);
   if (importedVersion !== null && importedVersion > SHORTLIST_SCHEMA_VERSION) {
     throw new Error(`This shortlist file uses newer schema ${importedVersion}. Update the app before importing it.`);
+  }
+  if (importedVersion !== SHORTLIST_SCHEMA_VERSION) {
+    throw new Error(`Expected a WHOISleuth shortlist export using schema ${SHORTLIST_SCHEMA_VERSION}.`);
   }
   const local = normalizeShortlistStore(localRaw).entries;
   const byDomain = new Map(local.map((record) => [record.domain, record]));

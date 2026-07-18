@@ -20,21 +20,6 @@ async function seed(page: import('@playwright/test').Page, value: unknown) {
   await page.getByRole('tab', { name: /Watchlists/ }).click();
 }
 
-test('a legacy watchlist map remains usable and migrates only after an explicit mutation', async ({ page }) => {
-  const legacy = { Keep: entry('keep.invalid'), Remove: entry('remove.invalid') };
-  await seed(page, legacy);
-  await expect(page.getByRole('cell', { name: 'Keep', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Remove', exact: true })).toBeVisible();
-
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('row', { name: /Remove/ }).getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByRole('status')).toContainText('Deleted "Remove"');
-  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), WATCHLIST_KEY);
-  expect(stored.version).toBe(2);
-  expect(stored.watchlists.Keep.results[0].domain).toBe('keep.invalid');
-  expect(stored.watchlists.Remove).toBeUndefined();
-});
-
 test('a future watchlist schema is never overwritten by an older app', async ({ page }) => {
   const future = { schema: 'whoisleuth.watchlists', version: 99, watchlists: { Future: entry('future.invalid') }, futureMetadata: { retain: true } };
   await seed(page, future);
@@ -47,9 +32,9 @@ test('a future watchlist schema is never overwritten by an older app', async ({ 
 });
 
 test('a watchlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
-  const legacy = { Priority: entry('priority.invalid') };
+  const previous = { schema: 'whoisleuth.watchlists', version: 2, watchlists: { Priority: entry('priority.invalid') } };
   await page.goto('/monitor');
-  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: WATCHLIST_KEY, stored: legacy });
+  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: WATCHLIST_KEY, stored: previous });
   await page.addInitScript((watchlistKey) => {
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
@@ -64,7 +49,7 @@ test('a watchlist quota failure reports a stable message and preserves the previ
   await page.getByRole('button', { name: 'Clear all' }).click();
   await expect(page.getByRole('status')).toContainText('Browser storage may be full or unavailable');
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), WATCHLIST_KEY);
-  expect(stored).toEqual(legacy);
+  expect(stored).toEqual(previous);
 });
 
 test('watchlist history filters material changes and hands retained domains back to Bulk', async ({ page }) => {

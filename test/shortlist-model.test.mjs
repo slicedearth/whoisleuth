@@ -52,10 +52,8 @@ test('normalizes known shortlist evidence and discards arbitrary imported fields
   assert.equal(normalized.rawWhois, undefined);
 });
 
-test('legacy arrays remain readable and identify as schema version one', () => {
-  const legacy = [record()];
-  const store = normalizeShortlistStore(legacy);
-  assert.equal(shortlistStoreVersion(legacy), 1);
+test('internal record collections normalize into the current envelope', () => {
+  const store = normalizeShortlistStore([record()]);
   assert.equal(store.version, SHORTLIST_SCHEMA_VERSION);
   assert.equal(store.entries[0].domain, 'example.invalid');
 });
@@ -78,12 +76,16 @@ test('store normalization bounds traversal and retained entries', () => {
 });
 
 test('imports add, update, and disclose invalid and duplicate entries', () => {
-  const result = mergeShortlistStores([record('local.invalid')], [
-    record('local.invalid', { riskScore: 33 }),
-    record('added.invalid'),
-    record('ADDED.INVALID', { riskScore: 88 }),
-    { domain: '' },
-  ]);
+  const result = mergeShortlistStores([record('local.invalid')], {
+    schema: SHORTLIST_SCHEMA,
+    version: SHORTLIST_SCHEMA_VERSION,
+    entries: [
+      record('local.invalid', { riskScore: 33 }),
+      record('added.invalid'),
+      record('ADDED.INVALID', { riskScore: 88 }),
+      { domain: '' },
+    ],
+  });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 1, skipped: 2 });
   assert.equal(result.entries.find((item) => item.domain === 'local.invalid').riskScore, 33);
   assert.equal(result.entries.find((item) => item.domain === 'added.invalid').riskScore, 88);
@@ -98,8 +100,10 @@ test('imports the current portable envelope without treating export metadata as 
 });
 
 test('imports reject malformed and future structured exports', () => {
-  assert.throws(() => mergeShortlistStores([], {}), /expected a shortlist export/i);
-  assert.throws(() => mergeShortlistStores([], { schema: 'whoisleuth.cases', entries: [] }), /expected a shortlist export/i);
+  assert.throws(() => mergeShortlistStores([], {}), /current WHOISleuth shortlist export/i);
+  assert.throws(() => mergeShortlistStores([], [record()]), /current WHOISleuth shortlist export/i);
+  assert.throws(() => mergeShortlistStores([], { schema: 'whoisleuth.cases', entries: [] }), /current WHOISleuth shortlist export/i);
+  assert.throws(() => mergeShortlistStores([], { schema: SHORTLIST_SCHEMA, version: 1, entries: [] }), /using schema 2/i);
   assert.throws(() => mergeShortlistStores([], { schema: SHORTLIST_SCHEMA, version: 99, entries: [] }), /newer schema 99/i);
 });
 

@@ -43,9 +43,8 @@
   let searching = $state(false);
   let filter = $state('');
   let profile = $state<BrandProfile|null>(null);
-  // Whether the last CT search rendered structured per-registrable-domain
-  // provenance or fell back to a legacy hostname-only backend response.
-  let ctResultKind = $state<'structured'|'legacy'|null>(null);
+  // Whether the current candidate set came from structured CT provenance.
+  let ctResultKind = $state<'structured'|null>(null);
   let ctHistory = $state<CtHistoryStore>({ version: 1, entries: [] });
   let ctNewDomains = $state<Set<string>>(new Set());
   let ctPreviousCheckedAt = $state<string|null>(null);
@@ -250,32 +249,28 @@
       const body = await response.json().catch(() => ({})) as Record<string, unknown>;
       if (token !== searchToken) return; // a newer search or a mode switch superseded this one
       if (!response.ok) throw new Error((body.error as string) || `Search failed (${response.status})`);
-      const { candidates: next, usedStructuredMatches, certCount, truncated } = normalizeCtResponse(body, query);
+      const { candidates: next, certCount, truncated } = normalizeCtResponse(body, query);
       const { filtered, excluded } = withoutAllowlisted(next);
-      ctResultKind = usedStructuredMatches ? 'structured' : 'legacy';
-      const noun = usedStructuredMatches ? 'registrable domain' : 'observed hostname';
+      ctResultKind = 'structured';
+      const noun = 'registrable domain';
       let historySummary = '';
-      if (usedStructuredMatches) {
-        try {
-          const result = saveCtHistorySearch(query, next.map((candidate)=>candidate.domain), { certificateCount: certCount, truncated });
-          ctHistory = result.store;
-          const visibleDomains = new Set(filtered.map((candidate)=>candidate.domain));
-          ctNewDomains = new Set(result.comparison.newDomains.filter((domain)=>visibleDomains.has(domain)));
-          ctPreviousCheckedAt = result.comparison.previousCheckedAt;
-          const visibleNewCount = ctNewDomains.size;
-          if (result.comparison.hasBaseline) {
-            historySummary = ` ${visibleNewCount} new since the previous complete search on ${historyDate(result.comparison.previousCheckedAt)}.`;
-            if (!result.comparison.baselineUpdated) historySummary += ' Capped results did not replace that baseline.';
-          } else if (result.comparison.baselineUpdated) {
-            historySummary = ' Saved as the first local baseline for this search.';
-          } else {
-            historySummary = ' Results were capped, so no local baseline was created.';
-          }
-        } catch (cause) {
-          ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
+      try {
+        const result = saveCtHistorySearch(query, next.map((candidate)=>candidate.domain), { certificateCount: certCount, truncated });
+        ctHistory = result.store;
+        const visibleDomains = new Set(filtered.map((candidate)=>candidate.domain));
+        ctNewDomains = new Set(result.comparison.newDomains.filter((domain)=>visibleDomains.has(domain)));
+        ctPreviousCheckedAt = result.comparison.previousCheckedAt;
+        const visibleNewCount = ctNewDomains.size;
+        if (result.comparison.hasBaseline) {
+          historySummary = ` ${visibleNewCount} new since the previous complete search on ${historyDate(result.comparison.previousCheckedAt)}.`;
+          if (!result.comparison.baselineUpdated) historySummary += ' Capped results did not replace that baseline.';
+        } else if (result.comparison.baselineUpdated) {
+          historySummary = ' Saved as the first local baseline for this search.';
+        } else {
+          historySummary = ' Results were capped, so no local baseline was created.';
         }
-      } else {
-        historySummary = ' Legacy hostname-only results do not update local baselines.';
+      } catch (cause) {
+        ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
       }
       setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${historySummary}`, next);
     } catch (cause) {
@@ -427,7 +422,6 @@
     newCount={ctNewDomains.size}
     {toggleNewOnly}
     {selectMatching}
-    legacy={ctResultKind==='legacy'}
     rows={candidateDisplayRows()}
     visibleCount={visible.length}
     {currentPage}

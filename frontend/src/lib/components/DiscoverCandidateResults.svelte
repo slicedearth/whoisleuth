@@ -27,7 +27,6 @@
     newCount,
     toggleNewOnly,
     selectMatching,
-    legacy,
     rows,
     visibleCount,
     currentPage,
@@ -47,7 +46,6 @@
     newCount: number;
     toggleNewOnly: () => void;
     selectMatching: (selected: boolean) => void;
-    legacy: boolean;
     rows: CandidateRow[];
     visibleCount: number;
     currentPage: number;
@@ -66,7 +64,6 @@
     <button class="btn" onclick={() => selectMatching(true)}>Select matching</button>
     <button class="btn" onclick={() => selectMatching(false)}>Clear matching</button>
   </div>
-  {#if legacy}<p class="ct-legacy" role="note">Detailed certificate provenance was unavailable for this search; showing observed hostnames only.</p>{/if}
   <div class="candidate-list">
     {#each rows as candidate, index (candidate.domain)}
       <div class="candidate" class:has-ct={candidate.certificateEvidence}>
@@ -120,7 +117,6 @@
   .ct-hosts details{width:100%}
   .ct-hosts summary{color:var(--accent);cursor:pointer;font-size:var(--text-2xs)}
   .ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-  .ct-legacy{margin:0 0 12px;color:var(--muted);font-size:var(--text-xs)}
   .page-summary{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
   @media(max-width:700px){
     .results-toolbar,.candidate-list{grid-template-columns:1fr}

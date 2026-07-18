@@ -215,7 +215,7 @@ npm run typecheck
 npm run check
 npm run build
 npm run test:e2e:install   # one-time: downloads the Chromium browser Playwright drives
-npm run test:e2e
+npm run test:e2e:built     # reuses the production build created above
 ```
 
 ### Browser end-to-end tests
@@ -230,9 +230,11 @@ live WHOIS, RDAP, DNS, CT, or website data - tests that need submission
 behavior use domain values the backend rejects locally before any upstream
 request. First run `npm run test:e2e:install` to download the Chromium
 build Playwright drives (a one-time step, separate from `npm install`), then
-`npm run test:e2e` to run the suite headlessly. A `playwright-report/`
-directory (traces/screenshots for failed tests only) is written to the repo
-root and is gitignored.
+`npm run test:e2e` to build and run the suite headlessly as a standalone
+command. After an explicit `npm run build`, use `npm run test:e2e:built` to
+avoid rebuilding identical assets. CI retains an HTML report only when its
+artifact upload is needed; local runs keep failure traces/screenshots in the
+gitignored `test-results/` directory without generating a success report.
 
 ## Usage
 
@@ -728,15 +730,14 @@ covered by the provider's community terms or an appropriate paid agreement.
   Bulk beside each scanned row and in the CSV export (`ct_first_observed`,
   `ct_last_observed`, `ct_certificate_count`, `ct_hostnames`). CT observation
   timestamps and certificate counts are provenance only — they never feed the
-  Risk or Opportunity scores. An older backend that returns only the legacy
-  hostname list still works: Discover falls back to hostname-only candidates,
-  notes that detailed CT provenance was unavailable, and hands them off
-  without manufacturing timestamps or counts.
+  Risk or Opportunity scores. A malformed response without the current
+  structured `matches` contract fails explicitly rather than manufacturing
+  candidate provenance.
 - Complete structured certificate searches also maintain a bounded,
   browser-local baseline for each normalized keyword. A later search labels
   canonical domains that were absent from the previous complete result and
-  can filter the list to those new observations. Capped and legacy responses
-  are retained in the local check summary but never replace a complete
+  can filter the list to those new observations. Capped responses are retained
+  in the local check summary but never replace a complete
   baseline, avoiding false "new" labels after a partial result. Discover's
   **Previous certificate searches** panel can reuse or delete individual
   searches, or clear all CT history. This history stays in `localStorage`, is

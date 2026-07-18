@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { consoleDestinations } from '../frontend/src/lib/workspaces';
 
 // Coverage for the shared design system: native-sized checkbox controls with
 // correct label alignment, the Lookup result's grouped sections and local
@@ -207,7 +208,7 @@ test('long untrusted values wrap inside result tiles without page overflow', asy
 });
 
 test('every workspace renders without page-level overflow at narrow and wide widths', async ({ page }) => {
-  for (const path of ['/', '/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/brands']) {
+  for (const path of ['/', ...consoleDestinations.map(({ href }) => href), '/privacy']) {
     await page.goto(path);
     for (const size of [
       { width: 320, height: 640 },
@@ -219,7 +220,7 @@ test('every workspace renders without page-level overflow at narrow and wide wid
   }
 });
 
-test('protected workspace pages expose one consistent primary heading', async ({ page }) => {
+test('console and policy pages expose one consistent primary heading', async ({ page }) => {
   for (const [path, title, eyebrow] of [
     ['/dashboard', 'Investigation dashboard', 'Console'],
     ['/lookup', 'Lookup', 'Investigate'],
@@ -227,6 +228,7 @@ test('protected workspace pages expose one consistent primary heading', async ({
     ['/bulk', 'Bulk analysis', 'Assess'],
     ['/monitor', 'Investigation workspace', 'Monitor'],
     ['/brands', 'Brand profiles', 'Protect'],
+    ['/registry-support', 'Registry support', 'Reference'],
     ['/privacy', 'Privacy policy', 'Policy'],
   ]) {
     await page.goto(path);

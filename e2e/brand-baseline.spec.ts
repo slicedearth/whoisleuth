@@ -120,46 +120,6 @@ test('captures and persists only a bounded official-site baseline after profile 
   expect(serialized).not.toMatch(/rawHtml|must-not-persist|private\/path|token=|diagnostics|limitations|"exact"/);
 });
 
-test('legacy profiles remain editable and migrate with an explicit null baseline', async ({ page }) => {
-  await cleanBrandStorage(page);
-  await page.evaluate(({ profilesKey, activeKey, observedAt }) => {
-    const profile = {
-      id: 'legacy-profile',
-      name: 'Legacy Brand',
-      officialDomains: ['legacy.example'],
-      productNames: [],
-      tlds: ['example'],
-      approvedPartnerDomains: [],
-      allowlistedDomains: [],
-      allowlistedRegistrars: [],
-      dkimSelectors: [],
-      trademarkOwner: '',
-      trademarkRegistration: '',
-      officialFaviconHash: '',
-      officialFaviconPHash: '',
-      createdAt: observedAt,
-      updatedAt: observedAt,
-    };
-    localStorage.setItem(profilesKey, JSON.stringify([profile]));
-    localStorage.setItem(activeKey, profile.id);
-  }, { profilesKey: PROFILES_KEY, activeKey: ACTIVE_KEY, observedAt: ISO });
-  await page.reload();
-
-  await expect(page.getByText('Not captured', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Edit' }).click();
-  await expect(page.getByRole('button', { name: 'Capture official-site baseline' })).toBeVisible();
-  await page.getByRole('button', { name: 'Save profile' }).click();
-  const persisted = await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(value) ? value[0] : value.profiles[0];
-  }, PROFILES_KEY);
-  const persistedVersion = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null').version, PROFILES_KEY);
-  expect(persistedVersion).toBe(2);
-  expect(persisted.name).toBe('Legacy Brand');
-  expect(persisted.officialDomains).toEqual(['legacy.example']);
-  expect(persisted.pageBaseline).toBeNull();
-});
-
 test('a baseline is discarded when it no longer belongs to an official domain', async ({ page }) => {
   await page.route('**/api/availability?*', async (route) => route.fulfill({
     status: 200,

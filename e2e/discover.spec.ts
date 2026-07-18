@@ -32,13 +32,6 @@ const structuredResponse = {
   ],
 };
 
-const legacyResponse = {
-  keyword: 'example',
-  domains: ['a.example.invalid', 'b.example.invalid'],
-  certCount: 5,
-  truncated: false,
-};
-
 const initialBaselineResponse = {
   ...structuredResponse,
   certCount: 4,
@@ -343,21 +336,6 @@ test.describe('CT provenance badge in Bulk results', () => {
     await expect(ctDetails).toContainText('4 distinct certificates');
     await expect(ctDetails.locator('time[datetime="2026-06-01T00:00:00.000Z"]')).toBeVisible();
   });
-});
-
-test('a legacy domains-only response renders and hands off safely', async ({ page }) => {
-  await mockCtSearch(page, legacyResponse);
-  await runCtSearch(page);
-
-  await expect(page.locator('.ct-legacy')).toContainText('Detailed certificate provenance was unavailable');
-  await expect(page.locator('.candidate')).toHaveCount(2);
-  await expect(page.locator('.candidate strong')).toHaveText(['a.example.invalid', 'b.example.invalid']);
-  // No manufactured CT metadata on legacy candidates.
-  await expect(page.locator('.ct-meta')).toHaveCount(0);
-
-  await page.getByRole('button', { name: 'Continue to Bulk' }).click();
-  await expect(page).toHaveURL(/\/bulk/);
-  await expect(page.locator('#domains')).toHaveValue(/a\.example\.invalid/);
 });
 
 test('a complete CT baseline persists across reload and labels newly observed domains', async ({ page }) => {

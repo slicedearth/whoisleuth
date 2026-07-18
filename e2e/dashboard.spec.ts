@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
+import { workspaces, referenceWorkspaces } from '../frontend/src/lib/workspaces';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -54,17 +55,10 @@ test('the dashboard launches every workspace and links back to the public homepa
   await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'View public homepage' })).toHaveAttribute('href', '/');
   await expect(page.locator('.quick-card')).toHaveCount(3);
-  await expect(page.locator('.workspace-card')).toHaveCount(6);
+  await expect(page.locator('.workspace-card')).toHaveCount(workspaces.length + referenceWorkspaces.length);
 
-  for (const [name, href] of [
-    ['Lookup', '/lookup'],
-    ['Discover', '/discover'],
-    ['Bulk', '/bulk'],
-    ['Monitor', '/monitor'],
-    ['Brands', '/brands'],
-    ['Registry support', '/registry-support'],
-  ]) {
-    await expect(page.locator('.workspace-card').filter({ hasText: name }).first()).toHaveAttribute('href', href);
+  for (const { label, href } of [...workspaces, ...referenceWorkspaces]) {
+    await expect(page.locator('.workspace-card').filter({ hasText: label }).first()).toHaveAttribute('href', href);
   }
 });
 

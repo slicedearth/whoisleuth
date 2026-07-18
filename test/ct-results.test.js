@@ -40,7 +40,6 @@ describe('structured response', () => {
       { keyword: 'example', domains: ['a.example.com'], certCount: 42, truncated: false, matches: [match()] },
       'example',
     );
-    assert.equal(result.usedStructuredMatches, true);
     assert.equal(result.certCount, 42);
     assert.equal(result.truncated, false);
     assert.equal(result.candidates.length, 1);
@@ -166,9 +165,8 @@ describe('structured response', () => {
     assert.deepStrictEqual(response, copy);
   });
 
-  test('valid empty matches array is authoritative (no legacy fallback)', () => {
+  test('valid empty matches array is authoritative', () => {
     const result = normalizeCtResponse({ domains: ['a.example.com', 'b.example.com'], matches: [] }, 's');
-    assert.equal(result.usedStructuredMatches, true);
     assert.deepStrictEqual(result.candidates, []);
   });
 });
@@ -194,43 +192,27 @@ describe('input-processing caps', () => {
     assert.equal(result.candidates[0].certificateTransparency.hostnames.length, bounds.MAX_CT_HOSTNAMES);
   });
 
-  test('an oversized legacy domains array is capped and reports truncation', () => {
-    const domains = [];
-    for (let i = 0; i < bounds.MAX_CT_INPUT_DOMAINS + 100; i++) domains.push(`d${i}.example.com`);
-    const result = normalizeCtResponse({ domains }, 's');
-    assert.equal(result.truncated, true);
-    assert.ok(result.candidates.length <= bounds.MAX_CT_CANDIDATES);
-  });
-
   test('backend truncated flag is preserved even without a local cap hit', () => {
     assert.equal(normalizeCtResponse({ matches: [match()], truncated: true }, 's').truncated, true);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Legacy + malformed
+// Malformed responses
 // ---------------------------------------------------------------------------
 
-describe('legacy and malformed handling', () => {
-  test('legacy domains fallback when matches absent', () => {
-    const result = normalizeCtResponse({ domains: ['b.example.com', 'a.example.com', 'A.EXAMPLE.COM'], certCount: 9 }, 'src');
-    assert.equal(result.usedStructuredMatches, false);
-    assert.equal(result.certCount, 9);
-    // preserves legacy hostname candidates, deduped/lowercased, no CT metadata
-    assert.deepStrictEqual(result.candidates.map((c) => c.domain), ['b.example.com', 'a.example.com']);
-    assert.equal(result.candidates[0].certificateTransparency, undefined);
-    assert.deepStrictEqual(result.candidates[0].mutationTypes, ['certificate_transparency']);
-  });
-
-  test('present-but-malformed matches fails clearly', () => {
+describe('malformed response handling', () => {
+  test('missing or malformed matches fails clearly', () => {
+    assert.throws(() => normalizeCtResponse({}, 's'), /malformed/i);
+    assert.throws(() => normalizeCtResponse({ domains: ['old.example.com'] }, 's'), /malformed/i);
     assert.throws(() => normalizeCtResponse({ matches: 'nope' }, 's'), /malformed/i);
     assert.throws(() => normalizeCtResponse({ matches: null }, 's'), /malformed/i);
     assert.throws(() => normalizeCtResponse({ matches: { 0: match() } }, 's'), /malformed/i);
   });
 
-  test('structured matches never mix with legacy domains', () => {
+  test('structured matches ignore unrelated top-level fields', () => {
     const result = normalizeCtResponse(
-      { domains: ['legacy.example.com'], matches: [match({ domain: 'structured.com' })] },
+      { domains: ['unrelated.example.com'], matches: [match({ domain: 'structured.com' })] },
       's',
     );
     assert.deepStrictEqual(result.candidates.map((c) => c.domain), ['structured.com']);

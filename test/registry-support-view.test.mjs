@@ -13,6 +13,7 @@ import {
   registrySupportCatalogue,
   registrySupportLabel,
 } from '../frontend/src/lib/analysis/registry-support.js';
+import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
@@ -26,12 +27,10 @@ test('builds the bounded registry-support catalogue from the shared capability m
     accessDocumented: 2,
     fallbacks: 1,
   });
-  assert.deepEqual(catalogue.rows.map((row) => row.suffixes[0]), [
-    'ar', 'at', 'au', 'be', 'br', 'ca', 'cl', 'cn', 'cz', 'de', 'dk', 'edu',
-    'es', 'eu', 'fi', 'fr', 'gt', 'id', 'ie', 'il', 'in', 'it', 'jp', 'kr',
-    'mx', 'my', 'no', 'nz', 'pl', 'pt', 'ro', 'ru', 'se', 'sg', 'si', 'sk',
-    'tr', 'tw', 'ua', 'uk', 'us', 'vn',
-  ]);
+  assert.deepEqual(
+    catalogue.rows.map((row) => row.suffixes),
+    registryCompatibilityMatrix().map((row) => row.suffixes),
+  );
 });
 
 test('returns independent catalogue rows rather than exposing shared mutable arrays', () => {

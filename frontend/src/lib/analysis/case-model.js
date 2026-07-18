@@ -8,11 +8,6 @@
 import { normalizeHttpSummary } from './http-summary.js';
 import { normalizeRiskModelVersion } from './scoring.js';
 
-// Schema 2 replaces the single scalar `evidence` object of schema 1 with a
-// bounded, deduplicated `evidenceHistory` timeline. Version-1 stores are still
-// discovered under the same localStorage key and migrated on load: their one
-// `evidence` object becomes a single normalized snapshot.
-//
 // Forward-version policy (two distinct guarantees):
 //   - A locally-stored envelope that declares a version greater than this is
 //     still read best-effort on load (known fields kept, unknown dropped), but
@@ -880,26 +875,21 @@ export function compareCaseEvidence(previous, current) {
 }
 
 // ---------------------------------------------------------------------------
-// Case normalization / migration
+// Case normalization
 // ---------------------------------------------------------------------------
 
-// A case's own source maps onto a snapshot provenance for evidence it captured
-// itself. A hand-opened ('manual') case has no scan provenance -> 'unknown'.
+// A case's own source maps onto snapshot provenance for newly captured
+// evidence. A hand-opened ('manual') case has no scan provenance.
 function inferCaptureSource(caseSource) {
   return EVIDENCE_SOURCE_SET.has(caseSource) && caseSource !== 'import' ? caseSource : DEFAULT_EVIDENCE_SOURCE;
 }
 
-// Builds a case's evidence history from either a schema-2 `evidenceHistory`
-// array or a legacy schema-1 `evidence` scalar. The legacy value becomes a
-// single snapshot; the legacy field itself is dropped from the output. Uses a
-// lenient local fallback timestamp so our own stored data always loads.
+// Builds a case's bounded current-schema evidence history. Uses a lenient
+// local fallback timestamp so recoverable current data always loads.
 function normalizeCaseEvidence(record, createdAt, updatedAt, now) {
   const localFallback = updatedAt || createdAt || now;
   if (Array.isArray(record.evidenceHistory)) {
     return normalizeEvidenceHistory(record.evidenceHistory, { source: DEFAULT_EVIDENCE_SOURCE, fallback: localFallback });
-  }
-  if (record.evidence && typeof record.evidence === 'object') {
-    return normalizeEvidenceHistory([record.evidence], { source: inferCaptureSource(record.source), fallback: localFallback });
   }
   return [];
 }
@@ -1132,11 +1122,7 @@ function extractImportPatch(raw) {
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const importFallback = isoOrNull(record.updatedAt) || isoOrNull(record.createdAt) || null;
-  const rawEvidence = Array.isArray(record.evidenceHistory)
-    ? record.evidenceHistory
-    : record.evidence && typeof record.evidence === 'object'
-      ? [record.evidence]
-      : [];
+  const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
@@ -1237,6 +1223,11 @@ export function mergeCases(localCases, importedRaw) {
   const importedVersion = parseStoreVersion(importedRaw);
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
+  }
+  if (importedVersion !== CASE_SCHEMA_VERSION
+    || !importedRaw || typeof importedRaw !== 'object'
+    || !Array.isArray(/** @type {Record<string, unknown>} */ (importedRaw).cases)) {
+    throw new Error(`Expected a WHOISleuth case export using schema ${CASE_SCHEMA_VERSION}.`);
   }
   const local = normalizeCaseStore(localCases).cases;
   const byDomain = new Map(local.map((item) => [item.domain, item]));

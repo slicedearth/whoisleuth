@@ -143,11 +143,10 @@ test('preserves existing identity and creation time while touching updates', () 
   assert.equal(result.updatedAt, NOW);
 });
 
-test('legacy array stores migrate in memory to the current version', () => {
+test('internal profile collections normalize to the current envelope', () => {
   const result = normalizeBrandProfileStore([profile()]);
   assert.equal(result.version, BRAND_PROFILE_SCHEMA_VERSION);
   assert.equal(result.profiles.length, 1);
-  assert.equal(brandProfileStoreVersion([profile()]), 1);
 });
 
 test('store normalization drops unknown fields and does not mutate input', () => {
@@ -168,7 +167,7 @@ test('duplicate ids retain the most recently updated bounded record', () => {
   assert.equal(result.profiles[0].name, 'Newer');
 });
 
-test('structured and legacy imports merge by case-insensitive profile name', () => {
+test('structured imports merge by case-insensitive profile name', () => {
   const local = profile({ id: 'local', name: 'Example Brand' });
   const imported = profile({ id: 'imported', name: 'example brand', productNames: ['Updated'] });
   const result = mergeBrandProfiles([local], { schema: 'whoisleuth.brand-profiles', version: 2, profiles: [imported] }, { nowIso: NOW, makeId: () => 'new-id' });
@@ -178,14 +177,20 @@ test('structured and legacy imports merge by case-insensitive profile name', () 
 });
 
 test('imports report malformed records as skipped', () => {
-  const result = mergeBrandProfiles([], [profile({ id: '../bad', name: 'Valid' }), { name: '' }], { nowIso: NOW, makeId: () => 'generated' });
+  const result = mergeBrandProfiles([], {
+    schema: 'whoisleuth.brand-profiles',
+    version: BRAND_PROFILE_SCHEMA_VERSION,
+    profiles: [profile({ id: '../bad', name: 'Valid' }), { name: '' }],
+  }, { nowIso: NOW, makeId: () => 'generated' });
   assert.equal(result.added, 1);
   assert.equal(result.skipped, 1);
 });
 
 test('imports reject unrelated and future schemas', () => {
-  assert.throws(() => mergeBrandProfiles([], {}), /expected a Brand Profile export/i);
+  assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
+  assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2/);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 3, profiles: [] }), /newer schema 3/);
 });
 

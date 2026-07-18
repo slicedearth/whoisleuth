@@ -151,7 +151,7 @@ export function brandProfileStoreVersion(raw) {
   return typeof value.version === 'number' && Number.isFinite(value.version) && value.version > 0 ? value.version : null;
 }
 
-/** Legacy arrays are accepted but are never rewritten merely by reading them. */
+/** Normalize an internal profile collection or current stored envelope. */
 export function normalizeBrandProfileStore(raw) {
   const byId = new Map();
   for (const item of profileList(raw).slice(0, MAX_PROFILES * 4)) {
@@ -181,18 +181,19 @@ export function assertBrandProfileStoreBudget(profiles) {
 }
 
 export function mergeBrandProfiles(localRaw, importedRaw, options = {}) {
-  if (!Array.isArray(importedRaw)) {
-    const imported = record(importedRaw);
-    if (imported.schema && imported.schema !== 'whoisleuth.brand-profiles') {
-      throw new Error('This JSON file is not a WHOISleuth Brand Profile export.');
-    }
-    if (!Array.isArray(imported.profiles)) {
-      throw new Error('Expected a Brand Profile export or a legacy JSON array.');
-    }
+  const imported = record(importedRaw);
+  if (imported.schema !== 'whoisleuth.brand-profiles') {
+    throw new Error('This JSON file is not a WHOISleuth Brand Profile export.');
+  }
+  if (!Array.isArray(imported.profiles)) {
+    throw new Error('Expected a current WHOISleuth Brand Profile export.');
   }
   const importedVersion = brandProfileStoreVersion(importedRaw);
   if (importedVersion !== null && importedVersion > BRAND_PROFILE_SCHEMA_VERSION) {
     throw new Error(`This Brand Profile file uses newer schema ${importedVersion}. Update the app before importing it.`);
+  }
+  if (importedVersion !== BRAND_PROFILE_SCHEMA_VERSION) {
+    throw new Error(`Expected a WHOISleuth Brand Profile export using schema ${BRAND_PROFILE_SCHEMA_VERSION}.`);
   }
   const local = normalizeBrandProfileStore(localRaw).profiles;
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));

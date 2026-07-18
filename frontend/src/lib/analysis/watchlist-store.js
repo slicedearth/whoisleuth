@@ -80,12 +80,11 @@ export function serializeWatchlistStore(watchlists) {
 
 function validateImportShape(raw) {
   const value = plainRecord(raw);
-  if (!value) throw new Error('Expected a watchlist export or a legacy object mapping names to watchlists.');
-  if (value.schema && value.schema !== WATCHLIST_SCHEMA) {
+  if (!value || value.schema !== WATCHLIST_SCHEMA) {
     throw new Error('This JSON file is not a WHOISleuth watchlist export.');
   }
-  if (Object.prototype.hasOwnProperty.call(value, 'watchlists') && !plainRecord(value.watchlists)) {
-    throw new Error('Expected a watchlist export or a legacy object mapping names to watchlists.');
+  if (!plainRecord(value.watchlists)) {
+    throw new Error('Expected a current WHOISleuth watchlist export.');
   }
 }
 
@@ -94,6 +93,9 @@ export function mergeWatchlistStores(localRaw, importedRaw) {
   const importedVersion = watchlistStoreVersion(importedRaw);
   if (importedVersion !== null && importedVersion > WATCHLIST_SCHEMA_VERSION) {
     throw new Error(`This watchlist file uses newer schema ${importedVersion}. Update the app before importing it.`);
+  }
+  if (importedVersion !== WATCHLIST_SCHEMA_VERSION) {
+    throw new Error(`Expected a WHOISleuth watchlist export using schema ${WATCHLIST_SCHEMA_VERSION}.`);
   }
   const local = normalizeWatchlistStore(localRaw).watchlists;
   const source = watchlistMap(importedRaw) || {};

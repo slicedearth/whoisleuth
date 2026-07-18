@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { TEST_SITE_PASSWORD } from './constants';
+import { consoleDestinations } from '../frontend/src/lib/workspaces';
 
 // This spec starts with no session, overriding the project's default
 // authenticated storageState - it's the one place the login *form* itself
@@ -93,7 +94,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
 });
 
 test('the dashboard and all investigation workspaces require sign-in and unsafe return targets are ignored', async ({ page }) => {
-  for (const path of ['/dashboard', '/lookup', '/discover', '/bulk', '/monitor', '/brands', '/registry-support']) {
+  for (const { href: path } of consoleDestinations) {
     await page.goto(path);
     await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);
     await expect(page.locator('form.login')).toBeVisible();

@@ -34,12 +34,11 @@ test('normalizes watchlist names and blocks prototype and control keys', () => {
   assert.equal(normalizeWatchlistName('N'.repeat(MAX_WATCHLIST_NAME_LENGTH + 1)), '');
 });
 
-test('legacy maps migrate in memory without confusing a watchlist named watchlists for an envelope', () => {
-  const legacy = { watchlists: entry() };
-  const store = normalizeWatchlistStore(legacy);
+test('internal watchlist maps normalize without confusing a list named watchlists for an envelope', () => {
+  const source = { watchlists: entry() };
+  const store = normalizeWatchlistStore(source);
   assert.equal(store.version, WATCHLIST_SCHEMA_VERSION);
   assert.ok(store.watchlists.watchlists);
-  assert.equal(watchlistStoreVersion(legacy), 1);
 });
 
 test('versioned stores retain only bounded known evidence fields', () => {
@@ -73,8 +72,10 @@ test('imports add, replace, and skip malformed or over-limit records determinist
 });
 
 test('imports reject unrelated, malformed, and future schemas', () => {
-  assert.throws(() => mergeWatchlistStores({}, []), /expected a watchlist export/i);
+  assert.throws(() => mergeWatchlistStores({}, []), /not a WHOISleuth watchlist export/i);
+  assert.throws(() => mergeWatchlistStores({}, { Priority: entry() }), /not a WHOISleuth watchlist export/i);
   assert.throws(() => mergeWatchlistStores({}, { schema: 'whoisleuth.cases', watchlists: {} }), /not a WHOISleuth watchlist export/);
+  assert.throws(() => mergeWatchlistStores({}, { schema: WATCHLIST_SCHEMA, version: 1, watchlists: {} }), /using schema 2/);
   assert.throws(() => mergeWatchlistStores({}, { schema: 'whoisleuth.watchlists', version: 3, watchlists: {} }), /newer schema 3/);
   assert.equal(watchlistStoreVersion({ schema: WATCHLIST_SCHEMA, version: 2.5, watchlists: {} }), 2.5);
 });

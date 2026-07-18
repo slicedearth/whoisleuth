@@ -79,24 +79,25 @@ for (const viewport of VIEWPORTS) {
 
     });
 
-    test('closing the drawer updates aria-expanded, and the footer links to Privacy', async ({ page }) => {
-      await page.goto('/lookup');
-
-      const shell = page.locator('.shell');
-      const toggle = page.getByRole('button', { name: 'Toggle navigation' });
-      await toggle.click();
-      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      await expect(shell).toHaveClass(/open/);
-
-      await page.keyboard.press('Escape');
-      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      await expect(shell).not.toHaveClass(/open/);
-
-      const footer = page.locator('footer.site-footer');
-      await expect(footer).toBeVisible();
-      await expect(footer.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
-
-      await expectNoHorizontalOverflow(page);
-    });
   });
 }
+
+test('closing the mobile drawer updates aria-expanded, and the footer links to Privacy', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/lookup');
+
+  const shell = page.locator('.shell');
+  const toggle = page.getByRole('button', { name: 'Toggle navigation' });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(shell).toHaveClass(/open/);
+
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(shell).not.toHaveClass(/open/);
+
+  const footer = page.locator('footer.site-footer');
+  await expect(footer).toBeVisible();
+  await expect(footer.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
+  await expectNoHorizontalOverflow(page);
+});

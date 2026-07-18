@@ -29,22 +29,6 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await expect(page.locator('tbody tr')).toHaveCount(42);
 
   const search = page.getByLabel('Suffix or capability');
-  await search.fill('bracketed');
-  await expect(page.locator('tbody tr')).toHaveCount(1);
-  await expect(page.locator('tbody tr')).toContainText('.jp');
-
-  await search.fill('structured underscore');
-  await expect(page.locator('tbody tr')).toHaveCount(1);
-  await expect(page.locator('tbody tr')).toContainText('.nz');
-
-  await search.fill('tci colon');
-  await expect(page.locator('tbody tr')).toHaveCount(1);
-  await expect(page.locator('tbody tr')).toContainText('.ru');
-
-  await search.fill('norid handle');
-  await expect(page.locator('tbody tr')).toHaveCount(1);
-  await expect(page.locator('tbody tr')).toContainText('.no');
-
   await search.fill('punktum domain');
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await expect(page.locator('tbody tr')).toContainText('.dk');

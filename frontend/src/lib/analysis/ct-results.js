@@ -34,7 +34,6 @@ export const MAX_CT_SOURCE_LENGTH = 253; // same bound the handoff enforces on s
 // Set above the output bounds so legitimate de-duplication is never starved.
 export const MAX_CT_INPUT_MATCHES = 2000;
 export const MAX_CT_INPUT_HOSTNAMES = 500;
-export const MAX_CT_INPUT_DOMAINS = 2000;
 
 /**
  * A canonical, bounded certificate-count. Accepts only finite non-negative
@@ -237,44 +236,15 @@ function buildStructuredCandidates(matches, source) {
 }
 
 /**
- * Preserves the legacy hostname-candidate behaviour for an older backend that
- * only returns the `domains` array. These hostnames are NOT canonical
- * registrable domains and carry no invented CT metadata - only the mutation
- * provenance token, deduplicated and lightly bounded.
- */
-function buildLegacyCandidates(domains, source) {
-  if (!Array.isArray(domains)) return { candidates: [], truncated: false };
-  // Slice first so a huge invalid array cannot be scanned in full.
-  let truncated = domains.length > MAX_CT_INPUT_DOMAINS;
-  const input = truncated ? domains.slice(0, MAX_CT_INPUT_DOMAINS) : domains;
-  const seen = new Set();
-  const out = [];
-  for (const raw of input) {
-    if (typeof raw !== 'string' || raw.length > MAX_CT_HOSTNAME_LENGTH) continue;
-    const domain = normalizeDomain(raw);
-    if (!domain || seen.has(domain)) continue;
-    seen.add(domain);
-    out.push({ domain, source, mutationTypes: [CERTIFICATE_TRANSPARENCY_MUTATION] });
-    if (out.length >= MAX_CT_CANDIDATES) {
-      truncated = truncated || out.length < input.length;
-      break;
-    }
-  }
-  return { candidates: out, truncated };
-}
-
-/**
- * @typedef {{ candidates: Array<{ domain: string, source: string, mutationTypes: string[], certificateTransparency?: CtProvenance | null }>, usedStructuredMatches: boolean, certCount: number, truncated: boolean }} CtNormalizationResult
+ * @typedef {{ candidates: Array<{ domain: string, source: string, mutationTypes: string[], certificateTransparency?: CtProvenance | null }>, certCount: number, truncated: boolean }} CtNormalizationResult
  */
 
 /**
  * Normalizes the entire untrusted CT search response into a bounded, ordered
  * candidate set plus display metadata.
  *
- * When `matches` is present it is authoritative even if empty; a present-but-
- * non-array `matches` is a malformation and throws rather than silently
- * trusting it or falling back to legacy. When `matches` is absent, the legacy
- * `domains` array is used. Structured matches and legacy domains never mix.
+ * `matches` is required and authoritative even when empty. A missing or
+ * non-array value is a malformed current response and fails explicitly.
  *
  * @param {unknown} response - the entire CT API response
  * @param {string} sourceLabel - bounded provenance label for each candidate
@@ -286,25 +256,13 @@ export function normalizeCtResponse(response, sourceLabel) {
   const certCount = normalizeCount(res.certCount);
   const truncated = res.truncated === true;
 
-  const hasMatches = Object.prototype.hasOwnProperty.call(res, 'matches') && res.matches !== undefined;
-  if (hasMatches) {
-    if (!Array.isArray(res.matches)) {
-      throw new Error('Certificate Transparency results were malformed (expected a matches array).');
-    }
-    const built = buildStructuredCandidates(res.matches, source);
-    return {
-      candidates: built.candidates,
-      usedStructuredMatches: true,
-      certCount,
-      truncated: truncated || built.truncated,
-    };
+  if (!Array.isArray(res.matches)) {
+    throw new Error('Certificate Transparency results were malformed (expected a matches array).');
   }
-
-  const legacy = buildLegacyCandidates(res.domains, source);
+  const built = buildStructuredCandidates(res.matches, source);
   return {
-    candidates: legacy.candidates,
-    usedStructuredMatches: false,
+    candidates: built.candidates,
     certCount,
-    truncated: truncated || legacy.truncated,
+    truncated: truncated || built.truncated,
   };
 }
