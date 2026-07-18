@@ -142,6 +142,29 @@ function parseRegistryDate(input: unknown): Date | null {
     return month ? utcDateFromParts(+match[3], month, +match[1]) : null;
   }
 
+  // Ordinal-day Month YYYY[ at HH:MM:SS.sss] - the English form published
+  // by the Channel Islands registry. The suffix and `at` token are required
+  // so ordinary prose containing a month name is not accepted as lifecycle
+  // evidence.
+  match = value.match(/^(\d{1,2})(st|nd|rd|th)\s+([A-Za-z]{3,9})\s+(\d{4})(?:\s+at\s+(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?)?$/i);
+  if (match) {
+    const day = +match[1];
+    const suffix = match[2].toLowerCase();
+    const expectedSuffix = day % 100 >= 11 && day % 100 <= 13
+      ? 'th'
+      : (({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] || 'th');
+    if (suffix !== expectedSuffix) return null;
+    const monthText = match[3].toLowerCase();
+    const month = REGISTRY_MONTH_NAMES[monthText] || REGISTRY_MONTHS[monthText];
+    const millisecond = match[8] ? Number(`${match[8]}00`.slice(0, 3)) : 0;
+    return month
+      ? utcDateFromParts(
+        +match[4], month, day, +(match[5] || 0), +(match[6] || 0),
+        +(match[7] || 0), millisecond,
+      )
+      : null;
+  }
+
   // Ddd Mon DD YYYY[ HH:MM:SS] - the English textual form used by the
   // Belgian registry. Weekday text is presentation-only; the validated
   // calendar components determine the canonical UTC companion.

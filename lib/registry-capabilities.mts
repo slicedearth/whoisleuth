@@ -40,7 +40,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 17;
+const REGISTRY_CAPABILITIES_VERSION = 18;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -771,6 +771,66 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
       'https://www.iana.org/domains/root/db/la.html',
       'https://www.iana.org/domains/root/db/xn--q7ce6a.html',
     ],
+  },
+  {
+    id: 'andorra-rdds-colon', suffixes: ['ad'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/ad.html'],
+  },
+  {
+    id: 'nic-bh-icann-colon', suffixes: ['bh'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/bh.html'],
+  },
+  {
+    id: 'cc-registry-colon', suffixes: ['cc'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/cc.html'],
+  },
+  {
+    id: 'nic-cr-contact-indirection', suffixes: ['cr'], registryClass: 'country-code',
+    whoisParserProfile: 'fred-contact-indirection', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/cr.html'],
+  },
+  {
+    id: 'nic-dz-colon', suffixes: ['dz'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/dz.html'],
+  },
+  {
+    id: 'channel-islands-sectioned', suffixes: ['gg', 'je'], registryClass: 'country-code',
+    whoisParserProfile: 'indented-section-values-and-bare-nameservers',
+    fixtureScenarios: ['registered', 'not_found'], rdapAccessProfile: 'no-iana-service',
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/gg.html',
+      'https://www.iana.org/domains/root/db/je.html',
+    ],
+  },
+  {
+    id: 'nic-gl-colon', suffixes: ['gl'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/gl.html'],
+  },
+  {
+    id: 'lsnic-contact-indirection', suffixes: ['ls'], registryClass: 'country-code',
+    whoisParserProfile: 'fred-contact-indirection', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/ls.html'],
+  },
+  {
+    id: 'nic-mc-colon', suffixes: ['mc'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/mc.html'],
+  },
+  {
+    id: 'mm-registry-colon', suffixes: ['mm'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/mm.html'],
   },
   {
     id: 'no-iana-registry-service', suffixes: ['vn'], registryClass: 'country-code',

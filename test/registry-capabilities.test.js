@@ -18,6 +18,7 @@ const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'amnic-sectioned', suffixes: ['xn--y9a3aq'] },
   { id: 'cctld-by-colon', suffixes: ['xn--90ais'] },
+  { id: 'channel-islands-sectioned', suffixes: ['je'] },
   { id: 'cnnic-colon', suffixes: ['xn--fiqs8s', 'xn--fiqz9s'] },
   { id: 'dot-leader', suffixes: ['xn--3e0b707e'] },
   { id: 'eurid-sectioned', suffixes: ['xn--e1a4c', 'xn--qxa6a'] },
@@ -73,22 +74,34 @@ const VERSION_16_ACCESS_SUFFIXES = [
   'pa', 'ps', 'py', 'sl', 'sv', 'sz', 'tj', 'tt', 'va',
   'xn--54b7fta0cc', 'xn--fzc2c9e2c', 'xn--node', 'xn--xkc2al3hye2a', 'zw',
 ];
+const VERSION_18_FIXTURE_SUFFIXES = [
+  { id: 'andorra-rdds-colon', suffixes: ['ad'], rdapAccessProfile: 'iana-bootstrap' },
+  { id: 'nic-bh-icann-colon', suffixes: ['bh'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'cc-registry-colon', suffixes: ['cc'], rdapAccessProfile: 'iana-bootstrap' },
+  { id: 'nic-cr-contact-indirection', suffixes: ['cr'], rdapAccessProfile: 'iana-bootstrap' },
+  { id: 'nic-dz-colon', suffixes: ['dz'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'channel-islands-sectioned', suffixes: ['gg', 'je'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'nic-gl-colon', suffixes: ['gl'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'lsnic-contact-indirection', suffixes: ['ls'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'nic-mc-colon', suffixes: ['mc'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'mm-registry-colon', suffixes: ['mm'], rdapAccessProfile: 'no-iana-service' },
+];
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 17);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 18);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'ac', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'at', 'au', 'az', 'ba', 'bb',
-      'bd', 'be', 'bg', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cd', 'cg', 'ch',
-      'ck', 'cl', 'cn', 'co', 'cu', 'cw', 'cy', 'cz', 'de', 'dj', 'dk', 'edu', 'ee',
-      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fk', 'fr', 'ga', 'gb', 'gf', 'gi', 'gm',
+      'ac', 'ad', 'ae', 'af', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'at', 'au', 'az', 'ba', 'bb',
+      'bd', 'be', 'bg', 'bh', 'br', 'bs', 'bt', 'bv', 'by', 'bz', 'ca', 'cc', 'cd', 'cg', 'ch',
+      'ck', 'cl', 'cn', 'co', 'cr', 'cu', 'cw', 'cy', 'cz', 'de', 'dj', 'dk', 'dz', 'edu', 'ee',
+      'eg', 'er', 'es', 'et', 'eu', 'fi', 'fk', 'fr', 'ga', 'gb', 'gf', 'gg', 'gi', 'gl', 'gm',
       'gr', 'gt', 'gu', 'gw', 'hk', 'hr',
-      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'jm', 'jo', 'jp', 'ke',
-      'kh', 'km', 'kp', 'kr', 'kw', 'kz', 'la', 'lc', 'li', 'lk', 'lr', 'lt', 'lu',
-      'lv', 'md', 'me', 'mh', 'mk', 'mn',
+      'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke',
+      'kh', 'km', 'kp', 'kr', 'kw', 'kz', 'la', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu',
+      'lv', 'mc', 'md', 'me', 'mh', 'mk', 'mm', 'mn',
       'mo', 'mp', 'mq', 'mt', 'mv', 'mx', 'my', 'ne', 'ni', 'nl', 'no',
       'np', 'nr', 'nz', 'pa', 'ph', 'pk', 'pl', 'pm', 'ps', 'pt', 'py', 're', 'ro',
       'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sj', 'sk', 'sl', 'su', 'sv', 'sz', 'tf',
@@ -163,7 +176,7 @@ describe('registry capability metadata', () => {
       }
     }
 
-    assert.equal(covered, 40);
+    assert.equal(covered, 41);
   });
 
   test('records version fourteen shared-operator suffixes with explicit provenance and coverage', () => {
@@ -269,6 +282,37 @@ describe('registry capability metadata', () => {
       assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic.rdapAccessProfile, 'no-iana-service', suffix);
     }
+  });
+
+  test('records version eighteen fixture-backed suffixes with IANA service provenance', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+    let covered = 0;
+
+    for (const family of VERSION_18_FIXTURE_SUFFIXES) {
+      const profile = profiles.get(family.id);
+      assert.ok(profile, family.id);
+      assert.deepEqual(profile.suffixes, family.suffixes, family.id);
+      assert.equal(profile.coverageState, 'fixture_verified', family.id);
+      assert.equal(profile.whoisAccessProfile, 'iana-referral', family.id);
+      assert.equal(profile.rdapAccessProfile, family.rdapAccessProfile, family.id);
+      assert.deepEqual(profile.fixtureScenarios, ['registered', 'not_found'], family.id);
+
+      for (const suffix of family.suffixes) {
+        const capability = registryCapabilityFor(`example.${suffix}`);
+        assert.equal(capability.id, family.id, suffix);
+        assert.deepEqual(capability.suffixes, [suffix], suffix);
+        assert.equal(capability.registryClass, 'country-code', suffix);
+        assert.equal(capability.coverageState, 'fixture_verified', suffix);
+        assert.equal(capability.rdapAccessProfile, family.rdapAccessProfile, suffix);
+        assert.ok(
+          profile.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`),
+          `${suffix}: IANA provenance`,
+        );
+        covered += 1;
+      }
+    }
+
+    assert.equal(covered, 11);
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {

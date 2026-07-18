@@ -651,6 +651,8 @@ const LINE_NOT_FOUND_PATTERNS = Object.freeze([
   /^[ \t]*[a-z0-9](?:[a-z0-9.-]{0,252})[ \t]+is free[ \t]*$/im,
   /^[ \t]*el dominio no se encuentra registrado en nic argentina[ \t]*$/im,
   /^[ \t]*the domain has not been registered\.?[ \t]*$/im,
+  /^[ \t]*the queried object does not exist:[ \t]*no matching objects found[ \t]*$/im,
+  /^[ \t]*no record found for[ \t]+'[a-z0-9.-]{1,253}'\.?[ \t]*$/im,
 ]);
 
 // InternetNZ's documented .nz WHOIS protocol uses a numeric query_status
@@ -674,6 +676,22 @@ const RATE_LIMIT_LINE_RE = /^[ \t]*(?:[%#*;>-]+[ \t]*)?(?:(?:error|status)[ \t:.
 const POSITIVE_REGISTRATION_RE = /^[ \t*]*(?:Domain(?:[ \t]+Name)?|domainname|Registrar|Registrar WHOIS Server|Creation Date|Created(?: On)?|Registry Expiry Date|Registered(?: On)?|Name Server|nserver|Sponsoring Registrar)[ \t.]*:[ \t]*\S/im;
 const POSITIVE_BRACKET_RE = /\[(?:Domain Name|Registrant|Name Server)\][ \t]*\S/i;
 
+function hasSectionedRegistrationEvidence(text: string): boolean {
+  if (!/^[ \t]*Relevant dates[ \t]*:[ \t]*$/im.test(text)
+    || !/^[ \t]*Registration status[ \t]*:[ \t]*$/im.test(text)) return false;
+  const domain = parseIndentedWhoisValue(
+    text,
+    /^[ \t]*Domain(?: name)?[ \t]*:[ \t]*$/im,
+    whoisFieldLimit('domainName'),
+  );
+  const status = parseIndentedWhoisValue(
+    text,
+    /^[ \t]*Registration status[ \t]*:[ \t]*$/im,
+    160,
+  );
+  return Boolean(domain?.value && status?.value);
+}
+
 function classifyHopEvidence(hop: WhoisHop, index: number): string {
   if (hop.error) return 'error';
   const text = hop.response || '';
@@ -689,7 +707,8 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   // Hop 0 is IANA's TLD delegation record, never evidence about the queried
   // domain itself.
   if (index > 0 && (POSITIVE_REGISTRATION_RE.test(text)
-    || POSITIVE_BRACKET_RE.test(text) || NZ_POSITIVE_RE.test(text))) return 'positive';
+    || POSITIVE_BRACKET_RE.test(text) || NZ_POSITIVE_RE.test(text)
+    || hasSectionedRegistrationEvidence(text))) return 'positive';
   return 'inconclusive';
 }
 
@@ -1607,7 +1626,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       && /^[ \t]*Registration status[ \t]*:[ \t]*$/im.test(text);
     if (isSectionedRegistryResponse) {
       for (const [key, headerRe] of [
-        ['domainName', /^[ \t]*Domain name[ \t]*:[ \t]*$/im],
+        ['domainName', /^[ \t]*Domain(?: name)?[ \t]*:[ \t]*$/im],
         ['registrantName', /^[ \t]*Registrant[ \t]*:[ \t]*$/im],
         ['registrar', /^[ \t]*Registrar[ \t]*:[ \t]*$/im],
       ] as const) {
@@ -1629,6 +1648,31 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
           field: 'statuses',
           truncatedFields,
         });
+      }
+
+      const isChannelIslandsResponse = /^[ \t]*Domain Status[ \t]*:[ \t]*$/im.test(text)
+        && /^[ \t]*WHOIS lookup made on[ \t]+[^\r\n]+$/im.test(text);
+      if (isChannelIslandsResponse) {
+        assignBoundedWhoisMatch(
+          text,
+          fields,
+          'createdDate',
+          /^[ \t]*Registered on[ \t]+(.+)$/im,
+          truncatedFields,
+        );
+        const domainStatus = parseIndentedWhoisValue(
+          text,
+          /^[ \t]*Domain Status[ \t]*:[ \t]*$/im,
+          160,
+        );
+        if (domainStatus?.value) {
+          addBoundedWhoisSetValue(statuses, domainStatus.value, {
+            maxEntries: MAX_WHOIS_STATUSES,
+            maxLength: 160,
+            field: 'statuses',
+            truncatedFields,
+          });
+        }
       }
     }
 

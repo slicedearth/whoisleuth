@@ -8,6 +8,7 @@ const fixtures = require('../fixtures/whois-registry-fixtures');
 const PARSER_FAMILY_ALIASES = [
   { profile: 'amnic-sectioned', baseSuffix: 'am', aliases: ['xn--y9a3aq'] },
   { profile: 'cctld-by-colon', baseSuffix: 'by', aliases: ['xn--90ais'] },
+  { profile: 'channel-islands-sectioned', baseSuffix: 'gg', aliases: ['je'] },
   { profile: 'cnnic-colon', baseSuffix: 'cn', aliases: ['xn--fiqs8s', 'xn--fiqz9s'] },
   { profile: 'dot-leader', baseSuffix: 'kr', aliases: ['xn--3e0b707e'] },
   { profile: 'eurid-sectioned', baseSuffix: 'eu', aliases: ['xn--e1a4c', 'xn--qxa6a'] },
@@ -137,7 +138,7 @@ describe('WHOIS registry compatibility fixtures', () => {
         covered += 1;
       }
     }
-    assert.equal(covered, 40);
+    assert.equal(covered, 41);
   });
 
   test('covers the version seventeen shared-service ccTLD batch', () => {
@@ -156,6 +157,73 @@ describe('WHOIS registry compatibility fixtures', () => {
         .sort();
       assert.deepEqual(coveredProfiles, expectedProfiles, scenario);
     }
+  });
+
+  test('covers the version eighteen fixture-backed ccTLD batch', () => {
+    const expectedProfiles = [
+      'andorra-rdds-colon',
+      'cc-registry-colon',
+      'channel-islands-sectioned',
+      'lsnic-contact-indirection',
+      'mm-registry-colon',
+      'nic-bh-icann-colon',
+      'nic-cr-contact-indirection',
+      'nic-dz-colon',
+      'nic-gl-colon',
+      'nic-mc-colon',
+    ];
+    for (const scenario of ['registered', 'not_found']) {
+      const coveredProfiles = fixtures
+        .filter((fixture) => fixture.scenario === scenario
+          && expectedProfiles.includes(fixture.capabilityProfile))
+        .map((fixture) => fixture.capabilityProfile)
+        .sort();
+      assert.deepEqual(coveredProfiles, expectedProfiles, scenario);
+    }
+  });
+
+  test('keeps Channel Islands ordinal dates behind the complete marker set', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: [
+          'Domain:',
+          '  example.test',
+          'Relevant dates:',
+          '  Registered on 24th April 1997 at 00:00:00.000',
+          'Registration status:',
+          '  Registered until cancelled',
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'registered');
+    assert.equal(parsed.domainName, 'example.test');
+    assert.equal(parsed.createdDate, undefined);
+    assert.equal(parsed.createdDateIso, null);
+    assert.deepEqual(parsed.statuses, ['Registered until cancelled']);
+  });
+
+  test('does not treat an empty sectioned registration status as positive evidence', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: [
+          'Domain:',
+          '  example.test',
+          'Relevant dates:',
+          'Registration status:',
+          'Name servers:',
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'inconclusive');
+    assert.equal(parsed.chainStatus, 'partial');
+    assert.equal(parsed.domainName, 'example.test');
+    assert.deepEqual(parsed.statuses, []);
   });
 
   test('keeps MONIC record and nameserver aliases behind the complete marker set', () => {
