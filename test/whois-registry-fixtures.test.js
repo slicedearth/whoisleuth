@@ -15,6 +15,29 @@ describe('WHOIS registry compatibility fixtures', () => {
     });
   }
 
+  test('covers the version eleven authoritative-negative ccTLD batch', () => {
+    const expectedProfiles = [
+      'afnic-colon',
+      'cira-colon',
+      'eurid-sectioned',
+      'fi-dot-leader',
+      'fred-contact-indirection',
+      'internetstiftelsen-colon',
+      'nic-at-colon',
+      'norid-dot-leader',
+      'registro-br-colon',
+      'sidn-sectioned',
+      'tci-colon',
+      'weare-ie-colon',
+    ];
+    const coveredProfiles = fixtures
+      .filter((fixture) => fixture.scenario === 'not_found'
+        && expectedProfiles.includes(fixture.capabilityProfile))
+      .map((fixture) => fixture.capabilityProfile)
+      .sort();
+    assert.deepEqual(coveredProfiles, expectedProfiles);
+  });
+
   test('does not unlock ambiguous aliases when registry marker sets are incomplete', () => {
     const parsed = parseWhoisChain([
       { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },

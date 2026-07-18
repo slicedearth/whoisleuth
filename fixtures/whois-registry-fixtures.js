@@ -48,6 +48,22 @@ const standardIcannFixture = (name, capabilityProfile, tld) => ({
   },
 });
 
+const authoritativeNotFoundFixture = (name, capabilityProfile, tld, lines) => ({
+  name,
+  capabilityProfile,
+  scenario: 'not_found',
+  chain: [
+    rootHop(tld, `whois.${tld.toLowerCase()}.invalid`),
+    registryHop(`whois.${tld.toLowerCase()}.invalid`, lines),
+  ],
+  expected: {
+    registrationStatus: 'not_found',
+    notFound: true,
+    notFoundSource: `whois.${tld.toLowerCase()}.invalid`,
+    chainStatus: 'complete',
+  },
+});
+
 module.exports = [
   {
     name: 'generic thin gTLD referral chain',
@@ -2182,6 +2198,78 @@ module.exports = [
   },
   standardIcannFixture('British Indian Ocean Territory registry ICANN-style response', 'nic-io-colon', 'IO'),
   standardIcannFixture('Afghan registry ICANN-style response', 'nic-af-colon', 'AF'),
+  authoritativeNotFoundFixture(
+    'Austrian registry authoritative not-found response',
+    'nic-at-colon',
+    'AT',
+    ['% nothing found'],
+  ),
+  authoritativeNotFoundFixture(
+    'Brazilian registry authoritative not-found response',
+    'registro-br-colon',
+    'BR',
+    ['% No match for available-example.com.br'],
+  ),
+  authoritativeNotFoundFixture(
+    'Canadian registry authoritative not-found response',
+    'cira-colon',
+    'CA',
+    ['Not found: available-example.ca'],
+  ),
+  authoritativeNotFoundFixture(
+    'Czech registry authoritative not-found response',
+    'fred-contact-indirection',
+    'CZ',
+    ['%ERROR:101: no entries found', '% No entries found.'],
+  ),
+  authoritativeNotFoundFixture(
+    'European registry authoritative available response',
+    'eurid-sectioned',
+    'EU',
+    ['Domain: available-example.eu', 'Script: LATIN', 'Status: AVAILABLE'],
+  ),
+  authoritativeNotFoundFixture(
+    'Finnish registry authoritative not-found response',
+    'fi-dot-leader',
+    'FI',
+    ['Domain not found'],
+  ),
+  authoritativeNotFoundFixture(
+    'French registry authoritative not-found response',
+    'afnic-colon',
+    'FR',
+    ['%% NOT FOUND'],
+  ),
+  authoritativeNotFoundFixture(
+    'Irish registry authoritative not-found response',
+    'weare-ie-colon',
+    'IE',
+    ['Not found: available-example.ie'],
+  ),
+  authoritativeNotFoundFixture(
+    'Dutch registry authoritative available response',
+    'sidn-sectioned',
+    'NL',
+    ['available-example.nl is free'],
+  ),
+  authoritativeNotFoundFixture(
+    'Norwegian registry authoritative not-found response',
+    'norid-dot-leader',
+    'NO',
+    ['% No match'],
+  ),
+  authoritativeNotFoundFixture(
+    'Russian registry authoritative not-found response',
+    'tci-colon',
+    'RU',
+    ['No entries found for the selected source(s).'],
+  ),
+  authoritativeNotFoundFixture(
+    'Swedish registry authoritative not-found response',
+    'internetstiftelsen-colon',
+    'SE',
+    ['domain "available-example.se" not found.'],
+  ),
   {
     name: 'authoritative unregistered response',
     capabilityProfile: 'iana-generic',

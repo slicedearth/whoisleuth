@@ -642,6 +642,13 @@ function parseIndentedContactBlock(text: string, headerRe: RegExp) {
 
 const NOT_FOUND_RE = /no match for|no match\b|not found|no data found|no entries found|domain not found|no object found|not registered|status\s*:\s*(?:available|free)\b|registered\s*:\s*(?:no|false)\b|is available for registration/i;
 
+// Some ccTLD registries publish terse, line-oriented availability responses
+// that would be unsafe to recognize as arbitrary prose. Keep these forms
+// anchored to the complete line: this accepts NIC.AT's percent-prefixed
+// response and SIDN's queried-domain response without treating sentences such
+// as "the service is free" or "nothing found in a cache" as registry evidence.
+const LINE_NOT_FOUND_RE = /^(?:[ \t]*%[ \t]*nothing found|[ \t]*[a-z0-9](?:[a-z0-9.-]{0,252})[ \t]+is free)[ \t]*$/im;
+
 // InternetNZ's documented .nz WHOIS protocol uses a numeric query_status
 // field rather than the generic prose above. Only 220 means that the queried
 // domain is available. Active and pending-release objects still exist in the
@@ -672,7 +679,7 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   if (RATE_LIMIT_RE.test(text)) return 'rate_limited';
   if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
   if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
-  if (NOT_FOUND_RE.test(text)) return 'negative';
+  if (NOT_FOUND_RE.test(text) || LINE_NOT_FOUND_RE.test(text)) return 'negative';
   // Hop 0 is IANA's TLD delegation record, never evidence about the queried
   // domain itself.
   if (index > 0 && (POSITIVE_REGISTRATION_RE.test(text)

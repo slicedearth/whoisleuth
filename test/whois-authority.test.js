@@ -121,6 +121,21 @@ describe('analyzeWhoisChainAuthority', () => {
     assert.equal(parsed.createdDate, undefined);
   });
 
+  test('terse registry negatives require their complete documented line shape', () => {
+    const prose = {
+      server: REGISTRY,
+      response: [
+        'Domain Name: EXAMPLE.COM',
+        'Registrar: Example Registrar',
+        'The registry search is free for technical use.',
+        '% Diagnostics: nothing found in the secondary cache.',
+      ].join('\n'),
+    };
+    const a = analyzeWhoisChainAuthority([ianaHop, prose]);
+    assert.equal(a.registrationStatus, 'registered');
+    assert.equal(a.notFound, false);
+  });
+
   test('the first authoritative decision wins over a contradictory later hop', () => {
     const a = analyzeWhoisChainAuthority([ianaHop, registryNoMatch, registrarThick]);
     assert.equal(a.registrationStatus, 'not_found');

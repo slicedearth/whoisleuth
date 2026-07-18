@@ -32,7 +32,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 10;
+const REGISTRY_CAPABILITIES_VERSION = 11;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -83,7 +83,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'nic-at-colon', suffixes: ['at'], registryClass: 'country-code',
-    whoisParserProfile: 'nic-at-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'nic-at-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.nic.at/en/my-at-domain/domain-search/whois',
       'https://www.iana.org/domains/root/db/at.html',
@@ -111,7 +111,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'registro-br-colon', suffixes: ['br'], registryClass: 'country-code',
-    whoisParserProfile: 'registro-br-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'registro-br-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://registro.br/tecnologia/ferramentas/whois/',
       'https://www.iana.org/domains/root/db/br.html',
@@ -119,7 +119,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'cira-colon', suffixes: ['ca'], registryClass: 'country-code',
-    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.cira.ca/en/ca-domains/whois/',
       'https://www.iana.org/domains/root/db/ca.html',
@@ -306,7 +306,11 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'fred-contact-indirection', suffixes: ['cz'], registryClass: 'country-code',
-    whoisParserProfile: 'fred-contact-indirection', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'fred-contact-indirection', fixtureScenarios: ['registered', 'not_found'],
+    documentationUrls: [
+      'https://www.nic.cz/whois/',
+      'https://www.iana.org/domains/root/db/cz.html',
+    ],
   },
   {
     id: 'denic-domain-ace', suffixes: ['de'], registryClass: 'country-code',
@@ -347,7 +351,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'eurid-sectioned', suffixes: ['eu'], registryClass: 'country-code',
-    whoisParserProfile: 'sectioned-registrar-and-nameservers', fixtureScenarios: ['registered', 'malformed'],
+    whoisParserProfile: 'sectioned-registrar-and-nameservers', fixtureScenarios: ['registered', 'not_found', 'malformed'],
     documentationUrls: [
       'https://eurid.eu/en/knowledge-centre/rules-for-eu-domains/',
       'https://eurid.eu/d/22380/whois_policy_en.pdf',
@@ -378,7 +382,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'weare-ie-colon', suffixes: ['ie'], registryClass: 'country-code',
-    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.weare.ie/wp-content/uploads/2023/12/WHOIS-Services-Policy-2023.pdf',
       'https://www.iana.org/domains/root/db/ie.html',
@@ -427,7 +431,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'fi-dot-leader', suffixes: ['fi'], registryClass: 'country-code',
-    whoisParserProfile: 'dot-leader', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'dot-leader', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.traficom.fi/en/fi-domains/point-contact-and-contact-channels/whois-shows-public-information-domain-name',
       'https://www.iana.org/domains/root/db/fi.html',
@@ -472,7 +476,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'norid-dot-leader', suffixes: ['no'], registryClass: 'country-code',
-    whoisParserProfile: 'norid-handle-dot-leader', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'norid-handle-dot-leader', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://teknisk.norid.no/uploads/2018/08/Whois_DAS_Interface_Specification.10e1.pdf',
       'https://www.norid.no/en/domeneoppslag/',
@@ -481,7 +485,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'sidn-sectioned', suffixes: ['nl'], registryClass: 'country-code',
-    whoisParserProfile: 'sidn-sectioned', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'sidn-sectioned', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.sidn.nl/en/nl-domain-name/looking-up-a-domain-name',
       'https://www.iana.org/domains/root/db/nl.html',
@@ -489,7 +493,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'afnic-colon', suffixes: ['fr'], registryClass: 'country-code',
-    whoisParserProfile: 'afnic-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'afnic-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://www.afnic.fr/en/domain-names-and-support/everything-there-is-to-know-about-domain-names/find-a-domain-name-or-a-holder-using-whois/',
       'https://www.iana.org/domains/root/db/fr.html',
@@ -538,7 +542,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'tci-colon', suffixes: ['ru'], registryClass: 'country-code',
-    whoisParserProfile: 'tci-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'tci-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://cctld.ru/en/service/whois/',
       'https://www.iana.org/domains/root/db/ru.html',
@@ -546,7 +550,7 @@ const EXPLICIT_CAPABILITIES = [
   },
   {
     id: 'internetstiftelsen-colon', suffixes: ['se'], registryClass: 'country-code',
-    whoisParserProfile: 'internetstiftelsen-colon', fixtureScenarios: ['registered'],
+    whoisParserProfile: 'internetstiftelsen-colon', fixtureScenarios: ['registered', 'not_found'],
     documentationUrls: [
       'https://internetstiftelsen.se/domaner/registrera-ett-domannamn/regler-och-beskrivning-av-domannamnssokningar/',
       'https://www.iana.org/domains/root/db/se.html',
