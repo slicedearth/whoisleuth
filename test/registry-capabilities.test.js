@@ -16,16 +16,18 @@ const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 9);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 10);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
     assert.deepEqual(first.map((row) => row.suffixes[0]), [
-      'ar', 'at', 'au', 'be', 'bg', 'br', 'ca', 'ch', 'cl', 'cn', 'cz', 'de',
-      'dk', 'edu', 'ee', 'es', 'eu', 'fi', 'fr', 'gt', 'hr', 'hu', 'id', 'ie',
-      'il', 'in', 'is', 'it', 'jp', 'kr', 'lt', 'lv', 'mx', 'my', 'nl', 'no',
-      'nz', 'pl', 'pt', 'ro', 'rs', 'ru', 'se', 'sg', 'si', 'sk', 'tr', 'tw',
-      'ua', 'uk', 'us', 'vn',
+      'ae', 'af', 'ai', 'al', 'am', 'ar', 'at', 'au', 'ba', 'be', 'bg', 'br',
+      'by', 'ca', 'ch', 'cl', 'cn', 'co', 'cy', 'cz', 'de', 'dk', 'edu', 'ee',
+      'es', 'eu', 'fi', 'fr', 'gr', 'gt', 'hk', 'hr', 'hu', 'id', 'ie', 'il',
+      'in', 'io', 'ir', 'is', 'it', 'jp', 'ke', 'kr', 'kz', 'lt', 'lu', 'lv',
+      'md', 'me', 'mn', 'mx', 'my', 'nl', 'no', 'nz', 'ph', 'pk', 'pl', 'pt',
+      'ro', 'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sk', 'th', 'tn', 'tr', 'tw',
+      'ua', 'uk', 'us', 'vn', 'za',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
@@ -112,6 +114,10 @@ describe('registry capability metadata', () => {
     assert.equal(ch.whoisAccessProfile, 'registry-policy-restricted');
     assert.equal(ch.rdapAccessProfile, 'no-iana-service');
     assert.match(ch.limitation, /non-standard-port.*not integrated.*no RDAP service/i);
+    const gr = registryAccessDiagnosticFor('example.gr');
+    assert.equal(gr.whoisAccessProfile, 'no-iana-service');
+    assert.equal(gr.rdapAccessProfile, 'no-iana-service');
+    assert.match(gr.limitation, /no domain WHOIS or RDAP service.*not evidence/i);
     assert.equal(registryAccessDiagnosticFor('example.com'), null);
     assert.equal(registryAccessDiagnosticFor('bad\n'), null);
   });

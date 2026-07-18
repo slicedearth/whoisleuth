@@ -24,9 +24,9 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v9')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('52');
-  await expect(page.locator('tbody tr')).toHaveCount(52);
+  await expect(page.getByText('Catalogue v10')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('77');
+  await expect(page.locator('tbody tr')).toHaveCount(77);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -35,10 +35,11 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await expect(page.locator('tbody tr')).toHaveCount(9);
   await expect(page.locator('tbody')).toContainText('.ch');
   await expect(page.locator('tbody')).toContainText('.es');
   await expect(page.locator('tbody')).toContainText('.vn');
+  await expect(page.locator('tbody')).toContainText('.gr');
 
   await search.fill('no matching capability');
   await expect(page.getByRole('heading', { name: 'No matching profiles' })).toBeVisible();

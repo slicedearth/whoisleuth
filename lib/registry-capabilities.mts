@@ -32,7 +32,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 9;
+const REGISTRY_CAPABILITIES_VERSION = 10;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -42,6 +42,7 @@ const CH_ACCESS_LIMITATION = 'The registry may restrict ordinary port-43 clients
 const VN_ACCESS_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.';
 const UK_TRANSITION_LIMITATION = 'Synthetic fixtures verify the documented sectioned port-43 response while that WHOIS service is phased out. RDAP remains the preferred registry source, and fixture coverage does not prove current reachability or field publication.';
 const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profile. The registry limits public WHOIS use, prohibits abusive high-volume automation, and states that a missing record is not proof of availability; WHOISleuth retains bounded request controls and authority-aware interpretation.';
+const NO_IANA_MACHINE_SERVICE_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. Missing registry data is not evidence that the domain is unregistered.';
 
 function freezeCapability(capability: RegistryCapability): Readonly<RegistryCapability> {
   Object.freeze(capability.suffixes);
@@ -143,6 +144,149 @@ const EXPLICIT_CAPABILITIES = [
       'https://www.iana.org/domains/root/db/ch.html',
     ],
     limitation: CH_ACCESS_LIMITATION,
+  },
+  {
+    id: 'aeda-colon', suffixes: ['ae'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/ae.html'],
+  },
+  {
+    id: 'identity-digital-colon-ai', suffixes: ['ai'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/ai.html'],
+  },
+  {
+    id: 'amnic-sectioned', suffixes: ['am'], registryClass: 'country-code',
+    whoisParserProfile: 'amnic-sectioned', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.amnic.net/', 'https://www.iana.org/domains/root/db/am.html'],
+  },
+  {
+    id: 'no-iana-machine-service-al', suffixes: ['al'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/al.html'],
+    limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
+  },
+  {
+    id: 'no-iana-machine-service-ba', suffixes: ['ba'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/ba.html'],
+    limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
+  },
+  {
+    id: 'cctld-by-colon', suffixes: ['by'], registryClass: 'country-code',
+    whoisParserProfile: 'cctld-by-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://cctld.by/', 'https://www.iana.org/domains/root/db/by.html'],
+  },
+  {
+    id: 'registry-co-colon', suffixes: ['co'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/co.html'],
+  },
+  {
+    id: 'no-iana-machine-service-cy', suffixes: ['cy'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/cy.html'],
+    limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
+  },
+  {
+    id: 'no-iana-machine-service-gr', suffixes: ['gr'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/gr.html'],
+    limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
+  },
+  {
+    id: 'hkirc-sectioned', suffixes: ['hk'], registryClass: 'country-code',
+    whoisParserProfile: 'hkirc-sectioned', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.hkirc.hk/', 'https://www.iana.org/domains/root/db/hk.html'],
+  },
+  {
+    id: 'irnic-handle-blocks', suffixes: ['ir'], registryClass: 'country-code',
+    whoisParserProfile: 'irnic-handle-blocks', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.nic.ir/', 'https://www.iana.org/domains/root/db/ir.html'],
+  },
+  {
+    id: 'kenic-colon', suffixes: ['ke'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://kenic.or.ke/', 'https://www.iana.org/domains/root/db/ke.html'],
+  },
+  {
+    id: 'nic-kz-dot-leader', suffixes: ['kz'], registryClass: 'country-code',
+    whoisParserProfile: 'nic-kz-dot-leader', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://nic.kz/', 'https://www.iana.org/domains/root/db/kz.html'],
+  },
+  {
+    id: 'dns-lu-hyphenated', suffixes: ['lu'], registryClass: 'country-code',
+    whoisParserProfile: 'dns-lu-hyphenated', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.dns.lu/', 'https://www.iana.org/domains/root/db/lu.html'],
+  },
+  {
+    id: 'nic-md-colon', suffixes: ['md'], registryClass: 'country-code',
+    whoisParserProfile: 'nic-md-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://nic.md/', 'https://www.iana.org/domains/root/db/md.html'],
+  },
+  {
+    id: 'identity-digital-colon-me', suffixes: ['me'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/me.html'],
+  },
+  {
+    id: 'identity-digital-colon-mn', suffixes: ['mn'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/mn.html'],
+  },
+  {
+    id: 'nic-pk-colon', suffixes: ['pk'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.pknic.net.pk/', 'https://www.iana.org/domains/root/db/pk.html'],
+  },
+  {
+    id: 'nic-sa-colon', suffixes: ['sa'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://nic.sa/', 'https://www.iana.org/domains/root/db/sa.html'],
+  },
+  {
+    id: 'thnic-holder-colon', suffixes: ['th'], registryClass: 'country-code',
+    whoisParserProfile: 'thnic-holder-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.thnic.co.th/', 'https://www.iana.org/domains/root/db/th.html'],
+  },
+  {
+    id: 'ati-tn-dot-leader', suffixes: ['tn'], registryClass: 'country-code',
+    whoisParserProfile: 'ati-tn-dot-leader', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.ati.tn/', 'https://www.iana.org/domains/root/db/tn.html'],
+  },
+  {
+    id: 'nic-io-colon', suffixes: ['io'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://www.iana.org/domains/root/db/io.html'],
+  },
+  {
+    id: 'nic-af-colon', suffixes: ['af'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: ['https://nic.af/', 'https://www.iana.org/domains/root/db/af.html'],
+  },
+  {
+    id: 'no-iana-machine-service-ph', suffixes: ['ph'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/ph.html'],
+    limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
+  },
+  {
+    id: 'no-iana-machine-service-za', suffixes: ['za'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/za.html'],
+    limitation: NO_IANA_MACHINE_SERVICE_LIMITATION,
   },
   {
     id: 'cnnic-colon', suffixes: ['cn'], registryClass: 'country-code',

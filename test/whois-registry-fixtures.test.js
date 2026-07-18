@@ -73,6 +73,39 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.deepEqual(parsed.statuses, []);
   });
 
+  test('keeps version ten terse aliases behind complete registry markers', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: [
+          'Org: SHOULD-NOT-PROMOTE',
+          'Registration or other identification number: SHOULD-NOT-PROMOTE',
+          'Domain Name Commencement Date: 02-01-2020',
+          'holder-c: HANDLE-1',
+          'nic-hdl: HANDLE-1',
+          'person: SHOULD-NOT-PROMOTE',
+          'org: SHOULD-NOT-PROMOTE',
+          'source: NOT-IRNIC',
+          'Current Registar: SHOULD-NOT-PROMOTE',
+          'Primary server: ns1.example.invalid',
+          'domainname: should-not-promote.test',
+          'registrar-name: SHOULD-NOT-PROMOTE',
+          'Domain Holder Organization: SHOULD-NOT-PROMOTE',
+          'Exp date: 02 Jan 2030',
+        ].join('\n'),
+      },
+    ]);
+
+    assert.equal(parsed.registrantId, undefined);
+    assert.equal(parsed.registrantOrg, undefined);
+    assert.equal(parsed.registrantName, undefined);
+    assert.equal(parsed.registrar, undefined);
+    assert.equal(parsed.createdDate, undefined);
+    assert.equal(parsed.expiryDate, undefined);
+    assert.deepEqual(parsed.nameservers, []);
+  });
+
   test('caps newly sectioned bare nameservers and discloses truncation', () => {
     const nameservers = Array.from({ length: 205 }, (_, index) => `ns${index}.example.invalid`);
     const parsed = parseWhoisChain([

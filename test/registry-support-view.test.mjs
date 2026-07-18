@@ -18,13 +18,13 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 9);
-  assert.equal(catalogue.rows.length, 52);
+  assert.equal(catalogue.version, 10);
+  assert.equal(catalogue.rows.length, 77);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 52,
-    fixtureVerified: 49,
-    accessDocumented: 3,
+    profiles: 77,
+    fixtureVerified: 68,
+    accessDocumented: 9,
     fallbacks: 1,
   });
   assert.deepEqual(
@@ -39,7 +39,7 @@ test('returns independent catalogue rows rather than exposing shared mutable arr
   first.rows[0].fixtureScenarios.push('changed');
 
   const second = registrySupportCatalogue();
-  assert.equal(second.rows[0].suffixes[0], 'ar');
+  assert.equal(second.rows[0].suffixes[0], 'ae');
   assert.equal(second.rows[0].fixtureScenarios.includes('changed'), false);
 });
 
@@ -89,7 +89,7 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   assert.deepEqual(filterRegistrySupportRows(rows, 'tci colon', 'all').map((row) => row.suffixes[0]), ['ru']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
-  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['ch', 'es', 'vn']);
+  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), ['al', 'ba', 'ch', 'cy', 'es', 'gr', 'ph', 'vn', 'za']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });
 

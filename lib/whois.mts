@@ -543,6 +543,49 @@ function resolveIsnicRole(text: string, handle: string | null | undefined) {
   };
 }
 
+// IRNIC publishes contact handles in the domain object and the corresponding
+// bounded contact record in a later `nic-hdl` block. Interpret only a block
+// carrying the exact requested handle and IRNIC source marker; terse `org`,
+// `person`, and `e-mail` labels are otherwise too ambiguous to use globally.
+function resolveIrnicContact(text: string, handle: string | null | undefined) {
+  if (!handle) return null;
+  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headerMatch = text.match(new RegExp(`^[ \\t]*nic-hdl:[ \\t]*${escaped}[ \\t]*$`, 'im'));
+  if (!headerMatch) return null;
+  const lines = text.slice((headerMatch.index ?? 0) + headerMatch[0].length)
+    .split('\n', 22);
+  const block: string[] = [];
+  for (const line of lines) {
+    if (!line.trim()) {
+      if (block.length) break;
+      continue;
+    }
+    if (/^[ \t]*(?:domain|nic-hdl):/i.test(line)) break;
+    if (block.length >= 20) break;
+    block.push(line);
+  }
+  const blockText = block.join('\n');
+  if (!/^[ \t]*source[ \t]*:[ \t]*IRNIC(?:\s|$)/im.test(blockText)) return null;
+  const get = (pattern: RegExp, maxLength: number) => {
+    const match = blockText.match(pattern);
+    return match ? boundedWhoisValue(match[1], maxLength) : { value: null, truncated: false };
+  };
+  const rawAddresses = [...blockText.matchAll(/^[ \t]*address[ \t]*:[ \t]*(.+)$/gim)];
+  const addresses = rawAddresses.slice(0, 4)
+    .map((match) => boundedWhoisValue(match[1], 300))
+    .filter((entry) => entry.value);
+  const address = boundedWhoisValue(addresses.map((entry) => entry.value).join(', '), 1000);
+  return {
+    name: get(/^[ \t]*person[ \t]*:[ \t]*(.+)$/im, 300),
+    org: get(/^[ \t]*org[ \t]*:[ \t]*(.+)$/im, 300),
+    email: get(/^[ \t]*e-?mail[ \t]*:[ \t]*(.+)$/im, 320),
+    phone: get(/^[ \t]*phone[ \t]*:[ \t]*(.+)$/im, 100),
+    address,
+    truncated: block.length >= 20 || rawAddresses.length > addresses.length
+      || addresses.some((entry) => entry.truncated),
+  };
+}
+
 // Some legacy thick-WHOIS registries (e.g. .edu via EDUCAUSE) list a
 // registrant/admin/technical contact as an unlabeled, indented block under a
 // plain header line instead of "Field: value" pairs - e.g.
@@ -615,7 +658,7 @@ const RATE_LIMIT_RE = /rate.?limit|too many requests|quota exceeded|query limit|
 // Positive registration evidence: a field that only appears for a domain that
 // actually exists, carrying a non-empty value. The IANA root hop is excluded
 // by the caller (it describes the TLD delegation, not the queried domain).
-const POSITIVE_REGISTRATION_RE = /^[ \t*]*(?:Domain(?: Name)?|Registrar|Registrar WHOIS Server|Creation Date|Created(?: On)?|Registry Expiry Date|Registered(?: On)?|Name Server|nserver|Sponsoring Registrar)[ \t.]*:[ \t]*\S/im;
+const POSITIVE_REGISTRATION_RE = /^[ \t*]*(?:Domain(?:[ \t]+Name)?|domainname|Registrar|Registrar WHOIS Server|Creation Date|Created(?: On)?|Registry Expiry Date|Registered(?: On)?|Name Server|nserver|Sponsoring Registrar)[ \t.]*:[ \t]*\S/im;
 const POSITIVE_BRACKET_RE = /\[(?:Domain Name|Registrant|Name Server)\][ \t]*\S/i;
 
 function classifyHopEvidence(hop: WhoisHop, index: number): string {
@@ -915,6 +958,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     ],
     updatedDate: [
       /^[ \t*]*Updated Date[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Update Date[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Last Update(?:d)?(?: Date| On)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Last Modified[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Modified(?: Date)?[ \t.]*:[ \t]*(.+)$/im,
@@ -1136,6 +1180,37 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       && /^[ \t]*Registration date[ \t]*:/im.test(text)
       && /^[ \t]*Modification date[ \t]*:/im.test(text)
       && /^[ \t]*DNSSEC signed[ \t]*:/im.test(text);
+    const isCctldBy = !isRootHop
+      && /^[ \t]*Domain name[ \t]*:/im.test(text)
+      && /^[ \t]*Registration or other identification number[ \t]*:/im.test(text);
+    const isHkirc = !isRootHop
+      && /^[ \t]*Domain Name Information[ \t]*:[ \t]*$/im.test(text)
+      && /^[ \t]*Name Servers Information[ \t]*:[ \t]*$/im.test(text)
+      && /^[ \t]*Domain Name Commencement Date[ \t]*:/im.test(text);
+    const isIrnic = !isRootHop
+      && /^[ \t]*source[ \t]*:[ \t]*IRNIC(?:\s|$)/im.test(text)
+      && /^[ \t]*holder-c[ \t]*:/im.test(text)
+      && /^[ \t]*nic-hdl[ \t]*:/im.test(text);
+    const isNicKz = !isRootHop
+      && /^[ \t]*Domain Name[ \t.]*:/im.test(text)
+      && /^[ \t]*Current Registar[ \t]*:/im.test(text)
+      && /^[ \t]*Primary server[ \t.]*:/im.test(text);
+    const isDnsLu = !isRootHop
+      && /^[ \t]*domainname[ \t]*:/im.test(text)
+      && /^[ \t]*domaintype[ \t]*:/im.test(text)
+      && /^[ \t]*registrar-name[ \t]*:/im.test(text);
+    const isNicMd = !isRootHop
+      && /^[ \t]*Domain[ \t]+name[ \t]*:/im.test(text)
+      && /^[ \t]*Domain state[ \t]*:/im.test(text)
+      && /^[ \t]*Registered on[ \t]*:/im.test(text);
+    const isThnic = !isRootHop
+      && /^[ \t]*Domain Holder Organization[ \t]*:/im.test(text)
+      && /^[ \t]*Created date[ \t]*:/im.test(text)
+      && /^[ \t]*Exp date[ \t]*:/im.test(text);
+    const isAtiTn = !isRootHop
+      && /^[ \t]*NIC Whois server for cTLDs[ \t.]*:/im.test(text)
+      && /^[ \t]*Domain name[ \t.]*:/im.test(text)
+      && /^[ \t]*Creation date[ \t.]*:/im.test(text);
 
     for (const [key, res] of Object.entries(patterns)) {
       // IANA's root hop describes the TLD and its operator, never a contact
@@ -1274,6 +1349,84 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
             field: 'statuses', truncatedFields,
           }) === 'capped') break;
         }
+      }
+
+      if (isCctldBy) {
+        assignBoundedWhoisMatch(text, fields, 'registrantOrg', /^[ \t]*Org[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrantId', /^[ \t]*Registration or other identification number[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+
+      if (isHkirc) {
+        assignBoundedWhoisMatch(text, fields, 'createdDate', /^[ \t]*Domain Name Commencement Date[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        collectBareWhoisNameservers(
+          text,
+          /^[ \t]*Name Servers Information[ \t]*:[ \t]*$/im,
+          nameservers,
+          truncatedFields,
+        );
+      }
+
+      if (isIrnic) {
+        const registrantId = text.match(/^[ \t]*holder-c[ \t]*:[ \t]*(.+)$/im)?.[1] || null;
+        if (registrantId) {
+          assignBoundedWhoisMatch(text, fields, 'registrantId', /^[ \t]*holder-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+          const contact = resolveIrnicContact(text, fields.registrantId);
+          if (contact) {
+            if (contact.name.value) fields.registrantName = contact.name.value;
+            if (contact.org.value) fields.registrantOrg = contact.org.value;
+            if (contact.email.value) fields.registrantEmail = contact.email.value;
+            if (contact.phone.value) fields.registrantPhone = contact.phone.value;
+            if (contact.address.value) fields.registrantAddress = contact.address.value;
+            if (contact.name.truncated) truncatedFields.add('registrantName');
+            if (contact.org.truncated) truncatedFields.add('registrantOrg');
+            if (contact.email.truncated) truncatedFields.add('registrantEmail');
+            if (contact.phone.truncated) truncatedFields.add('registrantPhone');
+            if (contact.address.truncated || contact.truncated) truncatedFields.add('registrantAddress');
+          }
+        }
+        assignBoundedWhoisMatch(text, fields, 'adminId', /^[ \t]*admin-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'techId', /^[ \t]*tech-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'billingId', /^[ \t]*bill-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+
+      if (isNicKz) {
+        assignBoundedWhoisMatch(text, fields, 'createdDate', /^[ \t]*Domain created[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'updatedDate', /^[ \t]*Last modified[ \t.]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*Current Registar[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        for (const pattern of [
+          /^[ \t]*Primary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/im,
+          /^[ \t]*Secondary server[ \t.]*:[ \t]*([a-zA-Z0-9.-]+)/im,
+        ]) {
+          const match = text.match(pattern);
+          if (match) addBoundedWhoisSetValue(nameservers, match[1], {
+            maxEntries: MAX_WHOIS_NAMESERVERS, maxLength: 253,
+            field: 'nameservers', truncatedFields,
+          });
+        }
+      }
+
+      if (isDnsLu) {
+        assignBoundedWhoisMatch(text, fields, 'domainName', /^[ \t]*domainname[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrar', /^[ \t]*registrar-name[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrarUrl', /^[ \t]*registrar-url[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+
+      if (isNicMd) {
+        assignBoundedWhoisMatch(text, fields, 'domainName', /^[ \t]*Domain[ \t]+name[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        for (const match of text.matchAll(/^[ \t]*Domain state[ \t]*:[ \t]*([^\r\n]+)/gim)) {
+          if (addBoundedWhoisSetValue(statuses, match[1], {
+            maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,
+            field: 'statuses', truncatedFields,
+          }) === 'capped') break;
+        }
+      }
+
+      if (isThnic) {
+        assignBoundedWhoisMatch(text, fields, 'createdDate', /^[ \t]*Created date[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'expiryDate', /^[ \t]*Exp date[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrantOrg', /^[ \t]*Domain Holder Organization[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrantCountry', /^[ \t]*Domain Holder Country[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrantStreet', /^[ \t]*Domain Holder Street[ \t]*:[ \t]*(.+)$/im, truncatedFields);
       }
 
       const isRegistroBr = /^[ \t]*owner-c[ \t]*:/im.test(text)
@@ -1523,7 +1676,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       }
     }
     if (!isRootHop && !fields.adminName) {
-      const block = parseIndentedContactBlock(text, /^[ \t]*Administrative Contact:[ \t]*$/m);
+      const block = parseIndentedContactBlock(text, /^[ \t]*Administrative Contact:[ \t]*$/im);
       if (block) {
         if (block.name) fields.adminName = block.name;
         if (block.address) fields.adminAddress = block.address;
@@ -1533,7 +1686,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       }
     }
     if (!isRootHop && !fields.techName) {
-      const block = parseIndentedContactBlock(text, /^[ \t]*Technical Contact:[ \t]*$/m);
+      const block = parseIndentedContactBlock(text, /^[ \t]*Technical Contact:[ \t]*$/im);
       if (block) {
         if (block.name) fields.techName = block.name;
         if (block.address) fields.techAddress = block.address;
@@ -1543,7 +1696,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       }
     }
     if (!isRootHop && !fields.billingName) {
-      const block = parseIndentedContactBlock(text, /^[ \t]*Billing Contact:[ \t]*$/m);
+      const block = parseIndentedContactBlock(text, /^[ \t]*Billing Contact:[ \t]*$/im);
       if (block) {
         if (block.name) fields.billingName = block.name;
         if (block.address) fields.billingAddress = block.address;
@@ -1626,7 +1779,8 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // the label alone - a missing status is safer than a wrong one.
     const statusRe = isRootHop
       ? /^[ \t*]*Domain Status[ \t.]*:[ \t]*([a-zA-Z][a-zA-Z0-9_-]*)/gim
-      : (isDnsBelgium || isPunktum || isIsocIl || isTwnic || isEif)
+      : (isDnsBelgium || isPunktum || isIsocIl || isTwnic || isEif
+          || isHkirc || isNicKz || isNicMd || isAtiTn)
         ? /^[ \t*]*(?:Domain Status|Status)[ \t.]*:[ \t]*([^\r\n]+)/gim
         : /^[ \t*]*(?:Domain Status|Status)[ \t.]*:[ \t]*([a-zA-Z][a-zA-Z0-9_-]*)/gim;
     if (!isRnids) {
@@ -1651,7 +1805,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // sometimes just a hostname, sometimes "hostname  ip.addr" - rather
     // than a per-line "Name Server:" label. Only meaningful on non-root hops.
     if (!isRootHop && nameservers.size === 0) {
-      const headerMatch = text.match(/^[ \t*]*(?:Name ?[Ss]ervers|Domain Servers)[ \t.]*:?[ \t]*$/m);
+      const headerMatch = text.match(/^[ \t*]*(?:Name ?[Ss]ervers|Domain Servers|DNS servers)[ \t.]*:?[ \t]*$/mi);
       if (headerMatch) {
         let found = 0;
         for (const line of text.slice((headerMatch.index ?? 0) + headerMatch[0].length).split('\n')) {

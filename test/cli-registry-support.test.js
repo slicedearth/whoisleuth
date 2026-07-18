@@ -196,11 +196,11 @@ describe('registry-support runner', () => {
         assert.equal(value, 'example.test');
         return capability;
       },
-      registryCapabilitiesVersion: 9,
+      registryCapabilitiesVersion: 10,
       now: () => '2026-07-17T00:00:00.000Z',
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.equal(JSON.parse(stdout.value()).catalogueVersion, 9);
+    assert.equal(JSON.parse(stdout.value()).catalogueVersion, 10);
     assert.deepEqual(capability, before);
   });
 

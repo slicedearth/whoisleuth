@@ -110,6 +110,37 @@ function parseRegistryDate(input: unknown): Date | null {
     return utcDateFromParts(+year, +month, +day);
   }
 
+  // YYYY-MM-DD HH:MM:SS (GMT+H:MM) - the explicit offset form published by
+  // the Kazakhstan registry. Parentheses and the GMT marker are required so
+  // unrelated prose is not accepted as a lifecycle timestamp.
+  match = value.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\s+\(GMT([+-])(\d{1,2}):(\d{2})\)$/i);
+  if (match) {
+    const [, year, month, day, hour, minute, second, sign, offsetHours, offsetMinutes] = match;
+    const local = utcDateFromParts(+year, +month, +day, +hour, +minute, +second);
+    if (!local || +offsetHours > 23 || +offsetMinutes > 59) return null;
+    const offsetMs = (+offsetHours * 60 + +offsetMinutes) * 60000;
+    return new Date(local.getTime() + (sign === '+' ? -offsetMs : offsetMs));
+  }
+
+  // DD-MM-YYYY HH:MM:SS GMT+H - the Tunisian registry's bounded local-time
+  // presentation. Accept an optional minute component but require the GMT
+  // marker and validate the calendar and offset before normalization.
+  match = value.match(/^(\d{1,2})-(\d{1,2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+GMT([+-])(\d{1,2})(?::(\d{2}))?$/i);
+  if (match) {
+    const [, day, month, year, hour, minute, second, sign, offsetHours, offsetMinutes = '0'] = match;
+    const local = utcDateFromParts(+year, +month, +day, +hour, +minute, +second);
+    if (!local || +offsetHours > 23 || +offsetMinutes > 59) return null;
+    const offsetMs = (+offsetHours * 60 + +offsetMinutes) * 60000;
+    return new Date(local.getTime() + (sign === '+' ? -offsetMs : offsetMs));
+  }
+
+  // DD Mon YYYY - the compact English month form published by THNIC.
+  match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (match) {
+    const month = REGISTRY_MONTHS[match[2].toLowerCase()];
+    return month ? utcDateFromParts(+match[3], month, +match[1]) : null;
+  }
+
   // Ddd Mon DD YYYY[ HH:MM:SS] - the English textual form used by the
   // Belgian registry. Weekday text is presentation-only; the validated
   // calendar components determine the canonical UTC companion.
