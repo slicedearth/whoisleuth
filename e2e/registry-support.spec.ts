@@ -24,9 +24,9 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v18')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('191');
-  await expect(page.locator('tbody tr')).toHaveCount(191);
+  await expect(page.getByText('Catalogue v19')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('211');
+  await expect(page.locator('tbody tr')).toHaveCount(211);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -35,7 +35,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(67);
+  await expect(page.locator('tbody tr')).toHaveCount(75);
   await expect(page.locator('tbody')).toContainText('.ao');
   await expect(page.locator('tbody')).toContainText('.ch');
   await expect(page.locator('tbody')).toContainText('.es');

@@ -16,6 +16,7 @@ const {
 const whoisFixtures = require('../fixtures/whois-registry-fixtures');
 
 const SHARED_ENDPOINT_SUFFIXES = [
+  { id: 'aeda-idn-colon', suffixes: ['xn--mgbaam7a8h'] },
   { id: 'amnic-sectioned', suffixes: ['xn--y9a3aq'] },
   { id: 'cctld-by-colon', suffixes: ['xn--90ais'] },
   { id: 'channel-islands-sectioned', suffixes: ['je'] },
@@ -28,7 +29,12 @@ const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'marnet-contact-indirection', suffixes: ['xn--d1alf'] },
   { id: 'mediaserv-object-colon', suffixes: ['gf'] },
   { id: 'monic-minimal-colon', suffixes: ['xn--mix891f'] },
+  { id: 'isoc-il-idn-colon', suffixes: ['xn--4dbrk0ce'] },
+  { id: 'irnic-idn-handle-blocks', suffixes: ['xn--mgba3a4f16a'] },
+  { id: 'mynic-idn-colon', suffixes: ['xn--mgbx4cd0ab'] },
+  { id: 'nic-dz-idn-colon', suffixes: ['xn--lgbbat1ad8j'] },
   { id: 'nic-io-colon', suffixes: ['ac'] },
+  { id: 'nic-sa-idn-colon', suffixes: ['xn--mgberp4a5d4ar'] },
   {
     id: 'nixi-colon',
     suffixes: [
@@ -46,12 +52,15 @@ const SHARED_ENDPOINT_SUFFIXES = [
       'xn--xkc2dl3a5ee0h',
     ],
   },
+  { id: 'nixi-arabic-colon', suffixes: ['xn--mgbbh1a', 'xn--mgbbh1a71e', 'xn--mgbgu82a'] },
   { id: 'nic-kz-dot-leader', suffixes: ['xn--80ao21a'] },
+  { id: 'om-registry-colon', suffixes: ['xn--mgb9awbf'] },
   { id: 'rnids-colon', suffixes: ['xn--90a3ac'] },
   { id: 'afnic-colon', suffixes: ['pm', 're', 'tf', 'wf', 'yt'] },
   { id: 'sgnic-colon', suffixes: ['xn--clchc0ea0b2g2a9gcd', 'xn--yfro4i67o'] },
   { id: 'tci-colon', suffixes: ['su', 'xn--p1ai'] },
   { id: 'thnic-holder-colon', suffixes: ['xn--o3cw4h'] },
+  { id: 'ati-tn-idn-dot-leader', suffixes: ['xn--pgbs0dh'] },
   { id: 'twnic-colon', suffixes: ['xn--kprw13d', 'xn--kpry57d'] },
 ];
 
@@ -86,10 +95,20 @@ const VERSION_18_FIXTURE_SUFFIXES = [
   { id: 'nic-mc-colon', suffixes: ['mc'], rdapAccessProfile: 'no-iana-service' },
   { id: 'mm-registry-colon', suffixes: ['mm'], rdapAccessProfile: 'no-iana-service' },
 ];
+const VERSION_19_NO_MACHINE_SUFFIXES = [
+  'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
+  'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--wgbh1c',
+];
+const VERSION_19_RDAP_ONLY_SUFFIXES = ['na', 'pn'];
+const VERSION_19_SHARED_FIXTURE_SUFFIXES = [
+  'xn--4dbrk0ce', 'xn--lgbbat1ad8j', 'xn--mgba3a4f16a', 'xn--mgbaam7a8h',
+  'xn--mgbbh1a', 'xn--mgbbh1a71e', 'xn--mgberp4a5d4ar', 'xn--mgbgu82a',
+  'xn--mgbx4cd0ab', 'xn--pgbs0dh',
+];
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 18);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 19);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -102,19 +121,23 @@ describe('registry capability metadata', () => {
       'hu', 'id', 'ie', 'il', 'in', 'io', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke',
       'kh', 'km', 'kp', 'kr', 'kw', 'kz', 'la', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu',
       'lv', 'mc', 'md', 'me', 'mh', 'mk', 'mm', 'mn',
-      'mo', 'mp', 'mq', 'mt', 'mv', 'mx', 'my', 'ne', 'ni', 'nl', 'no',
-      'np', 'nr', 'nz', 'pa', 'ph', 'pk', 'pl', 'pm', 'ps', 'pt', 'py', 're', 'ro',
+      'mo', 'mp', 'mq', 'mt', 'mv', 'mx', 'my', 'na', 'ne', 'ni', 'nl', 'no',
+      'np', 'nr', 'nz', 'om', 'pa', 'ph', 'pk', 'pl', 'pm', 'pn', 'ps', 'pt', 'py', 're', 'ro',
       'rs', 'ru', 'sa', 'se', 'sg', 'si', 'sj', 'sk', 'sl', 'su', 'sv', 'sz', 'tf',
       'th', 'tj', 'tn', 'tr', 'tt', 'tw', 'ua', 'uk', 'us', 'va', 'vc', 'vn', 'wf',
       'xn--2scrj9c', 'xn--3e0b707e',
-      'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--54b7fta0cc', 'xn--80ao21a',
+      'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--4dbrk0ce', 'xn--54b7fta0cc', 'xn--80ao21a',
       'xn--90a3ac', 'xn--90ais', 'xn--clchc0ea0b2g2a9gcd', 'xn--d1alf',
       'xn--e1a4c', 'xn--fiqs8s', 'xn--fiqz9s',
       'xn--fpcrj9c3d', 'xn--fzc2c9e2c', 'xn--gecrj9c', 'xn--h2breg3eve', 'xn--h2brj9c',
       'xn--h2brj9c8c', 'xn--j6w193g', 'xn--kprw13d', 'xn--kpry57d',
-      'xn--mix891f', 'xn--node', 'xn--o3cw4h', 'xn--p1ai', 'xn--q7ce6a', 'xn--qxa6a', 'xn--qxam',
-      'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--xkc2al3hye2a', 'xn--xkc2dl3a5ee0h',
-      'xn--y9a3aq', 'xn--yfro4i67o', 'yt', 'za', 'zw',
+      'xn--lgbbat1ad8j', 'xn--mgb9awbf', 'xn--mgba3a4f16a', 'xn--mgbaam7a8h',
+      'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbbh1a', 'xn--mgbbh1a71e',
+      'xn--mgbc0a9azcg', 'xn--mgbcpq6gpa1a', 'xn--mgberp4a5d4ar', 'xn--mgbgu82a',
+      'xn--mgbpl2fh', 'xn--mgbx4cd0ab', 'xn--mix891f', 'xn--node', 'xn--o3cw4h',
+      'xn--p1ai', 'xn--pgbs0dh', 'xn--q7ce6a', 'xn--qxa6a', 'xn--qxam',
+      'xn--rvc1e0am3e', 'xn--s9brj9c', 'xn--wgbh1c', 'xn--xkc2al3hye2a',
+      'xn--xkc2dl3a5ee0h', 'xn--y9a3aq', 'xn--yfro4i67o', 'yt', 'za', 'zw',
     ]);
     assert.equal(first.every((row) => row.explicitSuffixProfile), true);
   });
@@ -176,7 +199,7 @@ describe('registry capability metadata', () => {
       }
     }
 
-    assert.equal(covered, 41);
+    assert.equal(covered, 52);
   });
 
   test('records version fourteen shared-operator suffixes with explicit provenance and coverage', () => {
@@ -291,7 +314,11 @@ describe('registry capability metadata', () => {
     for (const family of VERSION_18_FIXTURE_SUFFIXES) {
       const profile = profiles.get(family.id);
       assert.ok(profile, family.id);
-      assert.deepEqual(profile.suffixes, family.suffixes, family.id);
+      assert.equal(
+        family.suffixes.every((suffix) => profile.suffixes.includes(suffix)),
+        true,
+        family.id,
+      );
       assert.equal(profile.coverageState, 'fixture_verified', family.id);
       assert.equal(profile.whoisAccessProfile, 'iana-referral', family.id);
       assert.equal(profile.rdapAccessProfile, family.rdapAccessProfile, family.id);
@@ -313,6 +340,66 @@ describe('registry capability metadata', () => {
     }
 
     assert.equal(covered, 11);
+  });
+
+  test('records the version nineteen 20-suffix service and fixture batch', () => {
+    const allProfiles = listRegistryCapabilities();
+    const profiles = new Map(allProfiles.map((entry) => [entry.id, entry]));
+
+    for (const suffix of VERSION_19_SHARED_FIXTURE_SUFFIXES) {
+      const capability = registryCapabilityFor(`example.${suffix}`);
+      assert.equal(capability.coverageState, 'fixture_verified', suffix);
+      assert.equal(capability.whoisAccessProfile, 'iana-referral', suffix);
+      assert.equal(capability.rdapAccessProfile, 'no-iana-service', suffix);
+      assert.match(capability.limitation, /exact shared IANA WHOIS service/i, suffix);
+      const profile = profiles.get(capability.id);
+      assert.ok(profile.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`), suffix);
+      const unicodeSuffix = domainToUnicode(suffix);
+      assert.notEqual(unicodeSuffix, suffix, suffix);
+      assert.equal(registryCapabilityFor(`example.${unicodeSuffix}`).id, capability.id, suffix);
+    }
+
+    const omProfile = profiles.get('om-registry-colon');
+    assert.deepEqual(omProfile.suffixes, ['om', 'xn--mgb9awbf']);
+    assert.deepEqual(omProfile.fixtureScenarios, ['registered', 'not_found']);
+    assert.equal(omProfile.coverageState, 'fixture_verified');
+    assert.equal(omProfile.whoisAccessProfile, 'iana-referral');
+    assert.equal(omProfile.rdapAccessProfile, 'no-iana-service');
+
+    for (const suffix of VERSION_19_NO_MACHINE_SUFFIXES) {
+      const profile = profiles.get(`no-iana-machine-service-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.equal(profile.coverageState, 'access_documented', suffix);
+      assert.equal(profile.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(profile.rdapAccessProfile, 'no-iana-service', suffix);
+      assert.deepEqual(profile.fixtureScenarios, [], suffix);
+      assert.deepEqual(profile.verificationFiles, [], suffix);
+      assert.match(profile.limitation, /no domain WHOIS or RDAP service/i, suffix);
+      assert.equal(registryAccessDiagnosticFor(`example.${suffix}`).authority, 'context_only', suffix);
+    }
+
+    for (const suffix of VERSION_19_RDAP_ONLY_SUFFIXES) {
+      const profile = profiles.get(`iana-rdap-only-${suffix}`);
+      assert.ok(profile, suffix);
+      assert.equal(profile.coverageState, 'access_documented', suffix);
+      assert.equal(profile.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(profile.rdapAccessProfile, 'iana-bootstrap', suffix);
+      assert.deepEqual(profile.fixtureScenarios, [], suffix);
+      assert.deepEqual(profile.verificationFiles, [], suffix);
+      assert.match(profile.limitation, /RDAP bootstrap service but no domain WHOIS referral/i, suffix);
+      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      assert.equal(diagnostic.authority, 'context_only', suffix);
+      assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
+      assert.equal(diagnostic.rdapAccessProfile, 'iana-bootstrap', suffix);
+    }
+
+    assert.equal(
+      VERSION_19_SHARED_FIXTURE_SUFFIXES.length
+        + omProfile.suffixes.length
+        + VERSION_19_NO_MACHINE_SUFFIXES.length
+        + VERSION_19_RDAP_ONLY_SUFFIXES.length,
+      20,
+    );
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {

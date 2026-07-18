@@ -22,7 +22,7 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 18 explicit matrix is:
+The version 19 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -135,6 +135,7 @@ The version 18 explicit matrix is:
 | `.mv` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.mx` | Colon fields with an indented registrant block and nameserver section | Registered |
 | `.my` | Standard bounded domain, registrar, lifecycle, status, DNSSEC, and nameserver fields; public-query policy applies | Registered |
+| `.na` | IANA publishes RDAP but no domain WHOIS referral | Access documented |
 | `.ne` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ni` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.nl` | Indented registrar, abuse-contact, and domain-nameserver sections with lifecycle and DNSSEC | Registered, not found |
@@ -142,11 +143,13 @@ The version 18 explicit matrix is:
 | `.np` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.nr` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.nz` | Structured underscore fields, numeric registry states, contacts, dates, DNSSEC, and numbered nameservers | Registered, available, temporary failure, restricted/inconclusive |
+| `.om` | Standard colon fields with registry identity, registrar, registrant, and nameservers; IANA publishes no RDAP service | Registered, not found |
 | `.pa` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ph` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.pk` | Compact domain, lifecycle, status, and nameserver fields | Registered |
 | `.pl` | NASK sectioned nameservers and registrar with dotted lifecycle dates | Registered, malformed |
 | `.pm` | Shared AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered, not found |
+| `.pn` | IANA publishes RDAP but no domain WHOIS referral | Access documented |
 | `.ps` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.pt` | Domain, owner, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
 | `.py` | IANA publishes no domain WHOIS or RDAP service | Access documented |
@@ -183,6 +186,7 @@ The version 18 explicit matrix is:
 | `.xn--3hcrj9c` (`.ଭାରତ`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.xn--45br5cyl` (`.ভাৰত`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.xn--45brj9c` (`.ভারত`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--4dbrk0ce` (`.ישראל`) | Shared ISOC validity, lifecycle, multi-word status, and nameserver fields | Registered |
 | `.xn--54b7fta0cc` (`.বাংলা`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.xn--80ao21a` (`.қаз`) | Shared NIC.KZ dot-leader lifecycle, registrar, status, and nameserver fields | Registered |
 | `.xn--90a3ac` (`.срб`) | Shared RNIDS multi-word status, lifecycle, contact, DNSSEC, and nameserver fields | Registered, not found |
@@ -201,15 +205,31 @@ The version 18 explicit matrix is:
 | `.xn--j6w193g` (`.香港`) | Shared HKIRC sectioned domain, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered, not found |
 | `.xn--kprw13d` (`.台湾`) | Shared TWNIC record dates, service provider, status, registrant, and nameserver fields | Registered |
 | `.xn--kpry57d` (`.台灣`) | Shared TWNIC record dates, service provider, status, registrant, and nameserver fields | Registered |
+| `.xn--lgbbat1ad8j` (`.الجزائر`) | Shared Algerian compact colon fields with registrar and contact roles; IANA publishes no RDAP service | Registered, not found |
+| `.xn--mgb9awbf` (`.عمان`) | Shared Omani standard colon fields with registry identity, registrar, registrant, and nameservers; IANA publishes no RDAP service | Registered, not found |
+| `.xn--mgba3a4f16a` (`.ایران`) | Shared IRNIC contact-handle indirection and nameservers | Registered |
+| `.xn--mgbaam7a8h` (`.امارات`) | Shared standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers | Registered |
+| `.xn--mgbai9azgqp6j` (`.پاکستان`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.xn--mgbayh7gpa` (`.الاردن`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.xn--mgbbh1a` (`.بارت`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--mgbbh1a71e` (`.بھارت`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--mgbc0a9azcg` (`.المغرب`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.xn--mgbcpq6gpa1a` (`.البحرين`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.xn--mgberp4a5d4ar` (`.السعودية`) | Shared compact domain, registrant, DNSSEC, and nameserver fields | Registered |
+| `.xn--mgbgu82a` (`.ڀارت`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--mgbpl2fh` (`.سودان`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.xn--mgbx4cd0ab` (`.مليسيا`) | Shared standard bounded domain, registrar, lifecycle, status, DNSSEC, and nameserver fields; public-query policy applies | Registered |
 | `.xn--mix891f` (`.澳門`) | Shared MONIC domain, record-created timestamp, and nameserver section | Registered, not found |
 | `.xn--node` (`.გე`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.xn--o3cw4h` (`.ไทย`) | Shared THNIC holder, lifecycle, registrar, status, DNSSEC, and nameserver fields | Registered |
 | `.xn--p1ai` (`.рф`) | Shared TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered, not found |
+| `.xn--pgbs0dh` (`.تونس`) | Shared dot-leader domain, lifecycle, registrar, status, and DNSSEC fields | Registered |
 | `.xn--q7ce6a` (`.ລາວ`) | Shared LANIC standard colon fields with lifecycle, registrar, status, DNSSEC, and nameservers | Registered, not found |
 | `.xn--qxa6a` (`.ευ`) | Shared EURid sectioned registrar and nameserver fields | Registered, not found |
 | `.xn--qxam` (`.ελ`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.xn--rvc1e0am3e` (`.ഭാരതം`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.xn--s9brj9c` (`.ਭਾਰਤ`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
+| `.xn--wgbh1c` (`.مصر`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.xn--xkc2al3hye2a` (`.இலங்கை`) | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.xn--xkc2dl3a5ee0h` (`.இந்தியா`) | Shared NIXI standard colon fields with lifecycle, status, DNSSEC, and nameservers | Registered |
 | `.xn--y9a3aq` (`.հայ`) | Shared AMNIC registrant/contact blocks with lifecycle, status, registrar, and DNS servers | Registered |
@@ -494,9 +514,9 @@ substitute a registry website or registration URL for a machine endpoint.
 Missing registry evidence for these suffixes therefore remains inconclusive
 and cannot decide availability, ownership, activity, safety, or maliciousness.
 
-Version 16 completes access documentation for the remaining 34 active
-country-code delegations whose current IANA records publish neither domain
-WHOIS nor RDAP: `.aq`, `.er`, `.ga`, `.gb`, `.gw`, `.jm`, `.km`, `.kp`,
+Version 16 added access documentation for 34 further active country-code
+delegations whose IANA records published neither domain WHOIS nor RDAP at that
+audit: `.aq`, `.er`, `.ga`, `.gb`, `.gw`, `.jm`, `.km`, `.kp`,
 `.kw`, `.lc`, `.lk`, `.lr`, `.mh`, `.mp`, `.mt`, `.mv`, `.ne`, `.ni`,
 `.np`, `.nr`, `.pa`, `.ps`, `.py`, `.sl`, `.sv`, `.sz`, `.tj`, `.tt`,
 `.va`, `.বাংলা`, `.ලංකා`, `.გე`, `.இலங்கை`, and `.zw`. Each ASCII or IDN
@@ -529,6 +549,27 @@ IANA currently publishes RDAP bootstrap services for `.ad`, `.cc`, and `.cr`.
 The other suffixes in this batch remain WHOIS-only in the IANA inventory, so
 their profiles expose that RDAP discovery is unavailable rather than implying
 a failed lookup is negative evidence.
+
+Version 19 adds twenty active country-code delegations from a fresh 19 July
+2026 IANA inventory. Ten IDN suffixes reuse an existing fixture-backed parser
+only because their delegation records publish the exact WHOIS endpoint already
+used by that profile: `.ישראל`, `.الجزائر`, `.ایران`, `.امارات`, `.بارت`,
+`.بھارت`, `.السعودية`, `.ڀارت`, `.مليسيا`, and `.تونس`. Each alias is reparsed
+from its family's sanitized fixture using the alias A-label, and both the
+Unicode and A-label forms resolve to the same suffix-correct capability.
+The ten aliases remain separate from their parser family's base profile because
+IANA publishes no RDAP bootstrap service for them; shared WHOIS infrastructure
+does not justify inheriting a different suffix's RDAP coverage.
+
+`.om` and `.عمان` add one new shared standard-colon family backed by sanitized
+registered and authoritative `No Data Found` fixtures. That terse absence form
+is accepted only as a complete response line, so policy prose cannot become an
+availability claim. `.na` and `.pn` document the inverse service boundary:
+IANA publishes RDAP bootstrap entries but no domain WHOIS referral. Finally,
+`.پاکستان`, `.الاردن`, `.المغرب`, `.البحرين`, `.سودان`, and `.مصر` document
+delegations for which IANA currently publishes neither domain WHOIS nor RDAP.
+All eight access-only profiles remain contextual and cannot decide domain
+existence.
 
 The catalogue does not hard-code those endpoints into lookup routing. Live
 queries still begin with IANA referral discovery for the requested suffix, and

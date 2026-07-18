@@ -640,7 +640,7 @@ function parseIndentedContactBlock(text: string, headerRe: RegExp) {
 // a downstream registrar WHOIS hiccups.
 // ---------------------------------------------------------------------------
 
-const NOT_FOUND_RE = /no match for|no match\b|not found|no data found|no entries found|domain not found|no object found|not registered|status\s*:\s*(?:available|free)\b|registered\s*:\s*(?:no|false)\b|is available for registration/i;
+const NOT_FOUND_RE = /no match for|no match\b|not found|no entries found|domain not found|no object found|not registered|status\s*:\s*(?:available|free)\b|registered\s*:\s*(?:no|false)\b|is available for registration/i;
 
 // Some ccTLD registries publish terse, line-oriented availability responses
 // that would be unsafe to recognize as arbitrary prose. Keep each documented
@@ -653,6 +653,8 @@ const LINE_NOT_FOUND_PATTERNS = Object.freeze([
   /^[ \t]*the domain has not been registered\.?[ \t]*$/im,
   /^[ \t]*the queried object does not exist:[ \t]*no matching objects found[ \t]*$/im,
   /^[ \t]*no record found for[ \t]+'[a-z0-9.-]{1,253}'\.?[ \t]*$/im,
+  /^[ \t]*no data found[ \t]*$/im,
+  /^[ \t]*>>[ \t]*no data found for domain[ \t]*:[ \t]*[a-z0-9.-]{1,253}[ \t]*$/im,
 ]);
 
 // InternetNZ's documented .nz WHOIS protocol uses a numeric query_status

@@ -110,7 +110,7 @@ describe('installed CLI process boundary', () => {
     assert.equal(result.stderr, '');
     const document = JSON.parse(result.stdout);
     assert.equal(document.schema, 'whoisleuth.cli.registry-support');
-    assert.equal(document.catalogueVersion, 18);
+    assert.equal(document.catalogueVersion, 19);
     assert.equal(document.suffix, 'uk');
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.interpretation.liveReachability, 'not_tested');

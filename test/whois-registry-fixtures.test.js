@@ -6,6 +6,7 @@ const { parseWhoisChain } = require('../lib/whois.mts');
 const fixtures = require('../fixtures/whois-registry-fixtures');
 
 const PARSER_FAMILY_ALIASES = [
+  { profile: 'aeda-colon', baseSuffix: 'ae', aliases: ['xn--mgbaam7a8h'] },
   { profile: 'amnic-sectioned', baseSuffix: 'am', aliases: ['xn--y9a3aq'] },
   { profile: 'cctld-by-colon', baseSuffix: 'by', aliases: ['xn--90ais'] },
   { profile: 'channel-islands-sectioned', baseSuffix: 'gg', aliases: ['je'] },
@@ -18,7 +19,12 @@ const PARSER_FAMILY_ALIASES = [
   { profile: 'marnet-contact-indirection', baseSuffix: 'mk', aliases: ['xn--d1alf'] },
   { profile: 'mediaserv-object-colon', baseSuffix: 'mq', aliases: ['gf'] },
   { profile: 'monic-minimal-colon', baseSuffix: 'mo', aliases: ['xn--mix891f'] },
+  { profile: 'isoc-il-colon', baseSuffix: 'il', aliases: ['xn--4dbrk0ce'] },
+  { profile: 'irnic-handle-blocks', baseSuffix: 'ir', aliases: ['xn--mgba3a4f16a'] },
+  { profile: 'mynic-colon', baseSuffix: 'my', aliases: ['xn--mgbx4cd0ab'] },
+  { profile: 'nic-dz-colon', baseSuffix: 'dz', aliases: ['xn--lgbbat1ad8j'] },
   { profile: 'nic-io-colon', baseSuffix: 'io', aliases: ['ac'] },
+  { profile: 'nic-sa-colon', baseSuffix: 'sa', aliases: ['xn--mgberp4a5d4ar'] },
   {
     profile: 'nixi-colon',
     baseSuffix: 'in',
@@ -32,12 +38,16 @@ const PARSER_FAMILY_ALIASES = [
       'xn--h2breg3eve',
       'xn--h2brj9c',
       'xn--h2brj9c8c',
+      'xn--mgbbh1a',
+      'xn--mgbbh1a71e',
+      'xn--mgbgu82a',
       'xn--rvc1e0am3e',
       'xn--s9brj9c',
       'xn--xkc2dl3a5ee0h',
     ],
   },
   { profile: 'nic-kz-dot-leader', baseSuffix: 'kz', aliases: ['xn--80ao21a'] },
+  { profile: 'om-registry-colon', baseSuffix: 'om', aliases: ['xn--mgb9awbf'] },
   { profile: 'rnids-colon', baseSuffix: 'rs', aliases: ['xn--90a3ac'] },
   { profile: 'afnic-colon', baseSuffix: 'fr', aliases: ['pm', 're', 'tf', 'wf', 'yt'] },
   {
@@ -47,6 +57,7 @@ const PARSER_FAMILY_ALIASES = [
   },
   { profile: 'tci-colon', baseSuffix: 'ru', aliases: ['su', 'xn--p1ai'] },
   { profile: 'thnic-holder-colon', baseSuffix: 'th', aliases: ['xn--o3cw4h'] },
+  { profile: 'ati-tn-dot-leader', baseSuffix: 'tn', aliases: ['xn--pgbs0dh'] },
   { profile: 'twnic-colon', baseSuffix: 'tw', aliases: ['xn--kprw13d', 'xn--kpry57d'] },
 ];
 
@@ -138,7 +149,7 @@ describe('WHOIS registry compatibility fixtures', () => {
         covered += 1;
       }
     }
-    assert.equal(covered, 41);
+    assert.equal(covered, 52);
   });
 
   test('covers the version seventeen shared-service ccTLD batch', () => {
@@ -180,6 +191,28 @@ describe('WHOIS registry compatibility fixtures', () => {
         .sort();
       assert.deepEqual(coveredProfiles, expectedProfiles, scenario);
     }
+  });
+
+  test('covers the version nineteen Omani registry family', () => {
+    for (const scenario of ['registered', 'not_found']) {
+      const covered = fixtures.filter((fixture) => fixture.capabilityProfile === 'om-registry-colon'
+        && fixture.scenario === scenario);
+      assert.equal(covered.length, 1, scenario);
+    }
+  });
+
+  test('does not promote no-data wording embedded in policy prose', () => {
+    const parsed = parseWhoisChain([
+      { server: 'whois.iana.org', response: 'domain: TEST\nrefer: whois.registry.invalid\n' },
+      {
+        server: 'whois.registry.invalid',
+        response: 'Policy notice: No Data Found is shown only when an object is absent.',
+      },
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'inconclusive');
+    assert.equal(parsed.notFound, false);
+    assert.equal(parsed.chainStatus, 'partial');
   });
 
   test('keeps Channel Islands ordinal dates behind the complete marker set', () => {

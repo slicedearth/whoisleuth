@@ -18,13 +18,13 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 18);
-  assert.equal(catalogue.rows.length, 191);
+  assert.equal(catalogue.version, 19);
+  assert.equal(catalogue.rows.length, 211);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 191,
-    fixtureVerified: 124,
-    accessDocumented: 67,
+    profiles: 211,
+    fixtureVerified: 136,
+    accessDocumented: 75,
     fallbacks: 1,
   });
   assert.deepEqual(
@@ -102,9 +102,11 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
     'al', 'ao', 'aq', 'az', 'ba', 'bb', 'bd', 'bs', 'bt', 'bv', 'bz', 'cd', 'cg',
     'ch', 'ck', 'cu', 'cw', 'cy', 'dj', 'eg', 'er', 'es', 'et', 'fk', 'ga', 'gb',
     'gm', 'gr', 'gu', 'gw', 'jm', 'jo', 'kh', 'km', 'kp', 'kw', 'lc', 'li', 'lk',
-    'lr', 'mh', 'mp', 'mt', 'mv', 'ne', 'ni', 'np', 'nr', 'pa', 'ph', 'ps', 'py',
+    'lr', 'mh', 'mp', 'mt', 'mv', 'na', 'ne', 'ni', 'np', 'nr', 'pa', 'ph', 'pn', 'ps', 'py',
     'sj', 'sl', 'sv', 'sz', 'tj', 'tt', 'va', 'vn', 'xn--54b7fta0cc',
-    'xn--fzc2c9e2c', 'xn--node', 'xn--qxam', 'xn--xkc2al3hye2a', 'za', 'zw',
+    'xn--fzc2c9e2c', 'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
+    'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--node', 'xn--qxam', 'xn--wgbh1c',
+    'xn--xkc2al3hye2a', 'za', 'zw',
   ]);
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
 });
