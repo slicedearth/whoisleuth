@@ -34,7 +34,13 @@ function utcDateFromParts(
 // timezone, so every accepted shape is validated and normalized through UTC.
 function parseRegistryDate(input: unknown): Date | null {
   if (typeof input !== 'string') return null;
-  const value = input.trim();
+  // The documented .nz WHOIS examples place one space before the RFC3339
+  // `T` separator. Canonicalize that registry-specific presentation quirk
+  // before applying the existing strict ISO-shaped parser.
+  const value = input.trim().replace(
+    /^(\d{4}-\d{2}-\d{2})[ ]+[Tt](?=\d{2}:)/,
+    '$1T',
+  );
   if (!value) return null;
 
   // DD.MM.YYYY[ HH:MM:SS] - e.g. 14.03.2024 10:46:48
@@ -46,6 +52,29 @@ function parseRegistryDate(input: unknown): Date | null {
 
   // YYYY. MM. DD. - e.g. 2006. 09. 18.
   match = value.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/);
+  if (match) {
+    const [, year, month, day] = match;
+    return utcDateFromParts(+year, +month, +day);
+  }
+
+  // YYYY.MM.DD HH:MM:SS - used by NASK's .pl WHOIS service.
+  match = value.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (match) {
+    const [, year, month, day, hour, minute, second] = match;
+    return utcDateFromParts(+year, +month, +day, +hour, +minute, +second);
+  }
+
+  // YYYY/MM/DD - an unambiguous year-first form used by CIRA WHOIS.
+  match = value.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    return utcDateFromParts(+year, +month, +day);
+  }
+
+  // YYYYMMDD with an optional Registro.br contact-reference suffix. The raw
+  // value remains available as provenance; only the leading calendar date is
+  // projected into the additive ISO companion.
+  match = value.match(/^(\d{4})(\d{2})(\d{2})(?:\s+#[0-9]{1,20})?$/);
   if (match) {
     const [, year, month, day] = match;
     return utcDateFromParts(+year, +month, +day);

@@ -32,7 +32,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
-const REGISTRY_CAPABILITIES_VERSION = 5;
+const REGISTRY_CAPABILITIES_VERSION = 6;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
@@ -75,6 +75,30 @@ const EXPLICIT_CAPABILITIES = [
     whoisParserProfile: 'eligibility-contact', fixtureScenarios: ['registered'],
   },
   {
+    id: 'registro-br-colon', suffixes: ['br'], registryClass: 'country-code',
+    whoisParserProfile: 'registro-br-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://registro.br/tecnologia/ferramentas/whois/',
+      'https://www.iana.org/domains/root/db/br.html',
+    ],
+  },
+  {
+    id: 'cira-colon', suffixes: ['ca'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.cira.ca/en/ca-domains/whois/',
+      'https://www.iana.org/domains/root/db/ca.html',
+    ],
+  },
+  {
+    id: 'ustld-colon', suffixes: ['us'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.about.us/faqs',
+      'https://www.iana.org/domains/root/db/us.html',
+    ],
+  },
+  {
     id: 'fred-contact-indirection', suffixes: ['cz'], registryClass: 'country-code',
     whoisParserProfile: 'fred-contact-indirection', fixtureScenarios: ['registered'],
   },
@@ -114,8 +138,65 @@ const EXPLICIT_CAPABILITIES = [
     fixtureScenarios: ['registered'],
   },
   {
+    id: 'fi-dot-leader', suffixes: ['fi'], registryClass: 'country-code',
+    whoisParserProfile: 'dot-leader', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.traficom.fi/en/fi-domains/point-contact-and-contact-channels/whois-shows-public-information-domain-name',
+      'https://www.iana.org/domains/root/db/fi.html',
+    ],
+  },
+  {
     id: 'dot-leader', suffixes: ['kr'], registryClass: 'country-code',
     whoisParserProfile: 'dot-leader', fixtureScenarios: ['registered'],
+  },
+  {
+    id: 'afnic-colon', suffixes: ['fr'], registryClass: 'country-code',
+    whoisParserProfile: 'afnic-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.afnic.fr/en/domain-names-and-support/everything-there-is-to-know-about-domain-names/find-a-domain-name-or-a-holder-using-whois/',
+      'https://www.iana.org/domains/root/db/fr.html',
+    ],
+  },
+  {
+    id: 'structured-underscore', suffixes: ['nz'], registryClass: 'country-code',
+    whoisParserProfile: 'structured-underscore',
+    fixtureScenarios: ['registered', 'not_found', 'rate_limited', 'restricted'],
+    documentationUrls: [
+      'https://docs.internetnz.nz/whois/',
+      'https://www.iana.org/domains/root/db/nz.html',
+    ],
+  },
+  {
+    id: 'nask-sectioned', suffixes: ['pl'], registryClass: 'country-code',
+    whoisParserProfile: 'nask-sectioned', fixtureScenarios: ['registered', 'malformed'],
+    documentationUrls: [
+      'https://www.dns.pl/en/whois',
+      'https://www.iana.org/domains/root/db/pl.html',
+    ],
+  },
+  {
+    id: 'dns-pt-colon', suffixes: ['pt'], registryClass: 'country-code',
+    whoisParserProfile: 'dns-pt-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.dns.pt/fotos/editor2/pt_registration_rules_apos_consulta.pdf',
+      'https://www.iana.org/domains/root/db/pt.html',
+    ],
+  },
+  {
+    id: 'tci-colon', suffixes: ['ru'], registryClass: 'country-code',
+    whoisParserProfile: 'tci-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://cctld.ru/en/service/whois/',
+      'https://www.iana.org/domains/root/db/ru.html',
+    ],
+  },
+  {
+    id: 'internetstiftelsen-colon', suffixes: ['se'], registryClass: 'country-code',
+    whoisParserProfile: 'internetstiftelsen-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://internetstiftelsen.se/domaner/registrera-ett-domannamn/regler-och-beskrivning-av-domannamnssokningar/',
+      'https://www.iana.org/domains/root/db/se.html',
+    ],
   },
   {
     id: 'prefixed-dot-leader', suffixes: ['tr'], registryClass: 'country-code',

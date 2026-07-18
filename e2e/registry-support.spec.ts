@@ -24,14 +24,22 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v5')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('12');
-  await expect(page.locator('tbody tr')).toHaveCount(12);
+  await expect(page.getByText('Catalogue v6')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('22');
+  await expect(page.locator('tbody tr')).toHaveCount(22);
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('bracketed');
   await expect(page.locator('tbody tr')).toHaveCount(1);
   await expect(page.locator('tbody tr')).toContainText('.jp');
+
+  await search.fill('structured underscore');
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await expect(page.locator('tbody tr')).toContainText('.nz');
+
+  await search.fill('tci colon');
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await expect(page.locator('tbody tr')).toContainText('.ru');
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');

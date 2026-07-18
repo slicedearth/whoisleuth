@@ -554,6 +554,15 @@ function parseIndentedContactBlock(text: string, headerRe: RegExp) {
 
 const NOT_FOUND_RE = /no match for|no match\b|not found|no data found|no entries found|domain not found|no object found|not registered|status\s*:\s*(?:available|free)\b|registered\s*:\s*(?:no|false)\b|is available for registration/i;
 
+// InternetNZ's documented .nz WHOIS protocol uses a numeric query_status
+// field rather than the generic prose above. Only 220 means that the queried
+// domain is available. Active and pending-release objects still exist in the
+// registry, while reserved/conflicted/prohibited states remain inconclusive
+// because they are neither ordinary registrations nor generally available.
+const NZ_NOT_FOUND_RE = /^[ \t]*query_status[ \t]*:[ \t]*220(?:\s|$)/im;
+const NZ_POSITIVE_RE = /^[ \t]*query_status[ \t]*:[ \t]*(?:200|210)(?:\s|$)/im;
+const NZ_TEMPORARY_FAILURE_RE = /^[ \t]*query_status[ \t]*:[ \t]*4\d{2}(?:\s|$)/im;
+
 // Rate-limit / soft-failure language. Detected separately from "not found" so
 // a throttled registrar can't read as "available".
 const RATE_LIMIT_RE = /rate.?limit|too many requests|quota exceeded|query limit|limit exceeded|number of .* exceeded|exceeded .* (?:queries|requests)|try again later|please try again|please wait|throttl|temporarily unavailable/i;
@@ -573,10 +582,13 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   // saying "Status: available" or "Registered: no"; treating that echo as
   // positive evidence turns an unregistered domain into a registered one.
   if (RATE_LIMIT_RE.test(text)) return 'rate_limited';
+  if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
+  if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
   if (NOT_FOUND_RE.test(text)) return 'negative';
   // Hop 0 is IANA's TLD delegation record, never evidence about the queried
   // domain itself.
-  if (index > 0 && (POSITIVE_REGISTRATION_RE.test(text) || POSITIVE_BRACKET_RE.test(text))) return 'positive';
+  if (index > 0 && (POSITIVE_REGISTRATION_RE.test(text)
+    || POSITIVE_BRACKET_RE.test(text) || NZ_POSITIVE_RE.test(text))) return 'positive';
   return 'inconclusive';
 }
 
@@ -641,6 +653,22 @@ function parseIndentedWhoisValue(text: string, headerRe: RegExp, maxLength: numb
     return boundedWhoisValue(line, maxLength);
   }
   return null;
+}
+
+function assignBoundedWhoisMatch(
+  text: string,
+  fields: ParsedWhoisRecord,
+  key: string,
+  pattern: RegExp,
+  truncatedFields: Set<string>,
+) {
+  if (fields[key]) return;
+  const match = text.match(pattern);
+  if (!match) return;
+  const bounded = boundedWhoisValue(match[1], whoisFieldLimit(key));
+  if (!bounded.value) return;
+  fields[key] = bounded.value;
+  if (bounded.truncated) truncatedFields.add(key);
 }
 
 function whoisFieldLimit(key: string): number {
@@ -732,9 +760,18 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
   // (.kr's "Domain Name                 :") instead of a colon right after
   // the label.
   const patterns = {
-    domainName: [/^[ \t*]*Domain Name[ \t.]*:[ \t]*(.+)$/im, /^[ \t*]*Domain[ \t.]*:[ \t]*(.+)$/im],
+    domainName: [
+      /^[ \t*]*Domain Name[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Domain[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*domain_name[ \t]*:[ \t]*(.+)$/im,
+    ],
     registryDomainId: [/^[ \t*]*Registry Domain ID[ \t.]*:[ \t]*(.+)$/im],
-    registrar: [/^[ \t*]*Registrar[ \t.]*:[ \t]*(.+)$/im, /^[ \t*]*Sponsoring Registrar[ \t.]*:[ \t]*(.+)$/im],
+    registrar: [
+      /^[ \t*]*Registrar[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Sponsoring Registrar[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Registrar Name[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrar_name[ \t]*:[ \t]*(.+)$/im,
+    ],
     registrarUrl: [/^[ \t*]*Registrar URL[ \t.]*:[ \t]*(.+)$/im],
     registrarWhoisServer: [/^[ \t*]*Registrar WHOIS Server[ \t.]*:[ \t]*(.+)$/im],
     registrarIanaId: [/^[ \t*]*Registrar IANA ID[ \t.]*:[ \t]*(.+)$/im],
@@ -744,6 +781,8 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       /^[ \t*]*Created(?: On)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Regist(?:ration|ered)(?: Time| Date| On)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Domain record activated[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*domain_dateregistered[ \t]*:[ \t]*(.+)$/im,
+      /^[ \t]*domain_datecreated[ \t]*:[ \t]*(.+)$/im,
     ],
     expiryDate: [
       /^[ \t*]*Registr(?:y|ar) Expiry Date[ \t.]*:[ \t]*(.+)$/im,
@@ -751,17 +790,28 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       /^[ \t*]*Expir(?:y|ation|e)s?(?: Date| On)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Valid Until[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Domain expires[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Renewal Date[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*paid-till[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*domain_datebilleduntil[ \t]*:[ \t]*(.+)$/im,
     ],
     updatedDate: [
       /^[ \t*]*Updated Date[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Last Update(?:d)?(?: Date| On)?[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Last Modified[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Modified[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Modification Date[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*last-update[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Changed[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Domain record last updated[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*domain_datelastmodified[ \t]*:[ \t]*(.+)$/im,
     ],
     abuseEmail: [/^[ \t*]*Registrar Abuse Contact Email[ \t.]*:[ \t]*(.+)$/im],
     abusePhone: [/^[ \t*]*Registrar Abuse Contact Phone[ \t.]*:[ \t]*(.+)$/im],
-    dnssec: [/^[ \t*]*DNSSEC[ \t.]*:[ \t]*(.+)$/im, /^[ \t*]*Signed[ \t.]*:[ \t]*(.+)$/im],
+    dnssec: [
+      /^[ \t*]*DNSSEC[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Signed[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*domain_signed[ \t]*:[ \t]*(.+)$/im,
+    ],
     // auDA (.au) publishes the registrant's eligibility basis (e.g. an ABN/
     // ACN for a company) alongside - and often instead of - a named contact,
     // since .au domain eligibility is tied to a registrable Australian
@@ -783,39 +833,105 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       /^[ \t*]*Registrant Name[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Registrant[ \t.]*:[ \t]*(.+)$/im,
       /^[ \t*]*Registrant Contact Name[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Owner Name[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrant_contact_name[ \t]*:[ \t]*(.+)$/im,
     ],
     registrantId: [/^[ \t*]*(?:Registry )?Registrant ID[ \t.]*:[ \t]*(.+)$/im],
     registrantOrg: [/^[ \t*]*Registrant (?:Contact )?Organi[sz]ation[ \t.]*:[ \t]*(.+)$/im],
-    registrantEmail: [/^[ \t*]*Registrant (?:Contact )?Email[ \t.]*:[ \t]*(.+)$/im],
-    registrantPhone: [/^[ \t*]*Registrant (?:Contact )?Phone[ \t.]*:[ \t]*(.+)$/im],
-    registrantAddress: [/^[ \t*]*Registrant (?:Contact )?Address[ \t.]*:[ \t]*(.+)$/im],
+    registrantEmail: [
+      /^[ \t*]*Registrant (?:Contact )?Email[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrant_contact_email[ \t]*:[ \t]*(.+)$/im,
+    ],
+    registrantPhone: [
+      /^[ \t*]*Registrant (?:Contact )?Phone[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrant_contact_phone[ \t]*:[ \t]*(.+)$/im,
+    ],
+    registrantAddress: [
+      /^[ \t*]*Registrant (?:Contact )?Address[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Owner Address[ \t.]*:[ \t]*(.+)$/im,
+    ],
     registrantStreet: [/^[ \t*]*Registrant (?:Contact )?Street[ \t.]*:[ \t]*(.+)$/im],
-    registrantCity: [/^[ \t*]*Registrant (?:Contact )?City[ \t.]*:[ \t]*(.+)$/im],
-    registrantState: [/^[ \t*]*Registrant (?:Contact )?State(?:\/Province)?[ \t.]*:[ \t]*(.+)$/im],
-    registrantPostalCode: [/^[ \t*]*Registrant (?:Contact )?Postal Code[ \t.]*:[ \t]*(.+)$/im],
-    registrantCountry: [/^[ \t*]*Registrant (?:Contact )?Country[ \t.]*:[ \t]*(.+)$/im],
+    registrantCity: [
+      /^[ \t*]*Registrant (?:Contact )?City[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrant_contact_city[ \t]*:[ \t]*(.+)$/im,
+    ],
+    registrantState: [
+      /^[ \t*]*Registrant (?:Contact )?State(?:\/Province)?[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrant_contact_province[ \t]*:[ \t]*(.+)$/im,
+    ],
+    registrantPostalCode: [
+      /^[ \t*]*Registrant (?:Contact )?Postal Code[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrant_contact_postalcode[ \t]*:[ \t]*(.+)$/im,
+    ],
+    registrantCountry: [
+      /^[ \t*]*Registrant (?:Contact )?Country[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t*]*Owner Country[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*registrant_contact_country[ \t]*:[ \t]*(.+)$/im,
+    ],
     adminId: [/^[ \t*]*(?:Registry )?Admin(?:istrative)? (?:Contact )?ID[ \t.]*:[ \t]*(.+)$/im],
-    adminName: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Name[ \t.]*:[ \t]*(.+)$/im],
+    adminName: [
+      /^[ \t*]*Admin(?:istrative)? (?:Contact )?Name[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*admin_contact_name[ \t]*:[ \t]*(.+)$/im,
+    ],
     adminOrg: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Organi[sz]ation[ \t.]*:[ \t]*(.+)$/im],
-    adminEmail: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Email[ \t.]*:[ \t]*(.+)$/im],
-    adminPhone: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Phone[ \t.]*:[ \t]*(.+)$/im],
+    adminEmail: [
+      /^[ \t*]*Admin(?:istrative)? (?:Contact )?Email[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*admin_contact_email[ \t]*:[ \t]*(.+)$/im,
+    ],
+    adminPhone: [
+      /^[ \t*]*Admin(?:istrative)? (?:Contact )?Phone[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*admin_contact_phone[ \t]*:[ \t]*(.+)$/im,
+    ],
     adminAddress: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Address[ \t.]*:[ \t]*(.+)$/im],
     adminStreet: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Street[ \t.]*:[ \t]*(.+)$/im],
-    adminCity: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?City[ \t.]*:[ \t]*(.+)$/im],
-    adminState: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?State(?:\/Province)?[ \t.]*:[ \t]*(.+)$/im],
-    adminPostalCode: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Postal Code[ \t.]*:[ \t]*(.+)$/im],
-    adminCountry: [/^[ \t*]*Admin(?:istrative)? (?:Contact )?Country[ \t.]*:[ \t]*(.+)$/im],
+    adminCity: [
+      /^[ \t*]*Admin(?:istrative)? (?:Contact )?City[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*admin_contact_city[ \t]*:[ \t]*(.+)$/im,
+    ],
+    adminState: [
+      /^[ \t*]*Admin(?:istrative)? (?:Contact )?State(?:\/Province)?[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*admin_contact_province[ \t]*:[ \t]*(.+)$/im,
+    ],
+    adminPostalCode: [
+      /^[ \t*]*Admin(?:istrative)? (?:Contact )?Postal Code[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*admin_contact_postalcode[ \t]*:[ \t]*(.+)$/im,
+    ],
+    adminCountry: [
+      /^[ \t*]*Admin(?:istrative)? (?:Contact )?Country[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*admin_contact_country[ \t]*:[ \t]*(.+)$/im,
+    ],
     techId: [/^[ \t*]*(?:Registry )?Tech(?:nical)? (?:Contact )?ID[ \t.]*:[ \t]*(.+)$/im],
-    techName: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Name[ \t.]*:[ \t]*(.+)$/im],
+    techName: [
+      /^[ \t*]*Tech(?:nical)? (?:Contact )?Name[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*technical_contact_name[ \t]*:[ \t]*(.+)$/im,
+    ],
     techOrg: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Organi[sz]ation[ \t.]*:[ \t]*(.+)$/im],
-    techEmail: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Email[ \t.]*:[ \t]*(.+)$/im],
-    techPhone: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Phone[ \t.]*:[ \t]*(.+)$/im],
+    techEmail: [
+      /^[ \t*]*Tech(?:nical)? (?:Contact )?Email[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*technical_contact_email[ \t]*:[ \t]*(.+)$/im,
+    ],
+    techPhone: [
+      /^[ \t*]*Tech(?:nical)? (?:Contact )?Phone[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*technical_contact_phone[ \t]*:[ \t]*(.+)$/im,
+    ],
     techAddress: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Address[ \t.]*:[ \t]*(.+)$/im],
     techStreet: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Street[ \t.]*:[ \t]*(.+)$/im],
-    techCity: [/^[ \t*]*Tech(?:nical)? (?:Contact )?City[ \t.]*:[ \t]*(.+)$/im],
-    techState: [/^[ \t*]*Tech(?:nical)? (?:Contact )?State(?:\/Province)?[ \t.]*:[ \t]*(.+)$/im],
-    techPostalCode: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Postal Code[ \t.]*:[ \t]*(.+)$/im],
-    techCountry: [/^[ \t*]*Tech(?:nical)? (?:Contact )?Country[ \t.]*:[ \t]*(.+)$/im],
+    techCity: [
+      /^[ \t*]*Tech(?:nical)? (?:Contact )?City[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*technical_contact_city[ \t]*:[ \t]*(.+)$/im,
+    ],
+    techState: [
+      /^[ \t*]*Tech(?:nical)? (?:Contact )?State(?:\/Province)?[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*technical_contact_province[ \t]*:[ \t]*(.+)$/im,
+    ],
+    techPostalCode: [
+      /^[ \t*]*Tech(?:nical)? (?:Contact )?Postal Code[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*technical_contact_postalcode[ \t]*:[ \t]*(.+)$/im,
+    ],
+    techCountry: [
+      /^[ \t*]*Tech(?:nical)? (?:Contact )?Country[ \t.]*:[ \t]*(.+)$/im,
+      /^[ \t]*technical_contact_country[ \t]*:[ \t]*(.+)$/im,
+    ],
     billingId: [/^[ \t*]*(?:Registry )?Billing (?:Contact )?ID[ \t.]*:[ \t]*(.+)$/im],
     billingName: [/^[ \t*]*Billing (?:Contact )?Name[ \t.]*:[ \t]*(.+)$/im],
     billingOrg: [/^[ \t*]*Billing (?:Contact )?Organi[sz]ation[ \t.]*:[ \t]*(.+)$/im],
@@ -867,6 +983,107 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
           fields[key] = bounded.value;
           if (bounded.truncated) truncatedFields.add(key);
           break;
+        }
+      }
+    }
+
+    // A small set of ccTLD dialects reuse terse labels that would be unsafe
+    // as global aliases (for example `org:` and `state:` also occur inside
+    // contact/address blocks). Gate those fields on registry-specific marker
+    // combinations, while retaining the same scalar/list bounds as the
+    // generic parser and leaving endpoint discovery and authority untouched.
+    if (!isRootHop) {
+      const isRegistroBr = /^[ \t]*owner-c[ \t]*:/im.test(text)
+        && /^[ \t]*country[ \t]*:[ \t]*BR(?:\s|$)/im.test(text);
+      if (isRegistroBr) {
+        assignBoundedWhoisMatch(text, fields, 'registrantName', /^[ \t]*owner[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'registrantId', /^[ \t]*owner-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'adminId', /^[ \t]*admin-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'techId', /^[ \t]*tech-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+      }
+
+      const isAfnic = /^[ \t]*source[ \t]*:[ \t]*FRNIC(?:\s|$)/im.test(text);
+      if (isAfnic) {
+        assignBoundedWhoisMatch(text, fields, 'registrantId', /^[ \t]*holder-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'adminId', /^[ \t]*admin-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        assignBoundedWhoisMatch(text, fields, 'techId', /^[ \t]*tech-c[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        for (const match of text.matchAll(/^[ \t]*eppstatus[ \t]*:[ \t]*(.+)$/gim)) {
+          if (addBoundedWhoisSetValue(statuses, match[1], {
+            maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,
+            field: 'statuses', truncatedFields,
+          }) === 'capped') break;
+        }
+      }
+
+      const isTci = /^[ \t]*source[ \t]*:[ \t]*TCI(?:\s|$)/im.test(text)
+        && /^[ \t]*paid-till[ \t]*:/im.test(text);
+      if (isTci) {
+        assignBoundedWhoisMatch(text, fields, 'registrantOrg', /^[ \t]*org[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        for (const match of text.matchAll(/^[ \t]*state[ \t]*:[ \t]*(.+)$/gim)) {
+          if (addBoundedWhoisSetValue(statuses, match[1], {
+            maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,
+            field: 'statuses', truncatedFields,
+          }) === 'capped') break;
+        }
+      }
+
+      const isInternetstiftelsen = /^[ \t]*registry-lock[ \t]*:/im.test(text)
+        && /^[ \t]*holder[ \t]*:/im.test(text);
+      if (isInternetstiftelsen) {
+        assignBoundedWhoisMatch(text, fields, 'registrantId', /^[ \t]*holder[ \t]*:[ \t]*(.+)$/im, truncatedFields);
+        for (const match of text.matchAll(/^[ \t]*state[ \t]*:[ \t]*(.+)$/gim)) {
+          if (addBoundedWhoisSetValue(statuses, match[1], {
+            maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,
+            field: 'statuses', truncatedFields,
+          }) === 'capped') break;
+        }
+      }
+
+      const isNask = /^[ \t]*DOMAIN NAME[ \t]*:/im.test(text)
+        && /^[ \t]*registrant type[ \t]*:/im.test(text)
+        && /^[ \t]*renewal date[ \t]*:/im.test(text)
+        && /^[ \t]*REGISTRAR[ \t]*:[ \t]*$/im.test(text);
+      if (isNask) {
+        if (!fields.registrar) {
+          const registrarHeader = text.match(/^[ \t]*REGISTRAR[ \t]*:[ \t]*$/im);
+          const followingLines = registrarHeader
+            ? text.slice((registrarHeader.index ?? 0) + registrarHeader[0].length).split('\n').slice(0, 8)
+            : [];
+          for (const line of followingLines) {
+            if (!line.trim()) continue;
+            const bounded = boundedWhoisValue(line, whoisFieldLimit('registrar'));
+            if (bounded.value && !/^[a-z][a-z0-9+.-]*:\/\//i.test(bounded.value)
+              && !/^[a-z][a-z0-9 -]{0,50}:[ \t]/i.test(bounded.value)) {
+              fields.registrar = bounded.value;
+            }
+            if (bounded.truncated) truncatedFields.add('registrar');
+            break;
+          }
+        }
+
+        const nameserverHeader = text.match(/^[ \t]*nameservers[ \t]*:[ \t]*(.*)$/im);
+        if (nameserverHeader) {
+          const candidates = [
+            nameserverHeader[1],
+            ...text.slice((nameserverHeader.index ?? 0) + nameserverHeader[0].length)
+              .split('\n').slice(1, MAX_WHOIS_NAMESERVERS + 2),
+          ];
+          let found = 0;
+          for (const line of candidates) {
+            const trimmed = line.trim();
+            if (!trimmed) {
+              if (found > 0) break;
+              continue;
+            }
+            const hostMatch = trimmed.match(/^([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\.?(?:\s|$)/);
+            if (!hostMatch) break;
+            const result = addBoundedWhoisSetValue(nameservers, hostMatch[1].replace(/\.$/, ''), {
+              maxEntries: MAX_WHOIS_NAMESERVERS, maxLength: 253,
+              field: 'nameservers', truncatedFields,
+            });
+            if (result === 'capped') break;
+            if (result === 'added') found += 1;
+          }
         }
       }
     }
@@ -927,6 +1144,30 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
         }
         if (lines.length) fields[key] = lines.join(', ');
         expandedStreetFields.add(key);
+      }
+
+      // The documented .nz protocol numbers up to two address lines using
+      // underscore field names. Aggregate only those exact fields, keeping
+      // the same four-line/300-character bounds as repeated ICANN-style
+      // street fields and leaving city/province/postcode separately typed.
+      for (const [prefix, nzPrefix] of [
+        ['registrant', 'registrant'], ['admin', 'admin'], ['tech', 'technical'],
+      ]) {
+        const key = `${prefix}Street`;
+        if (fields[key]) continue;
+        const addressRe = new RegExp(`^[ \\t]*${nzPrefix}_contact_address(?:1|2)[ \\t]*:[ \\t]*(.+)$`, 'gim');
+        const lines: string[] = [];
+        for (const match of text.matchAll(addressRe)) {
+          const bounded = boundedWhoisValue(match[1], 300);
+          if (bounded.truncated) truncatedFields.add(key);
+          if (!bounded.value || lines.includes(bounded.value)) continue;
+          if (lines.length >= 4) {
+            truncatedFields.add(key);
+            break;
+          }
+          lines.push(bounded.value);
+        }
+        if (lines.length) fields[key] = lines.join(', ');
       }
     }
 
@@ -1035,7 +1276,8 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       nsLinePatterns.push(
         /^[ \t*]*nserver[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
         /^[ \t*]*Host Name[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
-        /^[ \t*]*DNS[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim
+        /^[ \t*]*DNS[ \t.]*:[ \t]*([a-zA-Z0-9.\-]+)/gim,
+        /^[ \t]*ns_name_\d{2}[ \t]*:[ \t]*([a-zA-Z0-9.\-]+)/gim
       );
     }
     for (const re of nsLinePatterns) {
@@ -1063,6 +1305,14 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
         maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,
         field: 'statuses', truncatedFields,
       }) === 'capped') break;
+    }
+    if (!isRootHop) {
+      for (const m of text.matchAll(/^[ \t]*query_status[ \t]*:[ \t]*(\d{3}(?:[ \t]+[^\r\n]+)?)/gim)) {
+        if (addBoundedWhoisSetValue(statuses, m[1], {
+          maxEntries: MAX_WHOIS_STATUSES, maxLength: 160,
+          field: 'statuses', truncatedFields,
+        }) === 'capped') break;
+      }
     }
 
     // Some registries (e.g. .it, .tr) list nameservers as a bare header

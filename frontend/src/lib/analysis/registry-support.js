@@ -84,7 +84,9 @@ export function filterRegistrySupportRows(rows, query, coverage) {
   const normalizedQuery = typeof query === 'string'
     ? query.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, MAX_REGISTRY_SUPPORT_FILTER_LENGTH).toLowerCase()
     : '';
-  const searchableQuery = normalizedQuery.startsWith('.') ? normalizedQuery.slice(1) : normalizedQuery;
+  const searchableQuery = (normalizedQuery.startsWith('.') ? normalizedQuery.slice(1) : normalizedQuery)
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
   const normalizedCoverage = ['fixture_verified', 'access_documented'].includes(String(coverage))
     ? String(coverage)
     : 'all';
@@ -96,6 +98,9 @@ export function filterRegistrySupportRows(rows, query, coverage) {
       row.whoisQueryProfile, row.whoisParserProfile, row.fallbackProfile,
       row.whoisAccessProfile, row.rdapAccessProfile, row.limitation,
       ...row.fixtureScenarios,
-    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(searchableQuery));
+    ].filter(Boolean).some((value) => String(value).toLowerCase()
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .includes(searchableQuery));
   });
 }

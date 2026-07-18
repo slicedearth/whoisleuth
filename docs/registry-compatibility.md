@@ -22,21 +22,31 @@ and response encoding without duplicating the query value in the response.
   a machine-access constraint or publishes no machine endpoint. It describes
   collection conditions only and is never evidence about domain availability.
 
-The version 5 explicit matrix is:
+The version 6 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
 | `.au` | Eligibility and contact fields | Registered |
+| `.br` | Registry owner/contact handles, compact dates, status, and nameservers | Registered |
+| `.ca` | Standard colon fields with year-first slash dates | Registered |
 | `.cz` | FRED contact-handle indirection | Registered |
 | `.de` | First-referral domain-and-ACE query; alternate field labels | Registered |
 | `.edu` | Indented contact blocks | Registered |
 | `.es` | Plain WHOIS syntax; registry requires advance source-IP authorization; IANA publishes no RDAP service | Access documented |
+| `.fi` | Dot-leader fields, dates, DNSSEC, registrar, status, and nameservers | Registered |
+| `.fr` | AFNIC contact handles, EPP status, lifecycle dates, and nameservers | Registered |
 | `.gt` | Bounded registry-web fallback into the normal WHOIS parser | Registered, not found, unavailable |
 | `.it` | Alternate field labels and bare nameserver section | Registered |
 | `.jp` | First-referral English-output query; bracketed fields | Registered |
 | `.kr` | Dot-leader fields and host-name nameservers | Registered |
+| `.nz` | Structured underscore fields, numeric registry states, contacts, dates, DNSSEC, and numbered nameservers | Registered, available, temporary failure, restricted/inconclusive |
+| `.pl` | NASK sectioned nameservers and registrar with dotted lifecycle dates | Registered, malformed |
+| `.pt` | Domain, owner, registrar, lifecycle, status, DNSSEC, and nameserver fields | Registered |
+| `.ru` | TCI domain state, registrant organisation, registrar handle, dates, and nameservers | Registered |
+| `.se` | Registry state, holder handle, registrar, lifecycle, DNSSEC, and nameservers | Registered |
 | `.tr` | Prefixed dot-leader fields and bare nameserver section | Registered |
 | `.uk` | Sectioned indented domain, registrant, registrar, status, date, and nameserver fields | Registered, not found, malformed |
+| `.us` | Standard colon fields, registrar, lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.vn` | IANA publishes no domain WHOIS or RDAP service; official browser lookup is not integrated | Access documented |
 
 The exceptional query formats are grounded in the registries' own protocol
@@ -45,6 +55,39 @@ documents the domain-and-ACE query type, while the [`.jp` command-line
 guide](https://jprs.jp/about/dom-search/jprs-whois/whois-guide-usage.html)
 documents `/e` as the English-output suffix. The automated suite represents
 both with synthetic responses and never contacts either registry.
+
+The [`.nz` WHOIS protocol](https://docs.internetnz.nz/whois/) documents its
+underscore field names, numbered nameservers, contact layout, and numeric
+query states. WHOISleuth treats only `220 Available` as authoritative absence;
+`200 Active` and `210 PendingRelease` remain positive registry existence
+evidence, while prohibited, conflicted, reserved, and resolved states stay
+inconclusive rather than being mislabeled as available. Temporary `4xx`
+registry states are retained as failed-hop provenance and never as absence.
+
+Version 6 adds one fixture-backed compatibility batch for ten ccTLDs: `.br`,
+`.ca`, `.fi`, `.fr`, `.nz`, `.pl`, `.pt`, `.ru`, `.se`, and `.us`. The
+registry-specific parsers remain narrow: terse `owner`, `org`, `holder`, and
+`state` fields are interpreted only when the same response contains the
+registry's distinguishing markers, preventing contact/address fields in an
+unrelated dialect from being mislabeled. The `.pl` registrar and nameserver
+sections retain their source text, while `.br` compact dates and `.ca`
+year-first slash dates retain raw values and receive additive canonical ISO
+companions. Per-source field, list, response-byte, and referral bounds are
+unchanged.
+
+The batch is grounded in the registries' own public service descriptions for
+[`.br`](https://registro.br/tecnologia/ferramentas/whois/),
+[`.ca`](https://www.cira.ca/en/ca-domains/whois/),
+[`.fi`](https://www.traficom.fi/en/fi-domains/point-contact-and-contact-channels/whois-shows-public-information-domain-name),
+[`.fr`](https://www.afnic.fr/en/domain-names-and-support/everything-there-is-to-know-about-domain-names/find-a-domain-name-or-a-holder-using-whois/),
+[`.pl`](https://www.dns.pl/en/whois),
+[`.pt`](https://www.dns.pt/fotos/editor2/pt_registration_rules_apos_consulta.pdf),
+[`.ru`](https://cctld.ru/en/service/whois/),
+[`.se`](https://internetstiftelsen.se/domaner/registrera-ett-domannamn/regler-och-beskrivning-av-domannamnssokningar/),
+and [`.us`](https://www.about.us/faqs), plus IANA delegation records for
+machine-service discovery. These sources describe the service and published
+data; the synthetic fixtures verify parser behavior only and make no live
+reachability or completeness claim.
 
 The [`.uk` WHOIS instructions](https://registrars.nominet.uk/uk-namespace/registration-and-domain-management/query-tools/whois/whois-basic-instructions/)
 document a sectioned port-43 response with indented domain, registrar,
