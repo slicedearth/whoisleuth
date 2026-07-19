@@ -192,16 +192,19 @@ to grow.
 | HTTP trust boundary | [`lib/safe-fetch.mts`](../lib/safe-fetch.mts) | DNS-rebinding resistance, address pinning, redirect validation, byte caps, and dispatcher lifecycle. |
 | Hosted cost controls | [`lib/operation-budget.mts`](../lib/operation-budget.mts) | Provider-neutral atomic leases, feature identity, failure semantics, and optional durable accounting. |
 | Historical evidence model | [`frontend/src/lib/analysis/case-model.js`](../frontend/src/lib/analysis/case-model.js) | Versioned schema migration, non-destructive imports, depth-aware comparison, and serialized storage budgets. |
+| Typed local investigation projection | [`frontend/src/lib/analysis/investigation-projection.ts`](../frontend/src/lib/analysis/investigation-projection.ts) | Future-schema-safe source reads, deterministic entities, provenance-backed edges, and explicit projection bounds without a database. |
 | Public portfolio boundary | [`frontend/src/lib/analysis/demo-model.js`](../frontend/src/lib/analysis/demo-model.js) | Fixed synthetic fixtures, dependency-aware state normalization, and a deliberately distinct export contract. |
 | Browser network isolation | [`e2e/fixtures.ts`](../e2e/fixtures.ts) | Authentication setup, active off-origin request blocking, console failure collection, and scoped expected-noise handling. |
 
 ## Deliberate limitations
 
 WHOISleuth currently has a shared deployment password rather than individual
-accounts, stores investigations in one browser rather than a server database,
-and does not run scheduled scans or send notifications automatically. It is not
-a vulnerability scanner, passive-DNS platform, takedown service, or proof that
-a domain is malicious.
+accounts, stores ordinary investigations in one browser rather than a server
+database, and does not send automatic reports or notifications. An explicitly
+configured optional worker can rescan one bounded, encrypted compact watchlist
+projection; it is not a general background-job system or collaborative evidence
+store. WHOISleuth is not a vulnerability scanner, passive-DNS platform,
+takedown service, or proof that a domain is malicious.
 
 These are explicit scope and trust decisions for the current project,
 not claims that the omitted features are trivial. Adding them would require a

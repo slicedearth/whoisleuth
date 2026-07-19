@@ -45,8 +45,8 @@ exported.
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | `frontend/src/routes/` | Lookup, Discover, Bulk, Monitor, Brands, public Privacy, and public Demo presentation and interaction. | Registry protocol logic, authentication enforcement, outbound-request trust decisions, or deployment-wide budgets. |
-| `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
-| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, and cross-workspace handoff state. | Server persistence, cross-device synchronization, accounts, or scheduled jobs. |
+| `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
+| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, and cross-workspace handoff state. | General server persistence, cross-device synchronization, accounts, or background jobs. |
 | `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, and response shaping. | Separate copies of lookup and parsing rules. |
 | `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
 | Optional distributed budget provider | Opaque expiring leases and bounded operation counters when explicitly configured. | Query targets, responses, evidence, notes, profiles, or session tokens. |
@@ -131,6 +131,14 @@ budgets and deterministic pruning. They remain ordinary browser storage rather
 than encryption. Clearing site data removes them, and another device or browser
 profile does not receive them automatically.
 
+`investigation-projection.ts` provides a separate read-only view over current
+case, campaign, Brand Profile, page-baseline, and explicitly supplied scan-local
+relationship contracts. It revalidates each source, refuses newer schemas, and
+emits bounded typed entities, observations, and provenance-backed relationships
+without mutating or migrating a store. Compact case evidence keeps completeness
+and truncation unknown when its source-health envelope was not retained; the
+projection never fills that gap by inference.
+
 The public demo has a separate fixed schema and storage key. It uses reserved
 domains, does not call analysis APIs, cannot read or write production stores,
 and marks every downloaded package as synthetic.
@@ -194,7 +202,9 @@ DNS, Certificate Transparency, or websites.
 - **Shared password over accounts:** smaller operational and privacy surface;
   no individual authorization or accountability.
 - **Browser-local investigations over a database:** no hosted evidence store or
-  account synchronization; no background monitoring or cross-device state.
+  account synchronization. An optional bounded worker can rescan one encrypted
+  compact watchlist projection, but it is not a general job or cross-device
+  investigation system.
 - **Fast/deep profiles over one maximal scan:** predictable bulk cost and clear
   provenance; analysts must choose when richer evidence justifies more work.
 - **Exact and component-level relationships over ownership inference:**
@@ -208,7 +218,7 @@ DNS, Certificate Transparency, or websites.
   evidence budgets.
 
 These constraints are part of the product design, not unfinished abstractions.
-Features such as accounts, scheduled scans, server-side projects, automatic
-notifications, and heavier browser rendering require an explicit change to the
-security, privacy, cost, and persistence model rather than an isolated UI
-addition.
+Features such as accounts, general scheduled jobs, server-side projects,
+automatic notifications, and heavier browser rendering require an explicit
+change to the security, privacy, cost, and persistence model rather than an
+isolated UI addition.
