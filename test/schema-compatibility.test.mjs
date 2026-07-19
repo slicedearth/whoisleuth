@@ -73,6 +73,10 @@ import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
   buildLookupEvidence,
 } from '../lib/evidence-export.mts';
+import {
+  DEPLOYMENT_SELF_CHECK_SCHEMA,
+  DEPLOYMENT_SELF_CHECK_VERSION,
+} from '../tools/deployment-self-check.mts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -88,7 +92,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 44);
+    assert.equal(inventory.entries.length, 45);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -104,6 +108,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
     assert.equal(byId(inventory, 'export.workspace-settings-section').schema, WORKSPACE_SETTINGS_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-settings-section').currentVersion, WORKSPACE_SETTINGS_VERSION);
+    assert.equal(byId(inventory, 'cli.deployment-self-check').schema, DEPLOYMENT_SELF_CHECK_SCHEMA);
+    assert.equal(byId(inventory, 'cli.deployment-self-check').currentVersion, DEPLOYMENT_SELF_CHECK_VERSION);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {

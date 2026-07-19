@@ -1015,6 +1015,36 @@ lookup path's edge rule. Their function-level limiter still applies, but it is
 container-local; deployments that need durable protection against distributed
 abuse should add a shared rate-limit store or platform-level traffic controls.
 
+### Deployment self-check
+
+After publishing a deployment, an operator can run a bounded public-boundary
+check from this repository:
+
+```sh
+npm run deployment:self-check -- https://your-deployment.example
+```
+
+Add `--json` for the versioned machine-readable report. The command accepts
+one explicit HTTPS hostname origin and starts from only seven fixed same-origin
+paths. It makes at most ten requests, follows at most one same-origin redirect
+without a query string or fragment per GET probe, inspects at most 64 KiB per
+response, allows five seconds per request and twenty seconds overall, and uses
+the same public-address and DNS-rebinding protections as other outbound
+requests. It verifies the public homepage, anonymous session state,
+invalid-login response, unpublished direct login-function path, protected
+capability and scheduled-monitor management boundaries, browser security
+headers, and `no-store` directives.
+
+The check sends one fixed non-secret invalid value solely to the configured
+same-origin login route and never includes it or response bodies in the report.
+It does not accept a real password, session cookie, API credential, arbitrary
+path, or additional target. Because protected-route navigation and the
+server-authoritative capability report require browser execution and an
+authenticated session, their detailed state remains explicitly inconclusive
+or unsupported; confirm the workspace redirect and scheduled-monitor posture
+through the existing signed-in browser smoke test. A network failure or capped
+response is not converted into a pass or deployment defect.
+
 Network-heavy authenticated work also uses immediate in-memory concurrency
 leases. These are cost classes rather than provider quotas:
 
