@@ -1169,6 +1169,62 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(comparison.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid' })).toHaveCount(0);
   });
 
+  test('downloads the same filtered graph as JSON, GraphML, and GEXF without transient view state', async ({ page }) => {
+    const http = {
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://shared-export.invalid',
+      httpResponseStatus: 200,
+    };
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'export-graph-a', domain: 'alpha-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http })] }),
+      caseRecord({ id: 'export-graph-b', domain: 'bravo-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http })] }),
+    ]);
+
+    const region = page.getByRole('region', { name: 'Relationship graph' });
+    const visual = region.locator('.graph-scroll svg');
+    await visual.getByRole('button', { name: 'Shared final website origin: https://shared-export.invalid', exact: true }).click();
+    await region.getByRole('group', { name: 'Relationship graph view controls' }).getByRole('button', { name: 'Hide selected' }).click();
+    await expect(visual.getByRole('button', { name: /Shared final website origin/ })).toHaveCount(0);
+
+    const controls = region.getByRole('group', { name: 'Relationship graph export controls' });
+    const select = controls.getByLabel('Graph export format');
+    const download = async (format: 'json' | 'graphml' | 'gexf') => {
+      await select.selectOption(format);
+      const pending = page.waitForEvent('download');
+      await controls.getByRole('button', { name: 'Export filtered graph' }).click();
+      const result = await pending;
+      const body = await (await result.createReadStream()).toArray();
+      return { result, content: Buffer.concat(body).toString('utf-8') };
+    };
+
+    const json = await download('json');
+    expect(json.result.suggestedFilename()).toMatch(/^whoisleuth-relationship-graph-\d{4}-\d{2}-\d{2}\.json$/);
+    const document = JSON.parse(json.content);
+    expect(document.schema).toBe('whoisleuth.relationship-graph');
+    expect(document.version).toBe(1);
+    expect(document.graph.nodes).toHaveLength(4);
+    expect(document.graph.edges).toHaveLength(4);
+    expect(JSON.stringify(document)).not.toContain('hiddenIds');
+    expect(JSON.stringify(document)).not.toContain('pinnedIds');
+    expect(JSON.stringify(document)).not.toContain('groupCaseIds');
+
+    for (const format of ['graphml', 'gexf'] as const) {
+      const xml = await download(format);
+      expect(xml.result.suggestedFilename()).toMatch(new RegExp(`^whoisleuth-relationship-graph-\\d{4}-\\d{2}-\\d{2}\\.${format}$`));
+      const parsed = await page.evaluate((content) => {
+        const document = new DOMParser().parseFromString(content, 'application/xml');
+        return {
+          errors: document.getElementsByTagName('parsererror').length,
+          nodes: document.getElementsByTagNameNS('*', 'node').length,
+          edges: document.getElementsByTagNameNS('*', 'edge').length,
+        };
+      }, xml.content);
+      expect(parsed).toEqual({ errors: 0, nodes: 4, edges: 4 });
+    }
+    await expect(controls.getByRole('status')).toContainText('Downloaded 4 nodes and 4 edges');
+  });
+
   test('shows a clear empty state when no retained evidence relates cases', async ({ page }) => {
     await openRelationshipTable(page, [
       caseRecord({ id: 'single-a', domain: 'single-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.one.invalid'] })] }),

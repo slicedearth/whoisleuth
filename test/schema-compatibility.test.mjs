@@ -26,6 +26,11 @@ import {
   CASE_REPORT_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/case-report.js';
 import {
+  MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
+  RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
+  RELATIONSHIP_GRAPH_EXPORT_VERSION,
+} from '../frontend/src/lib/analysis/case-relationship-graph-export.js';
+import {
   buildCaseExport,
   CASE_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/case-model.js';
@@ -76,7 +81,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 41);
+    assert.equal(inventory.entries.length, 42);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -84,6 +89,9 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.cases').currentVersion, CASE_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.lookup-evidence').schema, LOOKUP_EVIDENCE_SCHEMA);
     assert.equal(byId(inventory, 'export.lookup-evidence').currentVersion, LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
+    assert.equal(byId(inventory, 'export.relationship-graph').currentVersion, RELATIONSHIP_GRAPH_EXPORT_VERSION);
+    assert.equal(byId(inventory, 'export.relationship-graph').byteBudget, MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {

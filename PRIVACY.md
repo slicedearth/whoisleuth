@@ -96,13 +96,17 @@ default (see the README), so many lookups return no personal data at all.
   collected by a requested deep check. Bulk results, watchlists, and analyst
   cases retain only the final origin (never its path or query), response status,
   transport, redirect count/flags, MIME type, and presence-only security-header
-  tokens. Monitor can compare the latest retained final origin and normalized
-  nameserver set across browser-local cases, including through a capped local
-  relationship table, without making a request or saving a separate
-  relationship record. This comparison uses the bounded nameserver
-  set retained by each case rather than an uncapped DNS inventory. Raw header
-  values, attempt errors, and redirect inventories are not copied into
-  browser-local investigation stores.
+  tokens. Monitor can derive a capped relationship graph and table from the
+  typed projection of bounded final-origin and nameserver-set observations
+  already retained in browser-local case histories. This makes no request and
+  saves no separate relationship record. A deliberate local graph download can
+  include the filtered case domains, exact retained relationship values,
+  method, classification, source, observation time, completeness, truncation,
+  limitations, and up to 8 bounded source observations per relationship as
+  versioned JSON, GraphML, or GEXF. It excludes case notes, status, disposition,
+  raw registry or page responses, contacts, credentials, and transient graph
+  view state. Raw header values, attempt errors, and redirect inventories are
+  not copied into browser-local investigation stores or graph exports.
 - **Public synthetic demo** - the unauthenticated demo uses fixed fictional
   fixtures on reserved domains to represent Dashboard, Brands, Discover, Bulk,
   Lookup, and Monitor without performing a live analysis request. Its bounded
@@ -214,7 +218,8 @@ default (see the README), so many lookups return no personal data at all.
   remove hosted state deliberately when its history is no longer required.
   Replacing or losing the encryption key without migrating the state makes the
   retained ciphertext unreadable.
-- **CSV/JSON exports**: downloaded directly to your device. Campaign exports
+- **Local exports**: CSV, JSON, Markdown, HTML, GraphML, GEXF, and other stated
+  formats are downloaded directly to your device. Campaign exports
   contain campaign labels, descriptions, domain membership, timestamps, and
   stated interpretation limits; they do not include case evidence or notes.
   Single-lookup

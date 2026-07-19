@@ -836,6 +836,13 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
   links, and each relationship retains at most 100 provenance observations;
   narrow screens use labelled stacked rows without page-level horizontal
   overflow.
+  The currently filtered graph can be downloaded deliberately as versioned
+  WHOISleuth JSON, GraphML, or GEXF. All three formats use the same deterministic
+  portable node and edge identifiers, retain bounded source, time, method,
+  classification, completeness, truncation, and limitation metadata, and are
+  capped at 512 KiB. At most 8 source observations are embedded per relationship.
+  Transient focus, pin, hide, and comparison-group state is not exported; the
+  download is generated locally and is never submitted to another service.
 - The **Campaigns** tab groups existing cases into bounded browser-local
   investigations. Each campaign retains only a name, optional description,
   and up to 50 normalized case domains; it does not duplicate case evidence,
