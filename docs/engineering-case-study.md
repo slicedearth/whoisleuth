@@ -193,6 +193,7 @@ to grow.
 | Hosted cost controls | [`lib/operation-budget.mts`](../lib/operation-budget.mts) | Provider-neutral atomic leases, feature identity, failure semantics, and optional durable accounting. |
 | Historical evidence model | [`frontend/src/lib/analysis/case-model.js`](../frontend/src/lib/analysis/case-model.js) | Versioned schema migration, non-destructive imports, depth-aware comparison, and serialized storage budgets. |
 | Typed local investigation projection | [`frontend/src/lib/analysis/investigation-projection.ts`](../frontend/src/lib/analysis/investigation-projection.ts) | Future-schema-safe source reads, deterministic entities, provenance-backed edges, and explicit projection bounds without a database. |
+| Local investigation search | [`frontend/src/lib/analysis/investigation-search.ts`](../frontend/src/lib/analysis/investigation-search.ts) | Bounded deterministic ranking over known projection fields, explicit source limitations, and passive pivots without network or persistence. |
 | Public portfolio boundary | [`frontend/src/lib/analysis/demo-model.js`](../frontend/src/lib/analysis/demo-model.js) | Fixed synthetic fixtures, dependency-aware state normalization, and a deliberately distinct export contract. |
 | Browser network isolation | [`e2e/fixtures.ts`](../e2e/fixtures.ts) | Authentication setup, active off-origin request blocking, console failure collection, and scoped expected-noise handling. |
 

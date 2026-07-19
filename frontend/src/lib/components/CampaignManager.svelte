@@ -15,7 +15,7 @@
     type CampaignRecord,
   } from '$lib/campaigns';
 
-  let { records, onselect, oncount }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void}=$props();
+  let { records, onselect, oncount, focusId = '' }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;focusId?:string}=$props();
   let campaigns=$state<CampaignRecord[]>([]);
   let expandedId=$state('');
   let newName=$state('');
@@ -84,7 +84,11 @@
   }
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
-  onMount(()=>refresh());
+  onMount(()=>{
+    refresh();
+    const focused=focusId?campaigns.find((campaign)=>campaign.id===focusId):null;
+    if(focused)open(focused);
+  });
 </script>
 
 <section class="campaign-toolbar card">

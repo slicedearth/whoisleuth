@@ -915,6 +915,12 @@ existing boolean session-status endpoint so an authenticated visitor can open
 the console or sign out from a public page. Authenticated visitors land on a
 protected dashboard that links to all five investigation workspaces and shows
 only bounded counts derived from browser-local cases, watchlists, and profiles.
+The dashboard can also build a disposable in-memory search index over known
+fields in the current case, campaign, and Brand Profile stores. Search results
+retain their source, observation time, completeness, truncation, and limitation
+labels and can open the exact source record. An empty result does not establish
+absence elsewhere, and searching does not start a lookup, contact a provider,
+or save a separate index.
 From that dashboard, an optional guided investigation can keep one canonical
 domain and a bounded list of opened workflow stages in the current tab's
 `sessionStorage`. It prefills Lookup and Discover while moving through the

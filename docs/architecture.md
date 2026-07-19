@@ -139,6 +139,15 @@ without mutating or migrating a store. Compact case evidence keeps completeness
 and truncation unknown when its source-health envelope was not retained; the
 projection never fills that gap by inference.
 
+`investigation-search.ts` builds a second bounded, disposable index over that
+projection. The browser adapter reads the existing case, campaign, and Brand
+Profile stores within their established byte limits, then discards the index
+when the page is left. Search is restricted to known entity fields, returns at
+most 50 deterministically ranked matches, carries source completeness and
+truncation into every result, and performs no provider request or persisted
+write. Result links are passive pivots into the exact retained case, campaign,
+or Brand Profile where one exists.
+
 The public demo has a separate fixed schema and storage key. It uses reserved
 domains, does not call analysis APIs, cannot read or write production stores,
 and marks every downloaded package as synthetic.

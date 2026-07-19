@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import { getContext } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import BrandProfileList from '$lib/components/BrandProfileList.svelte';
@@ -36,7 +37,7 @@
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Protect" title="Brand profiles" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button class="primary" onclick={clearForm}>New profile</button><button class="btn" onclick={exportProfiles} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></PageHeading>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
-<BrandProfileList {profiles} {activeId} {activate} {edit} {remove} formatDate={baselineDate} />
+<BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
 
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {pageBaseline} {capturingIdentity} disabledReason={siteIdentityReason} {captureSiteIdentity} {save} close={()=>showForm=false} formatDate={baselineDate} />{/if}
 

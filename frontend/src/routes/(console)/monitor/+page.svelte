@@ -101,7 +101,7 @@
 
 {#if view==='campaigns'}
 <div id="panel-campaigns" role="tabpanel" aria-labelledby="tab-campaigns">
-  <CampaignManager records={cases} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} />
+  <CampaignManager records={cases} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} />
 </div>
 {/if}
 

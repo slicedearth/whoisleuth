@@ -2,11 +2,14 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
+  import InvestigationSearch from '$lib/components/InvestigationSearch.svelte';
   import { loadProfiles } from '$lib/brand-profiles';
   import { loadCases } from '$lib/cases';
+  import { loadLocalInvestigationSearchIndex } from '$lib/investigation-search';
   import { loadWatchlists } from '$lib/watchlists';
   import { referenceWorkspaces, workspaces } from '$lib/workspaces';
   import { investigationGuideHref, startInvestigationGuide } from '$lib/investigation-guide';
+  import type { InvestigationSearchIndex } from '$lib/analysis/investigation-search.ts';
 
   const quickActions = [
     { href: '/lookup', label: 'Run a lookup', detail: 'Inspect a domain, IP address, or ASN across separately attributed sources.' },
@@ -15,6 +18,7 @@
   ];
 
   let counts = $state({ cases: 0, openCases: 0, watchlists: 0, profiles: 0 });
+  let investigationIndex = $state<InvestigationSearchIndex | null>(null);
   let guideDomain = $state('');
   let guideError = $state('');
 
@@ -26,6 +30,7 @@
       watchlists: Object.keys(loadWatchlists()).length,
       profiles: loadProfiles().length,
     };
+    investigationIndex = loadLocalInvestigationSearchIndex();
   }
 
   onMount(refreshLocalSummary);
@@ -67,6 +72,8 @@
     <p class="guide-note">Starting the guide does not scan anything. Each workspace runs only when you choose its action.</p>
   </form>
 </section>
+
+<InvestigationSearch index={investigationIndex} />
 
 <section class="dashboard-section" aria-labelledby="quick-actions-title">
   <div class="section-intro">
