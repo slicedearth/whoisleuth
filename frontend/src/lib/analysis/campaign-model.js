@@ -4,6 +4,7 @@
 
 import { normalizeDomain } from './case-model.js';
 
+export const CAMPAIGN_SCHEMA = 'whoisleuth.campaigns';
 export const CAMPAIGN_SCHEMA_VERSION = 1;
 export const MAX_CAMPAIGNS = 50;
 export const MAX_CAMPAIGN_DOMAINS = 50;
@@ -201,7 +202,7 @@ function mergeCampaign(local, imported) {
 
 /** Non-destructively merge a portable export into local campaigns by id. */
 export function mergeCampaigns(localRaw, importedRaw) {
-  if (importedRaw && typeof importedRaw === 'object' && typeof importedRaw.schema === 'string' && importedRaw.schema !== 'whoisleuth.campaigns') {
+  if (importedRaw && typeof importedRaw === 'object' && typeof importedRaw.schema === 'string' && importedRaw.schema !== CAMPAIGN_SCHEMA) {
     throw new Error('This JSON file is not a WHOISleuth campaign export.');
   }
   const version = campaignStoreVersion(importedRaw);
@@ -247,7 +248,7 @@ export function assertCampaignStoreBudget(campaigns) {
 
 export function buildCampaignExport(campaigns, nowIso = new Date().toISOString()) {
   return {
-    schema: 'whoisleuth.campaigns',
+    schema: CAMPAIGN_SCHEMA,
     version: CAMPAIGN_SCHEMA_VERSION,
     exportedAt: isoOrNull(nowIso) || new Date().toISOString(),
     campaigns: normalizeCampaignStore(campaigns).campaigns,

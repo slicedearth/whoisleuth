@@ -6,6 +6,7 @@ import { normalizeDomain } from './case-model.js';
 import { normalizePageBaseline } from './page-baseline.js';
 import { isInformativeFaviconHash } from './utils.js';
 
+export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
 export const BRAND_PROFILE_SCHEMA_VERSION = 2;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
@@ -182,7 +183,7 @@ export function assertBrandProfileStoreBudget(profiles) {
 
 export function mergeBrandProfiles(localRaw, importedRaw, options = {}) {
   const imported = record(importedRaw);
-  if (imported.schema !== 'whoisleuth.brand-profiles') {
+  if (imported.schema !== BRAND_PROFILE_SCHEMA) {
     throw new Error('This JSON file is not a WHOISleuth Brand Profile export.');
   }
   if (!Array.isArray(imported.profiles)) {
@@ -220,7 +221,7 @@ export function mergeBrandProfiles(localRaw, importedRaw, options = {}) {
 
 export function buildBrandProfileExport(profiles, nowIso = new Date().toISOString()) {
   return {
-    schema: 'whoisleuth.brand-profiles',
+    schema: BRAND_PROFILE_SCHEMA,
     version: BRAND_PROFILE_SCHEMA_VERSION,
     exportedAt: timestamp(nowIso, new Date().toISOString()),
     profiles: normalizeBrandProfileStore(profiles).profiles,

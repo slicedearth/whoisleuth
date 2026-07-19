@@ -202,6 +202,13 @@ The test pyramid is designed to avoid dependence on public services:
 5. CI runs the locked install and complete sequence for pushes and pull
    requests, retaining browser artifacts only on failure.
 
+The on-demand `npm run schema:inventory` report is assembled from the owning
+contract constants and readers rather than a copied version table. Its explicit
+supported-version lists make a contract bump fail tests until legacy handling,
+future-version behavior, byte bounds, migration direction, and write semantics
+are reviewed.
+It reads no browser-local or hosted records and writes no inventory artifact.
+
 Browser tests use reserved or locally rejected inputs and actively block
 off-origin requests, so ordinary verification does not query live registries,
 DNS, Certificate Transparency, or websites.

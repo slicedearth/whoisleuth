@@ -30,6 +30,9 @@
     "cli/**/*.cts",
     "bin/**/*.ts",
     "bin/**/*.mts",
-    "bin/**/*.cts"
+    "bin/**/*.cts",
+    "tools/**/*.ts",
+    "tools/**/*.mts",
+    "tools/**/*.cts"
   ]
 }

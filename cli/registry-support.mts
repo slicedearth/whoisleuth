@@ -4,20 +4,22 @@ import {
   type RegistryStandardsCoverageSnapshot,
 } from '../lib/registry-capabilities.mts';
 
+const REGISTRY_SUPPORT_SCHEMA = 'whoisleuth.cli.registry-support';
 const REGISTRY_SUPPORT_SCHEMA_VERSION = 2;
+const REGISTRY_STANDARDS_COVERAGE_SCHEMA = 'whoisleuth.registry-standards-coverage';
 const MAX_REGISTRY_SUPPORT_TEXT_LENGTH = 2048;
 const MAX_REGISTRY_SUPPORT_REFERENCES = 20;
 const MAX_REGISTRY_SUPPORT_REFERENCE_LENGTH = 2048;
 
 type RegistrySupportDocument = {
-  schema: 'whoisleuth.cli.registry-support';
+  schema: typeof REGISTRY_SUPPORT_SCHEMA;
   version: number;
   generatedAt: string;
   requestedInput: string;
   suffix: string;
   catalogueVersion: number;
   standardsCoverage: {
-    schema: 'whoisleuth.registry-standards-coverage';
+    schema: typeof REGISTRY_STANDARDS_COVERAGE_SCHEMA;
     version: number;
     verifiedAt: string;
     rootZoneVersion: string;
@@ -96,7 +98,7 @@ function boundedCount(value: unknown, maximum = 100000): number {
 function projectStandardsCoverage(snapshot: RegistryStandardsCoverageSnapshot): RegistrySupportDocument['standardsCoverage'] {
   const counts = snapshot?.counts || {} as RegistryStandardsCoverageSnapshot['counts'];
   return {
-    schema: 'whoisleuth.registry-standards-coverage',
+    schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA,
     version: boundedCount(snapshot?.version, 1000),
     verifiedAt: boundedText(snapshot?.verifiedAt, 'unknown', 32),
     rootZoneVersion: boundedText(snapshot?.sources?.rootZoneVersion, 'unknown', 64),
@@ -129,7 +131,7 @@ function buildRegistrySupportDocument(
     throw new TypeError('Registry capability did not provide a valid suffix.');
   }
   return {
-    schema: 'whoisleuth.cli.registry-support',
+    schema: REGISTRY_SUPPORT_SCHEMA,
     version: REGISTRY_SUPPORT_SCHEMA_VERSION,
     generatedAt: boundedText(generatedAt, '', 64),
     requestedInput: boundedText(requestedInput, '', 253),
@@ -175,6 +177,8 @@ export {
   MAX_REGISTRY_SUPPORT_REFERENCE_LENGTH,
   MAX_REGISTRY_SUPPORT_REFERENCES,
   MAX_REGISTRY_SUPPORT_TEXT_LENGTH,
+  REGISTRY_STANDARDS_COVERAGE_SCHEMA,
+  REGISTRY_SUPPORT_SCHEMA,
   REGISTRY_SUPPORT_SCHEMA_VERSION,
   buildRegistrySupportDocument,
   projectStandardsCoverage,

@@ -27,7 +27,8 @@
     "check": "npm run check --workspace=frontend",
     "test:e2e": "playwright test",
     "test:e2e:built": "WHOISLEUTH_E2E_USE_BUILD=1 playwright test",
-    "test:e2e:install": "playwright install --with-deps chromium"
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "schema:inventory": "node tools/schema-inventory.mts"
   },
   "engines": {
     "node": ">=24"

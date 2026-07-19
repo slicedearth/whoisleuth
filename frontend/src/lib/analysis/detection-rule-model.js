@@ -4,6 +4,7 @@
 
 import { latestCaseEvidence } from './case-model.js';
 
+export const DETECTION_RULE_SCHEMA = 'whoisleuth.detection-rules';
 export const DETECTION_RULE_SCHEMA_VERSION = 1;
 export const MAX_DETECTION_RULES = 50;
 export const MAX_RULE_CONDITIONS = 8;
@@ -216,7 +217,7 @@ export function evaluateRuleSet(records, rawRules) {
 }
 
 export function mergeDetectionRules(localRaw, importedRaw) {
-  if (importedRaw && typeof importedRaw === 'object' && typeof importedRaw.schema === 'string' && importedRaw.schema !== 'whoisleuth.detection-rules') {
+  if (importedRaw && typeof importedRaw === 'object' && typeof importedRaw.schema === 'string' && importedRaw.schema !== DETECTION_RULE_SCHEMA) {
     throw new Error('This JSON file is not a WHOISleuth custom-rule export.');
   }
   const version = detectionRuleStoreVersion(importedRaw);
@@ -258,7 +259,7 @@ export function serializeDetectionRuleStore(rules) {
 export function buildDetectionRuleExport(rules, nowIso = new Date().toISOString()) {
   const parsed = Date.parse(nowIso);
   return {
-    schema: 'whoisleuth.detection-rules',
+    schema: DETECTION_RULE_SCHEMA,
     version: DETECTION_RULE_SCHEMA_VERSION,
     exportedAt: Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString(),
     rules: normalizeDetectionRuleStore(rules).rules,

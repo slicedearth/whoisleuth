@@ -218,9 +218,16 @@ npm test
 npm run typecheck
 npm run check
 npm run build
+npm run schema:inventory  # generated compatibility report; reads no browser or hosted data
 npm run test:e2e:install   # one-time: downloads the Chromium browser Playwright drives
 npm run test:e2e:built     # reuses the production build created above
 ```
+
+`npm run schema:inventory` generates a maintainer-readable report from the
+actual browser-store, hosted-state, export, interchange, CLI, and derived-model
+version constants. Each entry records supported legacy versions, future-version
+behavior, migration direction, write semantics, serialized bounds, and its owning module. The
+report is generated on demand and does not inspect or copy user data.
 
 ### Browser end-to-end tests
 

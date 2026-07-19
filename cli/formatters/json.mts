@@ -1,7 +1,18 @@
 import type { BulkLookupResult, ClassifiedQuery } from '../bulk.mts';
 import type { UnknownRecord } from '../saved-lookup.mts';
 
+const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
+const CLI_BULK_SCHEMA = 'whoisleuth.cli.bulk';
+const CLI_BULK_ITEM_SCHEMA = 'whoisleuth.cli.bulk.item';
+const CLI_CT_SEARCH_SCHEMA = 'whoisleuth.cli.ct-search';
+const CLI_DISCOVER_SCHEMA = 'whoisleuth.cli.discover';
+const CLI_DISCOVER_ITEM_SCHEMA = 'whoisleuth.cli.discover.item';
+const CLI_POSTURE_SCHEMA = 'whoisleuth.cli.posture';
+const CLI_HTTP_SCHEMA = 'whoisleuth.cli.http';
+const CLI_TLS_SCHEMA = 'whoisleuth.cli.tls';
+const CLI_COMPARE_SCHEMA = 'whoisleuth.cli.compare';
 const CLI_LOOKUP_SCHEMA_VERSION = 1;
+const CLI_BULK_SCHEMA_VERSION = 1;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
 const CLI_DISCOVER_SCHEMA_VERSION = 1;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
@@ -34,7 +45,7 @@ function buildCliLookupDocument(
   mode = 'fast',
 ): UnknownRecord {
   return {
-    schema: 'whoisleuth.cli.lookup',
+    schema: CLI_LOOKUP_SCHEMA,
     version: CLI_LOOKUP_SCHEMA_VERSION,
     generatedAt,
     mode: mode === 'deep' ? 'deep' : 'fast',
@@ -56,13 +67,13 @@ function buildCliCtSearchDocument(
   result: UnknownRecord,
   generatedAt = new Date().toISOString(),
 ): UnknownRecord {
-  return { ...result, schema: 'whoisleuth.cli.ct-search', version: CLI_CT_SEARCH_SCHEMA_VERSION, generatedAt, keyword };
+  return { ...result, schema: CLI_CT_SEARCH_SCHEMA, version: CLI_CT_SEARCH_SCHEMA_VERSION, generatedAt, keyword };
 }
 
 function buildCliDiscoverDocument(seed: string, result: UnknownRecord, metadata: DiscoverMetadata): UnknownRecord {
   return {
     ...result,
-    schema: 'whoisleuth.cli.discover',
+    schema: CLI_DISCOVER_SCHEMA,
     version: CLI_DISCOVER_SCHEMA_VERSION,
     generatedAt: metadata.generatedAt,
     seed,
@@ -74,7 +85,7 @@ function buildCliDiscoverDocument(seed: string, result: UnknownRecord, metadata:
 
 function discoverJsonItem(candidate: DiscoverCandidate, metadata: DiscoverMetadata): UnknownRecord {
   return {
-    schema: 'whoisleuth.cli.discover.item',
+    schema: CLI_DISCOVER_ITEM_SCHEMA,
     version: CLI_DISCOVER_SCHEMA_VERSION,
     generatedAt: metadata.generatedAt,
     seed: metadata.seed,
@@ -104,31 +115,31 @@ function versionedResult(
 }
 
 function buildCliPostureDocument(requestedDomain: string, report: UnknownRecord, generatedAt = new Date().toISOString()): UnknownRecord {
-  return versionedResult(report, 'whoisleuth.cli.posture', CLI_POSTURE_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
+  return versionedResult(report, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
 }
 
 function buildCliHttpDocument(requestedDomain: string, result: UnknownRecord, generatedAt = new Date().toISOString()): UnknownRecord {
-  return versionedResult(result, 'whoisleuth.cli.http', CLI_HTTP_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
+  return versionedResult(result, CLI_HTTP_SCHEMA, CLI_HTTP_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
 }
 
 function buildCliTlsDocument(requestedHostname: string, result: UnknownRecord, generatedAt = new Date().toISOString()): UnknownRecord {
-  return versionedResult(result, 'whoisleuth.cli.tls', CLI_TLS_SCHEMA_VERSION, generatedAt, 'requestedHostname', requestedHostname);
+  return versionedResult(result, CLI_TLS_SCHEMA, CLI_TLS_SCHEMA_VERSION, generatedAt, 'requestedHostname', requestedHostname);
 }
 
 function buildCliCompareDocument(result: UnknownRecord, generatedAt = new Date().toISOString()): UnknownRecord {
-  return { ...result, schema: 'whoisleuth.cli.compare', version: CLI_COMPARE_SCHEMA_VERSION, generatedAt };
+  return { ...result, schema: CLI_COMPARE_SCHEMA, version: CLI_COMPARE_SCHEMA_VERSION, generatedAt };
 }
 
 function bulkJsonItem(item: BulkLookupResult, metadata: BulkMetadata): UnknownRecord {
   if (!item.ok) {
     return {
-      schema: 'whoisleuth.cli.bulk.item', version: 1, generatedAt: metadata.generatedAt,
+      schema: CLI_BULK_ITEM_SCHEMA, version: CLI_BULK_SCHEMA_VERSION, generatedAt: metadata.generatedAt,
       index: item.index, query: item.query, ok: false, error: item.error,
     };
   }
   const result = item.result as UnknownRecord;
   return {
-    schema: 'whoisleuth.cli.bulk.item', version: 1, generatedAt: metadata.generatedAt,
+    schema: CLI_BULK_ITEM_SCHEMA, version: CLI_BULK_SCHEMA_VERSION, generatedAt: metadata.generatedAt,
     index: item.index, query: item.query, ok: true,
     type: item.classified.type,
     inputHostname: item.classified.inputHostname,
@@ -143,7 +154,7 @@ function bulkJsonItem(item: BulkLookupResult, metadata: BulkMetadata): UnknownRe
 function buildCliBulkDocument(items: BulkLookupResult[], metadata: BulkMetadata): UnknownRecord {
   const succeeded = items.filter((item) => item.ok).length;
   return {
-    schema: 'whoisleuth.cli.bulk', version: 1, generatedAt: metadata.generatedAt,
+    schema: CLI_BULK_SCHEMA, version: CLI_BULK_SCHEMA_VERSION, generatedAt: metadata.generatedAt,
     mode: metadata.deep ? 'deep' : 'fast',
     summary: { total: items.length, succeeded, failed: items.length - succeeded, duplicatesRemoved: metadata.duplicates || 0 },
     results: items.map((item) => bulkJsonItem(item, metadata)),
@@ -155,9 +166,12 @@ function formatJsonLines(items: BulkLookupResult[], metadata: BulkMetadata): str
 }
 
 export {
-  CLI_COMPARE_SCHEMA_VERSION, CLI_CT_SEARCH_SCHEMA_VERSION, CLI_DISCOVER_SCHEMA_VERSION,
-  CLI_HTTP_SCHEMA_VERSION, CLI_POSTURE_SCHEMA_VERSION, CLI_TLS_SCHEMA_VERSION,
-  CLI_LOOKUP_SCHEMA_VERSION, buildCliBulkDocument, buildCliCompareDocument,
+  CLI_BULK_ITEM_SCHEMA, CLI_BULK_SCHEMA, CLI_BULK_SCHEMA_VERSION,
+  CLI_COMPARE_SCHEMA, CLI_COMPARE_SCHEMA_VERSION, CLI_CT_SEARCH_SCHEMA, CLI_CT_SEARCH_SCHEMA_VERSION,
+  CLI_DISCOVER_ITEM_SCHEMA, CLI_DISCOVER_SCHEMA, CLI_DISCOVER_SCHEMA_VERSION,
+  CLI_HTTP_SCHEMA, CLI_HTTP_SCHEMA_VERSION, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION,
+  CLI_TLS_SCHEMA, CLI_TLS_SCHEMA_VERSION, CLI_LOOKUP_SCHEMA, CLI_LOOKUP_SCHEMA_VERSION,
+  buildCliBulkDocument, buildCliCompareDocument,
   buildCliCtSearchDocument, buildCliDiscoverDocument, buildCliHttpDocument,
   buildCliLookupDocument, buildCliPostureDocument, buildCliTlsDocument,
   bulkJsonItem, discoverJsonItem, formatDiscoverJsonLines, formatJsonDocument, formatJsonLines,
