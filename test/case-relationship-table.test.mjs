@@ -177,4 +177,40 @@ describe('case relationship table projection', () => {
     assert.deepEqual(cases, beforeCases);
     assert.deepEqual(options, beforeOptions);
   });
+
+  test('filters projection-backed rows without dropping their retained provenance', () => {
+    const group = {
+      type: 'nameserver_set',
+      label: 'Shared nameserver set',
+      method: 'Exact retained set',
+      value: 'ns.shared.invalid',
+      cases: [{ id: 'alpha', domain: 'alpha.invalid' }, { id: 'bravo', domain: 'bravo.invalid' }],
+      campaigns: [{ id: 'campaign-one', label: 'Review' }],
+      description: 'Retained pivot.',
+      sources: ['monitor'],
+      scanDepths: ['deep'],
+      classifications: ['normalized'],
+      firstObservedAt: CAPTURED,
+      lastObservedAt: CAPTURED,
+      complete: null,
+      truncated: false,
+      observations: [{ id: 'obs-1', source: 'monitor', store: 'cases', observedAt: CAPTURED }],
+      omittedObservations: 0,
+      limitations: [],
+    };
+    const result = projectCaseRelationshipTable({
+      state: 'ready',
+      generatedAt: CAPTURED,
+      groups: [group],
+      sources: ['monitor'],
+      scopeOptions: [{ value: 'campaign:campaign-one', kind: 'campaign', label: 'Review' }],
+      truncated: false,
+      limitations: [],
+    }, { source: 'monitor', scope: 'campaign:campaign-one', completeness: 'unknown', query: 'review' });
+    assert.equal(result.rows.length, 1);
+    assert.deepEqual(result.rows[0].observations, group.observations);
+    assert.deepEqual(result.rows[0].campaigns, group.campaigns);
+    assert.equal(result.filters.source, 'monitor');
+    assert.equal(result.filters.scope, 'campaign:campaign-one');
+  });
 });

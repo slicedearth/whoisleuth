@@ -814,19 +814,23 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
   Lookup/Bulk link forward into the matching Monitor record. Filtered cases
   are shown 25 per page; deep links and relationship pivots open the page that
   contains the requested case.
-- Expanded cases also compare their latest compact evidence against the other
-  cases already stored in that browser. Exact retained normalized nameserver
-  sets and exact final HTTP(S) origins can become bounded cross-case
-  investigation pivots. This comparison makes no network requests, creates no
-  aggregate score or ownership claim, and does not add a new persisted relationship
-  record; shared DNS, redirect, hosting, CDN, parking, and platform services
-  remain common explanations.
-- The **Relationships** tab presents those same bounded comparisons in a
-  semantic table with search, relationship-family filtering, stable sorting,
+- Expanded cases continue to compare their latest compact evidence against the
+  other cases already stored in that browser. The **Relationships** tab builds
+  a separate disposable typed projection across retained case history and
+  campaign membership. Exact normalized nameserver sets and comparable final
+  HTTP(S) origins can become bounded cross-case investigation pivots without a
+  new network request, score, or persisted relationship record. Shared DNS,
+  redirect, hosting, CDN, parking, and platform services remain common
+  explanations rather than ownership or attribution evidence.
+- The **Relationships** graph and semantic table support relationship-family,
+  source, observation-time, completeness, case, and campaign filters. Selecting
+  a relationship exposes its comparison method, classification, first and last
+  retained observation times, source observations, completeness, truncation,
+  and limitations. The table also provides bounded search, stable sorting,
   pagination, explicit partial-result labels, and direct case pivots. Each page
-  shows up to 50 relationships and each row shows up to 20 case links; the
-  table transforms into labelled stacked rows on narrow screens and creates no
-  new request, score, or stored relationship record.
+  shows up to 50 relationships, each row shows up to 20 case links, and each
+  relationship retains at most 100 provenance observations; narrow screens use
+  labelled stacked rows without page-level horizontal overflow.
 - The **Campaigns** tab groups existing cases into bounded browser-local
   investigations. Each campaign retains only a name, optional description,
   and up to 50 normalized case domains; it does not duplicate case evidence,

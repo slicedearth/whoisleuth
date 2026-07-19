@@ -1033,7 +1033,7 @@ test.describe('accessible cross-case relationship table', () => {
     ]);
 
     await expect(page.getByRole('tab', { name: /Relationships 2/ })).toHaveAttribute('aria-selected', 'true');
-    const table = page.getByRole('table', { name: 'Cross-case relationships from latest browser-local case evidence' });
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
     await expect(table).toBeVisible();
     await expect(table.getByRole('columnheader')).toHaveCount(4);
     await expect(table.getByRole('row')).toHaveCount(3);
@@ -1041,7 +1041,7 @@ test.describe('accessible cross-case relationship table', () => {
     await page.locator('.relationship-filters .search input').fill('bravo-table.invalid');
     await expect(table.getByRole('row')).toHaveCount(2);
     await expect(table).toContainText('Shared nameserver set');
-    await page.getByRole('button', { name: 'Clear' }).click();
+    await page.getByRole('group', { name: 'Relationship table controls' }).getByRole('button', { name: 'Clear filters' }).click();
     await page.locator('.relationship-filters select').first().selectOption('http_final_origin');
     await expect(table.getByRole('row')).toHaveCount(2);
     await expect(table).toContainText('Shared final website origin');
@@ -1063,7 +1063,7 @@ test.describe('accessible cross-case relationship table', () => {
     }).flat();
     await openRelationshipTable(page, records);
 
-    const table = page.getByRole('table', { name: 'Cross-case relationships from latest browser-local case evidence' });
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
     const pagination = page.getByRole('navigation', { name: 'Case relationship pages' });
     await expect(table.getByRole('row')).toHaveCount(51);
     await expect(pagination).toContainText('Page 1 of 2');
@@ -1096,7 +1096,7 @@ test.describe('accessible cross-case relationship table', () => {
       caseRecord({ id: 'graph-b', domain: 'bravo-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
     ]);
 
-    const graph = page.getByRole('group', { name: /Relationship graph/ });
+    const graph = page.locator('.graph-scroll svg');
     await expect(graph).toBeVisible();
     await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toBeVisible();
 
@@ -1108,7 +1108,7 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(inspector).toContainText('alpha-graph.invalid');
     await expect(inspector).toContainText('Shared nameserver set: ns.shared-graph.invalid');
 
-    await page.locator('.graph-controls select').selectOption('http_final_origin');
+    await page.locator('.graph-controls select').first().selectOption('http_final_origin');
     await expect(graph.getByRole('button', { name: 'Shared final website origin: https://shared-graph.invalid' })).toBeVisible();
     await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toHaveCount(0);
 
@@ -1124,6 +1124,49 @@ test.describe('accessible cross-case relationship table', () => {
     ]);
     await expect(page.getByRole('heading', { name: 'No cross-case relationships yet' })).toBeVisible();
     await expect(page.getByRole('table')).toHaveCount(0);
+  });
+
+  test('filters retained relationship history and exposes provenance and campaign context', async ({ page }) => {
+    const history = (prefix: string, source: string, capturedAt: string, riskScore: number) => snapshot({
+      id: `${prefix}-${source}`,
+      fingerprint: `${prefix}-${source}-${riskScore}`,
+      source,
+      capturedAt,
+      firstCapturedAt: capturedAt,
+      riskScore,
+      nameservers: ['ns.provenance.invalid'],
+    });
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'prov-a', domain: 'provenance-a.invalid', updatedAt: '2026-07-18T00:00:00.000Z', evidenceHistory: [history('a', 'import', '2026-07-01T00:00:00.000Z', 10), history('a', 'lookup', '2026-07-18T00:00:00.000Z', 20)] }),
+      caseRecord({ id: 'prov-b', domain: 'provenance-b.invalid', updatedAt: '2026-07-18T00:00:00.000Z', evidenceHistory: [history('b', 'monitor', '2026-07-02T00:00:00.000Z', 11), history('b', 'lookup', '2026-07-18T00:00:00.000Z', 21)] }),
+    ]);
+    await page.evaluate(() => {
+      localStorage.setItem('whoisleuth-campaigns-v1', JSON.stringify({ version: 1, campaigns: [{
+        id: 'provenance-campaign', name: 'Provenance review', description: '',
+        domains: ['provenance-a.invalid', 'provenance-b.invalid'],
+        createdAt: '2026-07-10T00:00:00.000Z', updatedAt: '2026-07-18T00:00:00.000Z',
+      }] }));
+    });
+    await page.reload();
+    await page.getByRole('tab', { name: /Relationships/ }).click();
+
+    const graphControls = page.getByRole('group', { name: 'Relationship graph filters' });
+    await graphControls.getByLabel('Source').selectOption('import');
+    await graphControls.getByLabel('Completeness').selectOption('unknown');
+    await graphControls.getByLabel('Case or campaign').selectOption('campaign:provenance-campaign');
+    await expect(graphControls.getByRole('status')).toContainText('1 matching relationship');
+    const inspector = page.locator('.relationship-graph .inspector');
+    await expect(inspector).toContainText('Import, Lookup, Monitor');
+    await expect(inspector).toContainText('Provenance review');
+    await inspector.getByText(/Source observations/).click();
+    await expect(inspector).toContainText('Cases · Deep');
+
+    const tableControls = page.getByRole('group', { name: 'Relationship table controls' });
+    await tableControls.getByLabel('Source').selectOption('monitor');
+    await tableControls.getByLabel('Case or campaign').selectOption('campaign:provenance-campaign');
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
+    await expect(table).toContainText('Provenance review');
+    await expect(table).toContainText('Import, Lookup, Monitor');
   });
 
   test('sorts relationship rows by case count in both directions', async ({ page }) => {
@@ -1162,7 +1205,7 @@ test.describe('accessible cross-case relationship table', () => {
       caseRecord({ id: 'mobile-rel-a', domain: 'long-mobile-relationship-member-a.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
       caseRecord({ id: 'mobile-rel-b', domain: 'long-mobile-relationship-member-b.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
     ]);
-    await expect(page.getByRole('table', { name: 'Cross-case relationships from latest browser-local case evidence' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });

@@ -12,6 +12,7 @@ import {
   buildInvestigationSearchIndex,
   type InvestigationSearchIndex,
 } from './analysis/investigation-search.ts';
+import type { InvestigationProjection } from './analysis/investigation-projection.ts';
 
 function readBoundedStore(key: string, maximumBytes: number): unknown {
   try {
@@ -24,12 +25,24 @@ function readBoundedStore(key: string, maximumBytes: number): unknown {
   }
 }
 
-/** Builds a disposable in-memory index from the current browser's local stores. */
-export function loadLocalInvestigationSearchIndex(): InvestigationSearchIndex {
-  const projection = buildInvestigationProjection({
+/** Builds a disposable projection from the current browser's bounded stores. */
+export function loadLocalInvestigationProjection(): InvestigationProjection {
+  return buildInvestigationProjection({
     cases: readBoundedStore(CASES_KEY, MAX_CASE_STORE_BYTES),
     campaigns: readBoundedStore(CAMPAIGNS_KEY, MAX_CAMPAIGN_STORE_BYTES),
     brandProfiles: readBoundedStore(PROFILES_KEY, MAX_PROFILE_STORE_BYTES),
   });
-  return buildInvestigationSearchIndex(projection);
+}
+
+/** Builds the relationship workspace projection without unrelated profile data. */
+export function loadLocalCaseInvestigationProjection(): InvestigationProjection {
+  return buildInvestigationProjection({
+    cases: readBoundedStore(CASES_KEY, MAX_CASE_STORE_BYTES),
+    campaigns: readBoundedStore(CAMPAIGNS_KEY, MAX_CAMPAIGN_STORE_BYTES),
+  });
+}
+
+/** Builds a disposable in-memory index from the current browser's local stores. */
+export function loadLocalInvestigationSearchIndex(): InvestigationSearchIndex {
+  return buildInvestigationSearchIndex(loadLocalInvestigationProjection());
 }

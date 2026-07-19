@@ -3,7 +3,10 @@
 // filtering, sorting, pagination, and per-row member caps for an accessible
 // table.
 
-import { buildCaseRelationships } from './case-relationships.js';
+import {
+  buildCaseRelationships,
+  filterInvestigationCaseRelationships,
+} from './case-relationships.js';
 
 export const CASE_RELATIONSHIP_TABLE_VERSION = 1;
 export const MAX_RELATIONSHIP_TABLE_ROWS = 50;
@@ -33,7 +36,14 @@ function normalizePage(value) {
 }
 
 function searchable(group) {
-  return [group.label, group.method, group.value, ...group.cases.map((item) => item.domain)]
+  return [
+    group.label,
+    group.method,
+    group.value,
+    ...(Array.isArray(group.sources) ? group.sources : []),
+    ...(Array.isArray(group.campaigns) ? group.campaigns.map((item) => item.label) : []),
+    ...group.cases.map((item) => item.domain),
+  ]
     .join('\u0000')
     .toLowerCase();
 }
@@ -51,7 +61,7 @@ function compareRows(left, right, sort) {
 
 /**
  * @param {unknown} rawCases
- * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,page?:unknown}} [rawOptions]
+ * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,source?:unknown,period?:unknown,completeness?:unknown,scope?:unknown,page?:unknown}} [rawOptions]
  */
 export function buildCaseRelationshipTable(rawCases, rawOptions = {}) {
   return projectCaseRelationshipTable(buildCaseRelationships(rawCases), rawOptions);
@@ -62,19 +72,21 @@ export function buildCaseRelationshipTable(rawCases, rawOptions = {}) {
  * summary. Components can derive the summary from case records once, then use
  * this inexpensive projection for interactive filtering and sorting.
  * @param {ReturnType<typeof buildCaseRelationships>} summary
- * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,page?:unknown}} [rawOptions]
+ * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,source?:unknown,period?:unknown,completeness?:unknown,scope?:unknown,page?:unknown}} [rawOptions]
  */
 export function projectCaseRelationshipTable(summary, rawOptions = {}) {
-  const type = normalizeOption(rawOptions.type, TYPES, 'all');
+  const projectionBacked = summary?.state === 'ready';
+  const provenanceFiltered = projectionBacked
+    ? filterInvestigationCaseRelationships(summary, rawOptions)
+    : null;
+  const type = provenanceFiltered?.filters.type || normalizeOption(rawOptions.type, TYPES, 'all');
   const query = normalizeQuery(rawOptions.query);
   const sort = normalizeOption(rawOptions.sort, SORTS, 'type');
   const direction = normalizeOption(rawOptions.direction, DIRECTIONS, 'asc');
   const requestedPage = normalizePage(rawOptions.page);
 
-  const filtered = summary.groups.filter((group) => (
-    (type === 'all' || group.type === type)
-    && (!query || searchable(group).includes(query))
-  ));
+  const sourceGroups = provenanceFiltered?.groups || summary.groups.filter((group) => type === 'all' || group.type === type);
+  const filtered = sourceGroups.filter((group) => !query || searchable(group).includes(query));
 
   const sorted = [...filtered].map((group) => ({
     ...group,
@@ -101,7 +113,7 @@ export function projectCaseRelationshipTable(summary, rawOptions = {}) {
   return {
     version: CASE_RELATIONSHIP_TABLE_VERSION,
     rows,
-    totalRelationships: summary.groups.length,
+    totalRelationships: provenanceFiltered?.totalRelationships ?? summary.groups.length,
     matchingRelationships: filtered.length,
     currentPage,
     pageCount,
@@ -109,7 +121,16 @@ export function projectCaseRelationshipTable(summary, rawOptions = {}) {
     rangeStart: rows.length ? pageStart + 1 : 0,
     rangeEnd: pageStart + rows.length,
     truncated,
-    filters: { type, query, sort, direction },
+    filters: {
+      ...(provenanceFiltered?.filters || { type }),
+      query,
+      sort,
+      direction,
+    },
+    state: summary?.state || 'legacy',
+    sources: Array.isArray(summary?.sources) ? summary.sources : [],
+    scopeOptions: Array.isArray(summary?.scopeOptions) ? summary.scopeOptions : [],
+    filterOptionsTruncated: summary?.filterOptionsTruncated === true,
     limitations: summary.limitations,
   };
 }

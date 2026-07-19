@@ -107,4 +107,42 @@ describe('case relationship graph projection', () => {
     assert.ok(graph.caseNodes.every((node) => node.displayLabel.endsWith('…')));
     assert.deepEqual(cases, before);
   });
+
+  test('retains projection provenance while applying the shared source and scope filters', () => {
+    const observation = { id: 'obs-1', source: 'monitor', store: 'cases', observedAt: CAPTURED };
+    const group = {
+      type: 'nameserver_set',
+      label: 'Shared nameserver set',
+      method: 'Exact retained set',
+      value: 'ns.shared.invalid',
+      cases: [{ id: 'alpha', domain: 'alpha.invalid' }, { id: 'bravo', domain: 'bravo.invalid' }],
+      campaigns: [{ id: 'campaign-one', label: 'Review' }],
+      description: 'Retained pivot.',
+      sources: ['monitor'],
+      scanDepths: ['deep'],
+      classifications: ['normalized'],
+      firstObservedAt: CAPTURED,
+      lastObservedAt: CAPTURED,
+      complete: null,
+      truncated: false,
+      observations: [observation],
+      omittedObservations: 0,
+      limitations: ['Compact evidence is partial.'],
+    };
+    const graph = projectCaseRelationshipGraph({
+      state: 'ready',
+      generatedAt: CAPTURED,
+      groups: [group],
+      sources: ['monitor'],
+      scopeOptions: [{ value: 'campaign:campaign-one', kind: 'campaign', label: 'Review' }],
+      truncated: false,
+      limitations: [],
+    }, { source: 'monitor', scope: 'campaign:campaign-one', completeness: 'unknown' });
+    assert.equal(graph.relationshipNodes.length, 1);
+    assert.deepEqual(graph.relationshipNodes[0].observations, [observation]);
+    assert.deepEqual(graph.relationshipNodes[0].campaigns, [{ id: 'campaign-one', label: 'Review' }]);
+    assert.equal(graph.relationshipNodes[0].complete, null);
+    assert.equal(graph.filters.source, 'monitor');
+    assert.equal(graph.filters.scope, 'campaign:campaign-one');
+  });
 });

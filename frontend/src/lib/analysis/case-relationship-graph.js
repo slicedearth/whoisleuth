@@ -2,7 +2,10 @@
 // summary. This is an overview only: the accessible relationship table remains
 // the complete inspection surface and no new evidence or network work occurs.
 
-import { buildCaseRelationships } from './case-relationships.js';
+import {
+  buildCaseRelationships,
+  filterInvestigationCaseRelationships,
+} from './case-relationships.js';
 
 export const CASE_RELATIONSHIP_GRAPH_VERSION = 1;
 export const MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS = 12;
@@ -42,10 +45,14 @@ export function buildCaseRelationshipGraph(rawCases) {
  */
 export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
   const allGroups = Array.isArray(summary?.groups) ? summary.groups : [];
-  const type = typeof rawOptions?.type === 'string' && RELATIONSHIP_TYPES.has(rawOptions.type)
+  const projectionBacked = summary?.state === 'ready';
+  const filtered = projectionBacked
+    ? filterInvestigationCaseRelationships(summary, rawOptions)
+    : null;
+  const type = filtered?.filters.type || (typeof rawOptions?.type === 'string' && RELATIONSHIP_TYPES.has(rawOptions.type)
     ? rawOptions.type
-    : 'all';
-  const sourceGroups = type === 'all' ? allGroups : allGroups.filter((group) => group.type === type);
+    : 'all');
+  const sourceGroups = filtered?.groups || (type === 'all' ? allGroups : allGroups.filter((group) => group.type === type));
   const groups = sourceGroups.slice(0, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS);
   const cases = new Map();
 
@@ -103,6 +110,17 @@ export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
     method: group.method,
     description: group.description,
     cases: group.cases,
+    campaigns: Array.isArray(group.campaigns) ? group.campaigns : [],
+    sources: Array.isArray(group.sources) ? group.sources : [],
+    scanDepths: Array.isArray(group.scanDepths) ? group.scanDepths : [],
+    classifications: Array.isArray(group.classifications) ? group.classifications : [],
+    firstObservedAt: group.firstObservedAt || '',
+    lastObservedAt: group.lastObservedAt || '',
+    complete: typeof group.complete === 'boolean' ? group.complete : null,
+    truncated: group.truncated === true,
+    observations: Array.isArray(group.observations) ? group.observations : [],
+    omittedObservations: Number.isSafeInteger(group.omittedObservations) ? group.omittedObservations : 0,
+    limitations: Array.isArray(group.limitations) ? group.limitations : [],
     x: RELATIONSHIP_X,
     y: yPosition(position, retainedGroups.length),
     width: NODE_WIDTH,
@@ -137,9 +155,13 @@ export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
     caseNodes,
     relationshipNodes,
     edges: positionedEdges,
-    totalRelationships: allGroups.length,
-    matchingRelationships: sourceGroups.length,
-    filters: { type },
+    totalRelationships: filtered?.totalRelationships ?? allGroups.length,
+    matchingRelationships: filtered?.matchingRelationships ?? sourceGroups.length,
+    filters: filtered?.filters || { type },
+    state: summary?.state || 'legacy',
+    sources: Array.isArray(summary?.sources) ? summary.sources : [],
+    scopeOptions: Array.isArray(summary?.scopeOptions) ? summary.scopeOptions : [],
+    filterOptionsTruncated: summary?.filterOptionsTruncated === true,
     truncated,
     limitations: Array.isArray(summary?.limitations) ? summary.limitations : [],
   };

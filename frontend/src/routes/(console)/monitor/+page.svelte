@@ -14,7 +14,8 @@
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
-  import { buildCaseRelationships } from '$lib/analysis/case-relationships.js';
+  import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.js';
+  import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
@@ -46,8 +47,10 @@
   let cases=$state<CaseRecord[]>([]);
   let casePage=$state(1);
   let campaignCount=$state(0);
-  let relationshipCount=$state(0);
+  let investigationProjection=$state<unknown>(null);
   let customRuleCount=$state(0);
+  const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
+  const relationshipCount=$derived(relationshipSummary.groups.length);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
   const statusOrder=new Map(CASE_STATUSES.map((item,index)=>[item.value,index]));
@@ -69,7 +72,8 @@
   const pagedCases=$derived(filteredCases.slice((currentCasePage-1)*CASE_PAGE_SIZE,currentCasePage*CASE_PAGE_SIZE));
   function setCasePage(value:number){casePage=Math.min(casePageCount,Math.max(1,Math.trunc(value)));}
   function showCasePage(record:CaseRecord){const index=filteredCases.findIndex(item=>item.id===record.id);if(index>=0)casePage=Math.floor(index/CASE_PAGE_SIZE)+1;}
-  function refreshCases(){cases=loadCases();relationshipCount=buildCaseRelationships(cases).groups.length;if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
+  function refreshRelationships(){investigationProjection=loadLocalCaseInvestigationProjection();}
+  function refreshCases(){cases=loadCases();refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
   function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);}
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
@@ -101,14 +105,14 @@
 
 {#if view==='campaigns'}
 <div id="panel-campaigns" role="tabpanel" aria-labelledby="tab-campaigns">
-  <CampaignManager records={cases} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>campaignCount=count} />
+  <CampaignManager records={cases} focusId={page.url.searchParams.get('campaign') || ''} onselect={openRelatedCase} oncount={(count)=>{campaignCount=count;refreshRelationships();}} />
 </div>
 {/if}
 
 {#if view==='relationships'}
 <div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
-  <CaseRelationshipGraph records={cases} onselect={openRelatedCase} />
-  <CaseRelationshipTable records={cases} onselect={openRelatedCase} />
+  <CaseRelationshipGraph records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
+  <CaseRelationshipTable records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
 </div>
 {/if}
 
