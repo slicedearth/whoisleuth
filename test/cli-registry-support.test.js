@@ -75,8 +75,12 @@ describe('versioned registry-support document', () => {
     });
     const document = buildRegistrySupportDocument('example.test', capability, 5, '2026-07-17T00:00:00.000Z');
     assert.equal(document.schema, 'whoisleuth.cli.registry-support');
-    assert.equal(document.version, 1);
+    assert.equal(document.version, 2);
     assert.equal(document.catalogueVersion, 5);
+    assert.deepEqual(document.standardsCoverage.genericAndRestricted, {
+      total: 1113,
+      rdapCovered: 1113,
+    });
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.verification.fixtureScenarios.length, MAX_REGISTRY_SUPPORT_REFERENCES);
     assert.deepEqual(document.verification.files, ['fixtures/safe.test.js']);
@@ -105,11 +109,12 @@ describe('registry-support runner', () => {
     assert.equal(stderr.value(), '');
     assert.equal(lookupCalled, false);
     const document = JSON.parse(stdout.value());
-    assert.equal(document.catalogueVersion, 24);
+    assert.equal(document.catalogueVersion, 25);
     assert.equal(document.suffix, 'uk');
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.profile.coverageState, 'fixture_verified');
     assert.equal(document.interpretation.liveReachability, 'not_tested');
+    assert.equal(document.standardsCoverage.verifiedAt, '2026-07-19');
     assert.match(document.interpretation.statement, /does not test current live reachability/);
   });
 
@@ -155,6 +160,26 @@ describe('registry-support runner', () => {
     assert.match(stdout.value(), /Suffix\s+\.ch/);
     assert.match(stdout.value(), /Registry policy restricted/);
     assert.match(stdout.value(), /missing registry data is not evidence/i);
+  });
+
+  test('renders sponsored and infrastructure exceptions from the shared catalogue', async () => {
+    const military = capture();
+    assert.equal(await runCli(['registry-support', '.mil'], {
+      stdout: military.stream,
+      stderr: capture().stream,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(military.value(), /Registry class Sponsored/);
+    assert.match(military.value(), /RDAP access\s+No service published by IANA/);
+    assert.match(military.value(), /WHOIS access\s+No service published by IANA/);
+    assert.match(military.value(), /gTLD RDAP\s+1113 \/ 1113/);
+
+    const infrastructure = capture();
+    assert.equal(await runCli(['registry-support', '.arpa'], {
+      stdout: infrastructure.stream,
+      stderr: capture().stream,
+    }), EXIT_CODES.SUCCESS);
+    assert.match(infrastructure.value(), /Registry class Infrastructure/);
+    assert.match(infrastructure.value(), /not ordinary public registration/i);
   });
 
   test('quiet mode performs validation without writing output', async () => {

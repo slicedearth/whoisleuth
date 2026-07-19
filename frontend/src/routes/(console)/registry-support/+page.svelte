@@ -10,6 +10,7 @@
   } from '$lib/analysis/registry-support.js';
 
   const catalogue = registrySupportCatalogue();
+  const standards = catalogue.standardsCoverage;
   let query = $state('');
   let coverage = $state('all');
   let inspectionInput = $state('');
@@ -45,6 +46,45 @@
   <article class="card"><span>Fixture verified</span><strong>{catalogue.summary.fixtureVerified}</strong><p>Profiles exercised by bounded local fixtures</p></article>
   <article class="card"><span>Access documented</span><strong>{catalogue.summary.accessDocumented}</strong><p>Profiles with a documented collection constraint</p></article>
   <article class="card"><span>Fallbacks</span><strong>{catalogue.summary.fallbacks}</strong><p>Bounded non-port-43 collection profiles</p></article>
+</section>
+
+<section class="standards-section" aria-labelledby="standards-title">
+  <header class="section-intro">
+    <p class="eyebrow">Standards coverage</p>
+    <h2 id="standards-title">Generic TLD RDAP snapshot</h2>
+    <p>Current generic services are handled through live IANA bootstrap discovery and shared bounded RDAP parsing, not duplicated suffix profiles. This embedded snapshot records published coverage at the stated verification date; it is not a live endpoint check.</p>
+  </header>
+
+  <div class="standards-grid">
+    <article class="card">
+      <span>Generic + restricted</span>
+      <strong>{standards.counts.genericAndRestrictedRdapCovered} / {standards.counts.generic + standards.counts.genericRestricted}</strong>
+      <p>Current delegations present in the IANA RDAP bootstrap</p>
+    </article>
+    <article class="card">
+      <span>Sponsored</span>
+      <strong>{standards.counts.sponsoredRdapCovered} / {standards.counts.sponsored}</strong>
+      <p>Published RDAP coverage, with exceptions kept explicit</p>
+    </article>
+    <article class="card">
+      <span>Bootstrap groups</span>
+      <strong>{standards.counts.rdapBootstrapServiceGroups}</strong>
+      <p>Bounded IANA service groups in the source snapshot</p>
+    </article>
+    <article class="card">
+      <span>Verified</span>
+      <strong>{standards.verifiedAt}</strong>
+      <p>Root-zone version {standards.sources.rootZoneVersion}</p>
+    </article>
+  </div>
+
+  <div class="standards-notes card">
+    <div>
+      <h3>Explicit exceptions</h3>
+      <p><code>.edu</code> remains fixture-backed WHOIS-only, <code>.mil</code> has no IANA-published public domain service, and <code>.arpa</code> is infrastructure rather than ordinary public registration space.</p>
+    </div>
+    <p>{standards.interpretation}</p>
+  </div>
 </section>
 
 <section class="inspector-section" aria-labelledby="inspector-title">
@@ -172,6 +212,7 @@
   .summary-grid span{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}
   .summary-grid strong{grid-row:1 / span 2;grid-column:2;color:var(--accent2);font:750 1.55rem var(--mono)}
   .summary-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
+  .standards-section{margin-top:34px}.standards-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.standards-grid article{display:grid;gap:6px;padding:16px}.standards-grid span{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.standards-grid strong{color:var(--accent2);font:750 1.2rem var(--mono);overflow-wrap:anywhere}.standards-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}.standards-notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:8px;padding:16px}.standards-notes h3{margin:0 0 6px;font:700 var(--text-sm) var(--mono)}.standards-notes p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.standards-notes code{color:var(--accent)}
   .catalogue-section{margin-top:34px}
   .inspector-section{margin-top:34px}
   .section-intro{max-width:840px;margin-bottom:14px}.section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}.section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
@@ -190,6 +231,6 @@
   .profile-detail dl{display:grid;gap:7px;margin:0}.profile-detail dl>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px}.profile-detail dt{color:var(--muted);font:600 var(--text-2xs) var(--mono)}.profile-detail dd{min-width:0;margin:0;overflow-wrap:anywhere}.profile-detail h3{margin:0 0 5px;font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.profile-detail ul{display:grid;gap:4px;margin:0;padding-left:18px}.profile-detail a{color:var(--accent);overflow-wrap:anywhere}.reference{display:block;max-width:100%;color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}.limitation{margin:0;color:var(--muted);line-height:1.5}.limitation strong{color:var(--text)}
   .interpretation{display:grid;grid-template-columns:minmax(190px,.7fr) minmax(0,1.3fr);gap:14px 28px;margin-top:24px;padding:18px}.interpretation h2{margin:3px 0 0;font:700 var(--text-md) var(--mono)}.interpretation p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation p:last-child{grid-column:2}.interpretation code{color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-  @media(max-width:900px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.inspection-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}.table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}.interpretation{grid-template-columns:1fr}.interpretation p:last-child{grid-column:1}}
-  @media(max-width:560px){.summary-grid{grid-template-columns:1fr}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
+  @media(max-width:900px){.summary-grid,.standards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.standards-notes{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}.table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}.interpretation{grid-template-columns:1fr}.interpretation p:last-child{grid-column:1}}
+  @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
 </style>

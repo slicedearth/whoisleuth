@@ -1,6 +1,10 @@
-import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
+import {
+  registryStandardsCoverageSnapshot,
+  type RegistryCompatibilityRow,
+  type RegistryStandardsCoverageSnapshot,
+} from '../lib/registry-capabilities.mts';
 
-const REGISTRY_SUPPORT_SCHEMA_VERSION = 1;
+const REGISTRY_SUPPORT_SCHEMA_VERSION = 2;
 const MAX_REGISTRY_SUPPORT_TEXT_LENGTH = 2048;
 const MAX_REGISTRY_SUPPORT_REFERENCES = 20;
 const MAX_REGISTRY_SUPPORT_REFERENCE_LENGTH = 2048;
@@ -12,6 +16,17 @@ type RegistrySupportDocument = {
   requestedInput: string;
   suffix: string;
   catalogueVersion: number;
+  standardsCoverage: {
+    schema: 'whoisleuth.registry-standards-coverage';
+    version: number;
+    verifiedAt: string;
+    rootZoneVersion: string;
+    rdapBootstrapPublication: string;
+    genericAndRestricted: { total: number; rdapCovered: number };
+    sponsored: { total: number; rdapCovered: number };
+    infrastructure: { total: number; rdapCovered: number };
+    interpretation: string;
+  };
   profile: {
     id: string;
     explicitSuffixProfile: boolean;
@@ -72,11 +87,42 @@ function boundedList(values: unknown, kind: 'token' | 'file' | 'url'): string[] 
   return output;
 }
 
+function boundedCount(value: unknown, maximum = 100000): number {
+  return Number.isSafeInteger(value) && Number(value) >= 0
+    ? Math.min(Number(value), maximum)
+    : 0;
+}
+
+function projectStandardsCoverage(snapshot: RegistryStandardsCoverageSnapshot): RegistrySupportDocument['standardsCoverage'] {
+  const counts = snapshot?.counts || {} as RegistryStandardsCoverageSnapshot['counts'];
+  return {
+    schema: 'whoisleuth.registry-standards-coverage',
+    version: boundedCount(snapshot?.version, 1000),
+    verifiedAt: boundedText(snapshot?.verifiedAt, 'unknown', 32),
+    rootZoneVersion: boundedText(snapshot?.sources?.rootZoneVersion, 'unknown', 64),
+    rdapBootstrapPublication: boundedText(snapshot?.sources?.rdapBootstrapPublication, 'unknown', 64),
+    genericAndRestricted: {
+      total: boundedCount(counts.generic) + boundedCount(counts.genericRestricted),
+      rdapCovered: boundedCount(counts.genericAndRestrictedRdapCovered),
+    },
+    sponsored: {
+      total: boundedCount(counts.sponsored),
+      rdapCovered: boundedCount(counts.sponsoredRdapCovered),
+    },
+    infrastructure: {
+      total: boundedCount(counts.infrastructure),
+      rdapCovered: boundedCount(counts.infrastructureRdapCovered),
+    },
+    interpretation: boundedText(snapshot?.interpretation),
+  };
+}
+
 function buildRegistrySupportDocument(
   requestedInput: string,
   capability: RegistryCompatibilityRow,
   catalogueVersion: number,
   generatedAt = new Date().toISOString(),
+  standardsSnapshot = registryStandardsCoverageSnapshot(),
 ): RegistrySupportDocument {
   const suffix = boundedText(capability.suffixes?.[0], '', 63).toLowerCase();
   if (!suffix || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(suffix)) {
@@ -89,6 +135,7 @@ function buildRegistrySupportDocument(
     requestedInput: boundedText(requestedInput, '', 253),
     suffix,
     catalogueVersion: Number.isSafeInteger(catalogueVersion) && catalogueVersion > 0 ? catalogueVersion : 0,
+    standardsCoverage: projectStandardsCoverage(standardsSnapshot),
     profile: {
       id: boundedText(capability.id, 'unknown', 128),
       explicitSuffixProfile: capability.explicitSuffixProfile === true,
@@ -130,5 +177,6 @@ export {
   MAX_REGISTRY_SUPPORT_TEXT_LENGTH,
   REGISTRY_SUPPORT_SCHEMA_VERSION,
   buildRegistrySupportDocument,
+  projectStandardsCoverage,
 };
 export type { RegistrySupportDocument };

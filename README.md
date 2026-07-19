@@ -341,16 +341,23 @@ compact-storage boundary, and lookup evidence schema are documented in the
   deployments expose the same embedded catalogue in the **Registry support**
   reference workspace, with local text and coverage filters plus an offline
   domain-or-suffix inspector for generic IANA discovery fallback.
-  Catalogue version 24 contains 310 explicit suffix rows: 218 fixture verified
-  and 92 access documented. It includes an explicit profile for every currently
-  assigned country-code delegation plus the existing `.edu` registry profile.
-  Its latest depth increment adds a registry-scoped Unicode query for the
-  Bulgarian IDN and reuses exact shared WHOIS-service fixtures for the
-  Mongolian and Qatari IDNs. Seventeen IANA-published referrals remain access
-  documented because unavailable, restricted, prohibited, reserved, or
-  otherwise inconclusive responses are not parser or availability evidence.
-  Fixture scenarios claim only the represented behavior and make no automated
-  registry requests.
+  Catalogue version 25 contains 312 explicit suffix rows: 218 fixture verified
+  and 94 access documented. It includes an explicit profile for every currently
+  assigned country-code delegation plus `.edu`, `.mil`, and `.arpa`. `.edu` is
+  represented as a sponsored, fixture-backed WHOIS-only service; `.mil` has no
+  IANA-published public domain WHOIS or RDAP service; and `.arpa` is identified
+  as infrastructure rather than ordinary public registration space. The same
+  model exposes a versioned official-source snapshot verified on 19 July 2026.
+  That snapshot records all 1,113 current generic and generic-restricted TLDs
+  in IANA's RDAP bootstrap, 12 of 14 sponsored TLDs, and no RDAP service for
+  the single infrastructure TLD. Runtime lookup still resolves current IANA
+  bootstrap data, while the embedded snapshot provides dated coverage context
+  only. Thick and thin registry behavior is exercised through shared bounded
+  RDAP fixture families instead of duplicated per-suffix parsers. Seventeen
+  IANA-published country-code referrals remain access documented because
+  unavailable, restricted, prohibited, reserved, or otherwise inconclusive
+  responses are not parser or availability evidence. Fixture scenarios claim
+  only the represented behavior and make no automated registry requests.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,

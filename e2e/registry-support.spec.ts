@@ -24,9 +24,15 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v24')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('310');
-  await expect(page.locator('tbody tr')).toHaveCount(310);
+  await expect(page.getByText('Catalogue v25')).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('312');
+  await expect(page.locator('tbody tr')).toHaveCount(312);
+  const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
+  await expect(standards).toContainText('1113 / 1113');
+  await expect(standards).toContainText('12 / 14');
+  await expect(standards).toContainText('.edu');
+  await expect(standards).toContainText('.mil');
+  await expect(standards).toContainText('.arpa');
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -52,12 +58,14 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(92);
+  await expect(page.locator('tbody tr')).toHaveCount(94);
   await expect(page.locator('tbody')).toContainText('.ao');
   await expect(page.locator('tbody')).toContainText('.ch');
   await expect(page.locator('tbody')).toContainText('.es');
   await expect(page.locator('tbody')).toContainText('.vn');
   await expect(page.locator('tbody')).toContainText('.gr');
+  await expect(page.locator('tbody')).toContainText('.mil');
+  await expect(page.locator('tbody')).toContainText('.arpa');
   await expect(page.locator('tbody')).toContainText('.zw');
 
   await search.fill('no matching capability');
@@ -98,6 +106,12 @@ test('the local inspector explains explicit and generic suffix support without a
   await expect(result).toContainText('.com');
   await expect(result).toContainText('Discovery only');
   await expect(result).toContainText('IANA bootstrap discovery');
+
+  await input.fill('.mil');
+  await page.getByRole('button', { name: 'Inspect support' }).click();
+  await expect(result).toContainText('Explicit suffix profile');
+  await expect(result).toContainText('Sponsored');
+  await expect(result).toContainText('No service published by IANA');
 
   await input.fill('portal.example.uk');
   await page.getByRole('button', { name: 'Inspect support' }).click();
@@ -142,7 +156,7 @@ test('the registry-support reference remains readable without horizontal overflo
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
 
   const sectionIntros = page.locator('.section-intro');
-  await expect(sectionIntros).toHaveCount(2);
+  await expect(sectionIntros).toHaveCount(3);
   await expect(sectionIntros.first()).toHaveCSS('display', 'block');
   for (const heading of await sectionIntros.getByRole('heading').all()) {
     const box = await heading.boundingBox();

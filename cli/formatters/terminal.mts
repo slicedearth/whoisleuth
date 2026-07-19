@@ -77,11 +77,19 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
   const fixtures = Array.isArray(verification.fixtureScenarios) ? verification.fixtureScenarios : [];
   const files = Array.isArray(verification.files) ? verification.files : [];
   const documentation = Array.isArray(verification.documentationUrls) ? verification.documentationUrls : [];
+  const standards = document.standardsCoverage && typeof document.standardsCoverage === 'object'
+    ? document.standardsCoverage
+    : {};
+  const genericCoverage = standards.genericAndRestricted && typeof standards.genericAndRestricted === 'object'
+    ? standards.genericAndRestricted
+    : {};
   const supportLabel = (value: unknown) => titleCase(safeTerminalValue(value, 'unknown').replaceAll('-', '_'));
   const lines = [
     `Input          ${safeTerminalValue(document.requestedInput)}`,
     `Suffix         .${safeTerminalValue(document.suffix)}`,
     `Catalogue      Version ${safeTerminalValue(document.catalogueVersion, '0')}`,
+    `gTLD RDAP      ${safeTerminalValue(genericCoverage.rdapCovered, '0')} / ${safeTerminalValue(genericCoverage.total, '0')}`,
+    `Coverage date  ${safeTerminalValue(standards.verifiedAt, 'unknown')}`,
     `Profile        ${profile.explicitSuffixProfile ? 'Explicit suffix profile' : 'Generic IANA discovery profile'}`,
     `Profile ID     ${safeTerminalValue(profile.id)}`,
     `Registry class ${supportLabel(profile.registryClass)}`,

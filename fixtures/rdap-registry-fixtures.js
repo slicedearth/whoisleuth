@@ -18,6 +18,7 @@ module.exports = [
   {
     name: 'thick domain registry object',
     type: 'domain',
+    serviceFamily: 'thick-registry',
     input: {
       objectClassName: 'domain',
       handle: 'DOMAIN-1',
@@ -64,6 +65,7 @@ module.exports = [
   {
     name: 'thin domain registry object without registrant publication',
     type: 'domain',
+    serviceFamily: 'thin-registry-with-registrar-link',
     input: {
       objectClassName: 'domain',
       handle: 'DOMAIN-2',

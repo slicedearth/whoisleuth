@@ -3,7 +3,7 @@
 // referred registry query after a fixture-backed adapter is integrated.
 
 type CoverageState = 'discovery_only' | 'access_documented' | 'fixture_verified';
-type RegistryClass = 'country-code' | 'generic' | 'unknown';
+type RegistryClass = 'country-code' | 'generic' | 'generic-restricted' | 'sponsored' | 'infrastructure' | 'unknown';
 type WhoisQueryProfile =
   | 'plain-domain'
   | 'denic-domain-ace'
@@ -36,6 +36,39 @@ type RegistryCompatibilityRow = RegistryCapability & {
   explicitSuffixProfile: boolean;
 };
 
+type RegistryStandardsCoverageSnapshot = {
+  schema: 'whoisleuth.registry-standards-coverage';
+  version: number;
+  verifiedAt: string;
+  sources: {
+    rootZoneVersion: string;
+    rootZoneLastUpdatedAt: string;
+    rdapBootstrapPublication: string;
+    rdapBootstrapVersion: string;
+    urls: string[];
+  };
+  counts: {
+    activeTlds: number;
+    countryCode: number;
+    nonCountryCode: number;
+    generic: number;
+    genericRestricted: number;
+    sponsored: number;
+    infrastructure: number;
+    rdapBootstrapServiceGroups: number;
+    genericAndRestrictedRdapCovered: number;
+    sponsoredRdapCovered: number;
+    infrastructureRdapCovered: number;
+  };
+  exceptions: Array<{
+    suffix: string;
+    registryClass: Exclude<RegistryClass, 'country-code' | 'generic' | 'generic-restricted' | 'unknown'>;
+    rdapAccessProfile: RdapAccessProfile;
+    whoisAccessProfile: WhoisAccessProfile;
+  }>;
+  interpretation: string;
+};
+
 type RegistryCapabilitySeed = Pick<
   RegistryCapability,
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
@@ -44,8 +77,56 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 24;
+const REGISTRY_CAPABILITIES_VERSION = 25;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
+
+const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
+  schema: 'whoisleuth.registry-standards-coverage' as const,
+  version: 1,
+  verifiedAt: '2026-07-19',
+  sources: Object.freeze({
+    rootZoneVersion: '2026062302',
+    rootZoneLastUpdatedAt: '2026-06-24T07:07:01.000Z',
+    rdapBootstrapPublication: '2026-07-14T22:00:03.000Z',
+    rdapBootstrapVersion: '1.0',
+    urls: Object.freeze([
+      'https://data.iana.org/TLD/tlds-alpha-by-domain.txt',
+      'https://data.iana.org/rdap/dns.json',
+      'https://www.iana.org/domains/root/db',
+    ]),
+  }),
+  counts: Object.freeze({
+    activeTlds: 1437,
+    countryCode: 309,
+    nonCountryCode: 1128,
+    generic: 1110,
+    genericRestricted: 3,
+    sponsored: 14,
+    infrastructure: 1,
+    rdapBootstrapServiceGroups: 589,
+    genericAndRestrictedRdapCovered: 1113,
+    sponsoredRdapCovered: 12,
+    infrastructureRdapCovered: 0,
+  }),
+  exceptions: Object.freeze([
+    Object.freeze({
+      suffix: 'edu', registryClass: 'sponsored' as const,
+      rdapAccessProfile: 'no-iana-service' as const,
+      whoisAccessProfile: 'iana-referral' as const,
+    }),
+    Object.freeze({
+      suffix: 'mil', registryClass: 'sponsored' as const,
+      rdapAccessProfile: 'no-iana-service' as const,
+      whoisAccessProfile: 'no-iana-service' as const,
+    }),
+    Object.freeze({
+      suffix: 'arpa', registryClass: 'infrastructure' as const,
+      rdapAccessProfile: 'no-iana-service' as const,
+      whoisAccessProfile: 'iana-referral' as const,
+    }),
+  ]),
+  interpretation: 'This official-source snapshot describes published service coverage at the verification date. It does not test current reachability or decide registration, availability, ownership, safety, or maliciousness.',
+});
 
 const DISCOVERY_LIMITATION = 'IANA discovery is available, but no suffix-specific query, encoding, or parser behavior is fixture-verified.';
 const FIXTURE_LIMITATION = 'Synthetic fixtures verify the current parser profile; they do not prove current live-registry reachability, policy, or field publication.';
@@ -63,6 +144,8 @@ const WHOIS_ONLY_NEGATIVE_FIXTURE_LIMITATION = 'Synthetic fixtures verify only t
 const UNVERIFIED_WHOIS_REFERRAL_LIMITATION = 'IANA publishes a domain WHOIS referral, but its response behavior is not fixture-verified. A failed, restricted, prohibited, reserved, or otherwise inconclusive response is not evidence that the domain is unregistered, and IANA publishes no RDAP bootstrap service for this suffix.';
 const UNVERIFIED_WHOIS_WITH_RDAP_LIMITATION = 'IANA publishes domain WHOIS and RDAP discovery, but the WHOIS response behavior is not fixture-verified. A failed, restricted, prohibited, reserved, or otherwise inconclusive WHOIS response is not evidence that the domain is unregistered; RDAP remains separately attributed.';
 const NORID_CLOSED_SUFFIX_LIMITATION = 'The registry has not opened this suffix for registrations, and IANA publishes no domain WHOIS or RDAP service. Missing registry data is contextual only and must not be interpreted as a live availability result.';
+const MIL_ACCESS_LIMITATION = 'IANA publishes no public domain WHOIS or RDAP service for this sponsored suffix. Missing registry data is contextual only and is not evidence that a name is unregistered or available.';
+const ARPA_ACCESS_LIMITATION = 'This infrastructure suffix is not ordinary public registration space. IANA publishes WHOIS metadata but no RDAP bootstrap service, and missing or non-domain-shaped data must not be interpreted as registration availability.';
 const VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   'ao', 'az', 'bb', 'bd', 'bs', 'bt', 'bz', 'cd', 'cg', 'ck',
   'cu', 'cw', 'dj', 'eg', 'et', 'fk', 'gm', 'gu', 'jo', 'kh',
@@ -572,8 +655,30 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     ],
   },
   {
-    id: 'educause-indented', suffixes: ['edu'], registryClass: 'generic',
+    id: 'educause-indented', suffixes: ['edu'], registryClass: 'sponsored',
     whoisParserProfile: 'indented-contact-blocks', fixtureScenarios: ['registered'],
+    rdapAccessProfile: 'no-iana-service',
+    documentationUrls: ['https://www.iana.org/domains/root/db/edu.html'],
+    limitation: WHOIS_ONLY_FIXTURE_LIMITATION,
+  },
+  {
+    id: 'no-iana-machine-service-mil', suffixes: ['mil'], registryClass: 'sponsored',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'no-iana-service', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/mil.html'],
+    limitation: MIL_ACCESS_LIMITATION,
+  },
+  {
+    id: 'iana-infrastructure-arpa', suffixes: ['arpa'], registryClass: 'infrastructure',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', rdapAccessProfile: 'no-iana-service',
+    verificationFiles: [],
+    documentationUrls: [
+      'https://www.iana.org/domains/root/db/arpa.html',
+      'https://www.iana.org/domains/arpa',
+    ],
+    limitation: ARPA_ACCESS_LIMITATION,
   },
   {
     id: 'eif-sectioned', suffixes: ['ee'], registryClass: 'country-code',
@@ -1194,6 +1299,18 @@ function listRegistryCapabilities(): RegistryCapability[] {
   return EXPLICIT_CAPABILITIES.map((capability) => cloneCapability(capability));
 }
 
+function registryStandardsCoverageSnapshot(): RegistryStandardsCoverageSnapshot {
+  return {
+    ...REGISTRY_STANDARDS_COVERAGE_SNAPSHOT,
+    sources: {
+      ...REGISTRY_STANDARDS_COVERAGE_SNAPSHOT.sources,
+      urls: [...REGISTRY_STANDARDS_COVERAGE_SNAPSHOT.sources.urls],
+    },
+    counts: { ...REGISTRY_STANDARDS_COVERAGE_SNAPSHOT.counts },
+    exceptions: REGISTRY_STANDARDS_COVERAGE_SNAPSHOT.exceptions.map((entry) => ({ ...entry })),
+  };
+}
+
 function registryCompatibilityMatrix(): RegistryCompatibilityRow[] {
   return listRegistryCapabilities()
     .flatMap((capability) => capability.suffixes.map((suffix) => ({
@@ -1209,11 +1326,13 @@ export {
   registryCompatibilityMatrix,
   listRegistryCapabilities,
   registryAccessDiagnosticFor,
+  registryStandardsCoverageSnapshot,
 };
 export type {
   RdapAccessProfile,
   RegistryCapability,
   RegistryCompatibilityRow,
+  RegistryStandardsCoverageSnapshot,
   WhoisAccessProfile,
   WhoisQueryProfile,
 };

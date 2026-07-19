@@ -18,14 +18,27 @@ import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 24);
-  assert.equal(catalogue.rows.length, 310);
+  assert.equal(catalogue.version, 25);
+  assert.equal(catalogue.rows.length, 312);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
-    profiles: 310,
+    profiles: 312,
     fixtureVerified: 218,
-    accessDocumented: 92,
+    accessDocumented: 94,
     fallbacks: 1,
+  });
+  assert.deepEqual(catalogue.standardsCoverage.counts, {
+    activeTlds: 1437,
+    countryCode: 309,
+    nonCountryCode: 1128,
+    generic: 1110,
+    genericRestricted: 3,
+    sponsored: 14,
+    infrastructure: 1,
+    rdapBootstrapServiceGroups: 589,
+    genericAndRestrictedRdapCovered: 1113,
+    sponsoredRdapCovered: 12,
+    infrastructureRdapCovered: 0,
   });
   assert.deepEqual(
     catalogue.rows.map((row) => row.suffixes),
@@ -37,10 +50,12 @@ test('returns independent catalogue rows rather than exposing shared mutable arr
   const first = registrySupportCatalogue();
   first.rows[0].suffixes[0] = 'changed';
   first.rows[0].fixtureScenarios.push('changed');
+  first.standardsCoverage.counts.generic = 0;
 
   const second = registrySupportCatalogue();
   assert.equal(second.rows[0].suffixes[0], 'ac');
   assert.equal(second.rows[0].fixtureScenarios.includes('changed'), false);
+  assert.equal(second.standardsCoverage.counts.generic, 1110);
 });
 
 test('inspects explicit and generic suffix support through the shared catalogue', () => {
@@ -56,6 +71,18 @@ test('inspects explicit and generic suffix support through the shared catalogue'
   assert.equal(generic.profile.coverageState, 'discovery_only');
   assert.equal(generic.profile.rdapDiscovery, 'iana-bootstrap');
   assert.equal(generic.profile.whoisDiscovery, 'iana-referral');
+
+  const education = inspectRegistrySupport('.edu');
+  assert.equal(education.profile.registryClass, 'sponsored');
+  assert.equal(education.profile.rdapAccessProfile, 'no-iana-service');
+
+  const military = inspectRegistrySupport('.mil');
+  assert.equal(military.profile.registryClass, 'sponsored');
+  assert.equal(military.profile.coverageState, 'access_documented');
+
+  const infrastructure = inspectRegistrySupport('.arpa');
+  assert.equal(infrastructure.profile.registryClass, 'infrastructure');
+  assert.equal(infrastructure.profile.coverageState, 'access_documented');
 });
 
 test('normalizes IDN suffixes while keeping malformed and empty inspection states explicit', () => {
@@ -99,10 +126,10 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
   assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), [
-    'al', 'ao', 'aq', 'az', 'ba', 'bb', 'bd', 'bo', 'bs', 'bt', 'bv', 'bw', 'bz', 'cd', 'cf', 'cg',
+    'al', 'ao', 'aq', 'arpa', 'az', 'ba', 'bb', 'bd', 'bo', 'bs', 'bt', 'bv', 'bw', 'bz', 'cd', 'cf', 'cg',
     'ch', 'ck', 'cu', 'cw', 'cy', 'dj', 'eg', 'er', 'es', 'et', 'fk', 'ga', 'gb', 'ge',
     'gm', 'gp', 'gq', 'gr', 'gu', 'gw', 'hm', 'iq', 'jm', 'jo', 'kh', 'km', 'kp', 'kw', 'lc', 'li', 'lk',
-    'lr', 'mh', 'mp', 'mt', 'mv', 'na', 'ne', 'ni', 'np', 'nr', 'pa', 'pf', 'ph', 'pn', 'ps', 'py',
+    'lr', 'mh', 'mil', 'mp', 'mt', 'mv', 'na', 'ne', 'ni', 'np', 'nr', 'pa', 'pf', 'ph', 'pn', 'ps', 'py',
     'sb', 'sj', 'sl', 'sm', 'sv', 'sz', 'tj', 'tk', 'tl', 'tt', 'uy', 'va', 'vi', 'vn', 'xn--54b7fta0cc',
     'xn--fzc2c9e2c', 'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
     'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--mgbtx2b', 'xn--node', 'xn--qxam', 'xn--wgbh1c',

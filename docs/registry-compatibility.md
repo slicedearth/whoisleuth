@@ -23,7 +23,19 @@ and response encoding without duplicating the query value in the response.
   or publishes no machine endpoint. It describes collection conditions only and
   is never evidence about domain availability.
 
-The version 24 explicit matrix is:
+## Generic TLD service coverage
+
+Generic TLDs use live IANA RDAP bootstrap discovery and shared bounded RDAP
+parsing. WHOISleuth does not create a duplicate parser profile for each suffix.
+The version 25 catalogue includes an official-source snapshot verified on 19
+July 2026: all 1,113 current generic and generic-restricted TLDs were present in
+the IANA RDAP bootstrap, as were 12 of 14 sponsored TLDs. `.edu` and `.mil` are
+the sponsored exceptions, while the infrastructure suffix `.arpa` has no RDAP
+bootstrap service. The dated snapshot describes published coverage only. It is
+not a live reachability, registration, availability, ownership, safety, or
+maliciousness result.
+
+The version 25 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -38,6 +50,7 @@ The version 24 explicit matrix is:
 | `.ao` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.aq` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.ar` | Colon fields with registered, changed, and expiry timestamps | Registered, not found |
+| `.arpa` | Infrastructure suffix with IANA WHOIS metadata and no RDAP bootstrap service; not ordinary public registration space | Access documented |
 | `.as` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.at` | Colon fields with compact date-time values | Registered, not found |
 | `.au` | Eligibility and contact fields | Registered |
@@ -89,7 +102,7 @@ The version 24 explicit matrix is:
 | `.do` | Authoritative no-object response; registered-field parsing is not claimed and IANA publishes no RDAP service | Not found |
 | `.dz` | Compact colon fields with registrar and contact roles; IANA publishes no RDAP service | Registered, not found |
 | `.ec` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
-| `.edu` | Indented contact blocks | Registered |
+| `.edu` | Sponsored WHOIS-only service with indented contact blocks; IANA publishes no RDAP service | Registered |
 | `.ee` | Section-scoped domain, contacts, registrar, lifecycle, status, and nameservers | Registered, not found |
 | `.eg` | IANA publishes no domain WHOIS or RDAP service | Access documented |
 | `.er` | IANA publishes no domain WHOIS or RDAP service | Access documented |
@@ -169,6 +182,7 @@ The version 24 explicit matrix is:
 | `.me` | Standard colon fields with lifecycle, contacts, status, DNSSEC, and nameservers | Registered |
 | `.mg` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.mh` | IANA publishes no domain WHOIS or RDAP service | Access documented |
+| `.mil` | Sponsored suffix with no IANA-published public domain WHOIS or RDAP service | Access documented |
 | `.mk` | Shared MARNET contact-handle indirection, lifecycle, registrar, and nameservers | Registered, not found |
 | `.ml` | Standard colon fields with registry identity, lifecycle, registrar, status, DNSSEC, and nameservers; IANA RDAP is also available | Registered |
 | `.mm` | Standard colon fields with lifecycle, registrar, status, DNSSEC, and nameservers; IANA publishes no RDAP service | Registered, not found |

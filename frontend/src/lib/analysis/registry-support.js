@@ -2,6 +2,7 @@ import {
   REGISTRY_CAPABILITIES_VERSION,
   registryCapabilityFor,
   registryCompatibilityMatrix,
+  registryStandardsCoverageSnapshot,
 } from '../../../../lib/registry-capabilities.mts';
 
 export const MAX_REGISTRY_SUPPORT_ROWS = 500;
@@ -48,10 +49,12 @@ export function registryCoverageLabel(value) {
 export function registrySupportCatalogue() {
   const sourceRows = registryCompatibilityMatrix();
   const rows = sourceRows.slice(0, MAX_REGISTRY_SUPPORT_ROWS);
+  const standardsCoverage = registryStandardsCoverageSnapshot();
   return {
     version: REGISTRY_CAPABILITIES_VERSION,
     rows,
     truncated: sourceRows.length > rows.length,
+    standardsCoverage,
     summary: {
       profiles: rows.length,
       fixtureVerified: rows.filter((row) => row.coverageState === 'fixture_verified').length,
