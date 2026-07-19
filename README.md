@@ -826,11 +826,16 @@ full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
   source, observation-time, completeness, case, and campaign filters. Selecting
   a relationship exposes its comparison method, classification, first and last
   retained observation times, source observations, completeness, truncation,
-  and limitations. The table also provides bounded search, stable sorting,
-  pagination, explicit partial-result labels, and direct case pivots. Each page
-  shows up to 50 relationships, each row shows up to 20 case links, and each
-  relationship retains at most 100 provenance observations; narrow screens use
-  labelled stacked rows without page-level horizontal overflow.
+  and limitations. The graph can focus on one-hop neighbours, pin or hide nodes,
+  and compare the relationships shared by a transient analyst-selected case
+  group. That view state is not saved or exported and is limited to 8 pins, 12
+  hidden nodes, and 8 comparison cases. Resetting the view restores the complete
+  bounded graph, while the table remains unaffected and provides bounded search,
+  stable sorting, pagination, explicit partial-result labels, and direct case
+  pivots. Each page shows up to 50 relationships, each row shows up to 20 case
+  links, and each relationship retains at most 100 provenance observations;
+  narrow screens use labelled stacked rows without page-level horizontal
+  overflow.
 - The **Campaigns** tab groups existing cases into bounded browser-local
   investigations. Each campaign retains only a name, optional description,
   and up to 50 normalized case domains; it does not duplicate case evidence,

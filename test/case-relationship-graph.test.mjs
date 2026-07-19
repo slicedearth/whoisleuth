@@ -3,9 +3,13 @@ import { describe, test } from 'node:test';
 
 import {
   buildCaseRelationshipGraph,
+  CASE_RELATIONSHIP_GRAPH_VIEW_VERSION,
   CASE_RELATIONSHIP_GRAPH_VERSION,
   MAX_RELATIONSHIP_GRAPH_CASES,
   MAX_RELATIONSHIP_GRAPH_EDGES,
+  MAX_RELATIONSHIP_GRAPH_GROUP_CASES,
+  MAX_RELATIONSHIP_GRAPH_HIDDEN,
+  MAX_RELATIONSHIP_GRAPH_PINS,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
   projectCaseRelationshipGraph,
 } from '../frontend/src/lib/analysis/case-relationship-graph.js';
@@ -27,11 +31,23 @@ describe('case relationship graph projection', () => {
   test('returns a stable empty contract for invalid input', () => {
     const graph = buildCaseRelationshipGraph(null);
     assert.equal(graph.version, CASE_RELATIONSHIP_GRAPH_VERSION);
+    assert.equal(graph.version, 2);
     assert.deepEqual(graph.nodes, []);
     assert.deepEqual(graph.edges, []);
     assert.equal(graph.totalRelationships, 0);
     assert.equal(graph.matchingRelationships, 0);
     assert.deepEqual(graph.filters, { type: 'all' });
+    assert.deepEqual(graph.view, {
+      version: CASE_RELATIONSHIP_GRAPH_VIEW_VERSION,
+      focusId: '',
+      oneHop: false,
+      pinnedIds: [],
+      hiddenIds: [],
+      groupCaseIds: [],
+      truncated: false,
+    });
+    assert.deepEqual(graph.comparisonCaseNodes, []);
+    assert.deepEqual(graph.sharedRelationshipNodes, []);
     assert.equal(graph.truncated, false);
   });
 
@@ -144,5 +160,93 @@ describe('case relationship graph projection', () => {
     assert.equal(graph.relationshipNodes[0].complete, null);
     assert.equal(graph.filters.source, 'monitor');
     assert.equal(graph.filters.scope, 'campaign:campaign-one');
+  });
+
+  test('uses stable relationship ids and limits one-hop focus to direct neighbours', () => {
+    const http = { httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpFinalOrigin: 'https://shared.invalid', httpResponseStatus: 200 };
+    const cases = [
+      caseRecord('alpha', 'alpha.invalid', snapshot({ nameservers: ['ns.shared.invalid'], ...http })),
+      caseRecord('bravo', 'bravo.invalid', snapshot({ nameservers: ['ns.shared.invalid'], ...http })),
+      caseRecord('charlie', 'charlie.invalid', snapshot({ nameservers: ['ns.shared.invalid'] })),
+    ];
+    const summary = buildCaseRelationships(cases);
+    const full = projectCaseRelationshipGraph(summary);
+    const alpha = full.caseNodes.find((node) => node.caseId === 'alpha');
+    const nameserver = full.relationshipNodes.find((node) => node.type === 'nameserver_set');
+    assert.equal(nameserver.id, 'relationship:nameserver_set:ns.shared.invalid');
+
+    const focused = projectCaseRelationshipGraph(summary, { focusId: alpha.id, oneHop: true });
+    assert.deepEqual(focused.caseNodes.map((node) => node.caseId), ['alpha']);
+    assert.deepEqual(focused.relationshipNodes.map((node) => node.type), ['nameserver_set', 'http_final_origin']);
+    assert.equal(focused.edges.length, 2);
+
+    const withPinnedNeighbourhood = projectCaseRelationshipGraph(summary, {
+      focusId: alpha.id,
+      oneHop: true,
+      pinnedIds: [nameserver.id],
+    });
+    assert.deepEqual(withPinnedNeighbourhood.caseNodes.map((node) => node.caseId), ['alpha', 'bravo', 'charlie']);
+    assert.equal(withPinnedNeighbourhood.relationshipNodes.length, 2);
+    assert.deepEqual(withPinnedNeighbourhood.view.pinnedIds, [nameserver.id]);
+  });
+
+  test('finds relationships shared by every transient comparison case', () => {
+    const http = { httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpFinalOrigin: 'https://shared.invalid', httpResponseStatus: 200 };
+    const summary = buildCaseRelationships([
+      caseRecord('alpha', 'alpha.invalid', snapshot({ nameservers: ['ns.shared.invalid'], ...http })),
+      caseRecord('bravo', 'bravo.invalid', snapshot({ nameservers: ['ns.shared.invalid'], ...http })),
+      caseRecord('charlie', 'charlie.invalid', snapshot({ nameservers: ['ns.shared.invalid'] })),
+    ]);
+    const alphaBravo = projectCaseRelationshipGraph(summary, { groupCaseIds: ['case:alpha', 'case:bravo'] });
+    assert.deepEqual(alphaBravo.comparisonCaseNodes.map((node) => node.caseId), ['alpha', 'bravo']);
+    assert.deepEqual(alphaBravo.sharedRelationshipNodes.map((node) => node.type), ['nameserver_set', 'http_final_origin']);
+
+    const alphaCharlie = projectCaseRelationshipGraph(summary, { groupCaseIds: ['case:alpha', 'case:charlie'] });
+    assert.deepEqual(alphaCharlie.sharedRelationshipNodes.map((node) => node.type), ['nameserver_set']);
+  });
+
+  test('bounds and revalidates transient pin, hide, and comparison state', () => {
+    const cases = Array.from({ length: MAX_RELATIONSHIP_GRAPH_CASES }, (_, index) => (
+      caseRecord(`case-${index}`, `case-${index}.invalid`, snapshot({ nameservers: ['ns.shared.invalid'] }))
+    ));
+    const summary = buildCaseRelationships(cases);
+    const full = projectCaseRelationshipGraph(summary);
+    const caseIds = full.caseNodes.map((node) => node.id);
+    const viewed = projectCaseRelationshipGraph(summary, {
+      focusId: 'missing',
+      oneHop: true,
+      pinnedIds: [...caseIds, 'missing', caseIds[0]],
+      hiddenIds: caseIds.slice(0, MAX_RELATIONSHIP_GRAPH_HIDDEN + 2),
+      groupCaseIds: [...caseIds, 'relationship:nameserver_set:ns.shared.invalid'],
+    });
+    assert.equal(viewed.view.focusId, '');
+    assert.equal(viewed.view.oneHop, false);
+    assert.equal(viewed.view.hiddenIds.length, MAX_RELATIONSHIP_GRAPH_HIDDEN);
+    assert.equal(viewed.view.pinnedIds.length, MAX_RELATIONSHIP_GRAPH_PINS);
+    assert.equal(viewed.view.groupCaseIds.length, MAX_RELATIONSHIP_GRAPH_GROUP_CASES);
+    assert.ok(viewed.view.pinnedIds.every((id) => !viewed.view.hiddenIds.includes(id)));
+    assert.ok(viewed.view.groupCaseIds.every((id) => !viewed.view.hiddenIds.includes(id)));
+    assert.equal(viewed.view.truncated, true);
+  });
+
+  test('hides nodes only from the visual view and does not mutate the relationship summary', () => {
+    const summary = buildCaseRelationships(fixture());
+    const before = structuredClone(summary);
+    const full = projectCaseRelationshipGraph(summary);
+    const hiddenId = full.relationshipNodes.find((node) => node.type === 'nameserver_set').id;
+    const viewed = projectCaseRelationshipGraph(summary, { hiddenIds: [hiddenId] });
+    assert.equal(viewed.relationshipNodes.some((node) => node.id === hiddenId), false);
+    assert.equal(viewed.totalRelationships, full.totalRelationships);
+    assert.deepEqual(summary, before);
+  });
+
+  test('keeps the bounded reset contract when every overview node is hidden', () => {
+    const summary = buildCaseRelationships(fixture());
+    const full = projectCaseRelationshipGraph(summary);
+    const viewed = projectCaseRelationshipGraph(summary, { hiddenIds: full.nodes.map((node) => node.id) });
+    assert.equal(viewed.allNodeCount, full.nodes.length);
+    assert.deepEqual(viewed.nodes, []);
+    assert.deepEqual(viewed.edges, []);
+    assert.deepEqual(viewed.view.hiddenIds, full.nodes.map((node) => node.id));
   });
 });

@@ -1117,6 +1117,58 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(page.locator('.case-head', { hasText: 'alpha-graph.invalid' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  test('focuses, pins, hides, resets, and compares bounded graph neighbours', async ({ page }) => {
+    const http = {
+      httpSummaryVersion: 1,
+      httpEvidenceStatus: 'success',
+      httpFinalOrigin: 'https://shared-view.invalid',
+      httpResponseStatus: 200,
+    };
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'view-a', domain: 'alpha-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http })] }),
+      caseRecord({ id: 'view-b', domain: 'bravo-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http })] }),
+      caseRecord({ id: 'view-c', domain: 'charlie-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'] })] }),
+    ]);
+
+    const region = page.getByRole('region', { name: 'Relationship graph' });
+    const graph = region.locator('.graph-scroll svg');
+    const controls = region.getByRole('group', { name: 'Relationship graph view controls' });
+    await graph.getByRole('button', { name: 'Case alpha-view.invalid', exact: true }).click();
+    await controls.getByRole('button', { name: 'Focus one hop' }).click();
+    await expect(controls.getByRole('button', { name: 'Show overview' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(graph.getByRole('button', { name: 'Case alpha-view.invalid', exact: true })).toBeVisible();
+    await expect(graph.getByRole('button', { name: 'Case bravo-view.invalid', exact: true })).toHaveCount(0);
+    await expect(graph.getByRole('button', { name: 'Case charlie-view.invalid', exact: true })).toHaveCount(0);
+    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-view.invalid', exact: true })).toBeVisible();
+    await expect(graph.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid', exact: true })).toBeVisible();
+
+    await controls.getByRole('button', { name: 'Show overview' }).click();
+    await graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-view.invalid', exact: true }).click();
+    await controls.getByRole('button', { name: 'Pin selected' }).click();
+    await expect(controls).toContainText('1 pinned');
+    await graph.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid', exact: true }).click();
+    await controls.getByRole('button', { name: 'Hide selected' }).click();
+    await expect(graph.getByRole('button', { name: /Shared final website origin/ })).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toContainText('Shared final website origin');
+    await controls.getByRole('button', { name: 'Reset view' }).click();
+    await expect(graph.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid', exact: true })).toBeVisible();
+
+    await graph.getByRole('button', { name: 'Case alpha-view.invalid', exact: true }).click();
+    await region.getByRole('button', { name: 'Add to comparison group' }).click();
+    await graph.getByRole('button', { name: 'Case bravo-view.invalid', exact: true }).click();
+    await region.getByRole('button', { name: 'Add to comparison group' }).click();
+    const comparison = region.getByRole('region', { name: 'Comparison group' });
+    await expect(comparison).toContainText('alpha-view.invalid');
+    await expect(comparison).toContainText('bravo-view.invalid');
+    await expect(comparison.getByRole('button', { name: 'Shared nameserver set: ns.shared-view.invalid' })).toBeVisible();
+    await expect(comparison.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid' })).toBeVisible();
+
+    await graph.getByRole('button', { name: 'Case charlie-view.invalid', exact: true }).click();
+    await region.getByRole('button', { name: 'Add to comparison group' }).click();
+    await expect(comparison.getByRole('button', { name: 'Shared nameserver set: ns.shared-view.invalid' })).toBeVisible();
+    await expect(comparison.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid' })).toHaveCount(0);
+  });
+
   test('shows a clear empty state when no retained evidence relates cases', async ({ page }) => {
     await openRelationshipTable(page, [
       caseRecord({ id: 'single-a', domain: 'single-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.one.invalid'] })] }),
@@ -1206,6 +1258,10 @@ test.describe('accessible cross-case relationship table', () => {
       caseRecord({ id: 'mobile-rel-b', domain: 'long-mobile-relationship-member-b.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
     ]);
     await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toBeVisible();
+    const graph = page.getByRole('region', { name: 'Relationship graph' });
+    await graph.locator('.graph-scroll svg').getByRole('button', { name: 'Case long-mobile-relationship-member-a.invalid', exact: true }).click();
+    await graph.getByRole('button', { name: 'Add to comparison group' }).click();
+    await expect(graph.getByRole('region', { name: 'Comparison group' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });
