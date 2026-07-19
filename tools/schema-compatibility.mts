@@ -134,6 +134,10 @@ import {
   MAX_ENVELOPE_BYTES,
 } from '../lib/scheduled-monitor-crypto.mts';
 import {
+  CURATED_CONNECTOR_CONTRACT_VERSION,
+  CURATED_CONNECTOR_RESULT_SCHEMA,
+} from '../lib/threat-intelligence-contract.mts';
+import {
   registryStandardsCoverageSnapshot,
 } from '../lib/registry-capabilities.mts';
 import {
@@ -230,6 +234,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.risk-calibration-dataset', kind: 'cli_document', schema: RISK_CALIBRATION_DATASET_SCHEMA, currentVersion: RISK_CALIBRATION_DATASET_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_RISK_CALIBRATION_INPUT_BYTES, owner: 'cli/risk-calibration.mts', note: 'Offline labelled fixture input; no live collection.' }),
   entry({ id: 'cli.risk-calibration-report', kind: 'cli_document', schema: RISK_CALIBRATION_REPORT_SCHEMA, currentVersion: RISK_CALIBRATION_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/risk-calibration.mts', note: 'Offline calibration output; labels and metrics do not prove maliciousness.' }),
   entry({ id: 'cli.deployment-self-check', kind: 'cli_document', schema: DEPLOYMENT_SELF_CHECK_SCHEMA, currentVersion: DEPLOYMENT_SELF_CHECK_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/deployment-self-check.mts', note: 'Redacted operator-run public-boundary report; response bodies and credentialed posture are excluded.' }),
+  entry({ id: 'derived.curated-connector-result', kind: 'derived', schema: CURATED_CONNECTOR_RESULT_SCHEMA, currentVersion: CURATED_CONNECTOR_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'lib/threat-intelligence-contract.mts', note: 'Transient bounded entity and relationship projection; the contract enables no connector, request, credential, storage, score, or availability decision.' }),
   entry({ id: 'derived.investigation-projection', kind: 'derived', schema: INVESTIGATION_PROJECTION_SCHEMA, currentVersion: INVESTIGATION_PROJECTION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-projection.ts', note: 'Read-only bounded projection over existing stores; never persisted.' }),
   entry({ id: 'derived.investigation-search', kind: 'derived', schema: INVESTIGATION_SEARCH_SCHEMA, currentVersion: INVESTIGATION_SEARCH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'frontend/src/lib/analysis/investigation-search.ts', note: 'Disposable in-memory index; never persisted or transmitted.' }),
 ];
@@ -310,6 +315,7 @@ function buildSchemaCompatibilityInventory(
 function markdownCell(value: unknown): string {
   return String(value)
     .replace(/[\x00-\x1f\x7f]+/gu, ' ')
+    .replace(/\\/gu, '\\\\')
     .replace(/\|/gu, '\\|')
     .replace(/`/gu, '\\`');
 }

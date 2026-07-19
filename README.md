@@ -458,6 +458,20 @@ timeouts, response sizes, cache TTLs, concurrency, and daily/monthly request
 budgets. Version 1 permits lookup-only integrations and deliberately excludes
 automatic URL submission.
 
+The same module also provides version 1 of the curated discovery and enrichment
+connector contract. A definition must declare its accepted entity types, the
+exact representation disclosed for each input, normalized entity and
+relationship outputs, passive, active, or third-party collection mode,
+credential mode and scopes, reviewed policy decisions, and bounded request,
+quota, entity, and relationship limits. Every connector is disabled by default.
+The contract does not load arbitrary code, implement a provider, make a network
+request, read credentials, persist output, change availability, or contribute
+to Risk scoring. Its offline fixture harness accepts only bounded JSON and runs
+a synchronous normalizer twice, rejecting asynchronous or nondeterministic
+output before it can be treated as a versioned connector result. Active and
+third-party collection are declaration metadata only until a separately
+reviewed adapter explicitly implements them.
+
 Adapter output is normalized into separately attributed, bounded findings and
 explicit `success`, `partial`, `not_found`, `unsupported`, `skipped`,
 `rate_limited`, `unavailable`, or `error` states. It has no global “safe” field:
@@ -1190,7 +1204,7 @@ lib/                    Shared lookup logic, used by both server.mts and netlify
   favicon.mts           Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
   html-signals.mts      Bounded homepage signals and versioned static page-identity evidence
   tls-intelligence.mts  One-connection TLS/certificate profile with public-address pinning
-  threat-intelligence-contract.mts  Bounded policy and result boundary for optional external providers
+  threat-intelligence-contract.mts  Bounded policy, result, and fixture boundaries for optional providers and curated connectors
   ct-search.mts         Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.mts        SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.mts              Shared-password session cookie (sign/verify, no user accounts)

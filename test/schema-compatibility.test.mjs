@@ -77,6 +77,10 @@ import {
   DEPLOYMENT_SELF_CHECK_SCHEMA,
   DEPLOYMENT_SELF_CHECK_VERSION,
 } from '../tools/deployment-self-check.mts';
+import {
+  CURATED_CONNECTOR_CONTRACT_VERSION,
+  CURATED_CONNECTOR_RESULT_SCHEMA,
+} from '../lib/threat-intelligence-contract.mts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -92,7 +96,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 45);
+    assert.equal(inventory.entries.length, 46);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -110,6 +114,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.workspace-settings-section').currentVersion, WORKSPACE_SETTINGS_VERSION);
     assert.equal(byId(inventory, 'cli.deployment-self-check').schema, DEPLOYMENT_SELF_CHECK_SCHEMA);
     assert.equal(byId(inventory, 'cli.deployment-self-check').currentVersion, DEPLOYMENT_SELF_CHECK_VERSION);
+    assert.equal(byId(inventory, 'derived.curated-connector-result').schema, CURATED_CONNECTOR_RESULT_SCHEMA);
+    assert.equal(byId(inventory, 'derived.curated-connector-result').currentVersion, CURATED_CONNECTOR_CONTRACT_VERSION);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {
@@ -243,6 +249,17 @@ describe('schema compatibility inventory', () => {
       () => formatSchemaCompatibilityInventory({ ...inventory, limitations: ['bad\nvalue'] }),
       /limitations are invalid/i,
     );
+  });
+
+  test('escapes every Markdown table and code delimiter after existing backslashes', () => {
+    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
+    inventory.entries[0].note = 'Literal \\| and ` marker';
+    inventory.limitations = ['Literal \\| and ` marker'];
+    const report = formatSchemaCompatibilityInventory(inventory);
+    const slash = '\\';
+    const escaped = `Literal ${slash}${slash}${slash}| and ${slash}\` marker`;
+    assert.match(report, new RegExp(escaped.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'));
+    assert.equal(report.split(escaped).length - 1, 2);
   });
 
   test('keeps the normalized lookup evidence export tied to its listed contract', () => {
