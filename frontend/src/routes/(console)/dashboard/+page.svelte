@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import InvestigationSearch from '$lib/components/InvestigationSearch.svelte';
+  import WorkspaceArchive from '$lib/components/WorkspaceArchive.svelte';
   import { loadProfiles } from '$lib/brand-profiles';
   import { loadCases } from '$lib/cases';
   import { loadLocalInvestigationSearchIndex } from '$lib/investigation-search';
@@ -127,6 +128,8 @@
     </a>
   </div>
 </section>
+
+<WorkspaceArchive onimport={refreshLocalSummary} />
 
 <section class="dashboard-section" aria-labelledby="workspaces-title">
   <div class="section-intro">

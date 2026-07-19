@@ -177,8 +177,10 @@ default (see the README), so many lookups return no personal data at all.
   only visible to whoever is using that browser.
   The appearance selector can also retain one bounded `dark`, `light`, or
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
-  server or included in exports; without a saved value the site uses Dark,
-  while System follows the browser's operating-system preference.
+  server. It is included only when you deliberately download a unified
+  workspace archive so the receiving browser can restore the selected
+  appearance; without a saved value the site uses Dark, while System follows
+  the browser's operating-system preference.
   Campaigns retain a bounded label, optional description, and normalized case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.
@@ -224,7 +226,15 @@ default (see the README), so many lookups return no personal data at all.
   stated interpretation limits; they do not include case evidence or notes.
   Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
-  registry-published contact data. Nothing is uploaded or retained by the
+  registry-published contact data. A deliberate unified workspace archive can
+  contain cases and their analyst notes, campaigns, Brand Profiles, watchlists,
+  shortlist entries, custom detection rules, active-profile selection, and
+  theme preference. It uses a versioned manifest with per-section SHA-256
+  checksums, previews conflicts before a non-destructive merge, and excludes
+  sessions, passwords, API credentials, hosted-monitor encryption keys, raw
+  upstream payloads, tab state, Certificate Transparency history, and unrelated
+  browser storage. It is unencrypted, so secure it like the analyst records it
+  contains. Nothing is uploaded or retained by the
   server when you export. From that point on, the file is yours to manage -
   store it appropriately and delete it once you no longer need it.
 - **Official-domain posture audits**: handled per request and discarded. The

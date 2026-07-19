@@ -944,6 +944,19 @@ retain their source, observation time, completeness, truncation, and limitation
 labels and can open the exact source record. An empty result does not establish
 absence elsewhere, and searching does not start a lookup, contact a provider,
 or save a separate index.
+The dashboard also creates one deliberate, unencrypted workspace archive for
+cases, campaigns, Brand Profiles, watchlists, shortlist entries, custom
+detection rules, the active-profile selection, and the theme preference. The
+versioned JSON manifest records each section's schema, record count, byte count,
+and SHA-256 checksum; individual sections are capped at 5 MiB and the complete
+archive at 10 MiB. Import always previews new records, existing identity matches,
+skipped records, and unsupported section versions before writing. Selected
+sections use their existing non-destructive merge rules, and a failed browser
+write rolls earlier section changes back. The archive excludes sessions,
+passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
+state, Certificate Transparency history, and unrelated browser storage. Local
+encryption can be added separately without replacing the portable unencrypted
+schema.
 From that dashboard, an optional guided investigation can keep one canonical
 domain and a bounded list of opened workflow stages in the current tab's
 `sessionStorage`. It prefills Lookup and Discover while moving through the

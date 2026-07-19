@@ -31,6 +31,13 @@ import {
   RELATIONSHIP_GRAPH_EXPORT_VERSION,
 } from '../frontend/src/lib/analysis/case-relationship-graph-export.js';
 import {
+  MAX_WORKSPACE_ARCHIVE_BYTES,
+  WORKSPACE_ARCHIVE_SCHEMA,
+  WORKSPACE_ARCHIVE_VERSION,
+  WORKSPACE_SETTINGS_SCHEMA,
+  WORKSPACE_SETTINGS_VERSION,
+} from '../frontend/src/lib/analysis/workspace-archive.js';
+import {
   buildCaseExport,
   CASE_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/case-model.js';
@@ -81,7 +88,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 42);
+    assert.equal(inventory.entries.length, 44);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -92,6 +99,11 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.relationship-graph').currentVersion, RELATIONSHIP_GRAPH_EXPORT_VERSION);
     assert.equal(byId(inventory, 'export.relationship-graph').byteBudget, MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES);
+    assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
+    assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
+    assert.equal(byId(inventory, 'export.workspace-settings-section').schema, WORKSPACE_SETTINGS_SCHEMA);
+    assert.equal(byId(inventory, 'export.workspace-settings-section').currentVersion, WORKSPACE_SETTINGS_VERSION);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {
