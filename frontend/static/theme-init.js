@@ -1,12 +1,12 @@
 (() => {
   const storageKey = 'whoisleuth:theme:v1';
   const root = document.documentElement;
-  let preference = 'dark';
+  let preference = 'system';
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored === 'dark' || stored === 'light' || stored === 'system') preference = stored;
   } catch {
-    // Dark remains the deterministic fallback when browser storage is blocked.
+    // The operating-system preference remains the fallback when storage is blocked.
   }
   const systemUsesLight = preference === 'system'
     && typeof matchMedia === 'function'

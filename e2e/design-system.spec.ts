@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { consoleDestinations } from '../frontend/src/lib/workspaces';
 
 // Coverage for the shared design system: native-sized checkbox controls with
@@ -163,6 +163,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
 });
 
 test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {
+  await useTheme(page, 'dark');
   await page.goto('/brands');
   await page.evaluate(() => {
     const now = '2026-07-13T00:00:00.000Z';

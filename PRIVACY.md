@@ -179,8 +179,8 @@ default (see the README), so many lookups return no personal data at all.
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
   server. It is included only when you deliberately download a unified
   workspace archive so the receiving browser can restore the selected
-  appearance; without a saved value the site uses Dark, while System follows
-  the browser's operating-system preference.
+  appearance; without a saved value the site follows the browser's
+  operating-system preference.
   Campaigns retain a bounded label, optional description, and normalized case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.

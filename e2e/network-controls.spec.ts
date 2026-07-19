@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { useTheme } from './helpers';
 
 test.use({ allowExpectedLookup429Noise: true });
 
@@ -85,6 +86,7 @@ test('a disabled Lookup capability prevents single and Bulk submissions', async 
 });
 
 test('disabled certificate and website capabilities degrade their own controls only', async ({ page }) => {
+  await useTheme(page, 'dark');
   await mockCapabilities(page, ['certificate_transparency', 'website_probe']);
   await page.goto('/discover');
   await page.getByRole('tab', { name: 'Certificates' }).click();

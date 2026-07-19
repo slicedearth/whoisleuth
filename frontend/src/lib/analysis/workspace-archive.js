@@ -100,7 +100,7 @@ function boundedText(value, maximum = 300) {
 }
 
 function normalizeTheme(value) {
-  return value === 'light' || value === 'system' ? value : 'dark';
+  return value === 'dark' || value === 'light' ? value : 'system';
 }
 
 function canonicalize(value) {

@@ -98,9 +98,7 @@
     nav{--public-nav-control-h:32px;width:auto;min-width:0;flex:1 1 auto;flex-wrap:nowrap;justify-content:flex-end;gap:2px;padding:0}
     nav a,nav button{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;padding:0 6px;font-size:.68rem}
     nav .overview-link{display:none}
-    nav :global(.theme-selector){gap:0;margin:0}
-    nav :global(.theme-selector>span){display:none}
-    nav :global(.theme-trigger){width:64px;min-width:64px;padding-inline:7px;font-size:.68rem}
+    nav :global(.theme-selector){margin:0;font-size:.68rem}
     .console-label-full{display:none}
     .console-label-short{display:inline}
     .public-content{padding-top:38px}
@@ -114,6 +112,6 @@
     .public-brand .mark{width:24px;height:24px}
     .public-brand strong{font-size:.68rem}
     nav a,nav button{padding-inline:3px;font-size:.6rem}
-    nav :global(.theme-trigger){width:56px;min-width:56px;padding-inline:5px;font-size:.6rem}
+    nav :global(.theme-selector){font-size:.6rem}
   }
 </style>

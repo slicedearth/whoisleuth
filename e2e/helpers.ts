@@ -3,6 +3,13 @@ import { expect } from '@playwright/test';
 
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
+const THEME_STORAGE_KEY = 'whoisleuth:theme:v1';
+
+export async function useTheme(page: Page, preference: 'dark' | 'light' | 'system') {
+  await page.addInitScript(({ key, value }) => {
+    localStorage.setItem(key, value);
+  }, { key: THEME_STORAGE_KEY, value: preference });
+}
 
 export async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => {

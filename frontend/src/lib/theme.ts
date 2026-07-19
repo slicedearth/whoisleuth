@@ -8,7 +8,7 @@ const DARK_THEME_COLOR = '#0f1115';
 const LIGHT_THEME_COLOR = '#edf2f7';
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
-  return value === 'light' || value === 'system' ? value : 'dark';
+  return value === 'dark' || value === 'light' ? value : 'system';
 }
 
 export function resolveThemePreference(preference: ThemePreference, systemUsesLight: boolean): ResolvedTheme {
@@ -23,7 +23,7 @@ function systemUsesLight(): boolean {
 }
 
 export function readThemePreference(): ThemePreference {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'system';
   try {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     return stored === null
@@ -80,7 +80,7 @@ export function observeThemePreference(callback: (preference: ThemePreference) =
   const handleStorage = (event: StorageEvent) => {
     if (event.key !== THEME_STORAGE_KEY) return;
     const preference = event.newValue === null
-      ? 'dark'
+      ? 'system'
       : normalizeThemePreference(event.newValue);
     applyThemePreference(preference);
     callback(preference);

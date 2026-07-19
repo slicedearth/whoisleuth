@@ -9,10 +9,10 @@ test('theme preferences accept only the bounded public vocabulary', () => {
   assert.equal(normalizeThemePreference('dark'), 'dark');
   assert.equal(normalizeThemePreference('light'), 'light');
   assert.equal(normalizeThemePreference('system'), 'system');
-  assert.equal(normalizeThemePreference('LIGHT'), 'dark');
-  assert.equal(normalizeThemePreference(''), 'dark');
-  assert.equal(normalizeThemePreference(null), 'dark');
-  assert.equal(normalizeThemePreference({ theme: 'light' }), 'dark');
+  assert.equal(normalizeThemePreference('LIGHT'), 'system');
+  assert.equal(normalizeThemePreference(''), 'system');
+  assert.equal(normalizeThemePreference(null), 'system');
+  assert.equal(normalizeThemePreference({ theme: 'light' }), 'system');
 });
 
 test('explicit theme preferences do not depend on the system preference', () => {

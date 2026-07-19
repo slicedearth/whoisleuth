@@ -246,7 +246,7 @@ describe('portable workspace archive', () => {
       schema: 'whoisleuth.workspace-settings',
       version: 1,
       activeProfileId: '',
-      theme: 'dark',
+      theme: 'system',
     });
   });
 });
