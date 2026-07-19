@@ -65,7 +65,6 @@
   .public-brand .mark{width:38px;height:38px}
   .public-brand strong,.public-brand small{display:block}
   .public-brand strong{font-size:1rem;letter-spacing:-.02em}
-  .public-brand strong::after{content:"";display:inline-block;width:.46em;height:.9em;margin-left:.18em;background:var(--accent2);box-shadow:0 0 8px rgb(var(--accent2-rgb) / var(--cursor-glow-alpha));vertical-align:-.12em;animation:public-cursor 1.1s steps(1,end) infinite}
   .public-brand small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
   nav{--public-nav-control-h:38px;display:flex;align-items:center;gap:5px;margin:0}
   nav a,nav button{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h);min-height:var(--public-nav-control-h);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
@@ -83,8 +82,6 @@
   .public-footer p{max-width:72ch;margin:0}
   .public-footer p:last-child{flex:none;text-align:right}
   .public-footer a{color:var(--accent)}
-  @keyframes public-cursor{0%,55%{opacity:1}55.01%,99.99%{opacity:0}100%{opacity:1}}
-  @media(prefers-reduced-motion:reduce){.public-brand strong::after{animation:none}}
   @media(max-width:720px){
     .public-shell{padding-inline:12px}
     .public-header{align-items:center;flex-direction:row;gap:6px;padding:12px 0}
@@ -94,7 +91,6 @@
     .public-brand .brand-copy{display:block}
     .public-brand strong{font-size:.78rem}
     .public-brand small{display:none}
-    .public-brand strong::after{width:.4em;height:.82em;margin-left:.12em}
     nav{--public-nav-control-h:32px;width:auto;min-width:0;flex:1 1 auto;flex-wrap:nowrap;justify-content:flex-end;gap:2px;padding:0}
     nav a,nav button{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;padding:0 6px;font-size:.68rem}
     nav .overview-link{display:none}

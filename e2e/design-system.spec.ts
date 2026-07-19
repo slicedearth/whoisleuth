@@ -22,6 +22,42 @@ const INTELLIGENCE_CAPABILITIES = {
   limitations: [],
 };
 
+test('the phosphorous brand cursor stays aligned across public and console layouts', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  const variants = [
+    { path: '/', selector: '.public-brand strong', width: 1280, height: 800 },
+    { path: '/', selector: '.public-brand strong', width: 390, height: 844 },
+    { path: '/lookup', selector: '.brand strong', width: 1280, height: 800 },
+    { path: '/lookup', selector: '.shell > header > a > strong', width: 390, height: 844 },
+  ];
+
+  for (const variant of variants) {
+    await page.setViewportSize({ width: variant.width, height: variant.height });
+    await page.goto(variant.path);
+
+    const wordmark = page.locator(variant.selector);
+    await expect(wordmark).toBeVisible();
+    const cursor = await wordmark.evaluate((element) => {
+      const wordmarkStyle = getComputedStyle(element);
+      const cursorStyle = getComputedStyle(element, '::after');
+      const fontSize = Number.parseFloat(wordmarkStyle.fontSize);
+      return {
+        content: cursorStyle.content,
+        display: cursorStyle.display,
+        heightRatio: Number.parseFloat(cursorStyle.height) / fontSize,
+        verticalAlignRatio: Number.parseFloat(cursorStyle.verticalAlign) / fontSize,
+      };
+    });
+
+    expect(cursor.content).toBe('""');
+    expect(cursor.display).toBe('inline-block');
+    expect(cursor.heightRatio).toBeCloseTo(0.76, 2);
+    expect(cursor.verticalAlignRatio).toBeCloseTo(-0.02, 2);
+    await expectNoHorizontalOverflow(page);
+  }
+});
+
 // A deep-ish result with enough evidence groups to exercise the section
 // navigation: assessment + DNS + HTTP evidence plus the always-present
 // registry sources and raw response.
