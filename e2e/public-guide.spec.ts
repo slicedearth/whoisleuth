@@ -5,8 +5,9 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
-  await expect(page.locator('.hero-brand')).toContainText('WHOISleuth');
-  await expect(page.locator('.hero-brand .mark')).toHaveCSS('width', '58px');
+  await expect(page.locator('.hero-kicker')).toHaveText('Domain investigation workspace');
+  await expect(page.locator('.public-header .mark')).toHaveCount(1);
+  await expect(page.locator('.hero .mark')).toHaveCount(0);
   await expect(page.locator('.goal-grid article')).toHaveCount(3);
   await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
@@ -39,7 +40,8 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await page.setViewportSize({ width: 320, height: 700 });
 
   await page.goto('/');
-  await expect(page.locator('.hero-brand .mark')).toHaveCSS('width', '46px');
+  await expect(page.locator('.hero-kicker')).toBeVisible();
+  await expect(page.locator('.hero .mark')).toHaveCount(0);
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   await expectNoHorizontalOverflow(page);
 

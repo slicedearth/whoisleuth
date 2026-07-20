@@ -26,7 +26,7 @@
 
 <section class="hero">
   <div class="hero-copy">
-    <div class="hero-brand"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain investigation</small></span></div>
+    <p class="eyebrow hero-kicker">Domain investigation workspace</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
     <p class="lede">Check registration, DNS, certificates and website signals in one place. WHOISleuth shows where each fact came from, explains missing or conflicting results, and lets you save evidence for later review.</p>
     <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><a class="btn" href="/login">Sign in to investigate</a></div>
@@ -75,7 +75,7 @@
 
 <style>
   .hero{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(390px,.92fr);gap:clamp(34px,7vw,82px);align-items:center;padding:18px 0 90px}
-  .hero-brand{display:flex;align-items:center;gap:13px;margin-bottom:18px;font-family:var(--mono)}.hero-brand .mark{width:58px;height:58px}.hero-brand strong,.hero-brand small{display:block}.hero-brand strong{font-size:1rem;letter-spacing:-.02em}.hero-brand small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);letter-spacing:.05em;text-transform:uppercase}
+  .hero-kicker{margin:0 0 18px}
   .hero h1{max-width:760px;margin:.35rem 0 1rem;font:750 clamp(2.6rem,6.5vw,5.4rem)/.97 var(--mono);letter-spacing:-.075em}
   .hero h1 span{color:var(--accent)}
   .lede{max-width:68ch;color:var(--muted);font-size:clamp(1rem,1.7vw,1.16rem);line-height:1.7}
@@ -101,5 +101,5 @@
   .principles{display:grid;grid-template-columns:1.15fr .85fr;gap:50px;margin:35px 0;padding:clamp(24px,5vw,46px)}.principles ul{display:grid;gap:10px;margin:0;padding:0;list-style:none}.principles li{padding:11px 12px;border-left:2px solid var(--accent2);background:rgb(var(--accent2-rgb) / .035);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .build-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--border)}.build-grid div{display:grid;gap:7px;padding:18px;background:var(--bg)}.build-grid strong{font:700 var(--text-xs) var(--mono)}.build-grid span{color:var(--muted);font-size:var(--text-2xs);line-height:1.55}
   @media(max-width:980px){.hero{grid-template-columns:1fr}.terminal-preview{max-width:650px}.build-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:680px){.hero{padding-bottom:62px}.hero-brand .mark{width:46px;height:46px}.hero h1{font-size:clamp(2.3rem,13vw,3.5rem)}.terminal-body dl div{grid-template-columns:1fr}.goal-grid,.evidence-grid,.principles,.build-grid{grid-template-columns:1fr}.goal-grid article{min-height:0}}
+  @media(max-width:680px){.hero{padding-bottom:62px}.hero h1{font-size:clamp(2.3rem,13vw,3.5rem)}.terminal-body dl div{grid-template-columns:1fr}.goal-grid,.evidence-grid,.principles,.build-grid{grid-template-columns:1fr}.goal-grid article{min-height:0}}
 </style>
