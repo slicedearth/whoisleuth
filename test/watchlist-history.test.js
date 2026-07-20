@@ -232,4 +232,89 @@ describe('watchlist history', () => {
     assert.deepEqual(result.entry.results[0].mutationTypes, ['omission']);
     assert.equal(raw[0].rawHtml, '<secret>');
   });
+
+  test('groups retained fields into stable domain-history categories', () => {
+    assert.equal(history.watchlistHistoryCategory('availability'), 'registration');
+    assert.equal(history.watchlistHistoryCategory('nameservers'), 'delegation');
+    assert.equal(history.watchlistHistoryCategory('hasMx'), 'mail');
+    assert.equal(history.watchlistHistoryCategory('httpFinalOrigin'), 'web');
+    assert.equal(history.watchlistHistoryCategory('faviconHash'), 'identity');
+    assert.equal(history.watchlistHistoryCategory('riskScore'), 'risk');
+    assert.equal(history.watchlistHistoryCategory('unknown'), null);
+  });
+
+  test('projects one domain without merging unrelated watchlist changes', () => {
+    const entry = history.normalizeWatchlistEntry({
+      updatedAt: '2026-07-03T00:00:00.000Z',
+      results: [{ domain: 'focus.example', availability: 'registered', scanDepth: 'deep' }],
+      history: [
+        { checkedAt: '2026-07-01T00:00:00.000Z', mode: 'saved', resultCount: 2, conclusiveCount: 2, changeCount: 0, omittedChanges: 0, changes: [] },
+        {
+          checkedAt: '2026-07-02T00:00:00.000Z', mode: 'fast', resultCount: 2, conclusiveCount: 2,
+          changeCount: 2, omittedChanges: 0, changes: [
+            { domain: 'focus.example', field: 'nameservers', before: ['ns1.old.example'], after: ['ns1.new.example'], kind: 'infrastructure_changed', tone: 'warn' },
+            { domain: 'other.example', field: 'availability', before: 'available', after: 'registered', kind: 'new_registration', tone: 'danger' },
+          ],
+        },
+        {
+          checkedAt: '2026-07-03T00:00:00.000Z', mode: 'deep', resultCount: 2, conclusiveCount: 2,
+          changeCount: 2, omittedChanges: 4, changes: [
+            { domain: 'focus.example', field: 'hasMx', before: false, after: true, kind: 'mail_activated', tone: 'warn' },
+            { domain: 'focus.example', field: 'riskScore', before: 20, after: 80, kind: 'high_risk', tone: 'danger' },
+          ],
+        },
+      ],
+    });
+    const before = structuredClone(entry);
+    const projected = history.projectWatchlistDomainHistory(entry, 'FOCUS.EXAMPLE.');
+
+    assert.equal(projected.domain, 'focus.example');
+    assert.equal(projected.retainedWatchlistChecks, 3);
+    assert.equal(projected.watchlistFirstCheckedAt, '2026-07-01T00:00:00.000Z');
+    assert.equal(projected.watchlistLastCheckedAt, '2026-07-03T00:00:00.000Z');
+    assert.deepEqual(projected.scanModes, ['saved', 'fast', 'deep']);
+    assert.equal(projected.materialChangeCount, 3);
+    assert.equal(projected.omittedChanges, 4);
+    assert.equal(projected.events.length, 2);
+    assert.deepEqual(projected.events[0].groups.map((group) => group.key), ['delegation']);
+    assert.deepEqual(projected.events[1].groups.map((group) => group.key), ['mail', 'risk']);
+    assert.equal(projected.events.some((event) => event.groups.some((group) => group.changes.some((change) => change.domain === 'other.example'))), false);
+    assert.deepEqual(entry, before);
+  });
+
+  test('domain history keeps watchlist-wide omissions neutral', () => {
+    const projected = history.projectWatchlistDomainHistory({
+      updatedAt: '2026-07-02T00:00:00.000Z',
+      results: [{ domain: 'quiet.example', availability: 'registered' }],
+      history: [{
+        checkedAt: '2026-07-02T00:00:00.000Z', mode: 'fast', resultCount: 1,
+        conclusiveCount: 1, changeCount: 7, omittedChanges: 7, changes: [],
+      }],
+    }, 'quiet.example');
+    assert.equal(projected.materialChangeCount, 0);
+    assert.equal(projected.events.length, 0);
+    assert.equal(projected.omittedChanges, 7);
+  });
+
+  test('domain options prioritise current domains and retain bounded historical domains', () => {
+    const current = Array.from({ length: history.MAX_WATCHLIST_HISTORY_DOMAIN_OPTIONS }, (_, index) => ({
+      domain: `current-${String(index).padStart(4, '0')}.example`, availability: 'registered',
+    }));
+    const result = history.watchlistHistoryDomains({
+      updatedAt: '2026-07-02T00:00:00.000Z',
+      results: current,
+      history: [{
+        checkedAt: '2026-07-02T00:00:00.000Z', mode: 'fast', resultCount: current.length,
+        conclusiveCount: current.length, changeCount: 1, omittedChanges: 0,
+        changes: [{ domain: 'historical.example', field: 'availability', before: 'available', after: 'registered', kind: 'new_registration', tone: 'danger' }],
+      }],
+    });
+    assert.equal(result.domains.length, history.MAX_WATCHLIST_HISTORY_DOMAIN_OPTIONS);
+    assert.equal(result.domains.includes('historical.example'), false);
+    assert.equal(result.omittedDomains, 1);
+  });
+
+  test('rejects an invalid domain history focus', () => {
+    assert.equal(history.projectWatchlistDomainHistory({}, 'not a domain'), null);
+  });
 });

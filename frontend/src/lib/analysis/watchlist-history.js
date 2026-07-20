@@ -13,6 +13,7 @@ export const MAX_WATCHLIST_DOMAINS = 2000;
 export const MAX_WATCHLIST_INPUT_RECORDS = MAX_WATCHLIST_DOMAINS * 2;
 export const MAX_WATCHLIST_NAMESERVERS = 12;
 export const MAX_WATCHLIST_MUTATION_TYPES = 30;
+export const MAX_WATCHLIST_HISTORY_DOMAIN_OPTIONS = MAX_WATCHLIST_DOMAINS;
 
 const MAX_TEXT_LENGTH = 300;
 const MAX_TITLE_LENGTH = 200;
@@ -76,6 +77,43 @@ const FIELD_LABELS = {
   reusesOfficialAssets: 'Official asset reuse',
   riskScore: 'Risk score',
 };
+
+const HISTORY_CATEGORY_FIELDS = {
+  registration: new Set(['availability', 'registrarName', 'createdDate', 'expiryDate', 'privacyProtected']),
+  delegation: new Set(['nameservers']),
+  mail: new Set(['hasMx', 'hasSpf', 'hasDmarc']),
+  web: new Set([
+    'activityStatus',
+    'httpEvidenceStatus',
+    'httpFinalOrigin',
+    'httpResponseStatus',
+    'httpTransportSecurity',
+    'httpRedirectCount',
+    'httpCrossOriginRedirect',
+    'httpHttpsDowngrade',
+    'httpContentType',
+    'httpSecurityHeaders',
+  ]),
+  identity: new Set([
+    'pageTitle',
+    'faviconHash',
+    'faviconMatch',
+    'faviconNearMatch',
+    'hasPasswordField',
+    'phishingLanguageMatch',
+    'reusesOfficialAssets',
+  ]),
+  risk: new Set(['riskScore']),
+};
+
+export const WATCHLIST_HISTORY_CATEGORIES = Object.freeze([
+  Object.freeze({ key: 'registration', label: 'Registration' }),
+  Object.freeze({ key: 'delegation', label: 'Delegation' }),
+  Object.freeze({ key: 'mail', label: 'Mail' }),
+  Object.freeze({ key: 'web', label: 'Web' }),
+  Object.freeze({ key: 'identity', label: 'Identity' }),
+  Object.freeze({ key: 'risk', label: 'Risk' }),
+]);
 
 const MAX_CHANGE_COUNT = MAX_WATCHLIST_DOMAINS * Object.keys(FIELD_LABELS).length;
 
@@ -466,4 +504,80 @@ export function formatWatchlistValue(field, value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (value === null || value === undefined || value === '') return 'None';
   return String(value);
+}
+
+export function watchlistHistoryCategory(field) {
+  for (const category of WATCHLIST_HISTORY_CATEGORIES) {
+    if (HISTORY_CATEGORY_FIELDS[category.key].has(field)) return category.key;
+  }
+  return null;
+}
+
+/**
+ * Produces a bounded, deterministic domain list for the history focus control.
+ * Current retained domains are prioritised before domains that appear only in
+ * older change events, because the latter may have left the current watchlist.
+ *
+ * @param {object | null | undefined} entry
+ */
+export function watchlistHistoryDomains(entry) {
+  const normalized = normalizeWatchlistEntry(entry || {});
+  const current = new Set();
+  const historical = new Set();
+  for (const record of [...normalized.results, ...normalized.baseline]) {
+    if (record?.domain) current.add(record.domain);
+  }
+  for (const event of normalized.history) {
+    for (const change of event.changes) {
+      if (change.domain && !current.has(change.domain)) historical.add(change.domain);
+    }
+  }
+  const domains = [...current].sort().concat([...historical].sort()).slice(0, MAX_WATCHLIST_HISTORY_DOMAIN_OPTIONS);
+  return {
+    domains,
+    omittedDomains: Math.max(0, current.size + historical.size - domains.length),
+  };
+}
+
+/**
+ * Builds a read-only view over one domain's retained watchlist changes. The
+ * coverage window and scan modes describe the watchlist, not proof that the
+ * selected domain was included in every retained check.
+ *
+ * @param {object | null | undefined} entry
+ * @param {unknown} domain
+ */
+export function projectWatchlistDomainHistory(entry, domain) {
+  const normalizedDomain = normalizeDomain(domain);
+  if (!normalizedDomain) return null;
+  const normalized = normalizeWatchlistEntry(entry || {});
+  const events = [];
+  let materialChangeCount = 0;
+  let omittedChanges = 0;
+
+  for (const event of normalized.history) {
+    omittedChanges += event.omittedChanges;
+    const matching = event.changes.filter((change) => change.domain === normalizedDomain);
+    if (!matching.length) continue;
+    materialChangeCount += matching.length;
+    const groups = [];
+    for (const category of WATCHLIST_HISTORY_CATEGORIES) {
+      const changes = matching.filter((change) => watchlistHistoryCategory(change.field) === category.key);
+      if (changes.length) groups.push({ ...category, changes });
+    }
+    const uncategorized = matching.filter((change) => watchlistHistoryCategory(change.field) === null);
+    if (uncategorized.length) groups.push({ key: 'other', label: 'Other', changes: uncategorized });
+    events.push({ checkedAt: event.checkedAt, mode: event.mode, groups });
+  }
+
+  return {
+    domain: normalizedDomain,
+    retainedWatchlistChecks: normalized.history.length,
+    watchlistFirstCheckedAt: normalized.history[0]?.checkedAt || null,
+    watchlistLastCheckedAt: normalized.history.at(-1)?.checkedAt || null,
+    scanModes: ['saved', 'fast', 'deep'].filter((mode) => normalized.history.some((event) => event.mode === mode)),
+    materialChangeCount,
+    omittedChanges,
+    events,
+  };
 }

@@ -90,3 +90,70 @@ test('watchlist history filters material changes and hands retained domains back
   await expect(page).toHaveURL(/\/bulk\?source=watchlist$/);
   await expect(page.getByLabel('Domains')).toHaveValue('priority.invalid');
 });
+
+test('watchlist history focuses one domain without implying complete coverage', async ({ page }) => {
+  const retained = {
+    updatedAt: NOW,
+    results: [
+      { domain: 'priority.invalid', availability: 'registered', scanDepth: 'deep' },
+      { domain: 'other.invalid', availability: 'registered', scanDepth: 'fast' },
+    ],
+    baseline: [],
+    history: [
+      {
+        checkedAt: '2026-07-12T08:00:00.000Z', mode: 'saved', resultCount: 2,
+        conclusiveCount: 2, changeCount: 0, omittedChanges: 0, changes: [],
+      },
+      {
+        checkedAt: '2026-07-13T08:00:00.000Z', mode: 'fast', resultCount: 2,
+        conclusiveCount: 2, changeCount: 2, omittedChanges: 0, changes: [
+          {
+            domain: 'priority.invalid', field: 'nameservers', before: ['ns1.old.invalid'],
+            after: ['ns1.new.invalid'], kind: 'infrastructure_changed', tone: 'warn',
+          },
+          {
+            domain: 'other.invalid', field: 'availability', before: 'available',
+            after: 'registered', kind: 'new_registration', tone: 'danger',
+          },
+        ],
+      },
+      {
+        checkedAt: NOW, mode: 'deep', resultCount: 2,
+        conclusiveCount: 2, changeCount: 2, omittedChanges: 3, changes: [
+          {
+            domain: 'priority.invalid', field: 'hasMx', before: false,
+            after: true, kind: 'mail_activated', tone: 'warn',
+          },
+          {
+            domain: 'priority.invalid', field: 'riskScore', before: 20,
+            after: 80, kind: 'high_risk', tone: 'danger',
+          },
+        ],
+      },
+    ],
+  };
+  await seed(page, { Priority: retained });
+
+  await page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'History' }).click();
+  const history = page.locator('.history');
+  await history.getByLabel('History focus').selectOption('priority.invalid');
+
+  const domainHistory = history.locator('.domain-history');
+  await expect(domainHistory.getByRole('heading', { name: 'priority.invalid' })).toBeVisible();
+  await expect(domainHistory).toContainText('Retained watchlist window');
+  await expect(domainHistory).toContainText('Material changes');
+  await expect(domainHistory).toContainText('Delegation');
+  await expect(domainHistory).toContainText('Mail');
+  await expect(domainHistory).toContainText('Risk');
+  await expect(domainHistory).not.toContainText('other.invalid');
+  await expect(domainHistory).toContainText('does not prove this domain was included in every check');
+  await expect(domainHistory).toContainText('cannot be attributed reliably to this domain');
+
+  await page.setViewportSize({ width: 360, height: 740 });
+  await expectNoHorizontalOverflow(page);
+
+  await domainHistory.getByRole('button', { name: 'Open case workspace' }).click();
+  await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.case.open')).toContainText('priority.invalid');
+  await expect(page.getByRole('status')).toContainText('Watchlist history remains separately attributed');
+});
