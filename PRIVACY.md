@@ -116,15 +116,26 @@ default (see the README), so many lookups return no personal data at all.
   and are removed by the demo reset action or when that tab session ends. Any
   downloaded demo package is explicitly marked as synthetic and is not a live
   finding or evidence report.
-- **Guided investigation navigation**: an authenticated user can optionally
-  start a guide for one canonical domain from the dashboard. The guide keeps
-  only schema version 1, that domain, creation/update timestamps, and up to four
-  opened-stage identifiers in the current tab's `sessionStorage` under
-  `whoisleuth:investigation-guide:v1`. It is not sent to the server, copied to
-  persistent browser stores, exported, or treated as evidence completion. It
-  only prefills existing workspace controls and never starts a lookup, search,
-  scan, or Monitor action. **End guide** removes the record, and closing the tab
-  session removes it with the rest of that tab's session storage.
+- **Guided investigation recipes**: an authenticated user can optionally start
+  a fixed brand-sweep, infrastructure-pivot, or new-domain-triage recipe for one
+  canonical domain. Schema version 2 keeps only that recipe and domain,
+  creation/update timestamps, active or paused state, and bounded stage
+  approval, opened, and outcome markers in the current tab's `sessionStorage`
+  under `whoisleuth:investigation-guide:v2`. A deployed version 1 navigation
+  record can normalize into the new-domain triage recipe when no current record
+  exists; future records remain untouched. Recipe progress is not sent to the
+  server or copied into persistent browser stores, and it is not treated as
+  evidence completion. A network stage requires an explicit approval marker
+  before its workspace link becomes available, but opening that link still
+  never starts a lookup, search, scan, submission, export, or Monitor action.
+  **Export summary** requires confirmation and deliberately downloads only a
+  versioned compact progress record without raw evidence, notes, credentials,
+  provider responses, or scan results. A read-only local checkpoint derives
+  retained observation and relationship counts from the typed investigation
+  projection without deciding stage completion. **End recipe** removes both
+  current and migrated legacy tab records,
+  and closing the tab session removes them with the rest of that tab's session
+  storage.
 - **TLS and certificate intelligence**: a requested deep domain scan resolves
   the domain through the public-address guard and opens one direct TLS
   connection to one validated address while retaining the domain as SNI.

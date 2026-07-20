@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import InvestigationSearch from '$lib/components/InvestigationSearch.svelte';
@@ -9,7 +8,11 @@
   import { loadLocalInvestigationSearchIndex } from '$lib/investigation-search';
   import { loadWatchlists } from '$lib/watchlists';
   import { referenceWorkspaces, workspaces } from '$lib/workspaces';
-  import { investigationGuideHref, startInvestigationGuide } from '$lib/investigation-guide';
+  import {
+    investigationRecipes,
+    startInvestigationGuide,
+    type InvestigationRecipeId,
+  } from '$lib/investigation-guide';
   import type { InvestigationSearchIndex } from '$lib/analysis/investigation-search.ts';
 
   const quickActions = [
@@ -21,7 +24,9 @@
   let counts = $state({ cases: 0, openCases: 0, watchlists: 0, profiles: 0 });
   let investigationIndex = $state<InvestigationSearchIndex | null>(null);
   let guideDomain = $state('');
+  let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
   let guideError = $state('');
+  const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
 
   function refreshLocalSummary() {
     const cases = loadCases();
@@ -36,12 +41,11 @@
 
   onMount(refreshLocalSummary);
 
-  async function startGuide(event:SubmitEvent) {
+  function startGuide(event:SubmitEvent) {
     event.preventDefault();
     guideError = '';
     try {
-      const guide = startInvestigationGuide(guideDomain);
-      await goto(investigationGuideHref('lookup', guide.domain));
+      startInvestigationGuide(guideDomain, guideRecipeId);
     } catch (cause) {
       guideError = cause instanceof Error ? cause.message : 'Could not start the guided investigation.';
     }
@@ -59,18 +63,25 @@
 
 <section class="guide-launcher card" aria-labelledby="guide-launcher-title">
   <div>
-    <p class="eyebrow">Guided workflow</p>
-    <h2 id="guide-launcher-title">Follow one domain across the investigation workspaces</h2>
-    <p>Start in Lookup, then move through Discover, Bulk, and Monitor with the same domain kept as tab-scoped navigation context.</p>
+    <p class="eyebrow">Guided recipes</p>
+    <h2 id="guide-launcher-title">Coordinate a bounded investigation</h2>
+    <p>Choose a fixed analyst recipe. Every collection stage shows its request implications and requires approval before it can be opened.</p>
   </div>
   <form onsubmit={startGuide}>
-    <label for="guide-domain">Domain</label>
+    <label for="guide-recipe">Recipe</label>
+    <select id="guide-recipe" bind:value={guideRecipeId}>
+      {#each investigationRecipes as recipe}
+        <option value={recipe.id}>{recipe.label}</option>
+      {/each}
+    </select>
+    <p class="recipe-detail">{selectedRecipe.summary}</p>
+    <label for="guide-domain">{selectedRecipe.targetLabel}</label>
     <div class="guide-input">
       <input id="guide-domain" bind:value={guideDomain} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="example.test">
-      <button class="primary" type="submit">Start guide</button>
+      <button class="primary" type="submit">Start recipe</button>
     </div>
     {#if guideError}<p class="error" role="alert">{guideError}</p>{/if}
-    <p class="guide-note">Starting the guide does not scan anything. Each workspace runs only when you choose its action.</p>
+    <p class="guide-note">Starting or navigating a recipe does not scan anything. Progress stays in this tab, and each workspace action remains manual.</p>
   </form>
 </section>
 
@@ -153,6 +164,8 @@
   .guide-launcher>div>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .guide-launcher form{align-self:center;min-width:0}
   .guide-launcher label{display:block;margin-bottom:6px;font:700 var(--text-xs) var(--mono)}
+  .guide-launcher select{width:100%;margin-bottom:7px}
+  .recipe-detail{margin:0 0 13px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .guide-input{display:flex;gap:7px;min-width:0}
   .guide-input input{min-width:0;flex:1}
   .guide-input button{flex:none;white-space:nowrap}

@@ -2,36 +2,72 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  approveInvestigationGuideStage,
+  buildInvestigationGuideSummary,
   createInvestigationGuide,
-  INVESTIGATION_GUIDE_STAGES,
+  INVESTIGATION_GUIDE_EXPORT_SCHEMA,
+  INVESTIGATION_GUIDE_EXPORT_VERSION,
+  INVESTIGATION_GUIDE_LEGACY_VERSION,
   INVESTIGATION_GUIDE_VERSION,
+  INVESTIGATION_RECIPES,
   investigationGuideHref,
+  investigationGuideRecipe,
   investigationGuideStageForPath,
+  investigationGuideStagesForRecipe,
+  investigationGuideSummaryFilename,
   MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH,
   normalizeInvestigationGuideDomain,
   parseInvestigationGuide,
+  restartInvestigationGuide,
+  setInvestigationGuideStageOutcome,
+  setInvestigationGuideStatus,
   visitInvestigationGuide,
-} from '../frontend/src/lib/analysis/investigation-guide.js';
+} from '../frontend/src/lib/analysis/investigation-guide.ts';
 
-const STARTED_AT = '2026-07-18T01:00:00.000Z';
-const UPDATED_AT = '2026-07-18T01:05:00.000Z';
+const STARTED_AT = '2026-07-20T01:00:00.000Z';
+const OPENED_AT = '2026-07-20T01:05:00.000Z';
+const APPROVED_AT = '2026-07-20T01:04:00.000Z';
+const COMPLETED_AT = '2026-07-20T01:06:00.000Z';
 
-test('creates a versioned guide for one canonical domain', () => {
-  const guide = createInvestigationGuide('Portal.Example.Test.', STARTED_AT);
-  assert.deepEqual(guide, {
-    version: INVESTIGATION_GUIDE_VERSION,
-    domain: 'portal.example.test',
-    createdAt: STARTED_AT,
-    updatedAt: STARTED_AT,
-    visitedStages: [],
-  });
+test('defines three fixed bounded recipes with complete stage guidance', () => {
+  assert.deepEqual(INVESTIGATION_RECIPES.map((recipe) => recipe.id), [
+    'brand_sweep',
+    'infrastructure_pivot',
+    'new_domain_triage',
+  ]);
+  for (const recipe of INVESTIGATION_RECIPES) {
+    assert.ok(recipe.stages.length >= 3 && recipe.stages.length <= 5);
+    assert.equal(new Set(recipe.stages.map((stage) => stage.id)).size, recipe.stages.length);
+    for (const stage of recipe.stages) {
+      assert.ok(stage.detail);
+      assert.ok(stage.expectedEvidence);
+      assert.ok(stage.requestImpact);
+      assert.ok(stage.prerequisite);
+      assert.ok(stage.completionCriteria);
+      assert.equal(stage.path, `/${stage.workspace}`);
+    }
+  }
 });
 
-test('rejects URL-like, control-bearing, whitespace, IP, undotted, and oversized targets', () => {
+test('creates a versioned recipe for one canonical domain without starting or completing a stage', () => {
+  const guide = createInvestigationGuide('Portal.Example.Test.', 'infrastructure_pivot', STARTED_AT);
+  assert.equal(guide.version, INVESTIGATION_GUIDE_VERSION);
+  assert.equal(guide.recipeId, 'infrastructure_pivot');
+  assert.equal(guide.domain, 'portal.example.test');
+  assert.equal(guide.status, 'active');
+  assert.deepEqual(guide.stages.map(({ id, outcome, approvedAt, openedAt }) => ({ id, outcome, approvedAt, openedAt })), [
+    { id: 'lookup', outcome: 'pending', approvedAt: null, openedAt: null },
+    { id: 'bulk', outcome: 'pending', approvedAt: null, openedAt: null },
+    { id: 'monitor', outcome: 'pending', approvedAt: null, openedAt: null },
+  ]);
+});
+
+test('rejects unknown recipes and URL-like, control-bearing, whitespace, IP, undotted, and oversized targets', () => {
   for (const value of [
     'https://example.test/path', 'example.test:443', 'user@example.test', 'two domains.test',
     'bad\n.example', '127.0.0.1', 'localhost', 'a'.repeat(MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH + 1), null,
   ]) assert.equal(normalizeInvestigationGuideDomain(value), '');
+  assert.equal(createInvestigationGuide('example.test', 'unknown', STARTED_AT), null);
 });
 
 test('normalizes IDN hostnames without mutating the input', () => {
@@ -40,42 +76,165 @@ test('normalizes IDN hostnames without mutating the input', () => {
   assert.equal(value, 'café.example');
 });
 
-test('parses only the current bounded schema and known unique stages', () => {
-  const parsed = parseInvestigationGuide({
-    version: 1,
-    domain: 'example.test',
+test('normalizes deployed version 1 navigation into new-domain triage version 2', () => {
+  const legacy = {
+    version: INVESTIGATION_GUIDE_LEGACY_VERSION,
+    domain: 'Example.Test.',
     createdAt: STARTED_AT,
-    updatedAt: UPDATED_AT,
-    visitedStages: ['lookup', 'invented', 'lookup', 'discover', 'bulk', 'monitor', 'lookup', 'discover', 'extra'],
+    updatedAt: OPENED_AT,
+    visitedStages: ['lookup', 'invented', 'lookup', 'bulk', 'monitor', 'extra'],
     rawEvidence: 'must not escape',
-  });
-  assert.deepEqual(parsed.visitedStages, ['lookup', 'discover', 'bulk', 'monitor']);
+  };
+  const parsed = parseInvestigationGuide(legacy);
+  assert.equal(parsed.version, 2);
+  assert.equal(parsed.recipeId, 'new_domain_triage');
+  assert.equal(parsed.domain, 'example.test');
+  assert.deepEqual(parsed.stages.map((stage) => [stage.id, stage.openedAt]), [
+    ['lookup', OPENED_AT],
+    ['bulk', OPENED_AT],
+    ['monitor', OPENED_AT],
+  ]);
   assert.equal('rawEvidence' in parsed, false);
-  for (const value of [null, [], { version: 2 }, { version: 1, domain: 'bad' }, {
-    version: 1, domain: 'example.test', createdAt: 'bad', updatedAt: UPDATED_AT,
+  assert.equal(legacy.version, 1);
+});
+
+test('parses current records through fixed stage and field allowlists', () => {
+  const current = createInvestigationGuide('example.test', 'brand_sweep', STARTED_AT);
+  const parsed = parseInvestigationGuide({
+    ...current,
+    status: 'invented',
+    stages: [
+      { id: 'discover', outcome: 'partial', approvedAt: APPROVED_AT, openedAt: OPENED_AT, updatedAt: COMPLETED_AT, raw: 'drop' },
+      { id: 'discover', outcome: 'complete', approvedAt: null, openedAt: null, updatedAt: STARTED_AT },
+      { id: 'invented', outcome: 'complete', updatedAt: STARTED_AT },
+    ],
+    rawEvidence: 'drop',
+  });
+  assert.equal(parsed.status, 'active');
+  assert.equal(parsed.stages.length, 5);
+  assert.deepEqual(parsed.stages.find((stage) => stage.id === 'discover'), {
+    id: 'discover',
+    outcome: 'partial',
+    approvedAt: APPROVED_AT,
+    openedAt: OPENED_AT,
+    updatedAt: COMPLETED_AT,
+  });
+  assert.equal('rawEvidence' in parsed, false);
+  assert.equal('raw' in parsed.stages.find((stage) => stage.id === 'discover'), false);
+});
+
+test('rejects malformed and future records without treating them as an empty recipe', () => {
+  for (const value of [null, [], { version: 3 }, { version: 2, domain: 'bad' }, {
+    version: 2,
+    recipeId: 'new_domain_triage',
+    domain: 'example.test',
+    createdAt: 'bad',
+    updatedAt: OPENED_AT,
   }]) assert.equal(parseInvestigationGuide(value), null);
 });
 
-test('records navigation separately from evidence completion and does not mutate source state', () => {
-  const original = createInvestigationGuide('example.test', STARTED_AT);
-  const visited = visitInvestigationGuide(original, '/lookup', UPDATED_AT);
-  assert.deepEqual(original.visitedStages, []);
-  assert.deepEqual(visited.visitedStages, ['lookup']);
-  assert.equal(visited.updatedAt, UPDATED_AT);
-  assert.deepEqual(visitInvestigationGuide(visited, '/lookup', '2026-07-18T01:10:00.000Z'), visited);
-  assert.deepEqual(visitInvestigationGuide(visited, '/registry-support', UPDATED_AT), visited);
-  assert.equal('completedStages' in visited, false);
+test('maps recipe stages to existing workspace routes with safe target handoff', () => {
+  assert.equal(investigationGuideRecipe('brand_sweep')?.label, 'Brand sweep');
+  assert.equal(investigationGuideStagesForRecipe('invented').length, 0);
+  assert.equal(investigationGuideStageForPath('/lookup', 'new_domain_triage')?.id, 'lookup');
+  assert.equal(investigationGuideStageForPath('/monitor/case', 'infrastructure_pivot')?.id, 'monitor');
+  assert.equal(investigationGuideStageForPath('/discover', 'infrastructure_pivot'), null);
+  assert.equal(investigationGuideHref('lookup', 'café.example', 'new_domain_triage'), '/lookup?q=xn--caf-dma.example');
+  assert.equal(investigationGuideHref('discover', 'example.test', 'brand_sweep'), '/discover?q=example.test');
+  assert.equal(investigationGuideHref('bulk', 'example.test', 'brand_sweep'), '/bulk');
+  assert.equal(investigationGuideHref('monitor', 'example.test', 'new_domain_triage'), '/monitor?view=cases');
+  assert.equal(investigationGuideHref('invented', 'example.test', 'brand_sweep'), '/dashboard');
 });
 
-test('maps only the four existing workflow routes and emits safe stage links', () => {
-  assert.deepEqual(INVESTIGATION_GUIDE_STAGES.map((stage) => stage.id), ['lookup', 'discover', 'bulk', 'monitor']);
-  assert.equal(investigationGuideStageForPath('/lookup')?.id, 'lookup');
-  assert.equal(investigationGuideStageForPath('/monitor/case')?.id, 'monitor');
-  assert.equal(investigationGuideStageForPath('/dashboard'), null);
-  assert.equal(investigationGuideHref('lookup', 'café.example'), '/lookup?q=xn--caf-dma.example');
-  assert.equal(investigationGuideHref('discover', 'example.test'), '/discover?q=example.test');
-  assert.equal(investigationGuideHref('bulk', 'example.test'), '/bulk');
-  assert.equal(investigationGuideHref('monitor', 'example.test'), '/monitor?view=cases');
-  assert.equal(investigationGuideHref('invented', 'example.test'), '/dashboard');
-  assert.equal(investigationGuideHref('lookup', 'bad input'), '/dashboard');
+test('records opened stages separately from outcomes and does not mutate source state', () => {
+  const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
+  assert.deepEqual(visitInvestigationGuide(original, '/lookup', OPENED_AT), original);
+  const approved = approveInvestigationGuideStage(original, 'lookup', APPROVED_AT);
+  const visited = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
+  assert.equal(original.stages[0].openedAt, null);
+  assert.equal(visited.stages[0].openedAt, OPENED_AT);
+  assert.equal(visited.stages[0].outcome, 'pending');
+  assert.deepEqual(visitInvestigationGuide(visited, '/lookup', COMPLETED_AT), visited);
+  assert.deepEqual(visitInvestigationGuide(visited, '/discover', COMPLETED_AT), visited);
+});
+
+test('requires explicit collection approval but approval never opens or completes a stage', () => {
+  const original = createInvestigationGuide('example.test', 'brand_sweep', STARTED_AT);
+  const approved = approveInvestigationGuideStage(original, 'discover', APPROVED_AT);
+  const discover = approved.stages.find((stage) => stage.id === 'discover');
+  assert.equal(discover.approvedAt, APPROVED_AT);
+  assert.equal(discover.openedAt, null);
+  assert.equal(discover.outcome, 'pending');
+  assert.deepEqual(approveInvestigationGuideStage(approved, 'discover', COMPLETED_AT), approved);
+  assert.deepEqual(approveInvestigationGuideStage(original, 'brands', APPROVED_AT), original);
+});
+
+test('complete and partial outcomes require an opened stage while skipped remains explicit', () => {
+  const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
+  assert.deepEqual(setInvestigationGuideStageOutcome(original, 'lookup', 'complete', COMPLETED_AT), original);
+  const skipped = setInvestigationGuideStageOutcome(original, 'bulk', 'skipped', COMPLETED_AT);
+  assert.equal(skipped.stages.find((stage) => stage.id === 'bulk').outcome, 'skipped');
+  const approved = approveInvestigationGuideStage(original, 'lookup', APPROVED_AT);
+  const opened = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
+  const partial = setInvestigationGuideStageOutcome(opened, 'lookup', 'partial', COMPLETED_AT);
+  assert.equal(partial.stages.find((stage) => stage.id === 'lookup').outcome, 'partial');
+  assert.equal(partial.updatedAt, COMPLETED_AT);
+});
+
+test('pause blocks stage mutation until the recipe is resumed', () => {
+  const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
+  const paused = setInvestigationGuideStatus(original, 'paused', APPROVED_AT);
+  assert.equal(paused.status, 'paused');
+  assert.deepEqual(visitInvestigationGuide(paused, '/lookup', OPENED_AT), paused);
+  assert.deepEqual(approveInvestigationGuideStage(paused, 'lookup', OPENED_AT), paused);
+  assert.deepEqual(setInvestigationGuideStageOutcome(paused, 'bulk', 'skipped', OPENED_AT), paused);
+  const resumed = setInvestigationGuideStatus(paused, 'active', COMPLETED_AT);
+  assert.equal(resumed.status, 'active');
+});
+
+test('restart preserves the recipe and target but clears all progress', () => {
+  const original = createInvestigationGuide('example.test', 'infrastructure_pivot', STARTED_AT);
+  const opened = visitInvestigationGuide(original, '/lookup', OPENED_AT);
+  const approved = approveInvestigationGuideStage(opened, 'bulk', APPROVED_AT);
+  const restarted = restartInvestigationGuide(approved, COMPLETED_AT);
+  assert.equal(restarted.recipeId, 'infrastructure_pivot');
+  assert.equal(restarted.domain, 'example.test');
+  assert.equal(restarted.createdAt, COMPLETED_AT);
+  assert.ok(restarted.stages.every((stage) => stage.outcome === 'pending' && !stage.approvedAt && !stage.openedAt));
+});
+
+test('builds a deterministic compact summary without evidence or analyst-owned content', () => {
+  const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
+  const approved = approveInvestigationGuideStage(original, 'lookup', APPROVED_AT);
+  const opened = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
+  const completed = setInvestigationGuideStageOutcome(opened, 'lookup', 'complete', COMPLETED_AT);
+  const summary = buildInvestigationGuideSummary(completed, '2026-07-20T02:00:00.000Z');
+  assert.equal(summary.schema, INVESTIGATION_GUIDE_EXPORT_SCHEMA);
+  assert.equal(summary.version, INVESTIGATION_GUIDE_EXPORT_VERSION);
+  assert.deepEqual(summary.target, { type: 'domain', value: 'example.test' });
+  assert.deepEqual(summary.stages[0], {
+    id: 'lookup',
+    workspace: 'lookup',
+    outcome: 'complete',
+    approved: true,
+    opened: true,
+    updatedAt: COMPLETED_AT,
+  });
+  const keys = [];
+  JSON.stringify(summary, (key, value) => {
+    if (key) keys.push(key);
+    return value;
+  });
+  for (const excluded of ['rawEvidence', 'notes', 'credentials', 'providerResponse', 'riskScore']) {
+    assert.equal(keys.includes(excluded), false);
+  }
+  assert.equal(buildInvestigationGuideSummary(completed, 'bad'), null);
+});
+
+test('creates a bounded safe summary filename', () => {
+  const guide = createInvestigationGuide('café.example', 'new_domain_triage', STARTED_AT);
+  const filename = investigationGuideSummaryFilename(guide, '2026-07-20T02:00:00.000Z');
+  assert.equal(filename, 'whoisleuth-recipe-xn--caf-dma.example-2026-07-20T02-00-00-000Z.json');
+  assert.ok(filename.length < 220);
+  assert.equal(investigationGuideSummaryFilename(null, 'bad'), 'whoisleuth-investigation-recipe.json');
 });

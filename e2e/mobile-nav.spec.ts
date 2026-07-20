@@ -82,6 +82,30 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
+test('the desktop sidebar scrolls to keep its session controls reachable on short viewports', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 560 });
+  await page.goto('/lookup');
+
+  const sidebar = page.locator('#workspace-navigation');
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar).toHaveCSS('overflow-y', 'auto');
+  expect(await sidebar.evaluate((element) => element.scrollHeight)).toBeGreaterThan(
+    await sidebar.evaluate((element) => element.clientHeight),
+  );
+
+  const signOutButton = sidebar.getByRole('button', { name: 'Sign out' });
+  await signOutButton.scrollIntoViewIfNeeded();
+  await expect(signOutButton).toBeVisible();
+  await expect(signOutButton).toBeEnabled();
+  expect(await sidebar.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  const sidebarBox = await boundingBox(sidebar);
+  const signOutBox = await boundingBox(signOutButton);
+  expect(signOutBox.y).toBeGreaterThanOrEqual(sidebarBox.y);
+  expect(signOutBox.y + signOutBox.height).toBeLessThanOrEqual(sidebarBox.y + sidebarBox.height + 1);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('closing the mobile drawer updates aria-expanded, and the footer links to Privacy', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/lookup');

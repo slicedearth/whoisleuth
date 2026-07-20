@@ -81,6 +81,13 @@ import {
   CURATED_CONNECTOR_CONTRACT_VERSION,
   CURATED_CONNECTOR_RESULT_SCHEMA,
 } from '../lib/threat-intelligence-contract.mts';
+import {
+  INVESTIGATION_GUIDE_EXPORT_SCHEMA,
+  INVESTIGATION_GUIDE_EXPORT_VERSION,
+  INVESTIGATION_GUIDE_VERSION,
+  MAX_INVESTIGATION_GUIDE_EXPORT_BYTES,
+  MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
+} from '../frontend/src/lib/analysis/investigation-guide.ts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -96,7 +103,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 46);
+    assert.equal(inventory.entries.length, 47);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -116,6 +123,12 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.deployment-self-check').currentVersion, DEPLOYMENT_SELF_CHECK_VERSION);
     assert.equal(byId(inventory, 'derived.curated-connector-result').schema, CURATED_CONNECTOR_RESULT_SCHEMA);
     assert.equal(byId(inventory, 'derived.curated-connector-result').currentVersion, CURATED_CONNECTOR_CONTRACT_VERSION);
+    assert.equal(byId(inventory, 'tab.investigation-guide').currentVersion, INVESTIGATION_GUIDE_VERSION);
+    assert.deepEqual(byId(inventory, 'tab.investigation-guide').supportedVersions, [1, 2]);
+    assert.equal(byId(inventory, 'tab.investigation-guide').byteBudget, MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES);
+    assert.equal(byId(inventory, 'export.investigation-recipe-summary').schema, INVESTIGATION_GUIDE_EXPORT_SCHEMA);
+    assert.equal(byId(inventory, 'export.investigation-recipe-summary').currentVersion, INVESTIGATION_GUIDE_EXPORT_VERSION);
+    assert.equal(byId(inventory, 'export.investigation-recipe-summary').byteBudget, MAX_INVESTIGATION_GUIDE_EXPORT_BYTES);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {

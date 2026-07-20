@@ -1,58 +1,111 @@
 import {
+  approveInvestigationGuideStage,
+  buildInvestigationGuideSummary,
   createInvestigationGuide,
-  INVESTIGATION_GUIDE_STAGES,
+  INVESTIGATION_GUIDE_EXPORT_SCHEMA,
+  INVESTIGATION_GUIDE_EXPORT_VERSION,
+  INVESTIGATION_GUIDE_SCHEMA,
   INVESTIGATION_GUIDE_VERSION,
+  INVESTIGATION_RECIPES,
   investigationGuideHref,
+  investigationGuideRecipe,
   investigationGuideStageForPath,
+  investigationGuideStagesForRecipe,
+  investigationGuideSummaryFilename,
+  MAX_INVESTIGATION_GUIDE_EXPORT_BYTES,
+  MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
   parseInvestigationGuide,
+  restartInvestigationGuide,
+  setInvestigationGuideStageOutcome,
+  setInvestigationGuideStatus,
   visitInvestigationGuide,
-} from './analysis/investigation-guide.js';
+  type InvestigationGuide,
+  type InvestigationGuideOutcome,
+  type InvestigationRecipeId,
+} from './analysis/investigation-guide.ts';
 
-export const INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
+export const INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v2';
+export const LEGACY_INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
 export const INVESTIGATION_GUIDE_EVENT = 'whoisleuth:investigation-guide-change';
-export const MAX_INVESTIGATION_GUIDE_SERIALIZED_LENGTH = 2_048;
 
-export type InvestigationGuideStageId = 'lookup' | 'discover' | 'bulk' | 'monitor';
-export type InvestigationGuide = {
-  version: 1;
-  domain: string;
-  createdAt: string;
-  updatedAt: string;
-  visitedStages: InvestigationGuideStageId[];
-};
+export type {
+  InvestigationGuide,
+  InvestigationGuideOutcome,
+  InvestigationGuideStageProgress,
+  InvestigationGuideStatus,
+  InvestigationGuideSummary,
+  InvestigationRecipe,
+  InvestigationRecipeId,
+  InvestigationRecipeStage,
+  InvestigationWorkspaceId,
+} from './analysis/investigation-guide.ts';
 
-export const investigationGuideStages = INVESTIGATION_GUIDE_STAGES as ReadonlyArray<{
-  id: InvestigationGuideStageId;
-  label: string;
-  path: string;
-  detail: string;
-}>;
+export const investigationRecipes = INVESTIGATION_RECIPES;
 
 function announceGuideChange() {
   window.dispatchEvent(new CustomEvent(INVESTIGATION_GUIDE_EVENT));
 }
 
+function serializedBytes(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function readStoredGuide(key: string): { state: 'absent' | 'invalid' | 'valid'; guide: InvestigationGuide | null } {
+  try {
+    const serialized = sessionStorage.getItem(key);
+    if (serialized === null) return { state: 'absent', guide: null };
+    if (serialized.length > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES
+      || serializedBytes(serialized) > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES) {
+      return { state: 'invalid', guide: null };
+    }
+    const guide = parseInvestigationGuide(JSON.parse(serialized));
+    return { state: guide ? 'valid' : 'invalid', guide };
+  } catch {
+    return { state: 'invalid', guide: null };
+  }
+}
+
 function storeGuide(guide: InvestigationGuide) {
   const serialized = JSON.stringify(guide);
-  if (serialized.length > MAX_INVESTIGATION_GUIDE_SERIALIZED_LENGTH) {
-    throw new Error('Could not retain the guided investigation because its navigation record is too large.');
+  if (serialized.length > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES
+    || serializedBytes(serialized) > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES) {
+    throw new Error('Could not retain the guided investigation because its progress record is too large.');
   }
-  try { sessionStorage.setItem(INVESTIGATION_GUIDE_KEY, serialized); }
-  catch { throw new Error('Could not retain the guided investigation in this tab. Browser storage may be unavailable.'); }
+  try {
+    sessionStorage.setItem(INVESTIGATION_GUIDE_KEY, serialized);
+  } catch {
+    throw new Error('Could not retain the guided investigation in this tab. Browser storage may be unavailable.');
+  }
+}
+
+function updateStoredGuide(next: InvestigationGuide | null, fallback: InvestigationGuide | null): InvestigationGuide | null {
+  if (!next) return next;
+  if (fallback && JSON.stringify(next) === JSON.stringify(fallback)) return fallback;
+  try {
+    storeGuide(next);
+    announceGuideChange();
+    return next;
+  } catch {
+    return fallback;
+  }
 }
 
 export function loadInvestigationGuide(): InvestigationGuide | null {
+  const current = readStoredGuide(INVESTIGATION_GUIDE_KEY);
+  if (current.state !== 'absent') return current.guide;
+
+  const legacy = readStoredGuide(LEGACY_INVESTIGATION_GUIDE_KEY);
+  if (!legacy.guide) return null;
   try {
-    const serialized = sessionStorage.getItem(INVESTIGATION_GUIDE_KEY) || '';
-    if (!serialized || serialized.length > MAX_INVESTIGATION_GUIDE_SERIALIZED_LENGTH) return null;
-    return parseInvestigationGuide(JSON.parse(serialized)) as InvestigationGuide | null;
+    storeGuide(legacy.guide);
   } catch {
-    return null;
+    // The normalized legacy record remains usable in memory when storage is unavailable.
   }
+  return legacy.guide;
 }
 
-export function startInvestigationGuide(domain: string): InvestigationGuide {
-  const guide = createInvestigationGuide(domain) as InvestigationGuide | null;
+export function startInvestigationGuide(domain: string, recipeId: InvestigationRecipeId = 'new_domain_triage'): InvestigationGuide {
+  const guide = createInvestigationGuide(domain, recipeId) as InvestigationGuide | null;
   if (!guide) throw new Error('Enter one valid domain without a URL, path, port, or spaces.');
   storeGuide(guide);
   announceGuideChange();
@@ -61,18 +114,68 @@ export function startInvestigationGuide(domain: string): InvestigationGuide {
 
 export function recordInvestigationGuideVisit(pathname: string): InvestigationGuide | null {
   const current = loadInvestigationGuide();
-  const next = visitInvestigationGuide(current, pathname) as InvestigationGuide | null;
-  if (!current || !next) return next;
-  if (next.visitedStages.length !== current.visitedStages.length) {
-    try { storeGuide(next); }
-    catch { return current; }
+  return updateStoredGuide(visitInvestigationGuide(current, pathname), current);
+}
+
+export function approveInvestigationGuideCollection(stageId: string): InvestigationGuide | null {
+  const current = loadInvestigationGuide();
+  return updateStoredGuide(approveInvestigationGuideStage(current, stageId), current);
+}
+
+export function updateInvestigationGuideOutcome(stageId: string, outcome: InvestigationGuideOutcome): InvestigationGuide | null {
+  const current = loadInvestigationGuide();
+  return updateStoredGuide(setInvestigationGuideStageOutcome(current, stageId, outcome), current);
+}
+
+export function pauseInvestigationGuide(): InvestigationGuide | null {
+  const current = loadInvestigationGuide();
+  return updateStoredGuide(setInvestigationGuideStatus(current, 'paused'), current);
+}
+
+export function resumeInvestigationGuide(): InvestigationGuide | null {
+  const current = loadInvestigationGuide();
+  return updateStoredGuide(setInvestigationGuideStatus(current, 'active'), current);
+}
+
+export function restartStoredInvestigationGuide(): InvestigationGuide | null {
+  const current = loadInvestigationGuide();
+  return updateStoredGuide(restartInvestigationGuide(current), current);
+}
+
+export function downloadInvestigationGuideSummary(): void {
+  const guide = loadInvestigationGuide();
+  const generatedAt = new Date().toISOString();
+  const summary = buildInvestigationGuideSummary(guide, generatedAt);
+  if (!guide || !summary) throw new Error('There is no valid guided investigation to export.');
+  const content = `${JSON.stringify(summary, null, 2)}\n`;
+  if (serializedBytes(content) > MAX_INVESTIGATION_GUIDE_EXPORT_BYTES) {
+    throw new Error('Could not export the guided investigation because its summary is too large.');
   }
-  return next;
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = investigationGuideSummaryFilename(guide, generatedAt);
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export function clearInvestigationGuide() {
-  try { sessionStorage.removeItem(INVESTIGATION_GUIDE_KEY); } catch { /* unavailable storage is already effectively clear */ }
+  try {
+    sessionStorage.removeItem(INVESTIGATION_GUIDE_KEY);
+    sessionStorage.removeItem(LEGACY_INVESTIGATION_GUIDE_KEY);
+  } catch {
+    // Unavailable storage is already effectively clear.
+  }
   announceGuideChange();
 }
 
-export { INVESTIGATION_GUIDE_VERSION, investigationGuideHref, investigationGuideStageForPath };
+export {
+  INVESTIGATION_GUIDE_EXPORT_SCHEMA,
+  INVESTIGATION_GUIDE_EXPORT_VERSION,
+  INVESTIGATION_GUIDE_SCHEMA,
+  INVESTIGATION_GUIDE_VERSION,
+  investigationGuideHref,
+  investigationGuideRecipe,
+  investigationGuideStageForPath,
+  investigationGuideStagesForRecipe,
+};

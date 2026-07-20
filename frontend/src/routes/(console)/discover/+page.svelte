@@ -24,7 +24,7 @@
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.js';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.js';
+  import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all';

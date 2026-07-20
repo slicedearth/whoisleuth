@@ -971,12 +971,22 @@ passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
 state, Certificate Transparency history, and unrelated browser storage. Local
 encryption can be added separately without replacing the portable unencrypted
 schema.
-From that dashboard, an optional guided investigation can keep one canonical
-domain and a bounded list of opened workflow stages in the current tab's
-`sessionStorage`. It prefills Lookup and Discover while moving through the
-existing workspaces, but never starts a lookup, candidate generation, Bulk
-scan, or Monitor action. An opened-stage marker records navigation only, not
-evidence collection or review, and **End guide** removes the tab-scoped record.
+From that dashboard, an optional guided investigation can coordinate one of
+three fixed recipes: brand sweep, infrastructure pivot, or new-domain triage.
+Version 2 keeps one canonical domain, active or paused state, and bounded
+approval, opened-stage, and analyst-selected outcome markers in the current
+tab's `sessionStorage` under `whoisleuth:investigation-guide:v2`. Deployed
+version 1 navigation records normalize into the new-domain triage recipe when
+no version 2 record exists, while future records remain untouched. Every stage
+shows prerequisites, expected evidence, completion criteria, and request or
+cost implications. Network collection stages require an explicit approval
+marker before their workspace link becomes available, but opening a workspace
+still never starts a lookup, search, scan, submission, export, or Monitor
+action. Recipes can be paused, resumed, restarted after confirmation, or ended.
+An explicit confirmed local download exports only a versioned compact progress
+summary, not raw evidence, notes, credentials, provider responses, or scan
+results. A read-only checkpoint derives retained observation and relationship
+counts from the typed local projection without deciding stage completion.
 The protected WHOISleuth brand returns to that dashboard; the dashboard keeps
 the public homepage available as a separate, clearly labelled destination.
 `/login` accepts the shared deployment password and returns only to a known
