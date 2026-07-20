@@ -1,0 +1,46 @@
+name: Registry drift audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-drift-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=optional --ignore-scripts
+      - name: Run bounded official-registry audit
+        id: audit
+        timeout-minutes: 2
+        run: |
+          exit_code=0
+          npm run --silent registry:drift -- --json > registry-drift-report.json || exit_code=$?
+          printf 'exit_code=%s\n' "$exit_code" >> "$GITHUB_OUTPUT"
+      - name: Retain reviewable report
+        if: steps.audit.outputs.exit_code != '0'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: registry-drift-report
+          path: registry-drift-report.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Require manual review
+        if: steps.audit.outputs.exit_code != '0'
+        run: exit 1

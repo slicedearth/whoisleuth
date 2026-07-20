@@ -217,7 +217,12 @@ differences. It does not accept a target, query a registry, test live domain
 reachability, update the catalogue, or interpret drift as registration,
 availability, ownership, safety, or maliciousness evidence. Automated tests
 exercise only injected fixtures; running the command is an explicit manual
-network operation.
+network operation. The read-only `registry-drift.yml` workflow also runs the
+same command weekly or on explicit dispatch with locked dependencies, no
+secrets, no write permissions, and a ten-minute job deadline. A non-current
+result retains its versioned JSON report for seven days and fails the workflow
+for manual review; it does not modify the catalogue, open issues, or notify an
+external service.
 
 Browser tests use reserved or locally rejected inputs and actively block
 off-origin requests, so ordinary verification does not query live registries,

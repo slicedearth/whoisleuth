@@ -396,6 +396,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   catalogue. Add `-- --json` for the versioned machine-readable report; exit
   status 1 means reviewable drift and status 2 means the audit was
   inconclusive or invoked incorrectly.
+  A separate read-only workflow runs the same bounded JSON audit each week and
+  on explicit dispatch. It uses no secrets or write permissions and retains a
+  report for seven days only when drift or an inconclusive result requires
+  manual review. It never rewrites the catalogue, opens an issue, or sends a
+  notification automatically.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
