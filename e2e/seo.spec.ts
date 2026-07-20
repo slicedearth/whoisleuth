@@ -5,13 +5,19 @@ const publicPages = [
     path: '/',
     canonical: 'https://whoisleuth.com/',
     title: 'WHOISleuth | WHOIS, RDAP and domain intelligence',
-    heading: 'Investigate domains.',
+    heading: 'Understand a domain.',
   },
   {
     path: '/demo',
     canonical: 'https://whoisleuth.com/demo',
     title: 'Domain investigation demo | WHOISleuth',
     heading: 'Use the investigation workflow without touching a live target.',
+  },
+  {
+    path: '/guide',
+    canonical: 'https://whoisleuth.com/guide',
+    title: 'How to use WHOISleuth | Guide and glossary',
+    heading: 'Use WHOISleuth with confidence.',
   },
   {
     path: '/privacy',
@@ -45,6 +51,15 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
         name: 'WHOISleuth',
         url: 'https://whoisleuth.com/',
       });
+    }
+
+    if (expected.path === '/guide') {
+      const schema = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/u)?.[1];
+      expect(schema).toBeTruthy();
+      const parsed = JSON.parse(schema!);
+      expect(parsed).toMatchObject({ '@context': 'https://schema.org', '@type': 'FAQPage' });
+      expect(parsed.mainEntity).toHaveLength(12);
+      expect(parsed.mainEntity[0]).toMatchObject({ '@type': 'Question', acceptedAnswer: { '@type': 'Answer' } });
     }
   }
 });

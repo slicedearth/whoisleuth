@@ -22,8 +22,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Investigate domains\./ })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Explore synthetic demo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toBeVisible();
   await expect(page.locator('.public-header').getByRole('link', { name: 'Privacy' })).toHaveCount(0);
   await expect(page.locator('.public-footer').getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
   await expect(page.getByText('See the workflow', { exact: true })).toHaveCount(0);
@@ -79,7 +79,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page).toHaveURL('/dashboard');
   await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
   await page.getByRole('link', { name: 'View public homepage' }).click();
-  await expect(page.getByRole('heading', { name: /Investigate domains\./ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   const publicSignOutButton = page.getByRole('button', { name: 'Sign out' });
   await expect(publicSignOutButton).toBeVisible();

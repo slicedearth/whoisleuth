@@ -132,8 +132,8 @@ SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret n
 Then open **http://localhost:3000** for the public product overview, or
 **http://localhost:3000/login** to enter the protected console.
 
-The overview, privacy policy, sign-in page, and isolated synthetic demo are
-public and make no live investigation request. The Lookup, Discover, Bulk,
+The overview, guide and glossary, privacy policy, sign-in page, and isolated
+synthetic demo are public and make no live investigation request. The Lookup, Discover, Bulk,
 Monitor, and Brands workspaces sit behind a shared-password gate:
 `SITE_PASSWORD` is required, and every investigation API route rejects
 requests without a valid session regardless of which frontend file a visitor
@@ -996,9 +996,14 @@ deliberately instead of being exposed automatically.
 
 ### Public overview and protected console
 
-The unauthenticated `/` route describes the product, evidence model, privacy
-posture, and five investigation workspaces without reading deployment
-capabilities or calling an analysis API. The public layout reads only the
+The unauthenticated `/` route describes the product in task-focused language,
+links common investigation paths, and renders compact Discover, Lookup, and
+Monitor previews from the same fixed fictional fixtures as `/demo`. The
+previews do not call an analysis API, write browser storage, or reproduce the
+authenticated workspace implementations. The public `/guide` route provides
+task-based starting points, workspace instructions, result-state guidance, a
+glossary, common interpretation mistakes, and an FAQ from one typed content
+model. The public layout reads only the
 existing boolean session-status endpoint so an authenticated visitor can open
 the console or sign out from a public page. Authenticated visitors land on a
 protected dashboard that links to all five investigation workspaces and shows

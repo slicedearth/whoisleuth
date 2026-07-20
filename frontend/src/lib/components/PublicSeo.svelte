@@ -5,12 +5,14 @@
     path,
     indexable = true,
     website = false,
+    structuredData = null,
   }: {
     title: string;
     description: string;
     path: string;
     indexable?: boolean;
     website?: boolean;
+    structuredData?: Record<string, unknown> | null;
   } = $props();
 
   const siteOrigin = 'https://whoisleuth.com';
@@ -18,12 +20,14 @@
   const robots = $derived(indexable
     ? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
     : 'noindex, nofollow');
-  const websiteSchema = JSON.stringify({
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'WHOISleuth',
-    url: `${siteOrigin}/`,
-  });
+  const schemaJson = $derived(JSON.stringify(website
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'WHOISleuth',
+        url: `${siteOrigin}/`,
+      }
+    : structuredData).replaceAll('<', '\\u003c'));
 </script>
 
 <svelte:head>
@@ -40,5 +44,5 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content={title}>
   <meta name="twitter:description" content={description}>
-  {#if website}<svelte:element this={'script'} type="application/ld+json">{websiteSchema}</svelte:element>{/if}
+  {#if website || structuredData}<svelte:element this={'script'} type="application/ld+json">{schemaJson}</svelte:element>{/if}
 </svelte:head>

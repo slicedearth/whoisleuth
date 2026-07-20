@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { BASE_URL } from './constants';
 import { ALLOWED_ORIGIN, installNetworkGuard, isAllowedRequestOrigin } from './fixtures';
 
 // Exercises the predicate every spec's automatic network guard
@@ -7,7 +8,7 @@ import { ALLOWED_ORIGIN, installNetworkGuard, isAllowedRequestOrigin } from './f
 // no test happens to make an off-origin request.
 test.describe('network origin guard', () => {
   test('allows the local test server origin and rejects everything else', () => {
-    expect(ALLOWED_ORIGIN).toBe('http://127.0.0.1:4173');
+    expect(ALLOWED_ORIGIN).toBe(BASE_URL);
 
     expect(isAllowedRequestOrigin(`${ALLOWED_ORIGIN}/`)).toBe(true);
     expect(isAllowedRequestOrigin(`${ALLOWED_ORIGIN}/api/login`)).toBe(true);

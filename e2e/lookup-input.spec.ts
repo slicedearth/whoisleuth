@@ -263,6 +263,7 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
     }));
     await page.locator('#query').fill(`${state.status}.example`);
     await page.getByRole('button', { name: 'Run lookup' }).click();
+    await expect(page.getByRole('heading', { name: `${state.status}.example`, exact: true })).toBeVisible();
     const section = page.locator('details.registrar-rdap');
     await section.locator(':scope > summary').click();
     await expect(section.getByText(state.detail, { exact: true })).toBeVisible();

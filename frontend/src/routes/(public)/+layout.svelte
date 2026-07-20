@@ -53,8 +53,8 @@
   <main class="public-content" id="main-content">{@render children()}</main>
 
   <footer class="public-footer">
-    <p>WHOISleuth separates registry, registrar, DNS, certificate, website, and analyst-derived evidence so missing or inconclusive data is not presented as proof.</p>
-    <p>© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="/privacy">Privacy</a></p>
+    <p>WHOISleuth keeps registration and supporting evidence separate, so missing or inconclusive data is not presented as proof.</p>
+    <p>© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="/guide">Guide</a> · <a href="/privacy">Privacy</a></p>
   </footer>
 </div>
 

@@ -7,11 +7,11 @@ const VIEWPORTS = [
 ];
 
 // The CSS floor for the drawer's protected browser-chrome/safe-area region
-// (see app.css: `padding-bottom: max(72px, calc(env(safe-area-inset-bottom)
+// (see app.css: `padding-bottom: max(74px, calc(env(safe-area-inset-bottom)
 // + 24px))`). In a desktop-Chromium test run env(safe-area-inset-bottom) is
-// always 0, so this 72px floor is exactly the value that must hold - if the
-// padding rule regressed to just the 24px term (or was dropped entirely),
-// this would catch it.
+// always 0. The assertion keeps a 72px contractual floor while the extra CSS
+// allowance absorbs subpixel device scaling; if the padding regressed to just
+// the 24px term (or was dropped entirely), this would catch it.
 const MIN_SAFE_AREA_PX = 72;
 
 for (const viewport of VIEWPORTS) {

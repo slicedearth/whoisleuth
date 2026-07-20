@@ -13,7 +13,11 @@ export const workspaces = [
 ];
 
 export const referenceWorkspaces = [
-  { href: '/registry-support', label: 'Registry support', detail: 'Review fixture-backed compatibility and access constraints' },
+  { href: '/registry-support', label: 'Registry support', detail: 'Check tested support and known limits for domain endings' },
+];
+
+export const publicResources = [
+  { href: '/guide', label: 'Guide', detail: 'Learn workflows, result states, glossary terms, and common questions' },
 ];
 
 export const consoleDestinations = [dashboard, ...workspaces, ...referenceWorkspaces];
