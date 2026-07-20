@@ -10,6 +10,7 @@
   let { children } = $props();
   let session = $state<'checking'|'authenticated'|'unavailable'>('checking');
   let navOpen = $state(false);
+  let signingOut = $state(false);
   let capabilities = $state<CapabilityReport|null>(null);
   let capabilitiesChecked = $state(false);
 
@@ -42,6 +43,8 @@
   }
 
   async function logout(){
+    if(signingOut)return;
+    signingOut=true;
     try{await fetch('/api/logout',{method:'POST'});}
     finally{await goto('/login',{replaceState:true});}
   }
@@ -63,13 +66,19 @@
   <div class="center"><section class="login card"><h1>Session service unavailable</h1><p class="muted">The protected console could not confirm your session.</p><button class="primary" onclick={checkSession}>Retry</button><p class="login-links"><a href="/">Return home</a></p></section></div>
 {:else}
   <div class="shell" class:open={navOpen}>
-    <header><a href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a><button aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="workspace-navigation" onclick={toggleNavigation}>☰</button></header>
+    <header>
+      <a href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a>
+      <div class="console-header-actions">
+        <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
+        <button class="navigation-toggle" type="button" aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="workspace-navigation" onclick={toggleNavigation}>☰</button>
+      </div>
+    </header>
     <aside id="workspace-navigation">
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth / console</span></div>
       <a class="brand" href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
       <nav aria-label="Console"><p class="eyebrow">Console</p>{#each consoleDestinations as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each publicResources as item}<a href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
-      <div class="session"><ThemeSelector /><div class="session-row"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span><button onclick={logout}>Sign out</button></div></div>
+      <div class="session"><ThemeSelector /><div class="session-row"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" aria-label="Close navigation" onclick={()=>navOpen=false}></button>{/if}
     <main id="main-content" tabindex="-1"><InvestigationGuide />{@render children()}<footer class="site-footer"><p>WHOISleuth uses <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap data</a> to query relevant registry services and can also check public DNS, Certificate Transparency, and website endpoints. Missing registrant fields often reflect registry redaction rather than a lookup failure.</p><p class="credit">© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="/privacy">Privacy</a></p></footer></main>

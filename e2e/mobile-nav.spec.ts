@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
 
 const VIEWPORTS = [
+  { label: '320x640', width: 320, height: 640 },
   { label: '390x568', width: 390, height: 568 },
   { label: '390x844', width: 390, height: 844 },
 ];
@@ -18,7 +19,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`mobile navigation @ ${viewport.label}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test('drawer opens with a safely-placed session action and no overflow', async ({ page }) => {
+    test('header keeps sign out accessible while the drawer opens without overflow', async ({ page }) => {
       await page.goto('/lookup');
 
       // Exactly one visible WHOISleuth logo/title (the header's, not the
@@ -32,6 +33,13 @@ for (const viewport of VIEWPORTS) {
         .locator('strong', { hasText: 'WHOISleuth' })
         .evaluateAll((els) => els.filter((el) => (el as HTMLElement).offsetParent !== null).length);
       expect(visibleBrandCount).toBe(1);
+
+      const header = page.locator('.shell > header');
+      const signOutButton = header.getByRole('button', { name: 'Sign out' });
+      await expect(signOutButton).toBeVisible();
+      await expect(signOutButton).toBeEnabled();
+      await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
+      await expect(page.locator('#workspace-navigation').getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 
       const shell = page.locator('.shell');
       const toggle = page.getByRole('button', { name: 'Toggle navigation' });
@@ -54,10 +62,6 @@ for (const viewport of VIEWPORTS) {
       const paddingBottom = await drawer.evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
       expect(paddingBottom).toBeGreaterThanOrEqual(MIN_SAFE_AREA_PX);
 
-      const signOutButton = drawer.getByRole('button', { name: 'Sign out' });
-      await expect(signOutButton).toBeVisible();
-      await expect(signOutButton).toBeEnabled();
-      await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
       await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
 
       // hover() performs the same occlusion/actionability checks Playwright
@@ -68,12 +72,9 @@ for (const viewport of VIEWPORTS) {
       const signOutBox = await boundingBox(signOutButton);
       expect(signOutBox.width).toBeGreaterThan(0);
       expect(signOutBox.height).toBeGreaterThan(0);
-      // At least the full protected-chrome region of clearance from the
-      // viewport bottom - not merely "somewhere above the fold". This
-      // fails if the 72px reservation shrinks or disappears, even though
-      // the action would still technically render on screen.
-      const clearance = viewport.height - (signOutBox.y + signOutBox.height);
-      expect(clearance).toBeGreaterThanOrEqual(MIN_SAFE_AREA_PX);
+      const headerBox = await boundingBox(header);
+      expect(signOutBox.y).toBeGreaterThanOrEqual(headerBox.y);
+      expect(signOutBox.y + signOutBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
 
       await expectNoHorizontalOverflow(page);
 
@@ -82,7 +83,7 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-test('the desktop sidebar scrolls to keep its session controls reachable on short viewports', async ({ page }) => {
+test('the desktop header keeps sign out reachable while the sidebar scrolls independently', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 560 });
   await page.goto('/lookup');
 
@@ -93,16 +94,23 @@ test('the desktop sidebar scrolls to keep its session controls reachable on shor
     await sidebar.evaluate((element) => element.clientHeight),
   );
 
-  const signOutButton = sidebar.getByRole('button', { name: 'Sign out' });
-  await signOutButton.scrollIntoViewIfNeeded();
+  const header = page.locator('.shell > header');
+  const signOutButton = header.getByRole('button', { name: 'Sign out' });
   await expect(signOutButton).toBeVisible();
   await expect(signOutButton).toBeEnabled();
-  expect(await sidebar.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(sidebar.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 
-  const sidebarBox = await boundingBox(sidebar);
+  const headerBox = await boundingBox(header);
   const signOutBox = await boundingBox(signOutButton);
-  expect(signOutBox.y).toBeGreaterThanOrEqual(sidebarBox.y);
-  expect(signOutBox.y + signOutBox.height).toBeLessThanOrEqual(sidebarBox.y + sidebarBox.height + 1);
+  expect(signOutBox.y).toBeGreaterThanOrEqual(headerBox.y);
+  expect(signOutBox.y + signOutBox.height).toBeLessThanOrEqual(headerBox.y + headerBox.height + 1);
+
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const scrolledHeaderBox = await boundingBox(header);
+  const scrolledSignOutBox = await boundingBox(signOutButton);
+  expect(scrolledHeaderBox.y).toBe(0);
+  expect(scrolledSignOutBox.y).toBeGreaterThanOrEqual(scrolledHeaderBox.y);
+  expect(scrolledSignOutBox.y + scrolledSignOutBox.height).toBeLessThanOrEqual(scrolledHeaderBox.y + scrolledHeaderBox.height + 1);
   await expectNoHorizontalOverflow(page);
 });
 
