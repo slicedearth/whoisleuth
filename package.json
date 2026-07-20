@@ -31,6 +31,7 @@
     "schema:inventory": "node tools/schema-inventory.mts",
     "deployment:self-check": "node tools/deployment-self-check.mts",
     "registry:drift": "node tools/registry-drift-audit.mts",
+    "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "security:codeql": "node tools/local-codeql.mts"
   },
   "engines": {

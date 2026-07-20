@@ -220,6 +220,7 @@ npm run check
 npm run build
 npm run schema:inventory  # generated compatibility report; reads no browser or hosted data
 npm run registry:drift    # manual bounded comparison with two official IANA catalogues
+npm run benchmark:workflow  # deterministic specialist workflow regression benchmark
 npm run security:codeql   # local CodeQL scan; requires the official CLI bundle
 npm run test:e2e:install   # one-time: downloads the Chromium browser Playwright drives
 npm run test:e2e:built     # reuses the production build created above
@@ -246,6 +247,20 @@ actual browser-store, hosted-state, export, interchange, CLI, and derived-model
 version constants. Each entry records supported legacy versions, future-version
 behavior, migration direction, write semantics, serialized bounds, and its owning module. The
 report is generated on demand and does not inspect or copy user data.
+
+`npm run benchmark:workflow` runs the versioned offline specialist benchmark.
+It exercises the production WHOIS registry parsers against every checked-in
+sanitized fixture, bounded lookalike generation, explicit partial-source
+handling, provenance-backed relationships, labelled detection-rule replay,
+benign shared-infrastructure controls, graph truncation, and workspace archive
+round-trip validation. Add `-- --json` for the complete
+`whoisleuth.specialist-workflow-benchmark` version 1 document. The report includes
+fixture pass rate, incomplete-collection disclosure, labelled false-positive
+rate, rule-match deduplication, graph-edge provenance completeness, export
+compatibility, and a deterministic workflow-step proxy for time to first useful
+pivot. It uses reserved domains and synthetic local evidence, makes no network
+requests, and is a regression baseline rather than a live coverage or
+production-performance claim.
 
 ### Browser end-to-end tests
 
