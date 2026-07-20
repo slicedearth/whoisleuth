@@ -1,23 +1,23 @@
 export const dashboard = {
   href: '/dashboard',
   label: 'Dashboard',
-  detail: 'Start an investigation or continue browser-local work',
+  detail: 'Start new work, continue saved work, or follow a guide',
 };
 
 export const workspaces = [
-  { href: '/lookup', label: 'Lookup', detail: 'Investigate a domain, IP address, or ASN' },
-  { href: '/discover', label: 'Discover', detail: 'Generate and find brand-related candidates' },
-  { href: '/bulk', label: 'Bulk', detail: 'Triage candidates and related infrastructure' },
-  { href: '/monitor', label: 'Monitor', detail: 'Track analyst cases, watchlists, and change history' },
-  { href: '/brands', label: 'Brands', detail: 'Manage profiles, allowlists, and posture' }
+  { href: '/lookup', label: 'Lookup', detail: 'Check one domain, IP address, or ASN' },
+  { href: '/discover', label: 'Discover', detail: 'Find domain candidates related to a brand' },
+  { href: '/bulk', label: 'Bulk', detail: 'Compare and prioritise a list of domains' },
+  { href: '/monitor', label: 'Monitor', detail: 'Review cases, watchlists, changes, and campaigns' },
+  { href: '/brands', label: 'Brands', detail: 'Set official domains, trusted infrastructure, and analysis preferences' }
 ];
 
 export const referenceWorkspaces = [
-  { href: '/registry-support', label: 'Registry support', detail: 'Check tested support and known limits for domain endings' },
+  { href: '/registry-support', label: 'Registry support', detail: 'See tested lookup support and known limits for domain endings' },
 ];
 
 export const publicResources = [
-  { href: '/guide', label: 'Guide', detail: 'Learn workflows, result states, glossary terms, and common questions' },
+  { href: '/guide', label: 'Guide', detail: 'Learn how to investigate domains and interpret results' },
 ];
 
 export const consoleDestinations = [dashboard, ...workspaces, ...referenceWorkspaces];

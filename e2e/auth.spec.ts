@@ -47,6 +47,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const loginForm = page.locator('form.login');
   await expect(loginForm).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Continue to WHOISleuth.' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Public overview' })).toHaveCount(0);
   const passwordField = page.getByLabel('Password');
   const signInButton = page.getByRole('button', { name: 'Sign in' });
   await expect(signInButton).toBeDisabled();

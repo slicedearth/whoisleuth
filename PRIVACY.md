@@ -116,14 +116,15 @@ default (see the README), so many lookups return no personal data at all.
   and are removed by the demo reset action or when that tab session ends. Any
   downloaded demo package is explicitly marked as synthetic and is not a live
   finding or evidence report.
-- **Guided investigation recipes**: an authenticated user can optionally start
-  a fixed brand-sweep, infrastructure-pivot, or new-domain-triage recipe for one
-  canonical domain. Schema version 2 keeps only that recipe and domain,
+- **Guided investigations**: an authenticated user can optionally start a fixed
+  brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
+  domain. The versioned storage contract calls the selected guide a recipe;
+  schema version 2 keeps only that recipe identifier and domain,
   creation/update timestamps, active or paused state, and bounded stage
   approval, opened, and outcome markers in the current tab's `sessionStorage`
   under `whoisleuth:investigation-guide:v2`. A deployed version 1 navigation
   record can normalize into the new-domain triage recipe when no current record
-  exists; future records remain untouched. Recipe progress is not sent to the
+  exists; future records remain untouched. Guide progress is not sent to the
   server or copied into persistent browser stores, and it is not treated as
   evidence completion. A network stage requires an explicit approval marker
   before its workspace link becomes available, but opening that link still
@@ -132,7 +133,7 @@ default (see the README), so many lookups return no personal data at all.
   versioned compact progress record without raw evidence, notes, credentials,
   provider responses, or scan results. A read-only local checkpoint derives
   retained observation and relationship counts from the typed investigation
-  projection without deciding stage completion. **End recipe** removes both
+  projection without deciding stage completion. **End guide** removes both
   current and migrated legacy tab records,
   and closing the tab session removes them with the rest of that tab's session
   storage.

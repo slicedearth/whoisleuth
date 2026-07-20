@@ -58,13 +58,12 @@
     <input id="password" type="password" autocomplete="current-password" bind:value={password} disabled={checking||busy}>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     <button class="primary" disabled={checking||busy||!password}>{checking?'Checking session…':busy?'Signing in…':'Sign in'}</button>
-    <p class="form-links"><a href="/">Public overview</a><span aria-hidden="true">·</span><a href="/privacy">Privacy</a></p>
   </form>
 </section>
 
 <style>
   .login-view{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,430px);gap:clamp(40px,8vw,100px);align-items:center;min-height:calc(100vh - 300px);padding:30px 0}
   .login-copy{max-width:620px}.login-copy h1{margin:.35rem 0 1rem;font:750 clamp(2.3rem,5vw,4.3rem)/1 var(--mono);letter-spacing:-.065em}.login-copy>p:not(.eyebrow){color:var(--muted);font-size:var(--text-md);line-height:1.7}.login-copy>a{display:inline-block;margin-top:12px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
-  .login{width:100%}.login h2{margin:16px 0 3px;font:700 1.35rem var(--mono)}.form-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}.form-links a{color:var(--accent)}
+  .login{width:100%}.login h2{margin:16px 0 3px;font:700 1.35rem var(--mono)}
   @media(max-width:780px){.login-view{grid-template-columns:1fr;min-height:0}.login-copy{max-width:680px}.login{justify-self:center}}
 </style>

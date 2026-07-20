@@ -569,7 +569,7 @@ export function searchInvestigationIndex(
       results: [],
       totalMatches: 0,
       truncated: index.truncated,
-      detail: 'No retained local entity matched this query. This does not establish that the entity or evidence is absent elsewhere.',
+      detail: 'Nothing saved in this browser matched that search. This does not mean the domain or evidence is absent elsewhere.',
     };
   }
   return {

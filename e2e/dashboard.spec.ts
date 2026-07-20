@@ -1,6 +1,5 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
-import { workspaces, referenceWorkspaces } from '../frontend/src/lib/workspaces';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -91,23 +90,32 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
 
 async function downloadWorkspaceArchive(page: import('@playwright/test').Page) {
   const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export workspace' }).click();
+  await page.getByRole('button', { name: 'Download backup' }).click();
   const download = await pending;
   const body = await (await download.createReadStream()).toArray();
   return { download, content: Buffer.concat(body).toString('utf-8') };
 }
 
-test('the dashboard launches every workspace and links back to the public homepage', async ({ page }) => {
+test('the dashboard groups core tasks without duplicating the sidebar workspace map', async ({ page }) => {
   await page.goto('/dashboard');
 
   await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'View public homepage' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('heading', { name: 'Start an investigation' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
   await expect(page.locator('.quick-card')).toHaveCount(3);
-  await expect(page.locator('.workspace-card')).toHaveCount(workspaces.length + referenceWorkspaces.length);
-
-  for (const { label, href } of [...workspaces, ...referenceWorkspaces]) {
-    await expect(page.locator('.workspace-card').filter({ hasText: label }).first()).toHaveAttribute('href', href);
-  }
+  await expect(page.locator('.workspace-card')).toHaveCount(0);
+  await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
+  await expect(page.locator('.summary-card', { hasText: 'Watchlists' })).toHaveAttribute('href', '/monitor?view=watchlists');
+  await expect(page.getByRole('link', { name: /Check domain-ending support/ })).toHaveAttribute('href', '/registry-support');
+  await expect(page.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', '/guide');
+  await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
+  await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
+  await expect(page.getByText('Investigation workspaces', { exact: true })).toHaveCount(0);
 });
 
 test('the dashboard reports bounded browser-local counts without exposing stored values', async ({ page }) => {
@@ -144,6 +152,18 @@ test('the dashboard reports bounded browser-local counts without exposing stored
   await expectNoHorizontalOverflow(page);
 });
 
+test('saved-work cards open the matching Monitor view', async ({ page }) => {
+  await page.goto('/dashboard');
+  await page.locator('.summary-card', { hasText: 'Open cases' }).click();
+  await expect(page).toHaveURL('/monitor?view=cases');
+  await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+
+  await page.goto('/dashboard');
+  await page.locator('.summary-card', { hasText: 'Watchlists' }).click();
+  await expect(page).toHaveURL('/monitor?view=watchlists');
+  await expect(page.getByRole('tab', { name: /Watchlists/ })).toHaveAttribute('aria-selected', 'true');
+});
+
 test('the dashboard exports one checksummed workspace archive without unrelated storage', async ({ page }) => {
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
@@ -163,7 +183,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(page.getByRole('status')).toContainText('Downloaded 7 verified workspace sections');
+  await expect(page.getByRole('status')).toContainText('Downloaded a workspace backup with 7 verified data sections');
 });
 
 test('workspace archive import previews conflicts before a non-destructive mobile-safe merge', async ({ page }) => {
@@ -179,18 +199,18 @@ test('workspace archive import previews conflicts before a non-destructive mobil
     }] }));
   }, { now: NOW });
   await page.reload();
-  await page.getByLabel('Preview archive').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
 
   const preview = page.locator('.preview');
-  await expect(preview.getByRole('heading', { name: 'Choose sections to merge' })).toBeVisible();
+  await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
   await expect(preview.locator('li')).toHaveCount(7);
   await expect(preview.locator('li', { hasText: 'Cases' })).toContainText('1 new');
   await expect(preview.locator('li', { hasText: 'Workspace settings' })).toContainText('Ready');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
-  await preview.getByRole('button', { name: 'Merge selected sections' }).click();
-  await expect(page.getByRole('status')).toContainText('Merged 7 sections');
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+  await expect(page.getByRole('status')).toContainText('Added backup data from 7 sections');
   const stored = await page.evaluate(() => ({
     cases: JSON.parse(localStorage.getItem('whois-rdap-cases-v1') || '{}').cases,
     campaigns: JSON.parse(localStorage.getItem('whoisleuth-campaigns-v1') || '{}').campaigns,
@@ -211,7 +231,7 @@ test('workspace archive import reports future sections and rolls back an interru
   const { content } = await downloadWorkspaceArchive(page);
   const future = JSON.parse(content);
   future.manifest.sections.find((section: any) => section.id === 'watchlists').version = 999;
-  await page.getByLabel('Preview archive').setInputFiles({ name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
+  await page.getByLabel('Review backup file').setInputFiles({ name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
   const futureWatchlists = page.locator('.preview li', { hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
   await expect(futureWatchlists.getByRole('checkbox')).toBeDisabled();
@@ -224,7 +244,7 @@ test('workspace archive import reports future sections and rolls back an interru
     }] }));
   }, { now: NOW });
   await page.reload();
-  await page.getByLabel('Preview archive').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
   const preview = page.locator('.preview');
   for (const checkbox of await preview.getByRole('checkbox').all()) {
     if (await checkbox.isChecked()) await checkbox.uncheck();
@@ -241,7 +261,7 @@ test('workspace archive import reports future sections and rolls back an interru
       },
     });
   });
-  await preview.getByRole('button', { name: 'Merge selected sections' }).click();
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
   await expect(page.getByRole('status')).toContainText('No archive changes were kept');
   const domains = await page.evaluate(() => JSON.parse(localStorage.getItem('whois-rdap-cases-v1') || '{}').cases.map((record: any) => record.domain));
   expect(domains).toEqual(['rollback.invalid']);

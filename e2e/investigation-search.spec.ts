@@ -68,7 +68,7 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
   });
   await seedInvestigationStores(page);
 
-  const search = page.getByRole('searchbox', { name: 'Search local evidence' });
+  const search = page.getByRole('searchbox', { name: 'Search saved work' });
   await expect(page.locator('main')).not.toContainText('candidate.invalid');
   await search.fill('candidate.invalid');
   const caseResult = page.locator('.result-card').filter({ hasText: 'Case' }).filter({ hasText: 'candidate.invalid' });
@@ -77,13 +77,13 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
   await expect(page.locator('.case-head', { hasText: 'candidate.invalid' })).toHaveAttribute('aria-expanded', 'true');
 
   await page.goto('/dashboard');
-  await page.getByRole('searchbox', { name: 'Search local evidence' }).fill('Priority review');
+  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('Priority review');
   await page.getByRole('link', { name: /Open campaign/ }).click();
   await expect(page).toHaveURL('/monitor?view=campaigns&campaign=campaign-source');
   await expect(page.locator('.campaign-head', { hasText: 'Priority review' })).toHaveAttribute('aria-expanded', 'true');
 
   await page.goto('/dashboard');
-  await page.getByRole('searchbox', { name: 'Search local evidence' }).fill('Reserved identity');
+  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('Reserved identity');
   await page.getByRole('link', { name: /Open profile/ }).click();
   await expect(page).toHaveURL('/brands?profile=profile-source');
   const focusedProfile = page.locator('#profile-profile-source');
@@ -100,18 +100,18 @@ test('dashboard local search exposes future-store limitations without indexing f
   }, caseRecord('future-case', 'future.invalid'));
   await page.reload();
 
-  await expect(page.getByText('1 local source warning')).toBeVisible();
-  await page.getByText('1 local source warning').click();
-  await expect(page.getByText('Cases: newer schema not indexed.')).toBeVisible();
-  await page.getByRole('searchbox', { name: 'Search local evidence' }).fill('future.invalid');
-  await expect(page.getByRole('status')).toContainText('No retained local entity matched');
+  await expect(page.getByText('1 saved-data warning')).toBeVisible();
+  await page.getByText('1 saved-data warning').click();
+  await expect(page.getByText('Cases: created by a newer version and not searched.')).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('future.invalid');
+  await expect(page.getByRole('status')).toContainText('Nothing saved in this browser matched');
   await expect(page.locator('main')).not.toContainText('future-case');
 });
 
 test('dashboard local search remains usable without horizontal overflow on narrow mobile screens', async ({ page }) => {
   await seedInvestigationStores(page);
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByRole('searchbox', { name: 'Search local evidence' }).fill('candidate.invalid');
+  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('candidate.invalid');
   await expect(page.locator('.result-card').first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole('link', { name: 'Open case', exact: true }).focus();

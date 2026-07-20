@@ -4,7 +4,7 @@ import { expectNoHorizontalOverflow } from './helpers';
 test('the dashboard and console navigation expose the registry-support reference', async ({ page }) => {
   await page.goto('/dashboard');
 
-  const dashboardLink = page.locator('.workspace-card').filter({ hasText: 'Registry support' });
+  const dashboardLink = page.getByRole('link', { name: /Check domain-ending support/ });
   await expect(dashboardLink).toHaveAttribute('href', '/registry-support');
   await expect(page.getByRole('navigation').getByRole('link', { name: 'Registry support' })).toHaveAttribute('href', '/registry-support');
 

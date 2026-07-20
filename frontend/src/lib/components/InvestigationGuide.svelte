@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
   import {
     approveInvestigationGuideCollection,
@@ -33,6 +33,7 @@
   let restartPending = $state(false);
   let exportPending = $state(false);
   let exportError = $state('');
+  let guideSection = $state<HTMLElement | null>(null);
   let evidence = $state({ observations: 0, relationships: 0, partial: false, truncated: false });
   const recipe = $derived(guide ? investigationGuideRecipe(guide.recipeId) : null);
   const stages = $derived(guide ? investigationGuideStagesForRecipe(guide.recipeId) : []);
@@ -42,6 +43,29 @@
   function refresh() {
     guide = loadInvestigationGuide();
     refreshEvidence();
+  }
+
+  function guideIdentity(value: InvestigationGuide | null) {
+    return value ? `${value.recipeId}\u0000${value.domain}\u0000${value.createdAt}` : '';
+  }
+
+  async function revealGuide() {
+    await tick();
+    guideSection?.focus({ preventScroll: true });
+    guideSection?.scrollIntoView({ block: 'start' });
+  }
+
+  async function revealStage(stageId: string) {
+    await tick();
+    const summary = guideSection?.querySelector<HTMLElement>(`[data-stage-id="${stageId}"] summary`);
+    summary?.focus({ preventScroll: true });
+    summary?.scrollIntoView({ block: 'center' });
+  }
+
+  function refreshFromEvent() {
+    const previousIdentity = guideIdentity(guide);
+    refresh();
+    if (guideIdentity(guide) !== previousIdentity) void revealGuide();
   }
 
   function refreshEvidence() {
@@ -84,6 +108,8 @@
   function setOutcome(stageId: string, event: Event) {
     const outcome = (event.currentTarget as HTMLSelectElement).value as InvestigationGuideOutcome;
     guide = updateInvestigationGuideOutcome(stageId, outcome);
+    const nextStage = outcome === 'pending' ? null : guide?.stages.find((stage) => stage.outcome === 'pending');
+    if (nextStage && nextStage.id !== stageId) void revealStage(nextStage.id);
   }
 
   function restart() {
@@ -112,8 +138,8 @@
   onMount(() => {
     mounted = true;
     refresh();
-    window.addEventListener(INVESTIGATION_GUIDE_EVENT, refresh);
-    return () => window.removeEventListener(INVESTIGATION_GUIDE_EVENT, refresh);
+    window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
+    return () => window.removeEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
   });
 
   $effect(() => {
@@ -123,7 +149,7 @@
 </script>
 
 {#if guide && recipe}
-  <section class="guide card" aria-labelledby="investigation-guide-title">
+  <section class="guide card" aria-labelledby="investigation-guide-title" tabindex="-1" bind:this={guideSection}>
     <div class="guide-heading">
       <div>
         <p class="eyebrow">Guided investigation</p>
@@ -133,32 +159,32 @@
       <span class:paused={guide.status === 'paused'} class="recipe-status">{guide.status === 'paused' ? 'Paused' : 'Active'}</span>
     </div>
 
-    <div class="guide-controls toolbar" aria-label="Recipe controls">
-      <button class="btn compact" type="button" onclick={togglePause}>{guide.status === 'paused' ? 'Resume recipe' : 'Pause recipe'}</button>
-      <button class="btn compact" type="button" onclick={restart}>{restartPending ? 'Confirm restart' : 'Restart recipe'}</button>
+    <div class="guide-controls toolbar" aria-label="Guide controls">
+      <button class="btn compact" type="button" onclick={togglePause}>{guide.status === 'paused' ? 'Resume guide' : 'Pause guide'}</button>
+      <button class="btn compact" type="button" onclick={restart}>{restartPending ? 'Confirm restart' : 'Restart guide'}</button>
       {#if restartPending}<button class="btn compact" type="button" onclick={() => restartPending = false}>Cancel restart</button>{/if}
       <button class="btn compact" type="button" onclick={exportSummary}>{exportPending ? 'Confirm export' : 'Export summary'}</button>
       {#if exportPending}<button class="btn compact" type="button" onclick={() => exportPending = false}>Cancel export</button>{/if}
-      <button class="btn compact" type="button" onclick={endGuide}>End recipe</button>
+      <button class="btn compact" type="button" onclick={endGuide}>End guide</button>
     </div>
     {#if exportError}<p class="error" role="alert">{exportError}</p>{/if}
     <p class="evidence-checkpoint">
-      <strong>Local evidence checkpoint.</strong>
+      <strong>Saved evidence checkpoint.</strong>
       {#if evidence.observations || evidence.relationships}
-        The typed local projection currently links {evidence.observations} retained observation{evidence.observations === 1 ? '' : 's'} and {evidence.relationships} relationship{evidence.relationships === 1 ? '' : 's'} to this domain.{evidence.partial ? ' Some retained evidence is partial.' : ''}{evidence.truncated ? ' A projection or source limit was reached.' : ''}
+        This browser currently links {evidence.observations} retained observation{evidence.observations === 1 ? '' : 's'} and {evidence.relationships} relationship{evidence.relationships === 1 ? '' : 's'} to this domain.{evidence.partial ? ' Some retained evidence is partial.' : ''}{evidence.truncated ? ' A saved-data or source limit was reached.' : ''}
       {:else}
-        No retained local observation currently links to this domain. This does not establish that evidence is absent elsewhere.{evidence.truncated ? ' A projection or source limit was reached.' : ''}
+        No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.{evidence.truncated ? ' A saved-data or source limit was reached.' : ''}
       {/if}
     </p>
 
-    <ol aria-label="Investigation recipe stages">
+    <ol aria-label="Investigation guide steps">
       {#each stages as stage,index}
         {@const progress = guide.stages.find((candidate) => candidate.id === stage.id)}
         {@const isCurrent = currentStage?.id === stage.id}
         {@const wasOpened = Boolean(progress?.openedAt)}
         {@const approved = !stage.requiresApproval || Boolean(progress?.approvedAt)}
-        <li class:current={isCurrent} class:opened={wasOpened} class:partial={progress?.outcome === 'partial'} class:complete={progress?.outcome === 'complete'} class:skipped={progress?.outcome === 'skipped'}>
-          <details open={isCurrent || (!currentStage && stage.id === nextStageId)}>
+        <li data-stage-id={stage.id} class:current={isCurrent} class:opened={wasOpened} class:partial={progress?.outcome === 'partial'} class:complete={progress?.outcome === 'complete'} class:skipped={progress?.outcome === 'skipped'}>
+          <details open={isCurrent || stage.id === nextStageId}>
             <summary>
               <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
               <span class="stage-heading"><strong>{stage.label}</strong><small>{stage.detail}</small></span>
@@ -167,16 +193,16 @@
             <div class="stage-body">
               <dl>
                 <div><dt>Expected evidence</dt><dd>{stage.expectedEvidence}</dd></div>
-                <div><dt>Request and cost</dt><dd>{stage.requestImpact}</dd></div>
-                <div><dt>Prerequisite</dt><dd>{stage.prerequisite}</dd></div>
-                <div><dt>Completion</dt><dd>{stage.completionCriteria}</dd></div>
+                <div><dt>What this step requests</dt><dd>{stage.requestImpact}</dd></div>
+                <div><dt>Before you start</dt><dd>{stage.prerequisite}</dd></div>
+                <div><dt>When to mark it complete</dt><dd>{stage.completionCriteria}</dd></div>
               </dl>
               <div class="stage-actions">
                 {#if stage.requiresApproval && !approved}
-                  <button class="btn compact" type="button" onclick={() => approve(stage.id)} disabled={guide.status === 'paused'}>Approve collection stage</button>
-                  <small>Approval records that you reviewed the request implications. Opening the workspace still does not start collection.</small>
+                  <button class="btn compact" type="button" onclick={() => approve(stage.id)} disabled={guide.status === 'paused'}>Allow this step</button>
+                  <small>This records that you reviewed what the step requests. It does not run the check. Opening the workspace only takes you there.</small>
                 {:else if guide.status === 'paused'}
-                  <span class="disabled-action">Resume the recipe to open this stage.</span>
+                  <span class="disabled-action">Resume the guide to open this step.</span>
                 {:else}
                   <a class="btn compact" href={investigationGuideHref(stage.id, guide.domain, guide.recipeId)}>Open {stage.workspace}</a>
                 {/if}
@@ -194,12 +220,13 @@
         </li>
       {/each}
     </ol>
-    <p class="boundary">Recipe progress is tab-local workflow metadata. It never starts a scan, submits a target, exports evidence, changes Risk, or decides a case disposition. Shared infrastructure remains a lead, not proof of control or intent.</p>
+    <p class="boundary">Guide progress stays in this tab. It never starts a scan, submits a target, exports evidence, changes Risk, or decides a case disposition. Shared infrastructure remains a lead, not proof of control or intent.</p>
   </section>
 {/if}
 
 <style>
-  .guide{margin:0 0 24px;padding:16px}
+  .guide{margin:0 0 24px;padding:16px;scroll-margin-top:76px}
+  .guide:focus{outline:2px solid var(--accent);outline-offset:3px}
   .guide-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .guide-title{display:block;margin:3px 0 0;overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
   .recipe-summary{max-width:850px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}

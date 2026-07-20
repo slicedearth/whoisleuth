@@ -58,16 +58,16 @@
 <section class="investigation-search card" aria-labelledby="investigation-search-title">
   <div class="search-intro">
     <div>
-      <p class="eyebrow">Local pivots</p>
-      <h2 id="investigation-search-title">Search retained investigation evidence</h2>
-      <p>Find known domains, cases, campaigns, brand profiles, infrastructure, and exact retained fingerprints in this browser.</p>
+      <p class="eyebrow">Find saved work</p>
+      <h2 id="investigation-search-title">Search what this browser remembers</h2>
+      <p>Find saved domains, cases, campaigns, brand profiles, and related infrastructure without starting another check.</p>
     </div>
     {#if index?.state === 'ready'}
-      <span class="index-count">{index.entityCount} indexed entit{index.entityCount === 1 ? 'y' : 'ies'}</span>
+      <span class="index-count">{index.entityCount} searchable item{index.entityCount === 1 ? '' : 's'}</span>
     {/if}
   </div>
 
-  <label for="investigation-search-query">Search local evidence</label>
+  <label for="investigation-search-query">Search saved work</label>
   <input
     id="investigation-search-query"
     type="search"
@@ -76,28 +76,28 @@
     autocomplete="off"
     autocapitalize="none"
     spellcheck="false"
-    placeholder="Domain, campaign, nameserver, origin, or hash"
+    placeholder="Domain, case, campaign, nameserver, or hash"
   >
-  <p class="search-note">Search runs only in memory. It does not query a provider, start a scan, or persist a separate index.</p>
+  <p class="search-note">This searches only data already retained in this browser. It does not contact a provider or start a new check.</p>
 
   {#if !index}
-    <p class="state-row" role="status">Preparing the local index.</p>
+    <p class="state-row" role="status">Preparing saved-work search.</p>
   {:else if index.state !== 'ready'}
-    <p class="state-row error" role="alert">{index.limitations[0] || 'The local investigation index is unavailable.'}</p>
+    <p class="state-row error" role="alert">{index.limitations[0] || 'Saved-work search is unavailable.'}</p>
   {:else}
     {#if sourceWarnings.length}
       <details class="source-warning">
-        <summary>{sourceWarnings.length} local source warning{sourceWarnings.length === 1 ? '' : 's'}</summary>
+        <summary>{sourceWarnings.length} saved-data warning{sourceWarnings.length === 1 ? '' : 's'}</summary>
         <ul>
           {#each sourceWarnings as [store, source]}
-            <li>{storeLabels[store] || store}: {source.state === 'unsupported' ? 'newer schema not indexed' : 'stored value could not be interpreted'}.</li>
+            <li>{storeLabels[store] || store}: {source.state === 'unsupported' ? 'created by a newer version and not searched' : 'could not be read safely'}.</li>
           {/each}
         </ul>
       </details>
     {/if}
     {#if index.limitations.length}
       <details class="index-limitations">
-        <summary>Index coverage and limitations</summary>
+        <summary>How search coverage works</summary>
         <ul>{#each index.limitations as limitation}<li>{limitation}</li>{/each}</ul>
       </details>
     {/if}
