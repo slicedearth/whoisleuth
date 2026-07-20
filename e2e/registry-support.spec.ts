@@ -6,7 +6,8 @@ test('the dashboard and console navigation expose the registry-support reference
 
   const dashboardLink = page.getByRole('link', { name: /Check domain-ending support/ });
   await expect(dashboardLink).toHaveAttribute('href', '/registry-support');
-  await expect(page.getByRole('navigation').getByRole('link', { name: 'Registry support' })).toHaveAttribute('href', '/registry-support');
+  await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: 'Registry support' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: 'Registry support' })).toHaveAttribute('href', '/registry-support');
 
   await dashboardLink.click();
   await expect(page).toHaveURL('/registry-support');
@@ -149,7 +150,7 @@ test('the registry-support reference remains readable without horizontal overflo
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'true');
   await expect(workspaceNavigation).toHaveCSS('transform', 'none');
-  await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: 'Registry support' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: 'Registry support' })).toBeVisible();
   await expect(interpretation).toHaveCSS('position', 'static');
   await expect(interpretation).toHaveCSS('transform', 'none');
   await page.getByRole('button', { name: 'Toggle navigation' }).click();

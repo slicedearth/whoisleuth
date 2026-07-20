@@ -1,22 +1,27 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { onMount } from 'svelte';
+  import { onMount, setContext } from 'svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
+  import {
+    PUBLIC_SESSION_CONTEXT,
+    type PublicSessionState,
+  } from '$lib/public-session';
 
   let { children } = $props();
-  let authenticated = $state(false);
+  let session = $state<PublicSessionState>('checking');
   let signingOut = $state(false);
   let logoutError = $state('');
 
+  setContext(PUBLIC_SESSION_CONTEXT, () => session);
   onMount(() => { void checkSession(); });
 
   async function checkSession(){
     try{
       const response=await fetch('/api/session',{cache:'no-store'});
-      authenticated=response.ok&&(await response.json()).authenticated===true;
+      session=response.ok&&(await response.json()).authenticated===true?'authenticated':'anonymous';
     }catch{
-      authenticated=false;
+      session='anonymous';
     }
   }
 
@@ -27,7 +32,7 @@
     try{
       const response=await fetch('/api/logout',{method:'POST'});
       if(!response.ok)throw new Error();
-      authenticated=false;
+      session='anonymous';
       await goto('/login',{replaceState:true});
     }catch{
       logoutError='Sign out failed. Try again.';
@@ -44,8 +49,8 @@
       <a class="overview-link" class:active={page.url.pathname==='/' } aria-current={page.url.pathname==='/'?'page':undefined} href="/">Overview</a>
       <a class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>
       <ThemeSelector />
-      <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} aria-label="Open console" href={authenticated?'/dashboard':'/login'}><span class="console-label-full" aria-hidden="true">Open console</span><span class="console-label-short" aria-hidden="true">Console</span></a>
-      {#if authenticated}<button class="sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>{/if}
+      <a class="console-link" class:active={page.url.pathname==='/login'} aria-current={page.url.pathname==='/login'?'page':undefined} aria-label="Open console" href={session==='authenticated'?'/dashboard':'/login'}><span class="console-label-full" aria-hidden="true">Open console</span><span class="console-label-short" aria-hidden="true">Console</span></a>
+      {#if session==='authenticated'}<button class="sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>{/if}
       {#if logoutError}<span class="session-error" role="status">{logoutError}</span>{/if}
     </nav>
   </header>

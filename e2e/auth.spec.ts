@@ -29,6 +29,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByText('See the workflow', { exact: true })).toHaveCount(0);
   await expect.poll(() => publicSessionRequests).toBe(1);
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
+  await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
   const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -82,7 +83,13 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
   await page.getByRole('link', { name: 'View public homepage' }).click();
   await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  await expect(publicNavigation.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.getByRole('link', { name: 'Open dashboard' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
+  await page.goto('/guide');
+  await expect(page.getByRole('link', { name: 'Open dashboard' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
+  await page.goto('/');
   const publicSignOutButton = page.getByRole('button', { name: 'Sign out' });
   await expect(publicSignOutButton).toBeVisible();
   await expect(publicSignOutButton).toHaveCSS('white-space', 'nowrap');

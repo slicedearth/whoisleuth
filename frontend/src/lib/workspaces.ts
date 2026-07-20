@@ -20,4 +20,6 @@ export const publicResources = [
   { href: '/guide', label: 'Guide', detail: 'Learn how to investigate domains and interpret results' },
 ];
 
-export const consoleDestinations = [dashboard, ...workspaces, ...referenceWorkspaces];
+export const consoleNavigation = [dashboard, ...workspaces];
+export const referenceNavigation = [...referenceWorkspaces, ...publicResources];
+export const consoleDestinations = [...consoleNavigation, ...referenceWorkspaces];

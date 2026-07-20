@@ -15,6 +15,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Explore the interactive demo' })).toHaveAttribute('href', '/demo');
+  await expect(page.getByRole('link', { name: 'Open dashboard' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -33,6 +35,8 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await question.click();
   await expect(page.getByText('No. It organises observed evidence and provides an explainable Risk score for prioritisation.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toHaveAttribute('href', '/demo');
+  await expect(page.getByRole('link', { name: 'Open dashboard' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -51,8 +55,10 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expectNoHorizontalOverflow(page);
 });
 
-test('authenticated console exposes the public guide as a reference without changing protected destinations', async ({ page }) => {
+test('authenticated console groups the guide and registry support under Reference', async ({ page }) => {
   await page.goto('/lookup');
   const reference = page.getByRole('navigation', { name: 'Reference' });
   await expect(reference.getByRole('link', { name: /Guide/ })).toHaveAttribute('href', '/guide');
+  await expect(reference.getByRole('link', { name: /Registry support/ })).toHaveAttribute('href', '/registry-support');
+  await expect(page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: /Registry support/ })).toHaveCount(0);
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import {
     commonMistakes,
     glossaryTerms,
@@ -31,7 +32,7 @@
   <p class="eyebrow">Guide and glossary</p>
   <h1>Use WHOISleuth with confidence.</h1>
   <p>Start with the task you need to complete, then learn how to read source states, registration evidence and supporting signals without turning uncertainty into a claim.</p>
-  <div class="guide-actions"><a class="primary" href="/demo">Try the synthetic demo</a><a class="btn" href="/login">Sign in to investigate</a></div>
+  <div class="guide-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
 </header>
 
 <nav class="guide-index card" aria-label="Guide sections">

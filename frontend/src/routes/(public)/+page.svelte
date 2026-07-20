@@ -1,6 +1,7 @@
 <script lang="ts">
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import HomepageProductPreview from '$lib/components/HomepageProductPreview.svelte';
+  import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import { publicGuideGoals } from '$lib/public-guide';
 
   const evidenceSources = [
@@ -29,7 +30,7 @@
     <p class="eyebrow hero-kicker">Domain investigation workspace</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
     <p class="lede">Check registration, DNS, certificates and website signals in one place. WHOISleuth shows where each fact came from, explains missing or conflicting results, and lets you save evidence for later review.</p>
-    <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><a class="btn" href="/login">Sign in to investigate</a></div>
+    <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
     <p class="access-note"><span aria-hidden="true">●</span> The overview and demo are public. Live checks require sign-in.</p>
   </div>
   <div class="terminal-preview card" aria-label="Example WHOISleuth evidence summary">
