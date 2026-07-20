@@ -219,9 +219,27 @@ npm run typecheck
 npm run check
 npm run build
 npm run schema:inventory  # generated compatibility report; reads no browser or hosted data
+npm run registry:drift    # manual bounded comparison with two official IANA catalogues
+npm run security:codeql   # local CodeQL scan; requires the official CLI bundle
 npm run test:e2e:install   # one-time: downloads the Chromium browser Playwright drives
 npm run test:e2e:built     # reuses the production build created above
 ```
+
+`npm run security:codeql` scans the current checkout, including uncommitted
+changes, with the standard JavaScript and TypeScript code-scanning suite. It
+requires GitHub's official CodeQL bundle on `PATH`, in the conventional
+`~/.local/bin/codeql` location, or at an absolute executable path supplied in
+`CODEQL_PATH`. The command never downloads or uploads code, creates its database
+and SARIF report under the operating system's temporary directory, and removes
+both on completion. Analysis uses two threads, at most half of system memory up
+to 4 GiB, bounded process output, a 16 MiB SARIF cap, and a 15-minute deadline
+per CodeQL process. Previously reviewed hosted findings are matched only by
+their exact SARIF fingerprints; a new occurrence or a stale baseline entry
+fails for review rather than broadly suppressing a rule or file. Exit status 0
+means no unreviewed findings or baseline drift, 1 means review is required, and
+2 means setup or analysis was inconclusive. The hosted scan remains
+authoritative when its managed CodeQL bundle differs from the locally installed
+version.
 
 `npm run schema:inventory` generates a maintainer-readable report from the
 actual browser-store, hosted-state, export, interchange, CLI, and derived-model
@@ -365,6 +383,14 @@ compact-storage boundary, and lookup evidence schema are documented in the
   unavailable, restricted, prohibited, reserved, or otherwise inconclusive
   responses are not parser or availability evidence. Fixture scenarios claim
   only the represented behavior and make no automated registry requests.
+  Maintainers can run `npm run registry:drift` to compare that dated snapshot
+  and every explicit suffix profile with the current IANA root-zone list and
+  domain RDAP bootstrap. The command makes exactly two fixed official-source
+  requests, accepts no target, caps each response, and returns current, drift,
+  or inconclusive checks without probing a registry or rewriting the
+  catalogue. Add `-- --json` for the versioned machine-readable report; exit
+  status 1 means reviewable drift and status 2 means the audit was
+  inconclusive or invoked incorrectly.
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,

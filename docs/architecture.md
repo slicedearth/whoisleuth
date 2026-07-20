@@ -209,6 +209,16 @@ future-version behavior, byte bounds, migration direction, and write semantics
 are reviewed.
 It reads no browser-local or hosted records and writes no inventory artifact.
 
+The maintainer-run `npm run registry:drift` audit compares the embedded
+registry-standards snapshot with exactly two fixed official IANA catalogue
+files: the root-zone TLD list and the domain RDAP bootstrap. Its versioned
+report caps response bytes, parsed records, deadlines, and reported suffix
+differences. It does not accept a target, query a registry, test live domain
+reachability, update the catalogue, or interpret drift as registration,
+availability, ownership, safety, or maliciousness evidence. Automated tests
+exercise only injected fixtures; running the command is an explicit manual
+network operation.
+
 Browser tests use reserved or locally rejected inputs and actively block
 off-origin requests, so ordinary verification does not query live registries,
 DNS, Certificate Transparency, or websites.

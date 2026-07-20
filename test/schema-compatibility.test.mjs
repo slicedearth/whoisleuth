@@ -78,6 +78,10 @@ import {
   DEPLOYMENT_SELF_CHECK_VERSION,
 } from '../tools/deployment-self-check.mts';
 import {
+  REGISTRY_DRIFT_AUDIT_SCHEMA,
+  REGISTRY_DRIFT_AUDIT_VERSION,
+} from '../tools/registry-drift-audit.mts';
+import {
   CURATED_CONNECTOR_CONTRACT_VERSION,
   CURATED_CONNECTOR_RESULT_SCHEMA,
 } from '../lib/threat-intelligence-contract.mts';
@@ -103,7 +107,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 47);
+    assert.equal(inventory.entries.length, 48);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -121,6 +125,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.workspace-settings-section').currentVersion, WORKSPACE_SETTINGS_VERSION);
     assert.equal(byId(inventory, 'cli.deployment-self-check').schema, DEPLOYMENT_SELF_CHECK_SCHEMA);
     assert.equal(byId(inventory, 'cli.deployment-self-check').currentVersion, DEPLOYMENT_SELF_CHECK_VERSION);
+    assert.equal(byId(inventory, 'cli.registry-drift-audit').schema, REGISTRY_DRIFT_AUDIT_SCHEMA);
+    assert.equal(byId(inventory, 'cli.registry-drift-audit').currentVersion, REGISTRY_DRIFT_AUDIT_VERSION);
     assert.equal(byId(inventory, 'derived.curated-connector-result').schema, CURATED_CONNECTOR_RESULT_SCHEMA);
     assert.equal(byId(inventory, 'derived.curated-connector-result').currentVersion, CURATED_CONNECTOR_CONTRACT_VERSION);
     assert.equal(byId(inventory, 'tab.investigation-guide').currentVersion, INVESTIGATION_GUIDE_VERSION);
