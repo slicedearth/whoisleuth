@@ -77,7 +77,7 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 25;
+const REGISTRY_CAPABILITIES_VERSION = 26;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
@@ -134,7 +134,7 @@ const ES_ACCESS_LIMITATION = 'The registry WHOIS service requires advance source
 const SWITCH_ACCESS_LIMITATION = 'The registry directs public domain searches to its official lookup. Its non-standard-port Domain Check is not integrated, and IANA publishes no RDAP service. Missing registry data is not evidence that the domain is unregistered.';
 const VN_ACCESS_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.';
 const UK_TRANSITION_LIMITATION = 'Synthetic fixtures verify the documented sectioned port-43 response while that WHOIS service is phased out. RDAP remains the preferred registry source, and fixture coverage does not prove current reachability or field publication.';
-const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profile. The registry limits public WHOIS use, prohibits abusive high-volume automation, and states that a missing record is not proof of availability; WHOISleuth retains bounded request controls and authority-aware interpretation.';
+const MY_ACCESS_LIMITATION = 'Synthetic fixtures verify the current parser profile. The registry limits public WHOIS use, prohibits abusive high-volume automation, and states that a missing record is not proof of availability; WHOISleuth retains bounded request controls and authority-aware interpretation. IANA publishes no RDAP bootstrap service for this suffix.';
 const NO_IANA_MACHINE_SERVICE_LIMITATION = 'IANA publishes no domain WHOIS or RDAP service for this suffix. Missing registry data is not evidence that the domain is unregistered.';
 const RDAP_ONLY_MACHINE_SERVICE_LIMITATION = 'IANA publishes an RDAP bootstrap service but no domain WHOIS referral for this suffix. Missing WHOIS data is contextual only and is not evidence that the domain is unregistered.';
 const SHARED_WHOIS_NO_RDAP_LIMITATION = 'Synthetic fixture reuse is limited to an exact shared IANA WHOIS service. IANA publishes no RDAP bootstrap service for this suffix, and missing registry data is not evidence that the domain is unregistered.';
@@ -197,6 +197,22 @@ const CURRENT_UNVERIFIED_REFERRAL_SUFFIXES = Object.freeze(
     (suffix) => !VERSION_24_PROMOTED_SUFFIXES.includes(suffix),
   ),
 );
+const VERSION_26_NO_RDAP_SUFFIXES = Object.freeze([
+  'ac', 'ae', 'af', 'am', 'at', 'be', 'bg', 'by', 'cl', 'cn',
+  'co', 'de', 'dk', 'ee', 'eu', 'gf', 'gi', 'gt', 'hk', 'hr',
+  'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kr', 'kz', 'la',
+  'lt', 'lu', 'lv', 'md', 'me', 'mk', 'mo', 'mq', 'mx', 'my',
+  'nz', 'pk', 'pt', 'ro', 'rs', 'ru', 'sa', 'se', 'sk', 'su',
+  'tn', 'tr', 'us', 'vc', 'xn--2scrj9c', 'xn--3e0b707e',
+  'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
+  'xn--90a3ac', 'xn--90ais', 'xn--d1alf', 'xn--e1a4c',
+  'xn--fiqs8s', 'xn--fiqz9s', 'xn--fpcrj9c3d', 'xn--gecrj9c',
+  'xn--h2breg3eve', 'xn--h2brj9c', 'xn--h2brj9c8c', 'xn--j6w193g',
+  'xn--kprw13d', 'xn--mix891f', 'xn--p1ai', 'xn--q7ce6a',
+  'xn--qxa6a', 'xn--rvc1e0am3e', 'xn--s9brj9c',
+  'xn--xkc2dl3a5ee0h', 'xn--y9a3aq',
+]);
+const VERSION_26_NO_RDAP_SUFFIX_SET = new Set(VERSION_26_NO_RDAP_SUFFIXES);
 const NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   ...VERSION_15_NO_IANA_MACHINE_SERVICE_SUFFIXES,
   ...VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES,
@@ -742,8 +758,15 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     ],
   },
   {
-    id: 'nixi-colon', suffixes: [
-      'in',
+    id: 'nixi-colon', suffixes: ['in'], registryClass: 'country-code',
+    whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.registry.in/policies',
+      'https://www.iana.org/domains/root/db/in.html',
+    ],
+  },
+  {
+    id: 'nixi-idn-colon', suffixes: [
       'xn--2scrj9c',
       'xn--3hcrj9c',
       'xn--45br5cyl',
@@ -760,7 +783,6 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered'],
     documentationUrls: [
       'https://www.registry.in/policies',
-      'https://www.iana.org/domains/root/db/in.html',
       'https://www.iana.org/domains/root/db/xn--2scrj9c.html',
       'https://www.iana.org/domains/root/db/xn--3hcrj9c.html',
       'https://www.iana.org/domains/root/db/xn--45br5cyl.html',
@@ -774,6 +796,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
       'https://www.iana.org/domains/root/db/xn--s9brj9c.html',
       'https://www.iana.org/domains/root/db/xn--xkc2dl3a5ee0h.html',
     ],
+    limitation: SHARED_WHOIS_NO_RDAP_LIMITATION,
   },
   {
     id: 'pandi-colon', suffixes: ['id'], registryClass: 'country-code',
@@ -992,14 +1015,22 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     whoisParserProfile: 'prefixed-dot-leader-and-bare-nameservers', fixtureScenarios: ['registered'],
   },
   {
-    id: 'twnic-colon', suffixes: ['tw', 'xn--kprw13d', 'xn--kpry57d'], registryClass: 'country-code',
+    id: 'twnic-colon', suffixes: ['tw', 'xn--kpry57d'], registryClass: 'country-code',
     whoisParserProfile: 'twnic-record-dates-and-provider', fixtureScenarios: ['registered'],
     documentationUrls: [
       'https://www.twnic.tw/dnservice/policy/?lang=en',
       'https://www.iana.org/domains/root/db/tw.html',
-      'https://www.iana.org/domains/root/db/xn--kprw13d.html',
       'https://www.iana.org/domains/root/db/xn--kpry57d.html',
     ],
+  },
+  {
+    id: 'twnic-no-rdap-colon', suffixes: ['xn--kprw13d'], registryClass: 'country-code',
+    whoisParserProfile: 'twnic-record-dates-and-provider', fixtureScenarios: ['registered'],
+    documentationUrls: [
+      'https://www.twnic.tw/dnservice/policy/?lang=en',
+      'https://www.iana.org/domains/root/db/xn--kprw13d.html',
+    ],
+    limitation: SHARED_WHOIS_NO_RDAP_LIMITATION,
   },
   {
     id: 'hostmaster-ua-colon', suffixes: ['ua'], registryClass: 'country-code',
@@ -1204,21 +1235,37 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
   },
 ];
 
-const EXPLICIT_CAPABILITIES = EXPLICIT_CAPABILITY_SEEDS.map((entry) => freezeCapability({
-  ...entry,
-  fallbackProfile: entry.fallbackProfile || null,
-  rdapDiscovery: 'iana-bootstrap',
-  whoisDiscovery: 'iana-referral',
-  whoisQueryProfile: entry.whoisQueryProfile || 'plain-domain',
-  whoisQueryScope: 'first-referral',
-  whoisEncodingProfile: 'utf-8',
-  whoisAccessProfile: entry.whoisAccessProfile || 'iana-referral',
-  rdapAccessProfile: entry.rdapAccessProfile || 'iana-bootstrap',
-  coverageState: entry.coverageState || 'fixture_verified',
-  verificationFiles: entry.verificationFiles || ['fixtures/whois-registry-fixtures.js'],
-  documentationUrls: entry.documentationUrls || [],
-  limitation: entry.limitation || FIXTURE_LIMITATION,
-} as RegistryCapability));
+function resolvedSeedRdapAccessProfile(entry: RegistryCapabilitySeed): RdapAccessProfile {
+  const declared = entry.rdapAccessProfile || 'iana-bootstrap';
+  const resolved = new Set(entry.suffixes.map((suffix) => (
+    VERSION_26_NO_RDAP_SUFFIX_SET.has(suffix) ? 'no-iana-service' : declared
+  )));
+  if (resolved.size !== 1) {
+    throw new Error(`Registry capability ${entry.id} mixes RDAP access profiles and must be split by suffix.`);
+  }
+  return [...resolved][0] as RdapAccessProfile;
+}
+
+const EXPLICIT_CAPABILITIES = EXPLICIT_CAPABILITY_SEEDS.map((entry) => {
+  const rdapAccessProfile = resolvedSeedRdapAccessProfile(entry);
+  return freezeCapability({
+    ...entry,
+    fallbackProfile: entry.fallbackProfile || null,
+    rdapDiscovery: 'iana-bootstrap',
+    whoisDiscovery: 'iana-referral',
+    whoisQueryProfile: entry.whoisQueryProfile || 'plain-domain',
+    whoisQueryScope: 'first-referral',
+    whoisEncodingProfile: 'utf-8',
+    whoisAccessProfile: entry.whoisAccessProfile || 'iana-referral',
+    rdapAccessProfile,
+    coverageState: entry.coverageState || 'fixture_verified',
+    verificationFiles: entry.verificationFiles || ['fixtures/whois-registry-fixtures.js'],
+    documentationUrls: entry.documentationUrls || [],
+    limitation: entry.limitation || (rdapAccessProfile === 'no-iana-service'
+      ? WHOIS_ONLY_FIXTURE_LIMITATION
+      : FIXTURE_LIMITATION),
+  } as RegistryCapability);
+});
 
 const CAPABILITY_BY_SUFFIX = new Map<string, Readonly<RegistryCapability>>();
 for (const capability of EXPLICIT_CAPABILITIES) {
@@ -1322,6 +1369,7 @@ function registryCompatibilityMatrix(): RegistryCompatibilityRow[] {
 
 export {
   REGISTRY_CAPABILITIES_VERSION,
+  VERSION_26_NO_RDAP_SUFFIXES,
   registryCapabilityFor,
   registryCompatibilityMatrix,
   listRegistryCapabilities,

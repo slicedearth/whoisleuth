@@ -27,7 +27,7 @@ and response encoding without duplicating the query value in the response.
 
 Generic TLDs use live IANA RDAP bootstrap discovery and shared bounded RDAP
 parsing. WHOISleuth does not create a duplicate parser profile for each suffix.
-The version 25 catalogue includes an official-source snapshot verified on 19
+The version 26 catalogue includes an official-source snapshot verified on 19
 July 2026: all 1,113 current generic and generic-restricted TLDs were present in
 the IANA RDAP bootstrap, as were 12 of 14 sponsored TLDs. `.edu` and `.mil` are
 the sponsored exceptions, while the infrastructure suffix `.arpa` has no RDAP
@@ -35,7 +35,7 @@ bootstrap service. The dated snapshot describes published coverage only. It is
 not a live reachability, registration, availability, ownership, safety, or
 maliciousness result.
 
-The version 25 explicit matrix is:
+The version 26 explicit matrix is:
 
 | Suffix | Current WHOIS parser/fallback or access profile | Coverage |
 | --- | --- | --- |
@@ -777,6 +777,27 @@ for these five related suffixes, and the catalogue now records that state for
 `.mn` explicitly. Seventeen version 23 referrals remain access documented
 because their manual responses were unavailable, restricted, prohibited,
 reserved, or otherwise inconclusive.
+
+Version 26 reconciles suffix-specific RDAP access metadata with the official
+domain bootstrap observed on 20 July 2026. A bounded manual audit found 81
+explicit rows that had inherited the catalogue's default bootstrap profile even
+though the official bootstrap published no service for those suffixes. The 54
+ASCII suffixes are `.ac`, `.ae`, `.af`, `.am`, `.at`, `.be`, `.bg`, `.by`,
+`.cl`, `.cn`, `.co`, `.de`, `.dk`, `.ee`, `.eu`, `.gf`, `.gi`, `.gt`, `.hk`,
+`.hr`, `.hu`, `.ie`, `.il`, `.io`, `.ir`, `.it`, `.jp`, `.kr`, `.kz`, `.la`,
+`.lt`, `.lu`, `.lv`, `.md`, `.me`, `.mk`, `.mo`, `.mq`, `.mx`, `.my`, `.nz`,
+`.pk`, `.pt`, `.ro`, `.rs`, `.ru`, `.sa`, `.se`, `.sk`, `.su`, `.tn`, `.tr`,
+`.us`, and `.vc`. The remaining 27 rows are the corresponding A-label
+delegations recorded in the versioned catalogue and its deterministic fixture.
+
+The shared WHOIS parser families remain unchanged. `.in`, `.tw`, and
+`.xn--kpry57d` retain their separately published RDAP bootstrap coverage, while
+the related suffixes without a bootstrap entry use suffix-specific capability
+rows. Runtime lookup still discovers endpoints from the live validated
+bootstrap and does not consult this metadata for routing or availability. A
+catalogue row that says no RDAP service is collection context at the stated
+audit date, not evidence that a domain is unregistered, available, inactive,
+safe, or malicious.
 
 Generic fixtures also verify registered, authoritative-not-found, and
 rate-limited WHOIS states. RDAP normalization has separate fixture coverage for

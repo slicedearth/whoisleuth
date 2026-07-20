@@ -24,7 +24,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v25')).toBeVisible();
+  await expect(page.getByText('Catalogue v26')).toBeVisible();
   await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('312');
   await expect(page.locator('tbody tr')).toHaveCount(312);
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });

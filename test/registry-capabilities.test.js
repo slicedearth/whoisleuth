@@ -8,6 +8,7 @@ const { domainToUnicode } = require('node:url');
 
 const {
   REGISTRY_CAPABILITIES_VERSION,
+  VERSION_26_NO_RDAP_SUFFIXES,
   registryAccessDiagnosticFor,
   registryCapabilityFor,
   registryCompatibilityMatrix,
@@ -37,7 +38,7 @@ const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'nic-io-colon', suffixes: ['ac'] },
   { id: 'nic-sa-idn-colon', suffixes: ['xn--mgberp4a5d4ar'] },
   {
-    id: 'nixi-colon',
+    id: 'nixi-idn-colon',
     suffixes: [
       'xn--2scrj9c',
       'xn--3hcrj9c',
@@ -63,7 +64,8 @@ const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'tci-colon', suffixes: ['su', 'xn--p1ai'] },
   { id: 'thnic-holder-colon', suffixes: ['xn--o3cw4h'] },
   { id: 'ati-tn-idn-dot-leader', suffixes: ['xn--pgbs0dh'] },
-  { id: 'twnic-colon', suffixes: ['xn--kprw13d', 'xn--kpry57d'] },
+  { id: 'twnic-no-rdap-colon', suffixes: ['xn--kprw13d'] },
+  { id: 'twnic-colon', suffixes: ['xn--kpry57d'] },
 ];
 
 const VERSION_14_SUFFIXES = [
@@ -139,7 +141,7 @@ const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 25);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 26);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -634,6 +636,42 @@ describe('registry capability metadata', () => {
       assert.equal(diagnostic?.rdapAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic?.authority, 'context_only', suffix);
     }
+  });
+
+  test('records the version twenty-six official RDAP access reconciliation', () => {
+    const expectedNoRdapSuffixes = [
+      'ac', 'ae', 'af', 'am', 'at', 'be', 'bg', 'by', 'cl', 'cn',
+      'co', 'de', 'dk', 'ee', 'eu', 'gf', 'gi', 'gt', 'hk', 'hr',
+      'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kr', 'kz', 'la',
+      'lt', 'lu', 'lv', 'md', 'me', 'mk', 'mo', 'mq', 'mx', 'my',
+      'nz', 'pk', 'pt', 'ro', 'rs', 'ru', 'sa', 'se', 'sk', 'su',
+      'tn', 'tr', 'us', 'vc', 'xn--2scrj9c', 'xn--3e0b707e',
+      'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
+      'xn--90a3ac', 'xn--90ais', 'xn--d1alf', 'xn--e1a4c',
+      'xn--fiqs8s', 'xn--fiqz9s', 'xn--fpcrj9c3d', 'xn--gecrj9c',
+      'xn--h2breg3eve', 'xn--h2brj9c', 'xn--h2brj9c8c', 'xn--j6w193g',
+      'xn--kprw13d', 'xn--mix891f', 'xn--p1ai', 'xn--q7ce6a',
+      'xn--qxa6a', 'xn--rvc1e0am3e', 'xn--s9brj9c',
+      'xn--xkc2dl3a5ee0h', 'xn--y9a3aq',
+    ];
+
+    assert.deepEqual(VERSION_26_NO_RDAP_SUFFIXES, expectedNoRdapSuffixes);
+    assert.equal(expectedNoRdapSuffixes.length, 81);
+    assert.equal(new Set(expectedNoRdapSuffixes).size, 81);
+    for (const suffix of expectedNoRdapSuffixes) {
+      const capability = registryCapabilityFor(`example.${suffix}`);
+      assert.equal(capability.rdapAccessProfile, 'no-iana-service', suffix);
+      assert.equal(registryAccessDiagnosticFor(`example.${suffix}`)?.authority, 'context_only', suffix);
+      assert.match(capability.limitation, /no RDAP bootstrap service|no RDAP service/i, suffix);
+    }
+
+    assert.equal(registryCapabilityFor('example.in').id, 'nixi-colon');
+    assert.equal(registryCapabilityFor('example.in').rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(registryCapabilityFor('example.xn--2scrj9c').id, 'nixi-idn-colon');
+    assert.equal(registryCapabilityFor('example.tw').id, 'twnic-colon');
+    assert.equal(registryCapabilityFor('example.tw').rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(registryCapabilityFor('example.xn--kpry57d').rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(registryCapabilityFor('example.xn--kprw13d').id, 'twnic-no-rdap-colon');
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {

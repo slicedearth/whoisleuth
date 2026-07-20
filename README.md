@@ -366,7 +366,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   deployments expose the same embedded catalogue in the **Registry support**
   reference workspace, with local text and coverage filters plus an offline
   domain-or-suffix inspector for generic IANA discovery fallback.
-  Catalogue version 25 contains 312 explicit suffix rows: 218 fixture verified
+  Catalogue version 26 contains 312 explicit suffix rows: 218 fixture verified
   and 94 access documented. It includes an explicit profile for every currently
   assigned country-code delegation plus `.edu`, `.mil`, and `.arpa`. `.edu` is
   represented as a sponsored, fixture-backed WHOIS-only service; `.mil` has no
@@ -383,6 +383,11 @@ compact-storage boundary, and lookup evidence schema are documented in the
   unavailable, restricted, prohibited, reserved, or otherwise inconclusive
   responses are not parser or availability evidence. Fixture scenarios claim
   only the represented behavior and make no automated registry requests.
+  Version 26 also reconciles 81 suffix-specific RDAP access claims with the
+  current official bootstrap. Shared WHOIS parser families remain reusable,
+  but no suffix inherits another suffix's RDAP publication state; a missing
+  bootstrap entry remains neutral collection context and does not alter runtime
+  discovery or domain availability.
   Maintainers can run `npm run registry:drift` to compare that dated snapshot
   and every explicit suffix profile with the current IANA root-zone list and
   domain RDAP bootstrap. The command makes exactly two fixed official-source

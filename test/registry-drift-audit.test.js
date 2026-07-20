@@ -156,7 +156,7 @@ describe('official registry drift report', () => {
       publication: '2026-01-02T00:00:00.000Z', version: '1.0', serviceGroups: 2,
       httpsServiceGroups: 2, httpOnlyServiceGroups: 0, coveredTlds: 2,
     });
-    assert.equal(report.baseline.catalogueVersion, 25);
+    assert.equal(report.baseline.catalogueVersion, 26);
     assert.doesNotMatch(JSON.stringify(report), /must not be retained|AA\nBB/);
   });
 
