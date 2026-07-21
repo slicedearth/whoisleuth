@@ -42,15 +42,36 @@ for (const viewport of VIEWPORTS) {
       await expect(page.locator('#console-navigation').getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 
       const shell = page.locator('.shell');
-      const toggle = page.getByRole('button', { name: 'Toggle navigation' });
+      const toggle = page.locator('.navigation-toggle');
+      await expect(toggle).toHaveAttribute('aria-label', 'Toggle navigation');
+      const drawer = page.locator('#console-navigation');
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
       await expect(shell).not.toHaveClass(/open/);
+      await expect(drawer).toHaveCSS('visibility', 'hidden');
+
+      await toggle.focus();
+      for (let index = 0; index < 12; index += 1) {
+        await page.keyboard.press('Tab');
+        expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+      }
 
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await expect(shell).toHaveClass(/open/);
+      await expect(drawer).toHaveCSS('visibility', 'visible');
+      await expect(page.locator('#main-content')).toHaveAttribute('inert', '');
 
-      const drawer = page.locator('#console-navigation');
+      const closeButton = drawer.getByRole('button', { name: 'Close navigation' });
+      await expect(closeButton).toBeFocused();
+
+      const lastDrawerControl = drawer.locator('a[href], button:not([disabled])').last();
+      const headerBrand = page.locator('.shell > header > a');
+      await lastDrawerControl.focus();
+      await page.keyboard.press('Tab');
+      await expect(headerBrand).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(lastDrawerControl).toBeFocused();
+
       const drawerBox = await boundingBox(drawer);
       // Fits the dynamic viewport height and scrolls internally rather than
       // pushing content (or itself) past the bottom edge.
@@ -62,7 +83,8 @@ for (const viewport of VIEWPORTS) {
       const paddingBottom = await drawer.evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
       expect(paddingBottom).toBeGreaterThanOrEqual(MIN_SAFE_AREA_PX);
 
-      await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
+      await expect(page.locator('a[href="/privacy"]')).toHaveCount(1);
+      await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(0);
 
       // hover() performs the same occlusion/actionability checks Playwright
       // runs before a click, proving this is a real, unobstructed pointer
@@ -119,7 +141,8 @@ test('closing the mobile drawer updates aria-expanded, and the footer links to P
   await page.goto('/lookup');
 
   const shell = page.locator('.shell');
-  const toggle = page.getByRole('button', { name: 'Toggle navigation' });
+  const toggle = page.locator('.navigation-toggle');
+  await expect(toggle).toHaveAttribute('aria-label', 'Toggle navigation');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(shell).toHaveClass(/open/);
@@ -127,6 +150,9 @@ test('closing the mobile drawer updates aria-expanded, and the footer links to P
   await page.keyboard.press('Escape');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(shell).not.toHaveClass(/open/);
+  await expect(toggle).toBeFocused();
+  await expect(page.locator('#main-content')).not.toHaveAttribute('inert', '');
+  await expect(page.locator('#console-navigation')).toHaveCSS('visibility', 'hidden');
 
   const footer = page.locator('footer.site-footer');
   await expect(footer).toBeVisible();
