@@ -690,6 +690,18 @@ covered by the provider's community terms or an appropriate paid agreement.
   are neutral because static or deliberately concealed technologies may not be
   observable. The profile makes no additional request, remains outside compact
   browser stores, and does not change availability or Risk scoring.
+- Deep Lookup also derives a versioned passive security-posture profile from
+  the HTTP response, static form and resource summaries, one TLS handshake,
+  registry or WHOIS DNSSEC publication, and the existing CAA query. Findings
+  distinguish observed configuration, potential exposure, response-scoped
+  observed absence, and unavailable evidence. The checks cover transport,
+  selected security headers, cleartext form and resource destinations,
+  certificate trust/hostname/validity, the negotiated TLS version, DNSSEC,
+  and CAA. They do not crawl, deliver payloads, enumerate protocol support, or
+  validate vulnerabilities, and they make no additional request. The profile
+  remains outside compact browser stores and Risk or availability decisions;
+  it is included only when the user deliberately exports the full Lookup
+  evidence response.
 - Page identity also includes an independently versioned fingerprint bundle
   derived from the same capped response. It reuses the exact captured-body
   SHA-256 and adds a noise-reduced normalized-HTML SHA-256, visible-text
@@ -1281,6 +1293,7 @@ lib/                    Shared lookup logic, used by both server.mts and netlify
   favicon.mts           Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
   html-signals.mts      Bounded homepage signals and versioned static page-identity evidence
   website-technology.mts Versioned technology indicators from existing deep evidence
+  website-security-posture.mts Passive posture findings from existing deep evidence
   tls-intelligence.mts  One-connection TLS/certificate profile with public-address pinning
   threat-intelligence-contract.mts  Bounded policy, result, and fixture boundaries for optional providers and curated connectors
   ct-search.mts         Certificate Transparency search (crt.sh) for lookalike hostnames

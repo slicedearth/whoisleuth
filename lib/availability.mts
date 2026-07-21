@@ -20,6 +20,7 @@ import { featureDecision, networkFeaturePolicy } from './feature-policy.mts';
 import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } from './http-intelligence.mts';
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
+import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
 
 const MAX_HOMEPAGE_BYTES = 300000;
 const DNS_DELEGATION_TIMEOUT_MS = 4000;
@@ -73,6 +74,7 @@ type DnsDelegation = {
 type AvailabilityOptions = {
   fast?: boolean;
   includeTechnologyProfile?: boolean;
+  includeSecurityPosture?: boolean;
   collectDnsIntelligence?: typeof collectDnsIntelligence;
   collectTlsIntelligence?: typeof collectTlsIntelligence;
   fetchHomepage?: (domain: string) => Promise<HomepageResult>;
@@ -644,6 +646,15 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     }
   }
 
+  const securityPosture = options.includeSecurityPosture === false ? null : analyzeWebsiteSecurityPosture({
+    http: homepage.http,
+    pageIdentity: htmlSignals.pageIdentity,
+    tls: tlsIntelligence,
+    dns: dnsIntelligence,
+    dnssec,
+    observedAt: homepage.http?.observedAt,
+  });
+
   const redirectSaleSignal = forSaleRedirectSignal(homepage.http);
   if (!forSaleSignal && redirectSaleSignal) {
     forSaleSignal = redirectSaleSignal;
@@ -674,6 +685,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       faviconHash,
       faviconPHash,
       ...htmlSignals,
+      securityPosture,
       ...baseInfo,
       nameservers: nameservers.length ? nameservers : dnsIntelligence.records.ns,
       dns: dnsIntelligence,
@@ -698,6 +710,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     faviconHash,
     faviconPHash,
     ...htmlSignals,
+    securityPosture,
     ...baseInfo,
     nameservers: nameservers.length ? nameservers : dnsIntelligence.records.ns,
     dns: dnsIntelligence,

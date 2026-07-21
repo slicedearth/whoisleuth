@@ -194,6 +194,19 @@ default (see the README), so many lookups return no personal data at all.
   changes no availability or Risk result, and is not copied into compact
   browser-local cases, watchlists, profiles, or Bulk results. An unmatched
   signature is not evidence that a technology is absent.
+- **Passive security posture**: a requested deep Lookup can interpret the
+  existing HTTP response, bounded static form and resource summaries, one TLS
+  handshake, DNSSEC publication, and CAA query as a separate versioned posture
+  profile. It retains fixed finding identifiers, categories, state and tone
+  labels, fixed explanations, fixed evidence classes, and bounded counts. It
+  does not copy response-header values, TLS error strings, URLs, certificate
+  contents, DNS record contents, or page markup into the derived profile.
+  Observed absence is explicitly limited to the selected response or retained
+  static evidence. The analysis makes no extra request, performs no active
+  vulnerability testing, and does not affect availability or Risk scoring.
+  It is excluded from compact browser-local cases, watchlists, profiles, and
+  Bulk results, but is included when the user deliberately downloads a full
+  Lookup evidence export.
 - **Brand Profiles / Shortlist / Watchlist / Campaigns / Certificate search
   history**: saved in your own browser's `localStorage`, not on the server -
   only visible to whoever is using that browser.

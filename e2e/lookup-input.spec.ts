@@ -232,7 +232,7 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(13);
+  expect(exported.schemaVersion).toBe(14);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
@@ -686,6 +686,17 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', evidence: [{ source: 'resource origin', description: 'A retained resource origin uses fixture delivery infrastructure.' }] },
           ],
         },
+        securityPosture: {
+          postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
+          limitations: ['This is a passive fixture interpretation, not an active vulnerability assessment.'],
+          diagnostics: { findings: 2, observed: 1, potentialExposure: 0, observedAbsence: 1, unavailable: 0 },
+          summary: { observed: 1, potentialExposure: 0, observedAbsence: 1, unavailable: 0 },
+          findings: [
+            { id: 'fixture-https', category: 'transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The selected homepage response was reached over HTTPS.', evidence: ['HTTP response'] },
+            { id: 'fixture-csp', category: 'response headers', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The selected response did not include the header.', evidence: ['Selected HTTP response headers'] },
+          ],
+        },
       },
       rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
       diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
@@ -742,6 +753,13 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Fixture Edge' })).toBeVisible();
   await expect(technologyCard.getByText(/make no additional request and do not affect availability or Risk scoring/i)).toBeVisible();
+
+  const postureCard = page.locator('.security-posture-card');
+  await expect(postureCard.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
+  await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeVisible();
+  await expect(postureCard.getByText('Content Security Policy not observed', { exact: true })).toBeVisible();
+  await expect(postureCard.getByText('Review', { exact: true }).first()).toBeVisible();
+  await expect(postureCard.getByText(/review signals, not confirmed vulnerabilities/i)).toBeVisible();
 
   const pageComparison = page.locator('.page-comparison');
   await expect(pageComparison.getByRole('heading', { name: 'Official-site comparison' })).toBeVisible();

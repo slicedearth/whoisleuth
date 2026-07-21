@@ -13,6 +13,7 @@
   import LookupPageIdentity from '$lib/components/LookupPageIdentity.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
+  import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
@@ -109,6 +110,8 @@
   const pageDownloads=$derived(rec(pageIdentity.downloads));
   const pageFingerprints=$derived(rec(pageIdentity.fingerprints));
   const technologyProfile=$derived(rec(availability.technologyProfile));
+  const securityPosture=$derived(rec(availability.securityPosture));
+  const securityPostureSummary=$derived(rec(securityPosture.summary));
   const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
   const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
   const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>Array.isArray(whoisParsed.contactsByRole?.[role])&&whoisParsed.contactsByRole[role].length));
@@ -130,7 +133,7 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const caseEvidence=$derived({
     availability:String(availability.state||''),
@@ -215,6 +218,18 @@
     confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:Array.isArray(finding?.evidence)?finding.evidence.slice(0,4).map((item:any)=>({source:statusLabel(boundedTechnologyText(item?.source||'evidence',80)),description:boundedTechnologyText(item?.description||'Observed signature matched.',300)})):[]
   })):[];}
   function technologyLimitations(){return Array.isArray(technologyProfile.limitations)?technologyProfile.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
+  function boundedPostureCount(value:any){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,20):0;}
+  function securityPostureDisplaySummary(){return{
+    observed:boundedPostureCount(securityPostureSummary.observed),potentialExposure:boundedPostureCount(securityPostureSummary.potentialExposure),
+    observedAbsence:boundedPostureCount(securityPostureSummary.observedAbsence),unavailable:boundedPostureCount(securityPostureSummary.unavailable),
+  };}
+  function securityPostureFindingRows(){const states=new Set(['observed','potential_exposure','observed_absence','unavailable']);const tones=new Set(['configured','review','neutral']);return Array.isArray(securityPosture.findings)?securityPosture.findings.slice(0,20).map((finding:any)=>({
+    id:boundedTechnologyText(finding?.id,80),category:statusLabel(boundedTechnologyText(finding?.category||'posture',80)),
+    state:states.has(String(finding?.state))?String(finding.state):'unavailable',tone:tones.has(String(finding?.tone))?String(finding.tone):'neutral',
+    label:boundedTechnologyText(finding?.label||'Posture finding',160),detail:boundedTechnologyText(finding?.detail||'No additional detail is available.',300),
+    evidence:Array.isArray(finding?.evidence)?finding.evidence.slice(0,4).map((item:any)=>boundedTechnologyText(item,120)).filter(Boolean):[],
+  })):[];}
+  function securityPostureLimitations(){return Array.isArray(securityPosture.limitations)?securityPosture.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
   function pageFingerprintRows(){return[
     {label:'Exact captured body',value:rec(pageFingerprints.exact).value,detail:rec(pageFingerprints.exact).scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
     {label:'Normalized HTML',value:rec(pageFingerprints.normalizedHtml).value,detail:`${show(rec(pageFingerprints.normalizedHtml).tokenCount)} tokens`},
@@ -468,6 +483,16 @@
           trackingIdentifiers={pageTrackingIdentifierRows()}
           fingerprints={pageFingerprintRows()}
           limitations={stringList(pageIdentity.limitations)}
+        /></div>
+      {/if}
+
+      {#if securityPosture.source==='derived'}
+        <div class="evidence-component"><LookupSecurityPosture
+          status={statusLabel(show(securityPosture.status))}
+          complete={Boolean(securityPosture.complete)}
+          summary={securityPostureDisplaySummary()}
+          findings={securityPostureFindingRows()}
+          limitations={securityPostureLimitations()}
         /></div>
       {/if}
 

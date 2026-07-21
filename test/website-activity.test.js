@@ -174,6 +174,11 @@ describe('website activity classification', () => {
     assert.equal(result.technologyProfile.status, 'partial');
     assert.deepEqual(result.technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
     assert.doesNotMatch(JSON.stringify(result.technologyProfile), /token=|key=|secret|submit|0\.1/);
+    assert.equal(result.securityPosture.postureVersion, 1);
+    assert.equal(result.securityPosture.source, 'derived');
+    assert.equal(result.securityPosture.status, 'partial');
+    assert.equal(result.securityPosture.findings.some((item) => item.id === 'external_form_destinations'), true);
+    assert.doesNotMatch(JSON.stringify(result.securityPosture), /token=|key=|secret|submit|collect\.example/);
   });
 
   test('does not describe an explicitly non-HTML response as page identity evidence', async () => {
@@ -198,5 +203,7 @@ describe('website activity classification', () => {
 
     assert.equal(result.pageIdentity, null);
     assert.equal(result.technologyProfile, null);
+    assert.equal(result.securityPosture.source, 'derived');
+    assert.equal(result.securityPosture.findings.some((item) => item.id === 'static_page_evidence_unavailable'), true);
   });
 });

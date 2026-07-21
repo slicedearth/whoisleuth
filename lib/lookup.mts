@@ -121,6 +121,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? checkAvailability(classified.value, {
         fast,
         includeTechnologyProfile: !compact,
+        includeSecurityPosture: !compact,
         featurePolicy,
         rdapRecordPromise: rdapPromise,
         whoisChainPromise: whoisPromise,
@@ -324,7 +325,11 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   // opt-in response prevents large scans from downloading and retaining the
   // same registry payloads the backend already used to build `availability`.
   if (compact) {
-    const { technologyProfile: _technologyProfile, ...compactAvailability } = availability;
+    const {
+      technologyProfile: _technologyProfile,
+      securityPosture: _securityPosture,
+      ...compactAvailability
+    } = availability;
     return { availability: compactAvailability, diagnostics };
   }
   const targetDomain = classified.registrableDomain || classified.value;
