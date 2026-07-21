@@ -96,6 +96,16 @@ function savedLookup(overrides = {}) {
       hasMx: true,
       tls: { version: 1, status: 'success', protocol: 'TLSv1.3' },
     },
+    networkContext: {
+      contextVersion: 1, version: 1, status: 'success', observedAt: '2026-07-14T07:59:53.000Z',
+      scanMode: 'deep', source: 'ip_rdap', durationMs: 14, complete: true, truncated: false,
+      limitations: ['The selected address may represent shared edge infrastructure.'],
+      diagnostics: { requestCount: 1, addressSource: 'tls_connection', httpStatus: 200, cidrCount: 1 },
+      detail: 'The selected address was mapped to its network registration.',
+      endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
+      rdap: { endpoint: 'https://network.example.test/ip/93.184.216.34', transportSecurity: 'https', httpStatus: 200, fetchedAt: '2026-07-14T07:59:53.000Z', attempts: [] },
+      network: { handle: 'NET-EXAMPLE', name: 'Example edge network', holder: 'Example network holder', cidrs: ['93.184.216.0/24'], startAddress: '93.184.216.0', endAddress: '93.184.216.255', country: 'AU', networkType: 'ALLOCATED', databaseUpdatedAt: '2026-07-13T00:00:00.000Z' },
+    },
     diagnostics: {
       version: 4,
       rdap: {
@@ -174,13 +184,14 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 14);
+    assert.equal(result.schemaVersion, 15);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     assert.equal(result.query.submitted, 'login.example.test');
     assert.equal(result.query.registrableDomain, 'example.test');
     assert.equal(result.sources.rdap.raw.publicContact, 'published@example.test');
     assert.match(result.sources.whois.chain[0].response, /Registrant Email/);
     assert.equal(result.analysis.availability.tls.protocol, 'TLSv1.3');
+    assert.equal(result.sources.network.network.name, 'Example edge network');
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
     assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 0);
@@ -247,8 +258,8 @@ describe('lookup evidence export conversion', () => {
   test('rejects an injected builder with the wrong report contract', () => {
     assert.throws(() => buildCliEvidenceExport(JSON.stringify(savedLookup()), {
       LOOKUP_EVIDENCE_SCHEMA: 'whoisleuth.lookup-evidence',
-      LOOKUP_EVIDENCE_SCHEMA_VERSION: 14,
-      buildLookupEvidence: () => ({ schema: 'other', schemaVersion: 14 }),
+      LOOKUP_EVIDENCE_SCHEMA_VERSION: 15,
+      buildLookupEvidence: () => ({ schema: 'other', schemaVersion: 15 }),
     }), /unsupported report contract/);
   });
 
@@ -280,6 +291,9 @@ describe('lookup evidence Markdown rendering', () => {
     assert.match(markdown, /Registry RDAP/);
     assert.match(markdown, /registrar RDAP/);
     assert.match(markdown, /## Network evidence/);
+    assert.match(markdown, /### Observed network registration/);
+    assert.match(markdown, /Example edge network/);
+    assert.match(markdown, /edge or shared network rather than the origin host/);
     assert.match(markdown, /Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package/);
     assert.doesNotMatch(markdown, /publicContact|privateNestedValue|private-registrar/);
     assert.doesNotMatch(markdown, /Registrant Email/);
@@ -352,6 +366,9 @@ describe('lookup evidence HTML rendering', () => {
     assert.match(html, /<main>[\s\S]*<h2>Registry sources<\/h2>/);
     assert.match(html, /<table>[\s\S]*Normalized registry publication comparison/);
     assert.match(html, /Normalized registry and registrar RDAP publication comparison/);
+    assert.match(html, /Observed network registration/);
+    assert.match(html, /Example edge network/);
+    assert.match(html, /edge or shared network rather than the origin host/);
     assert.doesNotMatch(html, /<script\b/i);
     assert.doesNotMatch(html, /<a\b/i);
     assert.doesNotMatch(html, /publicContact|Registrant Email|privateNestedValue|private-registrar/);

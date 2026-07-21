@@ -95,6 +95,10 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
   const sources = objectOrEmpty(report.sources);
   const rdap = objectOrEmpty(sources.rdap);
   const whois = objectOrEmpty(sources.whois);
+  const networkContext = objectOrEmpty(sources.network);
+  const networkEndpoint = objectOrEmpty(networkContext.endpoint);
+  const networkRdap = objectOrEmpty(networkContext.rdap);
+  const networkRegistration = objectOrEmpty(networkContext.network);
   const rdapParsed = objectOrEmpty(rdap.parsed);
   const whoisParsed = objectOrEmpty(whois.parsed);
   const analysis = objectOrEmpty(report.analysis);
@@ -116,7 +120,7 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
   const tlsValidity = objectOrEmpty(tls.validity);
   const tlsCertificate = objectOrEmpty(tls.certificate);
   const titleTarget = query.registrableDomain || query.submitted || 'Unknown domain';
-  const registryAccessSuffix = diagnostics.version === 5 && registryAccess.authority === 'context_only'
+  const registryAccessSuffix = [5, 6].includes(Number(diagnostics.version)) && registryAccess.authority === 'context_only'
     && typeof registryAccess.suffix === 'string'
     ? cleanReportText(registryAccess.suffix, '')
     : '';
@@ -200,6 +204,25 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
         reportField('Certificate fingerprint', tlsCertificate.fingerprintSha256),
       ],
     },
+    networkRegistration: {
+      title: 'Observed network registration',
+      fields: [
+        reportField('Source status', displayLabel(networkContext.status)),
+        reportField('Selected address', networkEndpoint.address),
+        reportField('Selected from', displayLabel(networkEndpoint.selectedFrom)),
+        reportField('IP RDAP endpoint', networkRdap.endpoint),
+        reportField('IP RDAP fetched', networkRdap.fetchedAt),
+        reportField('Registered network', networkRegistration.name),
+        reportField('Network holder', networkRegistration.holder),
+        reportField('Network handle', networkRegistration.handle),
+        reportField('CIDR ranges', listText(networkRegistration.cidrs)),
+        reportField('Address range', networkRegistration.startAddress && networkRegistration.endAddress
+          ? `${networkRegistration.startAddress} to ${networkRegistration.endAddress}` : null),
+        reportField('Country', networkRegistration.country),
+        reportField('Network type', networkRegistration.networkType),
+        reportField('RDAP database updated', networkRegistration.databaseUpdatedAt),
+      ],
+    },
   } satisfies Record<string, ReportGroup>;
 
   const comparisonFields: ComparisonField[] = Array.isArray(comparison.fields)
@@ -267,19 +290,28 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
       fields: registrarComparisonFields,
       omitted: Math.max(0, (Array.isArray(registrarComparison.fields) ? registrarComparison.fields.length : 0) - registrarComparisonFields.length),
     },
-    networkGroups: [groups.dns, groups.website, groups.tls],
+    networkGroups: [
+      groups.dns,
+      groups.website,
+      groups.tls,
+      ...(networkContext.contextVersion === 1 ? [groups.networkRegistration] : []),
+    ],
     diagnostics: [
       reportField('Diagnostics version', diagnostics.version),
       reportField('RDAP', displayLabel(rdapDiagnostics.status)),
       reportField('Registrar RDAP', displayLabel(registrarRdapDiagnostics.status)),
       reportField('WHOIS', displayLabel(whoisDiagnostics.status)),
       reportField('Availability', displayLabel(availabilityDiagnostics.status)),
+      ...(networkContext.contextVersion === 1 ? [reportField('Observed network context', displayLabel(networkContext.status))] : []),
       ...registryAccessFields,
     ],
     limitations: [
       'This report summarizes point-in-time observations and registry publications. It does not prove ownership, activity, availability, or maliciousness.',
       'Missing, skipped, partial, unsupported, or failed sources are inconclusive rather than negative evidence.',
       'Raw registry payloads and full WHOIS referral responses are available only in the JSON evidence package and may contain public contact data.',
+      ...(networkContext.contextVersion === 1 ? [
+        'Observed network registration describes one point-in-time public endpoint. It may identify an edge or shared network rather than the origin host and does not prove control, ownership, intent, or maliciousness.',
+      ] : []),
       ...(registryAccessFields.length ? [
         'Registry access constraints describe collection reachability only. They do not decide registration, availability, ownership, safety, or maliciousness.',
       ] : []),

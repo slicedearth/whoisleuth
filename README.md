@@ -321,6 +321,18 @@ compact-storage boundary, and lookup evidence schema are documented in the
   entities, links, notices, and source-specific handles.
   The follow-up is omitted from fast and compact Bulk work, and unsupported or
   failed registrar responses remain neutral source states.
+- After deep TLS and DNS collection, Lookup can map one retained public
+  endpoint address to its registered network through one logical IP RDAP
+  enrichment. It prefers the address used by the successful TLS connection,
+  then falls back to a successful public A or AAAA result. The result keeps the
+  registered network name and holder, handle, bounded CIDRs, range, country,
+  network type, database freshness, and source provenance separate from domain
+  registry and registrar data. It can describe a CDN, proxy, load balancer, or
+  shared edge rather than the origin host, so it never decides availability,
+  Risk, ownership, or maliciousness. Fast, compact, Bulk, monitoring, and
+  browser-local case/watchlist paths remain unchanged. Because collection
+  begins after deep endpoint evidence is available, a cache miss can add the
+  bounded IP RDAP latency to the Lookup.
 - Structured domain results retain registry object IDs, registrar IANA IDs,
   registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
   remain WHOIS-free: they use RDAP first and may use a bounded authoritative
@@ -419,18 +431,19 @@ compact-storage boundary, and lookup evidence schema are documented in the
 - After a successful single lookup, **Export JSON** downloads a versioned
   evidence package containing the submitted/registrable-domain context,
   normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
-  discrepancy analysis, and availability/web/mail/TLS findings. The download is
+  discrepancy analysis, availability/web/mail/TLS findings, and the bounded
+  observed network-registration projection when represented. The download is
   created locally and may contain contact data published by the registry.
 - The unified `/api/lookup` response includes a versioned `diagnostics`
   object with independent RDAP, WHOIS, and availability statuses, source
   provenance, and stable source error codes. HTTP errors retain the existing
   human-readable `error` and add a machine-readable `errorCode` such as
   `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
-  clients do not need to match message text. Diagnostics version 5 retains the
-  separately-attributed registrar RDAP child and can add non-authoritative
-  registry-access context for suffixes whose machine services are restricted
-  or not published through IANA. This context is omitted from compact Bulk
-  responses and never changes availability or scoring.
+  clients do not need to match message text. Diagnostics version 6 retains the
+  separately-attributed registrar RDAP child and non-authoritative
+  registry-access context from version 5, and can add bounded observed-network
+  provenance to deep non-compact domain results. These additions are omitted
+  from compact Bulk responses and never change availability or scoring.
 - Clients that only need the derived assessment can add `compact=1` to
   `/api/lookup`. This retains `availability` and `diagnostics` while omitting
   raw RDAP and WHOIS payloads; Bulk uses this mode to bound browser memory and
@@ -617,7 +630,8 @@ covered by the provider's community terms or an appropriate paid agreement.
   explicitly versioned because upstream confusable data can evolve; the
   curated subset is not an exhaustive registry-variant or visual-similarity
   database. Lookup evidence
-  schema version 12 retains the analysis supplied to the export; Bulk CSV
+  schema version 15 retains the current bounded analysis and observed-network
+  projection supplied to the export; Bulk CSV
   exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it

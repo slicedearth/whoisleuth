@@ -57,6 +57,14 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
   }
   lines.push(`WHOIS          ${titleCase(document.diagnostics?.whois?.status)}`);
+  const network = document.networkContext;
+  if (network?.contextVersion === 1) {
+    lines.push(`Network RDAP   ${titleCase(network.status)}`);
+    if (network.endpoint?.address) lines.push(`Selected IP    ${safeTerminalValue(network.endpoint.address)}`);
+    if (network.network?.name || network.network?.holder) {
+      lines.push(`Network        ${safeTerminalValue(network.network.name || network.network.holder)}`);
+    }
+  }
   const registryAccess = document.diagnostics?.registryAccess;
   if (registryAccess) {
     lines.push(`Registry access .${safeTerminalValue(registryAccess.suffix)}`);

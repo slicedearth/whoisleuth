@@ -111,8 +111,8 @@ function withRegistrarPublication(source, overrides = {}) {
   return source;
 }
 
-function withRegistryAccess(source = lookupDocument(), overrides = {}) {
-  source.diagnostics.version = 5;
+function withRegistryAccess(source = lookupDocument(), overrides = {}, version = 5) {
+  source.diagnostics.version = version;
   source.diagnostics.registryAccess = {
     suffix: 'zz',
     coverageState: 'access_documented',
@@ -168,22 +168,24 @@ describe('comparison input boundary', () => {
     assert.deepEqual(source, before);
   });
 
-  test('projects only bounded version-5 context-only registry access diagnostics', () => {
-    const source = withRegistryAccess();
-    source.diagnostics.registryAccess.privateDetail = 'must not enter comparison output';
-    const before = structuredClone(source);
-    const parsed = parseCliLookupDocument(JSON.stringify(source));
+  test('projects only bounded version-5 and version-6 context-only registry access diagnostics', () => {
+    for (const version of [5, 6]) {
+      const source = withRegistryAccess(lookupDocument(), {}, version);
+      source.diagnostics.registryAccess.privateDetail = 'must not enter comparison output';
+      const before = structuredClone(source);
+      const parsed = parseCliLookupDocument(JSON.stringify(source));
 
-    assert.deepEqual(parsed.registryAccess, {
-      suffix: 'zz',
-      coverageState: 'access_documented',
-      whoisAccessProfile: 'source-ip-authorization-required',
-      rdapAccessProfile: 'no-iana-service',
-      limitation: 'Registry collection requires documented source authorization.',
-      authority: 'context_only',
-    });
-    assert.equal(JSON.stringify(parsed).includes('privateDetail'), false);
-    assert.deepEqual(source, before);
+      assert.deepEqual(parsed.registryAccess, {
+        suffix: 'zz',
+        coverageState: 'access_documented',
+        whoisAccessProfile: 'source-ip-authorization-required',
+        rdapAccessProfile: 'no-iana-service',
+        limitation: 'Registry collection requires documented source authorization.',
+        authority: 'context_only',
+      });
+      assert.equal(JSON.stringify(parsed).includes('privateDetail'), false);
+      assert.deepEqual(source, before);
+    }
   });
 
   test('rejects malformed version-5 registry access context at the saved-document boundary', () => {
@@ -212,7 +214,7 @@ describe('comparison input boundary', () => {
     }
   });
 
-  test('ignores registry access fields outside the version-5 diagnostic contract', () => {
+  test('ignores registry access fields outside the supported diagnostic contracts', () => {
     const source = withRegistryAccess();
     source.diagnostics.version = 4;
     assert.equal(parseCliLookupDocument(JSON.stringify(source)).registryAccess, null);

@@ -8,6 +8,7 @@
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
+  import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
   import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
   import LookupPageComparison from '$lib/components/LookupPageComparison.svelte';
   import LookupPageIdentity from '$lib/components/LookupPageIdentity.svelte';
@@ -81,6 +82,10 @@
   const whoisParsed=$derived(rec(whois.parsed));
   const diagnostics=$derived(rec(result?.diagnostics));
   const registryAccess=$derived(rec(diagnostics.registryAccess));
+  const observedNetworkContext=$derived(rec(result?.networkContext));
+  const observedNetworkEndpoint=$derived(rec(observedNetworkContext.endpoint));
+  const observedNetworkRdap=$derived(rec(observedNetworkContext.rdap));
+  const observedNetwork=$derived(rec(observedNetworkContext.network));
   const threatIntelligence=$derived(rec(result?.threatIntelligence));
   const threatIntelligenceProviders=$derived(Array.isArray(threatIntelligence.providers)?threatIntelligence.providers.map(rec):[]);
   const dnsEvidence=$derived(rec(availability.dns));
@@ -218,6 +223,18 @@
     confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:Array.isArray(finding?.evidence)?finding.evidence.slice(0,4).map((item:any)=>({source:statusLabel(boundedTechnologyText(item?.source||'evidence',80)),description:boundedTechnologyText(item?.description||'Observed signature matched.',300)})):[]
   })):[];}
   function technologyLimitations(){return Array.isArray(technologyProfile.limitations)?technologyProfile.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
+  function observedNetworkSourceLabel(){return({tls_connection:'TLS connection',dns_a:'DNS A fallback',dns_aaaa:'DNS AAAA fallback'} as Record<string,string>)[String(observedNetworkEndpoint.selectedFrom)]||'Unavailable';}
+  function observedNetworkRows(){return Object.keys(observedNetwork).length?[
+    {label:'Registered network',value:show(observedNetwork.name)},
+    {label:'Network holder',value:show(observedNetwork.holder)},
+    {label:'Handle',value:show(observedNetwork.handle)},
+    {label:'CIDR ranges',value:Array.isArray(observedNetwork.cidrs)?observedNetwork.cidrs.slice(0,16).map((item:any)=>boundedTechnologyText(item,96)).filter(Boolean).join(', ')||'—':'—'},
+    {label:'Address range',value:[boundedTechnologyText(observedNetwork.startAddress,64),boundedTechnologyText(observedNetwork.endAddress,64)].filter(Boolean).join(' to ')||'—'},
+    {label:'Country',value:show(observedNetwork.country)},
+    {label:'Network type',value:show(observedNetwork.networkType)},
+    {label:'RDAP database updated',value:formatDate(observedNetwork.databaseUpdatedAt),datetime:dateTimeAttribute(observedNetwork.databaseUpdatedAt)},
+  ]:[];}
+  function observedNetworkLimitations(){return Array.isArray(observedNetworkContext.limitations)?observedNetworkContext.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
   function boundedPostureCount(value:any){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,20):0;}
   function securityPostureDisplaySummary(){return{
     observed:boundedPostureCount(securityPostureSummary.observed),potentialExposure:boundedPostureCount(securityPostureSummary.potentialExposure),
@@ -533,6 +550,20 @@
         whoisTruncatedFields={stringList(whoisParsed.fieldsTruncated)}
         registrar={registrarRdapDisplay()}
       /></div>
+
+      {#if observedNetworkContext.contextVersion===1}
+        <div class="evidence-component"><LookupNetworkContext
+          status={statusLabel(boundedTechnologyText(observedNetworkContext.status||'unsupported',40))}
+          detail={boundedTechnologyText(observedNetworkContext.detail||'Observed network context was unavailable.',300)}
+          address={boundedTechnologyText(observedNetworkEndpoint.address,64)}
+          addressSource={observedNetworkSourceLabel()}
+          rdapEndpoint={boundedTechnologyText(observedNetworkRdap.endpoint,2048)}
+          httpStatus={observedNetworkRdap.httpStatus?String(observedNetworkRdap.httpStatus):''}
+          fetchedAt={dateTimeAttribute(observedNetworkRdap.fetchedAt)||''}
+          rows={observedNetworkRows()}
+          limitations={observedNetworkLimitations()}
+        /></div>
+      {/if}
     </section>
 
     {#if threatIntelligenceProviders.length}

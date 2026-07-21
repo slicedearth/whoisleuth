@@ -55,7 +55,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 5);
+    assert.equal(result.diagnostics.version, 6);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
@@ -179,7 +179,7 @@ describe('runUnifiedLookup', () => {
       applicable: true, domain: 'example.es', inputHostname: 'example.es',
       registrableDomain: 'example.es', isSubdomain: false, ...availability,
     });
-    assert.equal(result.diagnostics.version, 5);
+    assert.equal(result.diagnostics.version, 6);
     assert.deepEqual(result.diagnostics.registryAccess, {
       suffix: 'es', coverageState: 'access_documented',
       whoisAccessProfile: 'source-ip-authorization-required',
@@ -262,7 +262,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(registrarCalls, 1);
     assert.equal(result.rdap.registrarRdap.status, 'success');
     assert.equal(result.rdap.parsed, rdapRecord.parsed);
-    assert.equal(result.diagnostics.version, 5);
+    assert.equal(result.diagnostics.version, 6);
     assert.deepEqual(result.diagnostics.rdap.registrar, {
       status: 'success',
       endpoint: 'https://registrar.example/domain/example.com',
@@ -271,6 +271,118 @@ describe('runUnifiedLookup', () => {
       fetchedAt: '2026-07-14T00:00:00.000Z',
       attempt: { outcome: 'success', selected: true },
     });
+  });
+
+  test('adds one separately attributed IP RDAP enrichment without changing availability', async () => {
+    const calls = [];
+    const availability = {
+      state: 'registered',
+      confidence: 'high',
+      tls: {
+        source: 'tls',
+        status: 'success',
+        connectedAddress: '93.184.216.34',
+      },
+      dns: {
+        source: 'dns',
+        status: 'success',
+        records: { a: ['11.22.33.44'], aaaa: [] },
+        diagnostics: { a: { status: 'success' }, aaaa: { status: 'success' } },
+      },
+    };
+    const availabilityBefore = structuredClone(availability);
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async (type, value) => {
+        calls.push([type, value]);
+        if (type === 'domain') return {
+          rdapServer: 'https://registry.example/domain/example.com',
+          transportSecurity: 'https',
+          upstreamStatus: 200,
+          parsed: { domain: 'EXAMPLE.COM', links: [] },
+        };
+        return {
+          rdapServer: `https://network.example/ip/${value}`,
+          transportSecurity: 'https',
+          upstreamStatus: 200,
+          fetchedAt: '2026-07-22T00:00:00.000Z',
+          attempts: [{
+            endpoint: `https://network.example/ip/${value}`,
+            transportSecurity: 'https', status: 200, outcome: 'success', detail: null, selected: true,
+          }],
+          parsed: {
+            handle: 'NET-EXAMPLE', name: 'Example edge network',
+            startAddress: '93.184.216.0', endAddress: '93.184.216.255',
+            cidrs: ['93.184.216.0/24'], country: 'AU', networkType: 'ALLOCATED',
+            org: { name: 'Example network holder' },
+            lifecycle: { databaseUpdatedDateIso: '2026-07-21T00:00:00.000Z' },
+          },
+        };
+      },
+      fetchRegistrarRdapRecord: async () => ({ status: 'unsupported' }),
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => availability,
+    });
+
+    assert.deepEqual(calls, [
+      ['domain', 'example.com'],
+      ['ipv4', '93.184.216.34'],
+    ]);
+    assert.deepEqual(availability, availabilityBefore);
+    assert.equal(result.availability.state, 'registered');
+    assert.equal(result.networkContext.status, 'success');
+    assert.deepEqual(result.networkContext.endpoint, {
+      address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection',
+    });
+    assert.equal(result.networkContext.network.holder, 'Example network holder');
+    assert.equal(result.networkContext.network.cidrs[0], '93.184.216.0/24');
+    assert.equal(result.diagnostics.version, 6);
+    assert.deepEqual(result.diagnostics.network, {
+      status: 'success',
+      address: '93.184.216.34',
+      family: 4,
+      addressSource: 'tls_connection',
+      endpoint: 'https://network.example/ip/93.184.216.34',
+      transportSecurity: 'https',
+      httpStatus: 200,
+      fetchedAt: '2026-07-22T00:00:00.000Z',
+      attempts: [{
+        endpoint: 'https://network.example/ip/93.184.216.34',
+        transportSecurity: 'https', status: 200, outcome: 'success', detail: null, selected: true,
+      }],
+    });
+  });
+
+  test('never adds observed network context to fast, compact, disabled, or non-domain lookups', async () => {
+    let networkCalls = 0;
+    const common = {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({
+        state: 'registered', confidence: 'high',
+        tls: { source: 'tls', status: 'success', connectedAddress: '93.184.216.34' },
+      }),
+      collectObservedNetworkContext: async () => {
+        networkCalls += 1;
+        throw new Error('must not run');
+      },
+    };
+    const fast = await runUnifiedLookup(classifiedDomain, { ...common, fast: true });
+    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true });
+    const rdapDisabled = await runUnifiedLookup(classifiedDomain, {
+      ...common,
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_RDAP: '1' }),
+    });
+    const availabilityDisabled = await runUnifiedLookup(classifiedDomain, {
+      ...common,
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_AVAILABILITY: '1' }),
+    });
+    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, common);
+
+    assert.equal(networkCalls, 0);
+    for (const result of [fast, compact, rdapDisabled, availabilityDisabled, ip]) {
+      assert.equal(Object.hasOwn(result, 'networkContext'), false);
+      assert.equal(Object.hasOwn(result.diagnostics, 'network'), false);
+    }
   });
 
   test('registrar not_found remains diagnostic and cannot alter availability', async () => {

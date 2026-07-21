@@ -10,6 +10,7 @@ import { fetchRdapRecord, fetchRegistrarRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { OPERATION_BUDGET_ERROR_CODE } from './operation-budget.mts';
 import { checkDomainAvailability } from './availability.mts';
+import { collectObservedNetworkContext } from './observed-network-context.mts';
 import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import { FEATURE_DISABLED_ERROR_CODE, featureDecision, networkFeaturePolicy } from './feature-policy.mts';
@@ -24,6 +25,7 @@ type LookupOptions = {
   fetchRegistrarRdapRecord?: typeof fetchRegistrarRdapRecord;
   buildWhoisChain?: typeof buildWhoisChain;
   checkDomainAvailability?: typeof checkDomainAvailability;
+  collectObservedNetworkContext?: typeof collectObservedNetworkContext;
   lookupUrlscanDomain?: typeof lookupUrlscanDomain;
   lookupUrlhausDomain?: typeof lookupUrlhausDomain;
   lookupThreatfoxDomain?: typeof lookupThreatfoxDomain;
@@ -58,7 +60,7 @@ type AvailabilityEnvelope = {
   [key: string]: unknown;
 };
 
-const LOOKUP_DIAGNOSTICS_VERSION = 5;
+const LOOKUP_DIAGNOSTICS_VERSION = 6;
 const LOOKUP_ERROR_CODES = Object.freeze({
   AUTH_REQUIRED: 'AUTH_REQUIRED',
   RATE_LIMITED: 'RATE_LIMITED',
@@ -93,6 +95,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const fetchRegistrarRdap = options.fetchRegistrarRdapRecord || fetchRegistrarRdapRecord;
   const fetchWhois = options.buildWhoisChain || buildWhoisChain;
   const checkAvailability = options.checkDomainAvailability || checkDomainAvailability;
+  const collectNetworkContext = options.collectObservedNetworkContext || collectObservedNetworkContext;
   const fetchUrlscanIntelligence = options.lookupUrlscanDomain || lookupUrlscanDomain;
   const fetchUrlhausIntelligence = options.lookupUrlhausDomain || lookupUrlhausDomain;
   const fetchThreatfoxIntelligence = options.lookupThreatfoxDomain || lookupThreatfoxDomain;
@@ -127,6 +130,21 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         whoisChainPromise: whoisPromise,
       })
     : null;
+  // Network registration is an additive deep-only source. It starts only
+  // after availability has produced the existing TLS/DNS observations and
+  // never joins the evidence used to decide domain availability. The shared
+  // RDAP helper supplies its existing three-minute cache and safe transport.
+  const networkContextPromise = classified.type === 'domain'
+    && rdapEnabled
+    && availabilityEnabled
+    && !fast
+    && !compact
+    && availabilityPromise
+    ? availabilityPromise.then(
+        (availability) => collectNetworkContext(availability, { fetchRdapRecord: fetchRdap }),
+        () => collectNetworkContext({}, { fetchRdapRecord: fetchRdap }),
+      )
+    : null;
   const urlscanIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = externalIntelligence
     && classified.type === 'domain'
     && !fast
@@ -146,11 +164,12 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? fetchThreatfoxIntelligence(classified.registrableDomain || classified.value)
     : null;
 
-  const [rdapResult, whoisResult, availabilityResult, registrarRdapResult, urlscanIntelligenceResult, urlhausIntelligenceResult, threatfoxIntelligenceResult] = await Promise.allSettled([
+  const [rdapResult, whoisResult, availabilityResult, registrarRdapResult, networkContextResult, urlscanIntelligenceResult, urlhausIntelligenceResult, threatfoxIntelligenceResult] = await Promise.allSettled([
     rdapPromise,
     whoisPromise,
     availabilityPromise,
     registrarRdapPromise,
+    networkContextPromise,
     urlscanIntelligencePromise,
     urlhausIntelligencePromise,
     threatfoxIntelligencePromise,
@@ -274,6 +293,15 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const registryAccess = classified.type === 'domain' && !compact
     ? registryAccessDiagnosticFor(classified.value)
     : null;
+  const networkContext = networkContextPromise && networkContextResult.status === 'fulfilled'
+    ? networkContextResult.value
+    : null;
+  const networkContextRdap = networkContext && typeof networkContext.rdap === 'object' && networkContext.rdap
+    ? networkContext.rdap as Record<string, unknown>
+    : null;
+  const networkContextEndpoint = networkContext && typeof networkContext.endpoint === 'object' && networkContext.endpoint
+    ? networkContext.endpoint as Record<string, unknown>
+    : null;
 
   const diagnostics = {
     version: LOOKUP_DIAGNOSTICS_VERSION,
@@ -318,6 +346,19 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         : availabilityStatus === 'error' ? LOOKUP_ERROR_CODES.AVAILABILITY_CHECK_FAILED : null,
       resultState: availability.applicable === true ? availability.state || 'unknown' : null,
     },
+    ...(networkContext ? {
+      network: {
+        status: networkContext.status,
+        address: networkContextEndpoint?.address || null,
+        family: networkContextEndpoint?.family || null,
+        addressSource: networkContextEndpoint?.selectedFrom || null,
+        endpoint: networkContextRdap?.endpoint || null,
+        transportSecurity: networkContextRdap?.transportSecurity || null,
+        httpStatus: networkContextRdap?.httpStatus ?? null,
+        fetchedAt: networkContextRdap?.fetchedAt || null,
+        attempts: networkContextRdap?.attempts || [],
+      },
+    } : {}),
   };
 
   // Bulk triage only consumes the derived availability evidence and source
@@ -369,6 +410,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     whois,
     availability,
     diagnostics,
+    ...(networkContext ? { networkContext } : {}),
     ...(threatIntelligence ? { threatIntelligence } : {}),
   };
 }

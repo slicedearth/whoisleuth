@@ -94,7 +94,14 @@ fast mode reports the existing skipped state. IP, ASN, and lookup responses
 without registrar diagnostics remain unchanged. These source states are
 provenance only and do not decide availability or imply safety.
 
-When diagnostics version 5 reports a documented registry collection
+A deep domain lookup can also show the status, selected public address, and
+registered network name from the bounded observed network context. It uses the
+same address and IP RDAP source represented in the JSON document. This is
+point-in-time edge or network-registration context, not proof of the origin
+host, hosting control, ownership, intent, or maliciousness. Fast and compact
+commands do not run the enrichment.
+
+When diagnostics version 5 or 6 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it
 does not make another request, and restricted, unpublished, or unavailable
@@ -285,8 +292,8 @@ its diagnostic status. Raw RDAP JSON, registrar contacts and source-specific
 handles, WHOIS response bodies, availability evidence, and unrelated lookup
 fields are not copied into the comparison result.
 
-When the saved Lookup contains valid version-5, context-only registry-access
-diagnostics, version 3 retains their bounded suffix, access profiles, and
+When the saved Lookup contains valid version-5 or version-6, context-only
+registry-access diagnostics, version 3 retains their bounded suffix, access profiles, and
 limitation. Terminal output labels the same collection context explicitly.
 It explains source reachability only and cannot decide registration,
 availability, ownership, safety, or maliciousness. Older documents and saved
@@ -317,17 +324,21 @@ The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
 and the shared registry-source comparison. Registrar RDAP raw data, contacts,
 entities, links, notices, and source-specific handles remain excluded; schema
-version 12 retains only its normalized portable-field comparison and explicit
-source-health states.
+version 15 retains that normalized portable-field comparison, explicit
+source-health states, and a strict bounded projection of observed network
+registration when the saved deep lookup represents it. Raw IP RDAP payloads
+and contact entities remain excluded.
 
 Markdown output summarizes query context, assessment state, registry sources,
 source reconciliation, network observations, and collection diagnostics. It
 escapes all upstream text as untrusted content, bounds displayed values and
 lists, and deliberately omits raw RDAP JSON and full WHOIS response bodies.
 Use JSON when the complete evidence package or machine processing is required.
-When a version-5 lookup records a documented registry-access constraint, both
+When a version-5 or version-6 lookup records a documented registry-access constraint, both
 Markdown and HTML include that context in collection diagnostics without
-changing its non-authoritative interpretation.
+changing its non-authoritative interpretation. Both formats also include the
+selected address and bounded network registration when present, together with
+the edge-versus-origin limitation.
 
 HTML uses the same bounded summary model as Markdown. The generated document
 contains inline styling for screen and print, but no scripts, forms, active

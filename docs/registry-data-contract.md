@@ -24,6 +24,9 @@ ASN. A full successful response contains:
 - `availability`: the derived domain-registration assessment, or a
   non-applicable result for IP/ASN input.
 - `diagnostics`: independent source status and provenance.
+- `networkContext`: for an eligible deep non-compact domain result, a
+  separately attributed summary of one observed public endpoint address and
+  its IP RDAP network registration.
 
 `compact=1` returns only `availability` and `diagnostics`. Bulk uses this mode;
 raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
@@ -65,6 +68,27 @@ infrastructure is not proof of common ownership or maliciousness. Full Lookup
 and deliberate evidence exports retain the bounded observation. Compact Bulk
 responses may display or export it, but watchlists and analyst cases continue
 to store only their existing compact compatibility fields.
+
+After deep availability collection completes, Lookup prefers the public address
+used by the successful TLS connection. If no eligible TLS address was retained,
+it falls back deterministically to a successful public A result and then a
+successful public AAAA result. Lookup can perform one logical IP RDAP
+enrichment for that address through the existing bootstrap, safe-fetch,
+response-cap, failover, and cache boundary. The normalized `networkContext`
+retains the selected address and evidence source, registered network name and
+holder, handle, up to 16 CIDR ranges, address range, country, network type, RDAP
+database update time, and bounded source provenance. It excludes raw IP RDAP
+data and published contact details.
+
+This source describes a registered network associated with one point-in-time
+endpoint. CDNs, reverse proxies, load balancers, shared hosting, and
+location-dependent DNS can mean the address is not the origin host. The source
+never decides domain availability, Risk, or ownership. It is omitted from fast
+and compact requests, non-domain lookup enrichment, Bulk, monitoring, and
+browser-local compact stores. Unsupported, not-found, partial, and failed IP
+RDAP states remain explicit and neutral. Because collection starts after deep
+endpoint evidence is available, a cache miss can add the bounded IP RDAP
+latency to the Lookup.
 
 ## Shared observation envelope
 
@@ -151,18 +175,19 @@ HTTP `429`, `errorCode: NETWORK_USAGE_LIMITED`, a bounded `Retry-After`, and a
 30-day window is fixed and UTC-epoch-aligned; it is not a calendar month,
 rolling window, or hosting-provider billing statement.
 
-## Diagnostics version 5
+## Diagnostics version 6
 
-`diagnostics.version` is `5`. Version 5 retains the version-4 source fields,
-including the optional separately attributed registrar RDAP child, and adds an
-optional `diagnostics.registryAccess` object to non-compact domain responses.
-That object records a documented machine-access constraint or the absence of
-an IANA-published service for the suffix. It is static context only, performs
-no network work, is omitted from compact Bulk responses, and is never consulted
-by availability or scoring. Consumers that do not recognize version 5 must fail
-conservatively rather than reinterpret a disabled, skipped, unsupported, or
-failed source as upstream absence. The source objects use explicit status
-values:
+`diagnostics.version` is `6`. Version 6 retains the version-5 source fields,
+including the optional separately attributed registrar RDAP child and static
+`diagnostics.registryAccess` context, and adds optional
+`diagnostics.network` provenance when observed network context was attempted.
+The registry-access object records a documented machine-access constraint or
+the absence of an IANA-published service for the suffix. It is static context
+only, performs no network work, is omitted from compact Bulk responses, and is
+never consulted by availability or scoring. Consumers that do not recognize
+version 6 must fail conservatively rather than reinterpret a disabled, skipped,
+unsupported, or failed source as upstream absence. The source objects use
+explicit status values:
 
 - RDAP: `success`, `not_found`, `unsupported`, `disabled`, or `error`.
 - WHOIS: `complete`, `partial`, `skipped`, `disabled`, or `error`.
@@ -175,6 +200,12 @@ state, and a control-safe detail of at most 240 characters.
 Registrar diagnostics may include its status, endpoint, HTTPS transport,
 upstream status, fetch time, and one bounded attempt. Registrar `not_found` is
 diagnostic only and never an availability signal.
+
+Observed-network diagnostics may include status, selected address, address
+family, whether the selection came from TLS or DNS fallback, IP RDAP endpoint,
+transport, upstream status, fetch time, and up to three bounded endpoint
+attempts. IP RDAP `not_found`, missing bootstrap coverage, and transient errors
+are source states only. They never change the domain's availability result.
 
 WHOIS diagnostics may include query time, authoritative hop, failed hop, and
 conflicting hop. A partial chain can still contain useful published values;
@@ -392,10 +423,14 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `12`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `15`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 12 additionally retains the bounded portable-field
+registry comparison. Version 15 adds a strict, bounded projection of observed
+network context and never includes its raw IP RDAP object or contact entities.
+Version 14 added passive security-posture findings derived from already-retained
+deep evidence, and version 13 added curated technology indicators. Version 12
+additionally retained the bounded portable-field
 comparison between registry and registrar RDAP publications when that follow-up
 was represented. It preserves both normalized source display values and source
 health while excluding the registrar raw object, contacts, entities, links,
@@ -422,11 +457,13 @@ and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
 forms, active links, or external resources and includes a restrictive embedded
 Content Security Policy. The versioned JSON package remains the authoritative
 machine-readable export when complete captured source material is required.
-When schema-version 12 JSON retains a version-5 `diagnostics.registryAccess`
-object, both readable formats include its bounded suffix, WHOIS and RDAP access
-profiles, and limitation in collection diagnostics. This remains collection
-context only and cannot decide registration, availability, ownership, safety,
-or maliciousness.
+When schema-version 15 JSON retains a supported version-5 or version-6
+`diagnostics.registryAccess` object, both readable formats include its bounded
+suffix, WHOIS and RDAP access profiles, and limitation in collection
+diagnostics. This remains collection context only and cannot decide
+registration, availability, ownership, safety, or maliciousness. The readable
+formats also include the bounded observed network registration and its
+origin-host limitation when that source is present.
 
 Lookup evidence is a downloadable report contract, not a browser-local case
 storage schema. Consumers must check `schema` and `schemaVersion`; an unknown

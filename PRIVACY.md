@@ -38,6 +38,19 @@ default (see the README), so many lookups return no personal data at all.
   including both displayed source values and source-health states, but excludes
   the registrar raw object, contacts, entities, links, notices, and
   source-specific handles.
+- **Observed network context in deep Lookup**: after the existing TLS and DNS
+  collection, a deep non-compact domain Lookup can select one retained public
+  endpoint address and perform one logical IP RDAP enrichment through the
+  existing bounded safe-fetch and cache boundary. The transient result keeps a
+  separately attributed network name and holder, handle, bounded CIDRs, address
+  range, country, network type, database freshness, and source provenance. Raw
+  IP RDAP data and published network contacts are excluded from this summary.
+  It can be displayed and deliberately exported, but it is not copied into
+  compact Bulk responses, cases, watchlists, profiles, or monitoring state and
+  never affects availability or Risk. The underlying public IP RDAP response is
+  briefly cached in server memory like other RDAP responses. The selected
+  address can belong to a CDN, proxy, load balancer, or shared edge and is not
+  proof of an origin host, hosting control, ownership, intent, or maliciousness.
 - **Optional archived-verdict search**: if the operator explicitly enables the
   URLscan adapter and a user selects it for a deep single-domain Lookup, the
   server sends only the canonical registrable domain to URLscan's Search API.

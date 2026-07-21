@@ -162,13 +162,31 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expectNoHorizontalOverflow(page);
 });
 
-test('deep Lookup presents registrar RDAP as a separate collapsed source', async ({ page }) => {
+test('deep Lookup presents registrar and observed network RDAP as separate sources', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
       query: 'registrar-source.example', type: 'domain', registrableDomain: 'registrar-source.example',
       availability: { state: 'registered', confidence: 'high', domain: 'registrar-source.example' },
+      networkContext: {
+        contextVersion: 1, version: 1, status: 'success', observedAt: '2026-07-14T01:02:04.000Z',
+        scanMode: 'deep', source: 'ip_rdap', durationMs: 22, complete: true, truncated: false,
+        limitations: ['The selected address may represent shared edge infrastructure.'],
+        diagnostics: { requestCount: 1, addressSource: 'tls_connection', httpStatus: 200, cidrCount: 1 },
+        detail: 'The selected public endpoint address was mapped to its separately attributed IP RDAP registration.',
+        endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
+        rdap: {
+          endpoint: 'https://network.example/rdap/ip/93.184.216.34/with-a-deliberately-long-provenance-segment-for-wrapping',
+          transportSecurity: 'https', httpStatus: 200, fetchedAt: '2026-07-14T01:02:04.000Z',
+          attempts: [],
+        },
+        network: {
+          handle: 'NET-EXAMPLE', name: 'Example edge network', holder: 'Example network holder',
+          cidrs: ['93.184.216.0/24'], startAddress: '93.184.216.0', endAddress: '93.184.216.255',
+          country: 'AU', networkType: 'ALLOCATED', databaseUpdatedAt: '2026-07-13T00:00:00.000Z',
+        },
+      },
       rdap: {
         upstreamStatus: 200,
         rdapServer: 'https://registry.example/domain/registrar-source.example',
@@ -197,7 +215,7 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
       },
       whois: { parsed: {}, chain: [] },
       diagnostics: {
-        version: 4,
+        version: 6,
         rdap: { status: 'success', registrar: { status: 'success' } },
         whois: { status: 'partial' }, availability: { status: 'complete' },
       },
@@ -226,15 +244,27 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
   await section.getByText('Published contacts · 1 role').click();
   await expect(section.getByText('Email: abuse@registrar.example')).toBeVisible();
 
+  const network = page.locator('.network-context');
+  await expect(network.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
+  await expect(network.getByText('93.184.216.34', { exact: true })).toBeVisible();
+  await expect(network.getByText('TLS connection', { exact: true })).toBeVisible();
+  await expect(network.getByText('Example network holder', { exact: true })).toBeVisible();
+  await expect(network.getByText('93.184.216.0/24', { exact: true })).toBeVisible();
+  await expect(network.getByText(/does not prove hosting control, ownership, intent, or maliciousness/i)).toBeVisible();
+  await network.getByText('IP RDAP source', { exact: true }).click();
+  await expect(network.getByText(/deliberately-long-provenance-segment-for-wrapping/)).toBeVisible();
+
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
   const download = await downloadPromise;
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(14);
+  expect(exported.schemaVersion).toBe(15);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
+  expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
+  expect(exported.sources.network.network.holder).toBe('Example network holder');
   expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
   expect(JSON.stringify(exported)).not.toContain('abuse@registrar.example');
 

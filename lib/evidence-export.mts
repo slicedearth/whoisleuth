@@ -1,7 +1,7 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 14;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 15;
 
 type LooseRecord = Record<string, any>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
@@ -9,6 +9,8 @@ type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
 const REGISTRAR_RDAP_STATUSES = new Set([
   'success', 'partial', 'error', 'unsupported', 'not_found', 'skipped', 'disabled',
 ]);
+const NETWORK_CONTEXT_STATUSES = new Set(['success', 'partial', 'not_found', 'unsupported', 'error']);
+const NETWORK_ADDRESS_SOURCES = new Set(['tls_connection', 'dns_a', 'dns_aaaa']);
 
 function recordOrNull(value: unknown): LooseRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as LooseRecord : null;
@@ -17,6 +19,112 @@ function recordOrNull(value: unknown): LooseRecord | null {
 function cloneJson(value: unknown): unknown {
   if (value === undefined) return null;
   return JSON.parse(JSON.stringify(value));
+}
+
+function boundedString(value: unknown, maximum: number): string | null {
+  if (typeof value !== 'string' || value.length > maximum || /[\u0000-\u001f\u007f]/.test(value)) return null;
+  return value.replace(/\s+/g, ' ').trim() || null;
+}
+
+function boundedInteger(value: unknown, maximum: number): number | null {
+  return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum ? Number(value) : null;
+}
+
+function boundedHttpStatus(value: unknown): number | null {
+  return Number.isInteger(value) && Number(value) >= 100 && Number(value) <= 599 ? Number(value) : null;
+}
+
+function boundedTimestamp(value: unknown): string | null {
+  const text = boundedString(value, 64);
+  if (!text) return null;
+  const time = Date.parse(text);
+  return Number.isFinite(time) ? new Date(time).toISOString() : null;
+}
+
+function boundedEndpoint(value: unknown): string | null {
+  const text = boundedString(value, 2048);
+  if (!text) return null;
+  try {
+    const url = new URL(text);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+    url.search = '';
+    url.hash = '';
+    return url.toString().slice(0, 2048);
+  } catch {
+    return null;
+  }
+}
+
+function boundedStringList(value: unknown, count: number, length: number): string[] {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .slice(0, count)
+    .map((item) => boundedString(item, length))
+    .filter((item): item is string => item !== null))];
+}
+
+function networkAttempt(value: unknown) {
+  const attempt = recordOrNull(value) || {};
+  const endpoint = boundedEndpoint(attempt.endpoint);
+  return {
+    endpoint,
+    transportSecurity: endpoint ? endpoint.startsWith('https:') ? 'https' : 'http' : null,
+    status: boundedHttpStatus(attempt.status),
+    outcome: boundedString(attempt.outcome, 40),
+    detail: boundedString(attempt.detail, 240),
+    selected: attempt.selected === true,
+  };
+}
+
+function networkSource(value: unknown) {
+  const source = recordOrNull(value);
+  if (!source || source.contextVersion !== 1 || !NETWORK_CONTEXT_STATUSES.has(source.status)) return null;
+  const endpoint = recordOrNull(source.endpoint);
+  const rdap = recordOrNull(source.rdap);
+  const network = recordOrNull(source.network);
+  const diagnostics = recordOrNull(source.diagnostics);
+  const rdapEndpoint = boundedEndpoint(rdap?.endpoint);
+  return {
+    contextVersion: 1,
+    version: source.version === 1 ? 1 : null,
+    status: source.status,
+    observedAt: boundedTimestamp(source.observedAt),
+    scanMode: source.scanMode === 'deep' ? 'deep' : null,
+    source: source.source === 'ip_rdap' ? 'ip_rdap' : null,
+    durationMs: boundedInteger(source.durationMs, 120_000),
+    complete: source.complete === true,
+    truncated: source.truncated === true,
+    limitations: boundedStringList(source.limitations, 10, 300),
+    diagnostics: diagnostics ? {
+      requestCount: boundedInteger(diagnostics.requestCount, 1),
+      addressSource: NETWORK_ADDRESS_SOURCES.has(diagnostics.addressSource) ? diagnostics.addressSource : null,
+      httpStatus: boundedHttpStatus(diagnostics.httpStatus),
+      cidrCount: boundedInteger(diagnostics.cidrCount, 16),
+    } : null,
+    detail: boundedString(source.detail, 300),
+    endpoint: endpoint ? {
+      address: boundedString(endpoint.address, 64),
+      family: endpoint.family === 4 || endpoint.family === 6 ? endpoint.family : null,
+      selectedFrom: NETWORK_ADDRESS_SOURCES.has(endpoint.selectedFrom) ? endpoint.selectedFrom : null,
+    } : null,
+    rdap: rdap ? {
+      endpoint: rdapEndpoint,
+      transportSecurity: rdapEndpoint ? rdapEndpoint.startsWith('https:') ? 'https' : 'http' : null,
+      httpStatus: boundedHttpStatus(rdap.httpStatus),
+      fetchedAt: boundedTimestamp(rdap.fetchedAt),
+      attempts: (Array.isArray(rdap.attempts) ? rdap.attempts : []).slice(0, 3).map(networkAttempt),
+    } : null,
+    network: network ? {
+      handle: boundedString(network.handle, 300),
+      name: boundedString(network.name, 300),
+      holder: boundedString(network.holder, 300),
+      cidrs: boundedStringList(network.cidrs, 16, 96),
+      startAddress: boundedString(network.startAddress, 64),
+      endAddress: boundedString(network.endAddress, 64),
+      country: /^[a-z]{2}$/i.test(String(network.country || '')) ? String(network.country).toUpperCase() : null,
+      networkType: boundedString(network.networkType, 160),
+      databaseUpdatedAt: boundedTimestamp(network.databaseUpdatedAt),
+    } : null,
+  };
 }
 
 function rdapSource(rdap: LooseRecord | null | undefined) {
@@ -92,6 +200,7 @@ export function buildLookupEvidence(response: LooseRecord | null | undefined, op
     sources: {
       rdap: rdapSource(body.rdap),
       whois: whoisSource(body.whois),
+      network: networkSource(body.networkContext),
     },
     analysis: {
       availability: cloneJson(body.availability),

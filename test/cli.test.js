@@ -197,6 +197,25 @@ test('terminal lookup preserves registrar skip states and omits absent diagnosti
   assert.doesNotMatch(formatTerminalLookup(absentDocument), /Registrar/);
 });
 
+test('terminal lookup presents bounded observed network registration context', () => {
+  const result = lookupResult({
+    networkContext: {
+      contextVersion: 1,
+      status: 'success',
+      endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
+      network: { name: 'Example edge network', holder: 'Example network holder' },
+      rawContact: 'must-not-render@example.test',
+    },
+  });
+  const document = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, result, '2026-07-14T00:00:00.000Z', 'deep');
+  const terminal = formatTerminalLookup(document);
+
+  assert.match(terminal, /Network RDAP\s+Success/);
+  assert.match(terminal, /Selected IP\s+93\.184\.216\.34/);
+  assert.match(terminal, /Network\s+Example edge network/);
+  assert.doesNotMatch(terminal, /must-not-render/);
+});
+
 test('terminal lookup explains represented registry access constraints', () => {
   const restricted = lookupResult({
     diagnostics: {

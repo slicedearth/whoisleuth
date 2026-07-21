@@ -65,6 +65,26 @@ function fixtureResponse() {
         { server: 'whois.registry.example', queriedAt: '2026-07-11T01:02:04.000Z', response: 'Domain Name: EXAMPLE.COM' },
       ],
     },
+    networkContext: {
+      contextVersion: 1, version: 1, status: 'success', observedAt: '2026-07-11T01:02:06.000Z',
+      scanMode: 'deep', source: 'ip_rdap', durationMs: 18, complete: true, truncated: false,
+      limitations: ['The selected address can represent shared edge infrastructure.'],
+      diagnostics: { requestCount: 1, addressSource: 'tls_connection', httpStatus: 200, cidrCount: 1 },
+      detail: 'The selected endpoint address was mapped to its network registration.',
+      endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
+      rdap: {
+        endpoint: 'https://network.example/ip/93.184.216.34?token=must-not-export#private', transportSecurity: 'https',
+        httpStatus: 200, fetchedAt: '2026-07-11T01:02:06.000Z',
+        attempts: [{ endpoint: 'https://network.example/ip/93.184.216.34?token=must-not-export', transportSecurity: 'https', status: 200, outcome: 'success', detail: null, selected: true }],
+      },
+      network: {
+        handle: 'NET-EXAMPLE', name: 'Example edge network', holder: 'Example network holder',
+        cidrs: ['93.184.216.0/24'], startAddress: '93.184.216.0', endAddress: '93.184.216.255',
+        country: 'AU', networkType: 'ALLOCATED', databaseUpdatedAt: '2026-07-10T00:00:00.000Z',
+        rawContacts: [{ email: 'must-not-export@example.test' }],
+      },
+      unknownImportedField: 'must not export',
+    },
     availability: {
       applicable: true,
       domain: 'example.com',
@@ -185,7 +205,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 14);
+    assert.equal(result.schemaVersion, 15);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -201,6 +221,14 @@ describe('lookup evidence export', () => {
     assert.equal(JSON.stringify(result).includes('provider-only-secret'), false);
     assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
+    assert.equal(result.sources.network.endpoint.address, '93.184.216.34');
+    assert.equal(result.sources.network.network.holder, 'Example network holder');
+    assert.deepEqual(result.sources.network.network.cidrs, ['93.184.216.0/24']);
+    assert.equal(result.sources.network.rdap.attempts[0].outcome, 'success');
+    assert.equal(result.sources.network.rdap.endpoint, 'https://network.example/ip/93.184.216.34');
+    assert.equal(result.sources.network.rdap.attempts[0].endpoint, 'https://network.example/ip/93.184.216.34');
+    assert.equal(JSON.stringify(result.sources.network).includes('must-not-export'), false);
+    assert.equal(JSON.stringify(result.sources.network).includes('unknownImportedField'), false);
     assert.equal(result.analysis.availability.hasMx, true);
     assert.equal(result.analysis.availability.http.response.status, 200);
     assert.equal(result.analysis.availability.http.response.bodyHash.value, 'a'.repeat(64));
@@ -248,7 +276,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 14);
+    assert.equal(result.schemaVersion, 15);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });
@@ -307,6 +335,13 @@ describe('lookup evidence export', () => {
     delete response.diagnostics.rdap.registrar;
     const result = evidence.buildLookupEvidence(response);
     assert.equal(result.analysis.registrarPublicationComparison, null);
+  });
+
+  test('uses null when no bounded observed network context was represented', () => {
+    const response = fixtureResponse();
+    delete response.networkContext;
+    const result = evidence.buildLookupEvidence(response);
+    assert.equal(result.sources.network, null);
   });
 
   test('creates a bounded, filesystem-safe filename', () => {
