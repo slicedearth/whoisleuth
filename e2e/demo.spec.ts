@@ -33,7 +33,11 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
+  await expect(page.getByText('security.txt', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Technology indicators' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
   await expect(page.getByText('RDAP structured data')).toBeVisible();
   await expect(page.getByText('WHOIS structured data')).toBeVisible();
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
@@ -60,9 +64,11 @@ test('completes the public synthetic workflow without investigation requests or 
   const body = await (await download.createReadStream()).toArray();
   const payload = JSON.parse(Buffer.concat(body).toString('utf-8'));
   expect(download.suggestedFilename()).toBe('whoisleuth-synthetic-demo-case.json');
-  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 2, synthetic: true, case: { domain: 'northstar-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
+  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 3, synthetic: true, case: { domain: 'northstar-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
   expect(payload.timeline).toHaveLength(2);
   expect(payload.evidence.registry.source).toBe('Registry RDAP fixture');
+  expect(payload.evidence.securityTxt.state).toBe('present');
+  expect(payload.evidence.observedNetwork.address).toBe('203.0.113.44');
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();

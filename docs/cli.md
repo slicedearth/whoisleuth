@@ -4,7 +4,7 @@ The first-party command-line interface runs the same local classification and
 lookup modules as the Express and serverless adapters. It does not call the
 hosted WHOISleuth deployment.
 
-## Current command
+## Commands
 
 ```bash
 node bin/whoisleuth.mts lookup example.com
@@ -40,8 +40,10 @@ continues to run from a repository checkout through `npm start`; it is not
 represented as an installable library entry point.
 
 Lookup defaults to the conservative fast profile. `--deep` must be requested
-explicitly and can make the additional bounded WHOIS, DNS, website, and TLS
-requests used by a deep web lookup.
+explicitly and can add bounded WHOIS, DNS, website, TLS, registrar RDAP, and
+observed-network IP RDAP work for a domain. The browser Console's optional
+security.txt and external intelligence selections are not CLI flags; the CLI
+does not run those actions implicitly.
 
 Only one query is accepted by `lookup`. Multiple-input processing belongs to
 the explicit `bulk` command rather than being silently inferred by `lookup`.
@@ -101,7 +103,7 @@ point-in-time edge or network-registration context, not proof of the origin
 host, hosting control, ownership, intent, or maliciousness. Fast and compact
 commands do not run the enrichment.
 
-When diagnostics version 5 or 6 reports a documented registry collection
+When diagnostics version 5, 6, or 7 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it
 does not make another request, and restricted, unpublished, or unavailable
@@ -292,7 +294,7 @@ its diagnostic status. Raw RDAP JSON, registrar contacts and source-specific
 handles, WHOIS response bodies, availability evidence, and unrelated lookup
 fields are not copied into the comparison result.
 
-When the saved Lookup contains valid version-5 or version-6, context-only
+When the saved Lookup contains valid version-5, version-6, or version-7, context-only
 registry-access diagnostics, version 3 retains their bounded suffix, access profiles, and
 limitation. Terminal output labels the same collection context explicitly.
 It explains source reachability only and cannot decide registration,
@@ -324,17 +326,18 @@ The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
 and the shared registry-source comparison. Registrar RDAP raw data, contacts,
 entities, links, notices, and source-specific handles remain excluded; schema
-version 15 retains that normalized portable-field comparison, explicit
-source-health states, and a strict bounded projection of observed network
-registration when the saved deep lookup represents it. Raw IP RDAP payloads
-and contact entities remain excluded.
+version 16 retains that normalized portable-field comparison, explicit
+source-health states, a strict bounded projection of observed network
+registration, and an optional normalized security.txt disclosure source when
+the saved deep lookup represents them. Raw IP RDAP payloads, security.txt
+response bodies, and contact entities remain excluded.
 
 Markdown output summarizes query context, assessment state, registry sources,
 source reconciliation, network observations, and collection diagnostics. It
 escapes all upstream text as untrusted content, bounds displayed values and
 lists, and deliberately omits raw RDAP JSON and full WHOIS response bodies.
 Use JSON when the complete evidence package or machine processing is required.
-When a version-5 or version-6 lookup records a documented registry-access constraint, both
+When a version-5, version-6, or version-7 lookup records a documented registry-access constraint, both
 Markdown and HTML include that context in collection diagnostics without
 changing its non-authoritative interpretation. Both formats also include the
 selected address and bounded network registration when present, together with

@@ -16,7 +16,7 @@ retention are covered by [the privacy notice](../PRIVACY.md).
 
 ```mermaid
 flowchart LR
-  visitor["Public visitor"] --> public["Privacy and synthetic demo pages"]
+  visitor["Public visitor"] --> public["Overview, guide, privacy, sign-in, and synthetic demo"]
   analyst["Authenticated analyst"] --> ui["Prerendered SvelteKit console"]
 
   public --> tab["Isolated demo sessionStorage"]
@@ -31,25 +31,30 @@ flowchart LR
   shared --> registry["IANA bootstrap, RDAP, and WHOIS"]
   shared --> dns["Public DNS and CT sources"]
   shared --> web["Validated public HTTP and TLS endpoints"]
+  shared -. "optional explicitly selected enrichment" .-> intel["Configured external intelligence APIs"]
   shared -. "optional minimal leases and counters" .-> budget["Distributed budget provider"]
+  functions -. "optional encrypted compact watchlist" .-> blobs["Netlify Blobs"]
 ```
 
 The browser never opens raw WHOIS sockets or bypasses the API to perform hosted
 evidence collection. The backend never owns analyst projects or a general
 investigation database. It returns bounded results for the current request;
 deliberate browser actions decide what compact evidence is retained locally or
-exported.
+exported. When explicitly configured, the scheduled worker stores one bounded,
+application-encrypted compact watchlist projection rather than ordinary cases,
+profiles, notes, raw registry payloads, or deep website evidence.
 
 ## Component responsibilities
 
 | Layer | Owns | Does not own |
 | --- | --- | --- |
-| `frontend/src/routes/` | Lookup, Discover, Bulk, Monitor, Brands, public Privacy, and public Demo presentation and interaction. | Registry protocol logic, authentication enforcement, outbound-request trust decisions, or deployment-wide budgets. |
+| `frontend/src/routes/` | Public overview, demo, guide, sign-in, and privacy pages plus the protected Dashboard, Lookup, Discover, Bulk, Monitor, Brands, and Registry support interfaces. | Registry protocol logic, authentication enforcement, outbound-request trust decisions, or deployment-wide budgets. |
 | `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
-| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, and cross-tool handoff state. | General server persistence, cross-device synchronization, accounts, or background jobs. |
-| `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, and response shaping. | Separate copies of lookup and parsing rules. |
-| `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
+| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, and cross-tool handoff state. | General server persistence, cross-device synchronization, accounts, or a general background-job system. |
+| `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, response shaping, and the optional Netlify scheduled-watchlist boundary. | Separate copies of lookup and parsing rules. |
+| `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security.txt collection, optional external intelligence adapters, derived technology and passive-posture analysis, observed network context, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
 | Optional distributed budget provider | Opaque expiring leases and bounded operation counters when explicitly configured. | Query targets, responses, evidence, notes, profiles, or session tokens. |
+| Optional Netlify Blob store | One application-encrypted, bounded compact scheduled-watchlist envelope when explicitly configured. | Raw RDAP/WHOIS, expanded contacts, analyst notes, sessions, Brand Profiles, cases, or deep website evidence. |
 
 ## Protected request pipeline
 
@@ -81,7 +86,7 @@ Fast and deep modes are execution profiles, not confidence labels:
 | Profile | Intended use | Hosted work |
 | --- | --- | --- |
 | **Fast** | High-volume candidate triage. | RDAP-led registration analysis, with bounded authoritative DNS delegation fallback where needed. WHOIS and deep website/TLS evidence are skipped explicitly. |
-| **Deep** | Analyst-selected investigation and richer evidence. | RDAP plus WHOIS and enabled availability, DNS, HTTP, favicon, page-identity, and one-connection TLS observations. |
+| **Deep** | Single-target investigation and analyst-selected richer Bulk or CLI evidence. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS, HTTP, favicon, page identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
 
 Bulk uses the same `/api/lookup` orchestration one domain at a time and requests
 a compact response that omits raw RDAP JSON and multi-hop WHOIS bodies. This
@@ -101,7 +106,9 @@ payloads that Bulk does not display or retain.
 - **HTTP** resolves a hostname once, rejects private and special-purpose
   addresses, pins the actual connection to validated public addresses, validates
   every redirect, caps redirects and retained body bytes, and closes its
-  per-request dispatcher.
+  per-request dispatcher. The homepage, favicon, optional security.txt file,
+  and owned-domain policy requests reuse these trust controls with their own
+  bounded contracts.
 - **TLS** resolves through the public-address guard and opens one pinned
   connection while retaining the hostname for SNI and hostname validation. It
   stores bounded public certificate metadata rather than certificate bytes or
@@ -109,6 +116,10 @@ payloads that Bulk does not display or retain.
 - **DNS and Certificate Transparency** retain only the records or structured
   public-log provenance needed for the requested feature, with explicit row,
   string, hostname, and response-size caps.
+- **External intelligence** is disabled until configured and runs only when a
+  user selects the corresponding deep action. Each adapter sends a bounded
+  canonical domain under its declared policy, retains no provider cache, and
+  keeps provider misses or outages neutral.
 
 Source health is part of the result contract. Unsupported, skipped, partial,
 not-found, and failed collection remain distinct so missing data is not silently
@@ -118,11 +129,13 @@ converted into a negative security or availability conclusion.
 
 ```mermaid
 flowchart TB
-  transient["Transient server request data"] -->|"discarded after response"| none["No application database"]
+  transient["Request-scoped evidence"] --> response["Bounded API response"]
+  upstreamCache["Bounded process caches"] -->|"short expiry or replacement"| expiry["No ordinary investigation database"]
   compact["Normalized compact evidence"] -->|"explicit user action"| stores["Browser localStorage"]
   handoff["Candidate handoff"] --> session["Browser sessionStorage"]
   demo["Synthetic demo progress"] --> demoStore["Separate tab-scoped sessionStorage key"]
   stores --> export["Deliberate local exports"]
+  scheduled["Selected compact watchlist"] -->|"application-encrypted when configured"| blob["Site-wide Netlify Blob"]
 ```
 
 The local stores are versioned, normalized on read, bounded by record and field
@@ -130,6 +143,14 @@ counts, and—where evidence volume is material—protected by serialized byte
 budgets and deterministic pruning. They remain ordinary browser storage rather
 than encryption. Clearing site data removes them, and another device or browser
 profile does not receive them automatically.
+
+Registry bootstrap data and selected upstream results can use bounded,
+short-lived process caches to reduce duplicate requests; they are not an
+analyst investigation store. Optional hosted monitoring is a separate,
+Netlify-only persistence path. It retains one encrypted compact projection with
+bounded history and a resumable cursor so scheduled fast checks can continue.
+Because the deployment uses one shared login, every signed-in person can manage
+that same hosted projection when the feature is enabled.
 
 `investigation-projection.ts` provides a separate read-only view over current
 case, campaign, Brand Profile, page-baseline, and explicitly supplied scan-local
@@ -149,8 +170,10 @@ write. Result links are passive pivots into the exact retained case, campaign,
 or Brand Profile where one exists.
 
 The public demo has a separate fixed schema and storage key. It uses reserved
-domains, does not call analysis APIs, cannot read or write production stores,
-and marks every downloaded package as synthetic.
+domains, does not call analysis APIs, cannot read or write production
+investigation stores, and marks every downloaded package as synthetic. The
+public layout's ordinary theme preference and boolean session-status check
+remain separate from demo progress.
 
 ## Authentication and operation controls
 
@@ -178,7 +201,8 @@ had disappeared.
 same output can be served by Express or published directly by Netlify. Express
 maps API routes in one process; Netlify uses thin function wrappers and path
 rewrites. Both import the same `lib/` orchestration and use compatible response
-shapes.
+shapes. The encrypted scheduled-watchlist worker and Blob management path are
+optional Netlify capabilities rather than an Express parity claim.
 
 The parity boundary is verified at shared modules and HTTP wrappers rather than
 through duplicated business logic. Platform-specific limitations remain
@@ -199,8 +223,9 @@ The test pyramid is designed to avoid dependence on public services:
 4. Chromium Playwright tests cover authentication, responsive and accessible
    workflows, browser storage and downloads, API isolation, and the public
    synthetic demo against a local production-style server.
-5. CI runs the locked install and complete sequence for pushes and pull
-   requests, retaining browser artifacts only on failure.
+5. CI runs the locked install, production dependency audit, and complete
+   verification sequence for pushes and pull requests, retaining browser
+   artifacts only on failure.
 
 The on-demand `npm run schema:inventory` report is assembled from the owning
 contract constants and readers rather than a copied version table. Its explicit

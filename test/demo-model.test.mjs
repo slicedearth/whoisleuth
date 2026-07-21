@@ -88,6 +88,10 @@ describe('synthetic demo state', () => {
     assert.equal(lookup.registry.rdapParsed.domain, 'northstar-login.example');
     assert.equal(lookup.dns.rows[0].label, 'Nameservers');
     assert.equal(lookup.http.attempts[0].detail, 'Synthetic fixture; no connection was attempted');
+    assert.equal(lookup.securityTxt.state, 'present');
+    assert.equal(lookup.securityPosture.summary.potentialExposure, 1);
+    assert.equal(lookup.technology.findings[0].name, 'Example CMS');
+    assert.equal(lookup.network.address, '203.0.113.44');
     assert.equal(lookup.tls.alternativeNames.length, 2);
     assert.equal(syntheticDemoLookupView('unknown'), null);
 
@@ -113,6 +117,9 @@ describe('synthetic demo export', () => {
     assert.equal(payload.case.domain, 'northstar-login.example');
     assert.equal(payload.timeline.length, 2);
     assert.equal(payload.provenance.source, 'Certificate Transparency');
+    assert.equal(payload.evidence.securityTxt.state, 'present');
+    assert.equal(payload.evidence.technology.findings[0].name, 'Example CMS');
+    assert.equal(payload.evidence.observedNetwork.address, '203.0.113.44');
     assert.match(payload.warning, /Synthetic demonstration data only/);
     assert.ok(payload.limitations.every((item) => /fixture|request|live assessment/i.test(item)));
   });
@@ -123,6 +130,7 @@ describe('synthetic demo export', () => {
     const payload = buildSyntheticDemoExport(state, '2026-07-14T01:02:03.000Z');
     payload.assessment.signals.push('Changed export');
     payload.evidence.dns.nameservers.push('changed.invalid');
+    payload.evidence.securityTxt.contacts.push('mailto:changed@invalid.example');
     payload.timeline[1].changes[0].field = 'Changed timeline';
     assert.deepEqual(state, before);
     assert.equal(SYNTHETIC_DEMO_CANDIDATES[0].signals.includes('Changed export'), false);

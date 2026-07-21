@@ -119,11 +119,10 @@ function getClientIp(
 // model for this gate, so this stays tight regardless of deployment mode.
 const LOGIN_RATE_LIMIT: Readonly<RateLimitConfig> = { limit: 10, windowMs: 5 * 60 * 1000 };
 
-// Lookup endpoints (rdap/whois/availability/ct-search): generous enough to
-// clear a full 2000-domain fast bulk scan (see MAX_FAST_BULK_DOMAINS in
-// the Bulk workspace) without breaking normal use, while still capping an
-// unbounded scripted flood well below what upstream registries would treat
-// as abuse.
+// Lookup endpoints (rdap/whois/availability/ct-search): accommodate bounded
+// client concurrency while limiting one warm runtime's request burst. This is
+// an application guard, not an upstream allowance or a promise that a large
+// scan will complete inside one window.
 const API_RATE_LIMIT: Readonly<RateLimitConfig> = { limit: 1000, windowMs: 60 * 1000 };
 
 // Hosted-watchlist management performs strongly consistent Blob reads and

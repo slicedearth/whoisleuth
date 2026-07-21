@@ -231,6 +231,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
   const externalIntelligence = req.query.intelligence === '1' || req.query.intelligence === 'true';
   const malwareHostIntelligence = req.query.malware === '1' || req.query.malware === 'true';
   const malwareIocIntelligence = req.query.ioc === '1' || req.query.ioc === 'true';
+  const securityTxt = req.query.security_txt === '1' || req.query.security_txt === 'true';
   return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
     try {
       const result = await runUnifiedLookup(classified, {
@@ -239,6 +240,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
         externalIntelligence,
         malwareHostIntelligence,
         malwareIocIntelligence,
+        securityTxt,
         featurePolicy: req.networkFeaturePolicy,
       });
       res.json({

@@ -36,7 +36,7 @@
   <div class="terminal-preview card" aria-label="Example WHOISleuth evidence summary">
     <div class="terminal-bar"><span class="terminal-window-red"></span><span class="terminal-window-yellow"></span><span class="terminal-window-green"></span><code>lookup --deep example.test</code></div>
     <div class="terminal-body">
-      <p><span class="prompt">❯</span> review_sources <strong>6</strong></p>
+      <p><span class="prompt">❯</span> review_sources <strong>--summary</strong></p>
       <dl>
         <div><dt>Registration</dt><dd><span class="state observed">observed</span> Registry RDAP</dd></div>
         <div><dt>Registrar</dt><dd><span class="state separate">separate</span> Related RDAP</dd></div>

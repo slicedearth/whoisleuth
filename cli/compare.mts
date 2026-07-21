@@ -109,7 +109,7 @@ function boundedSourceList(value: unknown, field: string): string[] {
 function projectRegistryAccessContext(diagnostics: UnknownRecord): RegistryAccessContext | null {
   const value = diagnostics.registryAccess;
   if (value === null || value === undefined) return null;
-  if (![5, 6].includes(Number(diagnostics.version))) return null;
+  if (![5, 6, 7].includes(Number(diagnostics.version))) return null;
   const context = objectOrNull(value);
   if (!context) throw new CliUsageError('diagnostics.registryAccess must be an object when present.');
   if (context.authority !== 'context_only') {

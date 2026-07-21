@@ -17,9 +17,11 @@ default (see the README), so many lookups return no personal data at all.
 
 ## Where that data goes
 
-- **Single and bulk lookups**: proxied through the server per-request, held
-  in memory only for the duration of that request, never written to a
-  database or disk server-side. Single Lookup can display multiple bounded
+- **Single and bulk lookups**: proxied through the server and never written to
+  an ordinary investigation database or disk server-side. Request data is
+  transient, while bounded registry bootstrap and selected public RDAP/WHOIS
+  results can remain briefly in memory to reduce duplicate upstream requests.
+  Single Lookup can display multiple bounded
   registry-published contacts per RDAP role and bounded normalized WHOIS
   contacts for registrant, administrative, technical, billing, and abuse
   roles. Bulk, watchlist, and case data retain only the existing compact
@@ -51,6 +53,16 @@ default (see the README), so many lookups return no personal data at all.
   briefly cached in server memory like other RDAP responses. The selected
   address can belong to a CDN, proxy, load balancer, or shared edge and is not
   proof of an origin host, hosting control, ownership, intent, or maliciousness.
+- **Optional security.txt disclosure lookup**: when selected for a deep
+  single-domain Lookup, the server starts one bounded HTTPS collection at the
+  standardized security.txt location on the exact entered hostname. It retains
+  only normalized published contacts, policy and encryption references,
+  preferred languages, canonical locations, expiry, and source health. The
+  response body is discarded after parsing and no server cache is used. The
+  normalized result can be displayed and deliberately exported, but it is not
+  copied into compact Bulk responses, cases, watchlists, profiles, or
+  monitoring state and never affects availability or Risk. Publication does
+  not authorize testing or prove that a contact is monitored.
 - **Optional archived-verdict search**: if the operator explicitly enables the
   URLscan adapter and a user selects it for a deep single-domain Lookup, the
   server sends only the canonical registrable domain to URLscan's Search API.
@@ -357,10 +369,10 @@ data-subject requests to:
   should review its terms, select an appropriate region and retention posture,
   and keep the write token secret.
 - Upstream RDAP/WHOIS servers, public DNS, `crt.sh` (Certificate Transparency
-  search), a deep-scanned domain's TLS endpoint, and an audited domain's own
-  MTA-STS policy host are queried live,
-  on demand - they're the data sources, not sub-processors this tool shares
-  stored data with.
+  search), a deep-scanned domain's homepage, favicon, TLS endpoint, optional
+  security.txt endpoint, and an audited domain's own MTA-STS policy host are
+  queried live, on demand - they're the data sources, not sub-processors this
+  tool shares stored data with.
 - URLscan: only when the operator configures the optional adapter and a user
   explicitly selects archived-verdict search, its API receives the canonical
   registrable domain and ordinary request metadata. Operators should review

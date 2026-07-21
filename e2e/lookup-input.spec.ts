@@ -18,6 +18,58 @@ test('a single domain can be entered normally', async ({ page }) => {
   await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
 });
 
+test('security.txt collection is explicit, separately presented, and mobile safe', async ({ page }) => {
+  let requestUrl = '';
+  await page.route('**/api/lookup?*', async (route) => {
+    requestUrl = route.request().url();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'portal.example.test', type: 'domain', inputHostname: 'portal.example.test',
+        registrableDomain: 'example.test', isSubdomain: true,
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: 'example.test' },
+        rdap: { error: 'Fixture source unavailable' }, whois: { parsed: {}, chain: [] },
+        diagnostics: { version: 7, rdap: { status: 'error' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+        securityTxt: {
+          securityTxtVersion: 1, version: 1, state: 'present', status: 'success',
+          observedAt: '2026-07-22T01:00:00.000Z', scanMode: 'deep', source: 'security_txt',
+          durationMs: 9, complete: true, truncated: false, limitations: [], diagnostics: {},
+          detail: 'A current security disclosure file was published for this hostname.',
+          requestedUrl: 'https://portal.example.test/.well-known/security.txt',
+          finalUrl: 'https://portal.example.test/.well-known/security.txt', httpStatus: 200,
+          redirectCount: 0, contacts: ['mailto:security@example.test'],
+          policies: ['https://portal.example.test/security-policy'], encryption: [], canonical: [],
+          preferredLanguages: ['en'], expiresAt: '2027-01-01T00:00:00.000Z', signed: false, canonicalMatches: null,
+        },
+      }),
+    });
+  });
+
+  const option = page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u });
+  await expect(option).not.toBeChecked();
+  await page.locator('#query').fill('192.0.2.1');
+  await expect(option).toBeDisabled();
+  await page.locator('#query').fill('AS64496');
+  await expect(option).toBeDisabled();
+  await page.locator('#query').fill('one.example.test, two.example.test');
+  await expect(option).toBeDisabled();
+  await page.locator('#query').fill('portal.example.test');
+  await expect(option).toBeEnabled();
+  await option.check();
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  expect(new URL(requestUrl).searchParams.get('security_txt')).toBe('1');
+
+  const disclosure = page.locator('details.security-txt');
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  await disclosure.locator('summary').click();
+  await expect(disclosure.getByText('mailto:security@example.test', { exact: true })).toBeVisible();
+  await expect(disclosure.getByText(/does not authorize testing/u)).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('newlines, commas, and semicolons all parse as multiple domains and hand off to Bulk', async ({ page }) => {
   // Each delimiter gets its own line: the client-side parser picks one
   // dominant delimiter per line, so a line mixing "," and ";" together would
@@ -215,7 +267,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
       },
       whois: { parsed: {}, chain: [] },
       diagnostics: {
-        version: 6,
+        version: 7,
         rdap: { status: 'success', registrar: { status: 'success' } },
         whois: { status: 'partial' }, availability: { status: 'complete' },
       },
@@ -260,7 +312,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(15);
+  expect(exported.schemaVersion).toBe(16);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');

@@ -24,7 +24,8 @@ perceptual favicon matching against a Brand Profile's official site).
 Findings can be triaged, drafted into abuse reports, organized into
 browser-local cases and campaigns, kept in a shortlist, and monitored over
 time with a watchlist that records a bounded timeline of material changes -
-all with CSV/JSON import/export. Brand Profiles
+with deliberate CSV, JSON, and readable exports where each workflow supports
+them. Brand Profiles
 can also audit their official domains' mail and DNS posture (SPF, DMARC, MX,
 DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly configured DKIM
 selectors).
@@ -49,12 +50,12 @@ explicit preference stays only in that browser's local storage.
 
 | Tool | Purpose | Important boundary |
 | --- | --- | --- |
-| **Lookup** | Inspect one domain, IP address, or ASN through normalized RDAP/WHOIS evidence and optional deep DNS, HTTP, favicon, page-identity, and TLS observations. | Fast and deep results disclose skipped, partial, unsupported, and failed sources rather than treating missing evidence as negative evidence. |
+| **Lookup** | Inspect one domain, IP address, or ASN. A domain lookup uses the full profile with normalized registration sources, DNS, HTTP, favicon, page identity, TLS, derived technology and passive posture, and observed network context. | Optional security.txt and external intelligence requests run only when selected. Source states remain explicit rather than turning missing evidence into a negative finding. |
 | **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates; supplement them with structured Certificate Transparency matches. | Candidate generation is local. Certificate Transparency is an explicit hosted search and its timestamps are public-log observations, not proof of site activity or maliciousness. |
 | **Bulk** | Triage a list of domains with filters, score explanations, CSV export, scan-local relationships, and fast/deep profiles. | Each domain is a separately budgeted lookup. Fast mode avoids WHOIS and deep website/TLS collection; deep mode costs more requests and time. |
 | **Brands** | Keep browser-local official-domain profiles, posture settings, allowlists, and optional page-identity baselines. | Profiles stay in that browser. A posture audit and baseline capture run only when explicitly requested. |
 | **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local by default. An optional Netlify worker can retain only encrypted compact scheduled-watchlist state when explicitly configured; there are no accounts, automatic reports, or automatic notifications. |
-| **Demo** | Walk through representative Dashboard, Brands, Discover, Bulk, Lookup, and Monitor interfaces using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production browser stores. |
+| **Demo** | Walk through representative Dashboard, Brands, Discover, Bulk, Lookup, and Monitor interfaces using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production investigation stores. |
 
 The application is intentionally an analyst workbench rather than an autonomous
 scanner or enforcement system. Scores, similarity, relationships, and generated
@@ -209,12 +210,14 @@ an environment update or new function instance before a changed value takes
 effect. Removing the variable or setting any value other than the four values
 above re-enables the feature.
 
-Every push and pull request runs the locked install, test suite, JavaScript
-type checks, Svelte checks, production frontend build, and browser end-to-end
-suite in GitHub Actions. Run the same verification locally:
+Every push and pull request runs the locked install, production dependency
+audit, test suite, TypeScript checks, Svelte checks, production frontend build,
+and browser end-to-end suite in GitHub Actions. Run the same verification
+locally:
 
 ```bash
 npm test
+npm audit --omit=dev
 npm run typecheck
 npm run check
 npm run build
@@ -439,11 +442,13 @@ compact-storage boundary, and lookup evidence schema are documented in the
   provenance, and stable source error codes. HTTP errors retain the existing
   human-readable `error` and add a machine-readable `errorCode` such as
   `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
-  clients do not need to match message text. Diagnostics version 6 retains the
+  clients do not need to match message text. Diagnostics version 7 retains the
   separately-attributed registrar RDAP child and non-authoritative
   registry-access context from version 5, and can add bounded observed-network
-  provenance to deep non-compact domain results. These additions are omitted
-  from compact Bulk responses and never change availability or scoring.
+  provenance from version 6. It can also add separately attributed security.txt
+  state and provenance when that optional deep action is selected. These
+  additions are omitted from compact Bulk responses and never change
+  availability or scoring.
 - Clients that only need the derived assessment can add `compact=1` to
   `/api/lookup`. This retains `availability` and `diagnostics` while omitting
   raw RDAP and WHOIS payloads; Bulk uses this mode to bound browser memory and
@@ -463,7 +468,8 @@ compact-storage boundary, and lookup evidence schema are documented in the
   report so browser, CLI, and worker consumers can distinguish hosted support,
   local-only analysis, disabled features, and unavailable integrations. The
   report is server-authoritative, identifies the active concurrency provider
-  and scope, and does not claim unimplemented scheduled capabilities.
+  and scope, and reports optional scheduled monitoring and distributed
+  controls from their effective runtime configuration.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
   browser's local storage. The retained collection remains available to load,
   export, or clear as a whole while its domain chips are displayed in pages of
@@ -630,8 +636,9 @@ covered by the provider's community terms or an appropriate paid agreement.
   explicitly versioned because upstream confusable data can evolve; the
   curated subset is not an exhaustive registry-variant or visual-similarity
   database. Lookup evidence
-  schema version 15 retains the current bounded analysis and observed-network
-  projection supplied to the export; Bulk CSV
+  schema version 16 retains the current bounded analysis, observed-network
+  projection, and optional normalized security.txt source supplied to the
+  export; Bulk CSV
   exports include the compact IDN fields.
 - Run **Audit official domains** from a Brand Profile to check preventive
   mail/DNS controls. Each finding retains its source records, explains why it
@@ -716,6 +723,17 @@ covered by the provider's community terms or an appropriate paid agreement.
   remains outside compact browser stores and Risk or availability decisions;
   it is included only when the user deliberately exports the full Lookup
   evidence response.
+- A deep single-domain Lookup can explicitly request the standardized
+  `/.well-known/security.txt` file for the exact entered hostname. The optional
+  collector makes one bounded HTTPS-only collection with safe redirect handling,
+  retains only normalized Contact, Expires, Canonical, Policy,
+  Preferred-Languages, and Encryption fields, and reports absent, stale,
+  partial, malformed, unsupported, and unavailable states separately. The
+  response body is discarded after parsing. This source is not requested by
+  default, does not run in fast or compact modes, is not copied into
+  browser-local stores, and never affects availability or Risk. A published
+  file provides reporting information; it does not authorize security testing
+  or prove that a contact is monitored.
 - Page identity also includes an independently versioned fingerprint bundle
   derived from the same capped response. It reuses the exact captured-body
   SHA-256 and adds a noise-reduced normalized-HTML SHA-256, visible-text
@@ -1013,19 +1031,22 @@ moves from a bounded profile and official-site baseline through candidate
 generation, explainable triage, separately attributed evidence, an isolated
 case, a later observation, material-change filtering, and report export. It
 uses fixed fixtures on reserved domains and makes no live registry, DNS,
-website, certificate, Netlify Function, or other analysis request. Demo
+website, certificate, or other analysis request. The public layout can still
+read the same minimal boolean session-status endpoint used by other public
+pages. Demo
 progress is kept only in `sessionStorage` under
 `whoisleuth:synthetic-demo:v1`; it never reads or writes production Brand
 Profiles, candidates, cases, campaigns, watchlists, or history, and **Reset
 demo** removes the tab-scoped record.
 
-Demo exports use version 2 of the distinct
+Demo exports use version 3 of the distinct
 `whoisleuth.synthetic-demo-case` schema, carry `synthetic: true`, retain only
 the fixed attributed fixtures and synthetic observation timeline, and include
 an explicit warning that they are not live findings, evidence packages, or
 abuse reports. The demo remains a representative product walkthrough rather
 than a shadow implementation of every tool. Its fixture adapters feed the
-same read-only profile, score, relationship, registry, DNS, HTTP, TLS, and
+same read-only profile, score, relationship, registry, DNS, HTTP, TLS,
+security.txt, technology, passive-posture, network-context, and
 evidence-timeline components used by the protected console. Existing
 represented surfaces therefore inherit component-level UI and accessibility
 changes, while genuinely new tools are added to the guided scenario
@@ -1105,10 +1126,10 @@ Functions:
 - `/api/login` - 10 attempts per 5 minutes, since the shared password is the
   tool's only access control and the main thing worth throttling.
 - `/api/lookup`, `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search`,
-  `/api/domain-posture` - 1000 requests per minute, generous enough to clear a
-  full 2000-domain fast bulk scan without breaking normal use, while still
-  capping a scripted flood well below what upstream registries would treat as
-  abuse.
+  `/api/domain-posture` - 1000 requests per minute. Bulk uses bounded client
+  concurrency, and a `429` response tells the client when to retry. This
+  container-local ceiling limits bursts but is not an upstream allowance or a
+  guarantee that a large scan will complete within one minute.
 - `/api/scheduled-monitor` - 60 authenticated management requests per minute
   per warm runtime and signed session, in addition to the general API limit.
   This lower ceiling protects strongly consistent Blob reads and conditional
@@ -1258,10 +1279,12 @@ when they bypass canonical-path edge rules.
 
 ## Deploying to Netlify
 
-This repository also ships TypeScript Netlify Functions for RDAP, WHOIS,
-availability, Certificate Transparency search, and domain-posture audits. They
-remain thin entry points over the same `lib/` code `server.mts` uses, so behavior
-is identical either way. To deploy:
+This repository also ships TypeScript Netlify Functions for unified lookup,
+RDAP, WHOIS, availability, Certificate Transparency search, domain-posture
+audits, authentication, capability reporting, and optional scheduled-watchlist
+management. They remain thin entry points over the same shared modules used by
+`server.mts`; the private scheduled worker adds only the Netlify-specific
+encrypted Blob boundary. To deploy:
 
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).
@@ -1277,20 +1300,22 @@ is identical either way. To deploy:
    `SITE_PASSWORD`, authentication fails closed and nobody can log in.
 
 Bulk scans run as one `/api/lookup` call per domain with client-side
-concurrency (see `frontend/src/routes/bulk/+page.svelte`) rather than one long server-held
-request, since serverless functions have a per-invocation execution limit -
-this keeps each function call short regardless of how many domains are in a
-bulk run.
+concurrency (see `frontend/src/routes/(console)/bulk/+page.svelte`) rather than
+one long server-held request. Serverless functions have a per-invocation
+execution limit, so this keeps each function call bounded regardless of how
+many domains are in a bulk run.
 
 ## Project structure
 
 ```
 LICENSE                 Apache 2.0 license text
 NOTICE                  Copyright attribution notice
-PRIVACY.md              Template privacy notice - what data is processed, retention, deletion
-server.mts               Express backend: lookup/posture/auth routes
+PRIVACY.md              Template privacy notice: processing, retention, and deletion
+server.mts               Express API, authentication, capability, and static-site adapter
+bin/                    First-party CLI entry point
+cli/                    CLI commands, formatters, and local command contracts
 frontend/               SvelteKit multi-page frontend workspace
-  src/routes/           Lookup, Discover, Bulk, Monitor, Brands, and Privacy pages
+  src/routes/           Public overview/demo/guide/login/privacy and protected Console pages
   src/lib/              Browser state, workflow helpers, and analysis modules
     cases.ts            Browser-local analyst case store (localStorage wrapper)
     analysis/           Framework-neutral scoring, comparison, generation, history, and case logic
@@ -1308,15 +1333,19 @@ lib/                    Shared lookup logic, used by both server.mts and netlify
   html-signals.mts      Bounded homepage signals and versioned static page-identity evidence
   website-technology.mts Versioned technology indicators from existing deep evidence
   website-security-posture.mts Passive posture findings from existing deep evidence
+  observed-network-context.mts Bounded IP RDAP context for one observed endpoint address
+  security-txt.mts      Optional bounded security.txt disclosure-contact collection
   tls-intelligence.mts  One-connection TLS/certificate profile with public-address pinning
   threat-intelligence-contract.mts  Bounded policy, result, and fixture boundaries for optional providers and curated connectors
   ct-search.mts         Certificate Transparency search (crt.sh) for lookalike hostnames
   safe-fetch.mts        SSRF-guarded fetch (blocks private/loopback/link-local targets)
   auth.mts              Shared-password session cookie (sign/verify, no user accounts)
   rate-limit.mts        Per-IP rate limiting for login and lookup routes
-netlify/functions/      Netlify Functions (lookups, posture audit, auth/session)
+netlify/functions/      Netlify Functions, scheduled worker, and hosted-watchlist management
 netlify.toml            Netlify build/redirect config
+tools/                  Maintainer-run schema, drift, benchmark, deployment, and security checks
 docs/architecture.md    System context, request pipeline, trust boundaries, and trade-offs
+docs/cli.md             First-party CLI commands, boundaries, schemas, and exit codes
 docs/engineering-case-study.md  Project constraints, decisions, challenges, and review guide
 docs/registry-data-contract.md  Normalized registry source and evidence contracts
 ```

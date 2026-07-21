@@ -168,8 +168,8 @@ describe('comparison input boundary', () => {
     assert.deepEqual(source, before);
   });
 
-  test('projects only bounded version-5 and version-6 context-only registry access diagnostics', () => {
-    for (const version of [5, 6]) {
+  test('projects only bounded supported context-only registry access diagnostics', () => {
+    for (const version of [5, 6, 7]) {
       const source = withRegistryAccess(lookupDocument(), {}, version);
       source.diagnostics.registryAccess.privateDetail = 'must not enter comparison output';
       const before = structuredClone(source);

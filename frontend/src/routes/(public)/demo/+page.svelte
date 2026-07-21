@@ -6,7 +6,11 @@
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
+  import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
+  import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
+  import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
+  import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
@@ -126,12 +130,16 @@
 {:else if view==='lookup'&&selected&&lookupView}
   <section class="demo-panel" aria-labelledby="lookup-heading">
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
-    <p>The production Lookup components render the synthetic view model below. Each source remains separately attributed. Inconclusive enrichment stays explicit and is never treated as evidence of absence or safety.</p>
+    <p>The production Lookup components render the synthetic view model below. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety.</p>
     <div class="shared-evidence"><LookupAssessment {...lookupView.assessment} /></div>
     <div class="shared-evidence"><LookupRegistrySources {...lookupView.registry} /></div>
     <div class="shared-evidence"><LookupDnsEvidence {...lookupView.dns} /></div>
     <div class="shared-evidence"><LookupHttpEvidence {...lookupView.http} /></div>
+    <div class="shared-evidence"><LookupSecurityTxt {...lookupView.securityTxt} /></div>
+    <div class="shared-evidence"><LookupSecurityPosture {...lookupView.securityPosture} /></div>
+    <div class="shared-evidence"><LookupTechnologyProfile {...lookupView.technology} /></div>
     <div class="shared-evidence"><LookupTlsEvidence {...lookupView.tls} /></div>
+    <div class="shared-evidence"><LookupNetworkContext {...lookupView.network} /></div>
     {#if selected.relationship}<div class="limitation info"><strong>Relationship context</strong><p>{selected.relationship.label} <code>{selected.relationship.value}</code> appears in {selected.relationship.relatedCandidates} synthetic candidates. Shared infrastructure is not proof of common ownership.</p></div>{/if}
     <div class="limitation"><strong>Interpretation limit</strong><p>These values demonstrate source attribution and explainability only. A live result would still require analyst review.</p></div>
     <button class="primary" type="button" onclick={openCase}>Open synthetic case in Monitor</button>

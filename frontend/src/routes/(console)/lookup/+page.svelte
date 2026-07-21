@@ -15,6 +15,7 @@
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
+  import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
@@ -53,6 +54,7 @@
   let includeExternalIntelligence=$state(false);
   let includeMalwareHostIntelligence=$state(false);
   let includeMalwareIocIntelligence=$state(false);
+  let includeSecurityTxt=$state(false);
   let error=$state('');
   let result=$state<JsonRecord|null>(null);
   let profile=$state<BrandProfile|null>(null);
@@ -67,11 +69,17 @@
   const malwareHostIntelligenceSupported=$derived(urlhausCapability?.status==='supported');
   const threatfoxCapability=$derived(featureCapability(capabilityReport?.()||null,'threatfox_domain_ioc'));
   const malwareIocIntelligenceSupported=$derived(threatfoxCapability?.status==='supported');
+  const websiteProbeCapability=$derived(featureCapability(capabilityReport?.()||null,'website_probe'));
+  const securityTxtSupported=$derived(websiteProbeCapability?.status==='supported');
 
   const rec=(value:any):JsonRecord=>value&&typeof value==='object'?value:{};
   const show=(value:any):string=>value==null||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='object'?show(value.name||value.org||value.handle||value.domain):String(value);
   const parsedInput=$derived(parseDomainInput(query));
   const entries=$derived(parsedInput.entries);
+  const securityTxtEligible=$derived.by(()=>{
+    if(entries.length!==1)return false;
+    try{const value=entries[0];const url=new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)?value:`https://${value}`);const host=url.hostname;return host.includes('.')&&!host.includes(':')&&!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);}catch{return false;}
+  });
   const availability=$derived(rec(result?.availability));
   const lookupEvidenceDepth=$derived(availability.deepScanComplete===false?'fast':'deep');
   const rdap=$derived(rec(result?.rdap));
@@ -86,6 +94,7 @@
   const observedNetworkEndpoint=$derived(rec(observedNetworkContext.endpoint));
   const observedNetworkRdap=$derived(rec(observedNetworkContext.rdap));
   const observedNetwork=$derived(rec(observedNetworkContext.network));
+  const securityTxt=$derived(rec(result?.securityTxt));
   const threatIntelligence=$derived(rec(result?.threatIntelligence));
   const threatIntelligenceProviders=$derived(Array.isArray(threatIntelligence.providers)?threatIntelligence.providers.map(rec):[]);
   const dnsEvidence=$derived(rec(availability.dns));
@@ -138,7 +147,7 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const caseEvidence=$derived({
     availability:String(availability.state||''),
@@ -422,7 +431,7 @@
     ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
     {href:'#raw-data',label:'Raw data'},
   ];}
-  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');const response=await fetch(`/api/lookup?${params}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
+  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');if(includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');const response=await fetch(`/api/lookup?${params}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
@@ -437,9 +446,12 @@
   {externalIntelligenceSupported}
   {malwareHostIntelligenceSupported}
   {malwareIocIntelligenceSupported}
+  {securityTxtSupported}
+  {securityTxtEligible}
   bind:includeExternalIntelligence
   bind:includeMalwareHostIntelligence
   bind:includeMalwareIocIntelligence
+  bind:includeSecurityTxt
   {error}
   onsubmit={submit}
 />
@@ -483,6 +495,22 @@
 
       {#if tlsEvidence.source==='tls'}
         <div class="evidence-component"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={tlsEvidenceRows()} findings={tlsFindingRows()} leafCertificate={tlsLeafCertificateRows()} alternativeNames={tlsAlternativeNameRows()} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={tlsChainRows()} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={tlsValidationRows()} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} /></div>
+      {/if}
+
+      {#if securityTxt.securityTxtVersion===1}
+        <div class="evidence-component"><LookupSecurityTxt
+          state={boundedTechnologyText(securityTxt.state||'unavailable',40)}
+          detail={boundedTechnologyText(securityTxt.detail||'Disclosure contact collection was unavailable.',300)}
+          endpoint={boundedTechnologyText(securityTxt.finalUrl,2048)}
+          httpStatus={securityTxt.httpStatus?String(securityTxt.httpStatus):''}
+          observedAt={dateTimeAttribute(securityTxt.observedAt)||''}
+          expiresAt={dateTimeAttribute(securityTxt.expiresAt)||''}
+          contacts={stringList(securityTxt.contacts).slice(0,10)}
+          policies={stringList(securityTxt.policies).slice(0,10)}
+          encryption={stringList(securityTxt.encryption).slice(0,10)}
+          languages={stringList(securityTxt.preferredLanguages).slice(0,10)}
+          limitations={stringList(securityTxt.limitations).slice(0,10)}
+        /></div>
       {/if}
 
       {#if pageIdentity.source==='html'}

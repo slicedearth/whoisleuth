@@ -55,7 +55,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 6);
+    assert.equal(result.diagnostics.version, 7);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
@@ -179,7 +179,7 @@ describe('runUnifiedLookup', () => {
       applicable: true, domain: 'example.es', inputHostname: 'example.es',
       registrableDomain: 'example.es', isSubdomain: false, ...availability,
     });
-    assert.equal(result.diagnostics.version, 6);
+    assert.equal(result.diagnostics.version, 7);
     assert.deepEqual(result.diagnostics.registryAccess, {
       suffix: 'es', coverageState: 'access_documented',
       whoisAccessProfile: 'source-ip-authorization-required',
@@ -262,7 +262,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(registrarCalls, 1);
     assert.equal(result.rdap.registrarRdap.status, 'success');
     assert.equal(result.rdap.parsed, rdapRecord.parsed);
-    assert.equal(result.diagnostics.version, 6);
+    assert.equal(result.diagnostics.version, 7);
     assert.deepEqual(result.diagnostics.rdap.registrar, {
       status: 'success',
       endpoint: 'https://registrar.example/domain/example.com',
@@ -335,7 +335,7 @@ describe('runUnifiedLookup', () => {
     });
     assert.equal(result.networkContext.network.holder, 'Example network holder');
     assert.equal(result.networkContext.network.cidrs[0], '93.184.216.0/24');
-    assert.equal(result.diagnostics.version, 6);
+    assert.equal(result.diagnostics.version, 7);
     assert.deepEqual(result.diagnostics.network, {
       status: 'success',
       address: '93.184.216.34',
@@ -383,6 +383,87 @@ describe('runUnifiedLookup', () => {
       assert.equal(Object.hasOwn(result, 'networkContext'), false);
       assert.equal(Object.hasOwn(result.diagnostics, 'network'), false);
     }
+  });
+
+  test('adds security.txt only when explicitly requested and keeps it outside availability', async () => {
+    const availability = { state: 'registered', confidence: 'high' };
+    const before = structuredClone(availability);
+    let securityCalls = 0;
+    const result = await runUnifiedLookup(classifiedDomain, {
+      securityTxt: true,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => availability,
+      collectSecurityTxt: async (hostname) => {
+        securityCalls += 1;
+        assert.equal(hostname, 'login.example.com');
+        return {
+          securityTxtVersion: 1, version: 1, state: 'present', status: 'success',
+          observedAt: '2026-07-22T01:00:00.000Z', scanMode: 'deep', source: 'security_txt',
+          durationMs: 9, complete: true, truncated: false, limitations: [], diagnostics: {},
+          detail: 'A current security disclosure file was published for this hostname.',
+          requestedUrl: 'https://login.example.com/.well-known/security.txt',
+          finalUrl: 'https://login.example.com/.well-known/security.txt', httpStatus: 200,
+          redirectCount: 0, contacts: ['mailto:security@example.com'], policies: [],
+          encryption: [], canonical: [], preferredLanguages: ['en'], expiresAt: '2027-01-01T00:00:00.000Z',
+          signed: false, canonicalMatches: null,
+        };
+      },
+    });
+
+    assert.equal(securityCalls, 1);
+    assert.deepEqual(availability, before);
+    assert.equal(result.availability.state, 'registered');
+    assert.equal(result.securityTxt.state, 'present');
+    assert.deepEqual(result.diagnostics.securityTxt, {
+      status: 'success', state: 'present',
+      endpoint: 'https://login.example.com/.well-known/security.txt',
+      httpStatus: 200, observedAt: '2026-07-22T01:00:00.000Z', complete: true, truncated: false,
+    });
+  });
+
+  test('does not request security.txt by default or in ineligible lookup modes', async () => {
+    let securityCalls = 0;
+    const common = {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      collectSecurityTxt: async () => {
+        securityCalls += 1;
+        throw new Error('must not run');
+      },
+    };
+    const ordinary = await runUnifiedLookup(classifiedDomain, common);
+    const fast = await runUnifiedLookup(classifiedDomain, { ...common, securityTxt: true, fast: true });
+    const compact = await runUnifiedLookup(classifiedDomain, { ...common, securityTxt: true, compact: true });
+    const disabled = await runUnifiedLookup(classifiedDomain, {
+      ...common,
+      securityTxt: true,
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1' }),
+    });
+    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, { ...common, securityTxt: true });
+
+    assert.equal(securityCalls, 0);
+    for (const result of [ordinary, fast, compact, disabled, ip]) {
+      assert.equal(Object.hasOwn(result, 'securityTxt'), false);
+      assert.equal(Object.hasOwn(result.diagnostics, 'securityTxt'), false);
+    }
+  });
+
+  test('keeps an unexpected security.txt failure as explicit neutral source health', async () => {
+    const result = await runUnifiedLookup(classifiedDomain, {
+      securityTxt: true,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+      collectSecurityTxt: async () => { throw new Error('fixture collector failure'); },
+    });
+
+    assert.equal(result.availability.state, 'registered');
+    assert.equal(result.securityTxt.state, 'unavailable');
+    assert.equal(result.securityTxt.status, 'error');
+    assert.match(result.securityTxt.detail, /fixture collector failure/u);
+    assert.equal(result.diagnostics.securityTxt.state, 'unavailable');
   });
 
   test('registrar not_found remains diagnostic and cannot alter availability', async () => {

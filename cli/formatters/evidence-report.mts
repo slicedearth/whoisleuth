@@ -120,7 +120,7 @@ function buildLookupEvidenceReport(document: unknown): LookupEvidenceReport {
   const tlsValidity = objectOrEmpty(tls.validity);
   const tlsCertificate = objectOrEmpty(tls.certificate);
   const titleTarget = query.registrableDomain || query.submitted || 'Unknown domain';
-  const registryAccessSuffix = [5, 6].includes(Number(diagnostics.version)) && registryAccess.authority === 'context_only'
+  const registryAccessSuffix = [5, 6, 7].includes(Number(diagnostics.version)) && registryAccess.authority === 'context_only'
     && typeof registryAccess.suffix === 'string'
     ? cleanReportText(registryAccess.suffix, '')
     : '';

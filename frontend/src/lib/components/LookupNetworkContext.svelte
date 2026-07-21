@@ -11,6 +11,7 @@
     fetchedAt,
     rows,
     limitations,
+    provenance = 'This maps one point-in-time public endpoint address to its registered network. CDNs, reverse proxies, load balancers, shared hosting, and location-dependent DNS can mean this is not the origin host. Network registration does not prove hosting control, ownership, intent, or maliciousness.',
   }: {
     status: string;
     detail: string;
@@ -21,6 +22,7 @@
     fetchedAt: string;
     rows: Row[];
     limitations: string[];
+    provenance?: string;
   } = $props();
 </script>
 
@@ -61,7 +63,7 @@
     </details>
   {/if}
 
-  <p class="provenance">This maps one point-in-time public endpoint address to its registered network. CDNs, reverse proxies, load balancers, shared hosting, and location-dependent DNS can mean this is not the origin host. Network registration does not prove hosting control, ownership, intent, or maliciousness.</p>
+  <p class="provenance">{provenance}</p>
 
   {#if limitations.length}
     <details class="limitations">

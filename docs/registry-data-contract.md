@@ -27,6 +27,9 @@ ASN. A full successful response contains:
 - `networkContext`: for an eligible deep non-compact domain result, a
   separately attributed summary of one observed public endpoint address and
   its IP RDAP network registration.
+- `securityTxt`: only when explicitly selected for a deep single-domain
+  request, a bounded normalized disclosure file for the exact submitted
+  hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.
 
 `compact=1` returns only `availability` and `diagnostics`. Bulk uses this mode;
 raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
@@ -118,8 +121,9 @@ Authenticated clients can request `GET /api/capabilities`. Version 1 returns a
 server-authoritative runtime identifier and a bounded feature list using
 `supported`, `disabled`, `unavailable`, or `local_only`. Each entry identifies
 its execution location and only the existing `fast`/`deep` modes it actually
-supports. The report deliberately marks scheduled monitoring and distributed
-budgets unavailable until those services exist.
+supports. Optional scheduled monitoring and distributed budgets report their
+effective configured, disabled, unavailable, or supported state rather than a
+hard-coded capability claim.
 
 Hosted feature status is derived from the same environment policy enforced by
 Express and each direct Netlify Function. A disabled top-level network feature
@@ -175,17 +179,19 @@ HTTP `429`, `errorCode: NETWORK_USAGE_LIMITED`, a bounded `Retry-After`, and a
 30-day window is fixed and UTC-epoch-aligned; it is not a calendar month,
 rolling window, or hosting-provider billing statement.
 
-## Diagnostics version 6
+## Diagnostics version 7
 
-`diagnostics.version` is `6`. Version 6 retains the version-5 source fields,
+`diagnostics.version` is `7`. Version 7 retains the version-5 source fields,
 including the optional separately attributed registrar RDAP child and static
 `diagnostics.registryAccess` context, and adds optional
-`diagnostics.network` provenance when observed network context was attempted.
+`diagnostics.network` provenance introduced in version 6. When the optional
+security.txt action runs, it adds `diagnostics.securityTxt` with source state,
+endpoint, HTTP status, observation time, completeness, and truncation.
 The registry-access object records a documented machine-access constraint or
 the absence of an IANA-published service for the suffix. It is static context
 only, performs no network work, is omitted from compact Bulk responses, and is
 never consulted by availability or scoring. Consumers that do not recognize
-version 6 must fail conservatively rather than reinterpret a disabled, skipped,
+version 7 must fail conservatively rather than reinterpret a disabled, skipped,
 unsupported, or failed source as upstream absence. The source objects use
 explicit status values:
 
@@ -423,13 +429,16 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `15`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `16`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 15 adds a strict, bounded projection of observed
-network context and never includes its raw IP RDAP object or contact entities.
-Version 14 added passive security-posture findings derived from already-retained
-deep evidence, and version 13 added curated technology indicators. Version 12
+registry comparison. Version 16 can add the normalized, bounded security.txt
+disclosure-contact result when that optional deep action was selected; raw
+file text is never included. Version 15 added a strict, bounded projection of
+observed network context and never includes its raw IP RDAP object or contact
+entities. Version 14 added passive security-posture findings derived from
+already-retained deep evidence, and version 13 added curated technology
+indicators. Version 12
 additionally retained the bounded portable-field
 comparison between registry and registrar RDAP publications when that follow-up
 was represented. It preserves both normalized source display values and source
@@ -457,13 +466,17 @@ and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
 forms, active links, or external resources and includes a restrictive embedded
 Content Security Policy. The versioned JSON package remains the authoritative
 machine-readable export when complete captured source material is required.
-When schema-version 15 JSON retains a supported version-5 or version-6
+When schema-version 16 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
 registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
+
+Schema version 16 can also retain the bounded normalized security.txt source
+from an explicitly requested deep Lookup. It excludes the response body and
+does not make publication an authorization, availability, or Risk signal.
 
 Lookup evidence is a downloadable report contract, not a browser-local case
 storage schema. Consumers must check `schema` and `schemaVersion`; an unknown

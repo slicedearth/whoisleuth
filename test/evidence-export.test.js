@@ -85,6 +85,20 @@ function fixtureResponse() {
       },
       unknownImportedField: 'must not export',
     },
+    securityTxt: {
+      securityTxtVersion: 1, version: 1, state: 'present', status: 'success',
+      observedAt: '2026-07-11T01:02:07.000Z', scanMode: 'deep', source: 'security_txt',
+      durationMs: 12, complete: true, truncated: false, limitations: [],
+      detail: 'A current security disclosure file was published for this hostname.',
+      requestedUrl: 'https://login.example.com/.well-known/security.txt',
+      finalUrl: 'https://login.example.com/.well-known/security.txt#discarded',
+      httpStatus: 200, redirectCount: 0, expiresAt: '2027-01-01T00:00:00Z',
+      signed: false, canonicalMatches: true,
+      contacts: ['mailto:security@example.test', 'javascript:must-not-export'],
+      policies: ['https://login.example.com/security-policy'], encryption: ['openpgp4fpr:0123456789ABCDEF'],
+      canonical: ['https://login.example.com/.well-known/security.txt'], preferredLanguages: ['en'],
+      rawBody: 'must-not-export-security-txt-body', unknownImportedField: 'must not export',
+    },
     availability: {
       applicable: true,
       domain: 'example.com',
@@ -205,7 +219,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 15);
+    assert.equal(result.schemaVersion, 16);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -229,6 +243,11 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.network.rdap.attempts[0].endpoint, 'https://network.example/ip/93.184.216.34');
     assert.equal(JSON.stringify(result.sources.network).includes('must-not-export'), false);
     assert.equal(JSON.stringify(result.sources.network).includes('unknownImportedField'), false);
+    assert.equal(result.sources.securityTxt.state, 'present');
+    assert.deepEqual(result.sources.securityTxt.contacts, ['mailto:security@example.test']);
+    assert.equal(result.sources.securityTxt.finalUrl, 'https://login.example.com/.well-known/security.txt');
+    assert.equal(JSON.stringify(result.sources.securityTxt).includes('must-not-export-security-txt-body'), false);
+    assert.equal(JSON.stringify(result.sources.securityTxt).includes('javascript:'), false);
     assert.equal(result.analysis.availability.hasMx, true);
     assert.equal(result.analysis.availability.http.response.status, 200);
     assert.equal(result.analysis.availability.http.response.bodyHash.value, 'a'.repeat(64));
@@ -276,7 +295,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 15);
+    assert.equal(result.schemaVersion, 16);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });
@@ -342,6 +361,13 @@ describe('lookup evidence export', () => {
     delete response.networkContext;
     const result = evidence.buildLookupEvidence(response);
     assert.equal(result.sources.network, null);
+  });
+
+  test('uses null when no bounded security.txt source was represented', () => {
+    const response = fixtureResponse();
+    delete response.securityTxt;
+    const result = evidence.buildLookupEvidence(response);
+    assert.equal(result.sources.securityTxt, null);
   });
 
   test('creates a bounded, filesystem-safe filename', () => {

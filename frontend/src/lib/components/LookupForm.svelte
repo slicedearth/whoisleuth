@@ -11,9 +11,12 @@
     externalIntelligenceSupported,
     malwareHostIntelligenceSupported,
     malwareIocIntelligenceSupported,
+    securityTxtSupported,
+    securityTxtEligible,
     includeExternalIntelligence = $bindable(),
     includeMalwareHostIntelligence = $bindable(),
     includeMalwareIocIntelligence = $bindable(),
+    includeSecurityTxt = $bindable(),
     error,
     onsubmit,
   }: {
@@ -26,9 +29,12 @@
     externalIntelligenceSupported: boolean;
     malwareHostIntelligenceSupported: boolean;
     malwareIocIntelligenceSupported: boolean;
+    securityTxtSupported: boolean;
+    securityTxtEligible: boolean;
     includeExternalIntelligence: boolean;
     includeMalwareHostIntelligence: boolean;
     includeMalwareIocIntelligence: boolean;
+    includeSecurityTxt: boolean;
     error: string;
     onsubmit: (event: SubmitEvent) => void | Promise<void>;
   } = $props();
@@ -64,6 +70,14 @@
       ? `${entryCount} unique entries detected. Multiple entries continue in Bulk${duplicateCount ? `; ${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} removed` : ''}.`
       : 'Separate multiple domains with commas, semicolons, tabs, or new lines.'}
   </p>
+
+  {#if securityTxtSupported}
+    <fieldset class="intelligence-options">
+      <legend>Optional disclosure contact</legend>
+      <p class="intelligence-hint">This starts one bounded HTTPS collection at the standardized security.txt location on the exact hostname entered.</p>
+      <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeSecurityTxt} disabled={!securityTxtEligible}> <span><strong>Retrieve security.txt contacts</strong> Collects published contact, policy, expiry, language, and encryption references. Publication does not authorize security testing.</span></label>
+    </fieldset>
+  {/if}
 
   {#if intelligenceOptionCount}
     <fieldset class="intelligence-options">

@@ -10,7 +10,7 @@ import { deriveTimeline } from './evidence-display.js';
 import { RISK_MODEL_VERSION } from './scoring.js';
 
 export const SYNTHETIC_DEMO_VERSION = 1;
-export const SYNTHETIC_DEMO_EXPORT_VERSION = 2;
+export const SYNTHETIC_DEMO_EXPORT_VERSION = 3;
 export const SYNTHETIC_DEMO_STORAGE_KEY = 'whoisleuth:synthetic-demo:v1';
 export const SYNTHETIC_DEMO_EXPORT_SCHEMA = 'whoisleuth.synthetic-demo-case';
 export const MAX_SYNTHETIC_DEMO_NOTE_LENGTH = 800;
@@ -330,6 +330,8 @@ export function syntheticDemoLookupView(id) {
   const certificate = candidate.evidence.certificate;
   const conclusive = candidate.availability !== 'Unknown';
   const observedAt = candidate.provenance.lastObservedAt || '2026-06-26T11:15:00.000Z';
+  const active = candidate.id === 'credential-lure';
+  const fixtureAddress = candidate.id === 'character-edit' ? '203.0.113.45' : '203.0.113.44';
   return {
     assessment: {
       detail: candidate.availability,
@@ -406,6 +408,57 @@ export function syntheticDemoLookupView(id) {
       metadata: [],
       limitations: ['This is fixed demonstration evidence, not a live website observation.'],
     },
+    securityTxt: {
+      state: active ? 'present' : conclusive ? 'not_found' : 'skipped',
+      detail: active ? 'A fixed disclosure-contact fixture was selected for this demonstration.' : conclusive ? 'The fixed fixture contains no published disclosure file.' : 'The disclosure-contact action was not represented for this inconclusive fixture.',
+      endpoint: active ? `https://${candidate.domain}/.well-known/security.txt` : '',
+      httpStatus: active ? '200' : conclusive ? '404' : '',
+      observedAt: active ? observedAt : '',
+      expiresAt: active ? '2026-12-31T00:00:00.000Z' : '',
+      contacts: active ? [`mailto:security@${candidate.domain}`] : [],
+      policies: active ? [`https://${candidate.domain}/security-policy`] : [],
+      encryption: [],
+      languages: active ? ['en'] : [],
+      limitations: ['Fixed synthetic disclosure fixture; no request was performed and no testing is authorized.'],
+    },
+    securityPosture: {
+      status: conclusive ? 'Complete' : 'Partial',
+      complete: conclusive,
+      summary: conclusive ? { observed: 2, potentialExposure: active ? 1 : 0, observedAbsence: active ? 1 : 0, unavailable: 0 } : { observed: 0, potentialExposure: 0, observedAbsence: 0, unavailable: 4 },
+      findings: conclusive ? [
+        { id: 'https-transport', category: 'Transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The fixed homepage fixture uses HTTPS.', evidence: ['HTTP fixture'] },
+        { id: 'certificate-hostname', category: 'Certificate', state: 'observed', tone: 'configured', label: 'Certificate hostname matched', detail: 'The fixed certificate fixture includes the candidate hostname.', evidence: ['TLS fixture'] },
+        ...(active ? [
+          { id: 'csp-header', category: 'Browser policy', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The fixed response-header fixture does not contain this policy.', evidence: ['HTTP fixture'] },
+          { id: 'password-form', category: 'Page behavior', state: 'potential_exposure', tone: 'review', label: 'Password form observed', detail: 'A password field appears in the fixed static page fixture.', evidence: ['Page fixture'] },
+        ] : []),
+      ] : [
+        { id: 'collection-unavailable', category: 'Collection', state: 'unavailable', tone: 'neutral', label: 'Posture evidence unavailable', detail: 'The synthetic deep collection is intentionally inconclusive.', evidence: [] },
+      ],
+      limitations: ['Fixed derived findings for demonstration only; no active vulnerability test was performed.'],
+    },
+    technology: {
+      status: conclusive ? 'Complete' : 'Partial',
+      complete: conclusive,
+      findings: active ? [{ id: 'synthetic-example-cms', name: 'Example CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'Generator metadata', description: 'Example CMS 2.1 synthetic fixture' }] }] : [],
+      limitations: ['Fixed technology indicators for demonstration only; no additional request was performed.'],
+    },
+    network: {
+      status: conclusive ? 'success' : 'unsupported',
+      detail: conclusive ? 'A fixed reserved-address fixture demonstrates separately attributed network registration.' : 'No observed network fixture is represented for this inconclusive candidate.',
+      address: conclusive ? fixtureAddress : '',
+      addressSource: conclusive ? 'TLS connection fixture' : '',
+      rdapEndpoint: conclusive ? `https://rdap.example.invalid/ip/${fixtureAddress}` : '',
+      httpStatus: conclusive ? '200' : '',
+      fetchedAt: conclusive ? observedAt : '',
+      rows: conclusive ? [
+        { label: 'Registered network', value: 'Documentation network (synthetic)' },
+        { label: 'Country', value: 'ZZ' },
+        { label: 'CIDR', value: '203.0.113.0/24' },
+      ] : [],
+      limitations: ['203.0.113.0/24 is reserved for documentation and does not identify a live host or network operator.'],
+      provenance: 'This fixed reserved-address fixture demonstrates the network-context presentation only. It is not a public endpoint observation and does not identify hosting, ownership, control, intent, or maliciousness.',
+    },
     tls: {
       status: certificate.status,
       complete: certificate.status === 'Observed',
@@ -432,6 +485,8 @@ export function buildSyntheticDemoExport(state, generatedAt) {
   const candidate = syntheticDemoCandidate(normalized.selectedCandidateId);
   if (!normalized.caseReady || !normalized.followUpReady || !candidate) throw new Error('Complete the monitored synthetic case before exporting it.');
   if (typeof generatedAt !== 'string' || generatedAt.length > 64 || /[\x00-\x1f\x7f]/.test(generatedAt) || !Number.isFinite(Date.parse(generatedAt))) throw new Error('A valid export timestamp is required.');
+  const lookupView = syntheticDemoLookupView(candidate.id);
+  if (!lookupView) throw new Error('The selected synthetic lookup fixture is unavailable.');
   return {
     schema: SYNTHETIC_DEMO_EXPORT_SCHEMA,
     version: SYNTHETIC_DEMO_EXPORT_VERSION,
@@ -448,8 +503,12 @@ export function buildSyntheticDemoExport(state, generatedAt) {
       dns: { ...candidate.evidence.dns, nameservers: [...candidate.evidence.dns.nameservers] },
       website: { ...candidate.evidence.website },
       certificate: { ...candidate.evidence.certificate },
+      securityTxt: structuredClone(lookupView.securityTxt),
+      securityPosture: structuredClone(lookupView.securityPosture),
+      technology: structuredClone(lookupView.technology),
+      observedNetwork: structuredClone(lookupView.network),
     },
     timeline: syntheticDemoTimeline(candidate.id, true),
-    limitations: ['All values are fixed local fixtures using reserved domains.', 'No registry, DNS, website, certificate, or other investigation request was performed.', 'Synthetic risk values and relationships demonstrate presentation only and are not a live assessment.'],
+    limitations: ['All values are fixed local fixtures using reserved domains and addresses.', 'No registry, DNS, website, certificate, or other investigation request was performed.', 'Synthetic risk values and relationships demonstrate presentation only and are not a live assessment.'],
   };
 }

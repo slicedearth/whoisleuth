@@ -63,9 +63,9 @@ test('navigation, tool guide, and reference guide use one canonical product voca
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {
-  assert.equal(glossaryTerms.length, 31);
-  assert.equal(guideFaqs.length, 12);
-  assert.equal(resultStates.length, 5);
+  assert.equal(glossaryTerms.length, 39);
+  assert.equal(guideFaqs.length, 14);
+  assert.equal(resultStates.length, 9);
   assert.equal(commonMistakes.length, 5);
   assert.equal(unique(glossaryTerms.map((item) => item.term)), true);
   assert.equal(unique(guideFaqs.map((item) => item.question)), true);

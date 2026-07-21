@@ -1,7 +1,7 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 15;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 16;
 
 type LooseRecord = Record<string, any>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
@@ -11,6 +11,7 @@ const REGISTRAR_RDAP_STATUSES = new Set([
 ]);
 const NETWORK_CONTEXT_STATUSES = new Set(['success', 'partial', 'not_found', 'unsupported', 'error']);
 const NETWORK_ADDRESS_SOURCES = new Set(['tls_connection', 'dns_a', 'dns_aaaa']);
+const SECURITY_TXT_STATES = new Set(['present', 'stale', 'partial', 'absent', 'malformed', 'unsupported', 'unavailable']);
 
 function recordOrNull(value: unknown): LooseRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as LooseRecord : null;
@@ -60,6 +61,58 @@ function boundedStringList(value: unknown, count: number, length: number): strin
     .slice(0, count)
     .map((item) => boundedString(item, length))
     .filter((item): item is string => item !== null))];
+}
+
+function boundedPublishedUri(value: unknown, protocols: string[]): string | null {
+  const text = boundedString(value, 2048);
+  if (!text) return null;
+  try {
+    const url = new URL(text);
+    if (!protocols.includes(url.protocol) || url.username || url.password) return null;
+    url.search = '';
+    url.hash = '';
+    return url.toString().slice(0, 2048);
+  } catch {
+    return null;
+  }
+}
+
+function boundedUriList(value: unknown, protocols: string[]): string[] {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .slice(0, 10)
+    .map((item) => boundedPublishedUri(item, protocols))
+    .filter((item): item is string => item !== null))];
+}
+
+function securityTxtSource(value: unknown) {
+  const source = recordOrNull(value);
+  if (!source || source.securityTxtVersion !== 1 || !SECURITY_TXT_STATES.has(source.state)) return null;
+  return {
+    securityTxtVersion: 1,
+    version: source.version === 1 ? 1 : null,
+    state: source.state,
+    status: boundedString(source.status, 40),
+    observedAt: boundedTimestamp(source.observedAt),
+    scanMode: source.scanMode === 'deep' ? 'deep' : null,
+    source: source.source === 'security_txt' ? 'security_txt' : null,
+    durationMs: boundedInteger(source.durationMs, 120_000),
+    complete: source.complete === true,
+    truncated: source.truncated === true,
+    limitations: boundedStringList(source.limitations, 10, 300),
+    detail: boundedString(source.detail, 300),
+    requestedUrl: boundedPublishedUri(source.requestedUrl, ['https:']),
+    finalUrl: boundedPublishedUri(source.finalUrl, ['https:']),
+    httpStatus: boundedHttpStatus(source.httpStatus),
+    redirectCount: boundedInteger(source.redirectCount, 3),
+    expiresAt: boundedTimestamp(source.expiresAt),
+    signed: source.signed === true,
+    canonicalMatches: typeof source.canonicalMatches === 'boolean' ? source.canonicalMatches : null,
+    contacts: boundedUriList(source.contacts, ['https:', 'mailto:', 'tel:']),
+    policies: boundedUriList(source.policies, ['https:']),
+    encryption: boundedUriList(source.encryption, ['https:', 'dns:', 'openpgp4fpr:']),
+    canonical: boundedUriList(source.canonical, ['https:']),
+    preferredLanguages: boundedStringList(source.preferredLanguages, 10, 40),
+  };
 }
 
 function networkAttempt(value: unknown) {
@@ -201,6 +254,7 @@ export function buildLookupEvidence(response: LooseRecord | null | undefined, op
       rdap: rdapSource(body.rdap),
       whois: whoisSource(body.whois),
       network: networkSource(body.networkContext),
+      securityTxt: securityTxtSource(body.securityTxt),
     },
     analysis: {
       availability: cloneJson(body.availability),
