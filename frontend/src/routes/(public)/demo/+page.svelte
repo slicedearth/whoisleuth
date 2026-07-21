@@ -8,6 +8,7 @@
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
+  import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import {
     buildSyntheticDemoExport, createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
@@ -92,16 +93,16 @@
 
 {#if view==='dashboard'}
   <section class="demo-panel card" aria-labelledby="dashboard-heading">
-    <p class="eyebrow">Dashboard · Synthetic console</p><h2 id="dashboard-heading">Choose a focused investigation task</h2>
-    <p>The protected dashboard normally summarizes browser-local work and opens each workspace. These synthetic counts do not read production storage.</p>
+    <p class="eyebrow">Dashboard · Synthetic preview</p><h2 id="dashboard-heading">Choose a focused investigation task</h2>
+    <p>The protected Dashboard normally summarizes browser-local work and opens each tool. These synthetic counts do not read production storage.</p>
     <div class="dashboard-summary"><article><span>Open cases</span><strong>0</strong></article><article><span>Watchlists</span><strong>0</strong></article><article><span>Brand profiles</span><strong>1 fixture</strong></article></div>
-    <div class="workspace-preview"><span>Brands</span><span>Discover</span><span>Bulk</span><span>Lookup</span><span>Monitor</span></div>
+    <div class="tool-preview"><span>Brands</span><span>Discover</span><span>Bulk</span><span>Lookup</span><span>Monitor</span></div>
     <button class="primary" type="button" onclick={start}>Begin with Brands</button>
   </section>
 {:else if view==='brands'}
   <section class="demo-panel card" aria-labelledby="brand-heading">
     <p class="eyebrow">Brands · Local profile</p><h2 id="brand-heading">Define the protected identity</h2>
-    <p>The same read-only profile card used by the protected Brands workspace renders this immutable fixture. It never enters the production profile store.</p>
+    <p>The same read-only profile card used by the protected Brands tool renders this immutable fixture. It never enters the production profile store.</p>
     <div class="shared-profile"><BrandProfileList profiles={[SYNTHETIC_DEMO_PROFILE]} activeId={SYNTHETIC_DEMO_PROFILE.id} {formatDate} readOnly /></div>
     <dl><div><dt>Products</dt><dd>{SYNTHETIC_DEMO_PROFILE.productNames.join(', ')}</dd></div><div><dt>Preferred coverage</dt><dd>{SYNTHETIC_DEMO_PROFILE.tlds.join(', ')}</dd></div><div><dt>Baseline title</dt><dd>{SYNTHETIC_DEMO_PROFILE.pageBaseline?.pageTitle}</dd></div><div><dt>Canonical host</dt><dd>{SYNTHETIC_DEMO_PROFILE.pageBaseline?.canonicalHost}</dd></div></dl>
     <button class="primary" type="button" onclick={loadProfile}>Use synthetic profile</button>
@@ -146,7 +147,7 @@
   </section>
 {/if}
 
-<section class="demo-footer"><p>Ready for live investigation? <a href="/login?next=%2Fdashboard">Sign in to the protected console</a>.</p><p><a href="/">Return to the public overview</a></p></section>
+<section class="demo-footer"><div><p>Ready for live investigation?</p><PublicConsoleCta /></div><p><a href="/">Return to the public overview</a></p></section>
 
 <style>
   .demo-actions button,.candidate button,.case-actions button,.filter-bar button{padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);font:700 var(--text-xs) var(--mono)}
@@ -155,12 +156,12 @@
   .demo-actions{display:flex;min-height:40px;align-items:center;gap:14px;margin-bottom:18px}.demo-actions span{color:var(--muted);font-size:var(--text-xs)}
   .demo-panel{padding:clamp(22px,4vw,38px)}.demo-panel:not(.card){padding-inline:0}.demo-panel>h2{margin:.25rem 0 8px;font:700 clamp(1.4rem,3vw,2rem) var(--mono)}.demo-panel>p:not(.eyebrow),.candidate p,.export-warning,.follow-up p{color:var(--muted);line-height:1.55}
   .demo-panel dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:24px 0}.demo-panel dl div{min-width:0;padding:14px;border:1px solid var(--border)}dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}dd{margin:6px 0 0;overflow-wrap:anywhere}code{color:var(--accent);font-family:var(--mono)}
-  .dashboard-summary,.configuration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:24px 0}.dashboard-summary article,.configuration-grid article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.dashboard-summary span,.configuration-grid span{display:block;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.dashboard-summary strong,.configuration-grid strong{display:block;margin-top:7px;overflow-wrap:anywhere}.workspace-preview,.preview-list{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.workspace-preview span,.preview-list span{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs)}
+  .dashboard-summary,.configuration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:24px 0}.dashboard-summary article,.configuration-grid article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.dashboard-summary span,.configuration-grid span{display:block;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.dashboard-summary strong,.configuration-grid strong{display:block;margin-top:7px;overflow-wrap:anywhere}.tool-preview,.preview-list{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.tool-preview span,.preview-list span{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs)}
   .shared-profile,.shared-evidence,.shared-timeline{margin-top:18px}.shared-profile{margin-bottom:18px}.shared-evidence+.shared-evidence{margin-top:12px}
   .filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 12px}.filter-bar button.active{border-color:var(--accent2);color:var(--accent2);background:rgb(var(--accent2-rgb) / .08)}.candidate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.candidate{display:flex;min-width:0;flex-direction:column;padding:18px}.candidate>div{display:flex;align-items:flex-start;flex-direction:column;gap:8px}.candidate code{overflow-wrap:anywhere;font-size:.9rem}.candidate span{color:var(--amber);font:700 var(--text-xs) var(--mono)}.candidate span.high{color:var(--danger)}.candidate ul{padding-left:19px;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.candidate details{margin-bottom:12px}.candidate summary{color:var(--accent);cursor:pointer;font-size:var(--text-xs)}.candidate .provenance{padding:9px;border-left:2px solid var(--border);font-size:var(--text-2xs)}.candidate button{width:100%;margin-top:auto;color:var(--text)}
   .limitation{margin:20px 0;padding:14px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .04)}.limitation.info{border-left-color:var(--accent)}.limitation p{margin:5px 0 0;color:var(--muted)}
   .case-grid{display:grid;grid-template-columns:minmax(180px,.45fr) minmax(0,1fr);gap:12px;margin-top:22px}.demo-panel label{display:block;color:var(--muted);font-size:var(--text-xs)}.demo-panel select,.demo-panel textarea{display:block;margin-top:7px;padding:10px}.demo-panel textarea{min-height:110px;resize:vertical}.follow-up{margin-top:22px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.follow-up p{margin:0 0 10px}.case-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.case-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
-  .demo-footer{display:flex;justify-content:space-between;gap:20px;margin-top:45px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}.demo-footer p{margin:0}.demo-footer a{color:var(--accent)}
+  .demo-footer{display:flex;justify-content:space-between;gap:20px;margin-top:45px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}.demo-footer>div{display:flex;align-items:center;gap:10px}.demo-footer p{margin:0}.demo-footer a{color:var(--accent)}
   @media(max-width:840px){.demo-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.candidate-grid{grid-template-columns:1fr}.dashboard-summary,.configuration-grid{grid-template-columns:1fr}}
-  @media(max-width:760px){.demo-steps{grid-template-columns:1fr}.demo-steps button{text-align:left}.demo-actions,.demo-footer{align-items:flex-start;flex-direction:column}.demo-panel dl,.case-grid{grid-template-columns:1fr}}
+  @media(max-width:760px){.demo-steps{grid-template-columns:1fr}.demo-steps button{text-align:left}.demo-actions,.demo-footer,.demo-footer>div{align-items:flex-start;flex-direction:column}.demo-panel dl,.case-grid{grid-template-columns:1fr}}
 </style>

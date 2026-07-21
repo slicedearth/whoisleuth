@@ -13,7 +13,7 @@
   const engineeringChoices = [
     ['Safe request limits','Network checks have time, size, redirect and concurrency limits.'],
     ['Tested registry handling','Known WHOIS and RDAP formats are checked against local fixtures.'],
-    ['Browser-local workspace','Core saved work stays in the current browser by default.'],
+    ['Browser-local saved work','Core saved work stays in the current browser by default.'],
     ['Portable operation','The same application can run through Express or optional Netlify functions.'],
   ];
 </script>
@@ -27,7 +27,7 @@
 
 <section class="hero">
   <div class="hero-copy">
-    <p class="eyebrow hero-kicker">Domain investigation workspace</p>
+    <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
     <p class="lede">Check registration, DNS, certificates and website signals in one place. WHOISleuth shows where each fact came from, explains missing or conflicting results, and lets you save evidence for later review.</p>
     <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
@@ -54,7 +54,7 @@
 </section>
 
 <section class="product-tour" aria-labelledby="product-tour-title">
-  <div class="section-intro"><p class="eyebrow">Inside the workspace</p><h2 id="product-tour-title">Move from candidates to evidence and change history.</h2><p>These compact previews use the same fictional fixtures as the public demo, so you can see the workflow without sending a lookup.</p></div>
+  <div class="section-intro"><p class="eyebrow">Inside the console</p><h2 id="product-tour-title">Move from candidates to evidence and change history.</h2><p>These compact previews use the same fictional fixtures as the public demo, so you can see the workflow without sending a lookup.</p></div>
   <HomepageProductPreview />
   <p class="tour-action"><a class="btn" href="/demo">Explore the interactive demo <span aria-hidden="true">→</span></a></p>
 </section>

@@ -805,8 +805,8 @@ thick and thin domain objects plus IPv4, IPv6, and autonomous-system objects;
 suffix coverage remains dynamic because TLD managers publish their services in
 the IANA bootstrap registry.
 
-Authenticated users can browse the same explicit matrix in the **Registry
-support** console reference. Its text and coverage filters run locally over the
+Authenticated users can browse the same explicit matrix on the **Registry
+support** reference page. Its text and coverage filters run locally over the
 embedded catalogue, and its local inspector resolves one domain or suffix to an
 explicit profile or the generic IANA discovery-only fallback. Neither feature
 makes a registry or application API request. The page does not test current

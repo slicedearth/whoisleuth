@@ -5,7 +5,7 @@ export type PublicGuideGoal = {
   steps: readonly string[];
 };
 
-export type WorkspaceGuide = {
+export type GuideEntry = {
   id: string;
   name: string;
   useWhen: string;
@@ -45,12 +45,15 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
   }),
 ]);
 
-export const workspaceGuides: readonly WorkspaceGuide[] = Object.freeze([
+export const toolGuides: readonly GuideEntry[] = Object.freeze([
   Object.freeze({ id: 'lookup', name: 'Lookup', useWhen: 'You have one domain, IP address or ASN to investigate.', input: 'Enter one target and choose Fast or Deep collection.', result: 'Registration evidence and available supporting context are shown by source.', next: 'Review conflicting or incomplete sources, then save a useful domain finding to Monitor.' }),
   Object.freeze({ id: 'brands', name: 'Brands', useWhen: 'You want searches and comparisons to reflect an official brand.', input: 'Add official domains, product names, preferred domain endings and known trusted infrastructure.', result: 'A browser-local profile provides a comparison boundary for discovery and analysis.', next: 'Open Discover to generate or find related candidates.' }),
   Object.freeze({ id: 'discover', name: 'Discover', useWhen: 'You want possible lookalikes or names observed in public certificate logs.', input: 'Choose a Brand Profile or enter a focused keyword.', result: 'Generated and certificate-log candidates retain their discovery source and limits.', next: 'Send a focused shortlist to Bulk rather than scanning every possible name.' }),
   Object.freeze({ id: 'bulk', name: 'Bulk', useWhen: 'You need to compare several candidate domains consistently.', input: 'Paste domains or accept a shortlist from Discover.', result: 'Fast or Deep checks prioritise candidates and expose related infrastructure already observed in the scan.', next: 'Open the strongest or most uncertain leads in Lookup for source-level review.' }),
   Object.freeze({ id: 'monitor', name: 'Monitor', useWhen: 'You want to retain a finding, document a decision or compare later observations.', input: 'Save a case or watchlist from Lookup or Bulk.', result: 'Browser-local timelines, notes, relationships and exports keep the review trail together.', next: 'Rescan deliberately or use optional hosted monitoring when it is configured.' }),
+]);
+
+export const referenceGuides: readonly GuideEntry[] = Object.freeze([
   Object.freeze({ id: 'registry-support', name: 'Registry support', useWhen: 'You want to know how a domain ending is handled before relying on a result.', input: 'Search for a domain ending such as com or au.', result: 'The catalogue shows tested WHOIS parsing, query rules and known RDAP access limits.', next: 'Treat a limitation as a source constraint, not evidence that a domain is available.' }),
 ]);
 
@@ -69,6 +72,8 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
   Object.freeze({ term: 'Case', definition: 'A saved analyst record containing selected evidence, notes, status and observation history.' }),
   Object.freeze({ term: 'Certificate Transparency', definition: 'Public logs of issued TLS certificates. A log timestamp records certificate observation, not website activation or maliciousness.' }),
   Object.freeze({ term: 'Confusable', definition: 'A character or label that can look similar to another, including internationalised domain characters.' }),
+  Object.freeze({ term: 'Console', definition: 'The complete signed-in area containing the Dashboard, investigation tools, and reference pages.' }),
+  Object.freeze({ term: 'Dashboard', definition: 'The signed-in starting page for beginning an investigation, continuing saved work, or opening a guide.' }),
   Object.freeze({ term: 'Deep lookup', definition: 'A broader lookup that can add WHOIS, DNS, website, TLS and optional enrichment checks to RDAP.' }),
   Object.freeze({ term: 'DKIM', definition: 'A mail authentication method that lets a domain sign outgoing messages.' }),
   Object.freeze({ term: 'DMARC', definition: 'A mail policy that builds on SPF and DKIM and can tell receivers how to handle failures.' }),
@@ -91,6 +96,7 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
   Object.freeze({ term: 'TLS certificate', definition: 'A certificate used to authenticate an encrypted connection. Its presence does not prove that a website is safe or active.' }),
   Object.freeze({ term: 'Watchlist', definition: 'A saved set of domains whose compact evidence can be compared across later checks.' }),
   Object.freeze({ term: 'WHOIS', definition: 'A text-based registration-data service whose format and availability vary between registries.' }),
+  Object.freeze({ term: 'Workspace archive', definition: 'A versioned local backup that combines supported browser-saved records. It is a file format, not a separate area of the interface.' }),
 ]);
 
 export const guideFaqs: readonly GuideFaq[] = Object.freeze([
@@ -105,7 +111,7 @@ export const guideFaqs: readonly GuideFaq[] = Object.freeze([
   Object.freeze({ question: 'Where are cases and watchlists saved?', answer: 'They are stored in the current browser profile by default. A workspace archive can move supported records deliberately. Optional hosted monitoring is a separate configured feature.' }),
   Object.freeze({ question: 'Can another person using the shared login see my saved browser work?', answer: 'Not automatically. The shared password grants console access, but browser-local cases, profiles and watchlists remain in the browser profile where they were saved.' }),
   Object.freeze({ question: 'What is sent to optional intelligence providers?', answer: 'Only enabled providers run. Each provider states the target representation, privacy decision, request limits and result provenance. A provider miss or outage does not imply safety.' }),
-  Object.freeze({ question: 'How do I export or delete saved work?', answer: 'Monitor can export individual cases, and Dashboard can export or import a bounded workspace archive. Saved browser records can be removed from their workspace or cleared through the documented local-storage controls.' }),
+  Object.freeze({ question: 'How do I export or delete saved work?', answer: 'Monitor can export individual cases, and Dashboard can export or import a bounded workspace archive. Saved browser records can be removed from the tool that stores them or cleared through the documented local-storage controls.' }),
 ]);
 
 export const commonMistakes: readonly string[] = Object.freeze([

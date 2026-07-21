@@ -1,7 +1,7 @@
 // Pure, bounded state, view adapters, and export contract for the public
 // synthetic demo. Fixtures use reserved domains and never flow into live
 // lookup or production browser-store contracts. The adapters deliberately
-// target the same read-only component contracts as the authenticated portal so
+// target the same read-only component contracts as the authenticated console so
 // presentation changes do not require a second implementation in this route.
 
 import { normalizeBrandProfile } from './brand-profile-model.js';

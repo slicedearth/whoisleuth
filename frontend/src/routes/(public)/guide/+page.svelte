@@ -6,8 +6,9 @@
     glossaryTerms,
     guideFaqs,
     publicGuideGoals,
+    referenceGuides,
     resultStates,
-    workspaceGuides,
+    toolGuides,
   } from '$lib/public-guide';
 
   const faqSchema = {
@@ -37,7 +38,8 @@
 
 <nav class="guide-index card" aria-label="Guide sections">
   <a href="#start">Start here</a>
-  <a href="#workspaces">Workspaces</a>
+  <a href="#tools">Tools</a>
+  <a href="#reference">Reference</a>
   <a href="#results">Read results</a>
   <a href="#glossary">Glossary</a>
   <a href="#faq">FAQ</a>
@@ -57,17 +59,34 @@
   </div>
 </section>
 
-<section id="workspaces" class="guide-section" aria-labelledby="workspaces-title">
-  <div class="section-intro"><p class="eyebrow">Workspace guide</p><h2 id="workspaces-title">Know where to go next.</h2><p>Each workspace has a distinct role. Deeper collection is deliberate and does not begin merely because you open a page.</p></div>
-  <div class="workspace-guide">
-    {#each workspaceGuides as workspace}
-      <article class="card" id={`workspace-${workspace.id}`}>
-        <h3>{workspace.name}</h3>
+<section id="tools" class="guide-section" aria-labelledby="tools-title">
+  <div class="section-intro"><p class="eyebrow">Tool guide</p><h2 id="tools-title">Know where to go next.</h2><p>Each tool has a distinct role. Deeper collection is deliberate and does not begin merely because you open a page.</p></div>
+  <div class="tool-guide">
+    {#each toolGuides as tool}
+      <article class="card" id={`tool-${tool.id}`}>
+        <h3>{tool.name}</h3>
         <dl>
-          <div><dt>Use it when</dt><dd>{workspace.useWhen}</dd></div>
-          <div><dt>What you provide</dt><dd>{workspace.input}</dd></div>
-          <div><dt>What you receive</dt><dd>{workspace.result}</dd></div>
-          <div><dt>What to do next</dt><dd>{workspace.next}</dd></div>
+          <div><dt>Use it when</dt><dd>{tool.useWhen}</dd></div>
+          <div><dt>What you provide</dt><dd>{tool.input}</dd></div>
+          <div><dt>What you receive</dt><dd>{tool.result}</dd></div>
+          <div><dt>What to do next</dt><dd>{tool.next}</dd></div>
+        </dl>
+      </article>
+    {/each}
+  </div>
+</section>
+
+<section id="reference" class="guide-section" aria-labelledby="reference-title">
+  <div class="section-intro"><p class="eyebrow">Reference</p><h2 id="reference-title">Check coverage before drawing a conclusion.</h2><p>Reference pages explain the evidence boundaries behind the investigation tools. They do not run a lookup or make a registry request.</p></div>
+  <div class="reference-guide">
+    {#each referenceGuides as resource}
+      <article class="card" id={`reference-${resource.id}`}>
+        <h3>{resource.name}</h3>
+        <dl>
+          <div><dt>Use it when</dt><dd>{resource.useWhen}</dd></div>
+          <div><dt>What you provide</dt><dd>{resource.input}</dd></div>
+          <div><dt>What you receive</dt><dd>{resource.result}</dd></div>
+          <div><dt>What to do next</dt><dd>{resource.next}</dd></div>
         </dl>
       </article>
     {/each}
@@ -108,7 +127,7 @@
 <section id="mistakes" class="guide-section" aria-labelledby="mistakes-title">
   <div class="section-intro"><p class="eyebrow">Common mistakes</p><h2 id="mistakes-title">Keep the conclusion narrower than the evidence.</h2></div>
   <ul class="mistake-list card">{#each commonMistakes as item}<li>{item}</li>{/each}</ul>
-  <div class="closing-actions"><a class="primary" href="/demo">Walk through the demo</a><a class="btn" href="/login">Open the protected console</a></div>
+  <div class="closing-actions"><a class="primary" href="/demo">Walk through the demo</a><PublicConsoleCta /></div>
 </section>
 
 <style>
@@ -117,11 +136,11 @@
   .guide-index{display:flex;position:sticky;top:8px;z-index:10;gap:5px;margin:0 0 52px;padding:6px;overflow-x:auto;background:rgb(var(--panel-rgb) / .94);backdrop-filter:blur(8px)}.guide-index a{flex:0 0 auto;padding:9px 11px;border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}.guide-index a:hover,.guide-index a:focus-visible{color:var(--text);background:rgb(var(--accent-rgb) / .08)}
   .guide-section{padding:62px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.6rem,3.4vw,2.45rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
   .goal-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.goal-grid article{padding:20px}.goal-grid h3{margin:0;font:700 1.05rem var(--mono)}.goal-grid p{min-height:72px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.goal-grid ol{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0;padding:0;list-style:none;counter-reset:steps}.goal-grid li{counter-increment:steps;padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono)}.goal-grid li::before{content:counter(steps) ". ";color:var(--accent2)}
-  .workspace-guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.workspace-guide article{padding:20px}.workspace-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.workspace-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.workspace-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.workspace-guide dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.workspace-guide dd{margin:0;font-size:var(--text-xs);line-height:1.5}
+  .tool-guide,.reference-guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tool-guide article,.reference-guide article{padding:20px}.tool-guide h3,.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--text-xs);line-height:1.5}
   .state-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.state-grid article{padding:16px}.state-grid h3{margin:0;color:var(--accent2);font:700 var(--text-sm) var(--mono)}.state-grid p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation{margin-top:12px;padding:19px;border-left:3px solid var(--amber)}.interpretation strong{font:700 var(--text-sm) var(--mono)}.interpretation p{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}
   .glossary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}.glossary-grid>div{display:grid;grid-template-columns:145px minmax(0,1fr);gap:15px;padding:16px}.glossary-grid dt{color:var(--accent);font:700 var(--text-xs) var(--mono)}.glossary-grid dd{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .faq-list{display:grid;gap:8px}.faq-list details{padding:0}.faq-list summary{padding:16px 48px 16px 18px;font:700 var(--text-sm) var(--mono)}.faq-list details p{margin:0;padding:0 18px 18px;color:var(--muted);font-size:var(--text-sm);line-height:1.65}
   .mistake-list{display:grid;gap:10px;margin:0;padding:20px 20px 20px 42px}.mistake-list li{padding-left:5px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.mistake-list li::marker{color:var(--amber)}
   @media(max-width:900px){.state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.state-grid article:last-child{grid-column:1 / -1}.glossary-grid{grid-template-columns:1fr}}
-  @media(max-width:680px){.guide-index{position:relative;top:auto}.goal-grid,.workspace-guide,.state-grid{grid-template-columns:1fr}.state-grid article:last-child{grid-column:auto}.goal-grid p{min-height:0}.workspace-guide dl div,.glossary-grid>div{grid-template-columns:1fr;gap:4px}.guide-section{scroll-margin-top:20px}}
+  @media(max-width:680px){.guide-index{position:relative;top:auto}.goal-grid,.tool-guide,.reference-guide,.state-grid{grid-template-columns:1fr}.state-grid article:last-child{grid-column:auto}.goal-grid p{min-height:0}.tool-guide dl div,.reference-guide dl div,.glossary-grid>div{grid-template-columns:1fr;gap:4px}.guide-section{scroll-margin-top:20px}}
 </style>

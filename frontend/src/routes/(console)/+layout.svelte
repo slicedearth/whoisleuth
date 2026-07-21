@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
-  import { consoleDestinations, consoleNavigation, referenceNavigation } from '$lib/workspaces';
+  import { consoleNavigation, protectedDestinations, referenceNavigation } from '$lib/workspaces';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import InvestigationGuide from '$lib/components/InvestigationGuide.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
@@ -18,7 +18,7 @@
   onMount(() => { void checkSession(); });
 
   function signInTarget(){
-    const path = consoleDestinations.some((item) => item.href === page.url.pathname) ? page.url.pathname : '/dashboard';
+    const path = protectedDestinations.some((item) => item.href === page.url.pathname) ? page.url.pathname : '/dashboard';
     return `/login?next=${encodeURIComponent(path)}`;
   }
 
@@ -67,15 +67,15 @@
 {:else}
   <div class="shell" class:open={navOpen}>
     <header>
-      <a href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a>
+      <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">
         <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
-        <button class="navigation-toggle" type="button" aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="workspace-navigation" onclick={toggleNavigation}>☰</button>
+        <button class="navigation-toggle" type="button" aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="console-navigation" onclick={toggleNavigation}>☰</button>
       </div>
     </header>
-    <aside id="workspace-navigation">
+    <aside id="console-navigation">
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth / console</span></div>
-      <a class="brand" href="/dashboard" aria-label="WHOISleuth dashboard"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
+      <a class="brand" href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
       <nav aria-label="Console"><p class="eyebrow">Console</p>{#each consoleNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <div class="session"><ThemeSelector /><div class="session-row"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>

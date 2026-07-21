@@ -70,7 +70,7 @@ test('sign-in and protected console shells are excluded from search', async ({ r
     expect(response.ok(), path).toBe(true);
     const html = await response.text();
     expect(html).toContain('<meta name="robots" content="noindex, nofollow"');
-    if (path !== '/login') expect(html).not.toContain('Investigation dashboard');
+    if (path !== '/login') expect(html).not.toContain('Start new work, continue something saved');
   }
 });
 

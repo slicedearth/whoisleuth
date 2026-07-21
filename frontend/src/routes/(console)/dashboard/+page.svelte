@@ -53,10 +53,10 @@
 
 <svelte:head>
   <title>Dashboard · WHOISleuth</title>
-  <meta name="description" content="Start or continue a WHOISleuth domain investigation from the protected console dashboard.">
+  <meta name="description" content="Start or continue a WHOISleuth domain investigation from the protected console's Dashboard.">
 </svelte:head>
 
-<PageHeading eyebrow="Console" title="Investigation dashboard" description="Start new work, continue something saved in this browser, or follow a step-by-step guide.">
+<PageHeading eyebrow="Console" title="Dashboard" description="Start new work, continue something saved in this browser, or follow a step-by-step guide.">
   <a class="btn" href="/">View public homepage</a>
 </PageHeading>
 
@@ -64,7 +64,7 @@
   <div class="section-intro">
     <p class="eyebrow">Start here</p>
     <h2 id="quick-actions-title">Start an investigation</h2>
-    <p>Choose the task that best matches what you need to learn. Nothing runs until you submit a check in the workspace you open.</p>
+    <p>Choose the task that best matches what you need to learn. Nothing runs until you submit a check in the tool you open.</p>
   </div>
   <div class="quick-grid">
     {#each quickActions as action,index}
@@ -89,7 +89,7 @@
       <span>Open cases</span><strong>{counts.openCases}</strong><p>{counts.cases} total saved case{counts.cases === 1 ? '' : 's'}</p>
     </a>
     <a class="summary-card card" href="/monitor?view=watchlists">
-      <span>Watchlists</span><strong>{counts.watchlists}</strong><p>Saved change-tracking workspace{counts.watchlists === 1 ? '' : 's'}</p>
+      <span>Watchlists</span><strong>{counts.watchlists}</strong><p>Saved change-tracking list{counts.watchlists === 1 ? '' : 's'}</p>
     </a>
     <a class="summary-card card" href="/brands">
       <span>Brand profiles</span><strong>{counts.profiles}</strong><p>Saved analysis profile{counts.profiles === 1 ? '' : 's'}</p>
@@ -105,7 +105,7 @@
     <h2 id="guide-launcher-title">Follow a guided investigation</h2>
     <p>Choose a guide and a domain. WHOISleuth saves progress in this tab so you can work through one clearly explained step at a time.</p>
     <div class="help-links" aria-label="Investigation help">
-      <a href="/guide"><strong>Read the guide</strong><span>Learn the workspaces, result states, and common mistakes.</span></a>
+      <a href="/guide"><strong>Read the guide</strong><span>Learn the tools, result states, and common mistakes.</span></a>
       <a href="/registry-support"><strong>Check domain-ending support</strong><span>See which domain endings have tested lookup support and known limits.</span></a>
     </div>
   </div>
@@ -123,7 +123,7 @@
       <button class="primary" type="submit">Start guide</button>
     </div>
     {#if guideError}<p class="error" role="alert">{guideError}</p>{/if}
-    <p class="guide-note">Starting a guide only saves its steps. Before a network step, you review what it requests and allow that step. Opening a workspace only takes you there; you still start the check yourself.</p>
+    <p class="guide-note">Starting a guide only saves its steps. Before a network step, you review what it requests and allow that step. Opening a tool only takes you there; you still start the check yourself.</p>
   </form>
 </section>
 

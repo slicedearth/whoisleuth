@@ -1,4 +1,4 @@
-// Covers the browser-safe analysis helpers consumed by the Svelte workspaces.
+// Covers the browser-safe analysis helpers consumed by the Svelte tools.
 
 const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');

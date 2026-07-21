@@ -28,7 +28,7 @@ for (const viewport of VIEWPORTS) {
       // authenticated shell before counting so this assertion cannot race the
       // client-side session check after navigation.
       await expect(page.locator('.shell > header strong', { hasText: 'WHOISleuth' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'WHOISleuth dashboard' })).toHaveAttribute('href', '/dashboard');
+      await expect(page.getByRole('link', { name: 'WHOISleuth Dashboard' })).toHaveAttribute('href', '/dashboard');
       const visibleBrandCount = await page
         .locator('strong', { hasText: 'WHOISleuth' })
         .evaluateAll((els) => els.filter((el) => (el as HTMLElement).offsetParent !== null).length);
@@ -39,7 +39,7 @@ for (const viewport of VIEWPORTS) {
       await expect(signOutButton).toBeVisible();
       await expect(signOutButton).toBeEnabled();
       await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
-      await expect(page.locator('#workspace-navigation').getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+      await expect(page.locator('#console-navigation').getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 
       const shell = page.locator('.shell');
       const toggle = page.getByRole('button', { name: 'Toggle navigation' });
@@ -50,7 +50,7 @@ for (const viewport of VIEWPORTS) {
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await expect(shell).toHaveClass(/open/);
 
-      const drawer = page.locator('#workspace-navigation');
+      const drawer = page.locator('#console-navigation');
       const drawerBox = await boundingBox(drawer);
       // Fits the dynamic viewport height and scrolls internally rather than
       // pushing content (or itself) past the bottom edge.
@@ -87,7 +87,7 @@ test('the desktop header keeps sign out reachable while the sidebar scrolls inde
   await page.setViewportSize({ width: 1280, height: 560 });
   await page.goto('/lookup');
 
-  const sidebar = page.locator('#workspace-navigation');
+  const sidebar = page.locator('#console-navigation');
   await expect(sidebar).toBeVisible();
   await expect(sidebar).toHaveCSS('overflow-y', 'auto');
   expect(await sidebar.evaluate((element) => element.scrollHeight)).toBeGreaterThan(

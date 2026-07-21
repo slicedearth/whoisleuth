@@ -370,7 +370,7 @@
 </script>
 
 <svelte:head><title>Discover · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Discover" title="Candidate discovery" description="Generate explainable lookalikes, explore defensive registrations, and search public Certificate Transparency logs." />
+<PageHeading eyebrow="Find candidates" title="Discover" description="Generate explainable lookalikes, explore defensive registrations, and search public Certificate Transparency logs." />
 
 <section class="controls card">
   {#if mode==='certificate-transparency'&&ctDisabled}<p class="feature-disabled" role="note">{ctDisabled.reason||'Certificate Transparency search is disabled by deployment policy.'}</p>{/if}

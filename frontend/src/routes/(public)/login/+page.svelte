@@ -3,13 +3,13 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
-  import { consoleDestinations } from '$lib/workspaces';
+  import { protectedDestinations } from '$lib/workspaces';
 
   let password=$state('');
   let error=$state('');
   let busy=$state(false);
   let checking=$state(true);
-  const allowedTargets=new Set(consoleDestinations.map((item)=>item.href));
+  const allowedTargets=new Set(protectedDestinations.map((item)=>item.href));
 
   function returnTarget(){
     const requested=page.url.searchParams.get('next');

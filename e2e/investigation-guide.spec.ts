@@ -50,11 +50,11 @@ test('the dashboard rejects non-domain recipe targets without changing storage',
   expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBeNull();
 });
 
-test('network stages require keyboard-operable approval before workspace navigation', async ({ page }) => {
+test('network stages require keyboard-operable approval before tool navigation', async ({ page }) => {
   await startRecipe(page);
   const lookupStage = page.locator('.guide li').filter({ hasText: 'Collect domain evidence' });
-  await expect(lookupStage.getByRole('link', { name: 'Open lookup' })).toHaveCount(0);
-  await expect(lookupStage).toContainText('Opening the workspace only takes you there.');
+  await expect(lookupStage.getByRole('link', { name: 'Open Lookup' })).toHaveCount(0);
+  await expect(lookupStage).toContainText('Opening the tool only takes you there.');
 
   await page.goto('/lookup');
   const manualLookupStage = page.locator('.guide li').filter({ hasText: 'Collect domain evidence' });
@@ -68,8 +68,8 @@ test('network stages require keyboard-operable approval before workspace navigat
   const approve = reopenedLookupStage.getByRole('button', { name: 'Allow this step' });
   await approve.focus();
   await page.keyboard.press('Enter');
-  await expect(reopenedLookupStage.getByRole('link', { name: 'Open lookup' })).toBeVisible();
-  await reopenedLookupStage.getByRole('link', { name: 'Open lookup' }).click();
+  await expect(reopenedLookupStage.getByRole('link', { name: 'Open Lookup' })).toBeVisible();
+  await reopenedLookupStage.getByRole('link', { name: 'Open Lookup' }).click();
 
   await expect(page).toHaveURL('/lookup?q=portal.example.test');
   await expect(page.getByRole('textbox', { name: 'Domain, IP address, ASN, or domain list' })).toHaveValue('portal.example.test');
@@ -83,7 +83,7 @@ test('partial progress, pause, and resume survive reload without implying comple
   await startRecipe(page, 'Infrastructure pivot');
   const lookupStage = page.locator('.guide li').filter({ hasText: 'Collect starting evidence' });
   await lookupStage.getByRole('button', { name: 'Allow this step' }).click();
-  await lookupStage.getByRole('link', { name: 'Open lookup' }).click();
+  await lookupStage.getByRole('link', { name: 'Open Lookup' }).click();
 
   await page.getByRole('combobox', { name: 'Outcome for Collect starting evidence' }).selectOption('partial');
   await expect(page.locator('.guide')).toContainText('Partial');

@@ -11,6 +11,9 @@ test('completes the public synthetic workflow without investigation requests or 
   });
 
   await page.goto('/demo');
+  await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
+  await expect(page.locator('.demo-footer').getByRole('link', { name: 'Open console' })).toHaveCount(0);
+  await expect(page.getByText('Synthetic console', { exact: false })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Use the investigation workflow without touching a live target.' })).toBeVisible();
   await expect(page.getByText('Synthetic fixtures · No live findings')).toBeVisible();
   await expect(page.locator('form.login')).toHaveCount(0);

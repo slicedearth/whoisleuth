@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { TEST_SITE_PASSWORD } from './constants';
-import { consoleDestinations } from '../frontend/src/lib/workspaces';
+import { protectedDestinations } from '../frontend/src/lib/workspaces';
 
 // This spec starts with no session, overriding the project's default
 // authenticated storageState - it's the one place the login *form* itself
@@ -48,6 +48,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const loginForm = page.locator('form.login');
   await expect(loginForm).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Continue to WHOISleuth.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Console sign-in' })).toBeVisible();
+  await expect(page.getByText('Protected console', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'Public overview' })).toHaveCount(0);
   const passwordField = page.getByLabel('Password');
@@ -75,19 +77,23 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
 
-  const dashboardLink = page.getByRole('link', { name: 'WHOISleuth dashboard' });
+  const dashboardLink = page.getByRole('link', { name: 'WHOISleuth Dashboard' });
   await expect(dashboardLink).toBeVisible();
   await expect(dashboardLink).toHaveAttribute('href', '/dashboard');
   await dashboardLink.click();
   await expect(page).toHaveURL('/dashboard');
-  await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'View public homepage' }).click();
   await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
   await expect(publicNavigation.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
-  await expect(page.getByRole('link', { name: 'Open dashboard' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
+  await page.goto('/demo');
+  await expect(page.locator('.demo-footer').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/guide');
-  await expect(page.getByRole('link', { name: 'Open dashboard' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.locator('.guide-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.locator('.closing-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/');
   const publicSignOutButton = page.getByRole('button', { name: 'Sign out' });
@@ -128,8 +134,8 @@ test('signs in through the login form and back out again', async ({ page }) => {
   expect(consoleTexts.join('\n')).not.toContain(TEST_SITE_PASSWORD);
 });
 
-test('the dashboard and all investigation workspaces require sign-in and unsafe return targets are ignored', async ({ page }) => {
-  for (const { href: path } of consoleDestinations) {
+test('the Dashboard and every protected destination require sign-in and unsafe return targets are ignored', async ({ page }) => {
+  for (const { href: path } of protectedDestinations) {
     await page.goto(path);
     await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);
     await expect(page.locator('form.login')).toBeVisible();
@@ -139,5 +145,5 @@ test('the dashboard and all investigation workspaces require sign-in and unsafe 
   await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL('/dashboard');
-  await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 });

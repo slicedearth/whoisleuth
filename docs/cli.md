@@ -208,7 +208,7 @@ is active or malicious.
 ## Lookalike discovery
 
 `discover` runs the same pure, bounded lookalike generator as the Discover
-workspace without making network requests. It accepts a brand label or a
+tool without making network requests. It accepts a brand label or a
 domain with one suffix label. The default TLD set is `com,net,org`; replace it
 with `--tlds com,net` when narrower coverage is wanted.
 
@@ -304,7 +304,7 @@ maliciousness decision.
 
 `export` converts one version-1 `whoisleuth.cli.lookup` domain document from a
 file or stdin into the same versioned `whoisleuth.lookup-evidence` JSON package
-produced by the web Lookup workspace. It performs no lookup and writes only to
+produced by the web Lookup tool. It performs no lookup and writes only to
 stdout, so use ordinary shell redirection when a file is wanted. Pretty JSON is
 the default; `--compact` emits one compact JSON line for pipeline use, while
 `--markdown` produces a readable source-attributed summary and `--html`

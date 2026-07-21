@@ -1,4 +1,4 @@
-// Bounded, scan-local relationship evidence for Bulk analysis. Shared
+// Bounded, scan-local relationship evidence for Bulk. Shared
 // observations can help an analyst pivot between domains, but they are not
 // proof of common ownership, coordination, intent, or maliciousness. This
 // module deliberately produces no aggregate score and is never a persistence

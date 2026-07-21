@@ -152,7 +152,7 @@ test('watchlist history focuses one domain without implying complete coverage', 
   await page.setViewportSize({ width: 360, height: 740 });
   await expectNoHorizontalOverflow(page);
 
-  await domainHistory.getByRole('button', { name: 'Open case workspace' }).click();
+  await domainHistory.getByRole('button', { name: 'Open case' }).click();
   await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.case.open')).toContainText('priority.invalid');
   await expect(page.getByRole('status')).toContainText('Watchlist history remains separately attributed');

@@ -81,7 +81,7 @@
       const{record,created,pruned}=openCase({domain,source:'monitor'});
       refreshCases();clearCaseFilters();casePage=1;showCasePage(record);view='cases';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
       caseMessage=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)} Watchlist history remains separately attributed.`;
-    }catch(cause){message=cause instanceof Error?cause.message:'Could not open the case workspace.';}
+    }catch(cause){message=cause instanceof Error?cause.message:'Could not open the case.';}
   }
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=openCase({domain,source:'monitor'});refreshCases();newDomain='';showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
@@ -107,7 +107,7 @@
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Monitor" title="Investigation workspace" description="Organize cases, review relationships, test local detection rules, and compare watchlist changes over time." />
+<PageHeading eyebrow="Track findings" title="Monitor" description="Organize cases, review relationships, test local detection rules, and compare watchlist changes over time." />
 
 <MonitorViewTabs {view} counts={{cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
 

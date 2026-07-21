@@ -96,10 +96,10 @@ async function downloadWorkspaceArchive(page: import('@playwright/test').Page) {
   return { download, content: Buffer.concat(body).toString('utf-8') };
 }
 
-test('the dashboard groups core tasks without duplicating the sidebar workspace map', async ({ page }) => {
+test('the Dashboard groups core tasks without duplicating the sidebar tool map', async ({ page }) => {
   await page.goto('/dashboard');
 
-  await expect(page.getByRole('heading', { name: 'Investigation dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'View public homepage' })).toHaveAttribute('href', '/');
   await expect(page.getByRole('heading', { name: 'Start an investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
@@ -115,7 +115,7 @@ test('the dashboard groups core tasks without duplicating the sidebar workspace 
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
   await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
   await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
-  await expect(page.getByText('Investigation workspaces', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
 });
 
 test('the dashboard reports bounded browser-local counts without exposing stored values', async ({ page }) => {

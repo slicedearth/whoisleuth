@@ -17,7 +17,7 @@ retention are covered by [the privacy notice](../PRIVACY.md).
 ```mermaid
 flowchart LR
   visitor["Public visitor"] --> public["Privacy and synthetic demo pages"]
-  analyst["Authenticated analyst"] --> ui["Prerendered SvelteKit workspaces"]
+  analyst["Authenticated analyst"] --> ui["Prerendered SvelteKit console"]
 
   public --> tab["Isolated demo sessionStorage"]
   ui --> local["Bounded browser-local stores"]
@@ -46,7 +46,7 @@ exported.
 | --- | --- | --- |
 | `frontend/src/routes/` | Lookup, Discover, Bulk, Monitor, Brands, public Privacy, and public Demo presentation and interaction. | Registry protocol logic, authentication enforcement, outbound-request trust decisions, or deployment-wide budgets. |
 | `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
-| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, and cross-workspace handoff state. | General server persistence, cross-device synchronization, accounts, or background jobs. |
+| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, and cross-tool handoff state. | General server persistence, cross-device synchronization, accounts, or background jobs. |
 | `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, and response shaping. | Separate copies of lookup and parsing rules. |
 | `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
 | Optional distributed budget provider | Opaque expiring leases and bounded operation counters when explicitly configured. | Query targets, responses, evidence, notes, profiles, or session tokens. |
@@ -174,7 +174,7 @@ had disappeared.
 
 ## Deployment parity
 
-`npm run build` prerenders independent static entries for each workspace. The
+`npm run build` prerenders independent static entries for each tool. The
 same output can be served by Express or published directly by Netlify. Express
 maps API routes in one process; Netlify uses thin function wrappers and path
 rewrites. Both import the same `lib/` orchestration and use compatible response

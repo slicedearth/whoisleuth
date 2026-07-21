@@ -9,11 +9,7 @@
   const session = $derived(getSession?.() ?? 'anonymous');
   const destination = $derived(session === 'authenticated' ? '/dashboard' : '/login');
   const label = $derived(
-    session === 'authenticated'
-      ? 'Open dashboard'
-      : session === 'checking'
-        ? 'Open console'
-        : 'Sign in to investigate',
+    session === 'anonymous' ? 'Sign in to investigate' : 'Open console',
   );
 </script>
 

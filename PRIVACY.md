@@ -127,7 +127,7 @@ default (see the README), so many lookups return no personal data at all.
   exists; future records remain untouched. Guide progress is not sent to the
   server or copied into persistent browser stores, and it is not treated as
   evidence completion. A network stage requires an explicit approval marker
-  before its workspace link becomes available, but opening that link still
+  before its tool link becomes available, but opening that link still
   never starts a lookup, search, scan, submission, export, or Monitor action.
   **Export summary** requires confirmation and deliberately downloads only a
   versioned compact progress record without raw evidence, notes, credentials,

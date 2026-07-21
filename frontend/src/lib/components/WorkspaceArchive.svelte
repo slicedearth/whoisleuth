@@ -72,7 +72,7 @@
   <p class="privacy-note">Backups can include case notes and other analyst-owned records. They are not encrypted. Sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser storage are excluded.</p>
   <details class="archive-details">
     <summary>How workspace backups work</summary>
-    <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each workspace's normal merge rules, and records missing from the backup are retained.</p>
+    <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each data type's normal merge rules, and records missing from the backup are retained.</p>
   </details>
 
   {#if preview}
@@ -81,7 +81,7 @@
         <div><p class="eyebrow">Backup review</p><h3 id="workspace-archive-preview-title">Choose saved data to add</h3></div>
         <span>{preview.bytes.toLocaleString()} bytes · {preview.generatedAt?new Date(preview.generatedAt).toLocaleString():'Unknown creation time'}</span>
       </header>
-      <p>Existing matches use each workspace's established merge rules. Records absent from the backup are retained, and nothing is written until you choose Add selected data.</p>
+      <p>Existing matches use each data type's established merge rules. Records absent from the backup are retained, and nothing is written until you choose Add selected data.</p>
       <ul>
         {#each preview.sections as section}
           <li class:unsupported={section.status!=='ready'}>

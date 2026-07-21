@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 
-test('the dashboard and console navigation expose the registry-support reference', async ({ page }) => {
+test('the Dashboard and console navigation expose the registry-support reference', async ({ page }) => {
   await page.goto('/dashboard');
 
   const dashboardLink = page.getByRole('link', { name: /Check domain-ending support/ });
@@ -143,13 +143,13 @@ test('the registry-support reference remains readable without horizontal overflo
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/registry-support');
 
-  const workspaceNavigation = page.locator('#workspace-navigation');
+  const consoleNavigation = page.locator('#console-navigation');
   const interpretation = page.locator('main .interpretation');
-  await expect(workspaceNavigation).toHaveCSS('position', 'fixed');
+  await expect(consoleNavigation).toHaveCSS('position', 'fixed');
   await expect(interpretation).toHaveCSS('position', 'static');
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'true');
-  await expect(workspaceNavigation).toHaveCSS('transform', 'none');
+  await expect(consoleNavigation).toHaveCSS('transform', 'none');
   await expect(page.getByRole('navigation', { name: 'Reference' }).getByRole('link', { name: 'Registry support' })).toBeVisible();
   await expect(interpretation).toHaveCSS('position', 'static');
   await expect(interpretation).toHaveCSS('transform', 'none');

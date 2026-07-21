@@ -132,8 +132,8 @@
   function saveResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}const findings=results.filter(row=>!row.trusted);if(!findings.length){saveStatus='Every result is trusted by the active profile; nothing was added to Monitor.';return;}try{const changes=saveWatchlist(name,findings.map(r=>r.saved),mode);const excluded=results.length-findings.length;saveStatus=changes.length?`Updated ${name} and recorded ${changes.length} material change${changes.length===1?'':'s'}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`:`Saved ${findings.length} result${findings.length===1?'':'s'} to ${name}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save watchlist.';}}
 </script>
 
-<svelte:head><title>Bulk analysis · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Assess" title="Bulk analysis" description="Scan multiple domains, prioritise findings, and retry inconclusive results." />
+<svelte:head><title>Bulk · WHOISleuth</title></svelte:head>
+<PageHeading eyebrow="Assess domains" title="Bulk" description="Scan multiple domains, prioritise findings, and retry inconclusive results." />
 <BulkScanQueue
   lookupDisabledReason={lookupDisabled?(lookupDisabled.reason||'Lookup is disabled by deployment policy.'):''}
   scanLimitations={scanLimitations.map((item)=>item.id.replaceAll('_',' '))}

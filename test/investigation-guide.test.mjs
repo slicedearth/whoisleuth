@@ -133,7 +133,7 @@ test('rejects malformed and future records without treating them as an empty rec
   }]) assert.equal(parseInvestigationGuide(value), null);
 });
 
-test('maps recipe stages to existing workspace routes with safe target handoff', () => {
+test('maps recipe stages to existing tool routes with safe target handoff', () => {
   assert.equal(investigationGuideRecipe('brand_sweep')?.label, 'Brand sweep');
   assert.equal(investigationGuideStagesForRecipe('invented').length, 0);
   assert.equal(investigationGuideStageForPath('/lookup', 'new_domain_triage')?.id, 'lookup');

@@ -35,7 +35,7 @@
 </script>
 
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Protect" title="Brand profiles" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button class="primary" onclick={clearForm}>New profile</button><button class="btn" onclick={exportProfiles} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></PageHeading>
+<PageHeading eyebrow="Protect" title="Brands" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button class="primary" onclick={clearForm}>New profile</button><button class="btn" onclick={exportProfiles} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></PageHeading>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 <BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
 

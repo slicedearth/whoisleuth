@@ -1,4 +1,4 @@
-// Browser-safe analysis helpers shared by the Svelte workspaces.
+// Browser-safe analysis helpers shared by the Svelte tools.
 
 // Deliberately conservative (no +tags, no comments, no quoted local parts) -
 // this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a

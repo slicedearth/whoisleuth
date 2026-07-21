@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
+  import { toolNavigation } from '$lib/workspaces';
   import {
     approveInvestigationGuideCollection,
     clearInvestigationGuide,
@@ -27,6 +28,7 @@
     { value: 'partial', label: 'Partial' },
     { value: 'skipped', label: 'Skipped' },
   ];
+  const toolLabels = new Map(toolNavigation.map((tool) => [tool.href, tool.label]));
 
   let guide = $state<InvestigationGuide | null>(null);
   let mounted = $state(false);
@@ -200,11 +202,11 @@
               <div class="stage-actions">
                 {#if stage.requiresApproval && !approved}
                   <button class="btn compact" type="button" onclick={() => approve(stage.id)} disabled={guide.status === 'paused'}>Allow this step</button>
-                  <small>This records that you reviewed what the step requests. It does not run the check. Opening the workspace only takes you there.</small>
+                  <small>This records that you reviewed what the step requests. It does not run the check. Opening the tool only takes you there.</small>
                 {:else if guide.status === 'paused'}
                   <span class="disabled-action">Resume the guide to open this step.</span>
                 {:else}
-                  <a class="btn compact" href={investigationGuideHref(stage.id, guide.domain, guide.recipeId)}>Open {stage.workspace}</a>
+                  <a class="btn compact" href={investigationGuideHref(stage.id, guide.domain, guide.recipeId)}>Open {toolLabels.get(stage.path) ?? stage.workspace}</a>
                 {/if}
                 <label>
                   <span>Outcome</span>

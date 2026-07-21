@@ -47,7 +47,7 @@ explicit preference stays only in that browser's local storage.
 
 ## At a glance
 
-| Workspace | Purpose | Important boundary |
+| Tool | Purpose | Important boundary |
 | --- | --- | --- |
 | **Lookup** | Inspect one domain, IP address, or ASN through normalized RDAP/WHOIS evidence and optional deep DNS, HTTP, favicon, page-identity, and TLS observations. | Fast and deep results disclose skipped, partial, unsupported, and failed sources rather than treating missing evidence as negative evidence. |
 | **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates; supplement them with structured Certificate Transparency matches. | Candidate generation is local. Certificate Transparency is an explicit hosted search and its timestamps are public-log observations, not proof of site activity or maliciousness. |
@@ -134,7 +134,7 @@ Then open **http://localhost:3000** for the public product overview, or
 
 The overview, guide and glossary, privacy policy, sign-in page, and isolated
 synthetic demo are public and make no live investigation request. The Lookup, Discover, Bulk,
-Monitor, and Brands workspaces sit behind a shared-password gate:
+Monitor, and Brands tools sit behind a shared-password gate:
 `SITE_PASSWORD` is required, and every investigation API route rejects
 requests without a valid session regardless of which frontend file a visitor
 can retrieve. Login and session status remain the narrow unauthenticated API
@@ -379,7 +379,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   making a registry request or turning coverage metadata into an availability
   or safety claim. Authenticated
   deployments expose the same embedded catalogue in the **Registry support**
-  reference workspace, with local text and coverage filters plus an offline
+  reference page, with local text and coverage filters plus an offline
   domain-or-suffix inspector for generic IANA discovery fallback.
   Catalogue version 26 contains 312 explicit suffix rows: 218 fixture verified
   and 94 access documented. It includes an explicit profile for every currently
@@ -855,7 +855,7 @@ covered by the provider's community terms or an appropriate paid agreement.
 
 Move a finding from discovery into a documented investigation. From a **Lookup**
 result or a **Bulk** row you can open a **case** for a domain; **Monitor** is the
-full investigation workspace, with `Cases`, `Campaigns`, `Relationships`, and
+tool for managing the full investigation record, with `Cases`, `Campaigns`, `Relationships`, and
 `Watchlists` tabs.
 
 - Each case carries an analyst **status** (New, Reviewing, Monitoring,
@@ -987,11 +987,11 @@ Demo exports use version 2 of the distinct
 the fixed attributed fixtures and synthetic observation timeline, and include
 an explicit warning that they are not live findings, evidence packages, or
 abuse reports. The demo remains a representative product walkthrough rather
-than a shadow implementation of every workspace. Its fixture adapters feed the
+than a shadow implementation of every tool. Its fixture adapters feed the
 same read-only profile, score, relationship, registry, DNS, HTTP, TLS, and
 evidence-timeline components used by the protected console. Existing
 represented surfaces therefore inherit component-level UI and accessibility
-changes, while genuinely new workspaces are added to the guided scenario
+changes, while genuinely new tools are added to the guided scenario
 deliberately instead of being exposed automatically.
 
 ### Public overview and protected console
@@ -1000,21 +1000,21 @@ The unauthenticated `/` route describes the product in task-focused language,
 links common investigation paths, and renders compact Discover, Lookup, and
 Monitor previews from the same fixed fictional fixtures as `/demo`. The
 previews do not call an analysis API, write browser storage, or reproduce the
-authenticated workspace implementations. The public `/guide` route provides
-task-based starting points, workspace instructions, result-state guidance, a
+authenticated tool implementations. The public `/guide` route provides
+task-based starting points, tool instructions, result-state guidance, a
 glossary, common interpretation mistakes, and an FAQ from one typed content
 model. The public layout reads only the
 existing boolean session-status endpoint so an authenticated visitor can open
 the console or sign out from a public page. Authenticated visitors land on a
-protected dashboard that links to all five investigation workspaces and shows
+protected Dashboard that links to all five investigation tools and shows
 only bounded counts derived from browser-local cases, watchlists, and profiles.
-The dashboard can also build a disposable in-memory search index over known
+The Dashboard can also build a disposable in-memory search index over known
 fields in the current case, campaign, and Brand Profile stores. Search results
 retain their source, observation time, completeness, truncation, and limitation
 labels and can open the exact source record. An empty result does not establish
 absence elsewhere, and searching does not start a lookup, contact a provider,
 or save a separate index.
-The dashboard also creates one deliberate, unencrypted workspace archive for
+The Dashboard also creates one deliberate, unencrypted workspace archive for
 cases, campaigns, Brand Profiles, watchlists, shortlist entries, custom
 detection rules, the active-profile selection, and the theme preference. The
 versioned JSON manifest records each section's schema, record count, byte count,
@@ -1027,7 +1027,7 @@ passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
 state, Certificate Transparency history, and unrelated browser storage. Local
 encryption can be added separately without replacing the portable unencrypted
 schema.
-From that dashboard, an optional guided investigation can coordinate one of
+From the Dashboard, an optional guided investigation can coordinate one of
 three fixed recipes: brand sweep, infrastructure pivot, or new-domain triage.
 Version 2 keeps one canonical domain, active or paused state, and bounded
 approval, opened-stage, and analyst-selected outcome markers in the current
@@ -1036,21 +1036,21 @@ version 1 navigation records normalize into the new-domain triage recipe when
 no version 2 record exists, while future records remain untouched. Every stage
 shows prerequisites, expected evidence, completion criteria, and request or
 cost implications. Network collection stages require an explicit approval
-marker before their workspace link becomes available, but opening a workspace
+marker before their tool link becomes available, but opening a tool
 still never starts a lookup, search, scan, submission, export, or Monitor
 action. Recipes can be paused, resumed, restarted after confirmation, or ended.
 An explicit confirmed local download exports only a versioned compact progress
 summary, not raw evidence, notes, credentials, provider responses, or scan
 results. A read-only checkpoint derives retained observation and relationship
 counts from the typed local projection without deciding stage completion.
-The protected WHOISleuth brand returns to that dashboard; the dashboard keeps
+The protected WHOISleuth brand returns to the Dashboard; the Dashboard keeps
 the public homepage available as a separate, clearly labelled destination.
 `/login` accepts the shared deployment password and returns only to a known
-protected workspace; arbitrary or off-origin return targets are ignored.
+protected console; arbitrary or off-origin return targets are ignored.
 Login JSON is capped at 1 MiB in both runtimes. Malformed and oversized bodies
 receive bounded JSON errors with `INVALID_REQUEST_BODY` or `REQUEST_TOO_LARGE`
 codes; parser exceptions and internal paths are never returned to the client.
-Direct anonymous navigation to the dashboard, Lookup, Discover, Bulk, Monitor,
+Direct anonymous navigation to the Dashboard, Lookup, Discover, Bulk, Monitor,
 or Brands is redirected to sign-in, while the backend continues to enforce
 authentication independently on every protected API.
 The public surface is designed around data minimisation, without advertising
@@ -1121,7 +1121,7 @@ It does not accept a real password, session cookie, API credential, arbitrary
 path, or additional target. Because protected-route navigation and the
 server-authoritative capability report require browser execution and an
 authenticated session, their detailed state remains explicitly inconclusive
-or unsupported; confirm the workspace redirect and scheduled-monitor posture
+or unsupported; confirm the console redirect and scheduled-monitor posture
 through the existing signed-in browser smoke test. A network failure or capped
 response is not converted into a pass or deployment defect.
 
@@ -1229,7 +1229,7 @@ is identical either way. To deploy:
 1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
    from the Netlify CLI if you have it installed).
 2. Netlify reads `netlify.toml`, runs `npm run build`, publishes the
-   prerendered `frontend/build/` workspace, and builds the functions in
+   prerendered `frontend/build/` site, and builds the functions in
    `netlify/functions/`. Direct routes such as `/lookup`, `/bulk`, and
    `/monitor` resolve to independent static HTML entries rather than relying
    on a catch-all client-side rewrite.

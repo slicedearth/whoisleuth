@@ -1,6 +1,6 @@
 # Defensive domain exports
 
-Bulk analysis can export filtered, high-risk registered domains in four local text formats and two structured interchange formats:
+Bulk can export filtered, high-risk registered domains in four local text formats and two structured interchange formats:
 
 - `domains`: one canonical domain per line;
 - `hosts`: `0.0.0.0 domain` entries;
