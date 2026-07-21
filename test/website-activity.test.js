@@ -145,7 +145,7 @@ describe('website activity classification', () => {
       fetchHomepage: async () => {
         homepageCalls += 1;
         return {
-          text: '<html lang="en"><link rel="canonical" href="../account?token=secret"><form method="post" action="https://collect.example/submit?key=secret"></form></html>',
+          text: '<html lang="en"><meta name="generator" content="Hugo 0.1"><link rel="canonical" href="../account?token=secret"><astro-island></astro-island><form method="post" action="https://collect.example/submit?key=secret"></form></html>',
           status: 'fetched',
           detail: 'Homepage responded.',
           http: {
@@ -154,6 +154,7 @@ describe('website activity classification', () => {
             response: {
               bodyTruncated: true,
               bodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'captured-prefix', bytes: 162 },
+              server: 'Caddy',
             },
           },
         };
@@ -170,6 +171,9 @@ describe('website activity classification', () => {
     assert.equal(result.pageIdentity.canonical.url, 'https://www.example.test/account');
     assert.deepEqual(result.pageIdentity.forms.externalActionOrigins, ['https://collect.example']);
     assert.doesNotMatch(JSON.stringify(result.pageIdentity), /token=|key=|secret|submit/);
+    assert.equal(result.technologyProfile.status, 'partial');
+    assert.deepEqual(result.technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
+    assert.doesNotMatch(JSON.stringify(result.technologyProfile), /token=|key=|secret|submit|0\.1/);
   });
 
   test('does not describe an explicitly non-HTML response as page identity evidence', async () => {
@@ -193,5 +197,6 @@ describe('website activity classification', () => {
     });
 
     assert.equal(result.pageIdentity, null);
+    assert.equal(result.technologyProfile, null);
   });
 });

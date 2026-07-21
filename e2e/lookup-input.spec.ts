@@ -232,7 +232,7 @@ test('deep Lookup presents registrar RDAP as a separate collapsed source', async
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(12);
+  expect(exported.schemaVersion).toBe(13);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
@@ -676,6 +676,16 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             complete: true, truncated: false, limitations: [],
           },
         },
+        technologyProfile: {
+          profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
+          limitations: ['Curated signature matching is selective; an unmatched technology may still be present.'],
+          diagnostics: { findings: 2, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 1 },
+          findings: [
+            { id: 'fixture-cms', name: 'Fixture CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'generator metadata', description: 'Generator metadata identifies the fixture CMS.' }] },
+            { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', evidence: [{ source: 'resource origin', description: 'A retained resource origin uses fixture delivery infrastructure.' }] },
+          ],
+        },
       },
       rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
       diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
@@ -724,6 +734,14 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
   await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
+
+  const technologyCard = page.locator('.technology-card');
+  await expect(technologyCard.getByRole('heading', { name: 'Technology indicators' })).toBeVisible();
+  await expect(technologyCard.getByRole('heading', { name: 'Fixture CMS' })).toBeVisible();
+  await expect(technologyCard.getByText('high confidence', { exact: true })).toBeVisible();
+  await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
+  await expect(technologyCard.getByRole('heading', { name: 'Fixture Edge' })).toBeVisible();
+  await expect(technologyCard.getByText(/make no additional request and do not affect availability or Risk scoring/i)).toBeVisible();
 
   const pageComparison = page.locator('.page-comparison');
   await expect(pageComparison.getByRole('heading', { name: 'Official-site comparison' })).toBeVisible();

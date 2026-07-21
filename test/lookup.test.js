@@ -142,13 +142,20 @@ describe('runUnifiedLookup', () => {
         parsed: { domain: 'EXAMPLE.COM' },
       }),
       buildWhoisChain: async () => [{ server: 'whois.example', response: 'large raw WHOIS body' }],
-      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high', registrar: 'Example Registrar' }),
+      checkDomainAvailability: async (_domain, options) => {
+        assert.equal(options.includeTechnologyProfile, false);
+        return {
+          state: 'registered', confidence: 'high', registrar: 'Example Registrar',
+          technologyProfile: { source: 'derived', findings: [{ name: 'must be omitted' }] },
+        };
+      },
     });
 
     assert.deepEqual(result.availability.registrar, 'Example Registrar');
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(Object.hasOwn(result, 'rdap'), false);
     assert.equal(Object.hasOwn(result, 'whois'), false);
+    assert.equal(Object.hasOwn(result.availability, 'technologyProfile'), false);
   });
 
   test('adds non-authoritative registry-access context without changing source work or availability', async () => {

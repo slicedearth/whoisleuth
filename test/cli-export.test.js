@@ -174,7 +174,7 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 12);
+    assert.equal(result.schemaVersion, 13);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     assert.equal(result.query.submitted, 'login.example.test');
     assert.equal(result.query.registrableDomain, 'example.test');
@@ -247,8 +247,8 @@ describe('lookup evidence export conversion', () => {
   test('rejects an injected builder with the wrong report contract', () => {
     assert.throws(() => buildCliEvidenceExport(JSON.stringify(savedLookup()), {
       LOOKUP_EVIDENCE_SCHEMA: 'whoisleuth.lookup-evidence',
-      LOOKUP_EVIDENCE_SCHEMA_VERSION: 12,
-      buildLookupEvidence: () => ({ schema: 'other', schemaVersion: 12 }),
+      LOOKUP_EVIDENCE_SCHEMA_VERSION: 13,
+      buildLookupEvidence: () => ({ schema: 'other', schemaVersion: 13 }),
     }), /unsupported report contract/);
   });
 

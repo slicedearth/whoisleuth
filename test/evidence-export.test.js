@@ -142,6 +142,15 @@ function fixtureResponse() {
           complete: true, truncated: false, limitations: [],
         },
       },
+      technologyProfile: {
+        profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
+        scanMode: 'deep', source: 'derived', complete: true, truncated: false,
+        limitations: ['Curated signature matching is selective.'], diagnostics: { findings: 1 },
+        findings: [{
+          id: 'fixture-framework', name: 'Fixture Framework', category: 'web framework', confidence: 'high',
+          evidence: [{ source: 'static HTML', description: 'Static markup contains a fixture framework marker.' }],
+        }],
+      },
     },
     diagnostics: {
       version: 4,
@@ -165,7 +174,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 12);
+    assert.equal(result.schemaVersion, 13);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -197,6 +206,8 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.visibleText.value, 'c'.repeat(16));
     assert.deepEqual(result.analysis.availability.pageIdentity.fingerprints.resourceHosts.values, ['cdn.example']);
+    assert.equal(result.analysis.availability.technologyProfile.profileVersion, 1);
+    assert.equal(result.analysis.availability.technologyProfile.findings[0].name, 'Fixture Framework');
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
     assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 1);
@@ -224,7 +235,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 12);
+    assert.equal(result.schemaVersion, 13);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });

@@ -9,6 +9,7 @@ import { domainToASCII } from 'node:url';
 
 import { createObservation } from './observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
+import { analyzeWebsiteTechnology } from './website-technology.mts';
 
 type NormalizedIdentityUrl = { url: string; queryOmitted: boolean; pathTruncated: boolean };
 type HtmlSignalOptions = {
@@ -16,8 +17,10 @@ type HtmlSignalOptions = {
   tagMarkup?: string;
   sourceTruncated?: boolean;
   exactBodyHash?: unknown;
+  httpServer?: unknown;
   observedAt?: string;
   includePageIdentity?: boolean;
+  includeTechnologyProfile?: boolean;
 };
 type ResourceType = 'image' | 'script' | 'stylesheet' | 'link' | 'frame' | 'media' | 'object';
 type ResourceReference = { type: ResourceType; value: string };
@@ -585,12 +588,21 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
 
 function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
   const phishingMatch = html.match(PHISHING_LANGUAGE_RE);
+  const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options);
   return {
     pageTitle: extractPageTitle(html),
     hasPasswordField: PASSWORD_FIELD_RE.test(html),
     phishingLanguageMatch: phishingMatch ? boundedHtmlText(phishingMatch[0], MAX_PHISHING_MATCH_LENGTH) : null,
     externalAssetHosts: extractExternalAssetHosts(html, domain),
-    pageIdentity: options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options),
+    pageIdentity,
+    technologyProfile: pageIdentity && options.includeTechnologyProfile !== false ? analyzeWebsiteTechnology({
+      html,
+      generator: pageIdentity.generator,
+      httpServer: options.httpServer,
+      resourceOrigins: pageIdentity.resources.externalOrigins,
+      observedAt: options.observedAt,
+      sourceTruncated: options.sourceTruncated,
+    }) : null,
   };
 }
 

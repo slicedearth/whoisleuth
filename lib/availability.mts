@@ -44,6 +44,7 @@ type HttpObservation = UnknownRecord & {
     contentType?: unknown;
     bodyTruncated?: unknown;
     bodyHash?: unknown;
+    server?: unknown;
   };
 };
 type HomepageResult = {
@@ -71,6 +72,7 @@ type DnsDelegation = {
 };
 type AvailabilityOptions = {
   fast?: boolean;
+  includeTechnologyProfile?: boolean;
   collectDnsIntelligence?: typeof collectDnsIntelligence;
   collectTlsIntelligence?: typeof collectTlsIntelligence;
   fetchHomepage?: (domain: string) => Promise<HomepageResult>;
@@ -617,7 +619,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   const faviconHash = favicon ? favicon.hash : null;
   const faviconPHash = favicon ? favicon.phash : null;
 
-  let htmlSignals: HtmlSignals = { pageTitle: null, hasPasswordField: false, phishingLanguageMatch: null, externalAssetHosts: [], pageIdentity: null };
+  let htmlSignals: HtmlSignals = { pageTitle: null, hasPasswordField: false, phishingLanguageMatch: null, externalAssetHosts: [], pageIdentity: null, technologyProfile: null };
 
   if (homepage.status === 'fetched') {
     if (page) {
@@ -635,7 +637,9 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         observedAt: typeof homepage.http?.observedAt === 'string' ? homepage.http.observedAt : undefined,
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
         exactBodyHash: homepage.http?.response?.bodyHash,
+        httpServer: homepage.http?.response?.server,
         includePageIdentity: pageIdentityEligible,
+        includeTechnologyProfile: options.includeTechnologyProfile,
       });
     }
   }

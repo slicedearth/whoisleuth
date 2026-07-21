@@ -281,8 +281,26 @@ describe('pageIdentity', () => {
       includePageIdentity: false,
     });
     assert.equal(result.pageIdentity, null);
+    assert.equal(result.technologyProfile, null);
     assert.equal(result.pageTitle, 'Example');
     assert.equal(result.hasPasswordField, true);
+  });
+
+  test('derives bounded technology indicators from the same captured HTML', () => {
+    const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1"><astro-island></astro-island>', 'example.com', {
+      httpServer: 'Caddy', observedAt,
+    });
+    assert.deepEqual(result.technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
+    assert.equal(result.technologyProfile.source, 'derived');
+    assert.equal(result.technologyProfile.observedAt, observedAt);
+  });
+
+  test('can omit technology analysis while preserving page identity', () => {
+    const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1">', 'example.com', {
+      includeTechnologyProfile: false,
+    });
+    assert.equal(result.pageIdentity.source, 'html');
+    assert.equal(result.technologyProfile, null);
   });
 
   test('summarizes normalized resource types and external origins without retaining paths', () => {

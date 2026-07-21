@@ -679,6 +679,17 @@ covered by the provider's community terms or an appropriate paid agreement.
   resulting metadata is contextual relationship/review evidence rather than a
   verdict about site ownership or intent. Data-bearing `srcset` attributes are
   skipped instead of being split incorrectly by the lightweight parser.
+- Deep Lookup derives a separate versioned technology profile from the same
+  selected HTTP server header, generator metadata, normalized resource
+  origins, and capped static HTML. Curated signatures currently cover common
+  content-management systems, commerce and site-building platforms, web
+  frameworks, static-site generators, web servers, and delivery platforms.
+  Each finding retains only a fixed technology name, category, confidence,
+  evidence class, and explanation. Matched markup, arbitrary header values,
+  resource paths, and signature input are not retained. Unmatched signatures
+  are neutral because static or deliberately concealed technologies may not be
+  observable. The profile makes no additional request, remains outside compact
+  browser stores, and does not change availability or Risk scoring.
 - Page identity also includes an independently versioned fingerprint bundle
   derived from the same capped response. It reuses the exact captured-body
   SHA-256 and adds a noise-reduced normalized-HTML SHA-256, visible-text
@@ -1269,6 +1280,7 @@ lib/                    Shared lookup logic, used by both server.mts and netlify
   domain-posture-parsers.mts  Pure SPF/DMARC/MTA-STS/TLS-RPT/BIMI/DKIM parsers
   favicon.mts           Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
   html-signals.mts      Bounded homepage signals and versioned static page-identity evidence
+  website-technology.mts Versioned technology indicators from existing deep evidence
   tls-intelligence.mts  One-connection TLS/certificate profile with public-address pinning
   threat-intelligence-contract.mts  Bounded policy, result, and fixture boundaries for optional providers and curated connectors
   ct-search.mts         Certificate Transparency search (crt.sh) for lookalike hostnames

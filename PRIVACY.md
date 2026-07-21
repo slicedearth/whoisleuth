@@ -184,6 +184,16 @@ default (see the README), so many lookups return no personal data at all.
   combined similarity score and the comparison does not affect Risk scoring.
   The derived comparison itself is transient and is not added to cases,
   watchlists, profiles, or evidence exports.
+- **Technology indicators**: a requested deep Lookup can derive a versioned
+  technology profile from the selected HTTP server header, generator metadata,
+  normalized resource origins, and capped static HTML already collected for
+  the page-identity analysis. The profile retains only curated technology
+  names, categories, confidence levels, evidence classes, and fixed
+  explanations. It does not retain matched markup, arbitrary header values,
+  URL paths, or signature input. This analysis makes no additional request,
+  changes no availability or Risk result, and is not copied into compact
+  browser-local cases, watchlists, profiles, or Bulk results. An unmatched
+  signature is not evidence that a technology is absent.
 - **Brand Profiles / Shortlist / Watchlist / Campaigns / Certificate search
   history**: saved in your own browser's `localStorage`, not on the server -
   only visible to whoever is using that browser.

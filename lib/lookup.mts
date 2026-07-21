@@ -120,6 +120,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const availabilityPromise = classified.type === 'domain' && availabilityEnabled
     ? checkAvailability(classified.value, {
         fast,
+        includeTechnologyProfile: !compact,
         featurePolicy,
         rdapRecordPromise: rdapPromise,
         whoisChainPromise: whoisPromise,
@@ -322,7 +323,10 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   // diagnostics. Omitting raw RDAP JSON and multi-hop WHOIS bodies from that
   // opt-in response prevents large scans from downloading and retaining the
   // same registry payloads the backend already used to build `availability`.
-  if (compact) return { availability, diagnostics };
+  if (compact) {
+    const { technologyProfile: _technologyProfile, ...compactAvailability } = availability;
+    return { availability: compactAvailability, diagnostics };
+  }
   const targetDomain = classified.registrableDomain || classified.value;
   const threatIntelligenceProviders: ThreatIntelligenceResult[] = [];
   if (urlscanIntelligencePromise) {

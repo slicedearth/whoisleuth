@@ -14,6 +14,7 @@
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
+  import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
@@ -107,6 +108,7 @@
   const pageResourceTypes=$derived(rec(pageResources.byType));
   const pageDownloads=$derived(rec(pageIdentity.downloads));
   const pageFingerprints=$derived(rec(pageIdentity.fingerprints));
+  const technologyProfile=$derived(rec(availability.technologyProfile));
   const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
   const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
   const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>Array.isArray(whoisParsed.contactsByRole?.[role])&&whoisParsed.contactsByRole[role].length));
@@ -128,7 +130,7 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const caseEvidence=$derived({
     availability:String(availability.state||''),
@@ -173,6 +175,7 @@
     'tag-container':'Tag container'
   } as Record<string,string>)[String(value)]||statusLabel(show(value));}
   function stringList(value:any){return Array.isArray(value)?value.map((item)=>String(item)):[];}
+  function boundedTechnologyText(value:any,maxLength=240){return String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,maxLength);}
   function pageIdentityFactRows(){return[
     {label:'Document language',value:show(pageIdentity.documentLanguage)},
     {label:'Canonical URL',value:show(pageCanonical.url)},
@@ -207,6 +210,11 @@
     {label:'External origins',value:stringList(pageDownloads.externalOrigins).join(', ')||'None observed'},
   ];}
   function pageTrackingIdentifierRows(){return Array.isArray(pageIdentity.trackingIdentifiers)?pageIdentity.trackingIdentifiers.map((identifier:any)=>({label:trackingIdentifierLabel(identifier?.type),value:show(identifier?.value)})):[];}
+  function technologyFindingRows(){return Array.isArray(technologyProfile.findings)?technologyProfile.findings.slice(0,24).map((finding:any)=>({
+    id:boundedTechnologyText(finding?.id,80),name:boundedTechnologyText(finding?.name||'Unknown indicator',120),category:statusLabel(boundedTechnologyText(finding?.category||'technology',80)),
+    confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:Array.isArray(finding?.evidence)?finding.evidence.slice(0,4).map((item:any)=>({source:statusLabel(boundedTechnologyText(item?.source||'evidence',80)),description:boundedTechnologyText(item?.description||'Observed signature matched.',300)})):[]
+  })):[];}
+  function technologyLimitations(){return Array.isArray(technologyProfile.limitations)?technologyProfile.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
   function pageFingerprintRows(){return[
     {label:'Exact captured body',value:rec(pageFingerprints.exact).value,detail:rec(pageFingerprints.exact).scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
     {label:'Normalized HTML',value:rec(pageFingerprints.normalizedHtml).value,detail:`${show(rec(pageFingerprints.normalizedHtml).tokenCount)} tokens`},
@@ -460,6 +468,15 @@
           trackingIdentifiers={pageTrackingIdentifierRows()}
           fingerprints={pageFingerprintRows()}
           limitations={stringList(pageIdentity.limitations)}
+        /></div>
+      {/if}
+
+      {#if technologyProfile.source==='derived'}
+        <div class="evidence-component"><LookupTechnologyProfile
+          status={statusLabel(show(technologyProfile.status))}
+          complete={Boolean(technologyProfile.complete)}
+          findings={technologyFindingRows()}
+          limitations={technologyLimitations()}
         /></div>
       {/if}
 
