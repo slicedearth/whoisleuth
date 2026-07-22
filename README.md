@@ -240,6 +240,7 @@ npm run build
 npm run schema:inventory  # generated compatibility report; reads no browser or hosted data
 npm run registry:drift    # manual bounded comparison with two official IANA catalogues
 npm run benchmark:workflow  # deterministic specialist workflow regression benchmark
+npm run platform:local-data  # offline browser-storage capacity and architecture evaluation
 npm run security:codeql   # local CodeQL scan; requires the official CLI bundle
 npm run test:e2e:install   # one-time: downloads the Chromium browser Playwright drives
 npm run test:e2e:built     # reuses the production build created above
@@ -280,6 +281,17 @@ compatibility, and a deterministic workflow-step proxy for time to first useful
 pivot. It uses reserved domains and synthetic local evidence, makes no network
 requests, and is a regression baseline rather than a live coverage or
 production-performance claim.
+
+`npm run platform:local-data` evaluates the browser-local storage architecture
+from the owning store-budget constants without inspecting browser data. It
+reports the aggregate declared capacity, whole-document query boundary, and
+candidate trade-offs, and recommends a dependency-free native IndexedDB
+prototype without authorizing a production migration. The browser test uses a
+unique temporary database and fixed synthetic records to verify transactions,
+keyed and indexed reads, rollback, deletion, cleanup, and bounded deadlines.
+Migration, application-level encryption, PWA support, and synchronization
+remain separate decisions. See
+[the browser-local data architecture](docs/browser-local-data.md).
 
 ### Browser end-to-end tests
 
@@ -1362,6 +1374,7 @@ netlify/functions/      Netlify Functions, scheduled worker, and hosted-watchlis
 netlify.toml            Netlify build/redirect config
 tools/                  Maintainer-run schema, drift, benchmark, deployment, and security checks
 docs/architecture.md    System context, request pipeline, trust boundaries, and trade-offs
+docs/browser-local-data.md  Browser-store capacity evaluation and migration constraints
 docs/cli.md             First-party CLI commands, boundaries, schemas, and exit codes
 docs/engineering-case-study.md  Project constraints, decisions, challenges, and review guide
 docs/registry-data-contract.md  Normalized registry source and evidence contracts

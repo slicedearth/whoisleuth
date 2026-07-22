@@ -169,6 +169,17 @@ truncation into every result, and performs no provider request or persisted
 write. Result links are passive pivots into the exact retained case, campaign,
 or Brand Profile where one exists.
 
+The independent browser-store ceilings now total 9.75 MiB, which is greater
+than the 5 MiB localStorage planning reference used by the case model. The
+maintainer-run `npm run platform:local-data` command derives that total from the
+owning constants without reading user data. The resulting architecture
+evaluation recommends a dependency-free native IndexedDB prototype, but does
+not change the current storage authority or approve a migration. The temporary
+browser probe uses only fixed synthetic records and deletes its database after
+testing. Production migration, encryption, PWA support, and synchronization
+remain separate decisions documented in
+[the browser-local data architecture](browser-local-data.md).
+
 The public demo has a separate fixed schema and storage key. It uses reserved
 domains, does not call analysis APIs, cannot read or write production
 investigation stores, and marks every downloaded package as synthetic. The
