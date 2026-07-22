@@ -15,7 +15,40 @@ test('a single domain can be entered normally', async ({ page }) => {
   await query.fill('bad-domain-one');
   await expect(query).toHaveValue('bad-domain-one');
   await expect(page.getByRole('button', { name: 'Run lookup' })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /Fast/u })).not.toBeChecked();
   await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
+});
+
+test('fast lookup mode is explicit and sends the fast contract parameter', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const url = new URL(route.request().url());
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: url.searchParams.get('q'), type: 'domain', registrableDomain: 'example.test',
+        availability: { applicable: true, state: 'registered', confidence: 'medium', domain: 'example.test', deepScanComplete: false },
+        rdap: { error: 'Fixture source unavailable' }, whois: { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' },
+        diagnostics: { version: 7, rdap: { status: 'error' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  await page.locator('#query').fill('example.test');
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await expect(page.getByText(/Fast returns lower-request registration evidence/u)).toBeVisible();
+
+  const requestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/lookup' && url.searchParams.get('fast') === '1';
+  });
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await requestPromise;
+  await expect(page.getByText(/Fast lookup is checking authoritative registration evidence/u)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
 });
 
 test('security.txt collection is explicit, separately presented, and mobile safe', async ({ page }) => {
