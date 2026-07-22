@@ -26,6 +26,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toBeVisible();
   await expect(page.locator('.public-header').getByRole('link', { name: 'Privacy' })).toHaveCount(0);
   await expect(page.locator('.public-footer').getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
+  await expect(page.locator('.public-footer').getByRole('link', { name: 'Source and licence' })).toHaveAttribute('href', 'https://github.com/slicedearth/whoisleuth');
   await expect(page.getByText('See the workflow', { exact: true })).toHaveCount(0);
   await expect.poll(() => publicSessionRequests).toBe(1);
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
@@ -51,6 +52,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Console sign-in' })).toBeVisible();
   await expect(page.getByText('Protected console', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Source and licence' })).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'Public overview' })).toHaveCount(0);
   const passwordField = page.getByLabel('Password');
   const signInButton = page.getByRole('button', { name: 'Sign in' });

@@ -5,7 +5,7 @@
 <h1 align="center">WHOISleuth</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg" alt="License: Apache 2.0" />
+  <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
   <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />
   <img src="https://img.shields.io/badge/frontend-SvelteKit%20%2B%20Vite-ff3e00" alt="SvelteKit and Vite" />
   <a href="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml"><img src="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
@@ -73,6 +73,7 @@ code-review entry points.
 ## Contents
 
 - [At a glance](#at-a-glance)
+- [Licence and attribution](#licence-and-attribution)
 - [Disclaimer](#disclaimer)
 - [Requirements](#requirements)
 - [Install & run](#install--run)
@@ -83,9 +84,24 @@ code-review entry points.
 - [Architecture orientation](docs/architecture.md)
 - [Engineering case study](docs/engineering-case-study.md)
 
+## Licence and attribution
+
+Versions of WHOISleuth released with this licence notice are available under
+the [GNU Affero General Public License version 3 only](LICENSE)
+(`AGPL-3.0-only`). Commercial use is permitted, but an operator that modifies
+WHOISleuth and makes that version available to users over a network must offer
+those users the corresponding source under the AGPL. Copyright, source, and
+licence notices must be preserved as required by the licence.
+
+Versions previously released under Apache License 2.0 remain available under
+the terms supplied with those versions; the existing grants cannot be revoked.
+Third-party packages, services, and data retain their own licences and terms.
+The [trademark policy](TRADEMARKS.md) covers the WHOISleuth name and logo
+separately from the source-code licence.
+
 ## Disclaimer
 
-Licensed under Apache 2.0 (see [LICENSE](LICENSE)) - provided **as is, with
+Licensed under AGPL-3.0-only (see [LICENSE](LICENSE)) - provided **as is, with
 no warranty**. A few things worth being deliberate about before you rely on
 this tool or point it at data that isn't your own:
 
@@ -1308,8 +1324,9 @@ many domains are in a bulk run.
 ## Project structure
 
 ```
-LICENSE                 Apache 2.0 license text
-NOTICE                  Copyright attribution notice
+LICENSE                 GNU Affero General Public License v3 text
+NOTICE                  Copyright, licence, and trademark notice
+TRADEMARKS.md           Project name and logo usage policy
 PRIVACY.md              Template privacy notice: processing, retention, and deletion
 server.mts               Express API, authentication, capability, and static-site adapter
 bin/                    First-party CLI entry point

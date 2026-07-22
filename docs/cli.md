@@ -4,6 +4,10 @@ The first-party command-line interface runs the same local classification and
 lookup modules as the Express and serverless adapters. It does not call the
 hosted WHOISleuth deployment.
 
+`whoisleuth --help` displays the copyright, AGPL-3.0-only licence, and official
+source location. Packaged copies include `LICENSE`, `NOTICE`, and
+`TRADEMARKS.md` alongside the CLI documentation.
+
 ## Commands
 
 ```bash

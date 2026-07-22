@@ -95,6 +95,9 @@ perform WHOIS, website, DNS, and TLS work through the shared bounded pipeline.
 Machine-readable output is written to stdout; diagnostics are written to stderr.
 Registry support is an offline catalogue view and never tests live reachability.
 Risk calibration is an offline fixture replay and never changes the scoring model.
+
+Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
+Source and licence: https://github.com/slicedearth/whoisleuth
 `;
 
 type WritableLike = { write(value: string): unknown };

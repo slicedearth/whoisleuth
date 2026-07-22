@@ -136,7 +136,7 @@ test('the desktop header keeps sign out reachable while the sidebar scrolls inde
   await expectNoHorizontalOverflow(page);
 });
 
-test('closing the mobile drawer updates aria-expanded, and the footer links to Privacy', async ({ page }) => {
+test('closing the mobile drawer updates aria-expanded, and the footer exposes legal links', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/lookup');
 
@@ -157,5 +157,6 @@ test('closing the mobile drawer updates aria-expanded, and the footer links to P
   const footer = page.locator('footer.site-footer');
   await expect(footer).toBeVisible();
   await expect(footer.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
+  await expect(footer.getByRole('link', { name: 'Source and licence' })).toHaveAttribute('href', 'https://github.com/slicedearth/whoisleuth');
   await expectNoHorizontalOverflow(page);
 });

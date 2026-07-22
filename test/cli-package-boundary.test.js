@@ -12,11 +12,13 @@ const EXPECTED_PACKAGE_FILES = [
   'docs/cli.md',
   'LICENSE',
   'NOTICE',
+  'TRADEMARKS.md',
 ];
 
 describe('CLI package boundary', () => {
   test('remains private and does not advertise an application library entry point', () => {
     assert.equal(packageJson.private, true);
+    assert.equal(packageJson.license, 'AGPL-3.0-only');
     assert.equal(Object.hasOwn(packageJson, 'main'), false);
   });
 

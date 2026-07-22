@@ -283,5 +283,8 @@ test('package metadata exposes an executable local CLI entry point', () => {
   const result = spawnSync(process.execPath, [path.join(root, packageJson.bin.whoisleuth), '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /WHOISleuth CLI/);
+  assert.match(result.stdout, /Copyright 2026 slicedearth/);
+  assert.match(result.stdout, /Licensed under AGPL-3\.0-only/);
+  assert.match(result.stdout, /Source and licence: https:\/\/github\.com\/slicedearth\/whoisleuth/);
   assert.equal(result.stderr, '');
 });
