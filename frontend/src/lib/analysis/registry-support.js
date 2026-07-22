@@ -8,6 +8,13 @@ import {
 export const MAX_REGISTRY_SUPPORT_ROWS = 500;
 export const MAX_REGISTRY_SUPPORT_FILTER_LENGTH = 100;
 export const MAX_REGISTRY_SUPPORT_LOOKUP_LENGTH = 253;
+export const REGISTRY_SUPPORT_SORT_KEYS = Object.freeze([
+  'suffix',
+  'coverage',
+  'registry_class',
+  'whois_access',
+  'whois_query',
+]);
 
 const COVERAGE_LABELS = Object.freeze({
   discovery_only: 'Discovery only',
@@ -106,5 +113,34 @@ export function filterRegistrySupportRows(rows, query, coverage) {
       .replace(/[_-]+/g, ' ')
       .replace(/\s+/g, ' ')
       .includes(searchableQuery));
+  });
+}
+
+/**
+ * @param {ReturnType<typeof registryCompatibilityMatrix>} rows
+ * @param {unknown} sortKey
+ * @param {unknown} direction
+ */
+export function sortRegistrySupportRows(rows, sortKey, direction) {
+  const boundedRows = Array.isArray(rows) ? rows.slice(0, MAX_REGISTRY_SUPPORT_ROWS) : [];
+  const normalizedKey = REGISTRY_SUPPORT_SORT_KEYS.includes(String(sortKey)) ? String(sortKey) : 'suffix';
+  const multiplier = direction === 'desc' ? -1 : 1;
+  const valueFor = (row) => {
+    if (normalizedKey === 'coverage') return row.coverageState;
+    if (normalizedKey === 'registry_class') return row.registryClass;
+    if (normalizedKey === 'whois_access') return row.whoisAccessProfile;
+    if (normalizedKey === 'whois_query') return row.whoisQueryProfile;
+    return row.suffixes[0];
+  };
+  return boundedRows.sort((left, right) => {
+    const comparison = String(valueFor(left) || '').localeCompare(String(valueFor(right) || ''), 'en', {
+      sensitivity: 'base',
+      numeric: true,
+    });
+    if (comparison) return comparison * multiplier;
+    return String(left.suffixes[0] || '').localeCompare(String(right.suffixes[0] || ''), 'en', {
+      sensitivity: 'base',
+      numeric: true,
+    }) * multiplier;
   });
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import PageHeading from '$lib/components/PageHeading.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import {
     filterRegistrySupportRows,
     inspectRegistrySupport,
@@ -7,17 +8,32 @@
     registryCoverageLabel,
     registrySupportCatalogue,
     registrySupportLabel,
+    sortRegistrySupportRows,
   } from '$lib/analysis/registry-support.js';
 
+  const PAGE_SIZE = 50;
   const catalogue = registrySupportCatalogue();
   const standards = catalogue.standardsCoverage;
   let query = $state('');
   let coverage = $state('all');
+  let sortKey = $state('suffix');
+  let sortDirection = $state('asc');
+  let page = $state(1);
   let inspectionInput = $state('');
   let inspectedValue = $state('');
   let inspectionActive = $state(false);
-  const visibleRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage));
+  const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage));
+  const sortedRows = $derived(sortRegistrySupportRows(filteredRows, sortKey, sortDirection));
+  const pageCount = $derived(Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const visibleRows = $derived(sortedRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
+  const firstVisibleRow = $derived(sortedRows.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0);
+  const lastVisibleRow = $derived((currentPage - 1) * PAGE_SIZE + visibleRows.length);
   const inspection = $derived(inspectRegistrySupport(inspectedValue));
+
+  function setPage(value: number) {
+    page = Math.max(1, Math.min(pageCount, Math.trunc(value) || 1));
+  }
 
   function inspectSupport(event: SubmitEvent) {
     event.preventDefault();
@@ -146,19 +162,38 @@
   <fieldset class="filters card">
     <legend>Filter registry profiles</legend>
     <label class="search" for="registry-filter">Suffix or capability
-      <input id="registry-filter" type="search" maxlength="100" placeholder="For example: uk, access, bracketed" bind:value={query}>
+      <input id="registry-filter" type="search" maxlength="100" placeholder="For example: uk, access, bracketed" value={query} oninput={(event) => { query = event.currentTarget.value; page = 1; }}>
     </label>
     <label for="coverage-filter">Coverage
-      <select id="coverage-filter" bind:value={coverage}>
+      <select id="coverage-filter" value={coverage} onchange={(event) => { coverage = event.currentTarget.value; page = 1; }}>
         <option value="all">All coverage states</option>
         <option value="fixture_verified">Fixture verified</option>
         <option value="access_documented">Access documented</option>
       </select>
     </label>
+    <label for="registry-sort">Sort by
+      <select id="registry-sort" value={sortKey} onchange={(event) => { sortKey = event.currentTarget.value; page = 1; }}>
+        <option value="suffix">Suffix</option>
+        <option value="coverage">Coverage</option>
+        <option value="registry_class">Registry class</option>
+        <option value="whois_access">WHOIS access</option>
+        <option value="whois_query">WHOIS query</option>
+      </select>
+    </label>
+    <label for="registry-sort-direction">Order
+      <select id="registry-sort-direction" value={sortDirection} onchange={(event) => { sortDirection = event.currentTarget.value; page = 1; }}>
+        <option value="asc">Ascending</option>
+        <option value="desc">Descending</option>
+      </select>
+    </label>
   </fieldset>
 
   <p class="result-count" role="status" aria-live="polite">
-    Showing {visibleRows.length} of {catalogue.rows.length} explicit suffix profile{catalogue.rows.length === 1 ? '' : 's'}.
+    {#if sortedRows.length}
+      Showing {firstVisibleRow}–{lastVisibleRow} of {sortedRows.length} matching profile{sortedRows.length === 1 ? '' : 's'} ({catalogue.rows.length} total).
+    {:else}
+      No profiles match the current filters ({catalogue.rows.length} total).
+    {/if}
   </p>
 
   {#if visibleRows.length}
@@ -194,6 +229,7 @@
         </tbody>
       </table>
     </div>
+    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Registry support pages" />
   {:else}
     <section class="empty-state card"><h3>No matching profiles</h3><p>Try a shorter suffix, parser term, or a different coverage state.</p></section>
   {/if}

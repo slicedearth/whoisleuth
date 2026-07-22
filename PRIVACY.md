@@ -141,18 +141,35 @@ default (see the README), so many lookups return no personal data at all.
   and are removed by the demo reset action or when that tab session ends. Any
   downloaded demo package is explicitly marked as synthetic and is not a live
   finding or evidence report.
+- **Transient Console navigation state**: Lookup and Bulk keep their current
+  form values, results, filters, sorting, and pagination in memory during
+  authenticated client-side navigation in the same tab. This state includes
+  the complete Lookup response currently displayed, including its
+  separately attributed raw RDAP and WHOIS source sections, rather than a
+  compact evidence snapshot. It is not written to `localStorage`,
+  `sessionStorage`, IndexedDB, the server, or a workspace archive. Signing out,
+  a full reload, or closing the tab clears it. Deliberate case, watchlist,
+  shortlist, download, and archive actions remain the only ways those tools
+  retain or export selected evidence.
 - **Guided investigations**: an authenticated user can optionally start a fixed
   brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
   domain. The versioned storage contract calls the selected guide a recipe;
-  schema version 2 keeps only that recipe identifier and domain,
+  schema version 2 keeps only that recipe identifier, official or starting
+  domain, an optional analyst-selected candidate domain, up to 25 canonical
+  domains carried from a guided Bulk comparison, an explicit truncation marker,
   creation/update timestamps, active or paused state, and bounded stage
   approval, opened, and outcome markers in the current tab's `sessionStorage`
   under `whoisleuth:investigation-guide:v2`. A deployed version 1 navigation
   record can normalize into the new-domain triage recipe when no current record
   exists; future records remain untouched. Guide progress is not sent to the
   server or copied into persistent browser stores, and it is not treated as
-  evidence completion. A network stage requires an explicit approval marker
-  before its tool link becomes available, but opening that link still
+  evidence completion. The guide can pre-fill or preserve a bounded profile,
+  discovery, lookup, Bulk, or case target, and carries the bounded comparison
+  set into a Monitor review queue without creating cases automatically. It
+  focuses the relevant tool control and can show a compact return control while
+  its main panel is outside the viewport; none of those behaviours submits the
+  focused form. A network stage displays its request implications and requires
+  an explicit approval marker before navigation, but opening that tool still
   never starts a lookup, search, scan, submission, export, or Monitor action.
   **Export summary** requires confirmation and deliberately downloads only a
   versioned compact progress record without raw evidence, notes, credentials,

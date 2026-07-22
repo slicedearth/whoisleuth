@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { getContext, onMount } from 'svelte';
+  import { getContext, onMount, tick } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import BrandProfileList from '$lib/components/BrandProfileList.svelte';
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
@@ -21,7 +21,7 @@
   const siteIdentityReason=$derived(siteIdentityDisabled?siteIdentityDisabled.reason||'Website checks are disabled by deployment policy.':'');
   const postureReason=$derived(postureDisabled?postureDisabled.reason||'Official-domain posture checks are disabled by deployment policy.':'');
   async function refresh(){profiles=await loadProfiles();activeId=activeProfileId();if(activeId&&!profiles.some(p=>p.id===activeId)){activeId='';setActiveProfile('');}}
-  function clearForm(){editing='';name='';official='';products='';tlds='com, net, org';partners='';allowDomains='';allowRegistrars='';selectors='';trademarkOwner='';trademarkRegistration='';faviconHash='';faviconPHash='';pageBaseline=null;capturingIdentity=false;showForm=true;}
+  function clearForm(prefillDomain=''){editing='';name='';official=prefillDomain;products='';tlds='com, net, org';partners='';allowDomains='';allowRegistrars='';selectors='';trademarkOwner='';trademarkRegistration='';faviconHash='';faviconPHash='';pageBaseline=null;capturingIdentity=false;showForm=true;}
   function setEditorValue(field:EditorField,value:string){if(field==='name')name=value;else if(field==='official')official=value;else if(field==='products')products=value;else if(field==='tlds')tlds=value;else if(field==='partners')partners=value;else if(field==='allowDomains')allowDomains=value;else if(field==='allowRegistrars')allowRegistrars=value;else if(field==='selectors')selectors=value;else if(field==='trademarkOwner')trademarkOwner=value;else if(field==='trademarkRegistration')trademarkRegistration=value;else faviconHash=value;}
   function edit(profile:BrandProfile){editing=profile.id;name=profile.name;official=profile.officialDomains.join('\n');products=profile.productNames.join(', ');tlds=profile.tlds.join(', ');partners=profile.approvedPartnerDomains.join('\n');allowDomains=profile.allowlistedDomains.join('\n');allowRegistrars=profile.allowlistedRegistrars.join(', ');selectors=profile.dkimSelectors.join(', ');trademarkOwner=profile.trademarkOwner;trademarkRegistration=profile.trademarkRegistration;faviconHash=profile.officialFaviconHash;faviconPHash=profile.officialFaviconPHash;pageBaseline=normalizePageBaseline(profile.pageBaseline);capturingIdentity=false;showForm=true;}
   async function save(){try{const profile=await upsertProfile({name,officialDomains:parseList(official,true),productNames:parseList(products),tlds:parseList(tlds,true),approvedPartnerDomains:parseList(partners,true),allowlistedDomains:parseList(allowDomains,true),allowlistedRegistrars:parseList(allowRegistrars),dkimSelectors:parseList(selectors,true),trademarkOwner,trademarkRegistration,officialFaviconHash:faviconHash,officialFaviconPHash:faviconPHash,pageBaseline},editing);message=`Saved "${profile.name}" and set it active.`;showForm=false;await refresh();}catch(cause){message=cause instanceof Error?cause.message:'Could not save profile.';}}
@@ -32,11 +32,23 @@
   async function audit(){if(postureDisabled){message=postureDisabled.reason||'Official-domain posture checks are disabled by deployment policy.';return;}if(!active?.officialDomains.length)return;auditing=true;auditResults=[];message=`Auditing ${active.officialDomains.length} official domain${active.officialDomains.length===1?'':'s'}…`;const domains=active.officialDomains.slice(0,20);let cursor=0;const next:AuditResult[]=new Array(domains.length);const worker=async()=>{while(cursor<domains.length){const index=cursor++,domain=domains[index];try{const params=new URLSearchParams({q:domain});if(active.dkimSelectors.length)params.set('selectors',active.dkimSelectors.join(','));const response=await fetch(`/api/domain-posture?${params}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Audit failed (${response.status})`);next[index]={domain,report:body,error:''};}catch(cause){next[index]={domain,report:null,error:cause instanceof Error?cause.message:'Audit failed'};}}};await Promise.all(Array.from({length:Math.min(3,domains.length)},worker));auditResults=next;auditing=false;message=`Audited ${next.filter(v=>v.report).length}/${domains.length} official domain${domains.length===1?'':'s'}.`;}
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;try{if(file.size>MAX_PROFILE_IMPORT_BYTES)throw new Error('Profile imports are limited to 2 MB.');const result=await importProfiles(JSON.parse(await file.text()));const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit profile${result.skipped===1?'':'s'}`:'';message=`Imported ${result.added} new and ${result.updated} updated profiles${skipped}.`;await refresh();}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
   async function download(){try{await exportProfiles();message='Exported the Brand Profile collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export profiles.';}}
-  onMount(()=>{void refresh();});
+  onMount(()=>{void (async()=>{
+    await refresh();
+    const guideDomain=parseList(page.url.searchParams.get('domain')||'',true)[0]||'';
+    if(page.url.searchParams.get('new')==='1'&&guideDomain){
+      clearForm(guideDomain);
+      await tick();
+      if(page.url.hash==='#official-domains'){
+        const target=document.getElementById('official-domains');
+        target?.scrollIntoView({block:'center'});
+        target?.focus({preventScroll:true});
+      }
+    }
+  })();});
 </script>
 
 <svelte:head><title>Brands · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Protect" title="Brands" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button class="primary" onclick={clearForm}>New profile</button><button class="btn" onclick={download} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></PageHeading>
+<PageHeading eyebrow="Protect" title="Brands" description="Define official domains, trusted partners, allowlists, and security posture checks."><div class="top-actions toolbar"><button id="new-brand-profile" class="primary" onclick={()=>clearForm()}>New profile</button><button class="btn" onclick={download} disabled={!profiles.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile}></label></div></PageHeading>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 <BrandProfileList {profiles} {activeId} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />
 

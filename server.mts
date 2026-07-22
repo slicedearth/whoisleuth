@@ -7,6 +7,7 @@ import { fetchRdapRecord } from './lib/rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
+import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from './lib/domain-posture.mts';
@@ -243,14 +244,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
         securityTxt,
         featurePolicy: req.networkFeaturePolicy,
       });
-      res.json({
-        query: q,
-        type: classified.type,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        isSubdomain: classified.isSubdomain,
-        ...result,
-      });
+      res.json(createLookupHttpResponse(q, classified, result));
     } catch (err) {
       res.status(500).json({ error: errorMessage(err), errorCode: LOOKUP_ERROR_CODES.LOOKUP_FAILED });
     }

@@ -33,6 +33,7 @@ test('a small scan completes and reports the correct error count', async ({ page
 
   await expect(page.locator('.filters button', { hasText: 'all' }).locator('span')).toHaveText(String(domains.length));
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText(String(domains.length));
+  await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill('unknown confidence'));
 });
 
 test('results stay a sortable table at desktop width', async ({ page }) => {
@@ -48,8 +49,113 @@ test('results stay a sortable table at desktop width', async ({ page }) => {
   await riskHeader.getByRole('button').click();
   await expect(riskHeader).toHaveAttribute('aria-sort', 'ascending');
 
+  for (const header of ['Registration', 'Website', 'Registrar', 'Mutation']) {
+    await expect(page.locator('.results-table th', { has: page.getByRole('button', { name: new RegExp(`^${header}`) }) })).toBeVisible();
+  }
+  await expect(page.getByLabel('Sort')).toHaveValue('risk');
+  await expect(page.getByLabel('Order')).toHaveValue('1');
+
   await expect(page.locator('.results-table tbody tr')).toHaveCount(domains.length);
   await expectNoHorizontalOverflow(page);
+});
+
+test('sorts complete results by registration, confidence, website, registrar, and mutation evidence', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const evidence = {
+      'charlie.example': { state: 'registered', confidence: 'low', activityStatus: 'inactive', registrar: { name: 'Zulu Registrar' } },
+      'alpha.example': { state: 'available', confidence: 'high', activityStatus: 'active', registrar: { name: 'Alpha Registrar' } },
+      'bravo.example': { state: 'registered', confidence: 'medium', activityStatus: 'parked', registrar: { name: 'Middle Registrar' } },
+    }[domain] || {};
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { domain, ...evidence },
+        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  await runBulkScan(page, ['charlie.example', 'alpha.example', 'bravo.example']);
+  const domains = () => page.locator('.results-table tbody td[data-label="Domain"] strong').allTextContents();
+
+  await page.getByLabel('Sort').selectOption('registrar');
+  await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
+
+  await page.getByLabel('Sort').selectOption('confidence');
+  await expect(page.getByLabel('Order')).toHaveValue('-1');
+  await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
+
+  await page.getByLabel('Sort').selectOption('activity');
+  await page.getByLabel('Order').selectOption('-1');
+  await expect.poll(domains).toEqual(['bravo.example', 'alpha.example', 'charlie.example']);
+
+  await page.getByRole('button', { name: /^Registration/ }).click();
+  await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByLabel('Sort')).toBeVisible();
+  await expect(page.getByLabel('Order')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('keeps the current queue, results, filters, sort, and page during console navigation only', async ({ page }) => {
+  const domains = invalidDomains(101);
+  await runBulkScan(page, domains);
+  await page.locator('.filters').getByRole('button', { name: /^errors / }).click();
+  await page.getByLabel('Sort').selectOption('domain');
+  await page.getByLabel('Order').selectOption('-1');
+  await page.getByRole('navigation', { name: 'Bulk result pages' }).getByRole('button', { name: 'Next' }).click();
+
+  const consoleNavigation = page.locator('#console-navigation');
+  await consoleNavigation.getByRole('link', { name: /^Dashboard/ }).click();
+  await consoleNavigation.getByRole('link', { name: /^Bulk/ }).click();
+
+  await expect(page.locator('#domains')).toHaveValue(domains.join('\n'));
+  await expect(page.getByLabel('Sort')).toHaveValue('domain');
+  await expect(page.getByLabel('Order')).toHaveValue('-1');
+  await expect(page.getByRole('navigation', { name: 'Bulk result pages' })).toContainText('Page 2 of 2');
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.filters').getByRole('button', { name: /^errors / })).toHaveClass(/active/);
+
+  await page.reload();
+  await expect(page.locator('#domains')).toHaveValue('');
+  await expect(page.locator('.results-table')).toHaveCount(0);
+});
+
+test('leaving a paused scan retains every settled result and releases paused workers', async ({ page }) => {
+  const domains = Array.from({ length: 13 }, (_, index) => `paused-${index + 1}.example`);
+  let releaseDelayed!: () => void;
+  const delayed = new Promise<void>((resolve) => { releaseDelayed = resolve; });
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    if (domain !== domains[0]) {
+      await delayed;
+      await route.abort('aborted').catch(() => {});
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { domain, state: 'registered', confidence: 'high' },
+        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  await page.locator('#domains').fill(domains.join('\n'));
+  await page.getByRole('button', { name: 'Scan 13 domains' }).click();
+  await expect(page.getByRole('progressbar', { name: 'Bulk scan progress' })).toHaveAttribute('aria-valuenow', '1');
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/ }).click();
+  releaseDelayed();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/ }).click();
+
+  await expect(page.locator('#domains')).toHaveValue(domains.join('\n'));
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
+  await expect(page.getByRole('status').filter({ hasText: 'Stopped after 1 of 13 lookups when you left Bulk.' })).toBeVisible();
 });
 
 test('long domains retain a readable table column and wrap safely in mobile cards', async ({ page }) => {

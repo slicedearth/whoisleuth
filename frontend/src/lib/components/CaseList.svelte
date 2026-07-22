@@ -56,7 +56,7 @@
 <section class="case-list">
   {#each records as record (record.id)}
     <article class="case card" class:open={expandedId === record.id}>
-      <button class="case-head" aria-expanded={expandedId === record.id} aria-controls={`case-body-${record.id}`} onclick={() => expand(record)}>
+      <button id={`case-head-${record.id}`} class="case-head" aria-expanded={expandedId === record.id} aria-controls={`case-body-${record.id}`} onclick={() => expand(record)}>
         <span class="case-domain"><strong>{record.domain}</strong>{#if record.notes.length}<small>{record.notes.length} note{record.notes.length === 1 ? '' : 's'}</small>{/if}</span>
         <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
         <span class="updated">{formatDate(record.updatedAt)}</span>

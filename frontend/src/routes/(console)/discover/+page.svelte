@@ -380,7 +380,7 @@
     <button role="tab" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
   </div>
   <div class="fields">
-    <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Certificate-log keyword' : 'Brand or domain'}<input bind:value={seed} maxlength={mode==='certificate-transparency'?MAX_CT_QUERY_LENGTH:MAX_GENERATION_INPUT_LENGTH} aria-describedby={mode==='certificate-transparency'?'ct-query-guidance':undefined} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
+    <label class="field">{mode==='keyword' ? 'Keyword' : mode==='certificate-transparency' ? 'Certificate-log keyword' : 'Brand or domain'}<input id="discovery-seed" bind:value={seed} maxlength={mode==='certificate-transparency'?MAX_CT_QUERY_LENGTH:MAX_GENERATION_INPUT_LENGTH} aria-describedby={mode==='certificate-transparency'?'ct-query-guidance':undefined} placeholder={mode==='typosquat'?'example.com':'Example brand'}></label>
     {#if mode!=='certificate-transparency'}<label class="field">TLDs<input bind:value={tldText} maxlength={maxTldTextLength} aria-describedby="generation-limits" placeholder="com, net, org"></label>{/if}
     <button class="primary" onclick={mode==='certificate-transparency'?searchCt:generate} disabled={searching||(mode==='certificate-transparency'&&Boolean(ctDisabled))}>{searching?'Searching…':mode==='certificate-transparency'?'Search certificates':'Generate candidates'}</button>
   </div>

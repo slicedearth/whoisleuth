@@ -50,7 +50,7 @@ explicit preference stays only in that browser's local storage.
 
 | Tool | Purpose | Important boundary |
 | --- | --- | --- |
-| **Lookup** | Inspect one domain, IP address, or ASN. A domain lookup uses the full profile with normalized registration sources, DNS, HTTP, favicon, page identity, TLS, derived technology and passive posture, and observed network context. | Optional security.txt and external intelligence requests run only when selected. Source states remain explicit rather than turning missing evidence into a negative finding. |
+| **Lookup** | Inspect one domain, IP address, or ASN. Deep is the default and collects the full domain evidence profile; Fast can be selected for lower-request registration-first triage. | Optional security.txt and external intelligence requests run only in Deep when selected. Source states remain explicit rather than turning missing evidence into a negative finding. |
 | **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates; supplement them with structured Certificate Transparency matches. | Candidate generation is local. Certificate Transparency is an explicit hosted search and its timestamps are public-log observations, not proof of site activity or maliciousness. |
 | **Bulk** | Triage a list of domains with filters, score explanations, CSV export, scan-local relationships, and fast/deep profiles. | Each domain is a separately budgeted lookup. Fast mode avoids WHOIS and deep website/TLS collection; deep mode costs more requests and time. |
 | **Brands** | Keep browser-local official-domain profiles, posture settings, allowlists, and optional page-identity baselines. | Profiles stay in that browser. A posture audit and baseline capture run only when explicitly requested. |
@@ -318,8 +318,12 @@ The normalized source shapes, source-health states, limits, truncation fields,
 compact-storage boundary, and lookup evidence schema are documented in the
 [registry data contract](docs/registry-data-contract.md).
 
-- Enter a single domain, IPv4/IPv6 address, or ASN in the search box for a
-  full RDAP + WHOIS + availability lookup.
+- Enter a single domain, IPv4/IPv6 address, or ASN in the search box. Deep is
+  selected by default and collects the complete applicable evidence profile.
+  Select Fast for a lower-request registration-first result that explicitly
+  skips WHOIS, website, TLS, and deep enrichment sources. Lookup shows the
+  selected collection profile while the request is running; it does not claim
+  source-by-source progress before the bounded unified response is complete.
 - For domain lookups, the Summary compares overlapping RDAP and WHOIS fields
   after both sources finish. Equivalent values are normalized for harmless
   formatting differences, while source-only values and material conflicts
@@ -789,8 +793,10 @@ covered by the provider's community terms or an appropriate paid agreement.
   than proof of common ownership, control, intent, or abuse.
 - **Bulk triage controls** keep large scans usable: filter by availability
   family, high-risk score, error state, mutation family, and one or more
-  evidence signals. Counts update while the scan runs; filters change only
-  the visible rows, never the saved/exported scan data.
+  evidence signals. Results can be sorted by domain, registration state,
+  confidence, Risk, Opportunity, website state, registrar, or mutation family,
+  with missing evidence kept last. Counts update while the scan runs; filters
+  and sorting change only the visible rows, never the saved/exported scan data.
 - Typosquat candidates retain their **mutation provenance** (omission,
   keyboard substitution, homoglyph, dictionary term, TLD typo, and the other
   generator families) through bulk results, watchlists, and CSV export. When
@@ -1119,20 +1125,40 @@ an optional encrypted vault can be added separately without replacing the
 portable unencrypted archive schema.
 From the Dashboard, an optional guided investigation can coordinate one of
 three fixed recipes: brand sweep, infrastructure pivot, or new-domain triage.
-Version 2 keeps one canonical domain, active or paused state, and bounded
-approval, opened-stage, and analyst-selected outcome markers in the current
-tab's `sessionStorage` under `whoisleuth:investigation-guide:v2`. Deployed
+Version 2 keeps one canonical domain, an optional analyst-selected candidate
+domain for a later focused step, up to 25 canonical domains explicitly scanned
+in a guided peer-comparison step, active or paused state, and bounded approval,
+opened-stage, and analyst-selected outcome markers in the current tab's
+`sessionStorage` under `whoisleuth:investigation-guide:v2`. Deployed
 version 1 navigation records normalize into the new-domain triage recipe when
 no version 2 record exists, while future records remain untouched. Every stage
-shows prerequisites, expected evidence, completion criteria, and request or
-cost implications. Network collection stages require an explicit approval
-marker before their tool link becomes available, but opening a tool
-still never starts a lookup, search, scan, submission, export, or Monitor
-action. Recipes can be paused, resumed, restarted after confirmation, or ended.
+has one compact current-action panel with three concrete instructions and
+explicit reviewed, partial, and skipped actions; the complete plan can be
+expanded to review prerequisites, expected evidence, completion criteria, and
+request or cost implications. Profile, discovery, lookup, Bulk, and case
+handoffs pre-fill or preserve the relevant bounded target. A brand sweep keeps
+the official target separate from the priority candidate explicitly selected
+from a Bulk result. New-domain triage and infrastructure pivot carry a bounded
+Bulk domain set into a visible Monitor review queue; no case is created until
+the analyst opens it, and a capped queue remains explicitly marked. Tool links
+focus the relevant input rather than leaving the
+user at the top of a long page, and same-page shortcuts do not reload or replace
+the current candidate queue. When the guide scrolls out of view, a compact
+return control keeps the active step reachable beside long Lookup and Bulk
+results. Network collection stages show their request implications and require
+an explicit approval marker before navigation, but opening a tool still never
+starts a lookup, search, scan, submission, export, or Monitor action. Recipes
+can be paused, resumed, restarted after confirmation, or ended.
 An explicit confirmed local download exports only a versioned compact progress
 summary, not raw evidence, notes, credentials, provider responses, or scan
 results. A read-only checkpoint derives retained observation and relationship
 counts from the typed local projection without deciding stage completion.
+Lookup and Bulk also retain their current forms, results, filters, sorting, and
+pagination in memory during authenticated client-side navigation in the same
+tab. Lookup retains the complete response currently displayed, including its
+separately attributed raw source sections, rather than a reduced evidence
+snapshot. That transient convenience state is not written to browser storage
+and disappears on sign-out, a full reload, or when the tab closes.
 The protected WHOISleuth brand returns to the Dashboard; the Dashboard keeps
 the public homepage available as a separate, clearly labelled destination.
 `/login` accepts the shared deployment password and returns only to a known

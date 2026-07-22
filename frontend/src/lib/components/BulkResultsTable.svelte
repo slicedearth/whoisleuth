@@ -1,7 +1,7 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
+  import type { BulkSortKey as SortKey } from '$lib/analysis/bulk-sort.js';
 
-  type SortKey = 'domain' | 'risk' | 'opportunity';
   type CaseOption = { value: string; label: string };
   type DraftAction = { mailto: string; body: string };
   type CtEvidence = { lastObservedAt: string | null; hostnameCount: number; certificateCount: number };
@@ -22,6 +22,7 @@
     errorRow: boolean;
     error: string;
     availability: string;
+    confidence: string;
     risk: number | null;
     highRisk: boolean;
     riskTitle: string | undefined;
@@ -43,6 +44,7 @@
     caseOptions,
     setDisposition,
     trackCase,
+    inspectDomain,
     copyDraft,
     currentPage,
     pageCount,
@@ -58,6 +60,7 @@
     caseOptions: CaseOption[];
     setDisposition: (resultIndex: number, value: string) => void;
     trackCase: (resultIndex: number) => void;
+    inspectDomain: (resultIndex: number) => void | Promise<void>;
     copyDraft: (text: string, label: string) => void | Promise<void>;
     currentPage: number;
     pageCount: number;
@@ -69,19 +72,19 @@
 
 <div class="table-wrap results-table">
   <table>
-    <thead><tr><th aria-sort={sortKey === 'domain' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('domain')}>Domain {sortKey === 'domain' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th>Registration</th><th aria-sort={sortKey === 'risk' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('risk')}>Risk {sortKey === 'risk' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'opportunity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('opportunity')}>Opportunity {sortKey === 'opportunity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th>Website</th><th>Registrar</th><th>Mutation</th><th>Case</th><th>Actions</th></tr></thead>
+    <thead><tr><th aria-sort={sortKey === 'domain' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('domain')}>Domain {sortKey === 'domain' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'availability' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('availability')}>Registration {sortKey === 'availability' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'risk' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('risk')}>Risk {sortKey === 'risk' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'opportunity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('opportunity')}>Opportunity {sortKey === 'opportunity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'activity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('activity')}>Website {sortKey === 'activity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'registrar' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('registrar')}>Registrar {sortKey === 'registrar' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'mutation' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('mutation')}>Mutation {sortKey === 'mutation' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th>Case</th><th>Actions</th></tr></thead>
     <tbody>
       {#each rows as row}
         <tr class:error-row={row.errorRow} class:trusted-row={Boolean(row.trusted)}>
           <td data-label="Domain"><div class="domain"><button class="star" aria-label={`${row.shortlisted ? 'Remove' : 'Add'} ${row.domain} ${row.shortlisted ? 'from' : 'to'} shortlist`} aria-pressed={row.shortlisted} onclick={() => toggleSaved(row.resultIndex)}>{row.shortlisted ? '★' : '☆'}</button><div class="domain-content"><strong>{row.domain}</strong>{#if row.unicodeDomain}<small class="idn-label">Unicode: {row.unicodeDomain}</small>{/if}{#if row.mixedScript}<small class="warn-label">Mixed writing scripts</small>{/if}{#if row.referenceMatch}<small class="warn-label">Official-domain skeleton match</small>{/if}{#if row.trusted}<small class="trusted-label">{row.trusted}</small>{/if}{#if row.faviconMatch}<small class="danger-label">Favicon match</small>{:else if row.faviconNearMatch}<small class="warn-label">Favicon near-match</small>{/if}{#if row.reusesOfficialAssets}<small class="warn-label">Official asset relationship</small>{/if}{#if row.hasPasswordField}<small class="warn-label">Password field</small>{/if}{#if row.phishingLanguageMatch}<small class="danger-label">Phishing language</small>{/if}{#if row.ct}<details class="ct-source"><summary>Certificate Transparency</summary><div class="ct-source-detail">{#if row.ct.lastObservedAt}<span>Latest CT observation <time datetime={row.ct.lastObservedAt}>{row.ct.lastObservedAt.slice(0, 10)}</time></span>{/if}<span>{row.ct.hostnameCount} observed hostname{row.ct.hostnameCount === 1 ? '' : 's'}</span><span>{row.ct.certificateCount} distinct certificate{row.ct.certificateCount === 1 ? '' : 's'}</span></div></details>{/if}{#if row.error}<small>{row.error}</small>{/if}</div></div></td>
-          <td data-label="Registration"><span class="state">{row.availability.replace('_', ' ')}</span></td>
+          <td data-label="Registration"><span class="state">{row.availability.replace('_', ' ')}</span><small class="confidence">{row.confidence} confidence</small></td>
           <td data-label="Risk" class:high={row.highRisk} title={row.riskTitle}>{row.risk ?? '—'}</td>
           <td data-label="Opportunity">{row.opportunity ?? '—'}</td>
           <td data-label="Website">{row.activity}</td>
           <td data-label="Registrar">{row.registrar}</td>
           <td data-label="Mutation">{row.mutationLabel}</td>
           <td data-label="Case">{#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`}>Open</a></div>{:else}<button class="btn small case-track" onclick={() => trackCase(row.resultIndex)}>＋ Create case</button>{/if}</td>
-          <td data-label="Actions"><div class="draft-actions">{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.abuse}<a class="danger" href={row.abuse.mailto}>Report abuse</a><button onclick={() => copyDraft(row.abuse?.body ?? '', `${row.domain} abuse draft`)}>Copy</button>{/if}{#if !row.outreach && !row.abuse}—{/if}</div></td>
+          <td data-label="Actions"><div class="draft-actions"><button class="inspect" onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.abuse}<a class="danger" href={row.abuse.mailto}>Report abuse</a><button onclick={() => copyDraft(row.abuse?.body ?? '', `${row.domain} abuse draft`)}>Copy</button>{/if}</div></td>
         </tr>
       {/each}
     </tbody>
@@ -109,12 +112,14 @@
   .ct-source-detail span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .ct-source-detail time{color:var(--text)}
   .state{color:var(--accent);text-transform:capitalize}
+  td .confidence{color:var(--muted);text-transform:capitalize}
   .high{color:var(--danger);font-weight:800}
   .error-row{background:rgb(var(--danger-rgb) / .03)}
   .trusted-row{background:rgb(var(--accent2-rgb) / .03)}
   .draft-actions{display:grid;grid-template-columns:auto auto;gap:4px;align-items:center}
   .draft-actions a,.draft-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:600 var(--text-2xs) var(--mono);text-align:center}
   .draft-actions a.danger{border-color:rgb(var(--danger-rgb) / .34);background:rgb(var(--danger-rgb) / .05)}
+  .draft-actions .inspect{grid-column:1 / -1;border-color:rgb(var(--accent-rgb) / .45);color:var(--accent)}
   .draft-status{color:var(--accent)!important;font-size:var(--text-xs)}
   .case-cell{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
   .case-disp{min-height:32px;padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}

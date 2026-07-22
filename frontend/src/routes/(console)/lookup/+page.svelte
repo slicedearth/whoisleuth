@@ -29,11 +29,18 @@
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compactHttpObservation } from '$lib/analysis/http-summary.js';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.js';
+  import {
+    createLookupViewModel,
+    lookupHttpErrorMessage,
+    parseLookupHttpResponse,
+    type LookupHttpResponse,
+  } from '$lib/analysis/lookup-response.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.js';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
+  import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.js';
   import {
     explainOpportunityScore,
     explainRiskScore,
@@ -48,15 +55,17 @@
   type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
   type ComparisonField = { label:string; status:string; rdapDisplay:string; whoisDisplay:string };
   type RdapPublicationField = { label:string; status:string; registryDisplay:string; registrarDisplay:string };
+  type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
+  let lookupMode=$state<LookupMode>('deep');
   let loading=$state(false);
   let includeExternalIntelligence=$state(false);
   let includeMalwareHostIntelligence=$state(false);
   let includeMalwareIocIntelligence=$state(false);
   let includeSecurityTxt=$state(false);
   let error=$state('');
-  let result=$state<JsonRecord|null>(null);
+  let result=$state<LookupHttpResponse|null>(null);
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
@@ -80,52 +89,53 @@
     if(entries.length!==1)return false;
     try{const value=entries[0];const url=new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)?value:`https://${value}`);const host=url.hostname;return host.includes('.')&&!host.includes(':')&&!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);}catch{return false;}
   });
-  const availability=$derived(rec(result?.availability));
+  const lookupView=$derived(createLookupViewModel(result));
+  const availability=$derived(lookupView.availability as JsonRecord);
   const lookupEvidenceDepth=$derived(availability.deepScanComplete===false?'fast':'deep');
-  const rdap=$derived(rec(result?.rdap));
-  const registrarRdap=$derived(rec(rdap.registrarRdap));
-  const registrarRdapParsed=$derived(rec(registrarRdap.parsed));
-  const whois=$derived(rec(result?.whois));
-  const rdapParsed=$derived(rec(rdap.parsed));
-  const whoisParsed=$derived(rec(whois.parsed));
-  const diagnostics=$derived(rec(result?.diagnostics));
-  const registryAccess=$derived(rec(diagnostics.registryAccess));
-  const observedNetworkContext=$derived(rec(result?.networkContext));
-  const observedNetworkEndpoint=$derived(rec(observedNetworkContext.endpoint));
-  const observedNetworkRdap=$derived(rec(observedNetworkContext.rdap));
-  const observedNetwork=$derived(rec(observedNetworkContext.network));
-  const securityTxt=$derived(rec(result?.securityTxt));
-  const threatIntelligence=$derived(rec(result?.threatIntelligence));
-  const threatIntelligenceProviders=$derived(Array.isArray(threatIntelligence.providers)?threatIntelligence.providers.map(rec):[]);
-  const dnsEvidence=$derived(rec(availability.dns));
-  const dnsRecords=$derived(rec(dnsEvidence.records));
-  const httpEvidence=$derived(rec(availability.http));
-  const httpResponse=$derived(rec(httpEvidence.response));
-  const httpSecurityHeaders=$derived(rec(httpResponse.securityHeaders));
-  const tlsEvidence=$derived(rec(availability.tls));
-  const tlsCertificate=$derived(rec(tlsEvidence.certificate));
-  const tlsSubject=$derived(rec(tlsCertificate.subject));
-  const tlsIssuer=$derived(rec(tlsCertificate.issuer));
-  const tlsAltNames=$derived(rec(tlsCertificate.subjectAltNames));
-  const tlsPublicKey=$derived(rec(tlsCertificate.publicKey));
-  const tlsCipher=$derived(rec(tlsEvidence.cipher));
-  const tlsAuthorization=$derived(rec(tlsEvidence.authorization));
-  const tlsHostname=$derived(rec(tlsEvidence.hostname));
-  const tlsValidity=$derived(rec(tlsEvidence.validity));
-  const tlsDiagnostics=$derived(rec(tlsEvidence.diagnostics));
-  const pageIdentity=$derived(rec(availability.pageIdentity));
-  const pageCanonical=$derived(rec(pageIdentity.canonical));
-  const pageMetaRefresh=$derived(rec(pageIdentity.metaRefresh));
-  const pageOpenGraph=$derived(rec(pageIdentity.openGraph));
-  const pageOpenGraphUrl=$derived(rec(pageOpenGraph.url));
-  const pageForms=$derived(rec(pageIdentity.forms));
-  const pageResources=$derived(rec(pageIdentity.resources));
-  const pageResourceTypes=$derived(rec(pageResources.byType));
-  const pageDownloads=$derived(rec(pageIdentity.downloads));
-  const pageFingerprints=$derived(rec(pageIdentity.fingerprints));
-  const technologyProfile=$derived(rec(availability.technologyProfile));
-  const securityPosture=$derived(rec(availability.securityPosture));
-  const securityPostureSummary=$derived(rec(securityPosture.summary));
+  const rdap=$derived(lookupView.rdap as JsonRecord);
+  const registrarRdap=$derived(lookupView.registrarRdap as JsonRecord);
+  const registrarRdapParsed=$derived(lookupView.registrarRdapParsed as JsonRecord);
+  const whois=$derived(lookupView.whois as JsonRecord);
+  const rdapParsed=$derived(lookupView.rdapParsed as JsonRecord);
+  const whoisParsed=$derived(lookupView.whoisParsed as JsonRecord);
+  const diagnostics=$derived(lookupView.diagnostics as JsonRecord);
+  const registryAccess=$derived(lookupView.registryAccess as JsonRecord);
+  const observedNetworkContext=$derived(lookupView.observedNetworkContext as JsonRecord);
+  const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint as JsonRecord);
+  const observedNetworkRdap=$derived(lookupView.observedNetworkRdap as JsonRecord);
+  const observedNetwork=$derived(lookupView.observedNetwork as JsonRecord);
+  const securityTxt=$derived(lookupView.securityTxt as JsonRecord);
+  const threatIntelligence=$derived(lookupView.threatIntelligence as JsonRecord);
+  const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders as JsonRecord[]);
+  const dnsEvidence=$derived(lookupView.dnsEvidence as JsonRecord);
+  const dnsRecords=$derived(lookupView.dnsRecords as JsonRecord);
+  const httpEvidence=$derived(lookupView.httpEvidence as JsonRecord);
+  const httpResponse=$derived(lookupView.httpResponse as JsonRecord);
+  const httpSecurityHeaders=$derived(lookupView.httpSecurityHeaders as JsonRecord);
+  const tlsEvidence=$derived(lookupView.tlsEvidence as JsonRecord);
+  const tlsCertificate=$derived(lookupView.tlsCertificate as JsonRecord);
+  const tlsSubject=$derived(lookupView.tlsSubject as JsonRecord);
+  const tlsIssuer=$derived(lookupView.tlsIssuer as JsonRecord);
+  const tlsAltNames=$derived(lookupView.tlsAltNames as JsonRecord);
+  const tlsPublicKey=$derived(lookupView.tlsPublicKey as JsonRecord);
+  const tlsCipher=$derived(lookupView.tlsCipher as JsonRecord);
+  const tlsAuthorization=$derived(lookupView.tlsAuthorization as JsonRecord);
+  const tlsHostname=$derived(lookupView.tlsHostname as JsonRecord);
+  const tlsValidity=$derived(lookupView.tlsValidity as JsonRecord);
+  const tlsDiagnostics=$derived(lookupView.tlsDiagnostics as JsonRecord);
+  const pageIdentity=$derived(lookupView.pageIdentity as JsonRecord);
+  const pageCanonical=$derived(lookupView.pageCanonical as JsonRecord);
+  const pageMetaRefresh=$derived(lookupView.pageMetaRefresh as JsonRecord);
+  const pageOpenGraph=$derived(lookupView.pageOpenGraph as JsonRecord);
+  const pageOpenGraphUrl=$derived(lookupView.pageOpenGraphUrl as JsonRecord);
+  const pageForms=$derived(lookupView.pageForms as JsonRecord);
+  const pageResources=$derived(lookupView.pageResources as JsonRecord);
+  const pageResourceTypes=$derived(lookupView.pageResourceTypes as JsonRecord);
+  const pageDownloads=$derived(lookupView.pageDownloads as JsonRecord);
+  const pageFingerprints=$derived(lookupView.pageFingerprints as JsonRecord);
+  const technologyProfile=$derived(lookupView.technologyProfile as JsonRecord);
+  const securityPosture=$derived(lookupView.securityPosture as JsonRecord);
+  const securityPostureSummary=$derived(lookupView.securityPostureSummary as JsonRecord);
   const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
   const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
   const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>Array.isArray(whoisParsed.contactsByRole?.[role])&&whoisParsed.contactsByRole[role].length));
@@ -176,7 +186,19 @@
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=await openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:lookupEvidenceDepth}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{const{record,pruned}=await addCaseNote(caseRecord.id,body);caseRecord=record;caseNote='';caseStatus=`Added a note to the case.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
-  onMount(()=>{const q=page.url.searchParams.get('q');if(q)query=q;});
+  onMount(()=>{
+    const restored=readLookupWorkflowState();
+    if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
+    const q=page.url.searchParams.get('q');
+    const requestedDepth=page.url.searchParams.get('depth');
+    const targetChanged=Boolean(q&&q!==query);
+    const depthChanged=Boolean(requestedDepth&&(requestedDepth==='fast'||requestedDepth==='deep')&&requestedDepth!==lookupMode);
+    if(q&&(targetChanged||depthChanged)){query=q;result=null;error='';}
+    else if(q)query=q;
+    if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
+    void (async()=>{profile=await activeProfile();if(result)await refreshCase();})();
+    return()=>writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+  });
 
   function eventDate(action:string){return rdapParsed.events?.find((item:JsonRecord)=>item.action===action)?.date||null;}
   function created(){return availability.createdDateIso||availability.createdDate||rdapParsed.lifecycle?.createdDateIso||rdapParsed.lifecycle?.createdDate||eventDate('registration')||whoisParsed.createdDateIso||whoisParsed.lifecycle?.createdDateIso||whoisParsed.createdDate;}
@@ -431,13 +453,14 @@
     ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
     {href:'#raw-data',label:'Raw data'},
   ];}
-  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=await activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');if(includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');const response=await fetch(`/api/lookup?${params}`);const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);result=body;await refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
+  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){result=null;error='';saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=await activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(lookupMode==='fast')params.set('fast','1');if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(lookupMode==='deep'&&includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');if(lookupMode==='deep'&&includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');const response=await fetch(`/api/lookup?${params}`);const body:unknown=await response.json().catch(()=>({}));if(!response.ok)throw new Error(lookupHttpErrorMessage(body,response.status));const parsed=parseLookupHttpResponse(body);if(!parsed.ok)throw new Error(parsed.error);result=parsed.value;await refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Investigate" title="Lookup" description="Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains." />
 <LookupForm
   bind:query
+  bind:lookupMode
   {loading}
   entryCount={entries.length}
   duplicateCount={parsedInput.duplicates}

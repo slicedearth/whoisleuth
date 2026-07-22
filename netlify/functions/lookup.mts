@@ -1,5 +1,6 @@
 import { classifyQuery } from '../../lib/classify.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from '../../lib/lookup.mts';
+import { createLookupHttpResponse } from '../../lib/lookup-response-contract.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json } from '../../lib/http.mts';
@@ -37,14 +38,7 @@ const handler: NetlifyFunctionHandler = async (event) => {
         securityTxt,
         featurePolicy: guard.featurePolicy,
       });
-      return json(200, {
-        query: q,
-        type: classified.type,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        isSubdomain: classified.isSubdomain,
-        ...result,
-      });
+      return json(200, createLookupHttpResponse(q, classified, result));
     } catch (err) {
       return json(500, { error: err.message, errorCode: LOOKUP_ERROR_CODES.LOOKUP_FAILED });
     }

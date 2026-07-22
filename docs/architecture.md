@@ -86,12 +86,14 @@ Fast and deep modes are execution profiles, not confidence labels:
 | Profile | Intended use | Hosted work |
 | --- | --- | --- |
 | **Fast** | High-volume candidate triage. | RDAP-led registration analysis, with bounded authoritative DNS delegation fallback where needed. WHOIS and deep website/TLS evidence are skipped explicitly. |
-| **Deep** | Single-target investigation and analyst-selected richer Bulk or CLI evidence. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS, HTTP, favicon, page identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
+| **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS, HTTP, favicon, page identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
+| **Deep, compact** | Analyst-selected richer Bulk triage. | RDAP, WHOIS, availability, DNS, bounded website evidence, and TLS evidence needed by the compact result. Registrar RDAP follow-up, raw registry payloads, technology and passive-posture detail, observed-address IP RDAP, security.txt, and external providers remain omitted. |
 
 Bulk uses the same `/api/lookup` orchestration one domain at a time and requests
-a compact response that omits raw RDAP JSON and multi-hop WHOIS bodies. This
-keeps each serverless invocation bounded and avoids downloading large source
-payloads that Bulk does not display or retain.
+a compact response. The compact profile does not collect omitted full-lookup
+sources and excludes raw RDAP JSON and multi-hop WHOIS bodies from its response.
+This keeps each serverless invocation bounded and avoids work and payloads that
+Bulk does not display or retain.
 
 ## Outbound evidence boundaries
 

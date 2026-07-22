@@ -13,7 +13,8 @@ the corresponding source diagnostics and truncation fields.
 ## Unified Lookup response
 
 `GET /api/lookup?q=<query>` accepts a registrable domain, IPv4/IPv6 address, or
-ASN. A full successful response contains:
+ASN. Deep is the default. Add `fast=1` for the lower-request Fast profile. A
+full successful response contains:
 
 - Query classification and, for domain input, submitted-hostname and
   registrable-domain context.
@@ -33,7 +34,11 @@ ASN. A full successful response contains:
 
 `compact=1` returns only `availability` and `diagnostics`. Bulk uses this mode;
 raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
-downloaded into Bulk or copied into watchlists and analyst cases.
+downloaded into Bulk or copied into watchlists and analyst cases. Deep compact
+collection still runs the bounded WHOIS, DNS, website, TLS, and mail checks
+used by triage, but omits the single-domain registrar-RDAP follow-up, observed
+network RDAP, technology profile, passive security-posture detail,
+`security.txt`, and optional external-intelligence providers.
 
 Fast mode is WHOIS-free. It uses RDAP first and may perform a bounded NS lookup
 when RDAP is unsupported or inconclusive. A positive authoritative DNS
@@ -42,6 +47,11 @@ cannot provide registrar, lifecycle, or contact data. A missing delegation is
 never treated as availability because registered domains may be undelegated.
 The WHOIS diagnostic status remains `skipped`; this is not a WHOIS failure or
 an observation that WHOIS data is absent.
+
+The browser validates the required top-level response envelope before deriving
+or rendering evidence. Nested source records remain separately attributed and
+additive; an HTTP 200 response with a malformed envelope is reported as an
+invalid response rather than being interpreted as partial evidence.
 
 For a deep, non-compact domain Lookup only, a successful registry RDAP object
 may publish a complete `rel="related"` HTTPS domain-object link at the

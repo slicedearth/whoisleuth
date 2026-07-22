@@ -7,6 +7,7 @@
   import InvestigationGuide from '$lib/components/InvestigationGuide.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
+  import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
 
   let { children } = $props();
   let session = $state<'checking'|'authenticated'|'unavailable'>('checking');
@@ -47,7 +48,12 @@
       const response=await fetch('/api/session',{cache:'no-store'});
       if(!response.ok)throw new Error();
       const authenticated=(await response.json()).authenticated===true;
-      if(!authenticated){await goto(signInTarget(),{replaceState:true});return;}
+      if(!authenticated){
+        clearConsoleWorkflowState();
+        try{await goto(signInTarget(),{replaceState:true});}
+        finally{clearConsoleWorkflowState();}
+        return;
+      }
       localData={state:'initializing'};
       const [storageState]=await Promise.all([initializeBrowserLocalData(),loadCapabilityReport()]);
       localData=storageState;
@@ -66,7 +72,11 @@
     if(signingOut)return;
     signingOut=true;
     try{await fetch('/api/logout',{method:'POST'});}
-    finally{await goto('/login',{replaceState:true});}
+    finally{
+      clearConsoleWorkflowState();
+      try{await goto('/login',{replaceState:true});}
+      finally{clearConsoleWorkflowState();}
+    }
   }
 
   function navigationFocusables(){
@@ -147,7 +157,7 @@
     <aside id="console-navigation" bind:this={navigationPanel}>
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth / console</span></div>
       <button class="navigation-drawer-close" type="button" aria-label="Close navigation" onclick={()=>void closeNavigation()}>×</button>
-      <a class="brand" href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
+      <a class="brand" href="/dashboard"><span class="mark"><img src="/favicon.svg" alt=""></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
       <nav aria-label="Console"><p class="eyebrow">Console</p>{#each consoleNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
       <div class="session"><ThemeSelector /><div class="session-row"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
