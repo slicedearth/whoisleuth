@@ -42,9 +42,9 @@
   const currentStage = $derived(guide ? investigationGuideStageForPath(page.url.pathname, guide.recipeId) : null);
   const nextStageId = $derived(guide?.stages.find((stage) => stage.outcome === 'pending')?.id || null);
 
-  function refresh() {
+  async function refresh() {
     guide = loadInvestigationGuide();
-    refreshEvidence();
+    await refreshEvidence();
   }
 
   function guideIdentity(value: InvestigationGuide | null) {
@@ -64,18 +64,18 @@
     summary?.scrollIntoView({ block: 'center' });
   }
 
-  function refreshFromEvent() {
+  async function refreshFromEvent() {
     const previousIdentity = guideIdentity(guide);
-    refresh();
+    await refresh();
     if (guideIdentity(guide) !== previousIdentity) void revealGuide();
   }
 
-  function refreshEvidence() {
+  async function refreshEvidence() {
     if (!guide) {
       evidence = { observations: 0, relationships: 0, partial: false, truncated: false };
       return;
     }
-    const projection = loadLocalInvestigationProjection();
+    const projection = await loadLocalInvestigationProjection();
     const domainEntity = projection.entities.find((entity) => entity.type === 'domain' && entity.canonical === guide?.domain);
     if (!domainEntity) {
       evidence = { observations: 0, relationships: 0, partial: false, truncated: projection.truncated };
@@ -139,7 +139,7 @@
 
   onMount(() => {
     mounted = true;
-    refresh();
+    void refresh();
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     return () => window.removeEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
   });

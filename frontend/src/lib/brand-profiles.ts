@@ -1,18 +1,17 @@
 import { hammingDistanceHex, isInformativeFaviconHash } from './analysis/utils.js';
 import {
-  BRAND_PROFILE_SCHEMA_VERSION,
-  brandProfileStoreVersion,
   buildBrandProfileExport,
   mergeBrandProfiles,
   normalizeBrandProfile,
-  normalizeBrandProfileStore,
   serializeBrandProfileStore,
   MAX_PROFILES,
   MAX_PROFILE_VALUES,
 } from './analysis/brand-profile-model.js';
 import { normalizePageBaseline } from './analysis/page-baseline.js';
+import { browserLocalDataProvider } from './browser-local-data-service.js';
+import { LEGACY_PROFILES_KEY, PROFILES_COLLECTION } from './browser-local-data-definitions.js';
 
-export const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
+export const PROFILES_KEY = LEGACY_PROFILES_KEY;
 export const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
 export const MAX_PROFILE_IMPORT_BYTES = 2 * 1024 * 1024;
 
@@ -44,31 +43,16 @@ export function normalizeProfile(raw: any, existing?: BrandProfile, touch = fals
   return profile as BrandProfile;
 }
 
-function readRaw(): unknown {
-  const raw = localStorage.getItem(PROFILES_KEY);
-  return raw ? JSON.parse(raw) : null;
+export async function loadProfiles(): Promise<BrandProfile[]> {
+  return (await browserLocalDataProvider()).read(PROFILES_COLLECTION) as Promise<BrandProfile[]>;
 }
 
-export function loadProfiles(): BrandProfile[] {
-  try {
-    return normalizeBrandProfileStore(readRaw()).profiles as BrandProfile[];
-  } catch {
-    return [];
-  }
+function boundedProfiles(profiles: BrandProfile[]): BrandProfile[] {
+  return JSON.parse(serializeBrandProfileStore(profiles)).profiles as BrandProfile[];
 }
 
-export function writeProfiles(profiles: BrandProfile[]) {
-  let version: number | null = null;
-  try { version = brandProfileStoreVersion(readRaw()); } catch { /* corrupt data can be replaced safely */ }
-  if (version !== null && version > BRAND_PROFILE_SCHEMA_VERSION) {
-    throw new Error('Brand profiles were created by a newer app version. Update the app before saving.');
-  }
-  const serialized = serializeBrandProfileStore(profiles);
-  try { localStorage.setItem(PROFILES_KEY, serialized); }
-  catch (cause) {
-    if (cause instanceof Error && cause.message.startsWith('Brand profile storage is full')) throw cause;
-    throw new Error('Could not save brand profiles. Browser storage may be full or unavailable.');
-  }
+export async function writeProfiles(profiles: BrandProfile[]): Promise<void> {
+  await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, () => ({ document: boundedProfiles(profiles), result: undefined }));
 }
 
 export function activeProfileId() {
@@ -84,12 +68,12 @@ export function setActiveProfile(profileId: string) {
   }
 }
 
-export function activeProfile() {
+export async function activeProfile(): Promise<BrandProfile | null> {
   const active = activeProfileId();
-  return loadProfiles().find((profile) => profile.id === active) || null;
+  return (await loadProfiles()).find((profile) => profile.id === active) || null;
 }
 
-export function profileDomainKind(domain: string, profile = activeProfile()): 'official' | 'partner' | 'allowlisted' | null {
+export function profileDomainKind(domain: string, profile: BrandProfile | null = null): 'official' | 'partner' | 'allowlisted' | null {
   if (!profile || !domain) return null;
   const target = domain.trim().toLowerCase().replace(/\.$/, '');
   if (profile.officialDomains.some((value) => value.toLowerCase().replace(/\.$/, '') === target)) return 'official';
@@ -98,11 +82,11 @@ export function profileDomainKind(domain: string, profile = activeProfile()): 'o
   return null;
 }
 
-export function isDomainAllowlisted(domain: string, profile = activeProfile()) {
+export function isDomainAllowlisted(domain: string, profile: BrandProfile | null = null) {
   return profileDomainKind(domain, profile) !== null;
 }
 
-export function profileSignals(domain: string, evidence: Record<string, any>, profile = activeProfile()) {
+export function profileSignals(domain: string, evidence: Record<string, any>, profile: BrandProfile | null = null) {
   const trusted = profileDomainKind(domain, profile);
   if (!profile || trusted) return { trusted, faviconMatch: false, faviconNearMatch: false, reusesOfficialAssets: false };
   const exact = Boolean(evidence.faviconHash && profile.officialFaviconHash && evidence.faviconHash === profile.officialFaviconHash);
@@ -115,40 +99,44 @@ export function profileSignals(domain: string, evidence: Record<string, any>, pr
   return { trusted: null, faviconMatch: exact, faviconNearMatch: !exact && distance !== null && distance <= 8, reusesOfficialAssets: reused };
 }
 
-export function upsertProfile(raw: any, editingId = '') {
-  const profiles = loadProfiles();
-  const index = editingId ? profiles.findIndex((profile) => profile.id === editingId) : -1;
-  const existing = index >= 0 ? profiles[index] : undefined;
-  const profile = normalizeProfile(raw, existing, true);
-  if (!profile.name) throw new Error('Enter a brand name.');
-  if (index >= 0) profiles[index] = profile;
-  else {
-    if (profiles.length >= MAX_PROFILES) throw new Error(`Profiles are limited to ${MAX_PROFILES}.`);
-    profiles.push(profile);
-  }
-  writeProfiles(profiles);
+export async function upsertProfile(raw: any, editingId = ''): Promise<BrandProfile> {
+  const profile = await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
+    const profiles = [...current] as BrandProfile[];
+    const index = editingId ? profiles.findIndex((item) => item.id === editingId) : -1;
+    const existing = index >= 0 ? profiles[index] : undefined;
+    const normalized = normalizeProfile(raw, existing, true);
+    if (!normalized.name) throw new Error('Enter a brand name.');
+    if (index >= 0) profiles[index] = normalized;
+    else {
+      if (profiles.length >= MAX_PROFILES) throw new Error(`Profiles are limited to ${MAX_PROFILES}.`);
+      profiles.push(normalized);
+    }
+    return { document: boundedProfiles(profiles), result: normalized };
+  });
   setActiveProfile(profile.id);
   return profile;
 }
 
-export function deleteProfile(profileId: string) {
-  writeProfiles(loadProfiles().filter((profile) => profile.id !== profileId));
+export async function deleteProfile(profileId: string): Promise<void> {
+  await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => ({
+    document: boundedProfiles((current as BrandProfile[]).filter((profile) => profile.id !== profileId)),
+    result: undefined,
+  }));
   if (activeProfileId() === profileId) setActiveProfile('');
 }
 
-export function importProfiles(value: unknown) {
-  const result = mergeBrandProfiles(loadProfiles(), value, { makeId: id });
-  writeProfiles(result.profiles as BrandProfile[]);
-  return { added: result.added, updated: result.updated, skipped: result.skipped };
+export async function importProfiles(value: unknown) {
+  return (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
+    const result = mergeBrandProfiles(current, value, { makeId: id });
+    return {
+      document: boundedProfiles(result.profiles as BrandProfile[]),
+      result: { added: result.added, updated: result.updated, skipped: result.skipped },
+    };
+  });
 }
 
-export function exportProfiles() {
-  let version: number | null = null;
-  try { version = brandProfileStoreVersion(readRaw()); } catch { /* export normalized recovery */ }
-  if (version !== null && version > BRAND_PROFILE_SCHEMA_VERSION) {
-    throw new Error('Brand profiles were created by a newer app version. Update the app before exporting.');
-  }
-  const blob = new Blob([JSON.stringify(buildBrandProfileExport(loadProfiles()), null, 2)], { type: 'application/json' });
+export async function exportProfiles() {
+  const blob = new Blob([JSON.stringify(buildBrandProfileExport(await loadProfiles()), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

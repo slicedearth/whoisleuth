@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, runBulkScan } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -117,12 +117,9 @@ async function openSeededTimelineCase(
   records: ReturnType<typeof caseRecord>[],
 ) {
   await page.goto('/monitor');
-  await page.getByRole('tab', { name: /Cases/ }).click();
-  // Seed localStorage on the app origin.
-  await page.evaluate((cases) => {
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases }));
-  }, records);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: records },
+  });
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: domain }).click();
 }
@@ -180,10 +177,12 @@ test('status and disposition edits persist across a reload', async ({ page }) =>
 
 test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {
   await page.goto('/monitor');
-  await page.evaluate((records) => {
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases: records }));
-  }, [caseRecord({ domain: 'rule-match.invalid', evidenceHistory: [snapshot({ riskScore: 65, hasPasswordField: true })] })]);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 2,
+      cases: [caseRecord({ domain: 'rule-match.invalid', evidenceHistory: [snapshot({ riskScore: 65, hasPasswordField: true })] })],
+    },
+  });
   await page.getByRole('tab', { name: /Custom rules/ }).click();
 
   await page.getByLabel('Name', { exact: true }).fill('Password page above threshold');
@@ -201,7 +200,7 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   await expect(result).toContainText('Custom +15');
   await expect(result).toContainText('Context 80');
   await expect(result).toContainText('Suggested: manual-review');
-  const storedScore = await page.evaluate(() => JSON.parse(localStorage.getItem('whois-rdap-cases-v1')!).cases[0].evidenceHistory[0].riskScore);
+  const storedScore = (await readBrowserLocalCollection(page, 'cases')).records[0].value.evidenceHistory[0].riskScore;
   expect(storedScore).toBe(65);
 });
 
@@ -913,10 +912,9 @@ test.describe('browser-local campaigns', () => {
     records: ReturnType<typeof caseRecord>[] = [],
   ) {
     await page.goto('/monitor');
-    await page.evaluate((cases) => {
-      localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases }));
-    }, records);
-    await page.reload();
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': { version: 2, cases: records },
+    });
     await page.getByRole('tab', { name: /Campaigns/ }).click();
   }
 
@@ -946,19 +944,20 @@ test.describe('browser-local campaigns', () => {
   });
 
   test('campaign export contains membership metadata but no case evidence or notes', async ({ page }) => {
-    await openCampaigns(page, [caseRecord({
+    const cases = [caseRecord({
       id: 'sensitive-case',
       domain: 'export-member.invalid',
       notes: [{ createdAt: '2026-07-01T00:00:00.000Z', body: 'Do not copy this note.' }],
       evidenceHistory: [snapshot({ id: 'secret-evidence', pageTitle: 'Private evidence detail' })],
-    })]);
-    await page.evaluate(() => {
-      localStorage.setItem('whoisleuth-campaigns-v1', JSON.stringify({ version: 1, campaigns: [{
+    })];
+    await page.goto('/monitor');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': { version: 2, cases },
+      'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
         id: 'portable-campaign', name: 'Portable group', description: 'Metadata only',
         domains: ['export-member.invalid'], createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
-      }] }));
+      }] },
     });
-    await page.reload();
     await page.getByRole('tab', { name: /Campaigns/ }).click();
 
     const downloadPromise = page.waitForEvent('download');
@@ -1011,10 +1010,9 @@ test.describe('accessible cross-case relationship table', () => {
     records: ReturnType<typeof caseRecord>[],
   ) {
     await page.goto('/monitor');
-    await page.evaluate((cases) => {
-      localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases }));
-    }, records);
-    await page.reload();
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': { version: 2, cases: records },
+    });
     await page.getByRole('tab', { name: /Relationships/ }).click();
   }
 
@@ -1244,18 +1242,19 @@ test.describe('accessible cross-case relationship table', () => {
       riskScore,
       nameservers: ['ns.provenance.invalid'],
     });
-    await openRelationshipTable(page, [
+    const cases = [
       caseRecord({ id: 'prov-a', domain: 'provenance-a.invalid', updatedAt: '2026-07-18T00:00:00.000Z', evidenceHistory: [history('a', 'import', '2026-07-01T00:00:00.000Z', 10), history('a', 'lookup', '2026-07-18T00:00:00.000Z', 20)] }),
       caseRecord({ id: 'prov-b', domain: 'provenance-b.invalid', updatedAt: '2026-07-18T00:00:00.000Z', evidenceHistory: [history('b', 'monitor', '2026-07-02T00:00:00.000Z', 11), history('b', 'lookup', '2026-07-18T00:00:00.000Z', 21)] }),
-    ]);
-    await page.evaluate(() => {
-      localStorage.setItem('whoisleuth-campaigns-v1', JSON.stringify({ version: 1, campaigns: [{
+    ];
+    await page.goto('/monitor');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': { version: 2, cases },
+      'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
         id: 'provenance-campaign', name: 'Provenance review', description: '',
         domains: ['provenance-a.invalid', 'provenance-b.invalid'],
         createdAt: '2026-07-10T00:00:00.000Z', updatedAt: '2026-07-18T00:00:00.000Z',
-      }] }));
+      }] },
     });
-    await page.reload();
     await page.getByRole('tab', { name: /Relationships/ }).click();
 
     const graphControls = page.getByRole('group', { name: 'Relationship graph filters' });

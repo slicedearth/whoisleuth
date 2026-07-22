@@ -1,9 +1,9 @@
 // Pure, framework-neutral analyst-case logic: schema constants, strict domain
 // normalization, field-by-field validation, create/update helpers, a bounded
 // chronological evidence-history model, store bounding + byte-budget +
-// corruption recovery, import merge, and export shaping. All localStorage/DOM
-// access lives in the ../cases.ts wrapper so this module stays node --test-able
-// and free of any browser globals.
+// corruption recovery, import merge, and export shaping. All persistence and
+// DOM access lives outside this module so it stays node --test-able and free of
+// browser globals.
 
 import { normalizeHttpSummary } from './http-summary.js';
 import { normalizeRiskModelVersion } from './scoring.js';
@@ -37,8 +37,8 @@ export const MAX_EVIDENCE_STRING_LENGTH = 200;
 export const MAX_EVIDENCE_TITLE_LENGTH = 200;
 export const MAX_EVIDENCE_DETAIL_LENGTH = 200;
 export const MAX_EVIDENCE_CHANGES = 40;
-// Whole-store serialized byte budget. localStorage quota is typically ~5 MB per
-// origin; 4 MB leaves headroom for the watchlist store that shares the origin.
+// Whole-store serialized byte budget. Four megabytes leaves headroom for the
+// other collections that share the origin's browser-storage quota.
 export const MAX_CASE_STORE_BYTES = 4 * 1024 * 1024;
 
 // Stable machine values are stored; labels are only ever used for display.
@@ -639,7 +639,7 @@ export function latestCaseEvidence(record) {
 }
 
 // ---------------------------------------------------------------------------
-// Material-change comparison (pure; no Svelte/DOM/localStorage)
+// Material-change comparison (pure; no Svelte, DOM, or persistence access)
 // ---------------------------------------------------------------------------
 
 // `depthGate` decides when a field may be compared:
@@ -1322,7 +1322,7 @@ function pruneOldestSnapshots(cases, allowLast) {
 
 /**
  * Cleans and bounds the store, then enforces the serialized byte budget WITHOUT
- * relying on localStorage to throw. If evidence history pushes it over budget,
+ * relying on IndexedDB to throw. If evidence history pushes it over budget,
  * the oldest snapshots are pruned deterministically (extras first, then, only if
  * still necessary, single snapshots) and the number pruned is reported. If it
  * still does not fit once all evidence is prunable, a friendly error is thrown

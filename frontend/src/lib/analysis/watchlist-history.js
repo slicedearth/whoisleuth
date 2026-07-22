@@ -1,6 +1,6 @@
 // Pure watchlist history/diff logic. The latest full bulk records remain in
 // the watchlist entry for rescanning, while history stores compact changes
-// against a last-known baseline so localStorage does not grow by one complete
+// against a last-known baseline so browser-local storage does not grow by one complete
 // result set on every check.
 
 import { explainRiskScore, normalizeRiskModelVersion } from './scoring.js';

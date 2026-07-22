@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 
 const NOW = '2026-07-17T00:00:00.000Z';
 
@@ -75,9 +75,9 @@ function campaign(index: number, domains: string[] = []) {
 test('case pagination keeps deep-linked cases visible and expanded', async ({ page }) => {
   const cases = Array.from({ length: 27 }, (_, index) => caseRecord(index + 1));
   await page.goto('/monitor');
-  await page.evaluate((records) => {
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases: records }));
-  }, cases);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases },
+  });
   await page.goto('/monitor?case=case-26');
 
   const pagination = page.getByRole('navigation', { name: 'Case pages' });
@@ -93,10 +93,9 @@ test('watchlist pagination preserves table actions on mobile', async ({ page }) 
   ]));
   await page.setViewportSize({ width: 390, height: 700 });
   await page.goto('/monitor');
-  await page.evaluate((records) => {
-    localStorage.setItem('whois-rdap-watchlist-v1', JSON.stringify({ schema: 'whoisleuth.watchlists', version: 2, watchlists: records }));
-  }, watchlists);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-watchlist-v1': { schema: 'whoisleuth.watchlists', version: 2, watchlists },
+  });
 
   const pagination = page.getByRole('navigation', { name: 'Watchlist pages' });
   await pagination.getByRole('button', { name: 'Next' }).click();
@@ -110,10 +109,9 @@ test('watchlist pagination preserves table actions on mobile', async ({ page }) 
 test('shortlist pagination displays every retained entry without changing collection actions', async ({ page }) => {
   const entries = Array.from({ length: 101 }, (_, index) => shortlistRecord(index + 1));
   await page.goto('/bulk');
-  await page.evaluate((records) => {
-    localStorage.setItem('whois-rdap-shortlist-v1', JSON.stringify({ schema: 'whoisleuth.shortlist', version: 2, entries: records }));
-  }, entries);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-shortlist-v1': { schema: 'whoisleuth.shortlist', version: 2, entries },
+  });
 
   const pagination = page.getByRole('navigation', { name: 'Shortlist pages' });
   await expect(page.getByRole('heading', { name: 'Shortlist · 101' })).toBeVisible();
@@ -126,11 +124,10 @@ test('shortlist pagination displays every retained entry without changing collec
 test('brand profile pagination opens on the active profile page', async ({ page }) => {
   const profiles = Array.from({ length: 13 }, (_, index) => profile(index + 1));
   await page.goto('/brands');
-  await page.evaluate((records) => {
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify(records));
-    localStorage.setItem('whois-rdap-active-brand-profile-v1', 'profile-13');
-  }, profiles);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': profiles,
+    'whois-rdap-active-brand-profile-v1': 'profile-13',
+  });
 
   const pagination = page.getByRole('navigation', { name: 'Brand profile pages' });
   await expect(pagination).toContainText('Page 2 of 2');
@@ -142,11 +139,10 @@ test('campaign and member pagination preserve expansion and case controls', asyn
   const members = Array.from({ length: 26 }, (_, index) => `member-${String(index + 1).padStart(2, '0')}.invalid`);
   const campaigns = Array.from({ length: 11 }, (_, index) => campaign(index + 1, index === 10 ? members : []));
   await page.goto('/monitor');
-  await page.evaluate((records) => {
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases: [] }));
-    localStorage.setItem('whoisleuth-campaigns-v1', JSON.stringify({ version: 1, campaigns: records }));
-  }, campaigns);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: [] },
+    'whoisleuth-campaigns-v1': { version: 1, campaigns },
+  });
   await page.getByRole('tab', { name: /Campaigns/ }).click();
 
   const campaignPages = page.getByRole('navigation', { name: 'Campaign pages' });

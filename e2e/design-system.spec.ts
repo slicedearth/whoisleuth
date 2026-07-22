@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, useTheme } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 
 // Coverage for the shared design system: native-sized checkbox controls with
@@ -201,17 +201,17 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
 test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/brands');
-  await page.evaluate(() => {
-    const now = '2026-07-13T00:00:00.000Z';
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([{
+  const now = '2026-07-13T00:00:00.000Z';
+  const profile = {
       id: 'design-profile', name: 'Design profile', officialDomains: ['official.invalid'], productNames: [],
       tlds: [], approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
       trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
       createdAt: now, updatedAt: now, pageBaseline: null,
-    }]));
-    localStorage.setItem('whois-rdap-active-brand-profile-v1', 'design-profile');
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-active-brand-profile-v1': 'design-profile',
   });
-  await page.reload();
 
   const primary = page.getByRole('button', { name: 'New profile' });
   const neutral = page.getByRole('button', { name: 'Export JSON' }).first();

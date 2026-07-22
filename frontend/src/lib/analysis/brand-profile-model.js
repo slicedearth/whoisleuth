@@ -1,5 +1,5 @@
 // Pure Brand Profile normalization and storage model. The browser wrapper owns
-// localStorage and downloads; this module owns schema migration, semantic field
+// persistence and downloads; this module owns schema migration, semantic field
 // bounds, import merging, and exact serialized-byte accounting.
 
 import { normalizeDomain } from './case-model.js';
@@ -11,7 +11,7 @@ export const BRAND_PROFILE_SCHEMA_VERSION = 2;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
 export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
-// Profiles share the origin's localStorage quota with cases, campaigns,
+// Profiles share the origin's browser-storage quota with cases, campaigns,
 // watchlists, and CT history. Fail at a predictable one-megabyte boundary.
 export const MAX_PROFILE_STORE_BYTES = 1024 * 1024;
 export const MAX_PROFILE_NAME_LENGTH = 100;

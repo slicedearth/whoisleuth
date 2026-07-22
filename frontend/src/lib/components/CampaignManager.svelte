@@ -45,8 +45,8 @@
   $effect(()=>{if(page>pageCount)page=pageCount;});
   $effect(()=>{if(memberPage>memberPageCount)memberPage=memberPageCount;});
 
-  function refresh(next=loadCampaigns()){
-    campaigns=next;
+  async function refresh(next?:CampaignRecord[]){
+    campaigns=next??await loadCampaigns();
     if(expandedId&&!campaigns.some((campaign)=>campaign.id===expandedId))expandedId='';
     oncount?.(campaigns.length);
   }
@@ -54,41 +54,41 @@
     if(expandedId===campaign.id){expandedId='';return;}
     showCampaign(campaign.id);expandedId=campaign.id;nameDraft=campaign.name;descriptionDraft=campaign.description;selectedDomain='';memberPage=1;
   }
-  function create(){
-    try{const result=createCampaign({name:newName});refresh(result.campaigns);const created=result.record;newName='';open(created);message=`Created campaign “${created.name}”.`;}
+  async function create(){
+    try{const result=await createCampaign({name:newName});await refresh(result.campaigns);const created=result.record;newName='';open(created);message=`Created campaign “${created.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not create the campaign.';}
   }
-  function save(campaign:CampaignRecord){
-    try{refresh(editCampaign(campaign.id,{name:nameDraft,description:descriptionDraft}));showCampaign(campaign.id);const current=campaigns.find((item)=>item.id===campaign.id);if(current){nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
+  async function save(campaign:CampaignRecord){
+    try{await refresh(await editCampaign(campaign.id,{name:nameDraft,description:descriptionDraft}));showCampaign(campaign.id);const current=campaigns.find((item)=>item.id===campaign.id);if(current){nameDraft=current.name;descriptionDraft=current.description;}message=`Updated campaign “${current?.name??campaign.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not update the campaign.';}
   }
-  function add(campaign:CampaignRecord){
+  async function add(campaign:CampaignRecord){
     if(!selectedDomain){message='Choose a case to add.';return;}
-    try{refresh(addCampaignDomain(campaign.id,selectedDomain));showCampaign(campaign.id);message=`Added ${selectedDomain} to “${campaign.name}”.`;selectedDomain='';}
+    try{await refresh(await addCampaignDomain(campaign.id,selectedDomain));showCampaign(campaign.id);message=`Added ${selectedDomain} to “${campaign.name}”.`;selectedDomain='';}
     catch(cause){message=cause instanceof Error?cause.message:'Could not add the case.';}
   }
-  function removeDomain(campaign:CampaignRecord,domain:string){
-    try{refresh(removeCampaignDomain(campaign.id,domain));showCampaign(campaign.id);message=`Removed ${domain} from “${campaign.name}”.`;}
+  async function removeDomain(campaign:CampaignRecord,domain:string){
+    try{await refresh(await removeCampaignDomain(campaign.id,domain));showCampaign(campaign.id);message=`Removed ${domain} from “${campaign.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not remove the case.';}
   }
-  function remove(campaign:CampaignRecord){
+  async function remove(campaign:CampaignRecord){
     if(!confirm(`Delete campaign “${campaign.name}”? Cases and their evidence are not deleted.`))return;
-    try{refresh(deleteCampaign(campaign.id));message=`Deleted campaign “${campaign.name}”.`;}
+    try{await refresh(await deleteCampaign(campaign.id));message=`Deleted campaign “${campaign.name}”.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Could not delete the campaign.';}
   }
-  function download(){try{exportCampaigns();message='Exported the campaign collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export campaigns.';}}
+  async function download(){try{await exportCampaigns();message='Exported the campaign collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export campaigns.';}}
   async function importFile(event:Event){
     const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;
-    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=importCampaigns(JSON.parse(await file.text()));refresh(result.campaigns);page=1;memberPage=1;message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
+    try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=await importCampaigns(JSON.parse(await file.text()));await refresh(result.campaigns);page=1;memberPage=1;message=`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}
     catch(cause){message=cause instanceof Error?cause.message:'Campaign import failed.';}finally{input.value='';}
   }
   function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
-  onMount(()=>{
-    refresh();
+  onMount(()=>{void (async()=>{
+    await refresh();
     const focused=focusId?campaigns.find((campaign)=>campaign.id===focusId):null;
     if(focused)open(focused);
-  });
+  })();});
 </script>
 
 <section class="campaign-toolbar card">

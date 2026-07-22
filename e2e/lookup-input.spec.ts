@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFile } from 'node:fs/promises';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
@@ -19,9 +19,7 @@ test('a single domain can be entered normally', async ({ page }) => {
 });
 
 test('security.txt collection is explicit, separately presented, and mobile safe', async ({ page }) => {
-  let requestUrl = '';
   await page.route('**/api/lookup?*', async (route) => {
-    requestUrl = route.request().url();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -57,8 +55,12 @@ test('security.txt collection is explicit, separately presented, and mobile safe
   await page.locator('#query').fill('portal.example.test');
   await expect(option).toBeEnabled();
   await option.check();
+  const requestPromise = page.waitForRequest((request) => (
+    new URL(request.url()).pathname === '/api/lookup'
+    && new URL(request.url()).searchParams.get('security_txt') === '1'
+  ));
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  expect(new URL(requestUrl).searchParams.get('security_txt')).toBe('1');
+  await requestPromise;
 
   const disclosure = page.locator('details.security-txt');
   await expect(disclosure).not.toHaveAttribute('open', '');
@@ -552,10 +554,7 @@ test('a Lookup case stores the registrar name rather than stringifying its entit
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await page.getByRole('button', { name: 'Create case' }).click();
 
-  const registrar = await page.evaluate(() => {
-    const stored = JSON.parse(localStorage.getItem('whois-rdap-cases-v1') || '{}');
-    return stored.cases?.[0]?.evidenceHistory?.[0]?.registrar;
-  });
+  const registrar = (await readBrowserLocalCollection(page, 'cases')).records[0]?.value?.evidenceHistory?.[0]?.registrar;
   expect(registrar).toBe('Example Registrar LLC');
 });
 
@@ -622,7 +621,7 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
     localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
     localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
   });
-  await page.reload();
+  await migrateLegacyBrowserData(page, {});
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -709,6 +708,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
     localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
     localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
   });
+  await migrateLegacyBrowserData(page, {});
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',

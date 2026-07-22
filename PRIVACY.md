@@ -232,9 +232,18 @@ default (see the README), so many lookups return no personal data at all.
   It is excluded from compact browser-local cases, watchlists, profiles, and
   Bulk results, but is included when the user deliberately downloads a full
   Lookup evidence export.
-- **Brand Profiles / Shortlist / Watchlist / Campaigns / Certificate search
-  history**: saved in your own browser's `localStorage`, not on the server -
-  only visible to whoever is using that browser.
+- **Brand Profiles / Shortlist / Watchlist / Cases / Campaigns / Certificate
+  search history / Custom rules**: saved as bounded records in your own
+  browser's IndexedDB database, not on the server, and visible to whoever can
+  use that browser profile. On the first authenticated load after this storage
+  change, WHOISleuth normalizes supported legacy `localStorage` documents and
+  copies them into a versioned IndexedDB manifest without deleting the source
+  documents. Later IndexedDB writes are authoritative and do not automatically
+  update those legacy sources. A deliberate Dashboard control can refresh the
+  legacy compatibility copies before returning to an older build, subject to
+  local-storage quota. The IndexedDB record codec is currently plaintext JSON;
+  SHA-256 manifest digests detect corruption but are not encryption. A
+  downloaded workspace archive remains the safer portable backup.
   The appearance selector can also retain one bounded `dark`, `light`, or
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
   server. It is included only when you deliberately download a unified

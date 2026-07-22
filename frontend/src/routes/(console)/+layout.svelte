@@ -6,6 +6,7 @@
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import InvestigationGuide from '$lib/components/InvestigationGuide.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
+  import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
 
   let { children } = $props();
   let session = $state<'checking'|'authenticated'|'unavailable'>('checking');
@@ -13,6 +14,7 @@
   let signingOut = $state(false);
   let capabilities = $state<CapabilityReport|null>(null);
   let capabilitiesChecked = $state(false);
+  let localData = $state<BrowserLocalDataServiceState>({ state: 'idle' });
   let consoleHeader = $state<HTMLElement>();
   let navigationPanel = $state<HTMLElement>();
   let navigationToggle = $state<HTMLButtonElement>();
@@ -46,11 +48,18 @@
       if(!response.ok)throw new Error();
       const authenticated=(await response.json()).authenticated===true;
       if(!authenticated){await goto(signInTarget(),{replaceState:true});return;}
+      localData={state:'initializing'};
+      const [storageState]=await Promise.all([initializeBrowserLocalData(),loadCapabilityReport()]);
+      localData=storageState;
       session='authenticated';
-      await loadCapabilityReport();
     }catch{
       session='unavailable';
     }
+  }
+
+  async function retryLocalData(){
+    localData={state:'initializing'};
+    localData=await initializeBrowserLocalData();
   }
 
   async function logout(){
@@ -122,6 +131,10 @@
   <div class="center"><div class="mark"><img src="/favicon.svg" alt=""></div><p>Opening console…</p></div>
 {:else if session==='unavailable'}
   <div class="center"><section class="login card"><h1>Session service unavailable</h1><p class="muted">The protected console could not confirm your session.</p><button class="primary" onclick={checkSession}>Retry</button><p class="login-links"><a href="/">Return home</a></p></section></div>
+{:else if localData.state==='initializing'||localData.state==='idle'}
+  <div class="center"><div class="mark"><img src="/favicon.svg" alt=""></div><p>Preparing browser-local data…</p></div>
+{:else if localData.state==='error'}
+  <div class="center"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p><button class="primary" onclick={retryLocalData}>Retry</button><p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
 {:else}
   <div class="shell" class:open={navOpen}>
     <header bind:this={consoleHeader}>

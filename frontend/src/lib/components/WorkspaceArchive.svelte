@@ -5,6 +5,7 @@
     mergeLocalWorkspaceArchive,
     previewLocalWorkspaceArchive,
   } from '$lib/workspace-archive';
+  import { restoreLegacyBrowserData } from '$lib/browser-local-data-service';
 
   let { onimport }:{onimport?:()=>void}=$props();
   let archiveValue=$state<unknown>(null);
@@ -54,6 +55,15 @@
     }catch(cause){message=cause instanceof Error?cause.message:'Workspace archive import failed.';}
     finally{busy=false;}
   }
+
+  async function prepareRollbackCopy(){
+    busy=true;message='';
+    try{
+      const result=await restoreLegacyBrowserData();
+      message=`Updated the legacy rollback copy for ${result.collectionCount} browser-local collections (${result.serializedBytes.toLocaleString()} bytes).`;
+    }catch(cause){message=cause instanceof Error?cause.message:'Could not update the legacy rollback copy.';}
+    finally{busy=false;}
+  }
 </script>
 
 <section class="workspace-archive card" aria-labelledby="workspace-archive-title">
@@ -73,6 +83,8 @@
   <details class="archive-details">
     <summary>How workspace backups work</summary>
     <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each data type's normal merge rules, and records missing from the backup are retained.</p>
+    <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
+    <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
   </details>
 
   {#if preview}
@@ -105,6 +117,6 @@
 </section>
 
 <style>
-  .workspace-archive{margin-top:34px;padding:21px}.section-head{align-items:flex-start}.section-head h2,.preview h3{margin:3px 0 0;font:700 1.15rem var(--mono)}.section-head>div>p:not(.eyebrow),.privacy-note,.archive-details,.preview>p,.preview li p{color:var(--muted);font-size:var(--text-xs);line-height:1.55}.section-head>div>p:not(.eyebrow){max-width:720px;margin:7px 0 0}.privacy-note{margin:14px 0 0;padding:11px 12px;border-left:2px solid var(--amber);background:color-mix(in srgb,var(--amber) 7%,transparent)}.archive-details{margin-top:12px}.archive-details summary{cursor:pointer;color:var(--text);font:700 var(--text-xs) var(--mono)}.archive-details p{max-width:880px;margin:8px 0 0}.file-btn.disabled{opacity:.55;pointer-events:none}.preview{margin-top:18px;padding-top:18px;border-top:1px solid var(--border)}.preview>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.preview>header>span{color:var(--muted);font-size:var(--text-2xs);text-align:right}.preview>p{margin:9px 0 12px}.preview ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}.preview li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;align-items:center;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.preview li.unsupported{opacity:.72}.preview li label{display:flex;min-width:0;gap:10px;align-items:flex-start}.preview li label>span{display:grid;min-width:0;gap:3px}.preview li strong{overflow-wrap:anywhere;font:700 var(--text-xs) var(--mono)}.preview li small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.preview li .state{color:var(--accent2);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.preview li.unsupported .state{color:var(--amber)}.preview li p{grid-column:1/-1;margin:0 0 0 26px}.preview-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.status{margin:13px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .workspace-archive{margin-top:34px;padding:21px}.section-head{align-items:flex-start}.section-head h2,.preview h3{margin:3px 0 0;font:700 1.15rem var(--mono)}.section-head>div>p:not(.eyebrow),.privacy-note,.archive-details,.preview>p,.preview li p{color:var(--muted);font-size:var(--text-xs);line-height:1.55}.section-head>div>p:not(.eyebrow){max-width:720px;margin:7px 0 0}.privacy-note{margin:14px 0 0;padding:11px 12px;border-left:2px solid var(--amber);background:color-mix(in srgb,var(--amber) 7%,transparent)}.archive-details{margin-top:12px}.archive-details summary{cursor:pointer;color:var(--text);font:700 var(--text-xs) var(--mono)}.archive-details p{max-width:880px;margin:8px 0 0}.rollback-copy{margin-top:4px}.file-btn.disabled{opacity:.55;pointer-events:none}.preview{margin-top:18px;padding-top:18px;border-top:1px solid var(--border)}.preview>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.preview>header>span{color:var(--muted);font-size:var(--text-2xs);text-align:right}.preview>p{margin:9px 0 12px}.preview ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}.preview li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;align-items:center;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.preview li.unsupported{opacity:.72}.preview li label{display:flex;min-width:0;gap:10px;align-items:flex-start}.preview li label>span{display:grid;min-width:0;gap:3px}.preview li strong{overflow-wrap:anywhere;font:700 var(--text-xs) var(--mono)}.preview li small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.preview li .state{color:var(--accent2);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.preview li.unsupported .state{color:var(--amber)}.preview li p{grid-column:1/-1;margin:0 0 0 26px}.preview-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.status{margin:13px 0 0;color:var(--muted);font-size:var(--text-xs)}
   @media(max-width:700px){.workspace-archive{padding:16px}.section-head,.preview>header{align-items:stretch;flex-direction:column}.top-actions,.top-actions .btn,.preview-actions,.preview-actions button{width:100%}.top-actions{display:grid}.preview>header>span{text-align:left}.preview li{grid-template-columns:minmax(0,1fr)}.preview li .state{margin-left:26px}.preview-actions{display:grid}}
 </style>

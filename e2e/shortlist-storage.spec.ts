@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { readBrowserLocalCollection } from './helpers';
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -17,41 +18,34 @@ function record(domain: string) {
 }
 
 async function seed(page: import('@playwright/test').Page, value: unknown) {
+  await page.addInitScript(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: SHORTLIST_KEY, stored: value });
   await page.goto('/bulk');
-  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: SHORTLIST_KEY, stored: value });
-  await page.reload();
 }
 
 test('a future shortlist schema is never overwritten by an older app', async ({ page }) => {
   const future = { schema: 'whoisleuth.shortlist', version: 99, entries: [record('future.invalid')], futureMetadata: { retain: true } };
   await seed(page, future);
 
-  await page.getByRole('button', { name: 'Export JSON' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'newer app version' })).toBeVisible();
-
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Clear shortlist' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'newer app version' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Shortlist was created by a newer app version.')).toBeVisible();
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY);
   expect(stored).toEqual(future);
 });
 
 test('a shortlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
   const previous = { schema: 'whoisleuth.shortlist', version: 2, entries: [record('priority.invalid')] };
-  await page.goto('/bulk');
-  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: SHORTLIST_KEY, stored: previous });
-  await page.addInitScript((shortlistKey) => {
-    const originalSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (key, value) {
-      if (key === shortlistKey) throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-      return originalSetItem.call(this, key, value);
+  await seed(page, previous);
+  await page.evaluate(() => {
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (this.name === 'manifests') throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+      return originalPut.call(this, value, key);
     };
-  }, SHORTLIST_KEY);
-  await page.reload();
+  });
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Clear shortlist' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Browser storage may be full or unavailable' })).toBeVisible();
-  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY);
-  expect(stored).toEqual(previous);
+  await expect(page.getByRole('status').filter({ hasText: 'out of storage space' })).toBeVisible();
+  const stored = await readBrowserLocalCollection(page, 'shortlist');
+  expect(stored.records.map((entry) => entry.value.domain)).toEqual(['priority.invalid']);
 });

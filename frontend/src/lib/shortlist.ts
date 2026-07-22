@@ -3,13 +3,12 @@ import {
   MAX_SHORTLIST_ENTRIES,
   mergeShortlistStores,
   normalizeShortlistRecord,
-  normalizeShortlistStore,
   serializeShortlistStore,
-  SHORTLIST_SCHEMA_VERSION,
-  shortlistStoreVersion,
 } from './analysis/shortlist-model.js';
+import { browserLocalDataProvider } from './browser-local-data-service.js';
+import { LEGACY_SHORTLIST_KEY, SHORTLIST_COLLECTION } from './browser-local-data-definitions.js';
 
-export const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
+export const SHORTLIST_KEY = LEGACY_SHORTLIST_KEY;
 export const MAX_SHORTLIST_IMPORT_BYTES = 2 * 1024 * 1024;
 
 export interface ShortlistRecord {
@@ -24,59 +23,45 @@ export interface ShortlistRecord {
   [key: string]: unknown;
 }
 
-function readRaw(): unknown {
-  const raw = localStorage.getItem(SHORTLIST_KEY);
-  return raw ? JSON.parse(raw) : null;
+export async function loadShortlist(): Promise<ShortlistRecord[]> {
+  return (await browserLocalDataProvider()).read(SHORTLIST_COLLECTION) as Promise<ShortlistRecord[]>;
 }
 
-export function loadShortlist(): ShortlistRecord[] {
-  try { return normalizeShortlistStore(readRaw()).entries as ShortlistRecord[]; }
-  catch { return []; }
+function boundedShortlist(records: ShortlistRecord[]): ShortlistRecord[] {
+  return JSON.parse(serializeShortlistStore(records)).entries as ShortlistRecord[];
 }
 
-function writeShortlist(records: ShortlistRecord[]) {
-  let version: number | null = null;
-  try { version = shortlistStoreVersion(readRaw()); } catch { /* corrupt data can be replaced safely */ }
-  if (version !== null && version > SHORTLIST_SCHEMA_VERSION) {
-    throw new Error('The shortlist was created by a newer app version. Update the app before saving.');
-  }
-  const serialized = serializeShortlistStore(records);
-  try { localStorage.setItem(SHORTLIST_KEY, serialized); }
-  catch (cause) {
-    if (cause instanceof Error && cause.message.startsWith('Shortlist storage is full')) throw cause;
-    throw new Error('Could not save the shortlist. Browser storage may be full or unavailable.');
-  }
-}
-
-export function toggleShortlist(raw: unknown) {
+export async function toggleShortlist(raw: unknown): Promise<boolean> {
   const record = normalizeShortlistRecord(raw, { fallbackTimestamp: new Date().toISOString() }) as ShortlistRecord | null;
   if (!record) throw new Error('Invalid shortlist record.');
-  const records = loadShortlist();
-  const index = records.findIndex((item) => item.domain === record.domain);
-  if (index >= 0) records.splice(index, 1);
-  else {
-    if (records.length >= MAX_SHORTLIST_ENTRIES) throw new Error(`Shortlist is limited to ${MAX_SHORTLIST_ENTRIES} domains.`);
-    records.push(record);
-  }
-  writeShortlist(records);
-  return index < 0;
+  return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
+    const records = [...current] as ShortlistRecord[];
+    const index = records.findIndex((item) => item.domain === record.domain);
+    if (index >= 0) records.splice(index, 1);
+    else {
+      if (records.length >= MAX_SHORTLIST_ENTRIES) throw new Error(`Shortlist is limited to ${MAX_SHORTLIST_ENTRIES} domains.`);
+      records.push(record);
+    }
+    return { document: boundedShortlist(records), result: index < 0 };
+  });
 }
 
-export function clearShortlist() { writeShortlist([]); }
-
-export function importShortlist(value: unknown) {
-  const result = mergeShortlistStores(loadShortlist(), value);
-  writeShortlist(result.entries as ShortlistRecord[]);
-  return { added: result.added, updated: result.updated, skipped: result.skipped };
+export async function clearShortlist(): Promise<void> {
+  await (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, () => ({ document: [], result: undefined }));
 }
 
-export function exportShortlist() {
-  let version: number | null = null;
-  try { version = shortlistStoreVersion(readRaw()); } catch { /* export normalized recovery */ }
-  if (version !== null && version > SHORTLIST_SCHEMA_VERSION) {
-    throw new Error('The shortlist was created by a newer app version. Update the app before exporting.');
-  }
-  const url = URL.createObjectURL(new Blob([JSON.stringify(buildShortlistExport(loadShortlist()), null, 2)], { type: 'application/json' }));
+export async function importShortlist(value: unknown) {
+  return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
+    const result = mergeShortlistStores(current, value);
+    return {
+      document: boundedShortlist(result.entries as ShortlistRecord[]),
+      result: { added: result.added, updated: result.updated, skipped: result.skipped },
+    };
+  });
+}
+
+export async function exportShortlist() {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(buildShortlistExport(await loadShortlist()), null, 2)], { type: 'application/json' }));
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = `whoisleuth-shortlist-${new Date().toISOString().slice(0, 10)}.json`;

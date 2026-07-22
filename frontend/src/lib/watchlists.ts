@@ -9,13 +9,12 @@ import {
   buildWatchlistExport,
   mergeWatchlistStores,
   normalizeWatchlistName,
-  normalizeWatchlistStore,
   serializeWatchlistStore,
-  WATCHLIST_SCHEMA_VERSION,
-  watchlistStoreVersion,
 } from './analysis/watchlist-store.js';
+import { browserLocalDataProvider } from './browser-local-data-service.js';
+import { LEGACY_WATCHLIST_KEY, WATCHLISTS_COLLECTION } from './browser-local-data-definitions.js';
 
-export const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
+export const WATCHLIST_KEY = LEGACY_WATCHLIST_KEY;
 export const MAX_WATCHLIST_IMPORT_BYTES = 2 * 1024 * 1024;
 
 export interface WatchlistChange { domain:string; field:string; before:unknown; after:unknown; kind:string; tone:string }
@@ -35,45 +34,35 @@ export interface WatchlistDomainHistory {
   events:WatchlistDomainHistoryEvent[];
 }
 
-function readRaw(): unknown {
-  const raw = localStorage.getItem(WATCHLIST_KEY);
-  return raw ? JSON.parse(raw) : null;
+export async function loadWatchlists(): Promise<Watchlists> {
+  return (await browserLocalDataProvider()).read(WATCHLISTS_COLLECTION) as Promise<Watchlists>;
 }
 
-export function loadWatchlists(): Watchlists {
-  try {
-    return normalizeWatchlistStore(readRaw()).watchlists as Watchlists;
-  } catch { return {}; }
+function boundedWatchlists(all: Watchlists): Watchlists {
+  return JSON.parse(serializeWatchlistStore(all)).watchlists as Watchlists;
 }
 
-export function writeWatchlists(all: Watchlists) {
-  let version: number | null = null;
-  try { version = watchlistStoreVersion(readRaw()); } catch { /* corrupt data can be replaced safely */ }
-  if (version !== null && version > WATCHLIST_SCHEMA_VERSION) {
-    throw new Error('Watchlists were created by a newer app version. Update the app before saving.');
-  }
-  const serialized = serializeWatchlistStore(all);
-  try { localStorage.setItem(WATCHLIST_KEY, serialized); }
-  catch (cause) {
-    if (cause instanceof Error && cause.message.startsWith('Watchlist storage is full')) throw cause;
-    throw new Error('Could not save watchlists. Browser storage may be full or unavailable.');
-  }
+export async function writeWatchlists(all: Watchlists): Promise<void> {
+  await (await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION, () => ({ document: boundedWatchlists(all), result: undefined }));
 }
 
-export function saveWatchlist(name:string, results:Array<Record<string,any>>, mode:'fast'|'deep'|'saved') {
+export async function saveWatchlist(name:string, results:Array<Record<string,any>>, mode:'fast'|'deep'|'saved'): Promise<WatchlistChange[]> {
   const normalizedName=normalizeWatchlistName(name);
   if(!normalizedName)throw new Error('Watchlist names must be 1–100 characters and use a safe name.');
   if(results.length>MAX_WATCHLIST_DOMAINS)throw new Error(`Watchlists are limited to ${MAX_WATCHLIST_DOMAINS} domains.`);
-  const all=loadWatchlists();
-  const {entry,changes}=appendWatchlistScan(all[normalizedName]||null,results,{mode});
-  Object.defineProperty(all,normalizedName,{value:entry,writable:true,enumerable:true,configurable:true});writeWatchlists(all);return changes as WatchlistChange[];
+  return (await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION, (current) => {
+    const all = { ...current } as Watchlists;
+    const {entry,changes}=appendWatchlistScan(all[normalizedName]||null,results,{mode});
+    Object.defineProperty(all,normalizedName,{value:entry,writable:true,enumerable:true,configurable:true});
+    return { document: boundedWatchlists(all), result: changes as WatchlistChange[] };
+  });
 }
 
-export function deleteWatchlist(name:string){const all=loadWatchlists();delete all[name];writeWatchlists(all);}
+export async function deleteWatchlist(name:string):Promise<void>{await(await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION,(current)=>{const all={...current} as Watchlists;delete all[name];return{document:boundedWatchlists(all),result:undefined};});}
 
-export function importWatchlists(value:unknown){const result=mergeWatchlistStores(loadWatchlists(),value);writeWatchlists(result.watchlists as Watchlists);return{added:result.added,updated:result.updated,skipped:result.skipped};}
+export async function importWatchlists(value:unknown){return(await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION,(current)=>{const result=mergeWatchlistStores(current,value);const watchlists=boundedWatchlists(result.watchlists as Watchlists);return{document:watchlists,result:{added:result.added,updated:result.updated,skipped:result.skipped}};});}
 
-export function exportWatchlists(){let version:number|null=null;try{version=watchlistStoreVersion(readRaw());}catch{/* export normalized recovery */}if(version!==null&&version>WATCHLIST_SCHEMA_VERSION)throw new Error('Watchlists were created by a newer app version. Update the app before exporting.');const blob=new Blob([JSON.stringify(buildWatchlistExport(loadWatchlists()),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
+export async function exportWatchlists(){const blob=new Blob([JSON.stringify(buildWatchlistExport(await loadWatchlists()),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
 
 export const fieldLabels:Record<string,string>={availability:'Availability',registrarName:'Registrar',nameservers:'Nameservers',createdDate:'Creation date',expiryDate:'Expiry date',privacyProtected:'WHOIS privacy',hasMx:'MX',hasSpf:'SPF',hasDmarc:'DMARC',activityStatus:'Website activity',pageTitle:'Page title',httpEvidenceStatus:'HTTP evidence status',httpFinalOrigin:'Final website origin',httpResponseStatus:'HTTP response status',httpTransportSecurity:'Website transport',httpRedirectCount:'HTTP redirect count',httpCrossOriginRedirect:'Cross-origin redirect',httpHttpsDowngrade:'HTTPS downgrade',httpContentType:'Website content type',httpSecurityHeaders:'Observed security headers',faviconHash:'Favicon',faviconMatch:'Official favicon match',faviconNearMatch:'Official favicon near-match',hasPasswordField:'Password form',phishingLanguageMatch:'Phishing language',reusesOfficialAssets:'Official asset reuse',riskScore:'Risk score'};
 export function formatValue(value:unknown,field=''){if(Array.isArray(value))return (field==='httpSecurityHeaders'?value.map(item=>httpSecurityHeaderLabel(String(item))):value).join(', ')||'None';if(typeof value==='boolean')return value?'Yes':'No';return value==null||value===''?'None':String(value);}

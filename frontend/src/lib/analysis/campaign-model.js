@@ -1,6 +1,6 @@
 // Pure, framework-neutral browser-local campaign model. Campaigns deliberately
 // reference normalized case domains rather than copying case evidence, notes,
-// or mutable case ids. The browser wrapper owns localStorage and downloads.
+// or mutable case ids. The browser wrapper owns persistence and downloads.
 
 import { normalizeDomain } from './case-model.js';
 
@@ -12,7 +12,7 @@ export const MAX_CAMPAIGN_NAME_LENGTH = 100;
 export const MAX_CAMPAIGN_DESCRIPTION_LENGTH = 1000;
 export const MAX_CAMPAIGN_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_CAMPAIGN_INPUT_RECORDS = 500;
-// Cases and watchlists share the same per-origin localStorage quota. Keep this
+// Cases and watchlists share the same per-origin browser quota. Keep this
 // collection smaller than the case store and fail before a browser quota error.
 export const MAX_CAMPAIGN_STORE_BYTES = 512 * 1024;
 

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -45,19 +45,17 @@ function profile(id: string, name: string, officialDomains: string[] = []) {
 
 async function seedInvestigationStores(page: import('@playwright/test').Page) {
   await page.goto('/dashboard');
-  await page.evaluate(({ cases, campaigns, profiles }) => {
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases }));
-    localStorage.setItem('whoisleuth-campaigns-v1', JSON.stringify({ version: 1, campaigns }));
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify(profiles));
-  }, {
-    cases: [caseRecord('case-source', 'candidate.invalid')],
-    campaigns: [campaign('campaign-source', 'Priority review', ['candidate.invalid'])],
-    profiles: [
+  const cases = [caseRecord('case-source', 'candidate.invalid')];
+  const campaigns = [campaign('campaign-source', 'Priority review', ['candidate.invalid'])];
+  const profiles = [
       ...Array.from({ length: 12 }, (_, index) => profile(`profile-${index + 1}`, `Profile ${index + 1}`)),
       profile('profile-source', 'Reserved identity', ['official.invalid']),
-    ],
+  ];
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases },
+    'whoisleuth-campaigns-v1': { version: 1, campaigns },
+    'whois-rdap-brand-profiles-v1': profiles,
   });
-  await page.reload();
 }
 
 test('dashboard local search pivots to exact cases, campaigns, and brand profiles without scanning', async ({ page }) => {
@@ -95,17 +93,13 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
 
 test('dashboard local search exposes future-store limitations without indexing future values', async ({ page }) => {
   await page.goto('/dashboard');
-  await page.evaluate((record) => {
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 3, cases: [record] }));
-  }, caseRecord('future-case', 'future.invalid'));
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 3, cases: [caseRecord('future-case', 'future.invalid')] },
+  });
 
-  await expect(page.getByText('1 saved-data warning')).toBeVisible();
-  await page.getByText('1 saved-data warning').click();
-  await expect(page.getByText('Cases: created by a newer version and not searched.')).toBeVisible();
-  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('future.invalid');
-  await expect(page.getByRole('status')).toContainText('Nothing saved in this browser matched');
-  await expect(page.locator('main')).not.toContainText('future-case');
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText(/created by a newer app version/)).toBeVisible();
+  await expect(page.getByText('future-case', { exact: true })).toHaveCount(0);
 });
 
 test('dashboard local search remains usable without horizontal overflow on narrow mobile screens', async ({ page }) => {

@@ -1,14 +1,13 @@
 import {
-  CT_HISTORY_SCHEMA_VERSION,
   deleteCtHistoryEntry,
   emptyCtHistoryStore,
   enforceCtHistoryBudget,
-  normalizeCtHistoryStore,
   recordCtHistorySearch,
-  ctHistoryStoreVersion,
 } from './analysis/ct-history.js';
+import { browserLocalDataProvider } from './browser-local-data-service.js';
+import { CT_HISTORY_COLLECTION, LEGACY_CT_HISTORY_KEY } from './browser-local-data-definitions.js';
 
-export const CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
+export const CT_HISTORY_KEY = LEGACY_CT_HISTORY_KEY;
 
 export interface CtHistoryEvent {
   checkedAt: string;
@@ -38,46 +37,30 @@ export interface CtHistoryComparison {
   truncated: boolean;
 }
 
-function readRaw(): unknown {
-  const raw = localStorage.getItem(CT_HISTORY_KEY);
-  return raw ? JSON.parse(raw) : null;
+export async function loadCtHistory(): Promise<CtHistoryStore> {
+  return (await browserLocalDataProvider()).read(CT_HISTORY_COLLECTION) as Promise<CtHistoryStore>;
 }
 
-export function loadCtHistory(): CtHistoryStore {
-  try { return normalizeCtHistoryStore(readRaw()) as CtHistoryStore; }
-  catch { return emptyCtHistoryStore() as CtHistoryStore; }
+function boundedCtHistory(store: CtHistoryStore): CtHistoryStore {
+  return enforceCtHistoryBudget(store) as CtHistoryStore;
 }
 
-function persistCtHistory(store: CtHistoryStore): CtHistoryStore {
-  try {
-    let version: number | null = null;
-    try { version = ctHistoryStoreVersion(readRaw()); } catch { /* corrupt JSON is safely replaced */ }
-    if (version !== null && version > CT_HISTORY_SCHEMA_VERSION) {
-      throw new Error('Certificate search history was created by a newer app version.');
-    }
-    const normalized = enforceCtHistoryBudget(store) as CtHistoryStore;
-    localStorage.setItem(CT_HISTORY_KEY, JSON.stringify(normalized));
-    return normalized;
-  } catch (cause) {
-    if (cause instanceof Error && cause.message.includes('newer app version')) throw cause;
-    throw new Error('Could not save Certificate Transparency history. Browser storage may be full or unavailable.');
-  }
+export async function saveCtHistorySearch(query: string, domains: string[], options: { certificateCount: number; truncated: boolean; checkedAt?: string }): Promise<{ store: CtHistoryStore; comparison: CtHistoryComparison }> {
+  return (await browserLocalDataProvider()).update(CT_HISTORY_COLLECTION, (current) => {
+    const result = recordCtHistorySearch(current, query, domains, options) as { store: CtHistoryStore; comparison: CtHistoryComparison };
+    const store = boundedCtHistory(result.store);
+    return { document: store, result: { ...result, store } };
+  });
 }
 
-export function saveCtHistorySearch(query: string, domains: string[], options: { certificateCount: number; truncated: boolean; checkedAt?: string }): { store: CtHistoryStore; comparison: CtHistoryComparison } {
-  const result = recordCtHistorySearch(loadCtHistory(), query, domains, options) as { store: CtHistoryStore; comparison: CtHistoryComparison };
-  return { ...result, store: persistCtHistory(result.store) };
+export async function removeCtHistory(query: string): Promise<CtHistoryStore> {
+  return (await browserLocalDataProvider()).update(CT_HISTORY_COLLECTION, (current) => {
+    const store = boundedCtHistory(deleteCtHistoryEntry(current, query) as CtHistoryStore);
+    return { document: store, result: store };
+  });
 }
 
-export function removeCtHistory(query: string): CtHistoryStore {
-  return persistCtHistory(deleteCtHistoryEntry(loadCtHistory(), query) as CtHistoryStore);
-}
-
-export function clearCtHistory(): CtHistoryStore {
-  try {
-    localStorage.removeItem(CT_HISTORY_KEY);
-    return emptyCtHistoryStore() as CtHistoryStore;
-  } catch {
-    throw new Error('Could not clear Certificate Transparency history. Browser storage may be unavailable.');
-  }
+export async function clearCtHistory(): Promise<CtHistoryStore> {
+  const store = emptyCtHistoryStore() as CtHistoryStore;
+  return (await browserLocalDataProvider()).update(CT_HISTORY_COLLECTION, () => ({ document: store, result: store }));
 }

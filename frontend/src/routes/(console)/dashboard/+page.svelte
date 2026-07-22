@@ -27,18 +27,23 @@
   let guideError = $state('');
   const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
 
-  function refreshLocalSummary() {
-    const cases = loadCases();
+  async function refreshLocalSummary() {
+    const [cases, watchlists, profiles, searchIndex] = await Promise.all([
+      loadCases(),
+      loadWatchlists(),
+      loadProfiles(),
+      loadLocalInvestigationSearchIndex(),
+    ]);
     counts = {
       cases: cases.length,
       openCases: cases.filter((record) => record.status !== 'resolved').length,
-      watchlists: Object.keys(loadWatchlists()).length,
-      profiles: loadProfiles().length,
+      watchlists: Object.keys(watchlists).length,
+      profiles: profiles.length,
     };
-    investigationIndex = loadLocalInvestigationSearchIndex();
+    investigationIndex = searchIndex;
   }
 
-  onMount(refreshLocalSummary);
+  onMount(()=>{void refreshLocalSummary();});
 
   function startGuide(event:SubmitEvent) {
     event.preventDefault();

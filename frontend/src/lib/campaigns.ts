@@ -1,23 +1,21 @@
 // Browser-only campaign persistence. The pure campaign model owns validation,
-// bounds, merge semantics, and export shaping; this wrapper owns localStorage
-// and Blob downloads.
+// bounds, merge semantics, and export shaping; this wrapper owns asynchronous
+// provider access and Blob downloads.
 import {
   assertCampaignStoreBudget,
   buildCampaignExport,
-  CAMPAIGN_SCHEMA_VERSION,
-  campaignStoreVersion,
   createCampaign as createCampaignRecord,
   mergeCampaigns,
-  normalizeCampaignStore,
   removeCampaignDomain as removeDomain,
-  serializeCampaignStore,
   updateCampaign as updateCampaignRecord,
   addCampaignDomain as addDomain,
 } from './analysis/campaign-model.js';
+import { browserLocalDataProvider } from './browser-local-data-service.js';
+import { CAMPAIGNS_COLLECTION, LEGACY_CAMPAIGNS_KEY } from './browser-local-data-definitions.js';
 
 export { MAX_CAMPAIGN_IMPORT_BYTES } from './analysis/campaign-model.js';
 
-export const CAMPAIGNS_KEY = 'whoisleuth-campaigns-v1';
+export const CAMPAIGNS_KEY = LEGACY_CAMPAIGNS_KEY;
 
 export interface CampaignRecord {
   id: string;
@@ -28,65 +26,61 @@ export interface CampaignRecord {
   updatedAt: string;
 }
 
-function readRaw(): unknown {
-  const raw = localStorage.getItem(CAMPAIGNS_KEY);
-  return raw ? JSON.parse(raw) : null;
+export async function loadCampaigns(): Promise<CampaignRecord[]> {
+  return (await browserLocalDataProvider()).read(CAMPAIGNS_COLLECTION) as Promise<CampaignRecord[]>;
 }
 
-export function loadCampaigns(): CampaignRecord[] {
-  try { return normalizeCampaignStore(readRaw()).campaigns as CampaignRecord[]; }
-  catch { return []; }
-}
-
-function persist(campaigns: CampaignRecord[]): CampaignRecord[] {
-  let version: number | null = null;
-  try { version = campaignStoreVersion(readRaw()); } catch { /* corrupt data can be replaced safely */ }
-  if (version !== null && version > CAMPAIGN_SCHEMA_VERSION) {
-    throw new Error('Campaigns were created by a newer app version. Update the app before saving.');
-  }
+function boundedCampaigns(campaigns: CampaignRecord[]): CampaignRecord[] {
   const store = assertCampaignStoreBudget(campaigns);
-  try { localStorage.setItem(CAMPAIGNS_KEY, serializeCampaignStore(store.campaigns)); }
-  catch (cause) {
-    if (cause instanceof Error && cause.message.startsWith('Campaign storage is full')) throw cause;
-    throw new Error('Could not save campaigns. Browser storage may be full or unavailable.');
-  }
   return store.campaigns as CampaignRecord[];
 }
 
-export function createCampaign(input: { name: string; description?: string }): { campaigns: CampaignRecord[]; record: CampaignRecord } {
-  const result = createCampaignRecord(loadCampaigns(), input);
-  const campaigns = persist(result.campaigns as CampaignRecord[]);
-  return { campaigns, record: campaigns.find((campaign) => campaign.id === result.record.id) ?? result.record as CampaignRecord };
+export async function createCampaign(input: { name: string; description?: string }): Promise<{ campaigns: CampaignRecord[]; record: CampaignRecord }> {
+  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+    const result = createCampaignRecord(current, input);
+    const campaigns = boundedCampaigns(result.campaigns as CampaignRecord[]);
+    return { document: campaigns, result: { campaigns, record: campaigns.find((campaign) => campaign.id === result.record.id) ?? result.record as CampaignRecord } };
+  });
 }
 
-export function editCampaign(id: string, patch: { name?: string; description?: string; domains?: string[] }): CampaignRecord[] {
-  return persist(updateCampaignRecord(loadCampaigns(), id, patch).campaigns as CampaignRecord[]);
+export async function editCampaign(id: string, patch: { name?: string; description?: string; domains?: string[] }): Promise<CampaignRecord[]> {
+  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+    const campaigns = boundedCampaigns(updateCampaignRecord(current, id, patch).campaigns as CampaignRecord[]);
+    return { document: campaigns, result: campaigns };
+  });
 }
 
-export function addCampaignDomain(id: string, domain: string): CampaignRecord[] {
-  return persist(addDomain(loadCampaigns(), id, domain).campaigns as CampaignRecord[]);
+export async function addCampaignDomain(id: string, domain: string): Promise<CampaignRecord[]> {
+  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+    const campaigns = boundedCampaigns(addDomain(current, id, domain).campaigns as CampaignRecord[]);
+    return { document: campaigns, result: campaigns };
+  });
 }
 
-export function removeCampaignDomain(id: string, domain: string): CampaignRecord[] {
-  return persist(removeDomain(loadCampaigns(), id, domain).campaigns as CampaignRecord[]);
+export async function removeCampaignDomain(id: string, domain: string): Promise<CampaignRecord[]> {
+  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+    const campaigns = boundedCampaigns(removeDomain(current, id, domain).campaigns as CampaignRecord[]);
+    return { document: campaigns, result: campaigns };
+  });
 }
 
-export function deleteCampaign(id: string): CampaignRecord[] {
-  return persist(loadCampaigns().filter((campaign) => campaign.id !== id));
+export async function deleteCampaign(id: string): Promise<CampaignRecord[]> {
+  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+    const campaigns = boundedCampaigns(current.filter((campaign) => campaign.id !== id));
+    return { document: campaigns, result: campaigns };
+  });
 }
 
-export function importCampaigns(raw: unknown): { campaigns: CampaignRecord[]; added: number; updated: number; skipped: number } {
-  const result = mergeCampaigns(loadCampaigns(), raw);
-  return { campaigns: persist(result.campaigns as CampaignRecord[]), added: result.added, updated: result.updated, skipped: result.skipped };
+export async function importCampaigns(raw: unknown): Promise<{ campaigns: CampaignRecord[]; added: number; updated: number; skipped: number }> {
+  return (await browserLocalDataProvider()).update(CAMPAIGNS_COLLECTION, (current) => {
+    const result = mergeCampaigns(current, raw);
+    const campaigns = boundedCampaigns(result.campaigns as CampaignRecord[]);
+    return { document: campaigns, result: { campaigns, added: result.added, updated: result.updated, skipped: result.skipped } };
+  });
 }
 
-export function exportCampaigns(): void {
-  let version: number | null = null;
-  try { version = campaignStoreVersion(readRaw()); } catch { /* export normalized recovery */ }
-  if (version !== null && version > CAMPAIGN_SCHEMA_VERSION) {
-    throw new Error('Campaigns were created by a newer app version. Update the app before exporting.');
-  }
-  const blob = new Blob([JSON.stringify(buildCampaignExport(loadCampaigns()), null, 2)], { type: 'application/json' });
+export async function exportCampaigns(): Promise<void> {
+  const blob = new Blob([JSON.stringify(buildCampaignExport(await loadCampaigns()), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

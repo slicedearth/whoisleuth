@@ -35,7 +35,7 @@
   const caseById=$derived(new Map(records.map((record)=>[record.id,record])));
 
   function newCondition(){return{field:'availability',operator:'equals',value:'registered'};}
-  function refresh(next=loadDetectionRules()){rules=next;oncount?.(rules.length);}
+  async function refresh(next?:DetectionRule[]){rules=next??await loadDetectionRules();oncount?.(rules.length);}
   function definition(field:string){return ruleFieldDefinition(field) as null|{value:string;label:string;kind:string;values?:string[]};}
   function operatorLabel(value:string){return({equals:'equals',at_least:'at least',at_most:'at most',contains:'contains',present:'is present'} as Record<string,string>)[value]??value;}
   function updateField(index:number,value:string){const operator=operatorsForRuleField(value)[0]??'equals';const item={field:value,operator,value:operator==='present'?'true':definition(value)?.kind==='boolean'?'true':definition(value)?.values?.[0]??''};conditions=conditions.map((condition,i)=>i===index?item:condition);}
@@ -43,22 +43,22 @@
   function addCondition(){if(conditions.length<MAX_RULE_CONDITIONS)conditions=[...conditions,newCondition()];}
   function removeCondition(index:number){if(conditions.length>1)conditions=conditions.filter((_,i)=>i!==index);}
   function resetDraft(){name='';riskDelta=0;tag='';match='all';conditions=[newCondition()];}
-  function create(){
+  async function create(){
     try{
       const normalizedConditions:DetectionRuleCondition[]=conditions.map((condition)=>({field:condition.field,operator:condition.operator,value:definition(condition.field)?.kind==='number'?Number(condition.value):condition.value}));
-      refresh(createDetectionRule({name,enabled:true,match,conditions:normalizedConditions,riskDelta:Number(riskDelta),tag}));
+      await refresh(await createDetectionRule({name,enabled:true,match,conditions:normalizedConditions,riskDelta:Number(riskDelta),tag}));
       message=`Created custom rule “${name.trim()}”.`;resetDraft();
     }catch(cause){message=cause instanceof Error?cause.message:'Could not create the custom rule.';}
   }
-  function toggle(rule:DetectionRule){try{refresh(editDetectionRule(rule.id,{enabled:!rule.enabled}));message=`${rule.enabled?'Disabled':'Enabled'} “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not update the custom rule.';}}
-  function remove(rule:DetectionRule){if(!confirm(`Delete custom rule “${rule.name}”?`))return;try{refresh(deleteDetectionRule(rule.id));message=`Deleted “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete the custom rule.';}}
-  function download(){try{exportDetectionRules();message='Exported the custom-rule collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export custom rules.';}}
-  async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_RULE_IMPORT_BYTES)throw new Error('Custom-rule imports are limited to 2 MB.');const result=importDetectionRules(JSON.parse(await file.text()));refresh(result.rules);message=`Imported ${result.added} new and ${result.updated} updated custom rule${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}catch(cause){message=cause instanceof Error?cause.message:'Custom-rule import failed.';}finally{input.value='';}}
+  async function toggle(rule:DetectionRule){try{await refresh(await editDetectionRule(rule.id,{enabled:!rule.enabled}));message=`${rule.enabled?'Disabled':'Enabled'} “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not update the custom rule.';}}
+  async function remove(rule:DetectionRule){if(!confirm(`Delete custom rule “${rule.name}”?`))return;try{await refresh(await deleteDetectionRule(rule.id));message=`Deleted “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete the custom rule.';}}
+  async function download(){try{await exportDetectionRules();message='Exported the custom-rule collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export custom rules.';}}
+  async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_RULE_IMPORT_BYTES)throw new Error('Custom-rule imports are limited to 2 MB.');const result=await importDetectionRules(JSON.parse(await file.text()));await refresh(result.rules);message=`Imported ${result.added} new and ${result.updated} updated custom rule${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}catch(cause){message=cause instanceof Error?cause.message:'Custom-rule import failed.';}finally{input.value='';}}
   function countMatches(ruleId:string){return evaluations.filter((result)=>result.matchedRules.some((item)=>item.id===ruleId)).length;}
   function conditionLabel(condition:DetectionRuleCondition){const field=definition(condition.field)?.label??condition.field;return condition.operator==='present'?`${field} is present`:`${field} ${operatorLabel(condition.operator)} ${String(condition.value)}`;}
   function openCase(caseId:string){const record=caseById.get(caseId);if(record)onselect?.(record);}
 
-  onMount(()=>refresh());
+  onMount(()=>{void refresh();});
 </script>
 
 <section class="rule-builder card">

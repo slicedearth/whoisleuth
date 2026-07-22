@@ -284,13 +284,12 @@ production-performance claim.
 
 `npm run platform:local-data` evaluates the browser-local storage architecture
 from the owning store-budget constants without inspecting browser data. It
-reports the aggregate declared capacity, whole-document query boundary, and
-candidate trade-offs, and recommends a dependency-free native IndexedDB
-prototype without authorizing a production migration. The browser test uses a
-unique temporary database and fixed synthetic records to verify transactions,
-keyed and indexed reads, rollback, deletion, cleanup, and bounded deadlines.
-Migration, application-level encryption, PWA support, and synchronization
-remain separate decisions. See
+reports the aggregate declared capacity and candidate trade-offs behind the
+dependency-free native IndexedDB provider. Browser tests use fixed synthetic
+records to verify transactions, one-time legacy migration, keyed and indexed
+reads, rollback, quota failures, persistence, deletion, cleanup, and bounded
+deadlines. The active codec is plaintext JSON; application-level encryption,
+PWA support, and synchronization remain separate decisions. See
 [the browser-local data architecture](docs/browser-local-data.md).
 
 ### Browser end-to-end tests
@@ -499,7 +498,7 @@ compact-storage boundary, and lookup evidence schema are documented in the
   and scope, and reports optional scheduled monitoring and distributed
   controls from their effective runtime configuration.
 - Star any bulk result to add it to the **Shortlist**, which persists in the
-  browser's local storage. The retained collection remains available to load,
+  browser's IndexedDB investigation store. The retained collection remains available to load,
   export, or clear as a whole while its domain chips are displayed in pages of
   100.
 
@@ -926,7 +925,8 @@ covered by the provider's community terms or an appropriate paid agreement.
   in the local check summary but never replace a complete
   baseline, avoiding false "new" labels after a partial result. Discover's
   **Previous certificate searches** panel can reuse or delete individual
-  searches, or clear all CT history. This history stays in `localStorage`, is
+  searches, or clear all CT history. This history stays in the browser's
+  IndexedDB investigation store, is
   limited to 30 searches and 20 checks per search, and can be removed without
   affecting watchlists, cases, or Brand Profiles.
 - A registered result with a published abuse contact (from RDAP or WHOIS)
@@ -1005,11 +1005,10 @@ tool for managing the full investigation record, with `Cases`, `Campaigns`, `Rel
   Imports merge matching campaign IDs non-destructively: domain membership is
   unioned, while newer valid metadata wins. The store is limited to 50
   campaigns, 50 domains per campaign, a 512 KiB serialized budget, and 2 MB
-  import files. Campaign data stays in `localStorage` under
-  `whoisleuth-campaigns-v1` and never leaves the browser unless deliberately
-  exported.
-- **Cases live only in the current browser.** They are held in `localStorage`
-  under `whois-rdap-cases-v1` and are never sent to any server. Clearing your
+  import files. Campaign data stays in the browser's IndexedDB investigation
+  store and never leaves the browser unless deliberately exported.
+- **Cases live only in the current browser.** They are held in the browser's
+  IndexedDB investigation store and are never sent to any server. Clearing your
   browser storage (or using a different browser or device) removes them unless
   you exported them first. The store is at schema version 2; a version-1 store
   (single evidence snapshot) is discovered under the same key and migrated to an
@@ -1110,9 +1109,14 @@ skipped records, and unsupported section versions before writing. Selected
 sections use their existing non-destructive merge rules, and a failed browser
 write rolls earlier section changes back. The archive excludes sessions,
 passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
-state, Certificate Transparency history, and unrelated browser storage. Local
-encryption can be added separately without replacing the portable unencrypted
-schema.
+state, Certificate Transparency history, and unrelated browser storage. On the
+first authenticated load, supported legacy local-storage documents are
+normalized and copied into verified IndexedDB records without deleting the
+source documents. Later IndexedDB writes are authoritative. Before deliberately
+returning to an older build, the Dashboard can update the legacy compatibility
+copy, subject to local-storage quota. The current IndexedDB codec is plaintext;
+an optional encrypted vault can be added separately without replacing the
+portable unencrypted archive schema.
 From the Dashboard, an optional guided investigation can coordinate one of
 three fixed recipes: brand sweep, infrastructure pivot, or new-domain triage.
 Version 2 keeps one canonical domain, active or paused state, and bounded
@@ -1346,7 +1350,8 @@ cli/                    CLI commands, formatters, and local command contracts
 frontend/               SvelteKit multi-page frontend workspace
   src/routes/           Public overview/demo/guide/login/privacy and protected Console pages
   src/lib/              Browser state, workflow helpers, and analysis modules
-    cases.ts            Browser-local analyst case store (localStorage wrapper)
+    browser-local-data.ts  Bounded native IndexedDB provider and migration manifest
+    cases.ts            Asynchronous browser-local analyst case adapter
     analysis/           Framework-neutral scoring, comparison, generation, history, and case logic
   static/               Frontend-owned static assets
   build/                Generated static output (ignored; created by npm run build)
@@ -1374,7 +1379,7 @@ netlify/functions/      Netlify Functions, scheduled worker, and hosted-watchlis
 netlify.toml            Netlify build/redirect config
 tools/                  Maintainer-run schema, drift, benchmark, deployment, and security checks
 docs/architecture.md    System context, request pipeline, trust boundaries, and trade-offs
-docs/browser-local-data.md  Browser-store capacity evaluation and migration constraints
+docs/browser-local-data.md  IndexedDB, migration, rollback, and encryption boundary
 docs/cli.md             First-party CLI commands, boundaries, schemas, and exit codes
 docs/engineering-case-study.md  Project constraints, decisions, challenges, and review guide
 docs/registry-data-contract.md  Normalized registry source and evidence contracts

@@ -1,6 +1,6 @@
 // Framework-neutral normalization of the Certificate Transparency search API
 // response (see lib/ct-search.mts for the backend contract). No DOM, Svelte,
-// localStorage, sessionStorage, or network access lives here so the module is
+// IndexedDB, sessionStorage, or network access lives here so the module is
 // node --test-able and safe to import from both the Discover route and the
 // candidate-handoff serializer.
 //

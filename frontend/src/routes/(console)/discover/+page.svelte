@@ -83,12 +83,11 @@
   const pagedVisible = $derived(visible.slice((currentPage - 1) * DISCOVER_PAGE_SIZE, currentPage * DISCOVER_PAGE_SIZE));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
 
-  onMount(() => {
-    profile = activeProfile();
-    ctHistory = loadCtHistory();
+  onMount(() => {void (async()=>{
+    [profile,ctHistory] = await Promise.all([activeProfile(),loadCtHistory()]);
     const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
     if (guidedDomain) seed = guidedDomain;
-  });
+  })();});
 
   function resetCtComparison() {
     ctNewDomains = new Set();
@@ -255,7 +254,7 @@
       const noun = 'registrable domain';
       let historySummary = '';
       try {
-        const result = saveCtHistorySearch(query, next.map((candidate)=>candidate.domain), { certificateCount: certCount, truncated });
+        const result = await saveCtHistorySearch(query, next.map((candidate)=>candidate.domain), { certificateCount: certCount, truncated });
         ctHistory = result.store;
         const visibleDomains = new Set(filtered.map((candidate)=>candidate.domain));
         ctNewDomains = new Set(result.comparison.newDomains.filter((domain)=>visibleDomains.has(domain)));
@@ -291,20 +290,20 @@
     seed = entry.query;
   }
 
-  function deleteHistoryEntry(entry:CtHistoryEntry) {
+  async function deleteHistoryEntry(entry:CtHistoryEntry) {
     if (!confirm(`Forget the saved Certificate Transparency baseline and history for “${entry.query}”?`)) return;
     try {
-      ctHistory = removeCtHistory(entry.query);
+      ctHistory = await removeCtHistory(entry.query);
       resetCtComparison();
     } catch (cause) {
       ctHistoryNotice = cause instanceof Error ? cause.message : 'Could not remove Certificate Transparency history.';
     }
   }
 
-  function deleteAllHistory() {
+  async function deleteAllHistory() {
     if (!confirm('Delete every saved Certificate Transparency baseline and check history?')) return;
     try {
-      ctHistory = clearCtHistory();
+      ctHistory = await clearCtHistory();
       resetCtComparison();
     } catch (cause) {
       ctHistoryNotice = cause instanceof Error ? cause.message : 'Could not clear Certificate Transparency history.';

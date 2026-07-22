@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import type { Page } from '@playwright/test';
 
 // Every CT search below is fulfilled locally with fixture JSON, so no test
@@ -270,25 +270,24 @@ test('selection is keyed by canonical domain and is keyboard-accessible', async 
 });
 
 test('an allowlisted canonical domain is excluded when a profile is active', async ({ page }) => {
-  await page.addInitScript(() => {
-    const profile = {
+  const profile = {
       id: 'p1', name: 'Example', officialDomains: ['example.invalid'], productNames: [], tlds: [],
       approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
       trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
       createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
-    };
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
-    localStorage.setItem('whois-rdap-active-brand-profile-v1', 'p1');
-    localStorage.setItem('whoisleuth:ct-search-history:v1', JSON.stringify({
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-active-brand-profile-v1': 'p1',
+    'whoisleuth:ct-search-history:v1': {
       version: 1,
       entries: [{
         query: 'example', baselineAt: '2026-05-01T00:00:00.000Z', updatedAt: '2026-05-01T00:00:00.000Z',
         domains: ['other.invalid'],
         history: [{ checkedAt: '2026-05-01T00:00:00.000Z', resultCount: 1, certificateCount: 1, newCount: 0, newDomains: [], truncated: false }],
       }],
-    }));
+    },
   });
-  await page.goto('/discover');
   await mockCtSearch(page, structuredResponse);
   await runCtSearch(page);
 
@@ -408,46 +407,37 @@ test('a capped search does not replace the previous complete baseline', async ({
 });
 
 test('corrupt local CT history is recovered without losing search results', async ({ page }) => {
-  await page.evaluate(() => localStorage.setItem('whoisleuth:ct-search-history:v1', '{broken-json'));
+  await migrateLegacyBrowserData(page, { 'whoisleuth:ct-search-history:v1': '{broken-json' });
   await mockCtSearch(page, initialBaselineResponse);
   await runCtSearch(page);
 
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:ct-search-history:v1') || 'null'));
-  expect(stored.version).toBe(1);
-  expect(stored.entries).toHaveLength(1);
+  const stored = await readBrowserLocalCollection(page, 'ct_history');
+  expect(stored.manifest.schemaVersion).toBe(1);
+  expect(stored.records).toHaveLength(1);
 });
 
 test('a browser storage write failure does not hide valid CT search results', async ({ page }) => {
-  await page.addInitScript(() => {
-    const originalSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (key, value) {
-      if (key === 'whoisleuth:ct-search-history:v1') {
-        throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-      }
-      return originalSetItem.call(this, key, value);
-    };
-  });
-  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Certificates' })).toBeVisible();
+  await failBrowserLocalManifestWrites(page, 'ct_history');
   await mockCtSearch(page, initialBaselineResponse);
   await runCtSearch(page);
 
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.candidate strong')).toHaveText(['example.invalid']);
   await expect(page.locator('.status')).toContainText('Found 1 registrable domain from 4 certificates');
-  await expect(page.locator('.ct-history-notice')).toContainText('Browser storage may be full or unavailable');
+  await expect(page.locator('.ct-history-notice')).toContainText('out of storage space');
 });
 
 test('a future CT history schema is never overwritten by an older app', async ({ page }) => {
-  await page.evaluate(() => localStorage.setItem('whoisleuth:ct-search-history:v1', JSON.stringify({ version: 2, entries: [{ future: true }] })));
-  await mockCtSearch(page, initialBaselineResponse);
-  await runCtSearch(page);
+  const future = { version: 2, entries: [{ future: true }] };
+  await migrateLegacyBrowserData(page, { 'whoisleuth:ct-search-history:v1': future });
 
-  await expect(page.locator('.candidate')).toHaveCount(1);
-  await expect(page.locator('.ct-history-notice')).toContainText('newer app version');
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText(/created by a newer app version/)).toBeVisible();
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('whoisleuth:ct-search-history:v1') || 'null'));
-  expect(stored).toEqual({ version: 2, entries: [{ future: true }] });
+  expect(stored).toEqual(future);
 });
 
 test('switching tabs during an in-flight CT request does not leave the UI stuck', async ({ page }) => {

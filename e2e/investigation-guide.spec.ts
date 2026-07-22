@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 
 const GUIDE_KEY = 'whoisleuth:investigation-guide:v2';
 const LEGACY_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
@@ -137,9 +137,8 @@ test('exports only a compact versioned progress summary after explicit action', 
 
 test('shows retained evidence through the typed local projection without treating it as completion', async ({ page }) => {
   await page.goto('/dashboard');
-  await page.evaluate(() => localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({
-    version: 2,
-    cases: [{
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: [{
       id: 'case-recipe-1',
       domain: 'portal.example.test',
       status: 'new',
@@ -150,9 +149,8 @@ test('shows retained evidence through the typed local projection without treatin
       evidenceHistory: [],
       createdAt: '2026-07-20T00:00:00.000Z',
       updatedAt: '2026-07-20T00:00:00.000Z',
-    }],
-  })));
-  await page.reload();
+    }] },
+  });
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
   await page.getByRole('button', { name: 'Start guide' }).click();
 

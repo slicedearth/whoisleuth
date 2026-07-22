@@ -1,4 +1,4 @@
-// Pure browser-local shortlist model. The browser wrapper owns localStorage
+// Pure browser-local shortlist model. The browser wrapper owns persistence
 // and downloads; this module owns schema migration, record normalization,
 // import merging, and exact serialized-byte accounting.
 

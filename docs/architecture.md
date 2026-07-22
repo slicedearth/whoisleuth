@@ -131,7 +131,8 @@ converted into a negative security or availability conclusion.
 flowchart TB
   transient["Request-scoped evidence"] --> response["Bounded API response"]
   upstreamCache["Bounded process caches"] -->|"short expiry or replacement"| expiry["No ordinary investigation database"]
-  compact["Normalized compact evidence"] -->|"explicit user action"| stores["Browser localStorage"]
+  compact["Normalized compact evidence"] -->|"explicit user action"| stores["Browser IndexedDB"]
+  legacy["Bounded legacy local-storage documents"] -->|"one-time normalized copy"| stores
   handoff["Candidate handoff"] --> session["Browser sessionStorage"]
   demo["Synthetic demo progress"] --> demoStore["Separate tab-scoped sessionStorage key"]
   stores --> export["Deliberate local exports"]
@@ -139,10 +140,16 @@ flowchart TB
 ```
 
 The local stores are versioned, normalized on read, bounded by record and field
-counts, and—where evidence volume is material—protected by serialized byte
-budgets and deterministic pruning. They remain ordinary browser storage rather
-than encryption. Clearing site data removes them, and another device or browser
-profile does not receive them automatically.
+counts, and protected by serialized byte budgets and deterministic pruning
+where evidence volume is material. The dependency-free provider stores keyed
+records and collection manifests in IndexedDB and supports atomic
+multi-collection updates. A one-time migration normalizes supported legacy
+local-storage documents, verifies the committed record digests, and keeps the
+legacy source untouched. Later IndexedDB writes are authoritative; a deliberate
+Dashboard action can refresh the legacy compatibility copy before a rollback.
+These records remain ordinary plaintext browser storage rather than
+application-encrypted data. Clearing site data removes them, and another device
+or browser profile does not receive them automatically.
 
 Registry bootstrap data and selected upstream results can use bounded,
 short-lived process caches to reduce duplicate requests; they are not an
@@ -169,14 +176,13 @@ truncation into every result, and performs no provider request or persisted
 write. Result links are passive pivots into the exact retained case, campaign,
 or Brand Profile where one exists.
 
-The independent browser-store ceilings now total 9.75 MiB, which is greater
-than the 5 MiB localStorage planning reference used by the case model. The
+The independent browser-store ceilings total 9.75 MiB, which is greater than
+the 5 MiB local-storage planning reference used by the former design. The
 maintainer-run `npm run platform:local-data` command derives that total from the
-owning constants without reading user data. The resulting architecture
-evaluation recommends a dependency-free native IndexedDB prototype, but does
-not change the current storage authority or approve a migration. The temporary
-browser probe uses only fixed synthetic records and deletes its database after
-testing. Production migration, encryption, PWA support, and synchronization
+owning constants without reading user data. The native provider preserves those
+application bounds while removing the single-origin local-storage capacity
+assumption. Browser tests use only fixed synthetic records and isolate their
+database state. Application-level encryption, PWA support, and synchronization
 remain separate decisions documented in
 [the browser-local data architecture](browser-local-data.md).
 

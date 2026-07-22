@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -49,43 +49,42 @@ function profile(id: string, name: string) {
 }
 
 async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
-  await page.evaluate(({ now }) => {
-    const archiveCase = {
+  const archiveCase = {
       id: 'archive-case', domain: 'archive-case.invalid', status: 'new', disposition: 'unreviewed',
-      tags: ['archive'], notes: [{ id: 'archive-note', body: 'Analyst archive note', createdAt: now }],
-      source: 'lookup', evidenceHistory: [], createdAt: now, updatedAt: now,
+      tags: ['archive'], notes: [{ id: 'archive-note', body: 'Analyst archive note', createdAt: NOW }],
+      source: 'lookup', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
     };
-    const archiveProfile = {
+  const archiveProfile = {
       id: 'archive-profile', name: 'Archive profile', officialDomains: ['official.invalid'], productNames: [], tlds: [],
       approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
       trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,
-      createdAt: now, updatedAt: now,
+      createdAt: NOW, updatedAt: NOW,
     };
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases: [archiveCase] }));
-    localStorage.setItem('whoisleuth-campaigns-v1', JSON.stringify({ version: 1, campaigns: [{
+  await page.evaluate(() => sessionStorage.setItem('whoisleuth:investigation-guide:v1', JSON.stringify({ domain: 'private.invalid' })));
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: [archiveCase] },
+    'whoisleuth-campaigns-v1': { version: 1, campaigns: [{
       id: 'archive-campaign', name: 'Archive campaign', description: 'Portable workspace fixture',
-      domains: ['archive-case.invalid'], createdAt: now, updatedAt: now,
-    }] }));
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify({ version: 2, profiles: [archiveProfile] }));
-    localStorage.setItem('whois-rdap-active-brand-profile-v1', 'archive-profile');
-    localStorage.setItem('whois-rdap-watchlist-v1', JSON.stringify({
+      domains: ['archive-case.invalid'], createdAt: NOW, updatedAt: NOW,
+    }] },
+    'whois-rdap-brand-profiles-v1': { version: 2, profiles: [archiveProfile] },
+    'whois-rdap-active-brand-profile-v1': 'archive-profile',
+    'whois-rdap-watchlist-v1': {
       schema: 'whoisleuth.watchlists', version: 2,
-      watchlists: { 'Archive watchlist': { updatedAt: now, results: [], baseline: [], history: [] } },
-    }));
-    localStorage.setItem('whois-rdap-shortlist-v1', JSON.stringify({
+      watchlists: { 'Archive watchlist': { updatedAt: NOW, results: [], baseline: [], history: [] } },
+    },
+    'whois-rdap-shortlist-v1': {
       schema: 'whoisleuth.shortlist', version: 2,
-      entries: [{ domain: 'archive-case.invalid', availability: 'unknown', mutationTypes: [], savedAt: now }],
-    }));
-    localStorage.setItem('whoisleuth-detection-rules-v1', JSON.stringify({
+      entries: [{ domain: 'archive-case.invalid', availability: 'unknown', mutationTypes: [], savedAt: NOW }],
+    },
+    'whoisleuth-detection-rules-v1': {
       version: 1,
       rules: [{ id: 'archive-rule', name: 'Archive rule', enabled: true, match: 'all',
         conditions: [{ field: 'status', operator: 'equals', value: 'new' }], riskDelta: 0, tag: 'archive' }],
-    }));
-    localStorage.setItem('whoisleuth:theme:v1', 'light');
-    localStorage.setItem('unrelated-private-key', 'must-not-export');
-    sessionStorage.setItem('whoisleuth:investigation-guide:v1', JSON.stringify({ domain: 'private.invalid' }));
-  }, { now: NOW });
-  await page.reload();
+    },
+    'whoisleuth:theme:v1': 'light',
+    'unrelated-private-key': 'must-not-export',
+  }, { clearStorage: true });
 }
 
 async function downloadWorkspaceArchive(page: import('@playwright/test').Page) {
@@ -134,12 +133,11 @@ test('the dashboard reports bounded browser-local counts without exposing stored
     },
     profiles: [profile('profile-one', 'First profile'), profile('profile-two', 'Second profile')],
   };
-  await page.evaluate((value) => {
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify(value.cases));
-    localStorage.setItem('whois-rdap-watchlist-v1', JSON.stringify(value.watchlists));
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify(value.profiles));
-  }, stored);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': stored.cases,
+    'whois-rdap-watchlist-v1': stored.watchlists,
+    'whois-rdap-brand-profiles-v1': stored.profiles,
+  }, { clearStorage: true });
 
   await expect(page.locator('.summary-card', { hasText: 'Open cases' }).locator('strong')).toHaveText('1');
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toContainText('2 total saved cases');
@@ -191,14 +189,12 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
 
-  await page.evaluate(({ now }) => {
-    localStorage.clear();
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases: [{
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: [{
       id: 'local-case', domain: 'local-only.invalid', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
-      source: 'manual', evidenceHistory: [], createdAt: now, updatedAt: now,
-    }] }));
-  }, { now: NOW });
-  await page.reload();
+      source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
+    }] },
+  }, { clearStorage: true });
   await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
 
   const preview = page.locator('.preview');
@@ -211,18 +207,20 @@ test('workspace archive import previews conflicts before a non-destructive mobil
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
   await expect(page.getByRole('status')).toContainText('Added backup data from 7 sections');
-  const stored = await page.evaluate(() => ({
-    cases: JSON.parse(localStorage.getItem('whois-rdap-cases-v1') || '{}').cases,
-    campaigns: JSON.parse(localStorage.getItem('whoisleuth-campaigns-v1') || '{}').campaigns,
-    profiles: JSON.parse(localStorage.getItem('whois-rdap-brand-profiles-v1') || '{}').profiles,
+  const [cases, campaigns, profiles, settings] = await Promise.all([
+    readBrowserLocalCollection(page, 'cases'),
+    readBrowserLocalCollection(page, 'campaigns'),
+    readBrowserLocalCollection(page, 'brand_profiles'),
+    page.evaluate(() => ({
     activeProfile: localStorage.getItem('whois-rdap-active-brand-profile-v1'),
     theme: localStorage.getItem('whoisleuth:theme:v1'),
-  }));
-  expect(stored.cases.map((record: any) => record.domain).sort()).toEqual(['archive-case.invalid', 'local-only.invalid']);
-  expect(stored.campaigns).toHaveLength(1);
-  expect(stored.profiles).toHaveLength(1);
-  expect(stored.activeProfile).toBe('archive-profile');
-  expect(stored.theme).toBe('light');
+    })),
+  ]);
+  expect(cases.records.map((record: any) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'local-only.invalid']);
+  expect(campaigns.records).toHaveLength(1);
+  expect(profiles.records).toHaveLength(1);
+  expect(settings.activeProfile).toBe('archive-profile');
+  expect(settings.theme).toBe('light');
 });
 
 test('workspace archive import reports future sections and rolls back an interrupted merge', async ({ page }) => {
@@ -236,14 +234,12 @@ test('workspace archive import reports future sections and rolls back an interru
   await expect(futureWatchlists).toContainText('Unsupported');
   await expect(futureWatchlists.getByRole('checkbox')).toBeDisabled();
 
-  await page.evaluate(({ now }) => {
-    localStorage.clear();
-    localStorage.setItem('whois-rdap-cases-v1', JSON.stringify({ version: 2, cases: [{
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 2, cases: [{
       id: 'rollback-case', domain: 'rollback.invalid', status: 'new', disposition: 'unreviewed', tags: [], notes: [],
-      source: 'manual', evidenceHistory: [], createdAt: now, updatedAt: now,
-    }] }));
-  }, { now: NOW });
-  await page.reload();
+      source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
+    }] },
+  }, { clearStorage: true });
   await page.getByLabel('Review backup file').setInputFiles({ name: 'workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
   const preview = page.locator('.preview');
   for (const checkbox of await preview.getByRole('checkbox').all()) {
@@ -251,18 +247,9 @@ test('workspace archive import reports future sections and rolls back an interru
   }
   await preview.locator('li', { hasText: 'Cases' }).getByRole('checkbox').check();
   await preview.locator('li', { hasText: 'Campaigns' }).getByRole('checkbox').check();
-  await page.evaluate(() => {
-    const original = Storage.prototype.setItem;
-    Object.defineProperty(Storage.prototype, 'setItem', {
-      configurable: true,
-      value(key: string, value: string) {
-        if (key === 'whoisleuth-campaigns-v1') throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-        return original.call(this, key, value);
-      },
-    });
-  });
+  await failBrowserLocalManifestWrites(page, 'campaigns');
   await preview.getByRole('button', { name: 'Add selected data' }).click();
   await expect(page.getByRole('status')).toContainText('No archive changes were kept');
-  const domains = await page.evaluate(() => JSON.parse(localStorage.getItem('whois-rdap-cases-v1') || '{}').cases.map((record: any) => record.domain));
+  const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record: any) => record.value.domain);
   expect(domains).toEqual(['rollback.invalid']);
 });

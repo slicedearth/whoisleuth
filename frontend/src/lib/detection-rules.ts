@@ -3,16 +3,15 @@
 import {
   buildDetectionRuleExport,
   createDetectionRule as createRule,
-  DETECTION_RULE_SCHEMA_VERSION,
-  detectionRuleStoreVersion,
   evaluateDetectionRules,
   evaluateRuleSet,
   mergeDetectionRules,
-  normalizeDetectionRuleStore,
   RULE_FIELD_DEFINITIONS,
   serializeDetectionRuleStore,
   updateDetectionRule as updateRule,
 } from './analysis/detection-rule-model.js';
+import { browserLocalDataProvider } from './browser-local-data-service.js';
+import { DETECTION_RULES_COLLECTION, LEGACY_DETECTION_RULES_KEY } from './browser-local-data-definitions.js';
 
 export {
   MAX_RULE_IMPORT_BYTES,
@@ -24,59 +23,52 @@ export {
   RULE_FIELD_DEFINITIONS,
 } from './analysis/detection-rule-model.js';
 
-export const DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
+export const DETECTION_RULES_KEY = LEGACY_DETECTION_RULES_KEY;
 
 export interface DetectionRuleCondition { field: string; operator: string; value: string | number | boolean }
 export interface DetectionRule { id: string; name: string; enabled: boolean; match: 'all' | 'any'; conditions: DetectionRuleCondition[]; riskDelta: number; tag: string }
 export interface DetectionRuleMatch { id: string; name: string; riskDelta: number; appliedDelta: number; tag: string }
 export interface DetectionRuleEvaluation { caseId: string; domain: string; builtInRiskScore: number | null; customRiskDelta: number; contextualRiskScore: number | null; matchedRules: DetectionRuleMatch[]; suggestedTags: string[] }
 
-function readRaw(): unknown {
-  const raw = localStorage.getItem(DETECTION_RULES_KEY);
-  return raw ? JSON.parse(raw) : null;
+export async function loadDetectionRules(): Promise<DetectionRule[]> {
+  return (await browserLocalDataProvider()).read(DETECTION_RULES_COLLECTION) as Promise<DetectionRule[]>;
 }
 
-export function loadDetectionRules(): DetectionRule[] {
-  try { return normalizeDetectionRuleStore(readRaw()).rules as DetectionRule[]; }
-  catch { return []; }
+function boundedRules(rules: DetectionRule[]): DetectionRule[] {
+  return JSON.parse(serializeDetectionRuleStore(rules)).rules as DetectionRule[];
 }
 
-function persist(rules: DetectionRule[]): DetectionRule[] {
-  let version: number | null = null;
-  try { version = detectionRuleStoreVersion(readRaw()); } catch { /* corrupt data can be replaced */ }
-  if (version !== null && version > DETECTION_RULE_SCHEMA_VERSION) {
-    throw new Error('Custom rules were created by a newer app version. Update the app before saving.');
-  }
-  const serialized = serializeDetectionRuleStore(rules);
-  try { localStorage.setItem(DETECTION_RULES_KEY, serialized); }
-  catch { throw new Error('Could not save custom rules. Browser storage may be full or unavailable.'); }
-  return normalizeDetectionRuleStore(rules).rules as DetectionRule[];
+export async function createDetectionRule(input: Omit<DetectionRule, 'id'>): Promise<DetectionRule[]> {
+  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+    const rules = boundedRules(createRule(current, input).rules as DetectionRule[]);
+    return { document: rules, result: rules };
+  });
 }
 
-export function createDetectionRule(input: Omit<DetectionRule, 'id'>): DetectionRule[] {
-  return persist(createRule(loadDetectionRules(), input).rules as DetectionRule[]);
+export async function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>): Promise<DetectionRule[]> {
+  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+    const rules = boundedRules(updateRule(current, id, patch) as DetectionRule[]);
+    return { document: rules, result: rules };
+  });
 }
 
-export function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>): DetectionRule[] {
-  return persist(updateRule(loadDetectionRules(), id, patch) as DetectionRule[]);
+export async function deleteDetectionRule(id: string): Promise<DetectionRule[]> {
+  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+    const rules = boundedRules((current as DetectionRule[]).filter((rule) => rule.id !== id));
+    return { document: rules, result: rules };
+  });
 }
 
-export function deleteDetectionRule(id: string): DetectionRule[] {
-  return persist(loadDetectionRules().filter((rule) => rule.id !== id));
+export async function importDetectionRules(raw: unknown): Promise<{ rules: DetectionRule[]; added: number; updated: number; skipped: number }> {
+  return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
+    const result = mergeDetectionRules(current, raw);
+    const rules = boundedRules(result.rules as DetectionRule[]);
+    return { document: rules, result: { rules, added: result.added, updated: result.updated, skipped: result.skipped } };
+  });
 }
 
-export function importDetectionRules(raw: unknown): { rules: DetectionRule[]; added: number; updated: number; skipped: number } {
-  const result = mergeDetectionRules(loadDetectionRules(), raw);
-  return { rules: persist(result.rules as DetectionRule[]), added: result.added, updated: result.updated, skipped: result.skipped };
-}
-
-export function exportDetectionRules(): void {
-  let version: number | null = null;
-  try { version = detectionRuleStoreVersion(readRaw()); } catch { /* export normalized recovery */ }
-  if (version !== null && version > DETECTION_RULE_SCHEMA_VERSION) {
-    throw new Error('Custom rules were created by a newer app version. Update the app before exporting.');
-  }
-  const blob = new Blob([JSON.stringify(buildDetectionRuleExport(loadDetectionRules()), null, 2)], { type: 'application/json' });
+export async function exportDetectionRules(): Promise<void> {
+  const blob = new Blob([JSON.stringify(buildDetectionRuleExport(await loadDetectionRules()), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -85,11 +77,11 @@ export function exportDetectionRules(): void {
   URL.revokeObjectURL(url);
 }
 
-export function evaluateCaseRules(record: unknown, rules = loadDetectionRules()): DetectionRuleEvaluation {
+export function evaluateCaseRules(record: unknown, rules: DetectionRule[] = []): DetectionRuleEvaluation {
   return evaluateDetectionRules(record, rules) as DetectionRuleEvaluation;
 }
 
-export function evaluateCasesAgainstRules(records: unknown[], rules = loadDetectionRules()): DetectionRuleEvaluation[] {
+export function evaluateCasesAgainstRules(records: unknown[], rules: DetectionRule[] = []): DetectionRuleEvaluation[] {
   return evaluateRuleSet(records, rules) as DetectionRuleEvaluation[];
 }
 

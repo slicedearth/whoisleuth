@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, pseudoContent, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, pseudoContent, runBulkScan } from './helpers';
 
 // Default fixtures use dotless values so classifyQuery rejects them before
 // any upstream work. Tests that need completed result data install an explicit
@@ -131,17 +131,16 @@ test('a 101-result scan paginates 100 then 1, and Previous/Next update the page'
 });
 
 test('IDN evidence renders and filters without changing the risk score', async ({ page }) => {
-  await page.evaluate(() => {
-    const profile = {
-      id: 'idn-profile', name: 'Example Brand', officialDomains: ['paypal.com'], productNames: [], tlds: ['com'],
-      approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
-      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
-      createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
-    };
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
-    localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
+  const profile = {
+    id: 'idn-profile', name: 'Example Brand', officialDomains: ['paypal.com'], productNames: [], tlds: ['com'],
+    approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+    trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
+    createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-active-brand-profile-v1': profile.id,
   });
-  await page.reload();
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -168,15 +167,13 @@ test('IDN evidence renders and filters without changing the risk score', async (
 });
 
 test('risk model v5 exposes cross-family corroboration in Bulk triage', async ({ page }) => {
+  const profile = {
+    id: 'risk-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
+    approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+    trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: 'a'.repeat(64), officialFaviconPHash: '', pageBaseline: null,
+    createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
+  };
   await page.evaluate(() => {
-    const profile = {
-      id: 'risk-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
-      approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
-      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: 'a'.repeat(64), officialFaviconPHash: '', pageBaseline: null,
-      createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
-    };
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
-    localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
     sessionStorage.setItem('whoisleuth:candidate-handoff:v1', JSON.stringify({
       version: 1,
       createdAt: '2026-07-13T00:00:00.000Z',
@@ -184,7 +181,10 @@ test('risk model v5 exposes cross-family corroboration in Bulk triage', async ({
       candidates: [{ domain: 'candidate.example', source: 'official.example', mutationTypes: ['dictionary'] }],
     }));
   });
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-active-brand-profile-v1': profile.id,
+  });
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -252,17 +252,16 @@ test('risk model v5 exposes cross-family corroboration in Bulk triage', async ({
 });
 
 test('deep results present bounded relationship evidence including exact native certificate identity', async ({ page }) => {
-  await page.evaluate(() => {
-    const profile = {
-      id: 'relationship-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
-      approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
-      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,
-      createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
-    };
-    localStorage.setItem('whois-rdap-brand-profiles-v1', JSON.stringify([profile]));
-    localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
+  const profile = {
+    id: 'relationship-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
+    approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+    trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '', pageBaseline: null,
+    createdAt: '2026-07-13T00:00:00.000Z', updatedAt: '2026-07-13T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': [profile],
+    'whois-rdap-active-brand-profile-v1': profile.id,
   });
-  await page.reload();
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const shared = domain !== 'third.example';

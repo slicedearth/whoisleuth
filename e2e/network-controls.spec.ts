@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { useTheme } from './helpers';
+import { readBrowserLocalCollection, useTheme } from './helpers';
 
 test.use({ allowExpectedLookup429Noise: true });
 
@@ -139,10 +139,6 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
   await page.getByLabel('Watchlist name').fill('Policy-safe baseline');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
 
-  const storedDepth = await page.evaluate(() => {
-    const store = JSON.parse(localStorage.getItem('whois-rdap-watchlist-v1') || '{}');
-    const watchlists = store.watchlists || store;
-    return watchlists['Policy-safe baseline']?.results?.[0]?.scanDepth;
-  });
+  const storedDepth = (await readBrowserLocalCollection(page, 'watchlists')).records[0]?.value?.results?.[0]?.scanDepth;
   expect(storedDepth).toBe('fast');
 });

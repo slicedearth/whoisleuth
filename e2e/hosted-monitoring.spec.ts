@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, readBrowserLocalCollection } from './helpers';
 import type { Page, Route } from '@playwright/test';
 
 const NOW = '2026-07-16T12:00:00.000Z';
@@ -209,14 +209,14 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   expect(mock.commands.at(-1)?.entry).toBeTruthy();
 
   await item.getByRole('button', { name: 'Restore to browser' }).click();
-  const restored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), WATCHLIST_KEY);
-  expect(restored.watchlists['Priority domains'].results[0].domain).toBe('alpha.invalid');
+  const restored = await readBrowserLocalCollection(page, 'watchlists');
+  expect(restored.records[0].value.results[0].domain).toBe('alpha.invalid');
 
   await item.getByRole('button', { name: 'Delete hosted copy' }).click();
   await expect(hosted).toContainText('No watchlists are scheduled');
   expect(mock.watchlists()).toEqual([]);
-  const retained = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), WATCHLIST_KEY);
-  expect(retained.watchlists['Priority domains'].results[0].domain).toBe('alpha.invalid');
+  const retained = await readBrowserLocalCollection(page, 'watchlists');
+  expect(retained.records[0].value.results[0].domain).toBe('alpha.invalid');
 });
 
 test('hosted controls stay usable without horizontal overflow on a narrow mobile viewport', async ({ page }) => {

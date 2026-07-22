@@ -4,6 +4,9 @@ import { expect } from '@playwright/test';
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
 const THEME_STORAGE_KEY = 'whoisleuth:theme:v1';
+const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
+
+type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
 export async function useTheme(page: Page, preference: 'dark' | 'light' | 'system') {
   await page.addInitScript(({ key, value }) => {
@@ -23,6 +26,91 @@ export async function boundingBox(locator: Locator) {
   const box = await locator.boundingBox();
   expect(box, 'expected element to have a rendered bounding box').not.toBeNull();
   return box!;
+}
+
+export async function readBrowserLocalCollection(page: Page, collection: string) {
+  return page.evaluate(async ({ databaseName, collectionId }) => {
+    const request = indexedDB.open(databaseName);
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const transaction = database.transaction(['records', 'manifests'], 'readonly');
+      const manifestRequest = transaction.objectStore('manifests').get(collectionId);
+      const recordRequest = transaction.objectStore('records').index('collection').getAll(collectionId);
+      const [manifest, records] = await Promise.all([
+        new Promise<any>((resolve, reject) => {
+          manifestRequest.onsuccess = () => resolve(manifestRequest.result);
+          manifestRequest.onerror = () => reject(manifestRequest.error);
+        }),
+        new Promise<any[]>((resolve, reject) => {
+          recordRequest.onsuccess = () => resolve(recordRequest.result);
+          recordRequest.onerror = () => reject(recordRequest.error);
+        }),
+      ]);
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error);
+        transaction.onerror = () => undefined;
+      });
+      return {
+        manifest,
+        records: records
+          .sort((left, right) => left.ordinal - right.ordinal)
+          .map((record) => JSON.parse(record.payload)),
+      };
+    } finally {
+      database.close();
+    }
+  }, { databaseName: 'whoisleuth-browser-data-v1', collectionId: collection });
+}
+
+/**
+ * Recreates a browser that has legacy localStorage data but has not completed
+ * the IndexedDB migration yet. This is intentionally test-only: production
+ * code migrates once and then treats IndexedDB as authoritative.
+ */
+export async function migrateLegacyBrowserData(
+  page: Page,
+  entries: Record<string, LegacyStorageValue>,
+  options: Readonly<{ clearStorage?: boolean }> = {},
+) {
+  const current = new URL(page.url());
+  const destination = `${current.pathname}${current.search}${current.hash}`;
+  // Use a full document navigation before deleting the database. That closes
+  // the console document and its live IndexedDB connection, so the fixture
+  // cannot trigger transient "connection is closing" errors in page code.
+  await page.goto('/');
+  await page.evaluate(async ({ databaseName, values, clearStorage }) => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(databaseName);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error(`Could not reset ${databaseName} for the migration fixture.`));
+    });
+    if (clearStorage) localStorage.clear();
+    for (const [key, value] of Object.entries(values)) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+    }
+  }, { databaseName: LOCAL_DATA_DATABASE_NAME, values: entries, clearStorage: options.clearStorage === true });
+  await page.goto(destination);
+}
+
+export async function failBrowserLocalManifestWrites(page: Page, collection: string) {
+  await page.evaluate((collectionId) => {
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+      if (this.name === 'manifests'
+        && value !== null
+        && typeof value === 'object'
+        && (value as { collection?: unknown }).collection === collectionId) {
+        throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+      }
+      return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
+    };
+  }, collection);
 }
 
 // Computed content of a pseudo-element - used to check the CSS-only

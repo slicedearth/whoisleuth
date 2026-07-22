@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -68,11 +69,10 @@ function availabilityFixture() {
 
 async function cleanBrandStorage(page: import('@playwright/test').Page) {
   await page.goto('/brands');
-  await page.evaluate(([profilesKey, activeKey]) => {
-    localStorage.removeItem(profilesKey);
-    localStorage.removeItem(activeKey);
-  }, [PROFILES_KEY, ACTIVE_KEY]);
-  await page.reload();
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: null,
+    [ACTIVE_KEY]: null,
+  });
 }
 
 async function openProfileForm(page: import('@playwright/test').Page) {
@@ -98,10 +98,7 @@ test('captures and persists only a bounded official-site baseline after profile 
 
   await expect(page.getByText('Page baseline', { exact: true })).toBeVisible();
   await expect(page.getByText(/example\.com · Complete/)).toBeVisible();
-  const persisted = await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(value) ? value[0] : value.profiles[0];
-  }, PROFILES_KEY);
+  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles')).records[0].value;
   expect(persisted.pageBaseline).toMatchObject({
     baselineVersion: 1,
     domain: 'example.com',
@@ -132,10 +129,7 @@ test('a baseline is discarded when it no longer belongs to an official domain', 
   await page.getByLabel('Official domains').fill('different.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
-  const persisted = await page.evaluate((key) => {
-    const value = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(value) ? value[0] : value.profiles[0];
-  }, PROFILES_KEY);
+  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles')).records[0].value;
   expect(persisted.officialDomains).toEqual(['different.example']);
   expect(persisted.pageBaseline).toBeNull();
 });
@@ -182,12 +176,10 @@ test('official-site baseline controls fit a narrow mobile viewport without horiz
 test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {
   await cleanBrandStorage(page);
   const future = { version: 99, profiles: [{ future: true }] };
-  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: PROFILES_KEY, value: future });
-  await page.reload();
+  await migrateLegacyBrowserData(page, { [PROFILES_KEY]: future });
 
-  await openProfileForm(page);
-  await page.getByRole('button', { name: 'Save profile' }).click();
-  await expect(page.getByRole('status')).toContainText('newer app version');
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText(/created by a newer app version/)).toBeVisible();
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), PROFILES_KEY);
   expect(stored).toEqual(future);
 });
@@ -195,20 +187,13 @@ test('a future Brand Profile schema is never overwritten by an older app', async
 test('a browser quota failure reports a stable message and preserves the previous profiles', async ({ page }) => {
   await cleanBrandStorage(page);
   const stored = [profileFixture()];
-  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: PROFILES_KEY, value: stored });
-  await page.addInitScript((profilesKey) => {
-    const originalSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (key, value) {
-      if (key === profilesKey) throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-      return originalSetItem.call(this, key, value);
-    };
-  }, PROFILES_KEY);
-  await page.reload();
+  await migrateLegacyBrowserData(page, { [PROFILES_KEY]: stored });
+  await failBrowserLocalManifestWrites(page, 'brand_profiles');
 
   await page.getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel('Brand name').fill('Changed name');
   await page.getByRole('button', { name: 'Save profile' }).click();
-  await expect(page.getByRole('status')).toContainText('Browser storage may be full or unavailable');
-  const after = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), PROFILES_KEY);
-  expect(after).toEqual(stored);
+  await expect(page.getByRole('status')).toContainText('out of storage space');
+  const after = await readBrowserLocalCollection(page, 'brand_profiles');
+  expect(after.records.map((entry) => entry.value)).toEqual(stored);
 });

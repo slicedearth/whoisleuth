@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, readBrowserLocalCollection } from './helpers';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -14,42 +14,38 @@ function entry(domain: string) {
 }
 
 async function seed(page: import('@playwright/test').Page, value: unknown) {
+  await page.addInitScript(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: WATCHLIST_KEY, stored: value });
   await page.goto('/monitor');
-  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: WATCHLIST_KEY, stored: value });
-  await page.reload();
   await page.getByRole('tab', { name: /Watchlists/ }).click();
 }
 
 test('a future watchlist schema is never overwritten by an older app', async ({ page }) => {
   const future = { schema: 'whoisleuth.watchlists', version: 99, watchlists: { Future: entry('future.invalid') }, futureMetadata: { retain: true } };
-  await seed(page, future);
+  await page.addInitScript(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: WATCHLIST_KEY, stored: future });
+  await page.goto('/monitor');
 
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Clear all' }).click();
-  await expect(page.getByRole('status')).toContainText('newer app version');
+  await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+  await expect(page.getByText('Watchlists was created by a newer app version.')).toBeVisible();
   const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), WATCHLIST_KEY);
   expect(stored).toEqual(future);
 });
 
 test('a watchlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
   const previous = { schema: 'whoisleuth.watchlists', version: 2, watchlists: { Priority: entry('priority.invalid') } };
-  await page.goto('/monitor');
-  await page.evaluate(({ key, stored }) => localStorage.setItem(key, JSON.stringify(stored)), { key: WATCHLIST_KEY, stored: previous });
-  await page.addInitScript((watchlistKey) => {
-    const originalSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (key, value) {
-      if (key === watchlistKey) throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-      return originalSetItem.call(this, key, value);
+  await seed(page, previous);
+  await page.evaluate(() => {
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (this.name === 'manifests') throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+      return originalPut.call(this, value, key);
     };
-  }, WATCHLIST_KEY);
-  await page.reload();
-  await page.getByRole('tab', { name: /Watchlists/ }).click();
+  });
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Clear all' }).click();
-  await expect(page.getByRole('status')).toContainText('Browser storage may be full or unavailable');
-  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), WATCHLIST_KEY);
-  expect(stored).toEqual(previous);
+  await expect(page.getByRole('status')).toContainText('out of storage space');
+  const stored = await readBrowserLocalCollection(page, 'watchlists');
+  expect(stored.records.map((entry) => entry.id)).toEqual(['Priority']);
 });
 
 test('watchlist history filters material changes and hands retained domains back to Bulk', async ({ page }) => {
