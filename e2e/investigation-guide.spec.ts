@@ -85,11 +85,24 @@ test('partial progress, pause, and resume survive reload without implying comple
   await lookupStage.getByRole('button', { name: 'Allow this step' }).click();
   await lookupStage.getByRole('link', { name: 'Open Lookup' }).click();
 
-  await page.getByRole('combobox', { name: 'Outcome for Collect starting evidence' }).selectOption('partial');
-  await expect(page.locator('.guide')).toContainText('Partial');
+  const outcome = page.getByRole('combobox', { name: 'Outcome for Collect starting evidence' });
+  await expect.poll(async () => page.evaluate((key) => {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    return Boolean(stored?.stages?.find((stage: { id?: unknown }) => stage.id === 'lookup')?.openedAt);
+  }, GUIDE_KEY)).toBe(true);
+  await expect(outcome.getByRole('option', { name: 'Partial' })).toBeEnabled();
+  await outcome.selectOption('partial');
+  await expect.poll(async () => page.evaluate((key) => {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    return stored?.stages?.find((stage: { id?: unknown }) => stage.id === 'lookup')?.outcome;
+  }, GUIDE_KEY)).toBe('partial');
   await page.getByRole('button', { name: 'Pause guide' }).click();
   await expect(page.locator('.guide')).toContainText('Paused');
-  await expect(page.getByRole('combobox', { name: 'Outcome for Collect starting evidence' })).toBeDisabled();
+  await expect(outcome).toBeDisabled();
+  await expect.poll(async () => page.evaluate((key) => {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    return { status: stored?.status, outcome: stored?.stages?.find((stage: { id?: unknown }) => stage.id === 'lookup')?.outcome };
+  }, GUIDE_KEY)).toEqual({ status: 'paused', outcome: 'partial' });
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Resume guide' })).toBeVisible();

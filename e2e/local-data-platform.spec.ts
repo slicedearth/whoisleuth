@@ -83,7 +83,7 @@ test('application writes remain authoritative across reloads while the retained 
   await expect(page.getByRole('status').filter({ hasText: 'Shortlist cleared.' })).toBeVisible();
   await page.reload();
 
-  const collection = await readBrowserLocalCollection(page, 'shortlist');
+  const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRevision: 2 });
   expect(collection.manifest).toMatchObject({ revision: 2, recordCount: 0, source: 'application' });
   expect(collection.records).toEqual([]);
   expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), SHORTLIST_KEY)).toEqual(legacy);
@@ -106,6 +106,7 @@ test('a tampered IndexedDB record stops the console instead of presenting an emp
   });
   await page.goto('/bulk');
   await expect(page.getByRole('button', { name: 'Clear shortlist' })).toBeVisible();
+  await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await page.evaluate(async () => {
     const request = indexedDB.open('whoisleuth-browser-data-v1');
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -142,6 +143,7 @@ test('an older IndexedDB collection schema is normalized and recommitted at the 
   });
   await page.goto('/bulk');
   await expect(page.getByRole('button', { name: 'Clear shortlist' })).toBeVisible();
+  await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await page.evaluate(async () => {
     const request = indexedDB.open('whoisleuth-browser-data-v1');
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -166,7 +168,7 @@ test('an older IndexedDB collection schema is normalized and recommitted at the 
   });
   await page.reload();
 
-  const collection = await readBrowserLocalCollection(page, 'shortlist');
+  const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1, minimumRevision: 2 });
   expect(collection.manifest).toMatchObject({ schemaVersion: 2, revision: 2, source: 'application' });
   expect(collection.records.map((entry) => entry.value.domain)).toEqual(['priority.invalid']);
 });

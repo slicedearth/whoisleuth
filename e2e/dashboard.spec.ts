@@ -208,9 +208,9 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   await preview.getByRole('button', { name: 'Add selected data' }).click();
   await expect(page.getByRole('status')).toContainText('Added backup data from 7 sections');
   const [cases, campaigns, profiles, settings] = await Promise.all([
-    readBrowserLocalCollection(page, 'cases'),
-    readBrowserLocalCollection(page, 'campaigns'),
-    readBrowserLocalCollection(page, 'brand_profiles'),
+    readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
+    readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),
+    readBrowserLocalCollection(page, 'brand_profiles', { minimumRevision: 2 }),
     page.evaluate(() => ({
     activeProfile: localStorage.getItem('whois-rdap-active-brand-profile-v1'),
     theme: localStorage.getItem('whoisleuth:theme:v1'),
@@ -247,6 +247,7 @@ test('workspace archive import reports future sections and rolls back an interru
   }
   await preview.locator('li', { hasText: 'Cases' }).getByRole('checkbox').check();
   await preview.locator('li', { hasText: 'Campaigns' }).getByRole('checkbox').check();
+  await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'campaigns');
   await preview.getByRole('button', { name: 'Add selected data' }).click();
   await expect(page.getByRole('status')).toContainText('No archive changes were kept');

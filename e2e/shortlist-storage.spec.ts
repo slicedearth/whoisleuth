@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { readBrowserLocalCollection } from './helpers';
+import { failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -36,13 +36,7 @@ test('a shortlist quota failure reports a stable message and preserves the previ
   const previous = { schema: 'whoisleuth.shortlist', version: 2, entries: [record('priority.invalid')] };
   await seed(page, previous);
   await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
-  await page.evaluate(() => {
-    const originalPut = IDBObjectStore.prototype.put;
-    IDBObjectStore.prototype.put = function (value, key) {
-      if (this.name === 'manifests') throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-      return originalPut.call(this, value, key);
-    };
-  });
+  await failBrowserLocalManifestWrites(page, 'shortlist');
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Clear shortlist' }).click();
