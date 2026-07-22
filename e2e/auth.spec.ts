@@ -79,9 +79,10 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
 
-  const dashboardLink = page.getByRole('link', { name: 'WHOISleuth Dashboard' });
+  const dashboardLink = page.locator('#console-navigation').getByRole('link', { name: /^WHOISleuth\s+Domain intelligence console$/u });
   await expect(dashboardLink).toBeVisible();
   await expect(dashboardLink).toHaveAttribute('href', '/dashboard');
+  await page.locator('#query').fill('public-signout-state.example.test');
   await dashboardLink.click();
   await expect(page).toHaveURL('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
@@ -128,6 +129,13 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page).toHaveURL('/login');
   await expect(loginForm).toBeVisible();
   await expect(page.locator('.shell')).not.toBeVisible();
+
+  await passwordField.fill(TEST_SITE_PASSWORD);
+  await signInButton.click();
+  await expect(page).toHaveURL('/dashboard');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
+  await expect(page.locator('#query')).toHaveValue('');
 
   // The password only ever reaches the masked <input type="password">; the
   // page's own text/console output must never echo it back.

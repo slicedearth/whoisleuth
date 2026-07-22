@@ -6,12 +6,14 @@ import {
   MAX_REGISTRY_SUPPORT_FILTER_LENGTH,
   MAX_REGISTRY_SUPPORT_LOOKUP_LENGTH,
   MAX_REGISTRY_SUPPORT_ROWS,
+  REGISTRY_SUPPORT_SORT_KEYS,
   filterRegistrySupportRows,
   inspectRegistrySupport,
   registryAccessLabel,
   registryCoverageLabel,
   registrySupportCatalogue,
   registrySupportLabel,
+  sortRegistrySupportRows,
 } from '../frontend/src/lib/analysis/registry-support.js';
 import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 
@@ -157,6 +159,23 @@ test('caps injected catalogue rows before filtering', () => {
 
   assert.equal(filterRegistrySupportRows(rows, '', 'all').length, MAX_REGISTRY_SUPPORT_ROWS);
   assert.deepEqual(filterRegistrySupportRows(rows, `suffix-${MAX_REGISTRY_SUPPORT_ROWS + 1}`, 'all'), []);
+});
+
+test('sorts bounded filtered rows deterministically without mutating catalogue order', () => {
+  const { rows } = registrySupportCatalogue();
+  const before = rows.map((row) => row.id);
+
+  assert.deepEqual(REGISTRY_SUPPORT_SORT_KEYS, [
+    'suffix', 'coverage', 'registry_class', 'whois_access', 'whois_query',
+  ]);
+  assert.equal(sortRegistrySupportRows(rows, 'suffix', 'desc')[0].suffixes[0], 'zw');
+  assert.equal(sortRegistrySupportRows(rows, 'unexpected', 'asc')[0].suffixes[0], 'ac');
+  assert.deepEqual(rows.map((row) => row.id), before);
+
+  const byCoverage = sortRegistrySupportRows(rows, 'coverage', 'asc');
+  assert.equal(byCoverage[0].coverageState, 'access_documented');
+  assert.equal(byCoverage.at(-1).coverageState, 'fixture_verified');
+  assert.equal(sortRegistrySupportRows(null, 'suffix', 'asc').length, 0);
 });
 
 test('renders stable human-readable labels for known and unknown catalogue values', () => {

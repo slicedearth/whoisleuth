@@ -31,6 +31,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#edf2f7');
   await expect(page.locator('.terminal-preview')).toHaveCSS('background-color', 'rgb(245, 248, 251)');
+  await expect(page.locator('.terminal-note')).toHaveCSS('color', 'rgb(91, 104, 121)');
   await expect(page.locator('.terminal-window-red')).toHaveCSS('background-color', 'rgb(255, 107, 107)');
   await expect(page.locator('.terminal-window-yellow')).toHaveCSS('background-color', 'rgb(242, 184, 75)');
   await expect(page.locator('.terminal-window-green')).toHaveCSS('background-color', 'rgb(126, 224, 168)');
@@ -39,6 +40,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0f1115');
   await expect(page.locator('.terminal-preview')).toHaveCSS('background-color', 'rgb(17, 20, 26)');
+  await expect(page.locator('.terminal-note')).toHaveCSS('color', 'rgb(139, 147, 167)');
 
   const navFontSizes = await page.locator('.public-header').evaluate((header) => ({
     navigation: getComputedStyle(header.querySelector('a[href="/demo"]')!).fontSize,

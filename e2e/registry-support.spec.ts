@@ -27,13 +27,18 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await expect(page.getByText('Catalogue v26')).toBeVisible();
   await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('312');
-  await expect(page.locator('tbody tr')).toHaveCount(312);
+  await expect(page.locator('tbody tr')).toHaveCount(50);
+  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 312 matching profiles (312 total)');
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
   await expect(standards).toContainText('1113 / 1113');
   await expect(standards).toContainText('12 / 14');
   await expect(standards).toContainText('.edu');
   await expect(standards).toContainText('.mil');
   await expect(standards).toContainText('.arpa');
+
+  await page.locator('#registry-sort-direction').selectOption('desc');
+  await expect(page.locator('tbody tr').first().locator('td[data-label="Suffix"] > code')).toHaveText('.zw');
+  await page.locator('#registry-sort-direction').selectOption('asc');
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
@@ -59,14 +64,18 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(94);
+  await expect(page.locator('tbody tr')).toHaveCount(50);
+  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 94 matching profiles (312 total)');
   await expect(page.locator('tbody')).toContainText('.ao');
   await expect(page.locator('tbody')).toContainText('.ch');
   await expect(page.locator('tbody')).toContainText('.es');
-  await expect(page.locator('tbody')).toContainText('.vn');
   await expect(page.locator('tbody')).toContainText('.gr');
-  await expect(page.locator('tbody')).toContainText('.mil');
   await expect(page.locator('tbody')).toContainText('.arpa');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(44);
+  await expect(page.locator('.result-count')).toContainText('Showing 51–94 of 94 matching profiles (312 total)');
+  await expect(page.locator('tbody')).toContainText('.mil');
+  await expect(page.locator('tbody')).toContainText('.vn');
   await expect(page.locator('tbody')).toContainText('.zw');
 
   await search.fill('no matching capability');

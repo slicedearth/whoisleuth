@@ -35,7 +35,6 @@
       type="button"
       class:active={selectedPreset === preset.id}
       aria-pressed={selectedPreset === preset.id}
-      aria-label={`Use ${preset.label} generation preset`}
       onclick={() => selectPreset(preset.id)}
     >
       <strong>{preset.label}</strong>

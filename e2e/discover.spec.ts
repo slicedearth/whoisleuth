@@ -103,8 +103,8 @@ test('lookalike generation discloses its limits and paginates every retained can
 });
 
 test('lookalike presets expose a live upper-bound estimate and clear stale results', async ({ page }) => {
-  const allFamilies = page.getByRole('button', { name: 'Use All families generation preset' });
-  const impersonation = page.getByRole('button', { name: 'Use Impersonation generation preset' });
+  const allFamilies = page.getByRole('button', { name: /^All families\b/u });
+  const impersonation = page.getByRole('button', { name: /^Impersonation\b/u });
   await expect(allFamilies).toHaveAttribute('aria-pressed', 'true');
 
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
@@ -140,7 +140,7 @@ test('lookalike estimate discloses when the hard generation cap may apply', asyn
 });
 
 test('keyboard layout selection adds locale-specific neighbours and clears stale results', async ({ page }) => {
-  await page.getByRole('button', { name: 'Use Common edits generation preset' }).click();
+  await page.getByRole('button', { name: /^Common edits\b/u }).click();
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('z.com');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
 
@@ -157,13 +157,13 @@ test('keyboard layout selection adds locale-specific neighbours and clears stale
   });
   await expect(azertyNeighbour).toContainText('Keyboard substitution');
 
-  await page.getByRole('button', { name: 'Use Impersonation generation preset' }).click();
+  await page.getByRole('button', { name: /^Impersonation\b/u }).click();
   await expect(keyboardLayout).toBeDisabled();
   await expect(page.locator('.generation-options')).toContainText('Not used by the selected preset');
 });
 
 test('multi-word lookalikes retain separator and reordering provenance', async ({ page }) => {
-  await page.getByRole('button', { name: 'Use Common edits generation preset' }).click();
+  await page.getByRole('button', { name: /^Common edits\b/u }).click();
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('Acme Pay');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
   await page.getByRole('button', { name: 'Generate candidates' }).click();

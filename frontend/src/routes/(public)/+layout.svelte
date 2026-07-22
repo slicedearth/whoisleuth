@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
+  import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
   import {
     PUBLIC_SESSION_CONTEXT,
     type PublicSessionState,
@@ -20,8 +21,10 @@
     try{
       const response=await fetch('/api/session',{cache:'no-store'});
       session=response.ok&&(await response.json()).authenticated===true?'authenticated':'anonymous';
+      if(session==='anonymous')clearConsoleWorkflowState();
     }catch{
       session='anonymous';
+      clearConsoleWorkflowState();
     }
   }
 
@@ -33,7 +36,9 @@
       const response=await fetch('/api/logout',{method:'POST'});
       if(!response.ok)throw new Error();
       session='anonymous';
+      clearConsoleWorkflowState();
       await goto('/login',{replaceState:true});
+      clearConsoleWorkflowState();
     }catch{
       logoutError='Sign out failed. Try again.';
     }finally{
@@ -44,7 +49,7 @@
 
 <div class="public-shell">
   <header class="public-header">
-    <a class="public-brand" href="/" aria-label="WHOISleuth home"><span class="mark"><img src="/favicon.svg" alt=""></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
+    <a class="public-brand" href="/"><span class="mark"><img src="/favicon.svg" alt=""></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
     <nav aria-label="Public navigation">
       <a class="overview-link" class:active={page.url.pathname==='/' } aria-current={page.url.pathname==='/'?'page':undefined} href="/">Overview</a>
       <a class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>
