@@ -95,7 +95,7 @@
   </fieldset>
 
   {#if loading}
-    <p class="loading-note" role="status">{loadingDetail}</p>
+    <p class="loading-note" role="status"><span class="spinner" aria-hidden="true"></span><span>{loadingDetail}</span></p>
   {/if}
 
   {#if securityTxtSupported}
@@ -143,7 +143,10 @@
   .mode-options strong{font:700 var(--text-sm) var(--mono)}
   .mode-options small{color:var(--muted);font-size:var(--text-2xs)}
   .lookup-mode p,.loading-note{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .loading-note{padding:10px 12px;border:1px solid rgb(var(--accent-rgb) / .32);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .08)}
+  .loading-note{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid rgb(var(--accent-rgb) / .32);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .08)}
+  .spinner{flex:0 0 auto;width:13px;height:13px;margin-top:2px;border:2px solid rgb(var(--accent-rgb) / .28);border-top-color:var(--accent);border-radius:50%;animation:lookup-spin .8s linear infinite}
+  @keyframes lookup-spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.spinner{animation:none;border-color:var(--accent)}}
   .intelligence-options{margin:14px 0 0;padding:12px 14px 14px;border:1px solid var(--border);border-radius:var(--radius-md)}
   .intelligence-options legend{padding:0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .intelligence-hint{margin:0 0 10px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}

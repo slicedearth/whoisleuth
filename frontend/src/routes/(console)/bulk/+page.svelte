@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { page as routePage } from '$app/state';
   import { getContext, onMount } from 'svelte';
   import BulkResultsTable from '$lib/components/BulkResultsTable.svelte';
   import BulkCoverage from '$lib/components/BulkCoverage.svelte';
@@ -24,7 +26,10 @@
   import { buildMispIndicatorExport } from '$lib/analysis/misp-indicator-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compactHttpObservation, normalizeHttpSummary } from '$lib/analysis/http-summary.js';
+  import { defaultBulkSortDirection, sortBulkResults, type BulkSortDirection, type BulkSortKey } from '$lib/analysis/bulk-sort.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
+  import { readBulkWorkflowState, writeBulkWorkflowState } from '$lib/console-workflow-state.js';
+import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInvestigationGuideReviewDomains } from '$lib/investigation-guide';
 
   type ScanMode = 'fast' | 'deep';
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
@@ -45,8 +50,9 @@
   let handoff = $state<CandidateHandoff|null>(null);
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
   let completed = $state(0); let total = $state(0); let results = $state<ScanResult[]>([]); let filter = $state<Filter>('all');
-  let mutationFilter=$state('');let signalFilters=$state<Set<string>>(new Set());let sortKey=$state<'domain'|'risk'|'opportunity'>('risk');let sortDirection=$state<1|-1>(-1);let page=$state(1);
+  let mutationFilter=$state('');let signalFilters=$state<Set<string>>(new Set());let sortKey=$state<BulkSortKey>('risk');let sortDirection=$state<BulkSortDirection>(-1);let page=$state(1);
   let status = $state(''); let controller: AbortController|null = null; let pauseResolvers: Array<()=>void> = [];
+  let activeScanSnapshot: (()=>ScanResult[])|null = null;
   let indicatorFormat=$state<'domains'|'hosts'|'dnsmasq'|'rpz'|'stix'|'misp'>('domains');let indicatorStatus=$state('');
   let watchlistName = $state(''); let saveStatus = $state('');
   let profile = $state<BrandProfile|null>(null);
@@ -58,7 +64,7 @@
   const caseByDomain=$derived(new Map(cases.map(record=>[record.domain,record])));
   const mutationLabels=MUTATION_LABELS as Record<string,string>;
   const mutationOptions=$derived([...new Set(results.flatMap(row=>row.mutationTypes))].sort((a,b)=>(mutationLabels[a]||a).localeCompare(mutationLabels[b]||b)));
-  const filtered = $derived.by(()=>results.filter(matchesFilter).sort((a,b)=>{let comparison=0;if(sortKey==='domain')comparison=a.domain.localeCompare(b.domain);else comparison=(a[sortKey]??-1)-(b[sortKey]??-1);return comparison*sortDirection;}));
+  const filtered = $derived.by(()=>sortBulkResults(results.filter(matchesFilter),sortKey,sortDirection));
   const indicatorCount=$derived(filtered.filter(isDefensiveIndicatorCandidate).length);
   const counts = $derived.by(()=>{const next={all:results.length,available:0,registered:0,high_risk:0,trusted:0,errors:0};for(const row of results){if(row.availability==='available')next.available+=1;if(['registered','for_sale','expiring'].includes(row.availability))next.registered+=1;if((row.risk??-1)>=70&&!row.trusted)next.high_risk+=1;if(row.trusted)next.trusted+=1;if(row.status==='error')next.errors+=1;}return next;});
   const pageCount=$derived(Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)));
@@ -68,9 +74,25 @@
   const provenanceByDomain=$derived(new Map((handoff?.candidates||[]).map(candidate=>[candidate.domain.toLowerCase(),candidate])));
   const relationshipSummary=$derived(buildScanRelationships(running?[]:results));
   const parsedInput=$derived(parseDomainInput(input));
+  $effect(()=>{if(routePage.url.searchParams.has('investigation')&&!running&&results.length)selectInvestigationGuideReviewDomains(results.map((row)=>row.domain));});
   const coverage=$derived.by(()=>{if(!handoff||!['typosquat','keyword'].includes(handoff.source))return null;const generated=handoff.generatedCandidates||handoff.candidates;const trusted=new Set(generated.filter(candidate=>isDomainAllowlisted(candidate.domain,profile)).map(candidate=>candidate.domain));return buildCoverageReport(results.map(row=>({...row.saved,domain:row.domain,availability:row.availability,mutationTypes:row.mutationTypes})),generated,trusted,mutationLabels);});
 
-  onMount(()=>{void (async()=>{[profile,shortlist,cases]=await Promise.all([activeProfile(),loadShortlist(),loadCases()]);handoff=loadCandidateHandoff();if(handoff)input=handoff.candidates.map(c=>c.domain).join('\n');})();});
+  onMount(()=>{
+    const handoffNavigation=routePage.url.searchParams.has('source');
+    const investigationTarget=parseDomainInput(routePage.url.searchParams.get('investigation')||'').entries[0]||'';
+    const activeGuide=investigationTarget?loadInvestigationGuide():null;
+    const guideContext=investigationTarget&&activeGuide?.domain===investigationTarget?`${activeGuide.recipeId}\u0000${activeGuide.domain}\u0000${activeGuide.createdAt}`:investigationTarget?`target\u0000${investigationTarget}`:'';
+    const candidateState=handoffNavigation?null:readBulkWorkflowState<ScanResult>();
+    const restored=candidateState&&(!investigationTarget||candidateState.guideContext===guideContext)?candidateState:null;
+    if(restored){input=restored.input;mode=restored.mode;completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;watchlistName=restored.watchlistName;}
+    void (async()=>{[profile,shortlist,cases]=await Promise.all([activeProfile(),loadShortlist(),loadCases()]);handoff=loadCandidateHandoff();if(handoffNavigation&&handoff)input=handoff.candidates.map(c=>c.domain).join('\n');else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}})();
+    return()=>{
+      resume();
+      controller?.abort();
+      const retainedResults=activeScanSnapshot?.()||results;
+      writeBulkWorkflowState({guideContext,input,mode,completed,total,results:retainedResults,filter,mutationFilter,signalFilters:[...signalFilters],sortKey,sortDirection,page,status:running?`Stopped after ${completed} of ${total} lookups when you left Bulk. Completed results were retained.`:status,indicatorFormat,watchlistName});
+    };
+  });
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function trackCase(row:ScanResult){try{const s=row.saved;const{record,created,pruned}=await openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,phishingLanguageMatch:s.phishingLanguageMatch,mutationTypes:s.mutationTypes}});cases=await loadCases();caseStatus=`${created?`Opened a case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function setRowDisposition(row:ScanResult,value:string){const record=caseByDomain.get(row.domain);if(!record)return;try{const{pruned}=await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${row.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the case.';}}
@@ -80,7 +102,9 @@
   function setFilter(next:Filter){filter=next;page=1;}
   function toggleSignal(signal:string){const next=new Set(signalFilters);next.has(signal)?next.delete(signal):next.add(signal);signalFilters=next;page=1;}
   function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();page=1;}
-  function setSort(key:'domain'|'risk'|'opportunity'){if(sortKey===key)sortDirection=sortDirection===1?-1:1;else{sortKey=key;sortDirection=key==='domain'?1:-1;}}
+  function setSort(key:BulkSortKey){if(sortKey===key)sortDirection=sortDirection===1?-1:1;else{sortKey=key;sortDirection=defaultBulkSortDirection(key);}page=1;}
+  function setSortKey(key:BulkSortKey){if(sortKey!==key){sortKey=key;sortDirection=defaultBulkSortDirection(key);}page=1;}
+  function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
   function loadDomains(domains:string[]){input=domains.join('\n');status=`Loaded ${domains.length} related domains into the scan queue.`;document.querySelector('.queue')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
   function isShortlisted(domain:string){return shortlistedDomains.has(domain);}
   async function toggleSaved(row:ScanResult){try{const added=await toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
@@ -96,14 +120,15 @@
   function togglePause(){if(paused)resume();else paused=true;}
   function cancel(){resume();controller?.abort();status=`Cancelled after ${completed} of ${total} lookups.`;}
   async function fetchLookup(domain:string,signal:AbortSignal){const url=`/api/lookup?q=${encodeURIComponent(domain)}&fast=${mode==='fast'?'1':'0'}&compact=1`;let response=await fetch(url,{signal});for(let attempt=0;response.status===429&&attempt<3;attempt++){const seconds=Number(response.headers.get('Retry-After'))||2;await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,seconds*1000);signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Aborted','AbortError'));},{once:true});});response=await fetch(url,{signal});}const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||`Lookup failed (${response.status})`);return body;}
-  function normalize(domain:string,body:Record<string,any>):ScanResult {const av=body.availability||{};const canonicalDomain=String(av.domain||domain);const candidate=provenance(domain)||provenance(canonicalDomain);const matched=profileSignals(canonicalDomain,av,profile);const idn=analyzeDomainIdn(canonicalDomain,profile?.officialDomains||[]);const scoring={...av,...matched,availability:av.state,mutationTypes:candidate?.mutationTypes||[]};const riskExplanation=explainRiskScore(scoring);const risk=riskExplanation?.score??null;const opportunity=computeOpportunityScore(scoring);const nameservers=Array.isArray(av.nameservers)?av.nameservers.map(String):[];const registrant=av.registrant&&typeof av.registrant==='object'?av.registrant as Contact:null;const abuseEvidence=av.abuse?.email?{abuseEmail:String(av.abuse.email),hasMx:av.hasMx??null,activityStatus:av.activityStatus||null,privacyProtected:av.privacyProtected??null,domainAgeDays:av.domainAgeDays??null}:null;const httpSummary=compactHttpObservation(av.http)||{};const relationship=relationshipObservation(av,profile?.officialDomains||[]);const saved={domain:canonicalDomain,scanDepth:mode,availability:av.state||'unknown',registrarName:entityDisplayName(av.registrar)||'—',nameservers,createdDate:av.createdDate||null,expiryDate:av.expiryDate||null,privacyProtected:av.privacyProtected??null,hasMx:av.hasMx??null,hasSpf:av.hasSpf??null,hasDmarc:av.hasDmarc??null,activityStatus:av.activityStatus||null,pageTitle:av.pageTitle??null,...httpSummary,faviconHash:av.faviconHash||null,faviconPHash:av.faviconPHash||null,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:av.hasPasswordField??null,phishingLanguageMatch:av.phishingLanguageMatch??null,riskModelVersion:riskExplanation?.modelVersion??null,riskScore:risk,riskFactors:riskExplanation?.factors.map((factor)=>({label:factor.label,points:factor.delta}))||[],mutationTypes:candidate?.mutationTypes||[]};return{domain:canonicalDomain,status:'complete',availability:saved.availability,confidence:av.confidence||'low',registrar:saved.registrarName,activity:formatActivityCell(av.activityStatus,av.hasMx,av.hasSpf,av.hasDmarc),risk,opportunity,mutationTypes:candidate?.mutationTypes||[],trusted:matched.trusted,error:'',saved,nameservers,faviconHash:saved.faviconHash,faviconPHash:saved.faviconPHash,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:Boolean(av.hasPasswordField),phishingLanguageMatch:av.phishingLanguageMatch||null,registrant,abuseEvidence,ct:candidate?.certificateTransparency||null,idn,dns:av.dns&&typeof av.dns==='object'?av.dns:null,dnssec:av.dnssec||null,relationship};}
-  function failedResult(domain:string,message:string):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const idn=analyzeDomainIdn(domain,profile?.officialDomains||[]);return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'low',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:profileDomainKind(domain,profile),error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:mode,availability:'error',mutationTypes,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false,hasPasswordField:false,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,relationship:relationshipObservation({},[])};}
+  function normalize(domain:string,body:Record<string,any>):ScanResult {const av=body.availability||{};const canonicalDomain=String(av.domain||domain);const candidate=provenance(domain)||provenance(canonicalDomain);const matched=profileSignals(canonicalDomain,av,profile);const idn=analyzeDomainIdn(canonicalDomain,profile?.officialDomains||[]);const scoring={...av,...matched,availability:av.state,mutationTypes:candidate?.mutationTypes||[]};const riskExplanation=explainRiskScore(scoring);const risk=riskExplanation?.score??null;const opportunity=computeOpportunityScore(scoring);const nameservers=Array.isArray(av.nameservers)?av.nameservers.map(String):[];const registrant=av.registrant&&typeof av.registrant==='object'?av.registrant as Contact:null;const abuseEvidence=av.abuse?.email?{abuseEmail:String(av.abuse.email),hasMx:av.hasMx??null,activityStatus:av.activityStatus||null,privacyProtected:av.privacyProtected??null,domainAgeDays:av.domainAgeDays??null}:null;const httpSummary=compactHttpObservation(av.http)||{};const relationship=relationshipObservation(av,profile?.officialDomains||[]);const confidence=['high','medium','low'].includes(av.confidence)?av.confidence:'unknown';const saved={domain:canonicalDomain,scanDepth:mode,availability:av.state||'unknown',registrarName:entityDisplayName(av.registrar)||'—',nameservers,createdDate:av.createdDate||null,expiryDate:av.expiryDate||null,privacyProtected:av.privacyProtected??null,hasMx:av.hasMx??null,hasSpf:av.hasSpf??null,hasDmarc:av.hasDmarc??null,activityStatus:av.activityStatus||null,pageTitle:av.pageTitle??null,...httpSummary,faviconHash:av.faviconHash||null,faviconPHash:av.faviconPHash||null,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:av.hasPasswordField??null,phishingLanguageMatch:av.phishingLanguageMatch??null,riskModelVersion:riskExplanation?.modelVersion??null,riskScore:risk,riskFactors:riskExplanation?.factors.map((factor)=>({label:factor.label,points:factor.delta}))||[],mutationTypes:candidate?.mutationTypes||[]};return{domain:canonicalDomain,status:'complete',availability:saved.availability,confidence,registrar:saved.registrarName,activity:formatActivityCell(av.activityStatus,av.hasMx,av.hasSpf,av.hasDmarc),risk,opportunity,mutationTypes:candidate?.mutationTypes||[],trusted:matched.trusted,error:'',saved,nameservers,faviconHash:saved.faviconHash,faviconPHash:saved.faviconPHash,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:Boolean(av.hasPasswordField),phishingLanguageMatch:av.phishingLanguageMatch||null,registrant,abuseEvidence,ct:candidate?.certificateTransparency||null,idn,dns:av.dns&&typeof av.dns==='object'?av.dns:null,dnssec:av.dnssec||null,relationship};}
+  function failedResult(domain:string,message:string):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const idn=analyzeDomainIdn(domain,profile?.officialDomains||[]);return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:profileDomainKind(domain,profile),error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:mode,availability:'error',mutationTypes,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false,hasPasswordField:false,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,relationship:relationshipObservation({},[])};}
   function riskTitle(row:ScanResult){const factors=Array.isArray(row.saved.riskFactors)?row.saved.riskFactors:[];const lines=factors.map((factor:Record<string,any>)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`);if(row.saved.riskModelVersion)lines.push(`Risk model v${row.saved.riskModelVersion}`);return lines.join('\n')||undefined;}
-  function resultDisplayRows(){return visibleResults.map((row)=>{const resultIndex=results.indexOf(row);const caseRecord=caseByDomain.get(row.domain)||null;const outreach=outreachAction(row.domain,row.registrant);const abuse=abuseAction(row.domain,row.abuseEvidence);return{resultIndex,domain:row.domain,shortlisted:isShortlisted(row.domain),unicodeDomain:row.idn?.hasIdn?String(row.idn.unicodeDomain||''):'',mixedScript:Boolean(row.idn?.mixedScript),referenceMatch:Boolean(row.idn?.referenceMatches?.length),trusted:row.trusted||'',faviconMatch:row.faviconMatch,faviconNearMatch:row.faviconNearMatch,reusesOfficialAssets:row.reusesOfficialAssets,hasPasswordField:row.hasPasswordField,phishingLanguageMatch:row.phishingLanguageMatch||'',ct:row.ct?{lastObservedAt:row.ct.lastObservedAt,hostnameCount:row.ct.hostnames.length,certificateCount:row.ct.certificateCount}:null,errorRow:row.status==='error',error:row.error,availability:row.availability,risk:row.risk,highRisk:(row.risk??-1)>=70&&!row.trusted,riskTitle:riskTitle(row),opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,mutationLabel:row.mutationTypes.map(value=>mutationLabels[value]||value.replaceAll('_',' ')).join(', ')||'—',caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null,outreach:outreach?{mailto:outreach.mailto,body:outreach.body}:null,abuse:abuse?{mailto:abuse.mailto,body:abuse.body}:null};});}
+  function resultDisplayRows(){return visibleResults.map((row)=>{const resultIndex=results.indexOf(row);const caseRecord=caseByDomain.get(row.domain)||null;const outreach=outreachAction(row.domain,row.registrant);const abuse=abuseAction(row.domain,row.abuseEvidence);return{resultIndex,domain:row.domain,shortlisted:isShortlisted(row.domain),unicodeDomain:row.idn?.hasIdn?String(row.idn.unicodeDomain||''):'',mixedScript:Boolean(row.idn?.mixedScript),referenceMatch:Boolean(row.idn?.referenceMatches?.length),trusted:row.trusted||'',faviconMatch:row.faviconMatch,faviconNearMatch:row.faviconNearMatch,reusesOfficialAssets:row.reusesOfficialAssets,hasPasswordField:row.hasPasswordField,phishingLanguageMatch:row.phishingLanguageMatch||'',ct:row.ct?{lastObservedAt:row.ct.lastObservedAt,hostnameCount:row.ct.hostnames.length,certificateCount:row.ct.certificateCount}:null,errorRow:row.status==='error',error:row.error,availability:row.availability,confidence:row.confidence,risk:row.risk,highRisk:(row.risk??-1)>=70&&!row.trusted,riskTitle:riskTitle(row),opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,mutationLabel:row.mutationTypes.map(value=>mutationLabels[value]||value.replaceAll('_',' ')).join(', ')||'—',caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null,outreach:outreach?{mailto:outreach.mailto,body:outreach.body}:null,abuse:abuse?{mailto:abuse.mailto,body:abuse.body}:null};});}
   function resultAt(index:number){return index>=0&&index<results.length?results[index]:null;}
   function toggleSavedAt(index:number){const row=resultAt(index);if(row)toggleSaved(row);}
   function trackCaseAt(index:number){const row=resultAt(index);if(row)trackCase(row);}
   function setDispositionAt(index:number,value:string){const row=resultAt(index);if(row)setRowDisposition(row,value);}
+  async function inspectAt(index:number){const row=resultAt(index);if(!row)return;selectInvestigationGuideFocusDomain(row.domain);await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);}
   async function run(domains:string[],replace=true){
     const limit=mode==='fast'?2000:200;
     if(!domains.length){status='Enter at least one domain.';return;}
@@ -113,7 +138,9 @@
     const pendingResults:Array<ScanResult|undefined>=new Array(domains.length);
     let cursor=0;
     let publishTimer:ReturnType<typeof setTimeout>|null=null;
-    const publish=()=>{if(publishTimer){clearTimeout(publishTimer);publishTimer=null;}results=[...baseResults,...pendingResults.filter((row):row is ScanResult=>Boolean(row))];};
+    const snapshot=()=>[...baseResults,...pendingResults.filter((row):row is ScanResult=>Boolean(row))];
+    activeScanSnapshot=snapshot;
+    const publish=()=>{if(publishTimer){clearTimeout(publishTimer);publishTimer=null;}results=snapshot();};
     const schedulePublish=()=>{if(!publishTimer)publishTimer=setTimeout(publish,RESULT_PUBLISH_MS);};
     controller=scanController;running=true;paused=false;completed=0;total=domains.length;page=1;
     if(replace)results=[];
@@ -121,7 +148,7 @@
     const concurrency=mode==='fast'?12:4;
     const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted)break;const index=cursor++,domain=domains[index];try{const body=await fetchLookup(domain,scanController.signal);const row=normalize(domain,body);if(mode==='deep'&&body.availability?.deepScanComplete===false)row.saved.scanDepth='fast';pendingResults[index]=row;}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;pendingResults[index]=failedResult(domain,cause instanceof Error?cause.message:'Lookup failed');}completed+=1;schedulePublish();}};
     await Promise.all(Array.from({length:Math.min(concurrency,domains.length)},worker));
-    publish();running=false;controller=null;
+    publish();activeScanSnapshot=null;running=false;controller=null;
     if(scanController.signal.aborted)return;
     status=`Completed ${completed} of ${total} lookups.`;
   }
@@ -158,7 +185,7 @@
 />
 
 {#if results.length}
-  <section class="triage card">
+  <section id="results" class="triage card" tabindex="-1">
     <BulkTriageControls
       {counts}
       {filter}
@@ -176,6 +203,10 @@
       {signalFilters}
       {toggleSignal}
       {clearFilters}
+      {sortKey}
+      {sortDirection}
+      {setSortKey}
+      {setSortDirection}
       {indicatorStatus}
       matchedCount={filtered.length}
       resultCount={results.length}
@@ -196,6 +227,7 @@
       caseOptions={CASE_DISPOSITIONS}
       setDisposition={setDispositionAt}
       trackCase={trackCaseAt}
+      inspectDomain={inspectAt}
       {copyDraft}
       {currentPage}
       {pageCount}

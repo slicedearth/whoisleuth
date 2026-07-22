@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { BulkSortDirection, BulkSortKey } from '$lib/analysis/bulk-sort.js';
+
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
   type IndicatorFormat = 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';
   type Counts = Record<Filter, number>;
@@ -23,6 +25,10 @@
     signalFilters,
     toggleSignal,
     clearFilters,
+    sortKey,
+    sortDirection,
+    setSortKey,
+    setSortDirection,
     indicatorStatus,
     matchedCount,
     resultCount,
@@ -50,6 +56,10 @@
     signalFilters: Set<string>;
     toggleSignal: (value: string) => void;
     clearFilters: () => void;
+    sortKey: BulkSortKey;
+    sortDirection: BulkSortDirection;
+    setSortKey: (value: BulkSortKey) => void;
+    setSortDirection: (value: BulkSortDirection) => void;
     indicatorStatus: string;
     matchedCount: number;
     resultCount: number;
@@ -74,6 +84,8 @@
 </div>
 <div class="advanced-filters">
   <label class="field">Mutation<select value={mutationFilter} onchange={(event) => setMutationFilter(event.currentTarget.value)}><option value="">All mutations</option>{#each mutationOptions as mutation}<option value={mutation.value}>{mutation.label}</option>{/each}</select></label>
+  <label class="field">Sort<select value={sortKey} onchange={(event) => setSortKey(event.currentTarget.value as BulkSortKey)}><option value="risk">Risk</option><option value="opportunity">Opportunity</option><option value="domain">Domain</option><option value="availability">Registration</option><option value="confidence">Confidence</option><option value="activity">Website</option><option value="registrar">Registrar</option><option value="mutation">Mutation</option></select></label>
+  <label class="field">Order<select value={String(sortDirection)} onchange={(event) => setSortDirection(Number(event.currentTarget.value) === 1 ? 1 : -1)}><option value="-1">Descending</option><option value="1">Ascending</option></select></label>
   <div class="signal-filters" aria-label="Evidence filters">{#each signalOptions as option}<button class="btn small" class:active={signalFilters.has(option[0])} aria-pressed={signalFilters.has(option[0])} onclick={() => toggleSignal(option[0])}>{option[1]}</button>{/each}</div>
   <button class="btn" onclick={clearFilters} disabled={filter === 'all' && !mutationFilter && !signalFilters.size}>Clear filters</button>
 </div>

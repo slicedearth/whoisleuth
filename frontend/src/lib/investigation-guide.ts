@@ -16,6 +16,8 @@ import {
   MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
   parseInvestigationGuide,
   restartInvestigationGuide,
+  setInvestigationGuideFocusDomain,
+  setInvestigationGuideReviewDomains,
   setInvestigationGuideStageOutcome,
   setInvestigationGuideStatus,
   visitInvestigationGuide,
@@ -125,6 +127,16 @@ export function approveInvestigationGuideCollection(stageId: string): Investigat
 export function updateInvestigationGuideOutcome(stageId: string, outcome: InvestigationGuideOutcome): InvestigationGuide | null {
   const current = loadInvestigationGuide();
   return updateStoredGuide(setInvestigationGuideStageOutcome(current, stageId, outcome), current);
+}
+
+export function selectInvestigationGuideFocusDomain(domain: string): InvestigationGuide | null {
+  const current = loadInvestigationGuide();
+  return updateStoredGuide(setInvestigationGuideFocusDomain(current, domain), current);
+}
+
+export function selectInvestigationGuideReviewDomains(domains: string[]): InvestigationGuide | null {
+  const current = loadInvestigationGuide();
+  return updateStoredGuide(setInvestigationGuideReviewDomains(current, domains), current);
 }
 
 export function pauseInvestigationGuide(): InvestigationGuide | null {

@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFile } from 'node:fs/promises';
+import { TEST_SITE_PASSWORD } from './constants';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -49,6 +50,118 @@ test('fast lookup mode is explicit and sends the fast contract parameter', async
   await requestPromise;
   await expect(page.getByText(/Fast lookup is checking authoritative registration evidence/u)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+});
+
+test('keeps the current Lookup form and result during console navigation only', async ({ page }) => {
+  let requestCount = 0;
+  await page.route('**/api/lookup?*', async (route) => {
+    requestCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'portal.example.test', type: 'domain', registrableDomain: 'example.test',
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain: 'example.test', deepScanComplete: true },
+        rdap: { error: 'Fixture source unavailable' }, whois: { parsed: {}, chain: [] },
+        diagnostics: { version: 7, rdap: { status: 'error' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  await page.locator('#query').fill('portal.example.test');
+  await page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u }).check();
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+
+  const consoleNavigation = page.locator('#console-navigation');
+  await consoleNavigation.getByRole('link', { name: /^Dashboard/ }).click();
+  await consoleNavigation.getByRole('link', { name: /^Lookup/ }).click();
+
+  await expect(page.locator('#query')).toHaveValue('portal.example.test');
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u })).toBeChecked();
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  expect(requestCount).toBe(1);
+
+  await page.reload();
+  await expect(page.locator('#query')).toHaveValue('');
+  await expect(page.locator('#result')).toHaveCount(0);
+});
+
+test('clears transient Lookup state when signing out through the Console', async ({ page }) => {
+  await page.locator('#query').fill('transient-state.example.test');
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL('/login');
+
+  await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/dashboard');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
+
+  await expect(page.locator('#query')).toHaveValue('');
+  await expect(page.locator('#result')).toHaveCount(0);
+});
+
+test('does not show a saved Fast result after a same-domain Deep handoff', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const url = new URL(route.request().url());
+    const domain = url.searchParams.get('q') || 'same-depth.example.test';
+    const compact = url.searchParams.get('compact') === '1';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(compact ? {
+        availability: { applicable: true, state: 'registered', confidence: 'high', domain, deepScanComplete: true },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      } : {
+        query: domain,
+        type: 'domain',
+        registrableDomain: domain,
+        availability: { applicable: true, state: 'registered', confidence: 'medium', domain, deepScanComplete: false },
+        rdap: { parsed: {}, data: {} },
+        whois: { skipped: true, detail: 'WHOIS is omitted in fast mode.' },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }),
+    });
+  });
+
+  const domain = 'same-depth.example.test';
+  await page.locator('#query').fill(domain);
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/ }).click();
+  await page.locator('#domains').fill(domain);
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await page.getByRole('button', { name: 'Scan 1 domain' }).click();
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Inspect' }).click();
+
+  await expect(page.locator('#query')).toHaveValue(domain);
+  await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await expect(page.locator('#result')).toHaveCount(0);
+});
+
+test('a malformed successful response is rejected at the Lookup boundary', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'example.test',
+      type: 'domain',
+      rdap: {},
+      whois: {},
+      availability: {},
+    }),
+  }));
+
+  await page.goto('/lookup');
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  await expect(page.getByRole('alert')).toHaveText('Lookup returned an invalid response.');
+  await expect(page.locator('#result')).toHaveCount(0);
 });
 
 test('security.txt collection is explicit, separately presented, and mobile safe', async ({ page }) => {

@@ -16,9 +16,12 @@ import {
   investigationGuideStagesForRecipe,
   investigationGuideSummaryFilename,
   MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH,
+  MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS,
   normalizeInvestigationGuideDomain,
   parseInvestigationGuide,
   restartInvestigationGuide,
+  setInvestigationGuideFocusDomain,
+  setInvestigationGuideReviewDomains,
   setInvestigationGuideStageOutcome,
   setInvestigationGuideStatus,
   visitInvestigationGuide,
@@ -44,6 +47,8 @@ test('defines three fixed bounded recipes with complete stage guidance', () => {
       assert.ok(stage.requestImpact);
       assert.ok(stage.prerequisite);
       assert.ok(stage.completionCriteria);
+      assert.equal(stage.instructions.length, 3);
+      assert.ok(stage.instructions.every(Boolean));
       assert.equal(stage.path, `/${stage.workspace}`);
     }
   }
@@ -54,6 +59,9 @@ test('creates a versioned recipe for one canonical domain without starting or co
   assert.equal(guide.version, INVESTIGATION_GUIDE_VERSION);
   assert.equal(guide.recipeId, 'infrastructure_pivot');
   assert.equal(guide.domain, 'portal.example.test');
+  assert.equal(guide.focusDomain, null);
+  assert.deepEqual(guide.reviewDomains, ['portal.example.test']);
+  assert.equal(guide.reviewDomainsTruncated, false);
   assert.equal(guide.status, 'active');
   assert.deepEqual(guide.stages.map(({ id, outcome, approvedAt, openedAt }) => ({ id, outcome, approvedAt, openedAt })), [
     { id: 'lookup', outcome: 'pending', approvedAt: null, openedAt: null },
@@ -89,6 +97,7 @@ test('normalizes deployed version 1 navigation into new-domain triage version 2'
   assert.equal(parsed.version, 2);
   assert.equal(parsed.recipeId, 'new_domain_triage');
   assert.equal(parsed.domain, 'example.test');
+  assert.deepEqual(parsed.reviewDomains, ['example.test']);
   assert.deepEqual(parsed.stages.map((stage) => [stage.id, stage.openedAt]), [
     ['lookup', OPENED_AT],
     ['bulk', OPENED_AT],
@@ -139,11 +148,48 @@ test('maps recipe stages to existing tool routes with safe target handoff', () =
   assert.equal(investigationGuideStageForPath('/lookup', 'new_domain_triage')?.id, 'lookup');
   assert.equal(investigationGuideStageForPath('/monitor/case', 'infrastructure_pivot')?.id, 'monitor');
   assert.equal(investigationGuideStageForPath('/discover', 'infrastructure_pivot'), null);
-  assert.equal(investigationGuideHref('lookup', 'café.example', 'new_domain_triage'), '/lookup?q=xn--caf-dma.example');
-  assert.equal(investigationGuideHref('discover', 'example.test', 'brand_sweep'), '/discover?q=example.test');
-  assert.equal(investigationGuideHref('bulk', 'example.test', 'brand_sweep'), '/bulk');
-  assert.equal(investigationGuideHref('monitor', 'example.test', 'new_domain_triage'), '/monitor?view=cases');
+  assert.equal(investigationGuideHref('lookup', 'café.example', 'new_domain_triage'), '/lookup?q=xn--caf-dma.example&depth=deep#query');
+  assert.equal(investigationGuideHref('discover', 'example.test', 'brand_sweep'), '/discover?q=example.test#discovery-seed');
+  assert.equal(investigationGuideHref('discover', 'portal.example.test', 'brand_sweep'), '/discover?q=example.test#discovery-seed');
+  assert.equal(investigationGuideHref('bulk', 'example.test', 'brand_sweep'), '/bulk?investigation=example.test#domains');
+  assert.equal(investigationGuideHref('monitor', 'example.test', 'new_domain_triage'), '/monitor?view=cases&investigation=1&domain=example.test#case-review-queue');
+  assert.equal(investigationGuideHref('brands', 'example.test', 'brand_sweep'), '/brands?new=1&domain=example.test#official-domains');
+  assert.equal(investigationGuideHref('lookup', 'example.test', 'brand_sweep'), '/bulk#results');
+  assert.equal(investigationGuideHref('lookup', 'example.test', 'brand_sweep', 'candidate.example'), '/lookup?q=candidate.example&depth=deep#query');
   assert.equal(investigationGuideHref('invented', 'example.test', 'brand_sweep'), '/dashboard');
+});
+
+test('stores one bounded analyst-selected focus domain without changing the official target', () => {
+  const original = createInvestigationGuide('portal.example.test', 'brand_sweep', STARTED_AT);
+  const focused = setInvestigationGuideFocusDomain(original, 'Candidate.Example.', OPENED_AT);
+  assert.equal(original.focusDomain, null);
+  assert.equal(focused.domain, 'portal.example.test');
+  assert.equal(focused.focusDomain, 'candidate.example');
+  assert.equal(focused.updatedAt, OPENED_AT);
+  assert.deepEqual(setInvestigationGuideFocusDomain(focused, 'bad domain', COMPLETED_AT), focused);
+  const triage = createInvestigationGuide('portal.example.test', 'new_domain_triage', STARTED_AT);
+  assert.deepEqual(setInvestigationGuideFocusDomain(triage, 'candidate.example', OPENED_AT), triage);
+});
+
+test('carries a bounded canonical peer set for non-brand review without mutating the starting domain', () => {
+  const original = createInvestigationGuide('portal.example.test', 'new_domain_triage', STARTED_AT);
+  const values = [
+    'Peer.Example.',
+    'portal.example.test',
+    ...Array.from({ length: MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS + 5 }, (_, index) => `peer-${index}.example`),
+    'bad domain',
+  ];
+  const updated = setInvestigationGuideReviewDomains(original, values, OPENED_AT);
+  assert.equal(original.reviewDomains.length, 1);
+  assert.equal(updated.domain, 'portal.example.test');
+  assert.equal(updated.reviewDomains[0], 'portal.example.test');
+  assert.equal(updated.reviewDomains[1], 'peer.example');
+  assert.equal(updated.reviewDomains.length, MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
+  assert.equal(updated.reviewDomainsTruncated, true);
+  assert.equal(updated.updatedAt, OPENED_AT);
+
+  const brand = createInvestigationGuide('portal.example.test', 'brand_sweep', STARTED_AT);
+  assert.deepEqual(setInvestigationGuideReviewDomains(brand, values, OPENED_AT), brand);
 });
 
 test('records opened stages separately from outcomes and does not mutate source state', () => {
