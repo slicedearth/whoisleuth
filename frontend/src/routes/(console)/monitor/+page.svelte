@@ -1,10 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { getContext, onMount } from 'svelte';
+  import { getContext, onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
+  import GuidedCaseQueue from '$lib/components/GuidedCaseQueue.svelte';
   import CaseFilters from '$lib/components/CaseFilters.svelte';
   import CaseList from '$lib/components/CaseList.svelte';
   import WatchlistWorkspace from '$lib/components/WatchlistWorkspace.svelte';
@@ -15,6 +16,7 @@
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.js';
+  import { parseDomainInput } from '$lib/analysis/utils.js';
   import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
@@ -24,6 +26,7 @@
   import { loadCampaigns } from '$lib/campaigns';
   import { loadDetectionRules } from '$lib/detection-rules';
   import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '$lib/capabilities';
+  import { loadInvestigationGuide } from '$lib/investigation-guide';
 
   type View = 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   const CASE_PAGE_SIZE=25;
@@ -53,6 +56,8 @@
   const relationshipCount=$derived(relationshipSummary.groups.length);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
+  let guidedDomains=$state<string[]>([]);let guidedDomainsTruncated=$state(false);
+  const existingCaseDomains=$derived(new Set(cases.map((record)=>record.domain)));
   const statusOrder=new Map(CASE_STATUSES.map((item,index)=>[item.value,index]));
   const filteredCases=$derived.by(()=>{
     const term=caseSearch.trim().toLowerCase();
@@ -76,12 +81,26 @@
   async function refreshCases(){cases=await loadCases();await refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
   function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);}
+  async function focusCase(record:CaseRecord){
+    await tick();
+    const target=document.getElementById(`case-head-${record.id}`);
+    target?.scrollIntoView({block:'center'});
+    target?.focus({preventScroll:true});
+  }
   async function openWatchlistCase(domain:string){
     try{
       const{record,created,pruned}=await openCase({domain,source:'monitor'});
       await refreshCases();clearCaseFilters();casePage=1;showCasePage(record);view='cases';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
       caseMessage=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)} Watchlist history remains separately attributed.`;
     }catch(cause){message=cause instanceof Error?cause.message:'Could not open the case.';}
+  }
+  async function openGuidedCase(domain:string){
+    try{
+      const{record,created,pruned}=await openCase({domain,source:'monitor'});
+      await refreshCases();clearCaseFilters();casePage=1;showCasePage(record);view='cases';expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';
+      caseMessage=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;
+      await focusCase(record);
+    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the guided case.';}
   }
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=await openCase({domain,source:'monitor'});await refreshCases();newDomain='';showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
@@ -103,6 +122,22 @@
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
     else if(page.url.searchParams.get('view')==='relationships')view='relationships';
     else if(page.url.searchParams.get('view')==='rules')view='rules';
+    const guideDomain=parseDomainInput(page.url.searchParams.get('domain')||'').entries[0]||'';
+    const investigationRoute=page.url.searchParams.get('investigation')==='1';
+    if(investigationRoute){
+      const guide=loadInvestigationGuide();
+      const carried=guide?.recipeId==='brand_sweep'?(guide.focusDomain?[guide.focusDomain]:[]):guide?.reviewDomains||[];
+      guidedDomains=[...new Set([...carried,guideDomain].filter(Boolean))];
+      guidedDomainsTruncated=Boolean(guide?.reviewDomainsTruncated);
+      view='cases';
+      await tick();
+      if(page.url.hash==='#case-review-queue'){
+        const target=document.getElementById('case-review-queue');
+        target?.scrollIntoView({block:'center'});
+        target?.focus({preventScroll:true});
+      }
+    }
+    if(guideDomain&&!investigationRoute){view='cases';newDomain=guideDomain;}
   })();});
 </script>
 
@@ -132,6 +167,7 @@
 
 {#if view==='cases'}
 <div id="panel-cases" role="tabpanel" aria-labelledby="tab-cases">
+  {#if guidedDomains.length}<GuidedCaseQueue domains={guidedDomains} existingDomains={existingCaseDomains} truncated={guidedDomainsTruncated} openDomain={openGuidedCase} />{/if}
   <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} {downloadCases} {importCaseFile} message={caseMessage} />
 
   {#if cases.length}
