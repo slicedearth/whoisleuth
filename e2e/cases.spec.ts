@@ -200,7 +200,7 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   await expect(result).toContainText('Custom +15');
   await expect(result).toContainText('Context 80');
   await expect(result).toContainText('Suggested: manual-review');
-  const storedScore = (await readBrowserLocalCollection(page, 'cases')).records[0].value.evidenceHistory[0].riskScore;
+  const storedScore = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0].value.evidenceHistory[0].riskScore;
   expect(storedScore).toBe(65);
 });
 

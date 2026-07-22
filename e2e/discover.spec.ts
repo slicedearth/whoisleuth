@@ -413,13 +413,14 @@ test('corrupt local CT history is recovered without losing search results', asyn
 
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.status')).toContainText('Saved as the first local baseline');
-  const stored = await readBrowserLocalCollection(page, 'ct_history');
+  const stored = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1, minimumRevision: 2 });
   expect(stored.manifest.schemaVersion).toBe(1);
   expect(stored.records).toHaveLength(1);
 });
 
 test('a browser storage write failure does not hide valid CT search results', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Certificates' })).toBeVisible();
+  await readBrowserLocalCollection(page, 'ct_history');
   await failBrowserLocalManifestWrites(page, 'ct_history');
   await mockCtSearch(page, initialBaselineResponse);
   await runCtSearch(page);

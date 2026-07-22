@@ -208,14 +208,18 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   expect(mock.commands.at(-1)?.action).toBe('update');
   expect(mock.commands.at(-1)?.entry).toBeTruthy();
 
+  await page.getByRole('button', { name: 'Clear all' }).click();
+  const cleared = await readBrowserLocalCollection(page, 'watchlists', { minimumRevision: 2 });
+  expect(cleared.records).toEqual([]);
+
   await item.getByRole('button', { name: 'Restore to browser' }).click();
-  const restored = await readBrowserLocalCollection(page, 'watchlists');
+  const restored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1, minimumRevision: 3 });
   expect(restored.records[0].value.results[0].domain).toBe('alpha.invalid');
 
   await item.getByRole('button', { name: 'Delete hosted copy' }).click();
   await expect(hosted).toContainText('No watchlists are scheduled');
   expect(mock.watchlists()).toEqual([]);
-  const retained = await readBrowserLocalCollection(page, 'watchlists');
+  const retained = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1, minimumRevision: 3 });
   expect(retained.records[0].value.results[0].domain).toBe('alpha.invalid');
 });
 

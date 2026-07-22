@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, readBrowserLocalCollection } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -33,13 +33,8 @@ test('a future watchlist schema is never overwritten by an older app', async ({ 
 test('a watchlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
   const previous = { schema: 'whoisleuth.watchlists', version: 2, watchlists: { Priority: entry('priority.invalid') } };
   await seed(page, previous);
-  await page.evaluate(() => {
-    const originalPut = IDBObjectStore.prototype.put;
-    IDBObjectStore.prototype.put = function (value, key) {
-      if (this.name === 'manifests') throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-      return originalPut.call(this, value, key);
-    };
-  });
+  await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  await failBrowserLocalManifestWrites(page, 'watchlists');
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Clear all' }).click();
