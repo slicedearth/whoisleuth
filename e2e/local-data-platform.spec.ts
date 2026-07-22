@@ -54,7 +54,7 @@ test('legacy browser data migrates once into verified IndexedDB records without 
   });
   await page.goto('/bulk');
 
-  const collection = await readBrowserLocalCollection(page, 'shortlist');
+  const collection = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   expect(collection.manifest).toMatchObject({
     collection: 'shortlist',
     schemaVersion: 2,

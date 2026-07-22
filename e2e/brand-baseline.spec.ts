@@ -98,7 +98,7 @@ test('captures and persists only a bounded official-site baseline after profile 
 
   await expect(page.getByText('Page baseline', { exact: true })).toBeVisible();
   await expect(page.getByText(/example\.com · Complete/)).toBeVisible();
-  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles')).records[0].value;
+  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0].value;
   expect(persisted.pageBaseline).toMatchObject({
     baselineVersion: 1,
     domain: 'example.com',
@@ -129,7 +129,7 @@ test('a baseline is discarded when it no longer belongs to an official domain', 
   await page.getByLabel('Official domains').fill('different.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
-  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles')).records[0].value;
+  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0].value;
   expect(persisted.officialDomains).toEqual(['different.example']);
   expect(persisted.pageBaseline).toBeNull();
 });
@@ -188,6 +188,7 @@ test('a browser quota failure reports a stable message and preserves the previou
   await cleanBrandStorage(page);
   const stored = [profileFixture()];
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: stored });
+  await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'brand_profiles');
 
   await page.getByRole('button', { name: 'Edit' }).click();

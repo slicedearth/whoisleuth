@@ -35,6 +35,7 @@ test('a future shortlist schema is never overwritten by an older app', async ({ 
 test('a shortlist quota failure reports a stable message and preserves the previous store', async ({ page }) => {
   const previous = { schema: 'whoisleuth.shortlist', version: 2, entries: [record('priority.invalid')] };
   await seed(page, previous);
+  await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   await page.evaluate(() => {
     const originalPut = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (value, key) {

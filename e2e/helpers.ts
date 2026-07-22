@@ -8,6 +8,17 @@ const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 
 type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
+type BrowserLocalCollectionSnapshot = {
+  manifest: any;
+  records: any[];
+};
+
+type BrowserLocalCollectionReadOptions = Readonly<{
+  minimumRecords?: number;
+  minimumRevision?: number;
+  timeout?: number;
+}>;
+
 export async function useTheme(page: Page, preference: 'dark' | 'light' | 'system') {
   await page.addInitScript(({ key, value }) => {
     localStorage.setItem(key, value);
@@ -28,14 +39,26 @@ export async function boundingBox(locator: Locator) {
   return box!;
 }
 
-export async function readBrowserLocalCollection(page: Page, collection: string) {
+async function tryReadBrowserLocalCollection(
+  page: Page,
+  collection: string,
+): Promise<BrowserLocalCollectionSnapshot | null> {
   return page.evaluate(async ({ databaseName, collectionId }) => {
+    if (typeof indexedDB.databases !== 'function') {
+      throw new Error('The browser does not support non-creating IndexedDB discovery.');
+    }
+    const databases = await indexedDB.databases();
+    if (!databases.some((database) => database.name === databaseName)) return null;
+
     const request = indexedDB.open(databaseName);
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
     try {
+      if (!database.objectStoreNames.contains('records')
+        || !database.objectStoreNames.contains('manifests')) return null;
+
       const transaction = database.transaction(['records', 'manifests'], 'readonly');
       const manifestRequest = transaction.objectStore('manifests').get(collectionId);
       const recordRequest = transaction.objectStore('records').index('collection').getAll(collectionId);
@@ -54,6 +77,7 @@ export async function readBrowserLocalCollection(page: Page, collection: string)
         transaction.onabort = () => reject(transaction.error);
         transaction.onerror = () => undefined;
       });
+      if (!manifest) return null;
       return {
         manifest,
         records: records
@@ -63,7 +87,29 @@ export async function readBrowserLocalCollection(page: Page, collection: string)
     } finally {
       database.close();
     }
-  }, { databaseName: 'whoisleuth-browser-data-v1', collectionId: collection });
+  }, { databaseName: LOCAL_DATA_DATABASE_NAME, collectionId: collection });
+}
+
+export async function readBrowserLocalCollection(
+  page: Page,
+  collection: string,
+  options: BrowserLocalCollectionReadOptions = {},
+) {
+  const minimumRecords = options.minimumRecords ?? 0;
+  const minimumRevision = options.minimumRevision ?? 1;
+  let snapshot: BrowserLocalCollectionSnapshot | null = null;
+
+  await expect.poll(async () => {
+    snapshot = await tryReadBrowserLocalCollection(page, collection);
+    return snapshot !== null
+      && snapshot.records.length >= minimumRecords
+      && Number(snapshot.manifest?.revision) >= minimumRevision;
+  }, {
+    message: `waiting for the ${collection} IndexedDB collection to be ready`,
+    timeout: options.timeout ?? 5_000,
+  }).toBe(true);
+
+  return snapshot!;
 }
 
 /**
