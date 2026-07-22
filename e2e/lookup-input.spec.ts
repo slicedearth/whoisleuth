@@ -554,7 +554,7 @@ test('a Lookup case stores the registrar name rather than stringifying its entit
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await page.getByRole('button', { name: 'Create case' }).click();
 
-  const registrar = (await readBrowserLocalCollection(page, 'cases')).records[0]?.value?.evidenceHistory?.[0]?.registrar;
+  const registrar = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value?.evidenceHistory?.[0]?.registrar;
   expect(registrar).toBe('Example Registrar LLC');
 });
 
