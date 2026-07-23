@@ -24,7 +24,12 @@ import {
   parseCliLookupDocument,
   readCompareInputBounded,
 } from './compare.mts';
-import { DEFAULT_DISCOVERY_TLDS, normalizeDiscoveryTlds } from './discover.mts';
+import {
+  DEFAULT_DISCOVERY_TLDS,
+  MAX_DISCOVERY_DICTIONARY_BYTES,
+  normalizeDiscoveryTlds,
+  readDiscoveryDictionaryBounded,
+} from './discover.mts';
 import { boundedCliErrorMessage } from './errors.mts';
 import { buildCliEvidenceExport, formatCliEvidenceExport } from './export-evidence.mts';
 import EXIT_CODES from './exit-codes.mts';
@@ -79,7 +84,7 @@ Usage:
   cat domains.txt | whoisleuth bulk --jsonl
   whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]
   printf 'example brand\\n' | whoisleuth ct-search --json
-  whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>] [--keyboard <layout>] [--json|--jsonl]
+  whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--json|--jsonl]
   whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
@@ -290,13 +295,58 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       const loadGenerator = dependencies.loadTyposquatGenerator || (() => import('../lib/typosquat-generator.mts'));
       const generator = await loadGenerator();
       const tlds = normalizeDiscoveryTlds(args.tldText || DEFAULT_DISCOVERY_TLDS.join(','), generator.MAX_GENERATION_TLDS);
+      const requestedFamilies = args.familyText
+        ? [...new Set(args.familyText.split(',').map((value) => value.trim()).filter(Boolean))]
+        : [];
+      const mutationFamilies = args.preset === 'custom'
+        ? generator.normalizeMutationFamilyIds(requestedFamilies)
+        : [];
+      if (args.preset === 'custom'
+        && (!mutationFamilies.length || mutationFamilies.length !== requestedFamilies.length)) {
+        throw new CliUsageError(`--families requires one or more supported IDs: ${generator.MUTATION_FAMILY_IDS.join(', ')}.`);
+      }
+      let dictionaryText = '';
+      if (args.dictionarySource) {
+        if (args.preset === 'custom'
+          && !mutationFamilies.includes('dictionary')
+          && !mutationFamilies.includes('dictionary_token_replacement')) {
+          throw new CliUsageError('--dictionary requires a dictionary mutation family.');
+        }
+        try {
+          dictionaryText = dependencies.readDiscoveryDictionary
+            ? await dependencies.readDiscoveryDictionary(args.dictionarySource)
+            : await readDiscoveryDictionaryBounded(
+              createReadStream(args.dictionarySource, { highWaterMark: MAX_DISCOVERY_DICTIONARY_BYTES }),
+              MAX_DISCOVERY_DICTIONARY_BYTES,
+            );
+        } catch (error) {
+          if (error instanceof CliUsageError) throw error;
+          throw new CliUsageError(`Could not read discovery dictionary: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+        }
+        const normalizedDictionary = generator.normalizeCustomDictionaryTerms(dictionaryText);
+        if (!normalizedDictionary.values.length) {
+          throw new CliUsageError('The discovery dictionary did not contain any valid terms.');
+        }
+      }
       const result = generator.generateTyposquatCandidateSet(seed, tlds, {
         preset: args.preset,
         keyboardLayout: args.keyboardLayout,
+        dictionaryTerms: dictionaryText,
+        ...(args.preset === 'custom' ? { mutationTypes: mutationFamilies } : {}),
       });
       if (!result.inputValid) throw new CliUsageError('discover requires a valid brand label or domain with one suffix label.');
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-      const metadata = { generatedAt: now, seed, preset: args.preset, keyboardLayout: args.keyboardLayout, tlds };
+      const normalizedDictionary = generator.normalizeCustomDictionaryTerms(dictionaryText);
+      const metadata = {
+        generatedAt: now,
+        seed,
+        preset: args.preset,
+        keyboardLayout: args.keyboardLayout,
+        tlds,
+        mutationFamilies,
+        dictionaryTermCount: normalizedDictionary.values.length,
+        rejectedDictionaryTermCount: normalizedDictionary.rejectedCount,
+      };
       const document = buildCliDiscoverDocument(seed, result, metadata);
       if (!args.quiet) {
         if (args.output === 'json') write(stdout, formatJsonDocument(document));

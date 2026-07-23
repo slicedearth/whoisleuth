@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
@@ -121,8 +122,8 @@
       <input id="support-inspection" type="search" maxlength="253" placeholder="For example: example.invalid or .uk" aria-describedby="inspector-help" autocapitalize="none" spellcheck="false" bind:value={inspectionInput}>
     </label>
     <div class="inspector-actions">
-      <button class="btn primary" type="submit" disabled={!hydrated}>Inspect support</button>
-      <button class="btn" type="button" onclick={clearInspection} disabled={!hydrated || (!inspectionInput && !inspectionActive)}>Clear</button>
+      <button class="btn primary" type="submit" disabled={!browser || !hydrated}>Inspect support</button>
+      <button class="btn" type="button" onclick={clearInspection} disabled={!browser || !hydrated || (!inspectionInput && !inspectionActive)}>Clear</button>
     </div>
   </form>
 

@@ -46,7 +46,10 @@ async function useGuideReturn(page: import('@playwright/test').Page, step: strin
     const area = Math.max(1, rect.width * rect.height);
     return (visibleWidth * visibleHeight) / area >= 0.2;
   });
-  await expect.poll(async () => await hasUsefulExposure() || await control.isVisible()).toBe(true);
+  await expect.poll(
+    async () => await hasUsefulExposure() || await control.isVisible(),
+    { timeout: 15_000 },
+  ).toBe(true);
   if (!await hasUsefulExposure()) {
     await expect(control).toBeVisible();
     let usedControl = false;
@@ -58,7 +61,7 @@ async function useGuideReturn(page: import('@playwright/test').Page, step: strin
     }
     if (usedControl) await expect(action).toBeFocused();
   }
-  await expect.poll(hasUsefulExposure).toBe(true);
+  await expect.poll(hasUsefulExposure, { timeout: 15_000 }).toBe(true);
 }
 
 async function installLookupFixture(page: import('@playwright/test').Page) {

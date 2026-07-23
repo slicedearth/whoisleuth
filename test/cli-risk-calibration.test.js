@@ -171,7 +171,7 @@ describe('offline Risk calibration report', () => {
     });
     assert.equal(report.schema, 'whoisleuth.cli.risk-calibration');
     assert.equal(report.version, 1);
-    assert.equal(report.riskModelVersion, 5);
+    assert.equal(report.riskModelVersion, 6);
     assert.deepEqual(report.summary, {
       total: 4,
       positive: 1,
