@@ -11,14 +11,12 @@ const STATE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   registered: 'registered',
 });
 
-// Version 5 retains the grouped contextual evidence model and adds a bounded
-// external-evidence factor. A lone provider never contributes, two datasets
-// from the same publisher remain one source, and only allowlisted phishing or
-// malware observations from two independent publisher families can add points.
+// Version 6 preserves the grouped external-evidence factor and recognizes the
+// newly generated addition, plural, and embedded-TLD families conservatively.
 // Older scores remain readable, while case and watchlist comparisons gate
 // numeric changes on matching model versions so formula changes are not
 // mistaken for changes in the observed domain.
-export const RISK_MODEL_VERSION = 5;
+export const RISK_MODEL_VERSION = 6;
 export const RISK_REVIEW_THRESHOLD = 70;
 
 const RISK_STATE_BASE: Readonly<Record<string, number>> = Object.freeze({
@@ -28,11 +26,14 @@ const RISK_STATE_BASE: Readonly<Record<string, number>> = Object.freeze({
 });
 
 const HIGH_CONTEXT_MUTATIONS = new Set(['unicode_homoglyph', 'dictionary']);
-const MEDIUM_CONTEXT_MUTATIONS = new Set(['ascii_homoglyph', 'bitsquatting', 'tld_typo', 'tld_substitution']);
+const MEDIUM_CONTEXT_MUTATIONS = new Set(['ascii_homoglyph', 'bitsquatting', 'tld_embedding', 'tld_typo', 'tld_substitution']);
 const LOW_CONTEXT_MUTATIONS = new Set([
+  'character_addition',
   'character_omission',
   'character_duplication',
   'character_transposition',
+  'pluralization',
+  'www_prefix',
   'hyphenation',
   'separator_omission',
   'word_reordering',

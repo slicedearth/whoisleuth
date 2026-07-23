@@ -14,7 +14,7 @@ const CLI_COMPARE_SCHEMA = 'whoisleuth.cli.compare';
 const CLI_LOOKUP_SCHEMA_VERSION = 1;
 const CLI_BULK_SCHEMA_VERSION = 1;
 const CLI_CT_SEARCH_SCHEMA_VERSION = 1;
-const CLI_DISCOVER_SCHEMA_VERSION = 1;
+const CLI_DISCOVER_SCHEMA_VERSION = 2;
 const CLI_POSTURE_SCHEMA_VERSION = 1;
 const CLI_HTTP_SCHEMA_VERSION = 1;
 const CLI_TLS_SCHEMA_VERSION = 1;
@@ -33,6 +33,9 @@ type DiscoverMetadata = {
   preset: unknown;
   keyboardLayout: unknown;
   tlds: Iterable<unknown>;
+  mutationFamilies?: Iterable<unknown>;
+  dictionaryTermCount?: unknown;
+  rejectedDictionaryTermCount?: unknown;
 };
 
 type BulkMetadata = { generatedAt: string; deep?: boolean; duplicates?: number };
@@ -80,6 +83,9 @@ function buildCliDiscoverDocument(seed: string, result: UnknownRecord, metadata:
     preset: metadata.preset,
     keyboardLayout: metadata.keyboardLayout,
     tlds: [...metadata.tlds],
+    mutationFamilies: [...(metadata.mutationFamilies || [])],
+    dictionaryTermCount: metadata.dictionaryTermCount || 0,
+    rejectedDictionaryTermCount: metadata.rejectedDictionaryTermCount || 0,
   };
 }
 
@@ -91,6 +97,8 @@ function discoverJsonItem(candidate: DiscoverCandidate, metadata: DiscoverMetada
     seed: metadata.seed,
     preset: metadata.preset,
     keyboardLayout: metadata.keyboardLayout,
+    mutationFamilies: [...(metadata.mutationFamilies || [])],
+    dictionaryTermCount: metadata.dictionaryTermCount || 0,
     domain: candidate.domain,
     source: candidate.source,
     tld: candidate.tld,

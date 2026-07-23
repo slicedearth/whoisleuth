@@ -274,7 +274,7 @@ test('IDN evidence renders and filters without changing the risk score', async (
   await expectNoHorizontalOverflow(page);
 });
 
-test('risk model v5 exposes cross-family corroboration in Bulk triage', async ({ page }) => {
+test('risk model v6 exposes cross-family corroboration in Bulk triage', async ({ page }) => {
   const profile = {
     id: 'risk-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
     approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
@@ -311,7 +311,7 @@ test('risk model v5 exposes cross-family corroboration in Bulk triage', async ({
   const riskCell = row.locator('td[data-label="Risk"]');
   await expect(riskCell).toHaveText('85');
   await expect(riskCell).toHaveAttribute('title', /Corroborating context across 3 distinct evidence families \+20/);
-  await expect(riskCell).toHaveAttribute('title', /Risk model v5/);
+  await expect(riskCell).toHaveAttribute('title', /Risk model v6/);
 
   await page.getByRole('button', { name: 'high risk' }).click();
   await expect(row).toBeVisible();

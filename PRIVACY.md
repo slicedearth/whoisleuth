@@ -17,6 +17,14 @@ default (see the README), so many lookups return no personal data at all.
 
 ## Where that data goes
 
+- **Custom Discover dictionary**: optional pasted or imported terms are
+  normalized and capped at 100 unique entries, 32 characters per term, and
+  4,096 input characters. They remain transient in the current browser tab,
+  are not sent to the server or saved in the browser-local workspace, and are
+  used only after the user selects **Generate candidates**. If selected
+  candidates continue to Bulk, only the resulting domain names and bounded
+  mutation provenance follow the normal lookup path; the original dictionary
+  list does not.
 - **Single and bulk lookups**: proxied through the server and never written to
   an ordinary investigation database or disk server-side. Request data is
   transient, while bounded registry bootstrap and selected public RDAP/WHOIS
@@ -101,7 +109,7 @@ default (see the README), so many lookups return no personal data at all.
   and separately attributed. A lone publisher, a neutral miss, a failed
   provider, an unknown provider, or a non-phishing/non-malware category adds no
   Risk points. When positive qualifying records are corroborated across at
-  least two independent publisher families, Risk model v5 can add one bounded
+  least two independent publisher families, Risk model v6 can add one bounded
   factor. Multiple datasets operated by the same publisher count as one source.
   Browser-local cases and reports can retain the resulting score, model version,
   and factor label, but not the raw provider findings, references, or payloads.

@@ -114,9 +114,9 @@
 {:else if view==='discover'}
   <section class="demo-panel card" aria-labelledby="discover-heading">
     <p class="eyebrow">Discover · Candidate generation</p><h2 id="discover-heading">Generate bounded candidate coverage</h2>
-    <p>Discover combines explicit mutation families with separately attributed Certificate Transparency search results. Internationalised results show their readable Unicode and DNS-safe ASCII forms together. This action only reveals three local fixtures.</p>
-    <div class="configuration-grid"><article><span>Seed</span><strong>Northstar</strong></article><article><span>Mutation families</span><strong>Character · term · TLD</strong></article><article><span>Candidate cap</span><strong>3 synthetic records</strong></article></div>
-    <div class="preview-list"><span>Character edit</span><span>Unicode + DNS-safe forms</span><span>Impersonation term</span><span>Alternate TLD</span><span>CT provenance</span></div>
+    <p>Discover combines presets or an exact local mutation-family selection and optional custom terms with separately attributed Certificate Transparency search results. Internationalised results show their readable Unicode and DNS-safe ASCII forms together. This action only reveals three local fixtures.</p>
+    <div class="configuration-grid"><article><span>Seed</span><strong>Northstar</strong></article><article><span>Selected families</span><strong>Character · term · TLD</strong></article><article><span>Candidate cap</span><strong>3 synthetic records</strong></article></div>
+    <div class="preview-list"><span>Character edit</span><span>Unicode + DNS-safe forms</span><span>Local custom terms</span><span>Alternate TLD</span><span>CT provenance</span></div>
     <button class="primary" type="button" onclick={generate}>Load synthetic candidates</button>
   </section>
 {:else if view==='bulk'}

@@ -140,7 +140,7 @@ describe('installed CLI process boundary', () => {
     assert.equal(result.stderr, '');
     const document = JSON.parse(result.stdout);
     assert.equal(document.schema, 'whoisleuth.cli.risk-calibration');
-    assert.equal(document.riskModelVersion, 5);
+    assert.equal(document.riskModelVersion, 6);
     assert.equal(document.interpretation.networkRequests, false);
     assert.match(document.interpretation.statement, /does not.*prove maliciousness or safety/i);
   });

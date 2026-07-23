@@ -12,7 +12,7 @@ type CliArguments =
   | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json'; deep: boolean } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl'; deep: boolean; concurrency: number } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl'; preset: 'common' | 'impersonation' | 'all'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz'; tldText: string | null } & TerminalOptions)
+  | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null } & TerminalOptions)
   | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -149,9 +149,11 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
   let output: 'terminal' | 'json' | 'jsonl' = 'terminal';
   let quiet = false;
   let color = true;
-  let preset: 'common' | 'impersonation' | 'all' = 'all';
-  let keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' = 'qwerty';
+  let preset: 'common' | 'impersonation' | 'all' | 'custom' = 'all';
+  let keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all' = 'qwerty';
   let tldText: string | null = null;
+  let dictionarySource: string | null = null;
+  let familyText: string | null = null;
   let presetSet = false;
   let keyboardSet = false;
   for (let index = 0; index < argv.length; index++) {
@@ -161,6 +163,7 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
       output = argument === '--json' ? 'json' : 'jsonl';
     } else if (argument === '--preset') {
       if (presetSet) throw new CliUsageError('--preset may be supplied only once.');
+      if (familyText !== null) throw new CliUsageError('--preset cannot be combined with --families.');
       const value = argv[++index];
       if (value !== 'common' && value !== 'impersonation' && value !== 'all') {
         throw new CliUsageError('--preset requires common, impersonation, or all.');
@@ -170,8 +173,8 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
     } else if (argument === '--keyboard') {
       if (keyboardSet) throw new CliUsageError('--keyboard may be supplied only once.');
       const value = argv[++index];
-      if (value !== 'qwerty' && value !== 'azerty' && value !== 'qwertz') {
-        throw new CliUsageError('--keyboard requires qwerty, azerty, or qwertz.');
+      if (value !== 'qwerty' && value !== 'azerty' && value !== 'qwertz' && value !== 'all') {
+        throw new CliUsageError('--keyboard requires qwerty, azerty, qwertz, or all.');
       }
       keyboardLayout = value;
       keyboardSet = true;
@@ -180,6 +183,18 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
       const value = argv[++index];
       if (!value) throw new CliUsageError('--tlds requires a comma-separated list.');
       tldText = value;
+    } else if (argument === '--dictionary') {
+      if (dictionarySource !== null) throw new CliUsageError('--dictionary may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--dictionary requires one UTF-8 text file.');
+      dictionarySource = value;
+    } else if (argument === '--families') {
+      if (familyText !== null) throw new CliUsageError('--families may be supplied only once.');
+      if (presetSet) throw new CliUsageError('--families cannot be combined with --preset.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new CliUsageError('--families requires a comma-separated list of mutation family IDs.');
+      familyText = value;
+      preset = 'custom';
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -187,7 +202,10 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
     else throw new CliUsageError('discover accepts one brand label or domain. Quote multi-word labels as one argument.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'discover', seed, output, quiet, color, preset, keyboardLayout, tldText };
+  if (dictionarySource && preset === 'common') {
+    throw new CliUsageError('--dictionary requires the impersonation or all preset.');
+  }
+  return { action: 'discover', seed, output, quiet, color, preset, keyboardLayout, tldText, dictionarySource, familyText };
 }
 
 function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 'posture' }> {

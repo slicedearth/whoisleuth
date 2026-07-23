@@ -226,6 +226,67 @@ test('keyboard layout selection adds locale-specific neighbours and clears stale
   await expect(page.locator('.generation-options')).toContainText('Not used by the selected preset');
 });
 
+test('all-layout mode and a local custom dictionary add bounded reviewable candidates', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /^Common edits\b/u }).click();
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('z.test');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('test');
+  await page.getByRole('combobox', { name: 'Keyboard layout' }).selectOption('all');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.locator('.candidate strong', { hasText: /^e\.test$/ })).toBeVisible();
+  await expect(page.locator('.candidate strong', { hasText: /^t\.test$/ })).toBeVisible();
+
+  await page.getByRole('button', { name: /^Impersonation\b/u }).click();
+  await page.getByText(/^Custom dictionary/u).click();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'review-terms.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('invoice\ncustomer-care\nbad!\n'),
+  });
+  await expect(page.getByText('Loaded review-terms.txt.')).toBeVisible();
+  await expect(page.getByText(/^Custom dictionary · 2 accepted terms$/u)).toBeVisible();
+  await expect(page.getByText('1 invalid term will be ignored.')).toBeVisible();
+
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.test');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^invoice-acme\.test$/ }),
+  })).toContainText('Impersonation term');
+  await expect(page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^acme-customer-care\.test$/ }),
+  })).toContainText('Impersonation term');
+  await expect(page.locator('.status')).toContainText('Ignored 1 invalid custom dictionary term');
+  await expectNoHorizontalOverflow(page);
+});
+
+test('custom family mode generates only the analyst-selected mutation families', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /^Custom families\b/u }).click();
+
+  const familyCheckboxes = page.locator('.family-grid input[type="checkbox"]');
+  expect(await familyCheckboxes.count()).toBeGreaterThan(10);
+  for (const checkbox of await familyCheckboxes.all()) await checkbox.uncheck();
+  await expect(page.getByText('Select at least one family before generating candidates.')).toBeVisible();
+
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.getByRole('alert')).toContainText('Select at least one custom mutation family');
+
+  await page.getByRole('checkbox', { name: 'Plural form' }).check();
+  await page.getByRole('checkbox', { name: 'TLD embedded in label' }).check();
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  await expect(page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^acmes\.com$/ }),
+  })).toContainText('Plural form');
+  await expect(page.locator('.candidate').filter({
+    has: page.locator('strong', { hasText: /^acmecom\.com$/ }),
+  })).toContainText('TLD embedded in label');
+  await expect(page.locator('.candidate strong', { hasText: /^acm\.com$/ })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Mutation family' }).locator('option')).toHaveCount(3);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('multi-word lookalikes retain separator and reordering provenance', async ({ page }) => {
   await page.getByRole('button', { name: /^Common edits\b/u }).click();
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('Acme Pay');

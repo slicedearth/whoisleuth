@@ -177,6 +177,8 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
     `Preset         ${safeTerminalValue(document.preset)}`,
     `Keyboard       ${safeTerminalValue(document.keyboardLayout)}`,
     `TLDs           ${(Array.isArray(document.tlds) ? document.tlds : []).map((value: unknown) => safeTerminalValue(value)).join(', ')}`,
+    `Families       ${(Array.isArray(document.mutationFamilies) && document.mutationFamilies.length) ? document.mutationFamilies.map((value: unknown) => safeTerminalValue(value)).join(', ') : 'Preset defaults'}`,
+    `Dictionary     ${safeTerminalValue(document.dictionaryTermCount, '0')} accepted custom terms${Number(document.rejectedDictionaryTermCount) > 0 ? `, ${safeTerminalValue(document.rejectedDictionaryTermCount)} rejected` : ''}`,
     `Candidates     ${safeTerminalValue(candidates.length, '0')}`,
     `Truncated      ${document.truncated ? 'Yes' : 'No'}`,
     '',

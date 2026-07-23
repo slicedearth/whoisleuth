@@ -227,14 +227,35 @@ with `--tlds com,net` when narrower coverage is wanted.
 
 Generation presets are `common`, `impersonation`, and `all` (the default).
 Keyboard-aware mutations support `qwerty` (the default), `azerty`, and
-`qwertz`. Terminal output is capped at 200 candidates with an explicit notice;
-versioned JSON and JSONL retain the complete bounded candidate set and mutation
-provenance. Internationalised candidates show the DNS-safe ASCII form and
-readable Unicode form together in terminal output. The Impersonation and All
-presets can add up to six deterministic whole-label Unicode candidates when
-every letter has a reviewed same-script replacement. The command generates
-candidates only. It does not claim that a domain is registered, active, or
-malicious.
+`qwertz`; `--keyboard all` uses their bounded combined neighbour set. Supply a
+UTF-8 text file with `--dictionary terms.txt` to add up to 100 local terms when
+using the `impersonation` or `all` preset. Dictionary input is capped at 4,096
+bytes and individual terms at 32 characters. Machine output records accepted
+and rejected term counts but never copies the private terms into its metadata.
+
+Use `--families <ids>` instead of `--preset` to run an exact comma-separated
+selection. Supported IDs are `character_addition`, `character_omission`,
+`character_duplication`, `character_transposition`, `pluralization`,
+`tld_embedding`, `www_prefix`, `hyphenation`, `separator_omission`,
+`word_reordering`, `keyboard_substitution`, `keyboard_insertion`, `vowel_swap`,
+`bitsquatting`, `ascii_homoglyph`, `unicode_homoglyph`,
+`unicode_whole_label`, `dictionary`, `tld_typo`, and `tld_substitution`.
+Machine output records the normalized custom selection. A custom dictionary
+file requires `dictionary` in that selection.
+
+Dotted subdomain permutations are intentionally excluded because the lookup
+pipeline validates a hostname's registrable parent. The CLI does not present
+authoritative parent registration evidence as proof that a generated hostname
+exists.
+
+Terminal output is capped at 200 candidates with an explicit notice. Versioned
+JSON and JSONL use `whoisleuth.cli.discover` schema version 2 and retain the
+complete bounded candidate set and mutation provenance. Internationalised
+candidates show the DNS-safe ASCII form and readable Unicode form together in
+terminal output. The Impersonation and All presets can add up to six
+deterministic whole-label Unicode candidates when every letter has a reviewed
+same-script replacement. The command generates candidates only. It does not
+claim that a domain is registered, active, or malicious.
 
 ## Domain posture audit
 

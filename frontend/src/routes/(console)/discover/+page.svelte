@@ -12,11 +12,16 @@
     GENERATION_PRESETS,
     generateTyposquatCandidateSet,
     KEYBOARD_LAYOUTS,
+    MAX_CUSTOM_DICTIONARY_TERM_LENGTH,
+    MAX_CUSTOM_DICTIONARY_TERMS,
+    MAX_CUSTOM_DICTIONARY_TEXT_LENGTH,
     MAX_GENERATED_CANDIDATES,
     MAX_GENERATION_INPUT_LENGTH,
     MAX_GENERATION_TLDS,
     MAX_NAME_VARIANTS,
+    MUTATION_FAMILY_IDS,
     MUTATION_LABELS,
+    normalizeCustomDictionaryTerms,
   } from '$lib/analysis/typosquat-generator.js';
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
@@ -28,8 +33,8 @@
   import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
-  type GenerationPresetId = 'common' | 'impersonation' | 'all';
-  type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz';
+  type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
+  type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz' | 'all';
   type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
   type CandidateSort = 'generated' | 'domain' | 'generation-paths' | 'reference' | 'mixed' | 'certificate-newest';
   type CandidateMetadata = {
@@ -43,8 +48,10 @@
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
   let keyboardLayout = $state<KeyboardLayoutId>(DEFAULT_KEYBOARD_LAYOUT as KeyboardLayoutId);
+  let customMutationFamilies = $state<string[]>([...MUTATION_FAMILY_IDS]);
   let seed = $state('');
   let tldText = $state('com, net, org');
+  let customDictionaryText = $state('');
   let candidates = $state<Candidate[]>([]);
   let generatedContext = $state<Candidate[]>([]);
   let selected = $state<Set<string>>(new Set());
@@ -89,6 +96,10 @@
     description: string;
   }>;
   const keyboardLayouts = Object.values(KEYBOARD_LAYOUTS) as Array<{ id: KeyboardLayoutId; label: string }>;
+  const mutationFamilyOptions = MUTATION_FAMILY_IDS.map((id) => ({
+    id,
+    label: mutationLabels[id] || id.replaceAll('_', ' '),
+  }));
   const maxTldTextLength = 2_048;
 
   const mutationOptions = $derived.by(() => {
@@ -248,12 +259,21 @@
     return estimateTyposquatCandidateCount(seed, tldSelection().values, {
       preset: generationPreset,
       keyboardLayout,
+      dictionaryTerms: customDictionaryText,
+      mutationTypes: customMutationFamilies,
     });
   });
-  const keyboardLayoutRelevant = $derived(
-    GENERATION_PRESETS[generationPreset].mutationTypes.includes('keyboard_substitution')
-      || GENERATION_PRESETS[generationPreset].mutationTypes.includes('keyboard_insertion'),
+  const effectiveMutationFamilies = $derived(
+    generationPreset === 'custom'
+      ? customMutationFamilies
+      : [...GENERATION_PRESETS[generationPreset].mutationTypes],
   );
+  const keyboardLayoutRelevant = $derived(
+    effectiveMutationFamilies.includes('keyboard_substitution')
+      || effectiveMutationFamilies.includes('keyboard_insertion'),
+  );
+  const dictionaryRelevant = $derived(effectiveMutationFamilies.includes('dictionary'));
+  const customDictionary = $derived(normalizeCustomDictionaryTerms(customDictionaryText));
 
   function clearGeneratedResults() {
     candidates = [];
@@ -274,6 +294,21 @@
   function selectKeyboardLayout(next: string) {
     if (!(next in KEYBOARD_LAYOUTS) || next === keyboardLayout) return;
     keyboardLayout = next as KeyboardLayoutId;
+    clearGeneratedResults();
+  }
+
+  function toggleMutationFamily(id: string) {
+    if (!MUTATION_FAMILY_IDS.includes(id)) return;
+    customMutationFamilies = customMutationFamilies.includes(id)
+      ? customMutationFamilies.filter((value) => value !== id)
+      : MUTATION_FAMILY_IDS.filter((value) => value === id || customMutationFamilies.includes(value));
+    clearGeneratedResults();
+  }
+
+  function setCustomDictionaryText(next: string) {
+    const bounded = next.slice(0, MAX_CUSTOM_DICTIONARY_TEXT_LENGTH);
+    if (bounded === customDictionaryText) return;
+    customDictionaryText = bounded;
     clearGeneratedResults();
   }
 
@@ -330,9 +365,15 @@
       setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${capNote}`, generated);
       return;
     }
+    if (generationPreset === 'custom' && customMutationFamilies.length === 0) {
+      error = 'Select at least one custom mutation family.';
+      return;
+    }
     const result = generateTyposquatCandidateSet(seed, selection.values, {
       preset: generationPreset,
       keyboardLayout,
+      dictionaryTerms: customDictionaryText,
+      mutationTypes: customMutationFamilies,
     });
     if (!result.inputValid) {
       error = 'Enter a valid brand label or a domain with one suffix label.';
@@ -342,8 +383,11 @@
     const generated = result.candidates as Array<{domain:string;source:string;mutationTypes:string[]}>;
     const { filtered, excluded } = withoutAllowlisted(generated);
     const capped = result.truncated || (!seed.includes('.') && selection.truncated);
-    const capNote = capped ? ' Generation limits were reached; narrow the seed or TLD list for complete coverage.' : '';
-    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${capNote}`, generated);
+    const capNote = capped ? ' Generation limits were reached; narrow the seed, dictionary, or TLD list for complete coverage.' : '';
+    const dictionaryNote = dictionaryRelevant && customDictionary.rejectedCount
+      ? ` Ignored ${customDictionary.rejectedCount} invalid custom dictionary term${customDictionary.rejectedCount===1?'':'s'}.`
+      : '';
+    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${dictionaryNote}${capNote}`, generated);
   }
 
   async function searchCt() {
@@ -531,10 +575,20 @@
       presets={generationPresets}
       selectedPreset={generationPreset}
       selectPreset={(id)=>selectGenerationPreset(id as GenerationPresetId)}
+      mutationFamilies={mutationFamilyOptions}
+      selectedMutationFamilies={customMutationFamilies}
+      {toggleMutationFamily}
       {keyboardLayouts}
       selectedKeyboardLayout={keyboardLayout}
       {keyboardLayoutRelevant}
       {selectKeyboardLayout}
+      {dictionaryRelevant}
+      dictionaryText={customDictionaryText}
+      {setCustomDictionaryText}
+      dictionarySummary={customDictionary}
+      maxDictionaryTerms={MAX_CUSTOM_DICTIONARY_TERMS}
+      maxDictionaryTermLength={MAX_CUSTOM_DICTIONARY_TERM_LENGTH}
+      maxDictionaryTextLength={MAX_CUSTOM_DICTIONARY_TEXT_LENGTH}
       estimate={generationEstimate}
       maxTlds={MAX_GENERATION_TLDS}
       maxNameVariants={MAX_NAME_VARIANTS}

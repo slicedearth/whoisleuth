@@ -59,9 +59,24 @@ so review and store it accordingly.
 ### Discover
 
 Discover generates bounded candidates locally from typo, keyboard, confusable,
-separator, word-order, dictionary, and selected-TLD families. Presets narrow
-the generation families without changing the global safety limits. Candidate
-provenance remains attached when several algorithms produce the same domain.
+plural, separator, word-order, WWW-style, dictionary, and selected-TLD
+families. Presets narrow the generation families, while **Custom families**
+lets an analyst select the exact families required for a run. Neither choice
+changes the global safety limits. The keyboard selector can use one supported
+layout or the bounded union of all supported layouts.
+
+The optional custom dictionary accepts pasted terms or one local text file.
+It retains at most 100 unique terms of up to 32 characters inside the existing
+4,096-character input and 2,000-candidate limits. The terms stay in the current
+browser tab, are not uploaded or saved, and are used only when the analyst
+selects Generate candidates. Candidate provenance remains attached when
+several algorithms produce the same domain.
+
+Discover deliberately does not create dotted subdomain permutations. Registry
+lookups validate the registrable parent, so attaching that authoritative result
+to a generated hostname could imply that the hostname itself was observed.
+Certificate Transparency search remains the separately attributed route for
+finding publicly logged hostnames.
 
 Unicode-confusable generation and Lookup skeleton comparison share a
 versioned, checked-in projection of Unicode UTS #39 data. The projection is
