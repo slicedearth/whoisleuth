@@ -143,6 +143,14 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(candidate).toContainText('Scripts: Cyrillic, Latin');
   await expect(candidate).toContainText('Whole-label Unicode confusable');
   await expect(candidate).toContainText('Source or profile visual match');
+  await expect(candidate).toContainText('Visual match: scope.invalid');
+  const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');
+  const referenceScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="reference"]');
+  await expect(unicodeScope).toHaveText(/Internationalized \([1-9]\d*\)/u);
+  await expect(referenceScope).toHaveText(/Source or profile match \([1-9]\d*\)/u);
+  expect(Number((await unicodeScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
+  expect(Number((await referenceScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
+  await expect(page.getByText('Visual matches use a bounded character comparison.')).toContainText('not proof of impersonation');
 
   await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('reference');
   await expect(candidate).toBeVisible();

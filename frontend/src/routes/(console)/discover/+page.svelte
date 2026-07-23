@@ -37,7 +37,7 @@
     unicodeDomain: string;
     scripts: string[];
     mixedScript: boolean;
-    referenceMatch: boolean;
+    referenceDomains: string[];
   };
   const DISCOVER_PAGE_SIZE = 100;
   let mode = $state<Mode>('typosquat');
@@ -93,6 +93,18 @@
 
   const mutationOptions = $derived([...new Set(candidates.flatMap((candidate) => candidate.mutationTypes))]
     .sort((left, right) => (mutationLabels[left] || left).localeCompare(mutationLabels[right] || right)));
+  const candidateScopeCounts = $derived.by(() => {
+    let unicode = 0;
+    let mixed = 0;
+    let reference = 0;
+    for (const candidate of candidates) {
+      const metadata = candidateMetadata.get(candidate.domain);
+      if (metadata?.hasIdn) unicode += 1;
+      if (metadata?.mixedScript) mixed += 1;
+      if (metadata?.referenceDomains.length) reference += 1;
+    }
+    return { unicode, mixed, reference, selected: selected.size };
+  });
   const visible = $derived.by(() => {
     const filtered = candidates.filter((candidate) => {
       const metadata = candidateMetadata.get(candidate.domain);
@@ -100,7 +112,7 @@
       if (mutationFilter && !candidate.mutationTypes.includes(mutationFilter)) return false;
       if (candidateScope === 'unicode' && !metadata?.hasIdn) return false;
       if (candidateScope === 'mixed' && !metadata?.mixedScript) return false;
-      if (candidateScope === 'reference' && !metadata?.referenceMatch) return false;
+      if (candidateScope === 'reference' && !metadata?.referenceDomains.length) return false;
       if (candidateScope === 'selected' && !selected.has(candidate.domain)) return false;
       return true;
     });
@@ -145,7 +157,9 @@
         unicodeDomain: analysis?.hasIdn ? String(analysis.unicodeDomain || '') : '',
         scripts: Array.isArray(analysis?.scripts) ? analysis.scripts.map(String).slice(0, 12) : [],
         mixedScript: Boolean(analysis?.mixedScript),
-        referenceMatch: Boolean(analysis?.referenceMatches?.length),
+        referenceDomains: Array.isArray(analysis?.referenceMatches)
+          ? analysis.referenceMatches.map((match: { asciiDomain?: unknown }) => String(match.asciiDomain || '')).filter(Boolean).slice(0, 20)
+          : [],
       });
     }
     return metadata;
@@ -156,7 +170,7 @@
     return candidate.mutationTypes.length
       + (metadata?.hasIdn ? 1 : 0)
       + (metadata?.mixedScript ? 2 : 0)
-      + (metadata?.referenceMatch ? 3 : 0)
+      + (metadata?.referenceDomains.length ? 3 : 0)
       + (candidate.certificateTransparency ? 1 : 0)
       + (ctNewDomains.has(candidate.domain) ? 1 : 0);
   }
@@ -452,7 +466,7 @@
         unicodeDomain: metadata?.unicodeDomain || '',
         scripts: metadata?.scripts || [],
         mixedScript: Boolean(metadata?.mixedScript),
-        referenceMatch: Boolean(metadata?.referenceMatch),
+        referenceDomains: metadata?.referenceDomains || [],
         certificateEvidence: candidate.certificateTransparency ? {
           certificateCount: candidate.certificateTransparency.certificateCount,
           firstObservedAt: candidate.certificateTransparency.firstObservedAt,
@@ -518,6 +532,7 @@
     {filter}
     {setFilter}
     {candidateScope}
+    scopeCounts={candidateScopeCounts}
     setCandidateScope={(value)=>setCandidateScope(value as CandidateScope)}
     {mutationFilter}
     mutationOptions={mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_', ' ')}))}

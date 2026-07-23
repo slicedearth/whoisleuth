@@ -15,7 +15,7 @@
     unicodeDomain: string;
     scripts: string[];
     mixedScript: boolean;
-    referenceMatch: boolean;
+    referenceDomains: string[];
     certificateEvidence: CertificateEvidence | null;
   };
 
@@ -26,6 +26,7 @@
     filter,
     setFilter,
     candidateScope,
+    scopeCounts,
     setCandidateScope,
     mutationFilter,
     mutationOptions,
@@ -52,6 +53,7 @@
     filter: string;
     setFilter: (value: string) => void;
     candidateScope: string;
+    scopeCounts: { unicode: number; mixed: number; reference: number; selected: number };
     setCandidateScope: (value: string) => void;
     mutationFilter: string;
     mutationOptions: Array<{ value: string; label: string }>;
@@ -81,10 +83,10 @@
     <label>Show
       <select value={candidateScope} onchange={(event) => setCandidateScope(event.currentTarget.value)} aria-label="Candidate scope">
         <option value="all">All candidates</option>
-        <option value="unicode">Internationalized</option>
-        <option value="mixed">Mixed writing scripts</option>
-        <option value="reference">Source or profile match</option>
-        <option value="selected">Selected only</option>
+        <option value="unicode">Internationalized ({scopeCounts.unicode})</option>
+        <option value="mixed">Mixed writing scripts ({scopeCounts.mixed})</option>
+        <option value="reference">Source or profile match ({scopeCounts.reference})</option>
+        <option value="selected">Selected only ({scopeCounts.selected})</option>
       </select>
     </label>
     <label>Mutation
@@ -117,10 +119,15 @@
             <span class="candidate-badges">
               {#if candidate.unicodeDomain}<span class="candidate-badge">Internationalized</span>{/if}
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
-              {#if candidate.referenceMatch}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
+              {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
               {#if candidate.isNew}<span class="ct-new">New since previous search</span>{/if}
             </span>
           </label>
+          {#if candidate.referenceDomains.length}
+            <span class="reference-summary">
+              Visual match: {candidate.referenceDomains.slice(0, 3).join(', ')}{candidate.referenceDomains.length > 3 ? ` +${candidate.referenceDomains.length - 3} more` : ''}
+            </span>
+          {/if}
           {#if candidate.certificateEvidence}
             {@const ct = candidate.certificateEvidence}
             <div class="ct-meta">
@@ -139,6 +146,9 @@
       </div>
     {/each}
   </div>
+  {#if scopeCounts.reference}
+    <p class="candidate-note">Visual matches use a bounded character comparison. They are review leads, not proof of impersonation.</p>
+  {/if}
   {#if visibleCount}
     <p class="page-summary" role="status" aria-live="polite">Showing {(currentPage - 1) * pageSize + 1}–{(currentPage - 1) * pageSize + rows.length} of {visibleCount} matching candidate{visibleCount === 1 ? '' : 's'}.</p>
   {:else}
@@ -167,6 +177,7 @@
   .candidate-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
   .candidate-badge{display:inline-block;padding:3px 8px;border:1px solid rgb(var(--accent-rgb) / .35);border-radius:99px;color:var(--accent);font:600 var(--text-2xs) var(--mono)}
   .candidate-badge.warning{border-color:rgb(var(--amber-rgb) / .45);color:var(--amber)}
+  .reference-summary{display:block;margin-top:6px;overflow-wrap:anywhere;color:var(--muted);font-size:var(--text-2xs)}
   .ct-new{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid rgb(var(--accent2-rgb) / .45);border-radius:99px;color:var(--accent2);font:600 var(--text-2xs) var(--mono)}
   .ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}
   .ct-stat{color:var(--muted);font-size:var(--text-2xs)}
@@ -176,6 +187,7 @@
   .ct-hosts details{width:100%}
   .ct-hosts summary{color:var(--accent);cursor:pointer;font-size:var(--text-2xs)}
   .ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .candidate-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .page-summary{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
   @media(max-width:700px){
     .results-toolbar,.candidate-list{grid-template-columns:1fr}

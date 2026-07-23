@@ -79,10 +79,12 @@ does not add a new Risk contribution.
 
 Discover shows the DNS-safe ASCII domain as the selectable value and adds the
 readable Unicode form, observed scripts, and contextual mixed-script or
-source/profile visual-match badges. The internal comparison skeleton is never
-displayed. Candidate scope, mutation-family, text, and certificate-history
-filters operate on the complete bounded result, as do generated-order,
-alphabetical, and most-indicators sorting.
+source/profile visual-match badges. A matching candidate names up to three
+matched references and discloses any additional bounded matches without
+displaying the internal comparison skeleton. Candidate-scope options show
+complete-result counts. Candidate scope, mutation-family, text, and
+certificate-history filters operate on the complete bounded result, as do
+generated-order, alphabetical, and most-indicators sorting.
 
 Certificate Transparency search is a separate hosted action. It groups
 observed hostnames by canonical registrable domain and retains bounded first
