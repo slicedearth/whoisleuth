@@ -20,7 +20,7 @@
 
 <PublicSeo
   title="WHOISleuth | WHOIS, RDAP and domain intelligence"
-  description="Check domain registration, DNS, certificates and website signals in one place, with clear source attribution and honest handling of missing evidence."
+  description="Check domain registration, DNS, certificates, website platform indicators and network context in one place, with clear source attribution and honest handling of missing evidence."
   path="/"
   website
 />
@@ -29,7 +29,7 @@
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
-    <p class="lede">Check registration, DNS, certificates and website signals in one place. WHOISleuth shows where each fact came from, explains missing or conflicting results, and lets you save evidence for later review.</p>
+    <p class="lede">Check registration, DNS, certificates, website platform clues and network context in one place. WHOISleuth shows where each result came from, explains missing or conflicting evidence, and lets you save useful findings for later review.</p>
     <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
     <p class="access-note"><span aria-hidden="true">●</span> The overview and demo are public. Live checks require sign-in.</p>
   </div>
@@ -39,8 +39,8 @@
       <p><span class="prompt">❯</span> review_sources <strong>--summary</strong></p>
       <dl>
         <div><dt>Registration</dt><dd><span class="state observed">observed</span> Registry RDAP</dd></div>
-        <div><dt>Registrar</dt><dd><span class="state separate">separate</span> Related RDAP</dd></div>
-        <div><dt>Website</dt><dd><span class="state review">review</span> Redirect observed</dd></div>
+        <div><dt>Platform</dt><dd><span class="state clue">clue</span> Static markup</dd></div>
+        <div><dt>Network</dt><dd><span class="state context">context</span> IP RDAP</dd></div>
         <div><dt>Conclusion</dt><dd><span class="state neutral">review</span> Analyst judgement required</dd></div>
       </dl>
       <p class="terminal-note">// each source stays visible; missing data is not treated as absence</p>
@@ -92,7 +92,7 @@
   .terminal-bar code{min-width:0;margin-left:6px;overflow:hidden;color:var(--muted);font-size:var(--text-2xs);text-overflow:ellipsis;white-space:nowrap}
   .terminal-body{padding:20px}.terminal-body>p{margin:0;color:var(--muted);font:var(--text-xs) var(--mono)}.terminal-body .prompt{margin-right:8px;color:var(--accent2)}.terminal-body strong{color:var(--text)}
   .terminal-body dl{display:grid;gap:1px;margin:17px 0;background:var(--border)}.terminal-body dl div{display:grid;grid-template-columns:105px 1fr;gap:12px;padding:11px;background:var(--terminal-panel)}.terminal-body dt{color:var(--muted);font:var(--text-2xs) var(--mono)}.terminal-body dd{min-width:0;margin:0;font-size:var(--text-xs);overflow-wrap:anywhere}
-  .state{display:inline-block;width:68px;margin-right:7px;font:700 var(--text-2xs) var(--mono)}.state.observed{color:var(--accent2)}.state.separate{color:var(--accent)}.state.review{color:var(--amber)}.state.neutral{color:var(--muted)}
+  .state{display:inline-block;width:68px;margin-right:7px;font:700 var(--text-2xs) var(--mono)}.state.observed,.state.context{color:var(--accent2)}.state.clue{color:var(--accent)}.state.neutral{color:var(--muted)}
   .terminal-body .terminal-note{color:var(--muted);line-height:1.55}
   .workflow,.product-tour,.evidence,.build{padding:72px 0;border-top:1px solid var(--border)}
   .section-intro{max-width:780px;margin-bottom:30px}.section-intro h2,.principles h2{margin:.3rem 0 .7rem;font:700 clamp(1.65rem,3.5vw,2.55rem) var(--mono);letter-spacing:-.045em}.section-intro>p:not(.eyebrow),.principles p{color:var(--muted);line-height:1.65}

@@ -28,6 +28,10 @@ full successful response contains:
 - `networkContext`: for an eligible deep non-compact domain result, a
   separately attributed summary of one observed public endpoint address and
   its IP RDAP network registration.
+- `availability.technologyProfile`: for eligible deep non-compact domain
+  results with captured website evidence, a versioned derived profile of
+  curated software and delivery indicators. Profile version 2 broadens
+  commerce and content-delivery coverage without making another request.
 - `securityTxt`: only when explicitly selected for a deep single-domain
   request, a bounded normalized disclosure file for the exact submitted
   hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.
@@ -102,6 +106,13 @@ browser-local compact stores. Unsupported, not-found, partial, and failed IP
 RDAP states remain explicit and neutral. Because collection starts after deep
 endpoint evidence is available, a cache miss can add the bounded IP RDAP
 latency to the Lookup.
+
+The Lookup interface keeps primary assessment, source-health information, and
+material registry comparison warnings expanded. Long RDAP and WHOIS records
+and secondary DNS, HTTP, page, passive-posture, technology, TLS, and
+observed-network cards start collapsed with their headings, states, and bounded
+summaries visible. This is presentation only: expanding a card makes no request
+and does not change the response or export contract.
 
 ## Shared observation envelope
 

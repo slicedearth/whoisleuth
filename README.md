@@ -9,1408 +9,218 @@
   <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />
   <img src="https://img.shields.io/badge/frontend-SvelteKit%20%2B%20Vite-ff3e00" alt="SvelteKit and Vite" />
   <a href="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml"><img src="https://github.com/slicedearth/whoisleuth/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
-  <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify Status" /></a>
+  <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify status" /></a>
 </p>
 
-A local domain intelligence and brand-protection console, built on WHOIS +
-RDAP. At its core it checks domain, IP, and ASN records - single lookups or
-bulk scans of a domain list - backed by the official IANA RDAP bootstrap
-service and live WHOIS (TCP/43) queries to the relevant registries. On top of
-that it adds the pieces for hunting typosquats and lookalikes: keyword and
-typosquat candidate generators, a Certificate Transparency search for
-lookalikes no generated list would guess, availability/opportunity scoring, a
-typosquat phishing-risk score, and brand-asset cloning detection (exact and
-perceptual favicon matching against a Brand Profile's official site).
-Findings can be triaged, drafted into abuse reports, organized into
-browser-local cases and campaigns, kept in a shortlist, and monitored over
-time with a watchlist that records a bounded timeline of material changes -
-with deliberate CSV, JSON, and readable exports where each workflow supports
-them. Brand Profiles
-can also audit their official domains' mail and DNS posture (SPF, DMARC, MX,
-DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly configured DKIM
-selectors).
+WHOISleuth is a local-first domain intelligence and brand-protection console.
+It brings registration, DNS, certificate, website, network, and brand context
+into one review workflow without treating an unavailable source as evidence of
+absence or safety.
 
-Runs as a small Node backend (needed for raw WHOIS sockets and cross-origin
-RDAP requests, which browsers can't do directly) serving a prerendered
-SvelteKit frontend built with Vite. The lookup logic lives in a shared `lib/`
-so it can run either as a traditional always-on Node/Express server
-(`server.mts`) or as Netlify Functions (`netlify/functions/`) with no logic
-duplicated between the two.
-
-The public site and protected console share a System, Light, or Dark appearance
-selector. The site follows the operating-system preference by default, and an
-explicit preference stays only in that browser's local storage.
+Use it to inspect a domain, IP address, or ASN; discover possible brand
+lookalikes; compare a bounded list of domains; document cases; and monitor
+material changes. Evidence stays attributed to its source, collection limits
+remain visible, and scores remain explainable prioritisation aids rather than
+automated verdicts.
 
 <p align="center">
-  <a href="https://whoisleuth.com/demo"><strong>Explore the public synthetic demo →</strong></a><br />
-  <sub>Fixed fictional data · no sign-in · no live registry, DNS, website, or hosted analysis request</sub>
+  <a href="https://whoisleuth.com"><strong>View WHOISleuth</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://whoisleuth.com/demo"><strong>Explore the synthetic demo</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://whoisleuth.com/guide"><strong>Read the public guide</strong></a>
 </p>
 
-## At a glance
+The demo uses fixed fictional evidence on reserved domains. It does not sign
+in, run live analysis, or write to the protected Console's investigation data.
 
-| Tool | Purpose | Important boundary |
+## What it does
+
+| Area | Purpose | Important boundary |
 | --- | --- | --- |
-| **Lookup** | Inspect one domain, IP address, or ASN. Deep is the default and collects the full domain evidence profile; Fast can be selected for lower-request registration-first triage. | Optional security.txt and external intelligence requests run only in Deep when selected. Source states remain explicit rather than turning missing evidence into a negative finding. |
-| **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates; supplement them with structured Certificate Transparency matches. | Candidate generation is local. Certificate Transparency is an explicit hosted search and its timestamps are public-log observations, not proof of site activity or maliciousness. |
-| **Bulk** | Triage a list of domains with filters, score explanations, CSV export, scan-local relationships, and fast/deep profiles. | Each domain is a separately budgeted lookup. Fast mode avoids WHOIS and deep website/TLS collection; deep mode costs more requests and time. |
-| **Brands** | Keep browser-local official-domain profiles, posture settings, allowlists, and optional page-identity baselines. | Profiles stay in that browser. A posture audit and baseline capture run only when explicitly requested. |
-| **Monitor** | Maintain bounded watchlists, analyst cases, evidence timelines, campaigns, relationship comparisons, and deliberate case/store exports. | Investigation state is browser-local by default. An optional Netlify worker can retain only encrypted compact scheduled-watchlist state when explicitly configured; there are no accounts, automatic reports, or automatic notifications. |
-| **Demo** | Walk through representative Dashboard, Brands, Discover, Bulk, Lookup, and Monitor interfaces using reserved domains and clearly marked synthetic evidence. | The public demo uses an isolated tab-scoped store, never calls analysis APIs, and cannot write production investigation stores. |
+| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. |
+| **Discover** | Generate bounded typo, homoglyph, keyboard, separator, word-order, and impersonation candidates, with optional Certificate Transparency discovery. | Candidate generation is local. Certificate-log observations do not prove site activity or maliciousness. |
+| **Bulk** | Compare multiple domains with filters, sorting, score explanations, CSV export, and scan-local relationship evidence. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. |
+| **Brands** | Save official domains, product names, allowlists, posture settings, and optional page-identity baselines. | Profiles stay in the current browser unless deliberately exported in a workspace archive. |
+| **Monitor** | Manage cases, campaigns, relationships, watchlists, timelines, and evidence reports. | Ordinary investigation state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
+| **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
 
-The application is intentionally an analyst workbench rather than an autonomous
-scanner or enforcement system. Scores, similarity, relationships, and generated
-candidates are prioritisation context; a human remains responsible for review
-and any external action.
+Deep domain Lookup can combine:
 
-See the [architecture orientation](docs/architecture.md) for the main execution,
-trust, storage, and deployment boundaries, and the
-[registry data contract](docs/registry-data-contract.md) for normalized source
-shapes and compatibility details. The
-[engineering case study](docs/engineering-case-study.md) explains the project's
-constraints, representative decisions, difficult problems, and useful
-code-review entry points.
+- IANA-bootstrap RDAP and bounded WHOIS referral-chain evidence;
+- separately attributed registrar RDAP when the registry publishes an eligible
+  HTTPS link;
+- authority-aware availability analysis;
+- DNS, HTTP, favicon, page-identity, mail, and one-connection TLS evidence;
+- passive technology and security-posture indicators derived from the captured
+  response, without vulnerability testing;
+- one observed public endpoint mapped to its IP RDAP network registration;
+- optional security.txt and configured external intelligence sources.
 
-## Contents
+Long source records and secondary Deep evidence start collapsed. Their status
+and summary remain visible so the page can be scanned before opening the
+evidence, provenance, and limitations that matter to the investigation.
 
-- [At a glance](#at-a-glance)
-- [Licence and attribution](#licence-and-attribution)
-- [Disclaimer](#disclaimer)
-- [Requirements](#requirements)
-- [Install & run](#install--run)
-- [Usage](#usage)
-- [Rate limiting](#rate-limiting)
-- [Deploying to Netlify](#deploying-to-netlify)
-- [Project structure](#project-structure)
-- [Architecture orientation](docs/architecture.md)
-- [Engineering case study](docs/engineering-case-study.md)
+## Design principles
 
-## Licence and attribution
+- **Authority-aware conclusions.** Registry evidence controls registration
+  decisions. Registrar, website, and provider evidence cannot silently replace
+  it.
+- **Source health is evidence.** Unsupported, skipped, partial, not found,
+  rate-limited, unavailable, inconclusive, and error states remain distinct.
+- **Bounded collection.** Requests, responses, redirects, arrays, strings,
+  concurrency, caches, browser stores, and exports have explicit limits.
+- **Safe outbound networking.** HTTP and TLS collection validate public
+  addresses, revalidate redirects, resist DNS rebinding, and avoid private
+  network targets.
+- **Local-first investigation state.** Cases, profiles, watchlists, campaigns,
+  shortlist entries, and rules use bounded IndexedDB stores in the current
+  browser.
+- **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
+  technology, and posture findings expose their evidence and limitations.
+- **Human-controlled action.** WHOISleuth does not send reports, submit targets,
+  run takedowns, or turn a score into an enforcement decision automatically.
 
-Versions of WHOISleuth released with this licence notice are available under
-the [GNU Affero General Public License version 3 only](LICENSE)
-(`AGPL-3.0-only`). Commercial use is permitted, but an operator that modifies
-WHOISleuth and makes that version available to users over a network must offer
-those users the corresponding source under the AGPL. Copyright, source, and
-licence notices must be preserved as required by the licence.
+## Quick start
 
-Versions previously released under Apache License 2.0 remain available under
-the terms supplied with those versions; the existing grants cannot be revoked.
-Third-party packages, services, and data retain their own licences and terms.
-The [trademark policy](TRADEMARKS.md) covers the WHOISleuth name and logo
-separately from the source-code licence.
+Requirements:
 
-## Disclaimer
+- Node.js 24 or later
+- npm
 
-Licensed under AGPL-3.0-only (see [LICENSE](LICENSE)) - provided **as is, with
-no warranty**. A few things worth being deliberate about before you rely on
-this tool or point it at data that isn't your own:
-
-- **Data accuracy.** RDAP/WHOIS responses are only as current, complete, and
-  correctly-parsed as the upstream registry provides - fields can be
-  redacted, stale, or missing entirely (see the WHOIS parsing notes in
-  `lib/whois.mts`). Don't treat the Opportunity/Risk scores, availability
-  state, or abuse contact as a substitute for your own verification before
-  acting on them, especially for anything with legal or financial
-  consequences.
-- **Intended use.** The typosquat/homoglyph generator and Certificate
-  Transparency search are meant for monitoring domains and brands you have
-  a legitimate interest in (your own brand, a client's, etc.) - the same
-  candidate-domain output that helps a defender monitor lookalikes is
-  equally a list of not-yet-registered lookalikes, so don't use this
-  against a brand you have no relationship to.
-- **Outreach and abuse-report drafts don't send anything automatically** -
-  both only build a `mailto:` link plus a copy-to-clipboard button; a human
-  reviews and sends each one. That said, using registrant contact data
-  pulled via WHOIS/RDAP for outreach is still subject to whatever
-  anti-spam (CAN-SPAM, CASL, PECR, etc.) and privacy law (GDPR, CCPA, etc.)
-  applies in your and the recipient's jurisdiction - that's on you to
-  comply with, not something this tool enforces for you.
-- **Registry/registrar terms of service.** Several registries' own WHOIS/
-  RDAP terms restrict automated bulk querying without a separate bulk-access
-  agreement. This tool's rate limiting (see below) protects against
-  accidental abuse, not against violating an individual registry's own
-  terms if you run large or frequent bulk scans against it.
-
-See [PRIVACY.md](PRIVACY.md) for how registrant data is handled and how to
-clear it (fill in your own contact details before sharing a deployment).
-
-## Requirements
-
-- [Node.js](https://nodejs.org/) 24 or later (the current LTS line used by CI and Netlify)
-- npm (bundled with Node)
-
-## Install & run
+Install, build, and start the Express deployment:
 
 ```bash
 npm install
-SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret npm start
+SITE_PASSWORD=choose-a-password \
+SESSION_SECRET=choose-a-separate-random-secret \
+npm start
 ```
 
-Then open **http://localhost:3000** for the public product overview, or
-**http://localhost:3000/login** to enter the protected console.
+Open `http://localhost:3000` for the public overview or
+`http://localhost:3000/login` for the protected Console.
 
-The overview, guide and glossary, privacy policy, sign-in page, and isolated
-synthetic demo are public and make no live investigation request. The Lookup, Discover, Bulk,
-Monitor, and Brands tools sit behind a shared-password gate:
-`SITE_PASSWORD` is required, and every investigation API route rejects
-requests without a valid session regardless of which frontend file a visitor
-can retrieve. Login and session status remain the narrow unauthenticated API
-exceptions needed to enter the console. There's no per-user login, just one
-password shared with whoever you want to have access. Pick something you're
-comfortable sharing with those people, not a password reused elsewhere.
+`SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
+should be a separate random value, such as 32 random bytes encoded as hex. The
+application has no individual accounts, roles, or selective session
+revocation. See the [getting-started guide](docs/getting-started.md) for local
+development, verification, browser tests, and CLI usage.
 
-`SESSION_SECRET` should be a separate random value (for example, 32 random
-bytes encoded as hex). It signs session cookies without turning a captured
-cookie into an offline verifier for `SITE_PASSWORD`. For compatibility,
-deployments that omit it derive a slower signing key from `SITE_PASSWORD`,
-but setting the independent secret is recommended.
+## Architecture
 
-`npm start` builds the prerendered multi-page frontend and starts the shared
-Express/API process. The generated `frontend/build/` directory is the only
-frontend served by the Node deployment.
+WHOISleuth uses a prerendered SvelteKit frontend and a small Node network
+boundary. Shared modules under `lib/` own classification, collection,
+validation, normalization, scoring, and evidence contracts. Thin adapters call
+those modules from either:
 
-The server listens on port 3000 by default. To use a different port:
+- `server.mts`, an Express server that also serves `frontend/build/`; or
+- TypeScript functions under `netlify/functions/`.
 
-```bash
-PORT=4000 SITE_PASSWORD=choose-a-password SESSION_SECRET=choose-a-separate-random-secret npm start
-```
+The browser cannot open raw WHOIS TCP sockets. The backend does not keep a
+general investigation database. It returns bounded request results, while
+deliberate browser actions decide which compact records are retained locally or
+exported.
 
-When self-hosting behind a reverse proxy such as nginx, Caddy, or a managed
-load balancer, set `TRUST_PROXY=1` only if that proxy overwrites forwarded
-headers and clients cannot connect directly to the Node process. This lets
-per-IP rate limits use the proxy-supplied client address and lets proxied
-HTTPS requests receive HSTS. Secure cookies continue to fail closed when a
-proxy reports HTTPS even without this setting. Other forwarded client and
-scheme data is ignored; all proxied users will otherwise share the proxy
-socket's rate-limit bucket. Do not enable it on a directly
-internet-facing Node process, where clients could forge those headers.
+For the full request pipeline, trust boundaries, persistence model, and
+deployment parity, see the [architecture orientation](docs/architecture.md).
 
-Sessions are stateless and valid for up to 30 days. Signing out clears the
-cookie from that browser but cannot revoke a copied token before it expires.
-Rotate `SESSION_SECRET` (or `SITE_PASSWORD` when no independent session secret
-is configured) to invalidate every outstanding session immediately.
+## Documentation
 
-### Emergency feature switches
-
-Operators can stop individual hosted network features without changing or
-redeploying the frontend. Set any switch to `1`, `true`, `yes`, or `on`:
-
-| Environment variable | Enforced effect |
+| Document | Use it for |
 | --- | --- |
-| `WHOISLEUTH_DISABLE_LOOKUP` | Blocks unified Lookup and Bulk submissions. |
-| `WHOISLEUTH_DISABLE_RDAP` | Blocks direct RDAP and omits RDAP inside unified Lookup/availability. |
-| `WHOISLEUTH_DISABLE_WHOIS` | Blocks direct WHOIS and omits WHOIS inside deep Lookup/availability. |
-| `WHOISLEUTH_DISABLE_AVAILABILITY` | Blocks direct availability and omits availability analysis inside unified Lookup. |
-| `WHOISLEUTH_DISABLE_DNS_INTELLIGENCE` | Stops evidence/delegation DNS queries and also disables the DNS-dependent posture audit. Transport DNS needed to reach an otherwise-enabled RDAP, WHOIS, or website endpoint is not evidence collection and remains available. |
-| `WHOISLEUTH_DISABLE_WEBSITE_PROBE` | Stops homepage and favicon requests while retaining registry analysis. |
-| `WHOISLEUTH_DISABLE_TLS_INTELLIGENCE` | Stops the one-connection TLS/certificate profile while retaining other deep evidence. |
-| `WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY` | Blocks Certificate Transparency search. |
-| `WHOISLEUTH_DISABLE_DOMAIN_POSTURE` | Blocks owned-domain posture audits. |
+| [Application guide](docs/application-guide.md) | Tool workflow, Fast and Deep modes, result states, scoring, saved work, guided investigations, and exports. |
+| [Getting started](docs/getting-started.md) | Installation, local development, verification commands, browser tests, and CLI entry points. |
+| [Operations and deployment](docs/operations.md) | Authentication, proxy trust, feature switches, optional providers, rate and operation limits, hosted monitoring, Netlify, and deployment checks. |
+| [Architecture orientation](docs/architecture.md) | Components, request flow, outbound trust boundaries, persistence, and deliberate trade-offs. |
+| [Registry data contract](docs/registry-data-contract.md) | Normalized RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
+| [Registry compatibility](docs/registry-compatibility.md) | Fixture-backed parser support and separately documented access context. |
+| [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
+| [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, and evidence exports. |
+| [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
+| [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
 
-The authenticated capability report is generated from the same policy that
-the Express routes and direct Netlify Functions enforce. A disabled top-level
-endpoint returns HTTP `503` with `errorCode: FEATURE_DISABLED`, `feature`, and
-`disabledBy`. Unified Lookup degrades optional disabled sources explicitly
-instead of treating them as absent or failed evidence. Browser controls mirror
-the report for clarity, but hiding or disabling a control is never the security
-boundary. Existing local candidate generation, cases, watchlists, profiles,
-exports, and saved evidence remain usable.
+The public `/guide` route is the shortest user-facing introduction. These
+repository documents provide the operator and engineering detail behind it.
 
-When RDAP, WHOIS, DNS intelligence, website probing, or TLS intelligence is disabled, a requested
-deep scan is marked incomplete for persistence purposes. Its enabled evidence
-is still shown, while watchlists and analyst cases retain prior deep-only
-evidence instead of recording skipped sources as removals.
+## Verification
 
-Express reads the environment for each request. Hosting platforms may require
-an environment update or new function instance before a changed value takes
-effect. Removing the variable or setting any value other than the four values
-above re-enables the feature.
-
-Every push and pull request runs the locked install, production dependency
-audit, test suite, TypeScript checks, Svelte checks, production frontend build,
-and browser end-to-end suite in GitHub Actions. Run the same verification
-locally:
+The main local verification sequence is:
 
 ```bash
 npm test
-npm audit --omit=dev
 npm run typecheck
 npm run check
 npm run build
-npm run schema:inventory  # generated compatibility report; reads no browser or hosted data
-npm run registry:drift    # manual bounded comparison with two official IANA catalogues
-npm run benchmark:workflow  # deterministic specialist workflow regression benchmark
-npm run platform:local-data  # offline browser-storage capacity and architecture evaluation
-npm run security:codeql   # local CodeQL scan; requires the official CLI bundle
-npm run test:e2e:install   # one-time: downloads the Chromium browser Playwright drives
-npm run test:e2e:built     # reuses the production build created above
+npm run test:e2e:built
+git diff --check
+npm audit --omit=dev
 ```
 
-`npm run security:codeql` scans the current checkout, including uncommitted
-changes, with the standard JavaScript and TypeScript code-scanning suite. It
-requires GitHub's official CodeQL bundle on `PATH`, in the conventional
-`~/.local/bin/codeql` location, or at an absolute executable path supplied in
-`CODEQL_PATH`. The command never downloads or uploads code, creates its database
-and SARIF report under the operating system's temporary directory, and removes
-both on completion. Analysis uses two threads, at most half of system memory up
-to 4 GiB, bounded process output, a 16 MiB SARIF cap, and a 15-minute deadline
-per CodeQL process. Previously reviewed hosted findings are matched only by
-their exact SARIF fingerprints; a new occurrence or a stale baseline entry
-fails for review rather than broadly suppressing a rule or file. Exit status 0
-means no unreviewed findings or baseline drift, 1 means review is required, and
-2 means setup or analysis was inconclusive. The hosted scan remains
-authoritative when its managed CodeQL bundle differs from the locally installed
-version.
+Install Playwright's Chromium build once with `npm run test:e2e:install`.
+Additional offline or bounded maintainer checks include:
 
-`npm run schema:inventory` generates a maintainer-readable report from the
-actual browser-store, hosted-state, export, interchange, CLI, and derived-model
-version constants. Each entry records supported legacy versions, future-version
-behavior, migration direction, write semantics, serialized bounds, and its owning module. The
-report is generated on demand and does not inspect or copy user data.
-
-`npm run benchmark:workflow` runs the versioned offline specialist benchmark.
-It exercises the production WHOIS registry parsers against every checked-in
-sanitized fixture, bounded lookalike generation, explicit partial-source
-handling, provenance-backed relationships, labelled detection-rule replay,
-benign shared-infrastructure controls, graph truncation, and workspace archive
-round-trip validation. Add `-- --json` for the complete
-`whoisleuth.specialist-workflow-benchmark` version 1 document. The report includes
-fixture pass rate, incomplete-collection disclosure, labelled false-positive
-rate, rule-match deduplication, graph-edge provenance completeness, export
-compatibility, and a deterministic workflow-step proxy for time to first useful
-pivot. It uses reserved domains and synthetic local evidence, makes no network
-requests, and is a regression baseline rather than a live coverage or
-production-performance claim.
-
-`npm run platform:local-data` evaluates the browser-local storage architecture
-from the owning store-budget constants without inspecting browser data. It
-reports the aggregate declared capacity and candidate trade-offs behind the
-dependency-free native IndexedDB provider. Browser tests use fixed synthetic
-records to verify transactions, one-time legacy migration, keyed and indexed
-reads, rollback, quota failures, persistence, deletion, cleanup, and bounded
-deadlines. The active codec is plaintext JSON; application-level encryption,
-PWA support, and synchronization remain separate decisions. See
-[the browser-local data architecture](docs/browser-local-data.md).
-
-### Browser end-to-end tests
-
-The `e2e/` directory holds a [Playwright](https://playwright.dev/) smoke
-suite (Chromium only) covering authentication, responsive navigation, core
-investigation workflows, browser-local persistence and exports, accessibility,
-and the isolated public demo. It builds and runs its own local production-style
-server on port 4173 with a test-only `SITE_PASSWORD`/`SESSION_SECRET`
-(configured in `playwright.config.ts`, not your shell) and never queries
-live WHOIS, RDAP, DNS, CT, or website data - tests that need submission
-behavior use domain values the backend rejects locally before any upstream
-request. First run `npm run test:e2e:install` to download the Chromium
-build Playwright drives (a one-time step, separate from `npm install`), then
-`npm run test:e2e` to build and run the suite headlessly as a standalone
-command. After an explicit `npm run build`, use `npm run test:e2e:built` to
-avoid rebuilding identical assets. CI retains an HTML report only when its
-artifact upload is needed; local runs keep failure traces/screenshots in the
-gitignored `test-results/` directory without generating a success report.
-
-## Usage
-
-### Looking up domains
-
-The normalized source shapes, source-health states, limits, truncation fields,
-compact-storage boundary, and lookup evidence schema are documented in the
-[registry data contract](docs/registry-data-contract.md).
-
-- Enter a single domain, IPv4/IPv6 address, or ASN in the search box. Deep is
-  selected by default and collects the complete applicable evidence profile.
-  Select Fast for a lower-request registration-first result that explicitly
-  skips WHOIS, website, TLS, and deep enrichment sources. Lookup shows the
-  selected collection profile while the request is running; it does not claim
-  source-by-source progress before the bounded unified response is complete.
-- For domain lookups, the Summary compares overlapping RDAP and WHOIS fields
-  after both sources finish. Equivalent values are normalized for harmless
-  formatting differences, while source-only values and material conflicts
-  retain both original source values for review. A failed, unsupported,
-  skipped, not-found, or partial source is kept distinct from an unpublished
-  field, so incomplete collection is not presented as a registry discrepancy.
-- RDAP bootstrap data is validated, shared across concurrent requests, and
-  retained as a bounded stale fallback during a temporary IANA outage. Domain
-  lifecycle events are normalized into deterministic creation, expiration,
-  update, transfer, deletion, and reinstantiation dates without discarding the
-  bounded source event list.
-- HTTPS registry endpoints are preferred. A small number of current IANA
-  bootstrap entries expose only HTTP; those remain usable for lookup coverage,
-  and source diagnostics explicitly identify the cleartext transport.
-- A successful RDAP response is accepted only when its object type and domain,
-  IP range, or ASN range match the requested object. Empty, mismatched, and
-  malformed successful responses fall through to the next bounded bootstrap
-  endpoint; diagnostics and evidence exports retain the outcome of each attempt.
-- A deep, non-compact domain Lookup may make one additional bounded HTTPS
-  request when the registry object publishes a complete registrar RDAP domain
-  link. Registrar data is displayed as a separate attributed source and is
-  never merged into registry fields or used for availability or Risk scoring.
-  When both RDAP publications succeed, Lookup also compares their portable
-  domain, registrar, lifecycle, DNSSEC, status, and nameserver fields without
-  treating source-specific handles, contacts, or publication differences as
-  an authority decision. The deliberate structured Lookup evidence export
-  retains that normalized comparison with both source values and source-health
-  states, while continuing to exclude the registrar raw object, contacts,
-  entities, links, notices, and source-specific handles.
-  The follow-up is omitted from fast and compact Bulk work, and unsupported or
-  failed registrar responses remain neutral source states.
-- After deep TLS and DNS collection, Lookup can map one retained public
-  endpoint address to its registered network through one logical IP RDAP
-  enrichment. It prefers the address used by the successful TLS connection,
-  then falls back to a successful public A or AAAA result. The result keeps the
-  registered network name and holder, handle, bounded CIDRs, range, country,
-  network type, database freshness, and source provenance separate from domain
-  registry and registrar data. It can describe a CDN, proxy, load balancer, or
-  shared edge rather than the origin host, so it never decides availability,
-  Risk, ownership, or maliciousness. Fast, compact, Bulk, monitoring, and
-  browser-local case/watchlist paths remain unchanged. Because collection
-  begins after deep endpoint evidence is available, a cache miss can add the
-  bounded IP RDAP latency to the Lookup.
-- Structured domain results retain registry object IDs, registrar IANA IDs,
-  registrar WHOIS endpoints, and reseller data when published. Fast Bulk scans
-  remain WHOIS-free: they use RDAP first and may use a bounded authoritative
-  DNS-delegation check to positively confirm registration for TLDs without
-  usable RDAP. A missing DNS delegation never means that a domain is available.
-  Full Lookup and deep scans retain the WHOIS referral chain.
-- Full Lookup normalizes WHOIS creation, expiration, and update dates alongside
-  bounded registrant, administrative, technical, billing, and registrar-abuse
-  contacts when those roles are published. Existing scalar WHOIS fields remain
-  available for compatibility, while capped fields and inventories are labelled
-  in the structured view rather than presented as complete.
-- Lookup retains a bounded inventory of nested RDAP contacts by published role,
-  including repeated names, organizations, email addresses, phone numbers,
-  postal addresses, public identifiers, and HTTP(S) references. Bulk,
-  watchlists, and analyst cases continue using the compact primary-contact
-  shape so richer contact arrays do not expand browser-local stores implicitly.
-- Lookup also retains bounded RDAP conformance identifiers, response language,
-  explicit RFC-style redaction metadata, and published IDN variant groups.
-  Capped contact, redaction, and variant inventories are labelled rather than
-  presented as complete; the raw upstream response remains available only in
-  the single-lookup view and its deliberate evidence export.
-- Deep domain scans collect a bounded point-in-time DNS observation for A,
-  AAAA, CNAME, NS, MX, SPF, DMARC, and CAA alongside registry-derived DNSSEC.
-  Per-record diagnostics distinguish authoritative absence from resolver
-  failure, malformed neighbours are discarded, and caps are disclosed. Lookup
-  displays the evidence; deliberate JSON and Bulk CSV exports retain it. Shared
-  infrastructure is relationship context, not proof of ownership or abuse,
-  and the richer observation is not copied into watchlists or analyst cases.
-- Deep domain scans also make one bounded TLS connection to one public address
-  selected from an SSRF-guarded DNS resolution. The original domain remains the
-  SNI and hostname-verification target. Lookup retains the connected address,
-  negotiated protocol/cipher/ALPN, runtime authorization outcome, hostname and
-  validity status, bounded leaf subject/issuer/SAN/serial/fingerprint/public-key
-  metadata, and a capped chain summary. This is a point-in-time observation of
-  one edge, not an exhaustive protocol/cipher audit or a maliciousness verdict.
-- IPv4, IPv6, and ASN RDAP results retain their bounded status and lifecycle
-  metadata instead of treating those fields as domain-only. Published CIDR0
-  prefixes are accepted only for the requested address family and malformed
-  neighbouring entries are discarded; status, event, and CIDR caps are
-  disclosed in normalized results and the Lookup view.
-- Registry compatibility is tracked conservatively in a versioned
-  [capability matrix](docs/registry-compatibility.md). IANA RDAP bootstrap and
-  WHOIS referrals remain authoritative discovery; fixture-backed parser and
-  fallback profiles do not claim current live-registry reachability or field
-  publication. Independently documented operator families retain
-  suffix-correct profiles for supported ASCII and IDN suffixes, and Unicode
-  suffix input resolves to the same bounded fixture-backed family. Shared
-  management alone is not treated as parser evidence. Suffixes whose current
-  IANA records publish neither domain WHOIS nor RDAP are identified as access
-  context only; WHOISleuth does not scrape a registry website or interpret the
-  missing machine service as domain availability. Fixture scenarios
-  distinguish registered, authoritative not-found, temporary, restricted, and
-  malformed responses where the registry dialect is known; an undocumented or
-  non-authoritative negative remains inconclusive. The local CLI can inspect
-  this catalogue offline with `registry-support <domain-or-suffix>` without
-  making a registry request or turning coverage metadata into an availability
-  or safety claim. Authenticated
-  deployments expose the same embedded catalogue in the **Registry support**
-  reference page, with local text and coverage filters plus an offline
-  domain-or-suffix inspector for generic IANA discovery fallback.
-  Catalogue version 26 contains 312 explicit suffix rows: 218 fixture verified
-  and 94 access documented. It includes an explicit profile for every currently
-  assigned country-code delegation plus `.edu`, `.mil`, and `.arpa`. `.edu` is
-  represented as a sponsored, fixture-backed WHOIS-only service; `.mil` has no
-  IANA-published public domain WHOIS or RDAP service; and `.arpa` is identified
-  as infrastructure rather than ordinary public registration space. The same
-  model exposes a versioned official-source snapshot verified on 19 July 2026.
-  That snapshot records all 1,113 current generic and generic-restricted TLDs
-  in IANA's RDAP bootstrap, 12 of 14 sponsored TLDs, and no RDAP service for
-  the single infrastructure TLD. Runtime lookup still resolves current IANA
-  bootstrap data, while the embedded snapshot provides dated coverage context
-  only. Thick and thin registry behavior is exercised through shared bounded
-  RDAP fixture families instead of duplicated per-suffix parsers. Seventeen
-  IANA-published country-code referrals remain access documented because
-  unavailable, restricted, prohibited, reserved, or otherwise inconclusive
-  responses are not parser or availability evidence. Fixture scenarios claim
-  only the represented behavior and make no automated registry requests.
-  Version 26 also reconciles 81 suffix-specific RDAP access claims with the
-  current official bootstrap. Shared WHOIS parser families remain reusable,
-  but no suffix inherits another suffix's RDAP publication state; a missing
-  bootstrap entry remains neutral collection context and does not alter runtime
-  discovery or domain availability.
-  Maintainers can run `npm run registry:drift` to compare that dated snapshot
-  and every explicit suffix profile with the current IANA root-zone list and
-  domain RDAP bootstrap. The command makes exactly two fixed official-source
-  requests, accepts no target, caps each response, and returns current, drift,
-  or inconclusive checks without probing a registry or rewriting the
-  catalogue. Add `-- --json` for the versioned machine-readable report; exit
-  status 1 means reviewable drift and status 2 means the audit was
-  inconclusive or invoked incorrectly.
-  A separate read-only workflow runs the same bounded JSON audit each week and
-  on explicit dispatch. It uses no secrets or write permissions and retains a
-  report for seven days only when drift or an inconclusive result requires
-  manual review. It never rewrites the catalogue, opens an issue, or sends a
-  notification automatically.
-- After a successful single lookup, **Export JSON** downloads a versioned
-  evidence package containing the submitted/registrable-domain context,
-  normalized and raw RDAP/WHOIS sources, source endpoints and timestamps,
-  discrepancy analysis, availability/web/mail/TLS findings, and the bounded
-  observed network-registration projection when represented. The download is
-  created locally and may contain contact data published by the registry.
-- The unified `/api/lookup` response includes a versioned `diagnostics`
-  object with independent RDAP, WHOIS, and availability statuses, source
-  provenance, and stable source error codes. HTTP errors retain the existing
-  human-readable `error` and add a machine-readable `errorCode` such as
-  `AUTH_REQUIRED`, `RATE_LIMITED`, `MISSING_QUERY`, or `INVALID_QUERY`, so
-  clients do not need to match message text. Diagnostics version 7 retains the
-  separately-attributed registrar RDAP child and non-authoritative
-  registry-access context from version 5, and can add bounded observed-network
-  provenance from version 6. It can also add separately attributed security.txt
-  state and provenance when that optional deep action is selected. These
-  additions are omitted from compact Bulk responses and never change
-  availability or scoring.
-- Clients that only need the derived assessment can add `compact=1` to
-  `/api/lookup`. This retains `availability` and `diagnostics` while omitting
-  raw RDAP and WHOIS payloads; Bulk uses this mode to bound browser memory and
-  transfer size.
-- Paste multiple domains into Lookup to hand them to Bulk, or paste/upload a
-  CSV or text list directly in Bulk. Named domain columns, quoted CSV fields,
-  comma/semicolon/tab delimiters, and case-insensitive deduplication are
-  supported.
-- Use the keyword, typosquat, or Certificate Transparency discovery tools to
-  select candidate domains and send them directly to Bulk.
-- New network evidence uses an additive, versioned observation envelope for
-  source health, timestamp, duration, completeness, truncation, limitations,
-  and bounded diagnostics. DNS and Certificate Transparency are the first
-  adopters; their established response fields remain unchanged, and older
-  records without an envelope remain valid.
-- Authenticated deployments expose a provider-neutral `/api/capabilities`
-  report so browser, CLI, and worker consumers can distinguish hosted support,
-  local-only analysis, disabled features, and unavailable integrations. The
-  report is server-authoritative, identifies the active concurrency provider
-  and scope, and reports optional scheduled monitoring and distributed
-  controls from their effective runtime configuration.
-- Star any bulk result to add it to the **Shortlist**, which persists in the
-  browser's IndexedDB investigation store. The retained collection remains available to load,
-  export, or clear as a whole while its domain chips are displayed in pages of
-  100.
-
-### Optional external threat-intelligence boundary
-
-One optional adapter searches existing URLscan public scan history for
-recent malicious-verdict matches. It remains disabled unless the operator sets
-`WHOISLEUTH_ENABLE_URLSCAN=1` and a valid `URLSCAN_API_KEY`, and it runs only
-when a user explicitly selects the archived-verdict option for a deep,
-non-compact single-domain Lookup. It sends the canonical registrable domain,
-never a URL path or query, makes one bounded search request, follows no
-redirect with the credential, performs no scan submission, retains no cache,
-and does not run in fast or compact Bulk paths. The normalized provider result
-is displayed transiently and is not copied into browser-local stores or the
-structured Lookup evidence export. To remain compatible with URLscan's free
-API tier, it searches the canonical domain and date range, then filters verdicts
-from the newest 20 returned scans locally. This bounded view can miss older
-malicious scans and a provider miss is never treated as evidence of safety.
-
-A second optional adapter queries existing URLhaus host records for archived
-malware-distribution URLs. It remains disabled unless the operator sets
-`WHOISLEUTH_ENABLE_URLHAUS=1` and a valid `ABUSECH_AUTH_KEY` (the legacy
-`URLHAUS_AUTH_KEY` remains accepted), and it runs only
-when a user explicitly selects malware-distribution records for a deep,
-non-compact single-domain Lookup. The adapter posts only the canonical
-registrable domain to the fixed host-lookup endpoint, keeps its Auth-Key in an
-HTTP header, follows no credential-bearing redirect, and never submits a URL,
-sample, or report. Responses are capped at 256 KB and 20 displayed findings;
-the adapter uses a six-second timeout, one-request process-local concurrency,
-conservative process-local fair-use counters, and no cache. Raw results remain
-separately attributed and outside compact stores and structured evidence
-exports.
-
-A third optional adapter searches retained ThreatFox malware indicators for an
-exact canonical registrable-domain match. It remains disabled unless the
-operator sets `WHOISLEUTH_ENABLE_THREATFOX=1` and the same valid
-`ABUSECH_AUTH_KEY`, and it runs only when a user explicitly selects malware
-infrastructure records for a deep, non-compact single-domain Lookup. The fixed
-HTTPS endpoint receives one JSON search request with `exact_match` enabled;
-the adapter follows no redirect, never submits an indicator, URL, sample, or
-report, and keeps no cache. Responses are capped at 256 KB and 20 displayed
-findings with a six-second deadline, one-request process-local concurrency, and
-conservative process-local fair-use counters. Findings retain bounded malware
-family, infrastructure role, confidence, and observation-time context and
-remain separately attributed.
-
-Before any adapter can be enabled, `lib/threat-intelligence-contract.mts` requires a
-versioned provider definition that declares its supported target types, the
-exact target representation it would receive (registrable domain, hostname,
-origin, or full URL), a reviewed terms URL and privacy-policy decision,
-commercial-use, attribution, caching, provider query-retention, and
-redistribution policy, plus bounded
-timeouts, response sizes, cache TTLs, concurrency, and daily/monthly request
-budgets. Version 1 permits lookup-only integrations and deliberately excludes
-automatic URL submission.
-
-The same module also provides version 1 of the curated discovery and enrichment
-connector contract. A definition must declare its accepted entity types, the
-exact representation disclosed for each input, normalized entity and
-relationship outputs, passive, active, or third-party collection mode,
-credential mode and scopes, reviewed policy decisions, and bounded request,
-quota, entity, and relationship limits. Every connector is disabled by default.
-The contract does not load arbitrary code, implement a provider, make a network
-request, read credentials, persist output, change availability, or contribute
-to Risk scoring. Its offline fixture harness accepts only bounded JSON and runs
-a synchronous normalizer twice, rejecting asynchronous or nondeterministic
-output before it can be treated as a versioned connector result. Active and
-third-party collection are declaration metadata only until a separately
-reviewed adapter explicitly implements them.
-
-Adapter output is normalized into separately attributed, bounded findings and
-explicit `success`, `partial`, `not_found`, `unsupported`, `skipped`,
-`rate_limited`, `unavailable`, or `error` states. It has no global “safe” field:
-a provider miss, outage, quota failure, or unsupported target cannot become
-evidence of safety. Risk model v5 recognizes only allowlisted phishing or
-malware findings from positive provider states. A lone publisher contributes
-no points, and the two community malware datasets remain one publisher family;
-only corroboration across at least two independent publisher families can add
-one bounded factor (+18 when both have a record observed within 90 days of its
-provider query, otherwise +10). Unknown providers, suspicious-only categories,
-neutral misses, and failures contribute nothing. Raw provider findings remain
-transient; compact cases retain only the already-supported versioned score and
-factor explanation. The contract itself performs no requests or stores
-credentials. Each adapter remains subject to a fresh terms and privacy review
-before it is enabled; the URLscan policy
-declaration was reviewed on 15 July 2026 and conservatively records commercial
-use and redistribution as restricted, provider query retention as
-provider-defined, and caching as prohibited.
-The URLhaus policy declaration was also reviewed on 15 July 2026. Its
-community API is free for authenticated not-for-profit use under fair-use
-limits, while commercial use may require a paid plan; redistribution is
-therefore treated as restricted and provider query retention as
-provider-defined. Deployments must keep the adapter disabled unless their use
-qualifies under those terms or they have an appropriate commercial agreement.
-The ThreatFox declaration was reviewed on the same date under the same abuse.ch
-terms and privacy policy. Its community API expires older indicators, so a
-neutral result is never presented as complete historical coverage or evidence
-of safety. Commercial deployments must keep it disabled unless their use is
-covered by the provider's community terms or an appropriate paid agreement.
-
-### Opportunity & Risk scoring
-
-- A deep-checked registered result gets a versioned **Risk** score for analyst
-  prioritization, distinct from the **Opportunity** score that rates how
-  approachable a domain is to acquire. The Risk score is a heuristic review
-  indicator, not a maliciousness verdict. Model v5 groups related observations
-  into three contextual families: domain resemblance, brand presentation, and
-  credential-lure behavior. Related observations within one family remain
-  individually visible but do not manufacture extra corroboration; a separate
-  factor is added only when two or more distinct families agree. Even the
-  strongest single family cannot reach the danger threshold when combined with
-  all ordinary activity, mail, privacy, and recency context.
-- Optional external observations stay independently attributed. Only
-  allowlisted phishing or malware records corroborated across two independent
-  publisher families add one bounded Risk factor; multiple datasets from one
-  publisher cannot corroborate one another. Source age is derived against each
-  provider result's own observation time, a lone source adds no points, and a
-  provider miss is never evidence of safety.
-- A matching favicon, official-asset relationship, password form, or suspicious
-  phrase can also occur on legitimate SSO, payment, agency, CDN, and authorized
-  campaign pages. Domains classified by the active Brand Profile as official,
-  partner, or allowlisted therefore keep their observational score visible but
-  are excluded from untrusted high-risk triage and Monitor saves. Review the
-  contributing factors and evidence rather than treating the score as a verdict.
-- A single-domain lookup's availability card shows a compact, numbered
-  **Risk** and **Opportunity** meter beside the status: the bar speeds up
-  scanning but never replaces the score value.
-- Hover any Opportunity/Risk meter or bulk-table score for a tooltip breaking
-  down exactly which signals contributed and by how much. Bulk CSV exports
-  include the Risk model version and factor breakdown alongside the score.
-  Analyst-case snapshots and reports retain the same version. Scores created
-  before explicit versioning remain readable, but watchlist and case timelines
-  do not treat a difference between unversioned and versioned scores as a
-  change in the observed domain.
-- The local CLI can replay a bounded, versioned analyst-labelled fixture set
-  through the same shared Risk model with `risk-calibrate [dataset.json]`.
-  This offline report compares fixed review thresholds and factor breakdowns;
-  it makes no request, changes no weight or threshold, persists nothing, and
-  does not treat an analyst disposition or heuristic score as proof of
-  maliciousness or safety. See [the CLI guide](docs/cli.md#offline-risk-calibration)
-  for the input contract and limits.
-
-### Brand protection & monitoring
-
-- Save a **Brand Profile** (official domains, product names, TLDs, approved
-  partner domains, and an allowlist) - the typosquat generator can prefill
-  from the active profile and drops candidates already in its allowlist, and
-  bulk/watchlist results mark any domain in the allowlist instead of
-  treating your own domain as a lookalike.
-  Saved profiles are displayed in pages of 12; activating or saving a profile
-  brings its page into view without changing the bounded browser-local store.
-- Lookup and Bulk analyze internationalized domains locally in the browser.
-  Unicode and DNS-safe ASCII forms are shown together, per-label writing
-  scripts are identified, and a bounded, versioned visual skeleton can be
-  compared with official domains in the active Brand Profile. These findings
-  are contextual review indicators, never a maliciousness verdict, and do not
-  change the Risk score. The typosquat generator uses the same curated mapping
-  so generated confusable candidates and result explanations stay consistent.
-  Mapping `tr39-17.0-curated-ascii-v2` adds a reviewed IDNA-distinct
-  candidate-generation subset from Unicode 17 while retaining a maximum of
-  eight generated substitutions per ASCII character. Mapping changes are
-  explicitly versioned because upstream confusable data can evolve; the
-  curated subset is not an exhaustive registry-variant or visual-similarity
-  database. Lookup evidence
-  schema version 16 retains the current bounded analysis, observed-network
-  projection, and optional normalized security.txt source supplied to the
-  export; Bulk CSV
-  exports include the compact IDN fields.
-- Run **Audit official domains** from a Brand Profile to check preventive
-  mail/DNS controls. Each finding retains its source records, explains why it
-  passed or needs review/action, and provides a concrete next step. DKIM is
-  checked only for selectors saved in the profile because selectors cannot be
-  discovered reliably from DNS; the audit never guesses them.
-- A Brand Profile can explicitly capture a browser-local official-site
-  baseline from its first official domain. The baseline includes the page
-  title, canonical host, favicon hashes, versioned normalized-HTML,
-  visible-text, DOM and form fingerprints, and bounded external-resource host
-  and recognized tracking-identifier sets. It records whether the capture was
-  complete or partial and when it was observed, but never stores page HTML,
-  URL paths or query strings. Capturing does not persist anything until the
-  profile is saved; an inconclusive update leaves the existing baseline
-  unchanged. A registered lookalike serving the exact or a perceptually close
-  official favicon is flagged in results and contributes bounded
-  brand-presentation context to its Risk score. The remaining baseline
-  components are retained for explainable page comparison rather than treated
-  as proof of common ownership or intent.
-  Lookup compares normalized HTML and static DOM/form digests, visible-text
-  SimHash distance, external-resource-host overlap, and recognized tracking
-  identifiers independently. It reports no combined page-similarity score and
-  does not feed these comparisons into Risk scoring. The comparison is
-  computed transiently in the browser and is not copied into cases,
-  watchlists, or evidence exports.
-- A deep check also pulls a few signals straight from the domain's homepage
-  HTML at no extra fetch cost: a login/password form, urgency-driven
-  phishing/social-engineering language ("verify your account", "security
-  alert", ...), the page title, and any image/script/stylesheet it loads
-  directly from your official domain instead of copying - a lazy
-  phishing-kit tell. These observations contribute conservatively within their
-  contextual families and require evidence from another family before receiving
-  a corroboration bonus.
-- The same bounded homepage request now retains an HTTP observation with the
-  final response, a validated redirect chain, transport, selected response and
-  security headers, declared versus captured body size, and a SHA-256 over the
-  captured response bytes. The hash scope explicitly distinguishes a complete
-  captured body from a capped prefix; a prefix hash is not presented as a hash
-  of the complete upstream response. URL query strings are omitted from
-  retained provenance. Missing security headers and cross-origin redirects are
-  contextual evidence, not maliciousness verdicts, and do not change scoring.
-  Bulk results, watchlists, and analyst cases keep only a compact summary of
-  the final origin, response status, transport, redirect count/flags, MIME
-  type, and presence-only security-header tokens. They never copy URL paths,
-  query strings, header values, attempt errors, or redirect inventories from
-  the richer Lookup observation.
-- Deep Lookup also derives a versioned, bounded page-identity summary from
-  that same captured HTML response, without making another request. It can
-  retain the document language, canonical and meta-refresh targets, selected
-  Open Graph identity, generator metadata, form counts, bounded external
-  form-action origins, normalized resource-type counts, external resource and
-  embedded origins, mail-contact domains, download context, and recognized
-  public tracking identifiers. Credentials, query strings, fragments,
-  resource/download paths, form-action paths, and complete email addresses are
-  not retained; oversized inputs and collection caps are reported as partial
-  observations. This evidence is displayed only in Lookup and its deliberate
-  evidence export. It is not copied into Bulk, watchlists, or analyst cases and
-  does not alter Risk scoring. Static parsing does not run JavaScript, and the
-  resulting metadata is contextual relationship/review evidence rather than a
-  verdict about site ownership or intent. Data-bearing `srcset` attributes are
-  skipped instead of being split incorrectly by the lightweight parser.
-- Deep Lookup derives a separate versioned technology profile from the same
-  selected HTTP server header, generator metadata, normalized resource
-  origins, and capped static HTML. Curated signatures currently cover common
-  content-management systems, commerce and site-building platforms, web
-  frameworks, static-site generators, web servers, and delivery platforms.
-  Each finding retains only a fixed technology name, category, confidence,
-  evidence class, and explanation. Matched markup, arbitrary header values,
-  resource paths, and signature input are not retained. Unmatched signatures
-  are neutral because static or deliberately concealed technologies may not be
-  observable. The profile makes no additional request, remains outside compact
-  browser stores, and does not change availability or Risk scoring.
-- Deep Lookup also derives a versioned passive security-posture profile from
-  the HTTP response, static form and resource summaries, one TLS handshake,
-  registry or WHOIS DNSSEC publication, and the existing CAA query. Findings
-  distinguish observed configuration, potential exposure, response-scoped
-  observed absence, and unavailable evidence. The checks cover transport,
-  selected security headers, cleartext form and resource destinations,
-  certificate trust/hostname/validity, the negotiated TLS version, DNSSEC,
-  and CAA. They do not crawl, deliver payloads, enumerate protocol support, or
-  validate vulnerabilities, and they make no additional request. The profile
-  remains outside compact browser stores and Risk or availability decisions;
-  it is included only when the user deliberately exports the full Lookup
-  evidence response.
-- A deep single-domain Lookup can explicitly request the standardized
-  `/.well-known/security.txt` file for the exact entered hostname. The optional
-  collector makes one bounded HTTPS-only collection with safe redirect handling,
-  retains only normalized Contact, Expires, Canonical, Policy,
-  Preferred-Languages, and Encryption fields, and reports absent, stale,
-  partial, malformed, unsupported, and unavailable states separately. The
-  response body is discarded after parsing. This source is not requested by
-  default, does not run in fast or compact modes, is not copied into
-  browser-local stores, and never affects availability or Risk. A published
-  file provides reporting information; it does not authorize security testing
-  or prove that a contact is monitored.
-- Page identity also includes an independently versioned fingerprint bundle
-  derived from the same capped response. It reuses the exact captured-body
-  SHA-256 and adds a noise-reduced normalized-HTML SHA-256, visible-text
-  SimHash, static tag-sequence SHA-256, form-structure SHA-256, and bounded
-  external-resource-host and public-tracking-identifier sets with deterministic
-  set digests. Normalization removes comments and script/style/non-executing
-  bodies, reduces routine timestamps and random identifiers, omits nonce,
-  token, value, and tracking-query volatility, and sorts attributes where the
-  lightweight parser can do so safely. Normalized markup and visible text are
-  discarded after hashing. Component caps and source truncation remain
-  explicit; fuzzy SimHash is comparison data, not cryptographic evidence or
-  proof of common ownership.
-- A bulk scan presents bounded **Relationship evidence** from observations
-  already collected by that scan: exact nameserver sets, resolved IP
-  addresses, recognized public tracking identifiers, exact or perceptually
-  similar favicons, and asset hosts under configured official domains. Each
-  relationship states its comparison method and can be loaded back into the
-  query box. The comparison is scan-local, performs no extra lookups, changes
-  no Risk score, and is not copied into shortlists, watchlists, cases, or
-  exports. Shared observations are investigation pivots, not proof of common
-  ownership, coordination, intent, or maliciousness. CT hostname and
-  certificate-count provenance is not treated as certificate reuse. Deep Bulk
-  results can group exact native leaf-certificate SHA-256 observations within
-  the current scan. Multi-domain certificates, shared hosting, CDNs, and
-  managed platforms are common, so this remains relationship context rather
-  than proof of common ownership, control, intent, or abuse.
-- **Bulk triage controls** keep large scans usable: filter by availability
-  family, high-risk score, error state, mutation family, and one or more
-  evidence signals. Results can be sorted by domain, registration state,
-  confidence, Risk, Opportunity, website state, registrar, or mutation family,
-  with missing evidence kept last. Counts update while the scan runs; filters
-  and sorting change only the visible rows, never the saved/exported scan data.
-- Typosquat candidates retain their **mutation provenance** (omission,
-  keyboard substitution, homoglyph, dictionary term, TLD typo, and the other
-  generator families) through bulk results, watchlists, and CSV export. When
-  several algorithms produce the same domain, every contributing family is
-  retained rather than silently discarded. The Risk model uses only its
-  allowlisted generator machine values as a bounded context signal; arbitrary
-  imported labels cannot increase the score. Candidate generation validates
-  domain labels before including them and applies deterministic per-family,
-  label-variant, TLD, and overall candidate limits before browser handoff. The
-  Discover status reports when a limit prevents complete coverage.
-- Discover offers three local **generation presets**: Common edits,
-  Impersonation, and All families. All families preserves the established
-  default output, while the narrower presets let analysts focus on particular
-  mutation groups without changing the global safety limits. A live upper-bound
-  estimate shows the possible candidate count before validity filtering and
-  deduplication; it allocates no candidate objects and makes no network
-  requests. Filtered candidates are paginated locally at 100 per page rather
-  than hiding matches beyond a display cap; selection can still apply to every
-  matching candidate before the retained selection is handed to Bulk. Network
-  lookups begin only when those selected candidates are scanned.
-- Adjacent-key substitution and insertion can use **QWERTY, AZERTY, or
-  QWERTZ** geometry. QWERTY remains the compatibility default; changing the
-  layout clears any previously generated set so the visible results always
-  match the active configuration. Layout selection changes only local
-  candidate generation and does not alter the Risk model.
-- Bounded separator families add valid internal hyphens, remove existing
-  separators, and preserve two-to-four-token brand boundaries so deterministic
-  word reorderings can be generated in joined and hyphenated forms. Each family
-  keeps separate provenance, and four-token permutations stop at the existing
-  per-family boundary. Risk model v5 recognizes these generator-owned values as
-  low-context evidence; earlier stored scores remain readable but incomparable
-  across model versions.
-- The Impersonation preset uses a bounded curated set of access, account,
-  support, payment, and recovery terms in joined and hyphenated prefix/suffix
-  forms. These candidates retain the existing `dictionary` machine provenance
-  and display as **Impersonation term** evidence; a term match is investigation
-  context, not a maliciousness verdict.
-- When the seed is a domain, the selected TLD field now expands that exact
-  label and every generated label variation across the bounded selected TLD
-  set. These results retain an explicit **Selected TLD substitution** source,
-  including alongside any label-level mutation that also contributed.
-- After a generated-list scan, **Defensive registration coverage** groups the
-  results by mutation family and TLD: protected/allowlisted domains,
-  registered exposures, available gaps, and unknown results. Groups can be
-  loaded back into the query box or exported as a coverage CSV, using scan
-  data already collected with no extra network calls.
-- Save a generated typosquat set as a **Watchlist** and re-scan it later.
-  Each watchlist retains a bounded, browser-local timeline of material
-  availability, registrar, nameserver, date, mail, compact HTTP, website, and
-  Risk-score changes. Fast rescans update registration data without erasing
-  last-known deep-scan evidence; an explicit deep re-scan refreshes page/mail
-  and HTTP signals. Risk-score changes are reported only when both observations
-  carry the same explicit model version.
-  Deep watchlist rescans keep the same 200-domain safety limit as other deep
-  checks; larger watchlists remain available for fast registration monitoring.
-  Timeline entries can be filtered to changed checks only and are included
-  in the existing JSON backup/export. The watchlist table displays 25 saved
-  lists per page while rescans, history, export, and clear actions continue to
-  operate on the intended record or complete collection.
-- **Optional hosted monitoring worker**: Netlify deployments include a private
-  scheduled function that polls every five minutes, but it is a no-op unless
-  `WHOISLEUTH_SCHEDULED_MONITORING` is explicitly enabled with a valid
-  32-byte Base64 `WHOISLEUTH_SCHEDULED_MONITOR_KEY` and a bounded
-  `WHOISLEUTH_SCHEDULED_MONITOR_NAMESPACE`. The function has no production URL.
-  Set these values for the **Production** deploy context only. Automatic runs
-  and authenticated management are accepted only by the published deploy;
-  preview or branch-deploy code is rejected before Blob construction even if
-  its configuration was inherited accidentally.
-  When ready, it opens the site-wide `whoisleuth-scheduled-monitor` Blob store,
-  decrypts one bounded state envelope in memory, and processes at most two
-  existing fast compact lookups and eight internal deliveries within a
-  24-second soft budget. Durable progress is an encrypted cursor; provider
-  outages, inconclusive observations, conflicts, and deadlines remain explicit
-  and cannot erase an earlier conclusive baseline. Ordinary watchlists are not
-  copied automatically. Monitor exposes a separate **Scheduled watchlists**
-  card only when the capability report confirms that hosted monitoring is
-  ready. A signed-in user must deliberately select a browser-local watchlist
-  before scheduling it, and can pause/resume it, replace its hosted snapshot,
-  restore the compact hosted snapshot to the current browser, or delete only
-  the hosted copy. These actions use the authenticated
-  `/api/scheduled-monitor` route; mutations require a same-origin request and
-  request bodies are capped at 1 MiB. Because the app has one shared login
-  rather than individual roles, every signed-in user can view and manage the
-  same hosted scheduled-watchlist state.
-
-  Capacity admission is derived from the fixed schedule and cycle ceiling:
-  4,032 theoretical lookups per week, with at most 3,024 admitted and 25%
-  reserved for delayed or resumed work. A new or resumed schedule that would
-  exceed that admitted rate is rejected without changing stored state. This
-  is a processing ceiling, not a promise that upstream registries will answer.
-
-  The five-minute schedule itself can use 8,640 function invocations in a
-  30-day month or 8,928 in a 31-day month, including no-op invocations while the
-  feature is disabled. Blob reads, writes, and domain lookups occur only when
-  the complete enable configuration is valid. Scheduled intervals are targets,
-  not guarantees: bounded work is resumed by later invocations when several
-  lists are due or upstream services are slow. To roll back lookup and storage
-  activity, set `WHOISLEUTH_SCHEDULED_MONITORING=0` (or remove it) and redeploy.
-  Disabling the worker does not delete its encrypted Blob; remove that object
-  deliberately from the Netlify Blobs page only when its retained history is
-  no longer required. Removing the function's schedule is required to reclaim
-  the no-op invocation allowance as well.
-- Use **Search Certificate Transparency logs** to find hostnames with a
-  publicly-issued TLS certificate matching a brand keyword - catches
-  lookalikes the typosquat generator's fixed permutations would never guess,
-  often before the domain shows up anywhere else. Certificate searches now use
-  a shared bounded query contract: keywords are limited to 200 characters,
-  control characters are rejected before any upstream request, and invalid
-  input does not consume a hosted certificate-search operation. Results retain
-  structured provenance: each match groups observed hostnames by canonical
-  registrable domain, records the earliest and latest CT observation
-  timestamps, and counts distinct certificates. CT timestamps are public-log
-  observation metadata — they do not prove that a site is active, malicious,
-  or registered at a particular time.
-- Discover presents these structured results as **one selectable candidate per
-  registrable domain**, sorted by most recent CT observation. Each candidate's
-  observed certificate hostnames stay visible as provenance (filtering matches
-  both the canonical domain and its hostnames), and only the canonical
-  registrable domains are sent on to Bulk. The bounded CT provenance (observed
-  hostnames, first/last observation timestamps, distinct certificate count)
-  rides along through the browser-session handoff and is shown compactly in
-  Bulk beside each scanned row and in the CSV export (`ct_first_observed`,
-  `ct_last_observed`, `ct_certificate_count`, `ct_hostnames`). CT observation
-  timestamps and certificate counts are provenance only — they never feed the
-  Risk or Opportunity scores. A malformed response without the current
-  structured `matches` contract fails explicitly rather than manufacturing
-  candidate provenance.
-- Complete structured certificate searches also maintain a bounded,
-  browser-local baseline for each normalized keyword. A later search labels
-  canonical domains that were absent from the previous complete result and
-  can filter the list to those new observations. Capped responses are retained
-  in the local check summary but never replace a complete
-  baseline, avoiding false "new" labels after a partial result. Discover's
-  **Previous certificate searches** panel can reuse or delete individual
-  searches, or clear all CT history. This history stays in the browser's
-  IndexedDB investigation store, is
-  limited to 30 searches and 20 checks per search, and can be removed without
-  affecting watchlists, cases, or Brand Profiles.
-- A registered result with a published abuse contact (from RDAP or WHOIS)
-  gets a **Report abuse** draft - a prefilled takedown request referencing
-  that domain's risk signals, with the same mailto-link-plus-copy-button
-  pattern as the acquisition outreach draft.
-
-### Analyst cases
-
-Move a finding from discovery into a documented investigation. From a **Lookup**
-result or a **Bulk** row you can open a **case** for a domain; **Monitor** is the
-tool for managing the full investigation record, with `Cases`, `Campaigns`, `Relationships`, and
-`Watchlists` tabs.
-
-- Each case carries an analyst **status** (New, Reviewing, Monitoring,
-  Escalated, Resolved), a **disposition** (Unreviewed, Suspicious, Confirmed
-  abuse, False positive, Expected, Closed without action), free-text **tags**,
-  timestamped **notes**, its **source** (Lookup, Bulk, Monitor), and a bounded,
-  chronological **evidence history**: a small set of normalized snapshots
-  (availability, risk/opportunity scores, registrar, dates, nameservers, mail
-  and website signals) captured from results over time - never the raw registry,
-  RDAP, DNS, HTML, or screenshot data. Re-capturing materially identical
-  evidence advances the latest snapshot's timestamp rather than adding a
-  duplicate entry; only a material change opens a new snapshot. Monitor exposes
-  the full evidence timeline for every case: newest-to-oldest observations with
-  capture source, scan depth, repeat-detection, and depth-aware field-level
-  change reports. When capture depths differ enough to prevent reliable
-  comparison, the timeline explains why rather than falsely reporting a change or
-  a removal.
-- Monitor lets you filter by status and disposition, search by domain or tag,
-  sort by recent activity, edit a case inline, and delete one with a
-  confirmation. A case links back to a fresh **Look up** of its domain, and
-  Lookup/Bulk link forward into the matching Monitor record. Filtered cases
-  are shown 25 per page; deep links and relationship pivots open the page that
-  contains the requested case.
-- Expanded cases continue to compare their latest compact evidence against the
-  other cases already stored in that browser. The **Relationships** tab builds
-  a separate disposable typed projection across retained case history and
-  campaign membership. Exact normalized nameserver sets and comparable final
-  HTTP(S) origins can become bounded cross-case investigation pivots without a
-  new network request, score, or persisted relationship record. Shared DNS,
-  redirect, hosting, CDN, parking, and platform services remain common
-  explanations rather than ownership or attribution evidence.
-- The **Relationships** graph and semantic table support relationship-family,
-  source, observation-time, completeness, case, and campaign filters. Selecting
-  a relationship exposes its comparison method, classification, first and last
-  retained observation times, source observations, completeness, truncation,
-  and limitations. The graph can focus on one-hop neighbours, pin or hide nodes,
-  and compare the relationships shared by a transient analyst-selected case
-  group. That view state is not saved or exported and is limited to 8 pins, 12
-  hidden nodes, and 8 comparison cases. Resetting the view restores the complete
-  bounded graph, while the table remains unaffected and provides bounded search,
-  stable sorting, pagination, explicit partial-result labels, and direct case
-  pivots. Each page shows up to 50 relationships, each row shows up to 20 case
-  links, and each relationship retains at most 100 provenance observations;
-  narrow screens use labelled stacked rows without page-level horizontal
-  overflow.
-  The currently filtered graph can be downloaded deliberately as versioned
-  WHOISleuth JSON, GraphML, or GEXF. All three formats use the same deterministic
-  portable node and edge identifiers, retain bounded source, time, method,
-  classification, completeness, truncation, and limitation metadata, and are
-  capped at 512 KiB. At most 8 source observations are embedded per relationship.
-  Transient focus, pin, hide, and comparison-group state is not exported; the
-  download is generated locally and is never submitted to another service.
-- The **Campaigns** tab groups existing cases into bounded browser-local
-  investigations. Each campaign retains only a name, optional description,
-  and up to 50 normalized case domains; it does not duplicate case evidence,
-  notes, status, or disposition. A missing domain remains visible as an
-  unavailable case so portable membership is not silently lost after a case
-  deletion or import on another browser. Campaign membership is an analyst
-  organization aid, not evidence of common ownership, coordination, intent,
-  or maliciousness. Campaigns are shown 10 per page and member domains 25 per
-  page; collection export/import and membership mutations still address the
-  complete bounded data set.
-- Campaign collection export/import uses a separate versioned JSON contract.
-  Imports merge matching campaign IDs non-destructively: domain membership is
-  unioned, while newer valid metadata wins. The store is limited to 50
-  campaigns, 50 domains per campaign, a 512 KiB serialized budget, and 2 MB
-  import files. Campaign data stays in the browser's IndexedDB investigation
-  store and never leaves the browser unless deliberately exported.
-- **Cases live only in the current browser.** They are held in the browser's
-  IndexedDB investigation store and are never sent to any server. Clearing your
-  browser storage (or using a different browser or device) removes them unless
-  you exported them first. The store is at schema version 2; a version-1 store
-  (single evidence snapshot) is discovered under the same key and migrated to an
-  evidence history on load, and a store written by a newer, unsupported version
-  is never overwritten.
-- **Export** writes a portable JSON file that includes the schema version and an
-  export timestamp. **Import** merges a file into your existing cases by domain.
-  Tags, notes, and evidence snapshots are unioned (identical snapshots
-  deduplicate, and an older import can never move an observation backwards),
-  while a scalar field (status, disposition, source) is only replaced when the
-  imported record is both valid and more recently updated than your local copy -
-  a record with a missing or invalid timestamp is treated as older than any
-  local case, and a field absent from an imported record never overwrites your
-  local value. So importing can add context but cannot silently reset a local
-  status, disposition, or decision. Imports are capped at 2 MB and validated
-  field by field; unknown or malformed records are skipped rather than trusted.
-- Storage is bounded to keep it safe and predictable: up to 500 cases, 50 notes
-  per case (2000 characters each), 20 tags per case (40 characters each), and 25
-  evidence snapshots per case. The whole store is held to a serialized byte
-  budget: if evidence history would push it over, the oldest snapshots are
-  pruned first, and analyst-authored notes, tags, status, and decisions are
-  never discarded to make room. Old or malformed stored data is repaired on load
-  rather than crashing the app.
-- **Single-case evidence reports** are available inside each expanded case in
-  Monitor. You can export a _structured JSON_ or _readable Markdown_ package
-  containing the case summary, current assessment, full evidence timeline
-  (chronological, with depth-aware change reports), and an explicit
-  `notesIncluded` indicator. The **Include analyst notes** checkbox defaults to
-  **off** — enable it only when you need the notes in the report. These reports
-  are generated locally in the browser, never uploaded or sent automatically,
-  and are **not** import files (they are read-only evidence packages, distinct
-  from the whole-store backup/import JSON described above). Reports include a
-  limitations statement confirming that they contain normalized observations,
-  not raw registry/web responses, and that snapshot fingerprints are
-  deduplication identifiers rather than cryptographic evidence hashes.
-- **Notes may contain sensitive investigation detail** (analyst identities,
-  victim data, internal decisions). Treat an exported case file as sensitive:
-  store it somewhere access-controlled and share it deliberately. Review every
-  report before sharing it — Markdown reports in particular should be checked
-  for escaped content that an analyst or import may have stored.
-
-### Public synthetic demo
-
-The unauthenticated `/demo` route presents representative, guided versions of
-Dashboard, Brands, Discover, Bulk, Lookup, and Monitor. The fictional workflow
-moves from a bounded profile and official-site baseline through candidate
-generation, explainable triage, separately attributed evidence, an isolated
-case, a later observation, material-change filtering, and report export. It
-uses fixed fixtures on reserved domains and makes no live registry, DNS,
-website, certificate, or other analysis request. The public layout can still
-read the same minimal boolean session-status endpoint used by other public
-pages. Demo
-progress is kept only in `sessionStorage` under
-`whoisleuth:synthetic-demo:v1`; it never reads or writes production Brand
-Profiles, candidates, cases, campaigns, watchlists, or history, and **Reset
-demo** removes the tab-scoped record.
-
-Demo exports use version 3 of the distinct
-`whoisleuth.synthetic-demo-case` schema, carry `synthetic: true`, retain only
-the fixed attributed fixtures and synthetic observation timeline, and include
-an explicit warning that they are not live findings, evidence packages, or
-abuse reports. The demo remains a representative product walkthrough rather
-than a shadow implementation of every tool. Its fixture adapters feed the
-same read-only profile, score, relationship, registry, DNS, HTTP, TLS,
-security.txt, technology, passive-posture, network-context, and
-evidence-timeline components used by the protected console. Existing
-represented surfaces therefore inherit component-level UI and accessibility
-changes, while genuinely new tools are added to the guided scenario
-deliberately instead of being exposed automatically.
-
-### Public overview and protected console
-
-The unauthenticated `/` route describes the product in task-focused language,
-links common investigation paths, and renders compact Discover, Lookup, and
-Monitor previews from the same fixed fictional fixtures as `/demo`. The
-previews do not call an analysis API, write browser storage, or reproduce the
-authenticated tool implementations. The public `/guide` route provides
-task-based starting points, tool instructions, result-state guidance, a
-glossary, common interpretation mistakes, and an FAQ from one typed content
-model. The public layout reads only the
-existing boolean session-status endpoint so an authenticated visitor can open
-the console or sign out from a public page. Authenticated visitors land on a
-protected Dashboard that links to all five investigation tools and shows
-only bounded counts derived from browser-local cases, watchlists, and profiles.
-The Dashboard can also build a disposable in-memory search index over known
-fields in the current case, campaign, and Brand Profile stores. Search results
-retain their source, observation time, completeness, truncation, and limitation
-labels and can open the exact source record. An empty result does not establish
-absence elsewhere, and searching does not start a lookup, contact a provider,
-or save a separate index.
-The Dashboard also creates one deliberate, unencrypted workspace archive for
-cases, campaigns, Brand Profiles, watchlists, shortlist entries, custom
-detection rules, the active-profile selection, and the theme preference. The
-versioned JSON manifest records each section's schema, record count, byte count,
-and SHA-256 checksum; individual sections are capped at 5 MiB and the complete
-archive at 10 MiB. Import always previews new records, existing identity matches,
-skipped records, and unsupported section versions before writing. Selected
-sections use their existing non-destructive merge rules, and a failed browser
-write rolls earlier section changes back. The archive excludes sessions,
-passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
-state, Certificate Transparency history, and unrelated browser storage. On the
-first authenticated load, supported legacy local-storage documents are
-normalized and copied into verified IndexedDB records without deleting the
-source documents. Later IndexedDB writes are authoritative. Before deliberately
-returning to an older build, the Dashboard can update the legacy compatibility
-copy, subject to local-storage quota. The current IndexedDB codec is plaintext;
-an optional encrypted vault can be added separately without replacing the
-portable unencrypted archive schema.
-From the Dashboard, an optional guided investigation can coordinate one of
-three fixed recipes: brand sweep, infrastructure pivot, or new-domain triage.
-Version 2 keeps one canonical domain, an optional analyst-selected candidate
-domain for a later focused step, up to 25 canonical domains explicitly scanned
-in a guided peer-comparison step, active or paused state, and bounded approval,
-opened-stage, and analyst-selected outcome markers in the current tab's
-`sessionStorage` under `whoisleuth:investigation-guide:v2`. Deployed
-version 1 navigation records normalize into the new-domain triage recipe when
-no version 2 record exists, while future records remain untouched. Every stage
-has one compact current-action panel with three concrete instructions and
-explicit reviewed, partial, and skipped actions; the complete plan can be
-expanded to review prerequisites, expected evidence, completion criteria, and
-request or cost implications. Profile, discovery, lookup, Bulk, and case
-handoffs pre-fill or preserve the relevant bounded target. A brand sweep keeps
-the official target separate from the priority candidate explicitly selected
-from a Bulk result. New-domain triage and infrastructure pivot carry a bounded
-Bulk domain set into a visible Monitor review queue; no case is created until
-the analyst opens it, and a capped queue remains explicitly marked. Tool links
-focus the relevant input rather than leaving the
-user at the top of a long page, and same-page shortcuts do not reload or replace
-the current candidate queue. When the guide scrolls out of view, a compact
-return control keeps the active step reachable beside long Lookup and Bulk
-results. Network collection stages show their request implications and require
-an explicit approval marker before navigation, but opening a tool still never
-starts a lookup, search, scan, submission, export, or Monitor action. Recipes
-can be paused, resumed, restarted after confirmation, or ended.
-An explicit confirmed local download exports only a versioned compact progress
-summary, not raw evidence, notes, credentials, provider responses, or scan
-results. A read-only checkpoint derives retained observation and relationship
-counts from the typed local projection without deciding stage completion.
-Lookup and Bulk also retain their current forms, results, filters, sorting, and
-pagination in memory during authenticated client-side navigation in the same
-tab. Lookup retains the complete response currently displayed, including its
-separately attributed raw source sections, rather than a reduced evidence
-snapshot. That transient convenience state is not written to browser storage
-and disappears on sign-out, a full reload, or when the tab closes.
-The protected WHOISleuth brand returns to the Dashboard; the Dashboard keeps
-the public homepage available as a separate, clearly labelled destination.
-`/login` accepts the shared deployment password and returns only to a known
-protected console; arbitrary or off-origin return targets are ignored.
-Login JSON is capped at 1 MiB in both runtimes. Malformed and oversized bodies
-receive bounded JSON errors with `INVALID_REQUEST_BODY` or `REQUEST_TOO_LARGE`
-codes; parser exceptions and internal paths are never returned to the client.
-Direct anonymous navigation to the Dashboard, Lookup, Discover, Bulk, Monitor,
-or Brands is redirected to sign-in, while the backend continues to enforce
-authentication independently on every protected API.
-The public surface is designed around data minimisation, without advertising
-profiles or cross-site tracking. Any deployment-specific audience measurement
-belongs only on public routes and must be described in that deployment's
-privacy notice; protected-route activity and investigation inputs remain out
-of scope.
-
-## Rate limiting
-
-Authentication attempts and network-heavy API routes are rate-limited per
-client IP (`lib/rate-limit.mts`), shared by `server.mts` and the Netlify
-Functions:
-
-- `/api/login` - 10 attempts per 5 minutes, since the shared password is the
-  tool's only access control and the main thing worth throttling.
-- `/api/lookup`, `/api/rdap`, `/api/whois`, `/api/availability`, `/api/ct-search`,
-  `/api/domain-posture` - 1000 requests per minute. Bulk uses bounded client
-  concurrency, and a `429` response tells the client when to retry. This
-  container-local ceiling limits bursts but is not an upstream allowance or a
-  guarantee that a large scan will complete within one minute.
-- `/api/scheduled-monitor` - 60 authenticated management requests per minute
-  per warm runtime and signed session, in addition to the general API limit.
-  This lower ceiling protects strongly consistent Blob reads and conditional
-  writes from accidental Bulk-rate use.
-
-Exceeding these limits returns `429` with a `Retry-After` header. The limiter
-is in-memory: on `server.mts` (one long-lived process) it applies globally; on
-Netlify Functions each container has its own memory, so it only limits bursts
-within a single warm container rather than across the whole deployment - a
-cheap first line of defense, not a substitute for a shared store (e.g. Redis)
-under sustained distributed abuse. Netlify deployments additionally use the
-two code-based, per-IP rules available on the Legacy Free plan. Login is mapped
-to `/api/login` and rate-limited in the function's exported configuration, so
-the provider's default direct login-function endpoint is no longer available
-as a bypass. The main high-volume `/api/lookup` path retains its redirect-level
-edge rule. Confirm that both rules are reported as applied during Netlify's
-deployment post-processing; an invalid code-based rule does not necessarily
-fail the deployment.
-Other requests made directly to `/.netlify/functions/*` do not pass through the
-lookup path's edge rule. Their function-level limiter still applies, but it is
-container-local; deployments that need durable protection against distributed
-abuse should add a shared rate-limit store or platform-level traffic controls.
-
-### Deployment self-check
-
-After publishing a deployment, an operator can run a bounded public-boundary
-check from this repository:
-
-```sh
+```bash
+npm run schema:inventory
+npm run benchmark:workflow
+npm run platform:local-data
+npm run security:codeql
+npm run registry:drift
 npm run deployment:self-check -- https://your-deployment.example
 ```
 
-Add `--json` for the versioned machine-readable report. The command accepts
-one explicit HTTPS hostname origin and starts from only seven fixed same-origin
-paths. It makes at most ten requests, follows at most one same-origin redirect
-without a query string or fragment per GET probe, inspects at most 64 KiB per
-response, allows five seconds per request and twenty seconds overall, and uses
-the same public-address and DNS-rebinding protections as other outbound
-requests. It verifies the public homepage, anonymous session state,
-invalid-login response, unpublished direct login-function path, protected
-capability and scheduled-monitor management boundaries, browser security
-headers, and `no-store` directives.
+The registry-drift and deployment checks make only their documented, fixed,
+bounded network requests. Automated unit and browser tests use deterministic
+fixtures and do not query live registries, domains, or providers.
 
-The check sends one fixed non-secret invalid value solely to the configured
-same-origin login route and never includes it or response bodies in the report.
-It does not accept a real password, session cookie, API credential, arbitrary
-path, or additional target. Because protected-route navigation and the
-server-authoritative capability report require browser execution and an
-authenticated session, their detailed state remains explicitly inconclusive
-or unsupported; confirm the console redirect and scheduled-monitor posture
-through the existing signed-in browser smoke test. A network failure or capped
-response is not converted into a pass or deployment defect.
+## Deployment summary
 
-Network-heavy authenticated work also uses immediate in-memory concurrency
-leases. These are cost classes rather than provider quotas:
+Netlify reads `netlify.toml`, builds the static frontend, and packages the
+TypeScript functions. Before the first production deployment, set
+`SITE_PASSWORD` and a separate `SESSION_SECRET`. Optional providers, distributed
+operation controls, and encrypted scheduled monitoring remain disabled unless
+their complete configurations are supplied.
 
-| Operation class | Included work | Per session | Per runtime instance |
-| --- | --- | ---: | ---: |
-| `registry_light` | fast Lookup, RDAP, fast availability | 12 | 36 |
-| `registry_deep` | deep Lookup, WHOIS, deep availability | 4 | 12 |
-| `certificate_search` | Certificate Transparency search | 2 | 4 |
-| `posture_audit` | domain-posture audit | 3 | 8 |
+Read [operations and deployment](docs/operations.md) before exposing a
+deployment publicly. It documents the shared-login boundary, reverse-proxy
+trust, feature switches, optional credentials, fail-closed states, limits, and
+post-deployment checks.
 
-Each admitted request also receives a versioned, server-derived feature
-identity for later durable accounting. Version 1 distinguishes fast/deep
-Lookup, fast/deep compact Bulk work, direct RDAP, direct WHOIS, fast/deep
-availability, Certificate Transparency, and domain-posture requests while
-continuing to map them onto the four cost classes above. Compact response mode
-is the existing Bulk API contract; it is useful attribution, but not a security
-boundary because a custom client can choose another compatible response shape.
-Future deployment-wide totals must therefore retain an overall limit as well as
-feature-specific limits.
+## Licence, attribution, and responsible use
 
-An exhausted lease returns `429`, `Retry-After: 1`, and the stable
-`NETWORK_CONCURRENCY_LIMITED` error code. The lease is always released when
-the request succeeds or fails. Session keys are irreversible hashes of valid
-session tokens; bearer tokens are not retained in the budget maps.
+WHOISleuth is licensed under the [GNU Affero General Public License version 3
+only](LICENSE) (`AGPL-3.0-only`). Commercial use is permitted, but an operator
+that modifies WHOISleuth and makes that version available over a network must
+offer the corresponding source under the AGPL. Existing versions previously
+released under Apache License 2.0 remain available under the licence supplied
+with those versions. Third-party packages, services, and data retain their own
+licences and terms.
 
-Express and Netlify enter these leases through the same provider-neutral
-runner. Its contract uses one atomic acquire decision, an explicit lease
-release, and bounded status reporting; acquisition and release may be
-synchronous or asynchronous. The default provider remains entirely in memory.
+The [trademark policy](TRADEMARKS.md) covers the WHOISleuth name and logo
+separately from the source licence. Copyright and attribution details are in
+[NOTICE](NOTICE).
 
-Deployments can optionally set both `UPSTASH_REDIS_REST_URL` and
-`UPSTASH_REDIS_REST_TOKEN` to enforce the same ceilings across runtime
-instances through the service's HTTPS REST API. No additional package is
-required. `WHOISLEUTH_BUDGET_NAMESPACE` can provide a deployment-specific
-1-64 character key prefix when one database is shared; otherwise a versioned
-default is used. The write-capable REST token is a server secret and must never
-be exposed to browser code, committed, or included in a public build.
+The software is provided **as is, without warranty**. Registration data can be
+redacted, stale, incomplete, or parsed imperfectly. Scores and generated
+candidates require analyst review. Use collection, contact data, and report
+drafts only where you have a legitimate purpose and comply with applicable
+registry terms, privacy law, anti-spam law, and authorization boundaries.
 
-Distributed acquisition uses one atomic server-side script over expiring
-sorted-set leases and release uses one further command. Leases contain only an
-operation class, opaque random identifier, expiry, and one-way hash of the
-existing session fingerprint—never query targets, evidence, responses, or the
-session token. A five-minute lease expiry recovers capacity after interrupted
-serverless invocations without allowing a late release to decrement a newer
-lease. Provider outages fail closed with HTTP `503` and the stable
-`NETWORK_BUDGET_UNAVAILABLE` code rather than silently reverting to per-instance
-limits.
-
-An operator can additionally set `WHOISLEUTH_OPERATION_USAGE_LIMITS` to a
-bounded JSON policy. It requires global `daily` and `monthly` positive integer
-ceilings and accepts optional limits for the version-1 operation features:
-
-```json
-{
-  "daily": 2000,
-  "monthly": 20000,
-  "features": {
-    "bulk_deep": { "daily": 250, "monthly": 2500 },
-    "certificate_transparency": { "daily": 100, "monthly": 1000 }
-  }
-}
-```
-
-These figures are examples, not hosting-plan recommendations. Choose them from
-the deployment's measured request costs and provider allowances. The policy is
-valid only with both distributed REST credentials; missing credentials or a
-malformed policy fail closed rather than silently disabling accounting.
-
-Accounting uses provider server time and fixed UTC-epoch-aligned 24-hour and
-30-day buckets. The 30-day bucket is not a calendar month, rolling window, or
-provider billing total. One atomic acquisition checks session/runtime
-concurrency, the global counters, and any configured feature counters before it
-creates a lease or increments usage. A concurrency denial or provider failure
-does not consume usage; an admitted operation remains counted even if its
-downstream lookup later fails. Every admitted feature is counted, even without
-a feature ceiling, and the global ceiling cannot be bypassed by selecting a
-different compatible response shape. Counter keys retain only the operation
-feature, fixed-window identifier, and integer count and expire shortly after
-their window ends.
-
-Usage exhaustion returns HTTP `429`, a `Retry-After` value bounded by the
-current window reset, and `NETWORK_USAGE_LIMITED` with a global/feature and
-24-hour/30-day scope. Enabling usage accounting does not add provider commands:
-an allowed operation still uses one atomic acquisition command and one release
-command. The container-local fixed-window request limiter remains a separate
-control.
-
-Without the optional provider, these concurrency ceilings have the same
-local-only boundary as the fixed-window limiter. Express enforces them across
-one process. Netlify enforces them only inside one warm function instance,
-with state reset on cold starts. Direct function paths still perform
-function-level authentication, rate limiting, and concurrency checks even
-when they bypass canonical-path edge rules.
-
-## Deploying to Netlify
-
-This repository also ships TypeScript Netlify Functions for unified lookup,
-RDAP, WHOIS, availability, Certificate Transparency search, domain-posture
-audits, authentication, capability reporting, and optional scheduled-watchlist
-management. They remain thin entry points over the same shared modules used by
-`server.mts`; the private scheduled worker adds only the Netlify-specific
-encrypted Blob boundary. To deploy:
-
-1. Push this repo to GitHub and connect it in Netlify (or run `netlify deploy`
-   from the Netlify CLI if you have it installed).
-2. Netlify reads `netlify.toml`, runs `npm run build`, publishes the
-   prerendered `frontend/build/` site, and builds the functions in
-   `netlify/functions/`. Direct routes such as `/lookup`, `/bulk`, and
-   `/monitor` resolve to independent static HTML entries rather than relying
-   on a catch-all client-side rewrite.
-3. In the Netlify dashboard, set `SITE_PASSWORD` and a separate random
-   `SESSION_SECRET` environment variable
-   (Site settings → Environment variables) before your first deploy - the
-   login/session functions read them the same way `server.mts` does. Without
-   `SITE_PASSWORD`, authentication fails closed and nobody can log in.
-
-Bulk scans run as one `/api/lookup` call per domain with client-side
-concurrency (see `frontend/src/routes/(console)/bulk/+page.svelte`) rather than
-one long server-held request. Serverless functions have a per-invocation
-execution limit, so this keeps each function call bounded regardless of how
-many domains are in a bulk run.
+See [PRIVACY.md](PRIVACY.md) for data handling and deletion guidance. Review
+and adapt that notice before sharing your own deployment.
 
 ## Project structure
 
-```
-LICENSE                 GNU Affero General Public License v3 text
-NOTICE                  Copyright, licence, and trademark notice
-TRADEMARKS.md           Project name and logo usage policy
-PRIVACY.md              Template privacy notice: processing, retention, and deletion
-server.mts               Express API, authentication, capability, and static-site adapter
-bin/                    First-party CLI entry point
-cli/                    CLI commands, formatters, and local command contracts
-frontend/               SvelteKit multi-page frontend workspace
-  src/routes/           Public overview/demo/guide/login/privacy and protected Console pages
-  src/lib/              Browser state, workflow helpers, and analysis modules
-    browser-local-data.ts  Bounded native IndexedDB provider and migration manifest
-    cases.ts            Asynchronous browser-local analyst case adapter
-    analysis/           Framework-neutral scoring, comparison, generation, history, and case logic
-  static/               Frontend-owned static assets
-  build/                Generated static output (ignored; created by npm run build)
-lib/                    Shared lookup logic, used by both server.mts and netlify/functions/
-  classify.mts          Query classification (domain/IPv4/IPv6/ASN)
-  rdap.mts              IANA bootstrap lookup + RDAP response parsing
-  whois.mts             WHOIS (TCP/43) referral chain + response parsing
-  availability.mts      Availability/opportunity signal derivation
-  dns-mx.mts            MX-record lookup (phishing-risk signal for deep checks)
-  domain-posture.mts    Owned-domain DNS collection, assessment, and remediation
-  domain-posture-parsers.mts  Pure SPF/DMARC/MTA-STS/TLS-RPT/BIMI/DKIM parsers
-  favicon.mts           Favicon SHA-256 hash fetch (phishing-clone signal for deep checks)
-  html-signals.mts      Bounded homepage signals and versioned static page-identity evidence
-  website-technology.mts Versioned technology indicators from existing deep evidence
-  website-security-posture.mts Passive posture findings from existing deep evidence
-  observed-network-context.mts Bounded IP RDAP context for one observed endpoint address
-  security-txt.mts      Optional bounded security.txt disclosure-contact collection
-  tls-intelligence.mts  One-connection TLS/certificate profile with public-address pinning
-  threat-intelligence-contract.mts  Bounded policy, result, and fixture boundaries for optional providers and curated connectors
-  ct-search.mts         Certificate Transparency search (crt.sh) for lookalike hostnames
-  safe-fetch.mts        SSRF-guarded fetch (blocks private/loopback/link-local targets)
-  auth.mts              Shared-password session cookie (sign/verify, no user accounts)
-  rate-limit.mts        Per-IP rate limiting for login and lookup routes
-netlify/functions/      Netlify Functions, scheduled worker, and hosted-watchlist management
-netlify.toml            Netlify build/redirect config
-tools/                  Maintainer-run schema, drift, benchmark, deployment, and security checks
-docs/architecture.md    System context, request pipeline, trust boundaries, and trade-offs
-docs/browser-local-data.md  IndexedDB, migration, rollback, and encryption boundary
-docs/cli.md             First-party CLI commands, boundaries, schemas, and exit codes
-docs/engineering-case-study.md  Project constraints, decisions, challenges, and review guide
-docs/registry-data-contract.md  Normalized registry source and evidence contracts
+```text
+server.mts              Express, authentication, API, and static-site adapter
+lib/                    Shared bounded collection and analysis modules
+netlify/functions/      Thin Netlify adapters and optional scheduled worker
+frontend/               Prerendered SvelteKit public site and protected Console
+bin/ and cli/            First-party command-line interface
+fixtures/               Sanitized deterministic registry fixtures
+test/ and e2e/           Unit, integration, and browser verification
+tools/                  Maintainer checks and offline evaluation commands
+docs/                   User, operator, architecture, contract, and CLI guides
 ```
 
-The frontend is a prerendered SvelteKit multi-page app built with Vite. The
-Node server and Netlify both serve the same generated `frontend/build/`
-output.
+The generated `frontend/build/` output is ignored. Both deployment adapters
+serve the same frontend and call the same shared intelligence modules.

@@ -35,11 +35,32 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
   await expect(page.getByText('security.txt', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Technology indicators' })).toBeVisible();
+  for (const selector of ['.dns-card', '.http-card', '.security-posture-card', '.tls-card']) {
+    const card = page.locator(selector);
+    await expect(card).not.toHaveAttribute('open', '');
+    await expect(card.locator(':scope > summary .evidence-status')).toHaveText('Success');
+  }
+  const technology = page.locator('.technology-card');
+  await expect(technology).not.toHaveAttribute('open', '');
+  await expect(technology.getByRole('heading', { name: 'Technology indicators' })).toBeVisible();
+  await expect(technology.getByText('3 matched indicators · Expand for evidence and limitations', { exact: true })).toBeVisible();
+  await expect(technology.getByRole('heading', { name: 'Example Commerce' })).toBeHidden();
+  await technology.locator(':scope > summary').click();
+  await expect(technology.getByRole('heading', { name: 'Example Commerce' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
-  await expect(page.getByText('RDAP structured data')).toBeVisible();
-  await expect(page.getByText('WHOIS structured data')).toBeVisible();
+  const network = page.locator('.network-context');
+  await expect(network).not.toHaveAttribute('open', '');
+  await expect(network.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
+  await expect(network.locator(':scope > summary .evidence-status')).toHaveText('Success');
+  await expect(network.getByText('203.0.113.44', { exact: true })).toBeHidden();
+  await network.locator(':scope > summary').click();
+  await expect(network.getByText('203.0.113.44', { exact: true })).toBeVisible();
+  const registrySources = page.locator('.sources > details');
+  await expect(registrySources).toHaveCount(2);
+  await expect(registrySources.nth(0)).not.toHaveAttribute('open', '');
+  await expect(registrySources.nth(1)).not.toHaveAttribute('open', '');
+  await expect(registrySources.nth(0).getByText('RDAP structured data')).toBeVisible();
+  await expect(registrySources.nth(1).getByText('WHOIS structured data')).toBeVisible();
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
   await page.getByLabel('Status').selectOption('reviewing');
   await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
