@@ -17,9 +17,14 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'Use the investigation workflow without touching a live target.' })).toBeVisible();
   await expect(page.getByText('Synthetic fixtures · No live findings')).toBeVisible();
   await expect(page.locator('form.login')).toHaveCount(0);
+  await expect(page.locator('.demo-stage-summary')).toContainText('Stage 1 of 6');
+  await expect(page.getByRole('button', { name: /Dashboard.*Current/ })).toHaveAttribute('aria-current', 'step');
 
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
+  await expect(page.locator('.demo-stage-summary')).toContainText('Stage 2 of 6');
+  await expect(page.getByRole('button', { name: /Dashboard.*Completed/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /Brands.*Current/ })).toHaveAttribute('aria-current', 'step');
   await expect(page.getByRole('heading', { name: 'Northstar Outfitters' })).toBeVisible();
   await expect(page.getByText(/northstar\.example · Complete/)).toBeVisible();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();

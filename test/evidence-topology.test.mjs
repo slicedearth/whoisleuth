@@ -12,8 +12,8 @@ import {
 describe('evidence topology projection', () => {
   test('uses bounded deterministic D3 geometry without changing source attribution', () => {
     const nodes = [
-      { id: 'registry-rdap', label: 'Registry RDAP', detail: 'Authoritative registry publication', status: 'success', href: '#evidence-registry', side: 'left', glyph: 'R' },
-      { id: 'dns', label: 'DNS', detail: 'One record family was unavailable', status: 'partial', href: '#evidence-dns', side: 'right', glyph: 'D' },
+      { id: 'registry-rdap', label: 'Registry RDAP', detail: 'Authoritative registry publication', status: 'success', href: '#evidence-registry', side: 'left', glyph: 'R', family: 'registry' },
+      { id: 'dns', label: 'DNS', detail: 'One record family was unavailable', status: 'partial', href: '#evidence-dns', side: 'right', glyph: 'D', family: 'network' },
       { id: 'technology', label: 'Technology', detail: 'Derived from bounded website evidence', status: 'observed', href: '#evidence-technology', side: 'right', provenance: 'derived', glyph: 'T' },
     ];
     const first = projectEvidenceTopology({ label: 'example.test', detail: 'Domain', status: 'registered' }, nodes);
@@ -26,6 +26,8 @@ describe('evidence topology projection', () => {
     assert.equal(first.counts.success, 2);
     assert.equal(first.counts.partial, 1);
     assert.equal(first.nodes.find((node) => node.id === 'technology')?.provenance, 'derived');
+    assert.equal(first.nodes.find((node) => node.id === 'technology')?.family, 'derived');
+    assert.equal(first.nodes.find((node) => node.id === 'dns')?.family, 'network');
     assert.ok(first.edges.every((edge) => /^M.+C.+$/u.test(edge.path)));
   });
 
@@ -45,6 +47,7 @@ describe('evidence topology projection', () => {
     assert.ok(graph.nodes.every((node) => node.label.length <= 40 && node.detail.length <= 120));
     assert.equal(graph.nodes.find((node) => node.id === 'source-0')?.href, '');
     assert.equal(graph.nodes.find((node) => node.id === 'source-2')?.href, '#valid-anchor');
+    assert.ok(graph.nodes.every((node) => node.family === 'registry'));
   });
 
   test('preserves explicit incomplete and failure states instead of implying absence', () => {

@@ -51,6 +51,9 @@
   const loadingDetail = $derived(lookupMode === 'fast'
     ? 'Fast lookup is checking authoritative registration evidence and omitting slower web, WHOIS, and enrichment sources.'
     : 'Deep lookup is collecting registry, WHOIS, DNS, web, TLS, and separately attributed enrichment sources. Some registries can take several seconds to answer.');
+  const requestedSourceFamilies = $derived(lookupMode === 'fast'
+    ? ['Authority', 'RDAP']
+    : ['Authority', 'WHOIS', 'DNS', 'HTTP', 'TLS', 'Enrichment']);
 </script>
 
 <form class="search card" {onsubmit}>
@@ -95,7 +98,16 @@
   </fieldset>
 
   {#if loading}
-    <p class="loading-note" role="status"><span class="spinner" aria-hidden="true"></span><span>{loadingDetail}</span></p>
+    <div class="loading-note" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <div>
+        <p>{loadingDetail}</p>
+        <div class="collection-trace" aria-hidden="true">
+          <span class="trace-prompt">collect://</span>
+          {#each requestedSourceFamilies as source}<span>{source}</span>{/each}
+        </div>
+      </div>
+    </div>
   {/if}
 
   {#if securityTxtSupported}
@@ -144,9 +156,15 @@
   .mode-options small{color:var(--muted);font-size:var(--text-2xs)}
   .lookup-mode p,.loading-note{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .loading-note{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid rgb(var(--accent-rgb) / .32);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .08)}
+  .loading-note>div{min-width:0}.loading-note p{margin:0}
   .spinner{flex:0 0 auto;width:13px;height:13px;margin-top:2px;border:2px solid rgb(var(--accent-rgb) / .28);border-top-color:var(--accent);border-radius:50%;animation:lookup-spin .8s linear infinite}
+  .collection-trace{position:relative;display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;overflow:hidden}
+  .collection-trace::after{content:"";position:absolute;inset:0 auto 0 -25%;width:20%;background:linear-gradient(90deg,transparent,rgb(var(--accent-rgb) / .12),transparent);animation:collection-scan 1.8s linear infinite;pointer-events:none}
+  .collection-trace>span{padding:3px 6px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--muted);font:650 .58rem var(--mono);letter-spacing:.03em}
+  .collection-trace .trace-prompt{border-color:transparent;background:transparent;color:var(--accent2)}
   @keyframes lookup-spin{to{transform:rotate(360deg)}}
-  @media(prefers-reduced-motion:reduce){.spinner{animation:none;border-color:var(--accent)}}
+  @keyframes collection-scan{to{transform:translateX(650%)}}
+  @media(prefers-reduced-motion:reduce){.spinner{animation:none;border-color:var(--accent)}.collection-trace::after{display:none}}
   .intelligence-options{margin:14px 0 0;padding:12px 14px 14px;border:1px solid var(--border);border-radius:var(--radius-md)}
   .intelligence-options legend{padding:0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .intelligence-hint{margin:0 0 10px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}

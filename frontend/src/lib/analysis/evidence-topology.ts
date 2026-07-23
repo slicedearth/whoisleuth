@@ -20,6 +20,7 @@ export type EvidenceTopologyStatus =
 
 export type EvidenceTopologySide = 'left' | 'right';
 export type EvidenceTopologyProvenance = 'direct' | 'derived';
+export type EvidenceTopologyFamily = 'registry' | 'network' | 'web' | 'derived' | 'analyst';
 
 export type EvidenceTopologyInput = {
   id: string;
@@ -30,6 +31,7 @@ export type EvidenceTopologyInput = {
   glyph?: string;
   side?: EvidenceTopologySide;
   provenance?: EvidenceTopologyProvenance;
+  family?: EvidenceTopologyFamily;
 };
 
 export type EvidenceTopologyTarget = {
@@ -66,6 +68,16 @@ function boundedId(value: unknown) {
 function boundedHref(value: unknown) {
   const href = boundedText(value, 96);
   return /^#[a-z][a-z0-9_-]{0,79}$/iu.test(href) ? href : '';
+}
+
+function normalizeEvidenceTopologyFamily(
+  value: unknown,
+  provenance: EvidenceTopologyProvenance,
+): EvidenceTopologyFamily {
+  if (provenance === 'derived') return 'derived';
+  return value === 'network' || value === 'web' || value === 'analyst'
+    ? value
+    : 'registry';
 }
 
 export function normalizeEvidenceTopologyStatus(
@@ -111,6 +123,7 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
     if (!id || !label || seen.has(id)) continue;
     seen.add(id);
     if (accepted.length >= MAX_EVIDENCE_TOPOLOGY_NODES) continue;
+    const provenance = candidate.provenance === 'derived' ? 'derived' : 'direct';
     accepted.push({
       id,
       label,
@@ -119,7 +132,8 @@ export function projectEvidenceTopology(targetInput: EvidenceTopologyTarget, raw
       href: boundedHref(candidate.href),
       glyph: boundedText(candidate.glyph, 3).toUpperCase() || label.slice(0, 1).toUpperCase(),
       side: candidate.side === 'left' ? 'left' : 'right',
-      provenance: candidate.provenance === 'derived' ? 'derived' : 'direct',
+      provenance,
+      family: normalizeEvidenceTopologyFamily(candidate.family, provenance),
     });
   }
 

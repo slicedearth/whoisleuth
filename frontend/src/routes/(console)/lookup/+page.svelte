@@ -491,60 +491,60 @@
     nodes.push({
       id:'registry-rdap',label:result.type==='domain'?'Registry RDAP':'RDAP',
       detail:topologyDiagnosticDetail(rdapDiagnostic),status:topologyStatus(rdapDiagnostic.status),
-      href:'#evidence-registry',side:'left',glyph:'R',
+      href:'#evidence-registry',side:'left',glyph:'R',family:'registry',
     });
     if(result.type==='domain'||whoisDiagnostic.status){
       nodes.push({
         id:'whois',label:'WHOIS',detail:topologyDiagnosticDetail(whoisDiagnostic),
-        status:topologyStatus(whoisDiagnostic.status),href:'#evidence-registry',side:'left',glyph:'W',
+        status:topologyStatus(whoisDiagnostic.status),href:'#evidence-registry',side:'left',glyph:'W',family:'registry',
       });
     }
     if(registrarRdap.status){
       nodes.push({
         id:'registrar-rdap',label:'Registrar RDAP',
         detail:show(registrarRdap.detail||registrarRdap.endpoint||registrarRdap.status),
-        status:topologyStatus(registrarRdap.status),href:'#evidence-registry',side:'left',glyph:'RR',
+        status:topologyStatus(registrarRdap.status),href:'#evidence-registry',side:'left',glyph:'RR',family:'registry',
       });
     }
     if(observedNetworkContext.contextVersion===1){
       nodes.push({
         id:'network',label:'Network context',
         detail:show(observedNetworkEndpoint.address||observedNetworkContext.detail),
-        status:topologyStatus(observedNetworkContext.status),href:'#evidence-network',side:'left',glyph:'N',
+        status:topologyStatus(observedNetworkContext.status),href:'#evidence-network',side:'left',glyph:'N',family:'network',
       });
     }
     if(dnsEvidence.source==='dns'){
       nodes.push({
         id:'dns',label:'DNS',detail:dnsEvidence.complete===false?'Collection is explicitly partial':'Record families collected',
         status:topologyStatus(dnsEvidence.status,dnsEvidence.complete!==false,Boolean(dnsEvidence.truncated)),
-        href:'#evidence-dns',side:'right',glyph:'D',
+        href:'#evidence-dns',side:'right',glyph:'D',family:'network',
       });
     }
     if(httpEvidence.source==='http'){
       nodes.push({
         id:'http',label:'HTTP',detail:httpResponse.status?`HTTP ${show(httpResponse.status)} · ${show(httpEvidence.transportSecurity)}`:show(httpEvidence.status),
         status:topologyStatus(httpEvidence.status,httpEvidence.complete!==false,Boolean(httpEvidence.truncated)),
-        href:'#evidence-http',side:'right',glyph:'H',
+        href:'#evidence-http',side:'right',glyph:'H',family:'web',
       });
     }
     if(tlsEvidence.source==='tls'){
       nodes.push({
         id:'tls',label:'TLS',detail:show(tlsEvidence.protocol||(tlsAuthorization.authorized===true?'Validated certificate':tlsEvidence.status)),
         status:topologyStatus(tlsEvidence.status,tlsEvidence.complete!==false,Boolean(tlsEvidence.chainTruncated)),
-        href:'#evidence-tls',side:'right',glyph:'T',
+        href:'#evidence-tls',side:'right',glyph:'T',family:'web',
       });
     }
     if(pageIdentity.source==='html'){
       nodes.push({
         id:'page',label:'Page identity',detail:show(pageIdentity.title||availability.pageTitle||pageIdentity.status),
         status:topologyStatus(pageIdentity.status,Boolean(pageIdentity.complete),Boolean(pageIdentity.truncated)),
-        href:'#evidence-page',side:'right',glyph:'P',
+        href:'#evidence-page',side:'right',glyph:'P',family:'web',
       });
     }
     if(securityTxt.securityTxtVersion===1){
       nodes.push({
         id:'security-txt',label:'security.txt',detail:show(securityTxt.detail||securityTxt.state),
-        status:topologyStatus(securityTxt.state),href:'#evidence-security-txt',side:'right',glyph:'S',
+        status:topologyStatus(securityTxt.state),href:'#evidence-security-txt',side:'right',glyph:'S',family:'web',
       });
     }
     if(technologyProfile.source==='derived'){
@@ -593,9 +593,9 @@
   <section class="result-root" id="result">
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} />
 
-    <LocalSectionNav label="Result sections" links={resultSectionLinks()} />
+    <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 
-    <section class="result-section" id="overview" aria-labelledby="overview-title">
+    <section class="result-section family-overview" id="overview" aria-labelledby="overview-title">
       <h3 id="overview-title">Overview</h3>
 
       {#if availability.applicable!==false}
@@ -625,7 +625,7 @@
     </section>
 
     {#if hasWebEvidence}
-    <section class="result-section" id="web-evidence" aria-labelledby="web-evidence-title">
+    <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
       <h3 id="web-evidence-title">Web and DNS evidence</h3>
 
       {#if dnsEvidence.source==='dns'}
@@ -699,7 +699,7 @@
     </section>
     {/if}
 
-    <section class="result-section" id="registry" aria-labelledby="registry-title">
+    <section class="result-section family-registry" id="registry" aria-labelledby="registry-title">
       <h3 id="registry-title">Registry sources</h3>
 
       {#if registryAccess.suffix}
@@ -738,21 +738,21 @@
     </section>
 
     {#if threatIntelligenceProviders.length}
-      <section class="result-section" id="external-intelligence" aria-labelledby="external-intelligence-title">
+      <section class="result-section family-network" id="external-intelligence" aria-labelledby="external-intelligence-title">
         <h3 id="external-intelligence-title">External intelligence</h3>
         <LookupExternalIntelligence providers={threatIntelligenceProviders} riskContext={externalRiskContext} riskModelVersion={risk?.modelVersion ?? null} showValue={show} {formatDate} />
       </section>
     {/if}
 
     {#if hasCaseSection}
-      <section class="result-section" id="case-response" aria-labelledby="case-response-title">
+      <section class="result-section family-analyst" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
 
         <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuse} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
       </section>
     {/if}
 
-    <section class="result-section" id="raw-data" aria-labelledby="raw-data-title">
+    <section class="result-section family-raw" id="raw-data" aria-labelledby="raw-data-title">
       <h3 id="raw-data-title">Raw evidence</h3>
       <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
     </section>
@@ -761,15 +761,21 @@
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
-  .result-section{margin-top:26px}
-  .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
+  .result-section{--section-accent:var(--accent2);margin-top:26px}
+  .result-section.family-web{--section-accent:var(--amber)}
+  .result-section.family-registry{--section-accent:var(--accent2)}
+  .result-section.family-network{--section-accent:var(--accent)}
+  .result-section.family-analyst{--section-accent:var(--violet)}
+  .result-section.family-raw{--section-accent:var(--muted)}
+  .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--section-accent);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
   .result-section>h3::before{content:"//";color:var(--muted)}
-  .result-section>h3::after{content:"";flex:1;height:1px;background:var(--border)}
+  .result-section>h3::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--section-accent) 60%,var(--border)),var(--border) 42%)}
   .result-section>.card,.result-section>.evidence-component{margin-top:12px}
   .result-section>:nth-child(2){margin-top:0}
   .evidence-component[id]{position:relative;padding-left:3px;border-left:2px solid var(--evidence-rail,var(--accent));border-radius:var(--radius-md);scroll-margin-top:88px}
-  #evidence-page,#evidence-security-txt{--evidence-rail:var(--accent2)}
-  #evidence-posture,#evidence-technology{--evidence-rail:var(--amber)}
+  #evidence-page,#evidence-security-txt,#evidence-http,#evidence-tls{--evidence-rail:var(--amber)}
+  #evidence-dns,#evidence-network{--evidence-rail:var(--accent)}
+  #evidence-posture,#evidence-technology{--evidence-rail:var(--violet)}
 
   .evidence-card{padding:var(--card-pad)}
   .evidence-card .section-head p:not(.eyebrow){margin:4px 0 0;color:var(--muted);font-size:var(--text-xs)}

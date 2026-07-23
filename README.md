@@ -31,8 +31,12 @@ automated verdicts.
   <a href="https://whoisleuth.com/guide"><strong>Read the public guide</strong></a>
 </p>
 
-The demo uses fixed fictional evidence on reserved domains. It does not sign
-in, run live analysis, or write to the protected Console's investigation data.
+The demo uses fixed fictional evidence on reserved domains. Its six-stage
+progress rail distinguishes the current, completed, available, and upcoming
+parts of the workflow. It does not sign in, run live analysis, or write to the
+protected Console's investigation data. The public Guide maps common goals to
+the relevant tool and interpretation sections, while the Privacy page provides
+local section navigation without shortening the policy.
 
 ## What it does
 
@@ -62,6 +66,11 @@ and summary remain visible so the page can be scanned before opening the
 evidence, provenance, and limitations that matter to the investigation. A
 bounded source map uses locally rendered D3 geometry to connect the target to
 separately attributed evidence and provide direct links to each visible source.
+Registry, network, web, derived, and analyst evidence retain consistent visual
+cues and an accompanying key without changing their status or authority. The
+in-result section rail
+tracks the current evidence family, while `Ctrl+K` or `Cmd+K` opens a
+keyboard-searchable Console destination palette.
 An ordered lifecycle view adds dated registry and certificate context without
 pretending that visual spacing represents elapsed duration. HTTP redirect paths,
 the Bulk Risk/Opportunity matrix, and retained watchlist activity use the same

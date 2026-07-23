@@ -1,0 +1,163 @@
+<script lang="ts">
+  import { goto } from '$app/navigation';
+  import { onMount, tick } from 'svelte';
+
+  type ConsoleCommand = {
+    href: string;
+    label: string;
+    detail: string;
+    group: string;
+  };
+
+  let {
+    commands,
+    onclose,
+  }: {
+    commands: ConsoleCommand[];
+    onclose: () => void;
+  } = $props();
+
+  let query = $state('');
+  let selectedIndex = $state(0);
+  let searchInput = $state<HTMLInputElement>();
+  let dialog = $state<HTMLElement>();
+  const normalizedQuery = $derived(query.trim().toLowerCase());
+  const filteredCommands = $derived(commands
+    .filter((command) => !normalizedQuery || `${command.label} ${command.detail} ${command.group}`.toLowerCase().includes(normalizedQuery))
+    .slice(0, 12));
+
+  onMount(() => {
+    void tick().then(() => searchInput?.focus());
+  });
+
+  function close() {
+    onclose();
+  }
+
+  async function activate(command: ConsoleCommand | undefined) {
+    if (!command) return;
+    onclose();
+    await goto(command.href);
+  }
+
+  function focusables() {
+    if (!dialog) return [];
+    return [...dialog.querySelectorAll<HTMLElement>('input,a[href],button:not([disabled])')]
+      .filter((element) => element.getClientRects().length > 0);
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!filteredCommands.length) return;
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      selectedIndex = (selectedIndex + delta + filteredCommands.length) % filteredCommands.length;
+      return;
+    }
+    if (event.key === 'Enter' && document.activeElement === searchInput) {
+      event.preventDefault();
+      void activate(filteredCommands[selectedIndex] ?? filteredCommands[0]);
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const available = focusables();
+    if (!available.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = available[0];
+    const last = available.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+</script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+<div class="palette-layer">
+  <button class="palette-backdrop" type="button" aria-label="Close command palette" onclick={close}></button>
+  <div
+    class="command-palette card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="command-palette-title"
+    bind:this={dialog}
+  >
+    <header>
+      <div>
+        <p class="eyebrow">Console navigation</p>
+        <h2 id="command-palette-title">Go to</h2>
+      </div>
+      <button type="button" class="palette-close" aria-label="Close command palette" onclick={close}>Esc</button>
+    </header>
+    <label for="command-search">Search pages</label>
+    <div class="command-search">
+      <span aria-hidden="true">❯</span>
+      <input
+        id="command-search"
+        bind:this={searchInput}
+        bind:value={query}
+        oninput={() => selectedIndex = 0}
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Lookup, Monitor, Guide…"
+      >
+    </div>
+    {#if filteredCommands.length}
+      <ul aria-label="Console destinations">
+        {#each filteredCommands as command,index (command.href)}
+          <li class:selected={index === selectedIndex}>
+            <a
+              href={command.href}
+              onmouseenter={() => selectedIndex = index}
+              onclick={(event) => {
+                event.preventDefault();
+                void activate(command);
+              }}
+            >
+              <span><strong>{command.label}</strong><small>{command.detail}</small></span>
+              <em>{command.group}</em>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="no-results">No console destination matches that search.</p>
+    {/if}
+    <footer><span><kbd>↑</kbd><kbd>↓</kbd> select</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
+  </div>
+</div>
+
+<style>
+  .palette-layer{position:fixed;inset:0;z-index:100;display:grid;place-items:start center;padding:clamp(72px,12vh,130px) 14px 24px}
+  .palette-backdrop{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0;background:rgb(var(--shadow-rgb) / .76);backdrop-filter:blur(4px)}
+  .command-palette{position:relative;width:min(650px,100%);max-height:min(620px,calc(100dvh - 100px));padding:0;overflow:hidden;border-color:var(--border-strong);box-shadow:0 32px 100px rgb(var(--shadow-rgb) / .5)}
+  header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 17px 12px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .025)}
+  header p{margin:0}h2{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
+  .palette-close{min-height:30px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .command-search{display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;margin:14px;border:1px solid var(--accent);border-radius:var(--radius-md);background:var(--panel-raised);box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .08)}
+  .command-search span{padding-left:10px;color:var(--accent2);font:700 var(--text-sm) var(--mono)}
+  input{width:100%;min-width:0;padding:12px 12px 12px 2px;border:0;background:transparent;font:650 var(--text-sm) var(--mono);outline:0}
+  ul{display:grid;gap:4px;max-height:360px;margin:0;padding:0 10px 12px;overflow-y:auto;list-style:none}
+  li a{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm)}
+  li.selected a,li a:hover,li a:focus-visible{border-color:var(--border);background:rgb(var(--accent-rgb) / .08)}
+  li.selected a{box-shadow:inset 2px 0 var(--accent2)}
+  a>span{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
+  em{flex:0 0 auto;color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
+  .no-results{margin:0;padding:28px;color:var(--muted);text-align:center}
+  footer{display:flex;flex-wrap:wrap;gap:12px;padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono)}
+  kbd{margin-right:3px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--panel-raised);font:inherit}
+  @media(max-width:600px){.palette-layer{place-items:start center;padding-top:72px}.command-palette{max-height:calc(100dvh - 88px)}footer{display:none}em{display:none}}
+  @media(prefers-reduced-motion:no-preference){.command-palette{animation:palette-enter .16s ease-out both}@keyframes palette-enter{from{opacity:0;transform:translateY(-7px) scale(.99)}to{opacity:1;transform:none}}}
+</style>

@@ -142,6 +142,88 @@ test('empty Lookup shows the compact query card without result sections or local
   await expectNoHorizontalOverflow(page);
 });
 
+test('the protected Console opens through an intentional responsive loading state', async ({ page }) => {
+  let releaseSession: (() => void) | undefined;
+  const sessionGate = new Promise<void>((resolve) => {
+    releaseSession = resolve;
+  });
+  await page.route('**/api/session', async (route) => {
+    await sessionGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ authenticated: true }),
+    });
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/dashboard');
+
+  const loadingStatus = page.getByRole('status', { name: 'Console loading status' });
+  await expect(loadingStatus).toContainText('Opening WHOISleuth');
+  await expect(loadingStatus).toContainText('Confirm session');
+  await expect(loadingStatus).toContainText('Prepare workspace');
+  await expect(loadingStatus).toContainText('Open destination');
+  await expectNoHorizontalOverflow(page);
+
+  releaseSession?.();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+});
+
+test('the console command palette filters destinations and remains keyboard operable', async ({ page }) => {
+  await page.goto('/dashboard');
+  const trigger = page.getByRole('button', { name: 'Open command palette' });
+  await expect(trigger).toBeVisible();
+
+  await page.keyboard.press('Control+K');
+  const dialog = page.getByRole('dialog', { name: 'Go to' });
+  const search = dialog.getByRole('textbox', { name: 'Search pages' });
+  await expect(dialog).toBeVisible();
+  await expect(search).toBeFocused();
+  await search.fill('monitor');
+  await expect(dialog.getByRole('link', { name: /Monitor/ })).toBeVisible();
+  await search.press('Enter');
+  await expect(page).toHaveURL(/\/monitor$/);
+
+  await page.keyboard.press('Control+K');
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(dialog).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('Lookup reports requested source families without implying staged completion', async ({ page }) => {
+  let releaseLookup: (() => void) | undefined;
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    await lookupGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(sectionedLookupFixture('collection-state.invalid')),
+    });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill('collection-state.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const loadingStatus = page.getByRole('status');
+  await expect(loadingStatus).toContainText('Deep lookup is collecting');
+  await expect(page.locator('.collection-trace')).toContainText('Authority');
+  await expect(page.locator('.collection-trace')).toContainText('Enrichment');
+  await expect(page.locator('.collection-trace')).not.toContainText('complete');
+  releaseLookup?.();
+  await expect(page.locator('#result')).toBeVisible();
+});
+
 test('a data-heavy Lookup result groups evidence into navigable sections', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/lookup?*', (route) => route.fulfill({
@@ -171,12 +253,19 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   const topology = page.getByRole('region', { name: 'Evidence topology' });
   await expect(topology).toBeVisible();
   await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeVisible();
+  const visualKey = topology.getByRole('group', { name: 'Evidence topology visual key' });
+  await expect(visualKey).toContainText('Registry');
+  await expect(visualKey).toContainText('Network');
+  await expect(visualKey).toContainText('Web');
+  await expect(visualKey).toContainText('Derived');
+  await expect(visualKey).toContainText('Analyst');
+  await expect(visualKey).toContainText('Dot and label show source state');
   const topologyCopies = topology.locator('foreignObject.node-copy');
   await expect(topologyCopies.first()).toBeVisible();
   expect(await topologyCopies.evaluateAll((copies) => copies.every((copy) => {
     const text = copy.firstElementChild;
     const copyRect = copy.getBoundingClientRect();
-    const nodeRect = copy.closest('g')?.querySelector(':scope > rect')?.getBoundingClientRect();
+    const nodeRect = copy.closest('g')?.querySelector(':scope > .node-surface')?.getBoundingClientRect();
     const styles = text ? getComputedStyle(text) : null;
     return Boolean(
       text
@@ -196,6 +285,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
   await expect(dnsSource).toHaveAttribute('href', '#evidence-dns');
   await dnsSource.focus();
+  await expect(dnsSource.locator('xpath=..')).toHaveClass(/active/);
+  await expect(topology.locator('.source-node.family-network.active')).toHaveCount(1);
+  await expect(topology.locator('.topology-edges path.active')).toHaveCount(1);
   await dnsSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-dns$/);
   await expect(page.locator('#evidence-dns')).toBeInViewport();
@@ -215,6 +307,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await registryLink.press('Enter');
   await expect(page).toHaveURL(/#registry$/);
   await expect(page.locator('#registry')).toBeInViewport();
+  await expect(registryLink).toHaveAttribute('aria-current', 'location');
 
   // The DNS status stays visible while its detailed warning is disclosed on demand.
   const dnsCard = page.locator('.dns-card');

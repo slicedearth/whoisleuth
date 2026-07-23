@@ -39,6 +39,15 @@
   const lookupView=$derived(selected?syntheticDemoLookupView(selected.id):null);
   const caseRecord=$derived(syntheticDemoCaseRecord(demoState));
   const relationshipGroups=$derived(syntheticDemoRelationshipGroups());
+  const currentStageIndex=$derived(Math.max(0,SYNTHETIC_DEMO_STAGES.findIndex((stage)=>stage.id===view)));
+  const stageDescriptions:Record<View,string>={
+    dashboard:'Choose the investigation path and begin with a bounded synthetic brand profile.',
+    brands:'Define the official identity and trusted comparison boundary.',
+    discover:'Generate a small reviewable candidate set without contacting a target.',
+    bulk:'Compare candidates consistently and choose one lead for deeper review.',
+    lookup:'Inspect separately attributed evidence and its stated limitations.',
+    monitor:'Retain the synthetic finding and compare a later fixed observation.',
+  };
 
   onMount(()=>{
     let stored:string|null;
@@ -62,6 +71,21 @@
       ||(target==='lookup'&&Boolean(demoState.selectedCandidateId))
       ||(target==='monitor'&&demoState.caseReady);
   }
+  function complete(target:View){
+    if(target==='dashboard')return demoState.started;
+    if(target==='brands')return demoState.profileReady;
+    if(target==='discover')return demoState.candidatesReady;
+    if(target==='bulk')return Boolean(demoState.selectedCandidateId);
+    if(target==='lookup')return demoState.caseReady;
+    return demoState.followUpReady;
+  }
+  function stageStatus(target:View){
+    if(view===target)return 'Current';
+    if(complete(target))return 'Completed';
+    if(available(target))return 'Available';
+    return 'Upcoming';
+  }
+  function stageName(label:string){return label.replace(/^\d+\.\s*/u,'');}
   function save(patch:Record<string,unknown>,successMessage?:string){demoState=normalizeSyntheticDemoState({...demoState,...patch});try{sessionStorage.setItem(SYNTHETIC_DEMO_STORAGE_KEY,JSON.stringify(demoState));if(successMessage!==undefined)message=successMessage;}catch{message='Progress updated in memory, but tab storage is unavailable. Reloading will reset the demo.';}}
   function start(){save({started:true},'Guided synthetic investigation started.');view='brands';}
   function loadProfile(){save({profileReady:true},'Synthetic profile loaded. No production profile was created.');view='discover';}
@@ -91,8 +115,21 @@
 </section>
 
 <nav class="demo-steps card" aria-label="Synthetic investigation stages">
-  {#each SYNTHETIC_DEMO_STAGES as item}<button type="button" disabled={!available(item.id as View)} aria-current={view===item.id?'step':undefined} class:active={view===item.id} onclick={()=>view=item.id as View}>{item.label}</button>{/each}
+  {#each SYNTHETIC_DEMO_STAGES as item,index}
+    <button
+      type="button"
+      disabled={!available(item.id as View)}
+      aria-current={view===item.id?'step':undefined}
+      class:active={view===item.id}
+      class:complete={complete(item.id as View)}
+      onclick={()=>view=item.id as View}
+    >
+      <span class="stage-number" aria-hidden="true">{complete(item.id as View)&&view!==item.id?'✓':String(index+1).padStart(2,'0')}</span>
+      <span class="stage-copy"><strong>{stageName(item.label)}</strong><small>{stageStatus(item.id as View)}</small></span>
+    </button>
+  {/each}
 </nav>
+<p class="demo-stage-summary" aria-live="polite"><strong>Stage {currentStageIndex+1} of {SYNTHETIC_DEMO_STAGES.length}</strong><span>{stageDescriptions[view]}</span></p>
 <div class="demo-actions"><button type="button" onclick={reset}>Reset demo</button><span role="status" aria-live="polite">{message}</span></div>
 
 {#if view==='dashboard'}
@@ -160,7 +197,8 @@
 <style>
   .demo-actions button,.candidate button,.case-actions button,.filter-bar button{padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);font:700 var(--text-xs) var(--mono)}
   .demo-hero{max-width:900px}.demo-hero h1{margin:.25rem 0;font:700 clamp(1.9rem,4.4vw,3.1rem) var(--mono);letter-spacing:-.05em}.demo-hero>p:not(.eyebrow){max-width:78ch;color:var(--muted);line-height:1.6}.synthetic-flag{display:inline-block;margin-top:9px;padding:7px 10px;border:1px solid var(--amber);border-radius:999px;color:var(--amber);font:700 var(--text-2xs) var(--mono)}
-  .demo-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;margin:30px 0 12px;padding:5px}.demo-steps button{min-height:42px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font-size:var(--text-xs)}.demo-steps button.active{background:rgb(var(--accent2-rgb) / .1);color:var(--accent2)}
+  .demo-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;margin:30px 0 8px;padding:5px}.demo-steps button{position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);min-width:0;min-height:52px;align-items:center;gap:7px;padding:7px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);text-align:left}.demo-steps button:not(:last-child)::after{content:"";position:absolute;right:-4px;width:5px;height:1px;background:var(--border)}.demo-steps button.active{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--text);box-shadow:inset 0 -2px var(--accent)}.demo-steps button.complete:not(.active){color:var(--text)}.stage-number{display:grid;width:23px;height:23px;place-items:center;border:1px solid var(--border);border-radius:50%;font:700 .56rem var(--mono)}.complete .stage-number{border-color:var(--accent2);background:rgb(var(--accent2-rgb) / .09);color:var(--accent2)}.active .stage-number{border-color:var(--accent);color:var(--accent)}.stage-copy{min-width:0}.stage-copy strong,.stage-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stage-copy strong{font:700 var(--text-2xs) var(--mono)}.stage-copy small{margin-top:3px;color:var(--muted);font-size:.54rem}.complete .stage-copy small{color:var(--accent2)}.active .stage-copy small{color:var(--accent)}
+  .demo-stage-summary{display:flex;min-width:0;align-items:baseline;gap:10px;margin:0 0 12px;padding:8px 10px;border-left:2px solid var(--accent);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.demo-stage-summary strong{flex:0 0 auto;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .demo-actions{display:flex;min-height:40px;align-items:center;gap:14px;margin-bottom:18px}.demo-actions span{color:var(--muted);font-size:var(--text-xs)}
   .demo-panel{padding:clamp(22px,4vw,38px)}.demo-panel:not(.card){padding-inline:0}.demo-panel>h2{margin:.25rem 0 8px;font:700 clamp(1.4rem,3vw,2rem) var(--mono)}.demo-panel>p:not(.eyebrow),.candidate p,.export-warning,.follow-up p{color:var(--muted);line-height:1.55}
   .demo-panel dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:24px 0}.demo-panel dl div{min-width:0;padding:14px;border:1px solid var(--border)}dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}dd{margin:6px 0 0;overflow-wrap:anywhere}code{color:var(--accent);font-family:var(--mono)}
@@ -170,6 +208,6 @@
   .limitation{margin:20px 0;padding:14px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .04)}.limitation.info{border-left-color:var(--accent)}.limitation p{margin:5px 0 0;color:var(--muted)}
   .case-grid{display:grid;grid-template-columns:minmax(180px,.45fr) minmax(0,1fr);gap:12px;margin-top:22px}.demo-panel label{display:block;color:var(--muted);font-size:var(--text-xs)}.demo-panel select,.demo-panel textarea{display:block;margin-top:7px;padding:10px}.demo-panel textarea{min-height:110px;resize:vertical}.follow-up{margin-top:22px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.follow-up p{margin:0 0 10px}.case-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.case-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
   .demo-footer{display:flex;justify-content:space-between;gap:20px;margin-top:45px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}.demo-footer>div{display:flex;align-items:center;gap:10px}.demo-footer p{margin:0}.demo-footer a{color:var(--accent)}
-  @media(max-width:840px){.demo-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.candidate-grid{grid-template-columns:1fr}.dashboard-summary,.configuration-grid{grid-template-columns:1fr}}
-  @media(max-width:760px){.demo-steps{grid-template-columns:1fr}.demo-steps button{text-align:left}.demo-actions,.demo-footer,.demo-footer>div{align-items:flex-start;flex-direction:column}.demo-panel dl,.case-grid{grid-template-columns:1fr}}
+  @media(max-width:840px){.demo-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.demo-steps button::after{display:none}.candidate-grid{grid-template-columns:1fr}.dashboard-summary,.configuration-grid{grid-template-columns:1fr}}
+  @media(max-width:760px){.demo-steps{grid-template-columns:1fr}.demo-steps button{grid-template-columns:30px minmax(0,1fr);min-height:46px}.demo-stage-summary,.demo-actions,.demo-footer,.demo-footer>div{align-items:flex-start;flex-direction:column}.demo-stage-summary{gap:4px}.demo-panel dl,.case-grid{grid-template-columns:1fr}}
 </style>

@@ -8,10 +8,10 @@
   const selected = SYNTHETIC_DEMO_CANDIDATES[0];
   const timeline = syntheticDemoTimeline(selected.id, true);
   const topologyNodes = [
-    { id: 'registry', label: 'Registry', detail: selected.evidence.registry.status, status: 'success', side: 'left' as const, glyph: 'R' },
-    { id: 'dns', label: 'DNS', detail: selected.evidence.dns.status, status: 'success', side: 'left' as const, glyph: 'D' },
-    { id: 'website', label: 'Website', detail: 'Active page observed', status: 'success', side: 'right' as const, glyph: 'H' },
-    { id: 'certificate', label: 'Certificate', detail: selected.evidence.certificate.status, status: 'success', side: 'right' as const, glyph: 'T' },
+    { id: 'registry', label: 'Registry', detail: selected.evidence.registry.status, status: 'success', side: 'left' as const, glyph: 'R', family: 'registry' as const },
+    { id: 'dns', label: 'DNS', detail: selected.evidence.dns.status, status: 'success', side: 'left' as const, glyph: 'D', family: 'network' as const },
+    { id: 'website', label: 'Website', detail: 'Active page observed', status: 'success', side: 'right' as const, glyph: 'H', family: 'web' as const },
+    { id: 'certificate', label: 'Certificate', detail: selected.evidence.certificate.status, status: 'success', side: 'right' as const, glyph: 'T', family: 'web' as const },
     { id: 'analysis', label: 'Risk signals', detail: 'Explainable review cues', status: 'warning', side: 'right' as const, provenance: 'derived' as const, glyph: 'A' },
   ];
 </script>
