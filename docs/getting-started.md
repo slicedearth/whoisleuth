@@ -159,6 +159,19 @@ fixtures, candidate generation, partial-source handling, relationships,
 detection rules, graph limits, and workspace archive round trips. It is not a
 live coverage or production-performance benchmark.
 
+### Unicode confusable audit
+
+```bash
+npm run unicode:confusables
+npm run unicode:confusables -- --json
+```
+
+Validates the checked-in bounded Unicode-confusable projection and runs its
+offline labelled calibration and candidate-growth gates. It makes no network
+request. Maintainers can separately provide the pinned Unicode source file to
+check for projection drift; see
+[Unicode confusable maintenance](idn-confusables.md).
+
 ### Browser-local platform evaluation
 
 ```bash

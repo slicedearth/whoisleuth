@@ -178,6 +178,18 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', hasMx: true }), 18);
   });
 
+  test('whole-label provenance does not add a second Unicode Risk contribution', () => {
+    const existing = scoring.explainRiskScore({
+      availability: 'registered',
+      mutationTypes: ['unicode_homoglyph'],
+    });
+    const wholeLabel = scoring.explainRiskScore({
+      availability: 'registered',
+      mutationTypes: ['unicode_homoglyph', 'unicode_whole_label'],
+    });
+    assert.deepEqual(wholeLabel, existing);
+  });
+
   test('SPF+DMARC together score higher than either alone', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: true }), 13);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: false }), 11);

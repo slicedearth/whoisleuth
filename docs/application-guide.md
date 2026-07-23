@@ -58,10 +58,33 @@ so review and store it accordingly.
 
 ### Discover
 
-Discover generates bounded candidates locally from typo, keyboard, homoglyph,
+Discover generates bounded candidates locally from typo, keyboard, confusable,
 separator, word-order, dictionary, and selected-TLD families. Presets narrow
 the generation families without changing the global safety limits. Candidate
 provenance remains attached when several algorithms produce the same domain.
+
+Unicode-confusable generation and Lookup skeleton comparison share a
+versioned, checked-in projection of Unicode UTS #39 data. The projection is
+generated offline from a pinned source file, limited to reviewed domain-label
+scripts, and capped per ASCII letter. It does not download Unicode data, send
+the seed anywhere, or load the complete upstream table in the browser. A
+skeleton match is visual-similarity evidence, not a claim about ownership,
+intent, activity, or maliciousness.
+
+The Impersonation and All presets can also add a small set of same-script
+whole-label candidates when every ASCII letter has an eligible replacement.
+This generation is capped at one candidate per reviewed non-Latin script and
+six candidates overall. It is not a formal Unicode whole-script verdict and
+does not add a new Risk contribution.
+
+Discover shows the DNS-safe ASCII domain as the selectable value and adds the
+readable Unicode form, observed scripts, and contextual mixed-script or
+source/profile visual-match badges. A matching candidate names up to three
+matched references and discloses any additional bounded matches without
+displaying the internal comparison skeleton. Candidate-scope options show
+complete-result counts. Candidate scope, mutation-family, text, and
+certificate-history filters operate on the complete bounded result, as do
+generated-order, alphabetical, and most-indicators sorting.
 
 Certificate Transparency search is a separate hosted action. It groups
 observed hostnames by canonical registrable domain and retains bounded first
@@ -69,8 +92,10 @@ and last observation times plus certificate counts. These timestamps describe
 public-log observations. They do not prove registration time, website activity,
 ownership, or maliciousness.
 
-Filtered candidate lists are paginated locally. Selecting all matching entries
-operates on the complete bounded filtered set, not only the visible page.
+Filtered and sorted candidate lists are paginated locally. Selecting all
+filtered entries operates on the complete bounded filtered set, not only the
+visible page. New result sets start unselected so moving hundreds or thousands
+of candidates into Bulk always requires an explicit review choice.
 
 ### Bulk
 

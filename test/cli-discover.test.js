@@ -180,6 +180,22 @@ describe('discover output', () => {
     assert.match(output, /Showing 200 of 201 candidates/);
     assert.equal(document.candidates.length, 201);
   });
+
+  test('terminal output presents Unicode and DNS-safe forms together', () => {
+    const unicodeCandidate = {
+      domain: 'xn--e1argc3h.invalid',
+      source: 'scope.invalid',
+      tld: 'invalid',
+      mutationTypes: ['unicode_homoglyph', 'unicode_whole_label'],
+    };
+    const document = buildCliDiscoverDocument(metadata.seed, generationResult({ candidates: [unicodeCandidate] }), metadata);
+    const output = formatTerminalDiscover(document, {
+      unicode_homoglyph: 'Unicode confusable',
+      unicode_whole_label: 'Whole-label Unicode confusable',
+    });
+    assert.match(output, /xn--e1argc3h\.invalid \[Unicode: ѕсоре\.invalid\]/u);
+    assert.match(output, /Unicode confusable, Whole-label Unicode confusable/u);
+  });
 });
 
 describe('discover runner', () => {

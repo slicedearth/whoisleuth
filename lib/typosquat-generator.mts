@@ -2,7 +2,10 @@
 // objects so a later scan can explain why each domain was generated; callers
 // that only need the historical string list can use the compatibility wrapper.
 
-import { confusableCharactersForAscii } from './idn-confusables.mts';
+import {
+  confusableCharactersForAscii,
+  wholeLabelConfusableVariantsForAscii,
+} from './idn-confusables.mts';
 
 type KeyboardRow = { keys: string; offset: number };
 type KeyboardPosition = { rowIndex: number; index: number; x: number };
@@ -140,6 +143,7 @@ const FAMILY_NEW_VARIANT_LIMITS: Readonly<Record<string, number>> = Object.freez
   bitsquatting: 512,
   ascii_homoglyph: 128,
   unicode_homoglyph: 768,
+  unicode_whole_label: 8,
   dictionary: 128,
 });
 
@@ -159,6 +163,7 @@ const COMMON_EDIT_MUTATIONS = Object.freeze([
 const IMPERSONATION_MUTATIONS = Object.freeze([
   'ascii_homoglyph',
   'unicode_homoglyph',
+  'unicode_whole_label',
   'dictionary',
   'hyphenation',
   'word_reordering',
@@ -182,7 +187,7 @@ export const GENERATION_PRESETS: Readonly<Record<string, GenerationPreset>> = Ob
   impersonation: Object.freeze({
     id: 'impersonation',
     label: 'Impersonation',
-    description: 'Homoglyphs, account-themed terms, word forms, and TLD changes.',
+    description: 'Lookalike characters, account-themed terms, word forms, and TLD changes.',
     mutationTypes: IMPERSONATION_MUTATIONS,
   }),
   all: Object.freeze({
@@ -204,8 +209,9 @@ export const MUTATION_LABELS = {
   keyboard_insertion: 'Keyboard insertion',
   vowel_swap: 'Vowel swap',
   bitsquatting: 'Bitsquatting',
-  ascii_homoglyph: 'ASCII homoglyph',
-  unicode_homoglyph: 'Unicode homoglyph',
+  ascii_homoglyph: 'ASCII lookalike',
+  unicode_homoglyph: 'Unicode confusable',
+  unicode_whole_label: 'Whole-label Unicode confusable',
   dictionary: 'Impersonation term',
   tld_typo: 'TLD typo',
   tld_substitution: 'Selected TLD substitution',
@@ -420,6 +426,7 @@ export function estimateTyposquatCandidateCount(rawInput: unknown, fallbackTlds:
     bitsquatting: name.length * 8,
     ascii_homoglyph: asciiHomoglyphCount,
     unicode_homoglyph: unicodeHomoglyphCount,
+    unicode_whole_label: wholeLabelConfusableVariantsForAscii(name).length,
     dictionary: IMPERSONATION_TERMS.length * 4,
   };
   let rawVariantMaximum = 0;
@@ -558,6 +565,16 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
   if (enabledFamilies.has('ascii_homoglyph')) {
     for (const [from, to] of HOMOGLYPH_SWAPS) {
       if (name.includes(from)) addVariant(state, name.split(from).join(to), 'ascii_homoglyph');
+    }
+  }
+  if (enabledFamilies.has('unicode_whole_label')) {
+    for (const variant of wholeLabelConfusableVariantsForAscii(name)) {
+      const ascii = toAsciiLabel(variant.unicodeLabel);
+      if (!ascii) continue;
+      // Preserve the established Risk-model input while separately explaining
+      // that every replaceable letter uses one reviewed non-Latin script.
+      addVariant(state, ascii, 'unicode_homoglyph');
+      addVariant(state, ascii, 'unicode_whole_label');
     }
   }
   if (enabledFamilies.has('unicode_homoglyph')) {

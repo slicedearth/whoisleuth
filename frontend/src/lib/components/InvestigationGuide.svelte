@@ -38,6 +38,7 @@
     ['/monitor', '#case-review-queue'],
   ]);
   const guideTargetIds = new Set(['official-domains', 'discovery-seed', 'domains', 'query', 'new-case', 'case-review-queue', 'results']);
+  const usefulActionExposure = 0.2;
 
   let guide = $state<InvestigationGuide | null>(null);
   let mounted = $state(false);
@@ -89,29 +90,51 @@
     guideSection?.scrollIntoView({ block: 'start' });
   }
 
+  function actionExposureRatio(element: HTMLElement): number {
+    const rect = element.getBoundingClientRect();
+    const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+    const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+    const area = Math.max(1, rect.width * rect.height);
+    return (visibleWidth * visibleHeight) / area;
+  }
+
+  function afterLayout(): Promise<void> {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+  }
+
   async function observeAction() {
     await tick();
     actionObserver?.disconnect();
     actionObserver = null;
-    actionVisible = true;
-    if (!actionPanel || typeof IntersectionObserver === 'undefined') return;
+    if (!actionPanel) {
+      actionVisible = true;
+      return;
+    }
+    actionVisible = actionExposureRatio(actionPanel) >= usefulActionExposure;
+    if (typeof IntersectionObserver === 'undefined') return;
     actionObserver = new IntersectionObserver(([entry]) => {
       const ratio = entry?.isIntersecting ? entry.intersectionRatio : 0;
-      if (ratio >= 0.25) actionVisible = true;
-      else if (ratio <= 0.05) actionVisible = false;
-    }, { threshold: [0, 0.05, 0.25] });
+      actionVisible = ratio >= usefulActionExposure;
+    }, { threshold: [0, usefulActionExposure] });
     actionObserver.observe(actionPanel);
   }
 
   async function revealAction() {
     actionVisible = true;
     await tick();
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
-    actionPanel?.focus({ preventScroll: true });
-    actionPanel?.scrollIntoView({ behavior: 'auto', block: 'center' });
-    void observeAction();
+    await afterLayout();
+    const panel = actionPanel;
+    if (!panel) return;
+    panel.focus({ preventScroll: true });
+    panel.scrollIntoView({ behavior: 'auto', block: 'center' });
+    await afterLayout();
+    if (actionExposureRatio(panel) < usefulActionExposure) {
+      panel.scrollIntoView({ behavior: 'auto', block: 'start' });
+      await afterLayout();
+    }
+    await observeAction();
   }
 
   async function focusRouteTarget(hash: string) {

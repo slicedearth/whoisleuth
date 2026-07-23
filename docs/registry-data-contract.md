@@ -482,6 +482,15 @@ and may contain public registry
 contact data. The file is generated locally and is the user's responsibility
 after download.
 
+The IDN analysis carries its own `mappingVersion`. Mapping version
+`tr39-17.0.0-bounded-ascii-v3` is a bounded, generated projection of Unicode
+17.0.0 UTS #39 confusables plus the previously reviewed compatibility set.
+Only single-code-point, IDNA-valid additions from approved scripts are eligible,
+and per-letter and total caps apply before the mapping is checked in. The full
+Unicode table is not part of the runtime bundle. Mapping changes can alter
+which domains share a visual skeleton, so exported analyses must retain the
+mapping version when present.
+
 The local CLI `export` command can convert one bounded version-1
 `whoisleuth.cli.lookup` domain document into the same evidence schema without
 making another request. CLI conversion retains the source material already in

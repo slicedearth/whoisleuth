@@ -31,7 +31,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.tool-guide article')).toHaveCount(5);
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
   await expect(page.locator('.state-grid article')).toHaveCount(9);
-  await expect(page.locator('.glossary-grid > div')).toHaveCount(39);
+  await expect(page.locator('.glossary-grid > div')).toHaveCount(40);
   await expect(page.locator('.faq-list details')).toHaveCount(17);
 
   const question = page.getByText('Does WHOISleuth decide whether a domain is malicious?', { exact: true });
