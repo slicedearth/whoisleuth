@@ -22,6 +22,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional
+      - name: Verify release version
+        run: npm run release:check
       - name: Audit production dependencies
         run: npm audit --omit=dev
       - name: Run tests

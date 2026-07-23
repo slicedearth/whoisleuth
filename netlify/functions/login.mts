@@ -14,6 +14,7 @@ import {
   json,
   netlifyJsonToResponse,
   readRequestTextCapped,
+  withNetlifyFetchApiErrorBoundary,
 } from '../../lib/http.mts';
 import type { BoundedRequestText, NetlifyJsonResponse } from '../../lib/http.mts';
 import type { NetlifyFunctionEvent, NetlifyFunctionHeaders } from '../../lib/netlify-function-types.mts';
@@ -106,8 +107,10 @@ async function runLoginRequest(request: Request): Promise<Response> {
   return netlifyJsonToResponse(response);
 }
 
+const handleLoginFetchRequest = withNetlifyFetchApiErrorBoundary(runLoginRequest);
+
 export default async function loginHandler(request: Request): Promise<Response> {
-  return runLoginRequest(request);
+  return handleLoginFetchRequest(request);
 }
 
 export {

@@ -7,3 +7,7 @@ See the LICENSE file for the full license text.
 
 The WHOISleuth name and logo identify the WHOISleuth project and are not
 licensed under the AGPL. See TRADEMARKS.md for permitted uses.
+
+Development-only accessibility tests use @axe-core/playwright and axe-core,
+which are licensed under the Mozilla Public License 2.0. These packages are not
+part of the production runtime.

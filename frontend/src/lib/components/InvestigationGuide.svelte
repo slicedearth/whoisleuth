@@ -133,13 +133,15 @@
 
   async function refreshFromEvent() {
     const previousIdentity = guideIdentity(guide);
-    await refresh();
-    if (guideIdentity(guide) !== previousIdentity) {
+    guide = loadInvestigationGuide();
+    const identityChanged = guideIdentity(guide) !== previousIdentity;
+    if (identityChanged) {
       selectedStageId = '';
       reviewingStageId = '';
       planOpen = false;
-      void revealGuide();
     }
+    await refreshEvidence();
+    if (identityChanged) void revealGuide();
     void observeAction();
   }
 

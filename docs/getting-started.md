@@ -117,7 +117,24 @@ authentication values from `playwright.config.ts`. Failure traces and
 screenshots are written to the ignored `test-results/` directory. A successful
 local run does not create a retained HTML report.
 
+Representative public and authenticated states also run local axe-core checks
+for WCAG-tagged regressions. The scanner is a development-only dependency: it
+submits no page, finding, or telemetry to a hosted service and supplements,
+rather than replaces, the focused keyboard, focus, responsive, and
+screen-reader coverage.
+
 ## Maintainer checks
+
+### Release version
+
+```bash
+npm run release:check
+```
+
+Checks that the root manifest and lockfile use the same valid semantic version
+and that npm publication remains disabled. It is read-only and does not create
+a commit, tag, release, package, or deployment. See the
+[release discipline](releasing.md) before preparing or tagging a release.
 
 ### Schema inventory
 

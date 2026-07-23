@@ -27,6 +27,7 @@ describe('continuous integration workflow', () => {
     ]);
     for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
     for (const command of [
+      'npm run release:check',
       'npm audit --omit=dev',
       'npm test',
       'npm run typecheck',

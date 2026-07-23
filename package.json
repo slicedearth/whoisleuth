@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
@@ -34,6 +34,7 @@
     "registry:drift": "node tools/registry-drift-audit.mts",
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",
+    "release:check": "node tools/release-version-check.mts",
     "security:codeql": "node tools/local-codeql.mts"
   },
   "engines": {
@@ -46,6 +47,7 @@
     "undici": "^7.28.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.0",
     "typescript": "^6.0.3"

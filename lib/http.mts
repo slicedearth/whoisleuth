@@ -16,7 +16,7 @@ type ApiRequestErrorResponse = {
   statusCode: number;
   body: {
     error: string;
-    errorCode: ApiRequestErrorCode;
+    errorCode: string;
   };
 };
 
@@ -56,6 +56,17 @@ function apiRequestErrorResponse(errorCode: ApiRequestErrorCode): ApiRequestErro
   };
 }
 
+function apiUnexpectedErrorResponse(errorCode: unknown = API_REQUEST_ERROR_CODES.INTERNAL_ERROR): ApiRequestErrorResponse {
+  const boundedCode = typeof errorCode === 'string'
+    && /^[A-Z][A-Z0-9_]{0,63}$/u.test(errorCode)
+    ? errorCode
+    : API_REQUEST_ERROR_CODES.INTERNAL_ERROR;
+  return {
+    statusCode: 500,
+    body: { error: 'Internal server error', errorCode: boundedCode },
+  };
+}
+
 function apiErrorResponseFor(error: unknown): ApiRequestErrorResponse {
   const type = error && typeof error === 'object' && !Array.isArray(error)
     ? (error as { type?: unknown }).type
@@ -66,7 +77,7 @@ function apiErrorResponseFor(error: unknown): ApiRequestErrorResponse {
   if (type === 'entity.too.large') {
     return apiRequestErrorResponse(API_REQUEST_ERROR_CODES.REQUEST_TOO_LARGE);
   }
-  return apiRequestErrorResponse(API_REQUEST_ERROR_CODES.INTERNAL_ERROR);
+  return apiUnexpectedErrorResponse();
 }
 
 function json(
@@ -87,6 +98,34 @@ function json(
       ...extraHeaders,
     },
     body: JSON.stringify(body),
+  };
+}
+
+function withNetlifyApiErrorBoundary<TEvent>(
+  handler: (event: TEvent) => Promise<NetlifyJsonResponse>,
+  errorCode: unknown = API_REQUEST_ERROR_CODES.INTERNAL_ERROR,
+): (event: TEvent) => Promise<NetlifyJsonResponse> {
+  return async (event) => {
+    try {
+      return await handler(event);
+    } catch {
+      const response = apiUnexpectedErrorResponse(errorCode);
+      return json(response.statusCode, response.body);
+    }
+  };
+}
+
+function withNetlifyFetchApiErrorBoundary<TArguments extends unknown[]>(
+  handler: (...args: TArguments) => Promise<Response>,
+  errorCode: unknown = API_REQUEST_ERROR_CODES.INTERNAL_ERROR,
+): (...args: TArguments) => Promise<Response> {
+  return async (...args) => {
+    try {
+      return await handler(...args);
+    } catch {
+      const response = apiUnexpectedErrorResponse(errorCode);
+      return netlifyJsonToResponse(json(response.statusCode, response.body));
+    }
   };
 }
 
@@ -147,9 +186,12 @@ export {
   MAX_API_JSON_BODY_BYTES,
   apiErrorResponseFor,
   apiRequestErrorResponse,
+  apiUnexpectedErrorResponse,
   json,
   netlifyJsonToResponse,
   readRequestTextCapped,
+  withNetlifyApiErrorBoundary,
+  withNetlifyFetchApiErrorBoundary,
 };
 export type {
   ApiRequestErrorCode,

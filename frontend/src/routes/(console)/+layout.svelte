@@ -147,6 +147,7 @@
   <div class="center"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p><button class="primary" onclick={retryLocalData}>Retry</button><p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
 {:else}
   <div class="shell" class:open={navOpen}>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header bind:this={consoleHeader}>
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><img src="/favicon.svg" alt=""></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">

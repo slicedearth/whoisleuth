@@ -2,10 +2,10 @@ import { classifyQuery } from '../../lib/classify.mts';
 import { buildWhoisChain, parseWhoisChain } from '../../lib/whois.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
-import { json } from '../../lib/http.mts';
+import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handler: NetlifyFunctionHandler = async (event) => {
+const handleWhois: NetlifyFunctionHandler = async (event) => {
   const guard = guardNetlifyNetworkRequest(event, 'whois');
   if (guard.response) return guard.response;
 
@@ -20,20 +20,18 @@ const handler: NetlifyFunctionHandler = async (event) => {
   }
 
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('whois'), async () => {
-    try {
-      const chain = await buildWhoisChain(classified.value);
-      return json(200, {
-        query: q,
-        type: classified.type,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        chain,
-        parsed: parseWhoisChain(chain),
-      });
-    } catch (err) {
-      return json(500, { error: err.message });
-    }
+    const chain = await buildWhoisChain(classified.value);
+    return json(200, {
+      query: q,
+      type: classified.type,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      chain,
+      parsed: parseWhoisChain(chain),
+    });
   });
 };
+
+const handler = withNetlifyApiErrorBoundary(handleWhois);
 
 export { handler };
