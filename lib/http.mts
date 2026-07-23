@@ -115,6 +115,20 @@ function withNetlifyApiErrorBoundary<TEvent>(
   };
 }
 
+function withNetlifyFetchApiErrorBoundary<TArguments extends unknown[]>(
+  handler: (...args: TArguments) => Promise<Response>,
+  errorCode: unknown = API_REQUEST_ERROR_CODES.INTERNAL_ERROR,
+): (...args: TArguments) => Promise<Response> {
+  return async (...args) => {
+    try {
+      return await handler(...args);
+    } catch {
+      const response = apiUnexpectedErrorResponse(errorCode);
+      return netlifyJsonToResponse(json(response.statusCode, response.body));
+    }
+  };
+}
+
 // Modern Netlify Fetch handlers receive a streaming Request rather than the
 // already-buffered Lambda event used by the older entry points. Enforce the
 // same byte boundary before retaining the complete body, reject malformed
@@ -177,6 +191,7 @@ export {
   netlifyJsonToResponse,
   readRequestTextCapped,
   withNetlifyApiErrorBoundary,
+  withNetlifyFetchApiErrorBoundary,
 };
 export type {
   ApiRequestErrorCode,

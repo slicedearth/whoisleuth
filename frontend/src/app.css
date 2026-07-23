@@ -423,7 +423,10 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
    and 100% so if a reduced-motion setting collapses the animation it settles
    visible, not hidden; the media query below also disables it outright. */
 @keyframes brand-cursor-blink { 0%, 55% { opacity: 1; } 55.01%, 99.99% { opacity: 0; } 100% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .brand strong::after, .shell > header > a > strong::after, .public-brand strong::after { animation: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .skip-link { transition: none; }
+  .brand strong::after, .shell > header > a > strong::after, .public-brand strong::after { animation: none; opacity: 1; }
+}
 .brand small, nav a small { color: var(--muted); font-size: var(--text-2xs); line-height: 1.4; }
 .mark { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; }
 .mark img { display: block; width: 100%; height: 100%; }

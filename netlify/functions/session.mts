@@ -1,8 +1,10 @@
 import { isAuthenticatedFromCookieHeader } from '../../lib/auth.mts';
-import { json } from '../../lib/http.mts';
+import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handler: NetlifyFunctionHandler = async (event) =>
+const handleSession: NetlifyFunctionHandler = async (event) =>
   json(200, { authenticated: isAuthenticatedFromCookieHeader(event.headers && event.headers.cookie) });
+
+const handler = withNetlifyApiErrorBoundary(handleSession);
 
 export { handler };

@@ -13,6 +13,9 @@ test('public pages expose a first-focusable skip link in the dark desktop theme'
 
   await page.keyboard.press('Tab');
   await expect(skipLink).toBeFocused();
+  await expect.poll(async () => (await skipLink.boundingBox())?.y ?? -1, {
+    message: 'waiting for the focused skip link to finish entering the viewport',
+  }).toBeGreaterThanOrEqual(0);
   const focusedBox = await boundingBox(skipLink);
   expect(focusedBox.y).toBeGreaterThanOrEqual(0);
   expect(focusedBox.x).toBeGreaterThanOrEqual(0);
@@ -43,4 +46,16 @@ test('Console pages expose the same skip target in the light mobile theme', asyn
   await expect(main).not.toHaveAttribute('inert', '');
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
   await expectNoHorizontalOverflow(page);
+});
+
+test('skip navigation removes its reveal transition when reduced motion is requested', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+  await expect(skipLink).toHaveCSS('transition-property', 'none');
+  await page.keyboard.press('Tab');
+  await expect(skipLink).toBeFocused();
+  const focusedBox = await boundingBox(skipLink);
+  expect(focusedBox.y).toBeGreaterThanOrEqual(0);
 });

@@ -1,8 +1,8 @@
 import { buildClearCookie, isTrustedOrigin, isAuthenticatedFromCookieHeader } from '../../lib/auth.mts';
-import { json } from '../../lib/http.mts';
+import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handler: NetlifyFunctionHandler = async (event) => {
+const handleLogout: NetlifyFunctionHandler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }
@@ -15,5 +15,7 @@ const handler: NetlifyFunctionHandler = async (event) => {
 
   return json(200, { ok: true }, { 'Set-Cookie': buildClearCookie({ secure: true }) });
 };
+
+const handler = withNetlifyApiErrorBoundary(handleLogout);
 
 export { handler };
