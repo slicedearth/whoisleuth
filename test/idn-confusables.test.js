@@ -117,7 +117,7 @@ describe('versioned visual skeleton comparison', () => {
     assert.equal(idn.unicodeSkeleton('քւց'), 'fig');
   });
 
-  test('matches generated mixed-script and whole-script additions', () => {
+  test('matches generated mixed-script and whole-label additions', () => {
     const mixed = idn.analyzeDomainIdn(domainToASCII('𐑈ecure.example'), ['secure.example']);
     assert.equal(mixed.skeleton, 'secure.example');
     assert.deepEqual(mixed.referenceMatches.map((match) => match.asciiDomain), ['secure.example']);
@@ -162,5 +162,23 @@ describe('shared candidate-generation mapping', () => {
     const mutableCopy = idn.confusableCharactersForAscii('c');
     mutableCopy.push('x');
     assert.deepEqual(idn.confusableCharactersForAscii('c'), ['с', 'ᴄ', 'ⲥ', '𐐽']);
+  });
+
+  test('builds deterministic whole-label candidates from one reviewed script', () => {
+    assert.deepEqual(idn.wholeLabelConfusableVariantsForAscii('scope'), [
+      { unicodeLabel: 'ѕсоре', script: 'Cyrillic' },
+    ]);
+    assert.deepEqual(idn.wholeLabelConfusableVariantsForAscii('fig'), [
+      { unicodeLabel: 'քւց', script: 'Armenian' },
+    ]);
+  });
+
+  test('requires at least two replaceable letters and caps whole-label output', () => {
+    for (const input of ['', 'a', '-scope', 'bad_label', 'secure', null]) {
+      assert.deepEqual(idn.wholeLabelConfusableVariantsForAscii(input), [], String(input));
+    }
+    const variants = idn.wholeLabelConfusableVariantsForAscii('scope');
+    assert.ok(variants.length <= 6);
+    assert.equal(Object.isFrozen(variants[0]), true);
   });
 });

@@ -1,4 +1,5 @@
 import { registryAccessProfileLabel } from '../registry-access.mts';
+import { unicodeDomainFromAscii } from '../../lib/idn-confusables.mts';
 
 const MAX_TERMINAL_VALUE_LENGTH = 240;
 const MAX_CT_TERMINAL_MATCHES = 100;
@@ -183,7 +184,11 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
   for (const candidate of visible) {
     const labels = (Array.isArray(candidate.mutationTypes) ? candidate.mutationTypes : [])
       .map((value: string) => safeTerminalValue(mutationLabels[value] || value));
-    lines.push(`${safeTerminalValue(candidate.domain)} — ${labels.join(', ') || 'Generated variant'}`);
+    const unicodeDomain = unicodeDomainFromAscii(candidate.domain);
+    const unicodeDetail = unicodeDomain && unicodeDomain !== candidate.domain
+      ? ` [Unicode: ${safeTerminalValue(unicodeDomain)}]`
+      : '';
+    lines.push(`${safeTerminalValue(candidate.domain)}${unicodeDetail} — ${labels.join(', ') || 'Generated variant'}`);
   }
   if (!visible.length) lines.push('No candidates were generated.');
   if (candidates.length > visible.length) {

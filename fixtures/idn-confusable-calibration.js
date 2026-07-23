@@ -5,8 +5,8 @@
 // not maliciousness, ownership, or activity.
 module.exports = Object.freeze([
   Object.freeze({
-    id: 'whole-script-cyrillic',
-    category: 'whole-script',
+    id: 'whole-label-cyrillic',
+    category: 'whole-label',
     reference: 'scope',
     observed: 'ѕсоре',
     expectedMatch: true,
@@ -19,8 +19,8 @@ module.exports = Object.freeze([
     expectedMatch: true,
   }),
   Object.freeze({
-    id: 'whole-script-armenian-expansion',
-    category: 'whole-script',
+    id: 'whole-label-armenian-expansion',
+    category: 'whole-label',
     reference: 'fig',
     observed: 'քւց',
     expectedMatch: true,

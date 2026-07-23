@@ -22,6 +22,7 @@
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.js';
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.js';
+  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
@@ -29,6 +30,15 @@
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz';
+  type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
+  type CandidateSort = 'generated' | 'domain' | 'indicators';
+  type CandidateMetadata = {
+    hasIdn: boolean;
+    unicodeDomain: string;
+    scripts: string[];
+    mixedScript: boolean;
+    referenceMatch: boolean;
+  };
   const DISCOVER_PAGE_SIZE = 100;
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
@@ -42,6 +52,10 @@
   let error = $state('');
   let searching = $state(false);
   let filter = $state('');
+  let candidateScope = $state<CandidateScope>('all');
+  let mutationFilter = $state('');
+  let candidateSort = $state<CandidateSort>('generated');
+  let candidateMetadata = $state<Map<string, CandidateMetadata>>(new Map());
   let profile = $state<BrandProfile|null>(null);
   // Whether the current candidate set came from structured CT provenance.
   let ctResultKind = $state<'structured'|null>(null);
@@ -77,7 +91,26 @@
   const keyboardLayouts = Object.values(KEYBOARD_LAYOUTS) as Array<{ id: KeyboardLayoutId; label: string }>;
   const maxTldTextLength = 2_048;
 
-  const visible = $derived(candidates.filter((c) => ctCandidateMatchesFilter(c, filter) && (!ctNewOnly || ctNewDomains.has(c.domain))));
+  const mutationOptions = $derived([...new Set(candidates.flatMap((candidate) => candidate.mutationTypes))]
+    .sort((left, right) => (mutationLabels[left] || left).localeCompare(mutationLabels[right] || right)));
+  const visible = $derived.by(() => {
+    const filtered = candidates.filter((candidate) => {
+      const metadata = candidateMetadata.get(candidate.domain);
+      if (!ctCandidateMatchesFilter(candidate, filter) || (ctNewOnly && !ctNewDomains.has(candidate.domain))) return false;
+      if (mutationFilter && !candidate.mutationTypes.includes(mutationFilter)) return false;
+      if (candidateScope === 'unicode' && !metadata?.hasIdn) return false;
+      if (candidateScope === 'mixed' && !metadata?.mixedScript) return false;
+      if (candidateScope === 'reference' && !metadata?.referenceMatch) return false;
+      if (candidateScope === 'selected' && !selected.has(candidate.domain)) return false;
+      return true;
+    });
+    if (candidateSort === 'generated') return filtered;
+    return [...filtered].sort((left, right) => {
+      if (candidateSort === 'domain') return left.domain.localeCompare(right.domain);
+      const indicatorDifference = candidateIndicatorCount(right) - candidateIndicatorCount(left);
+      return indicatorDifference || left.domain.localeCompare(right.domain);
+    });
+  });
   const pageCount = $derived(Math.max(1, Math.ceil(visible.length / DISCOVER_PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const pagedVisible = $derived(visible.slice((currentPage - 1) * DISCOVER_PAGE_SIZE, currentPage * DISCOVER_PAGE_SIZE));
@@ -85,9 +118,56 @@
 
   onMount(() => {void (async()=>{
     [profile,ctHistory] = await Promise.all([activeProfile(),loadCtHistory()]);
+    if (candidates.length) candidateMetadata = buildCandidateMetadata(candidates);
     const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
     if (guidedDomain) seed = guidedDomain;
   })();});
+
+  function referenceDomainsForCandidate(candidate: Candidate): string[] {
+    const references: string[] = [];
+    const source = candidate.source.trim().toLowerCase().replace(/\.+$/, '');
+    if (/^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/i.test(source) && source.includes('.')) {
+      references.push(source);
+    } else if (/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(source)) {
+      const tld = candidate.domain.split('.').at(-1);
+      if (tld) references.push(`${source}.${tld}`);
+    }
+    if (profile) references.push(...profile.officialDomains);
+    return [...new Set(references)].slice(0, 50);
+  }
+
+  function buildCandidateMetadata(next: Candidate[]): Map<string, CandidateMetadata> {
+    const metadata = new Map<string, CandidateMetadata>();
+    for (const candidate of next.slice(0, MAX_GENERATED_CANDIDATES)) {
+      const analysis = analyzeDomainIdn(candidate.domain, referenceDomainsForCandidate(candidate));
+      metadata.set(candidate.domain, {
+        hasIdn: Boolean(analysis?.hasIdn),
+        unicodeDomain: analysis?.hasIdn ? String(analysis.unicodeDomain || '') : '',
+        scripts: Array.isArray(analysis?.scripts) ? analysis.scripts.map(String).slice(0, 12) : [],
+        mixedScript: Boolean(analysis?.mixedScript),
+        referenceMatch: Boolean(analysis?.referenceMatches?.length),
+      });
+    }
+    return metadata;
+  }
+
+  function candidateIndicatorCount(candidate: Candidate): number {
+    const metadata = candidateMetadata.get(candidate.domain);
+    return candidate.mutationTypes.length
+      + (metadata?.hasIdn ? 1 : 0)
+      + (metadata?.mixedScript ? 2 : 0)
+      + (metadata?.referenceMatch ? 3 : 0)
+      + (candidate.certificateTransparency ? 1 : 0)
+      + (ctNewDomains.has(candidate.domain) ? 1 : 0);
+  }
+
+  function resetCandidateView() {
+    filter = '';
+    candidateScope = 'all';
+    mutationFilter = '';
+    candidateSort = 'generated';
+    page = 1;
+  }
 
   function resetCtComparison() {
     ctNewDomains = new Set();
@@ -146,8 +226,8 @@
     selected = new Set();
     status = '';
     error = '';
-    filter = '';
-    page = 1;
+    candidateMetadata = new Map();
+    resetCandidateView();
   }
 
   function selectGenerationPreset(next: GenerationPresetId) {
@@ -176,10 +256,10 @@
     candidates = next;
     generatedContext = context;
     selected = new Set(next.map((c) => c.domain));
+    candidateMetadata = buildCandidateMetadata(next);
     status = message;
     error = '';
-    filter = '';
-    page = 1;
+    resetCandidateView();
   }
 
   function withoutAllowlisted(next: Candidate[]) {
@@ -195,7 +275,7 @@
     status = `Loaded discovery defaults from ${profile.name}.`;
   }
 
-  function selectMode(next:Mode){cancelCtSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();status='';error='';ctResultKind=null;page=1;resetCtComparison();}
+  function selectMode(next:Mode){cancelCtSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();candidateMetadata=new Map();status='';error='';ctResultKind=null;resetCandidateView();resetCtComparison();}
   function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;event.preventDefault();selectMode(order[index]);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
 
   function generate() {
@@ -337,6 +417,21 @@
     page = 1;
   }
 
+  function setCandidateScope(value: CandidateScope) {
+    candidateScope = value;
+    page = 1;
+  }
+
+  function setMutationFilter(value: string) {
+    mutationFilter = value;
+    page = 1;
+  }
+
+  function setCandidateSort(value: CandidateSort) {
+    candidateSort = value;
+    page = 1;
+  }
+
   function toggleNewOnly() {
     ctNewOnly = !ctNewOnly;
     page = 1;
@@ -347,18 +442,25 @@
   }
 
   function candidateDisplayRows() {
-    return pagedVisible.map((candidate) => ({
-      domain: candidate.domain,
-      mutationLabel: candidate.mutationTypes.map((type) => mutationLabels[type] || type.replaceAll('_', ' ')).join(' · '),
-      selected: selected.has(candidate.domain),
-      isNew: ctNewDomains.has(candidate.domain),
-      certificateEvidence: candidate.certificateTransparency ? {
-        certificateCount: candidate.certificateTransparency.certificateCount,
-        firstObservedAt: candidate.certificateTransparency.firstObservedAt,
-        lastObservedAt: candidate.certificateTransparency.lastObservedAt,
-        hostnames: candidate.certificateTransparency.hostnames.map(String),
-      } : null,
-    }));
+    return pagedVisible.map((candidate) => {
+      const metadata = candidateMetadata.get(candidate.domain);
+      return {
+        domain: candidate.domain,
+        mutationLabel: candidate.mutationTypes.map((type) => mutationLabels[type] || type.replaceAll('_', ' ')).join(' · '),
+        selected: selected.has(candidate.domain),
+        isNew: ctNewDomains.has(candidate.domain),
+        unicodeDomain: metadata?.unicodeDomain || '',
+        scripts: metadata?.scripts || [],
+        mixedScript: Boolean(metadata?.mixedScript),
+        referenceMatch: Boolean(metadata?.referenceMatch),
+        certificateEvidence: candidate.certificateTransparency ? {
+          certificateCount: candidate.certificateTransparency.certificateCount,
+          firstObservedAt: candidate.certificateTransparency.firstObservedAt,
+          lastObservedAt: candidate.certificateTransparency.lastObservedAt,
+          hostnames: candidate.certificateTransparency.hostnames.map(String),
+        } : null,
+      };
+    });
   }
 
   async function sendToBulk() {
@@ -415,6 +517,13 @@
     continueToBulk={sendToBulk}
     {filter}
     {setFilter}
+    {candidateScope}
+    setCandidateScope={(value)=>setCandidateScope(value as CandidateScope)}
+    {mutationFilter}
+    mutationOptions={mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_', ' ')}))}
+    {setMutationFilter}
+    {candidateSort}
+    setCandidateSort={(value)=>setCandidateSort(value as CandidateSort)}
     structured={ctResultKind==='structured'}
     previousCheckedAt={ctPreviousCheckedAt}
     newOnly={ctNewOnly}

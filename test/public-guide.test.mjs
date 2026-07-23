@@ -63,13 +63,14 @@ test('navigation, tool guide, and reference guide use one canonical product voca
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {
-  assert.equal(glossaryTerms.length, 39);
+  assert.equal(glossaryTerms.length, 40);
   assert.equal(guideFaqs.length, 17);
   assert.equal(resultStates.length, 9);
   assert.equal(commonMistakes.length, 5);
   assert.equal(unique(glossaryTerms.map((item) => item.term)), true);
   assert.equal(unique(guideFaqs.map((item) => item.question)), true);
   assert.deepEqual(glossaryTerms.map((item) => item.term), [...glossaryTerms].map((item) => item.term).sort((a, b) => a.localeCompare(b)));
+  assert.match(glossaryTerms.find((item) => item.term === 'Unicode confusable')?.definition || '', /not proof/i);
 
   const strings = allStrings({ publicGuideGoals, toolGuides, referenceGuides, resultStates, glossaryTerms, guideFaqs, commonMistakes });
   assert.equal(strings.every((value) => value.length > 0 && value.length <= 500), true);

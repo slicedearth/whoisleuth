@@ -129,6 +129,45 @@ test('lookalike presets expose a live upper-bound estimate and clear stale resul
   await expect(page.locator('.candidate strong', { hasText: /^acm\.com$/ })).toHaveCount(0);
 });
 
+test('Unicode lookalikes show both domain forms and support evidence-aware filtering', async ({ page }) => {
+  await page.getByRole('button', { name: /^Impersonation\b/u }).click();
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  await page.getByRole('combobox', { name: 'Mutation family' }).selectOption('unicode_whole_label');
+  await expect(page.locator('.candidate')).toHaveCount(1);
+  const candidate = page.locator('.candidate');
+  await expect(candidate.locator('strong')).toHaveText(/^xn--/u);
+  await expect(candidate).toContainText('Unicode: ѕсоре.invalid');
+  await expect(candidate).toContainText('Scripts: Cyrillic, Latin');
+  await expect(candidate).toContainText('Whole-label Unicode confusable');
+  await expect(candidate).toContainText('Source or profile visual match');
+
+  await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('reference');
+  await expect(candidate).toBeVisible();
+  await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('domain');
+  await expect(candidate).toBeVisible();
+
+  const checkbox = candidate.locator('input[type="checkbox"]');
+  await checkbox.uncheck();
+  await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('selected');
+  await expect(page.locator('.candidate')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'No candidates match the current filters' })).toBeVisible();
+});
+
+test('candidate filters remain contained at mobile width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  await expect(page.getByRole('combobox', { name: 'Candidate scope' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Mutation family' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test('lookalike estimate discloses when the hard generation cap may apply', async ({ page }) => {
   const tlds = Array.from({ length: 20 }, (_, index) =>
     `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,

@@ -36,19 +36,36 @@ npm run unicode:confusables -- --json
 
 The calibration uses reserved synthetic labels. It compares the previous
 reviewed mapping with the proposed projection across mixed-script,
-whole-script, same-script, and unrelated negative cases. It also measures
-single-substitution candidate growth across bounded neutral seed labels.
+whole-label, same-script, and unrelated negative cases. It also measures
+single-substitution and same-script whole-label candidate growth across
+bounded neutral seed labels.
 
 The current projection is eligible for runtime use because:
 
 - labelled true positives improve from 2 of 8 to 8 of 8;
 - labelled false positives remain 0 of 5;
-- aggregate candidate growth is 36.23%, below the 50% gate; and
+- aggregate candidate growth is 36.02%, from 211 to 287 candidates and below
+  the 50% gate; and
 - the largest seed grows 61.9%, below the 75% per-seed gate.
 
 These figures describe this small fixture corpus, not real-world accuracy,
 maliciousness, or prevalence. Future updates must extend the labelled corpus
 when they introduce a new script or mapping class.
+
+## Runtime generation boundary
+
+Discover generates single-character substitutions and, for the Impersonation
+and All presets, at most one same-script whole-label candidate per reviewed
+non-Latin script. A whole-label candidate is emitted only when every ASCII
+letter has one eligible replacement in that script. Digits and hyphens may be
+preserved, at least two letters must be replaced, and the complete helper is
+capped at six candidates.
+
+This helper is not a formal UTS #39 whole-script classification. It uses
+JavaScript `Script` properties rather than resolved `Script_Extensions`, so the
+interface describes the result as a whole-label Unicode confusable. Generated
+domains retain the existing Unicode-confusable provenance used by the Risk
+model, and the additional label does not change score weights.
 
 ## Rebuild from the pinned source
 

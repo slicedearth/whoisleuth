@@ -49,7 +49,7 @@ type MainOptions = Readonly<{
 }>;
 
 export const UNICODE_CONFUSABLE_AUDIT_SCHEMA = 'whoisleuth.unicode-confusable-audit';
-export const UNICODE_CONFUSABLE_AUDIT_VERSION = 1;
+export const UNICODE_CONFUSABLE_AUDIT_VERSION = 2;
 export const MAX_CONFUSABLE_CALIBRATION_CASES = 100;
 export const MAX_CONFUSABLE_CALIBRATION_LABEL_CODEPOINTS = 63;
 export const MAX_CONFUSABLE_CALIBRATION_ID_LENGTH = 80;
@@ -75,6 +75,14 @@ const CALIBRATION_SEEDS = Object.freeze([
 const MARK_RE = /\p{Mark}/u;
 const SAFE_LABEL_RE = /^[\p{Letter}\p{Number}-]+$/u;
 const SAFE_ID_RE = /^[a-z0-9-]+$/u;
+const WHOLE_LABEL_SCRIPT_TESTS: ReadonlyArray<readonly [string, RegExp]> = Object.freeze([
+  ['Cyrillic', /\p{Script=Cyrillic}/u],
+  ['Greek', /\p{Script=Greek}/u],
+  ['Armenian', /\p{Script=Armenian}/u],
+  ['Coptic', /\p{Script=Coptic}/u],
+  ['Deseret', /\p{Script=Deseret}/u],
+  ['Lisu', /\p{Script=Lisu}/u],
+]);
 
 function ratio(numerator: number, denominator: number): number {
   return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : 0;
@@ -165,16 +173,42 @@ function confusionFor(
   return Object.freeze(result);
 }
 
-function candidateCount(label: string, groups: Readonly<Record<string, string>>): number {
-  const candidates = new Set<string>();
+function candidateCounts(label: string, groups: Readonly<Record<string, string>>) {
+  const singleSubstitutionCandidates = new Set<string>();
   for (let index = 0; index < label.length; index += 1) {
     for (const substitution of [...(groups[label[index]] || '')].slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII)) {
       const unicode = `${label.slice(0, index)}${substitution}${label.slice(index + 1)}`;
       const ascii = domainToASCII(`${unicode}.example`).replace(/\.example$/u, '');
-      if (ascii.startsWith('xn--')) candidates.add(ascii);
+      if (ascii.startsWith('xn--')) singleSubstitutionCandidates.add(ascii);
     }
   }
-  return candidates.size;
+  const wholeLabelCandidates = new Set<string>();
+  for (const [, expression] of WHOLE_LABEL_SCRIPT_TESTS) {
+    let unicode = '';
+    let complete = true;
+    for (const character of label) {
+      if (!/^[a-z]$/u.test(character)) {
+        unicode += character;
+        continue;
+      }
+      const substitution = [...(groups[character] || '')]
+        .slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII)
+        .find((candidate) => expression.test(candidate));
+      if (!substitution) {
+        complete = false;
+        break;
+      }
+      unicode += substitution;
+    }
+    if (!complete) continue;
+    const ascii = domainToASCII(`${unicode}.example`).replace(/\.example$/u, '');
+    if (ascii.startsWith('xn--')) wholeLabelCandidates.add(ascii);
+  }
+  return Object.freeze({
+    singleSubstitutionCandidates: singleSubstitutionCandidates.size,
+    wholeLabelCandidates: wholeLabelCandidates.size,
+    totalCandidates: new Set([...singleSubstitutionCandidates, ...wholeLabelCandidates]).size,
+  });
 }
 
 function validateCheckedInProjection(): string[] {
@@ -216,13 +250,20 @@ export function buildUnicodeConfusableAudit(calibrationValue: unknown = CALIBRAT
   const current = confusionFor(cases, REVIEWED_SKELETON_CONFUSABLES);
   const proposed = confusionFor(cases, GENERATED_CONFUSABLE_GROUPS);
   const seeds = CALIBRATION_SEEDS.slice(0, MAX_CALIBRATION_SEEDS).map((seed) => {
-    const currentCandidates = candidateCount(seed, REVIEWED_GENERATION_CONFUSABLES);
-    const proposedCandidates = candidateCount(seed, GENERATED_GENERATION_CONFUSABLE_GROUPS);
+    const currentVolume = candidateCounts(seed, REVIEWED_GENERATION_CONFUSABLES);
+    const proposedVolume = candidateCounts(seed, GENERATED_GENERATION_CONFUSABLE_GROUPS);
     return Object.freeze({
       seed,
-      currentCandidates,
-      proposedCandidates,
-      growthRatio: ratio(proposedCandidates - currentCandidates, currentCandidates),
+      currentCandidates: currentVolume.totalCandidates,
+      proposedCandidates: proposedVolume.totalCandidates,
+      currentSingleSubstitutionCandidates: currentVolume.singleSubstitutionCandidates,
+      proposedSingleSubstitutionCandidates: proposedVolume.singleSubstitutionCandidates,
+      currentWholeLabelCandidates: currentVolume.wholeLabelCandidates,
+      proposedWholeLabelCandidates: proposedVolume.wholeLabelCandidates,
+      growthRatio: ratio(
+        proposedVolume.totalCandidates - currentVolume.totalCandidates,
+        currentVolume.totalCandidates,
+      ),
     });
   });
   const currentCandidates = seeds.reduce((total, item) => total + item.currentCandidates, 0);

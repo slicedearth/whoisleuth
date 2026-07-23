@@ -102,6 +102,8 @@ describe('checked-in Unicode confusable calibration', () => {
     assert.equal(report.calibration.proposed.falseNegative, 0);
     assert.ok(report.candidateVolume.totalGrowthRatio <= MAX_TOTAL_CANDIDATE_GROWTH_RATIO);
     assert.ok(report.candidateVolume.maximumSeedGrowthRatio <= MAX_SEED_CANDIDATE_GROWTH_RATIO);
+    assert.equal(report.version, 2);
+    assert.ok(report.candidateVolume.seeds.some((item) => item.proposedWholeLabelCandidates > 0));
     assert.deepEqual(report.failures, []);
   });
 

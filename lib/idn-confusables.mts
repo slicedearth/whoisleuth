@@ -25,6 +25,7 @@ const MAX_FINDINGS = 20;
 type ScriptLabel = { label: string; scripts: string[]; mixed: boolean };
 type ReferenceMatch = { asciiDomain: string; unicodeDomain: string; skeleton: string };
 type IdnFinding = { id: string; tone: string; label: string; detail: string };
+export type WholeLabelConfusableVariant = Readonly<{ unicodeLabel: string; script: string }>;
 
 const CONFUSABLE_TO_ASCII = new Map<string, string>();
 for (const [ascii, values] of Object.entries(GENERATED_CONFUSABLE_GROUPS)) {
@@ -60,6 +61,16 @@ const SCRIPT_TESTS: ReadonlyArray<readonly [string, RegExp]> = Object.freeze([
 const MARK_RE = /\p{Mark}/u;
 const LETTER_RE = /\p{Letter}/u;
 const JAPANESE_SCRIPTS = new Set<string>(['Han', 'Hiragana', 'Katakana']);
+const WHOLE_LABEL_TARGET_SCRIPTS = Object.freeze([
+  'Cyrillic',
+  'Greek',
+  'Armenian',
+  'Coptic',
+  'Deseret',
+  'Lisu',
+]);
+const MAX_WHOLE_LABEL_VARIANTS = WHOLE_LABEL_TARGET_SCRIPTS.length;
+const ASCII_GENERATION_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 
 function decodeDigit(codePoint: number): number {
   if (codePoint >= 0x61 && codePoint <= 0x7a) return codePoint - 0x61;
@@ -202,6 +213,46 @@ export function confusableCharactersForAscii(character: unknown): string[] {
   const source = String(character || '').toLowerCase();
   return [...(GENERATED_GENERATION_CONFUSABLE_GROUPS[source] || '')]
     .slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII);
+}
+
+// Builds at most one deterministic candidate per reviewed non-Latin script.
+// This is a deliberately narrower generation aid than the formal UTS #39
+// whole-script algorithm: it uses JavaScript Script properties rather than
+// resolved Script_Extensions and therefore does not expose a standards verdict.
+export function wholeLabelConfusableVariantsForAscii(raw: unknown): WholeLabelConfusableVariant[] {
+  if (typeof raw !== 'string') return [];
+  const label = raw.trim().toLowerCase();
+  const letters = [...label].filter((character) => /^[a-z]$/u.test(character));
+  if (
+    label.length === 0
+    || label.length > 63
+    || !ASCII_GENERATION_LABEL_RE.test(label)
+    || letters.length < 2
+  ) return [];
+
+  const variants: WholeLabelConfusableVariant[] = [];
+  for (const targetScript of WHOLE_LABEL_TARGET_SCRIPTS) {
+    let unicodeLabel = '';
+    let complete = true;
+    for (const character of label) {
+      if (!/^[a-z]$/u.test(character)) {
+        unicodeLabel += character;
+        continue;
+      }
+      const replacement = confusableCharactersForAscii(character)
+        .find((candidate) => scriptForCharacter(candidate) === targetScript);
+      if (!replacement) {
+        complete = false;
+        break;
+      }
+      unicodeLabel += replacement;
+    }
+    if (complete && unicodeLabel !== label) {
+      variants.push(Object.freeze({ unicodeLabel, script: targetScript }));
+      if (variants.length >= MAX_WHOLE_LABEL_VARIANTS) break;
+    }
+  }
+  return variants;
 }
 
 function analyzeLabels(unicodeDomain: string): { labels: ScriptLabel[]; scripts: string[] } {

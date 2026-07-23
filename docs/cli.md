@@ -229,8 +229,12 @@ Generation presets are `common`, `impersonation`, and `all` (the default).
 Keyboard-aware mutations support `qwerty` (the default), `azerty`, and
 `qwertz`. Terminal output is capped at 200 candidates with an explicit notice;
 versioned JSON and JSONL retain the complete bounded candidate set and mutation
-provenance. The command generates candidates only—it does not claim that a
-domain is registered, active, or malicious.
+provenance. Internationalised candidates show the DNS-safe ASCII form and
+readable Unicode form together in terminal output. The Impersonation and All
+presets can add up to six deterministic whole-label Unicode candidates when
+every letter has a reviewed same-script replacement. The command generates
+candidates only. It does not claim that a domain is registered, active, or
+malicious.
 
 ## Domain posture audit
 

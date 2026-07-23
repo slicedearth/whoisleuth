@@ -114,6 +114,18 @@ describe('provenance-aware typosquat generation', () => {
     });
   });
 
+  test('generates bounded whole-label Unicode candidates with additive provenance', () => {
+    const expected = domainToASCII('ѕсоре.invalid');
+    const result = generator.generateTyposquatCandidateSet('scope.invalid', [], { preset: 'impersonation' });
+    assert.deepEqual(result.candidates.find((candidate) => candidate.domain === expected), {
+      domain: expected,
+      source: 'scope.invalid',
+      tld: 'invalid',
+      mutationTypes: ['unicode_homoglyph', 'unicode_whole_label'],
+    });
+    assert.ok(generator.estimateTyposquatCandidateCount('scope.invalid', [], { preset: 'impersonation' }).estimatedMaximum >= result.candidates.length);
+  });
+
   test('caps unique candidates and reports the limiting boundary', () => {
     const tlds = Array.from({ length: 20 }, (_, index) =>
       `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
@@ -273,6 +285,7 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(mutationTypes.has('dictionary'), false);
     assert.equal(mutationTypes.has('ascii_homoglyph'), false);
     assert.equal(mutationTypes.has('unicode_homoglyph'), false);
+    assert.equal(mutationTypes.has('unicode_whole_label'), false);
     assert.equal(mutationTypes.has('keyboard_insertion'), false);
     assert.equal(result.candidates.some((candidate) => candidate.domain === 'loginacme.com'), false);
   });
@@ -282,6 +295,7 @@ describe('provenance-aware typosquat generation', () => {
     const mutationTypes = new Set(result.candidates.flatMap((candidate) => candidate.mutationTypes));
     assert.ok(mutationTypes.has('dictionary'));
     assert.ok(mutationTypes.has('unicode_homoglyph'));
+    assert.ok(mutationTypes.has('unicode_whole_label'));
     assert.ok(mutationTypes.has('tld_substitution'));
     assert.equal(mutationTypes.has('character_omission'), false);
     assert.equal(mutationTypes.has('keyboard_substitution'), false);
