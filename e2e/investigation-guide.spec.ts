@@ -272,6 +272,33 @@ test('request review is keyboard-operable and opening a tool does not claim comp
   expect(stored.stages[0].outcome).toBe('pending');
 });
 
+test('return control recovers when the first action-panel scroll is displaced', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 568 });
+  await startRecipe(page);
+  const action = currentAction(page);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const control = page.getByRole('button', { name: 'Return to guided investigation: Collect domain evidence' });
+  await expect(control).toBeVisible();
+
+  await action.evaluate((element) => {
+    const originalScrollIntoView = element.scrollIntoView.bind(element);
+    let callCount = 0;
+    element.scrollIntoView = (options?: boolean | ScrollIntoViewOptions) => {
+      callCount += 1;
+      if (callCount > 1) originalScrollIntoView(options);
+    };
+  });
+
+  await control.click();
+  await expect(action).toBeFocused();
+  await expect.poll(() => action.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+    const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+    return (visibleWidth * visibleHeight) / Math.max(1, rect.width * rect.height);
+  })).toBeGreaterThanOrEqual(0.2);
+});
+
 test('partial progress, pause, resume, and restart remain explicit', async ({ page }) => {
   await startRecipe(page, 'Infrastructure pivot');
   await allowAndOpen(page, 'Lookup');
