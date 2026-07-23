@@ -4,6 +4,7 @@
   import { getContext, onMount } from 'svelte';
   import BulkResultsTable from '$lib/components/BulkResultsTable.svelte';
   import BulkCoverage from '$lib/components/BulkCoverage.svelte';
+  import BulkTriagePlot from '$lib/components/BulkTriagePlot.svelte';
   import BulkRelationships from '$lib/components/BulkRelationships.svelte';
   import BulkScanQueue from '$lib/components/BulkScanQueue.svelte';
   import BulkShortlist from '$lib/components/BulkShortlist.svelte';
@@ -218,6 +219,16 @@ import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInve
       {saveResults}
       {saveStatus}
     />
+    <BulkTriagePlot
+      points={filtered.map((row)=>({
+        domain:row.domain,
+        risk:row.risk,
+        opportunity:row.opportunity,
+        availability:row.availability,
+        trusted:Boolean(row.trusted),
+      }))}
+      matchedCount={filtered.length}
+    />
     <BulkResultsTable
       rows={resultDisplayRows()}
       {sortKey}
@@ -246,4 +257,5 @@ import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInve
 <style>
   .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
+  .triage :global(#bulk-triage-plot){margin:16px 0}
 </style>

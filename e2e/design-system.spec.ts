@@ -66,6 +66,8 @@ function sectionedLookupFixture(domain: string) {
     query: domain, type: 'domain', registrableDomain: domain,
     availability: {
       state: 'registered', confidence: 'high', domain,
+      createdDateIso: '2020-01-02T00:00:00.000Z',
+      expiryDateIso: '2027-01-02T00:00:00.000Z',
       registrar: { name: 'Fixture Registrar LLC' },
       nameservers: [`ns1.${domain}`, `ns2.${domain}`],
       dns: {
@@ -76,9 +78,9 @@ function sectionedLookupFixture(domain: string) {
       http: {
         version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'http',
         durationMs: 100, complete: true, truncated: false, limitations: [], diagnostics: {},
-        requestUrl: `https://${domain}/`, finalUrl: `https://${domain}/`, transportSecurity: 'https',
-        redirectCount: 0, redirectLimitReached: false, crossOriginRedirect: false, httpsDowngrade: false,
-        redirects: [], attempts: [],
+        requestUrl: `https://${domain}/`, finalUrl: `https://www.${domain}/home`, transportSecurity: 'https',
+        redirectCount: 1, redirectLimitReached: false, crossOriginRedirect: false, httpsDowngrade: false,
+        redirects: [{ status: 301, from: `https://${domain}/`, to: `https://www.${domain}/home`, queryOmitted: false }], attempts: [],
         response: {
           status: 200, contentType: 'text/html', contentLanguage: null, server: null,
           declaredContentLength: null, capturedBodyBytes: 1024, bodyInspected: true, bodyTruncated: false,
@@ -86,7 +88,7 @@ function sectionedLookupFixture(domain: string) {
         },
       },
     },
-    rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {} } },
+    rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } } },
     whois: { parsed: {}, chain: [] },
     diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
   };
@@ -164,6 +166,45 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
 
+  // The D3-backed visual is paired with a complete, keyboard-operable source
+  // rail. It does not replace the detailed source sections.
+  const topology = page.getByRole('region', { name: 'Evidence topology' });
+  await expect(topology).toBeVisible();
+  await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeVisible();
+  const topologyCopies = topology.locator('foreignObject.node-copy');
+  await expect(topologyCopies.first()).toBeVisible();
+  expect(await topologyCopies.evaluateAll((copies) => copies.every((copy) => {
+    const text = copy.firstElementChild;
+    const copyRect = copy.getBoundingClientRect();
+    const nodeRect = copy.closest('g')?.querySelector(':scope > rect')?.getBoundingClientRect();
+    const styles = text ? getComputedStyle(text) : null;
+    return Boolean(
+      text
+      && nodeRect
+      && copyRect.left >= nodeRect.left - 0.5
+      && copyRect.right <= nodeRect.right + 0.5
+      && copyRect.top >= nodeRect.top - 0.5
+      && copyRect.bottom <= nodeRect.bottom + 0.5
+      && styles?.overflow === 'hidden'
+      && styles.textOverflow === 'ellipsis'
+      && styles.whiteSpace === 'nowrap'
+    );
+  }))).toBe(true);
+  const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
+  await expect(sourceRail.getByRole('link', { name: /Registry RDAP.*success/i })).toHaveAttribute('href', '#evidence-registry');
+  await expect(sourceRail.getByRole('link', { name: /WHOIS.*partial/i })).toHaveAttribute('href', '#evidence-registry');
+  const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
+  await expect(dnsSource).toHaveAttribute('href', '#evidence-dns');
+  await dnsSource.focus();
+  await dnsSource.press('Enter');
+  await expect(page).toHaveURL(/#evidence-dns$/);
+  await expect(page.locator('#evidence-dns')).toBeInViewport();
+
+  const lifecycle = page.getByRole('region', { name: 'Observed lifecycle' });
+  await expect(lifecycle).toBeVisible();
+  await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeVisible();
+  await expect(lifecycle.getByRole('list', { name: 'Lookup lifecycle events' })).toContainText('Domain created');
+
   // Detailed registry and raw unified records stay collapsed and subordinate.
   await expect(page.locator('.sources > details').first()).not.toHaveAttribute('open', '');
   await expect(page.locator('details.raw')).not.toHaveAttribute('open', '');
@@ -182,6 +223,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await dnsCard.locator(':scope > summary').click();
   await expect(page.getByText(/A resolver failure is not evidence that a record is absent/)).toBeVisible();
 
+  const httpCard = page.locator('.http-card');
+  await httpCard.locator(':scope > summary').click();
+  const redirectDisclosure = httpCard.getByText('Redirect chain · 1 hop');
+  await redirectDisclosure.click();
+  await expect(httpCard.getByRole('img', { name: 'HTTP redirect path with 1 hop' })).toBeVisible();
+
   for (const size of [
     { width: 1920, height: 1080 },
     { width: 320, height: 640 },
@@ -189,6 +236,17 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
     await page.setViewportSize(size);
     await expectNoHorizontalOverflow(page);
   }
+
+  // The wide chronological plot becomes a connected vertical timeline on
+  // narrow screens rather than requiring a nested horizontal scrollbar.
+  await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeHidden();
+  const mobileTimeline = lifecycle.getByRole('list', { name: 'Lookup lifecycle events' });
+  await expect(mobileTimeline).toBeVisible();
+  expect(await mobileTimeline.locator('li').evaluateAll((items) => items.every((item) => {
+    const listRect = item.parentElement?.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    return Boolean(listRect && itemRect.left >= listRect.left - 0.5 && itemRect.right <= listRect.right + 0.5);
+  }))).toBe(true);
 
   // The local navigation stays a single scrollable row on narrow screens
   // rather than stacking into a tall block.

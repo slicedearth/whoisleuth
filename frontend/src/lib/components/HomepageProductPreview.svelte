@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import {
     SYNTHETIC_DEMO_CANDIDATES,
     syntheticDemoTimeline,
@@ -6,10 +7,12 @@
 
   const selected = SYNTHETIC_DEMO_CANDIDATES[0];
   const timeline = syntheticDemoTimeline(selected.id, true);
-  const sourceRows = [
-    { label: 'Registry RDAP', value: selected.evidence.registry.status, tone: 'observed' },
-    { label: 'DNS', value: selected.evidence.dns.status, tone: 'observed' },
-    { label: 'Website', value: selected.evidence.website.status, tone: 'review' },
+  const topologyNodes = [
+    { id: 'registry', label: 'Registry', detail: selected.evidence.registry.status, status: 'success', side: 'left' as const, glyph: 'R' },
+    { id: 'dns', label: 'DNS', detail: selected.evidence.dns.status, status: 'success', side: 'left' as const, glyph: 'D' },
+    { id: 'website', label: 'Website', detail: 'Active page observed', status: 'success', side: 'right' as const, glyph: 'H' },
+    { id: 'certificate', label: 'Certificate', detail: selected.evidence.certificate.status, status: 'success', side: 'right' as const, glyph: 'T' },
+    { id: 'analysis', label: 'Risk signals', detail: 'Explainable review cues', status: 'warning', side: 'right' as const, provenance: 'derived' as const, glyph: 'A' },
   ];
 </script>
 
@@ -32,11 +35,14 @@
       <div><small>Registration</small><strong>{selected.availability}</strong></div>
       <div><small>Priority</small><strong>{selected.risk}<span>/100</span></strong></div>
     </div>
-    <dl>
-      {#each sourceRows as row}
-        <div><dt>{row.label}</dt><dd><span class:review={row.tone === 'review'}></span>{row.value}</dd></div>
-      {/each}
-    </dl>
+    <EvidenceTopology
+      id="homepage-evidence-topology"
+      title="Synthetic lookup evidence topology"
+      target={{ label: selected.domain, detail: 'Domain lookup', status: selected.availability }}
+      nodes={topologyNodes}
+      embedded
+      compact
+    />
   </article>
 
   <article class="preview-panel monitor-panel">
@@ -55,7 +61,8 @@
 <p class="preview-note">Fixed fictional data from the public demo. No live target is contacted.</p>
 
 <style>
-  .product-preview{display:grid;grid-template-columns:.9fr 1.2fr .9fr;gap:10px;align-items:stretch}
+  .product-preview{display:grid;grid-template-columns:.85fr 1.25fr;grid-template-rows:auto auto;gap:10px;align-items:stretch}
+  .discover-panel{grid-column:1;grid-row:1}.monitor-panel{grid-column:1;grid-row:2}.lookup-panel{grid-column:2;grid-row:1 / 3}
   .preview-panel{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .12)}
   .preview-panel header{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .025);font-family:var(--mono)}
   .preview-panel header span{color:var(--accent);font-size:var(--text-xs);font-weight:750}
@@ -67,9 +74,8 @@
   .candidate-row strong{font:650 var(--text-xs) var(--mono)}.candidate-row small{margin-top:3px;color:var(--muted);font-size:.62rem}.candidate-row b{color:var(--amber);font:750 .9rem var(--mono)}
   .assessment{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)}
   .assessment div{display:grid;gap:4px;padding:13px;background:var(--panel)}.assessment small{color:var(--muted);font:var(--text-2xs) var(--mono)}.assessment strong{color:var(--accent2);font:750 1.05rem var(--mono)}.assessment strong span{color:var(--muted);font-size:.62rem}
-  dl{display:grid;gap:1px;margin:0;background:var(--border)}dl div{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;padding:8px 11px;background:var(--panel)}dt{color:var(--muted);font:var(--text-2xs) var(--mono)}dd{min-width:0;margin:0;overflow:hidden;font-size:var(--text-2xs);text-overflow:ellipsis;white-space:nowrap}dd span{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--accent2)}dd span.review{background:var(--amber)}
   ol{display:grid;gap:0;margin:0;padding:12px 12px 12px 18px;list-style:none}li{display:grid;position:relative;grid-template-columns:12px minmax(0,1fr);gap:8px;min-height:49px}li::before{content:"";position:absolute;top:13px;bottom:-7px;left:4px;width:1px;background:var(--border)}li:last-child::before{display:none}li>span{z-index:1;width:9px;height:9px;margin-top:8px;border:2px solid var(--muted);border-radius:50%;background:var(--panel)}li.changed>span{border-color:var(--accent2);box-shadow:0 0 7px rgb(var(--accent2-rgb) / .4)}li strong,li small{display:block}li strong{font:650 var(--text-xs) var(--mono)}li small{margin-top:4px;color:var(--muted);font-size:.62rem;line-height:1.35}
   .preview-note{margin:12px 0 0;color:var(--muted);font:var(--text-2xs) var(--mono);text-align:center}
-  @media(max-width:820px){.product-preview{grid-template-columns:1fr 1fr}.lookup-panel{grid-column:1 / -1;grid-row:1}.discover-panel,.monitor-panel{grid-row:2}}
+  @media(max-width:820px){.product-preview{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.lookup-panel{grid-column:1 / -1;grid-row:1}.discover-panel{grid-column:1;grid-row:2}.monitor-panel{grid-column:2;grid-row:2}}
   @media(max-width:560px){.product-preview{grid-template-columns:1fr}.lookup-panel,.discover-panel,.monitor-panel{grid-column:auto;grid-row:auto}}
 </style>

@@ -59,7 +59,16 @@ Deep domain Lookup can combine:
 
 Long source records and secondary Deep evidence start collapsed. Their status
 and summary remain visible so the page can be scanned before opening the
-evidence, provenance, and limitations that matter to the investigation.
+evidence, provenance, and limitations that matter to the investigation. A
+bounded source map uses locally rendered D3 geometry to connect the target to
+separately attributed evidence and provide direct links to each visible source.
+An ordered lifecycle view adds dated registry and certificate context without
+pretending that visual spacing represents elapsed duration. HTTP redirect paths,
+the Bulk Risk/Opportunity matrix, and retained watchlist activity use the same
+bounded local visual layer. Large Bulk sets use a deterministic capped plot
+while the table retains every result; watchlist activity covers retained history
+only. These visuals make no additional request and do not replace their
+accessible lists, tables, or source records.
 
 ## Design principles
 
@@ -78,6 +87,9 @@ evidence, provenance, and limitations that matter to the investigation.
   browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
+- **Supplementary visuals.** Charts summarize bounded data already present in
+  the page. Accessible source lists and tables remain the complete review
+  surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
 

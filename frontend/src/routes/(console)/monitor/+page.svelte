@@ -10,6 +10,7 @@
   import CaseList from '$lib/components/CaseList.svelte';
   import WatchlistWorkspace from '$lib/components/WatchlistWorkspace.svelte';
   import HostedWatchlistManager from '$lib/components/HostedWatchlistManager.svelte';
+  import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
@@ -37,6 +38,12 @@
   // --- Watchlists ---
   let watchlists=$state<Watchlists>({});let selected=$state('');let changedOnly=$state(false);let message=$state('');
   const names=$derived(Object.keys(watchlists).sort());const entry=$derived(selected?watchlists[selected]||null:null);const history=$derived(entry?(changedOnly?entry.history.filter(e=>e.changeCount>0):entry.history):[]);
+  const watchlistActivity=$derived(Object.values(watchlists).flatMap((record)=>record.history.map((event)=>({
+    checkedAt:event.checkedAt,
+    changeCount:event.changeCount,
+    resultCount:event.resultCount,
+    conclusiveCount:event.conclusiveCount,
+  }))));
   async function refresh(){watchlists=await loadWatchlists();if(selected&&!watchlists[selected])selected='';}
   function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
   async function remove(name:string){if(!confirm(`Delete watchlist "${name}" and its history?`))return;try{await deleteWatchlist(name);await refresh();message=`Deleted "${name}".`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete watchlist.';}}
@@ -182,7 +189,12 @@
 
 {#if view==='watchlists'}
 <div id="panel-watchlists" role="tabpanel" aria-labelledby="tab-watchlists">
+  <MonitorActivityHeatmap events={watchlistActivity} />
   <WatchlistWorkspace {watchlists} {names} {entry} {selected} setSelected={(value)=>selected=value} {history} {changedOnly} setChangedOnly={(value)=>changedOnly=value} {message} {downloadWatchlists} {importFile} {clearAll} {rescan} {remove} openCase={openWatchlistCase} formatDate={date} />
   <HostedWatchlistManager capability={scheduledCapability} localWatchlists={watchlists} localNames={names} restoreHosted={restoreHostedWatchlist} formatDate={date} />
 </div>
 {/if}
+
+<style>
+  :global(#watchlist-activity){margin-bottom:16px}
+</style>
