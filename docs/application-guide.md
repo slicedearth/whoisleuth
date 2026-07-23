@@ -93,8 +93,9 @@ public-log observations. They do not prove registration time, website activity,
 ownership, or maliciousness.
 
 Filtered and sorted candidate lists are paginated locally. Selecting all
-matching entries operates on the complete bounded filtered set, not only the
-visible page.
+filtered entries operates on the complete bounded filtered set, not only the
+visible page. New result sets start unselected so moving hundreds or thousands
+of candidates into Bulk always requires an explicit review choice.
 
 ### Bulk
 

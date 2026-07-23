@@ -237,9 +237,8 @@ test('brand sweep carries the official domain into a profile and a selected cand
   await expect(page.locator('.candidate').first()).toBeVisible();
   const candidate = (await page.locator('.candidate strong').first().textContent())?.trim() || '';
   expect(candidate).not.toBe('');
-  await page.getByRole('button', { name: 'Clear matching' }).click();
   await page.locator('.candidate input[type="checkbox"]').first().check();
-  await page.getByRole('button', { name: 'Continue to Bulk' }).click();
+  await page.getByRole('button', { name: 'Continue to Bulk with 1' }).click();
   await markReviewed(page, 'Discover candidates');
 
   await runBulkStep(page, 'Triage candidates');

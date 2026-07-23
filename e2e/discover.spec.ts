@@ -82,10 +82,12 @@ test('lookalike generation discloses its limits and paginates every retained can
   await page.getByRole('textbox', { name: 'TLDs' }).fill(tlds.join(', '));
   await page.getByRole('button', { name: 'Generate candidates' }).click();
 
-  await expect(page.getByRole('heading', { name: '2000 selected of 2000' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '0 selected of 2000' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue to Bulk with 0' })).toBeDisabled();
   await expect(page.locator('.status')).toContainText('Generation limits were reached');
   await expect(page.locator('.candidate')).toHaveCount(100);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="all"]')).toHaveText('All candidates (2000)');
 
   const pagination = page.getByRole('navigation', { name: 'Discover candidate pages' });
   await expect(pagination).toContainText('Page 1 of 20');
@@ -100,6 +102,14 @@ test('lookalike generation discloses its limits and paginates every retained can
   await expect(page.locator('.candidate strong')).toHaveText(['login-acme.aa']);
   await expect(page.getByRole('navigation', { name: 'Discover candidate pages' })).toHaveCount(0);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 1–1 of 1 matching candidate' })).toBeVisible();
+  await page.getByRole('button', { name: 'Select filtered (1)' }).click();
+  await expect(page.getByRole('heading', { name: '1 selected of 2000' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue to Bulk with 1' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  await expect(page.locator('.candidate')).toHaveCount(100);
+  await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filtered (1)' }).click();
+  await expect(page.getByRole('heading', { name: '0 selected of 2000' })).toBeVisible();
 });
 
 test('lookalike presets expose a live upper-bound estimate and clear stale results', async ({ page }) => {
@@ -146,11 +156,14 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(candidate).toContainText('Visual match: scope.invalid');
   const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');
   const referenceScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="reference"]');
-  await expect(unicodeScope).toHaveText(/Internationalized \([1-9]\d*\)/u);
+  await expect(unicodeScope).toHaveText(/Internationalised \([1-9]\d*\)/u);
   await expect(referenceScope).toHaveText(/Source or profile match \([1-9]\d*\)/u);
   expect(Number((await unicodeScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
   expect(Number((await referenceScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
   await expect(page.getByText('Visual matches use a bounded character comparison.')).toContainText('not proof of impersonation');
+  await expect(page.getByRole('combobox', { name: 'Mutation family' }).locator('option[value="unicode_whole_label"]')).toHaveText('Whole-label Unicode confusable (1)');
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most generation paths');
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Reference matches first');
 
   await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('reference');
   await expect(candidate).toBeVisible();
@@ -158,8 +171,12 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(candidate).toBeVisible();
 
   const checkbox = candidate.locator('input[type="checkbox"]');
-  await checkbox.uncheck();
+  await checkbox.check();
+  await expect(page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="selected"]')).toHaveText('Selected only (1)');
   await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('selected');
+  await expect(candidate).toBeVisible();
+  await checkbox.focus();
+  await page.keyboard.press('Space');
   await expect(page.locator('.candidate')).toHaveCount(0);
   await expect(page.getByRole('status').filter({ hasText: 'No candidates match the current filters' })).toBeVisible();
 });
@@ -308,7 +325,7 @@ test('selection is keyed by canonical domain and is keyboard-accessible', async 
   await mockCtSearch(page, structuredResponse);
   await runCtSearch(page);
 
-  await expect(page.getByRole('heading', { name: '2 selected of 2' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '0 selected of 2' })).toBeVisible();
 
   const firstCheckbox = page.locator('.candidate input[type="checkbox"]').first();
   await firstCheckbox.focus();
@@ -350,7 +367,8 @@ test('Continue to Bulk loads canonical domains and CT provenance survives the ha
   await mockCtSearch(page, structuredResponse);
   await runCtSearch(page);
 
-  await page.getByRole('button', { name: 'Continue to Bulk' }).click();
+  await page.getByRole('button', { name: 'Select filtered (2)' }).click();
+  await page.getByRole('button', { name: 'Continue to Bulk with 2' }).click();
   await expect(page).toHaveURL(/\/bulk/);
 
   const textarea = page.locator('#domains');
@@ -368,7 +386,8 @@ test.describe('CT provenance badge in Bulk results', () => {
     );
     await mockCtSearch(page, structuredResponse);
     await runCtSearch(page);
-    await page.getByRole('button', { name: 'Continue to Bulk' }).click();
+    await page.getByRole('button', { name: 'Select filtered (2)' }).click();
+    await page.getByRole('button', { name: 'Continue to Bulk with 2' }).click();
     await expect(page).toHaveURL(/\/bulk/);
 
     await page.getByRole('button', { name: /^Scan 2 domains$/ }).click();

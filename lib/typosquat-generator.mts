@@ -187,7 +187,7 @@ export const GENERATION_PRESETS: Readonly<Record<string, GenerationPreset>> = Ob
   impersonation: Object.freeze({
     id: 'impersonation',
     label: 'Impersonation',
-    description: 'Homoglyphs, account-themed terms, word forms, and TLD changes.',
+    description: 'Lookalike characters, account-themed terms, word forms, and TLD changes.',
     mutationTypes: IMPERSONATION_MUTATIONS,
   }),
   all: Object.freeze({
@@ -209,7 +209,7 @@ export const MUTATION_LABELS = {
   keyboard_insertion: 'Keyboard insertion',
   vowel_swap: 'Vowel swap',
   bitsquatting: 'Bitsquatting',
-  ascii_homoglyph: 'ASCII homoglyph',
+  ascii_homoglyph: 'ASCII lookalike',
   unicode_homoglyph: 'Unicode confusable',
   unicode_whole_label: 'Whole-label Unicode confusable',
   dictionary: 'Impersonation term',

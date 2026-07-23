@@ -39,6 +39,9 @@
     newCount,
     toggleNewOnly,
     selectMatching,
+    selectedVisibleCount,
+    reviewControlsActive,
+    resetReviewControls,
     rows,
     visibleCount,
     currentPage,
@@ -56,7 +59,7 @@
     scopeCounts: { unicode: number; mixed: number; reference: number; selected: number };
     setCandidateScope: (value: string) => void;
     mutationFilter: string;
-    mutationOptions: Array<{ value: string; label: string }>;
+    mutationOptions: Array<{ value: string; label: string; count: number }>;
     setMutationFilter: (value: string) => void;
     candidateSort: string;
     setCandidateSort: (value: string) => void;
@@ -66,6 +69,9 @@
     newCount: number;
     toggleNewOnly: () => void;
     selectMatching: (selected: boolean) => void;
+    selectedVisibleCount: number;
+    reviewControlsActive: boolean;
+    resetReviewControls: () => void;
     rows: CandidateRow[];
     visibleCount: number;
     currentPage: number;
@@ -77,13 +83,13 @@
 </script>
 
 <section class="results card">
-  <header class="section-head"><div><p class="eyebrow">Candidates</p><h2>{selectedCount} selected of {candidateCount}</h2></div><button class="primary" onclick={continueToBulk} disabled={!selectedCount}>Continue to Bulk</button></header>
+  <header class="section-head"><div><p class="eyebrow">Candidates</p><h2>{selectedCount} selected of {candidateCount}</h2></div><button class="primary" onclick={continueToBulk} disabled={!selectedCount}>Continue to Bulk with {selectedCount}</button></header>
   <div class="toolbar results-toolbar">
     <input value={filter} oninput={(event) => setFilter(event.currentTarget.value)} aria-label="Filter candidates" placeholder={structured ? 'Filter by domain or observed hostname' : 'Filter candidates'}>
     <label>Show
       <select value={candidateScope} onchange={(event) => setCandidateScope(event.currentTarget.value)} aria-label="Candidate scope">
-        <option value="all">All candidates</option>
-        <option value="unicode">Internationalized ({scopeCounts.unicode})</option>
+        <option value="all">All candidates ({candidateCount})</option>
+        <option value="unicode">Internationalised ({scopeCounts.unicode})</option>
         <option value="mixed">Mixed writing scripts ({scopeCounts.mixed})</option>
         <option value="reference">Source or profile match ({scopeCounts.reference})</option>
         <option value="selected">Selected only ({scopeCounts.selected})</option>
@@ -91,20 +97,24 @@
     </label>
     <label>Mutation
       <select value={mutationFilter} onchange={(event) => setMutationFilter(event.currentTarget.value)} aria-label="Mutation family">
-        <option value="">All mutation families</option>
-        {#each mutationOptions as option}<option value={option.value}>{option.label}</option>{/each}
+        <option value="">All mutation families ({candidateCount})</option>
+        {#each mutationOptions as option}<option value={option.value}>{option.label} ({option.count})</option>{/each}
       </select>
     </label>
     <label>Sort
       <select value={candidateSort} onchange={(event) => setCandidateSort(event.currentTarget.value)} aria-label="Candidate sort">
         <option value="generated">Generated order</option>
         <option value="domain">Domain A–Z</option>
-        <option value="indicators">Most indicators</option>
+        <option value="generation-paths">Most generation paths</option>
+        {#if scopeCounts.reference}<option value="reference">Reference matches first</option>{/if}
+        {#if scopeCounts.mixed}<option value="mixed">Mixed writing scripts first</option>{/if}
+        {#if structured}<option value="certificate-newest">Newest certificate observation</option>{/if}
       </select>
     </label>
     {#if structured && previousCheckedAt}<button class="btn" class:active={newOnly} aria-pressed={newOnly} onclick={toggleNewOnly}>New only · {newCount}</button>{/if}
-    <button class="btn" onclick={() => selectMatching(true)}>Select matching</button>
-    <button class="btn" onclick={() => selectMatching(false)}>Clear matching</button>
+    <button class="btn" onclick={() => selectMatching(true)} disabled={!visibleCount}>Select filtered ({visibleCount})</button>
+    <button class="btn" onclick={() => selectMatching(false)} disabled={!selectedVisibleCount}>Clear filtered ({selectedVisibleCount})</button>
+    {#if reviewControlsActive}<button class="btn" onclick={resetReviewControls}>Reset view</button>{/if}
   </div>
   <div class="candidate-list">
     {#each rows as candidate, index (candidate.domain)}
@@ -117,7 +127,7 @@
             <small>{candidate.mutationLabel}</small>
             {#if candidate.scripts.length}<span class="script-summary">Scripts: {candidate.scripts.join(', ')}</span>{/if}
             <span class="candidate-badges">
-              {#if candidate.unicodeDomain}<span class="candidate-badge">Internationalized</span>{/if}
+              {#if candidate.unicodeDomain}<span class="candidate-badge">Internationalised</span>{/if}
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
               {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
               {#if candidate.isNew}<span class="ct-new">New since previous search</span>{/if}
@@ -148,6 +158,9 @@
   </div>
   {#if scopeCounts.reference}
     <p class="candidate-note">Visual matches use a bounded character comparison. They are review leads, not proof of impersonation.</p>
+  {/if}
+  {#if !selectedCount}
+    <p class="candidate-note">Select individual candidates or the current filtered set before continuing to Bulk.</p>
   {/if}
   {#if visibleCount}
     <p class="page-summary" role="status" aria-live="polite">Showing {(currentPage - 1) * pageSize + 1}–{(currentPage - 1) * pageSize + rows.length} of {visibleCount} matching candidate{visibleCount === 1 ? '' : 's'}.</p>

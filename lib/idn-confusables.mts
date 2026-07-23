@@ -296,7 +296,7 @@ export function analyzeDomainIdn(rawDomain: unknown, referenceDomains: unknown =
   if (hasIdn) findings.push({
     id: 'internationalized_domain',
     tone: 'info',
-    label: 'Internationalized domain',
+    label: 'Internationalised domain',
     detail: 'The DNS-safe ASCII form contains an xn-- label. Review the Unicode and ASCII forms together.',
   });
   for (const label of mixedScriptLabels) {

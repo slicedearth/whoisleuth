@@ -31,7 +31,7 @@
   type GenerationPresetId = 'common' | 'impersonation' | 'all';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz';
   type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
-  type CandidateSort = 'generated' | 'domain' | 'indicators';
+  type CandidateSort = 'generated' | 'domain' | 'generation-paths' | 'reference' | 'mixed' | 'certificate-newest';
   type CandidateMetadata = {
     hasIdn: boolean;
     unicodeDomain: string;
@@ -91,8 +91,17 @@
   const keyboardLayouts = Object.values(KEYBOARD_LAYOUTS) as Array<{ id: KeyboardLayoutId; label: string }>;
   const maxTldTextLength = 2_048;
 
-  const mutationOptions = $derived([...new Set(candidates.flatMap((candidate) => candidate.mutationTypes))]
-    .sort((left, right) => (mutationLabels[left] || left).localeCompare(mutationLabels[right] || right)));
+  const mutationOptions = $derived.by(() => {
+    const counts = new Map<string, number>();
+    for (const candidate of candidates) {
+      for (const mutationType of candidate.mutationTypes) {
+        counts.set(mutationType, (counts.get(mutationType) || 0) + 1);
+      }
+    }
+    return [...counts]
+      .map(([value, count]) => ({ value, count, label: mutationLabels[value] || value.replaceAll('_', ' ') }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  });
   const candidateScopeCounts = $derived.by(() => {
     let unicode = 0;
     let mixed = 0;
@@ -119,14 +128,36 @@
     if (candidateSort === 'generated') return filtered;
     return [...filtered].sort((left, right) => {
       if (candidateSort === 'domain') return left.domain.localeCompare(right.domain);
-      const indicatorDifference = candidateIndicatorCount(right) - candidateIndicatorCount(left);
-      return indicatorDifference || left.domain.localeCompare(right.domain);
+      if (candidateSort === 'generation-paths') {
+        return right.mutationTypes.length - left.mutationTypes.length || left.domain.localeCompare(right.domain);
+      }
+      if (candidateSort === 'reference') {
+        return Number(Boolean(candidateMetadata.get(right.domain)?.referenceDomains.length))
+          - Number(Boolean(candidateMetadata.get(left.domain)?.referenceDomains.length))
+          || left.domain.localeCompare(right.domain);
+      }
+      if (candidateSort === 'mixed') {
+        return Number(Boolean(candidateMetadata.get(right.domain)?.mixedScript))
+          - Number(Boolean(candidateMetadata.get(left.domain)?.mixedScript))
+          || left.domain.localeCompare(right.domain);
+      }
+      const leftObserved = left.certificateTransparency?.lastObservedAt || '';
+      const rightObserved = right.certificateTransparency?.lastObservedAt || '';
+      return rightObserved.localeCompare(leftObserved) || left.domain.localeCompare(right.domain);
     });
   });
   const pageCount = $derived(Math.max(1, Math.ceil(visible.length / DISCOVER_PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const pagedVisible = $derived(visible.slice((currentPage - 1) * DISCOVER_PAGE_SIZE, currentPage * DISCOVER_PAGE_SIZE));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
+  const selectedVisibleCount = $derived(visible.reduce((count, candidate) => count + Number(selected.has(candidate.domain)), 0));
+  const reviewControlsActive = $derived(
+    Boolean(filter)
+      || candidateScope !== 'all'
+      || Boolean(mutationFilter)
+      || candidateSort !== 'generated'
+      || ctNewOnly,
+  );
 
   onMount(() => {void (async()=>{
     [profile,ctHistory] = await Promise.all([activeProfile(),loadCtHistory()]);
@@ -163,16 +194,6 @@
       });
     }
     return metadata;
-  }
-
-  function candidateIndicatorCount(candidate: Candidate): number {
-    const metadata = candidateMetadata.get(candidate.domain);
-    return candidate.mutationTypes.length
-      + (metadata?.hasIdn ? 1 : 0)
-      + (metadata?.mixedScript ? 2 : 0)
-      + (metadata?.referenceDomains.length ? 3 : 0)
-      + (candidate.certificateTransparency ? 1 : 0)
-      + (ctNewDomains.has(candidate.domain) ? 1 : 0);
   }
 
   function resetCandidateView() {
@@ -269,7 +290,7 @@
   function setResults(next: Candidate[], message: string, context:Candidate[]=next) {
     candidates = next;
     generatedContext = context;
-    selected = new Set(next.map((c) => c.domain));
+    selected = new Set();
     candidateMetadata = buildCandidateMetadata(next);
     status = message;
     error = '';
@@ -426,6 +447,11 @@
     selected = next;
   }
 
+  function resetReviewControls() {
+    resetCandidateView();
+    ctNewOnly = false;
+  }
+
   function setFilter(value: string) {
     filter = value;
     page = 1;
@@ -535,7 +561,7 @@
     scopeCounts={candidateScopeCounts}
     setCandidateScope={(value)=>setCandidateScope(value as CandidateScope)}
     {mutationFilter}
-    mutationOptions={mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_', ' ')}))}
+    {mutationOptions}
     {setMutationFilter}
     {candidateSort}
     setCandidateSort={(value)=>setCandidateSort(value as CandidateSort)}
@@ -545,6 +571,9 @@
     newCount={ctNewDomains.size}
     {toggleNewOnly}
     {selectMatching}
+    {selectedVisibleCount}
+    {reviewControlsActive}
+    {resetReviewControls}
     rows={candidateDisplayRows()}
     visibleCount={visible.length}
     {currentPage}
