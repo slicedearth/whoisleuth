@@ -150,6 +150,8 @@ test('leaving a paused scan retains every settled result and releases paused wor
   await expect(page.getByRole('progressbar', { name: 'Bulk scan progress' })).toHaveAttribute('aria-valuenow', '1');
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/ }).click();
+  await expect(page).toHaveURL(/\/dashboard$/u);
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   releaseDelayed();
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/ }).click();
 
