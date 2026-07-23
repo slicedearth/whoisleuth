@@ -63,14 +63,17 @@ plural, separator, word-order, WWW-style, dictionary, and selected-TLD
 families. Presets narrow the generation families, while **Custom families**
 lets an analyst select the exact families required for a run. Neither choice
 changes the global safety limits. The keyboard selector can use one supported
-layout or the bounded union of all supported layouts.
+layout or the bounded union of all supported layouts, including adjacent
+number-row keys.
 
 The optional custom dictionary accepts pasted terms or one local text file.
 It retains at most 100 unique terms of up to 32 characters inside the existing
 4,096-character input and 2,000-candidate limits. The terms stay in the current
 browser tab, are not uploaded or saved, and are used only when the analyst
 selects Generate candidates. Candidate provenance remains attached when
-several algorithms produce the same domain.
+several algorithms produce the same domain. For an explicitly hyphenated seed,
+the separate token-replacement family can replace its first or last token with
+those analyst-supplied terms without adding the built-in term list.
 
 Discover deliberately does not create dotted subdomain permutations. Registry
 lookups validate the registrable parent, so attaching that authoritative result

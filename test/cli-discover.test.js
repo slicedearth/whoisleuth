@@ -60,7 +60,7 @@ function generationResult(overrides = {}) {
 }
 
 function fakeGenerator(run) {
-  const mutationFamilies = ['character_omission', 'dictionary', 'pluralization'];
+  const mutationFamilies = ['character_omission', 'dictionary', 'dictionary_token_replacement', 'pluralization'];
   return {
     MAX_GENERATION_TLDS: 20,
     MUTATION_FAMILY_IDS: mutationFamilies,
@@ -356,6 +356,34 @@ describe('discover runner', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.deepEqual(received.options.mutationTypes, ['pluralization', 'dictionary']);
     assert.deepEqual(JSON.parse(stdout.value()).mutationFamilies, ['pluralization', 'dictionary']);
+  });
+
+  test('accepts a local dictionary for token-replacement-only generation', async () => {
+    let received;
+    const code = await runCli([
+      'discover', 'alpha-portal.test',
+      '--families', 'dictionary_token_replacement',
+      '--dictionary', 'terms.txt',
+      '--quiet',
+    ], {
+      stdout: capture().stream,
+      stderr: capture().stream,
+      readDiscoveryDictionary: async () => 'account\nsupport\n',
+      loadTyposquatGenerator: async () => fakeGenerator((seed, tlds, options) => {
+        received = { seed, options };
+        return generationResult();
+      }),
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.deepEqual(received, {
+      seed: 'alpha-portal.test',
+      options: {
+        preset: 'custom',
+        keyboardLayout: 'qwerty',
+        dictionaryTerms: 'account\nsupport\n',
+        mutationTypes: ['dictionary_token_replacement'],
+      },
+    });
   });
 
   test('rejects unknown or empty custom families and dictionary-family mismatches', async () => {

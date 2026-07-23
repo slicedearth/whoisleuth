@@ -142,7 +142,7 @@
       Up to {maxDictionaryTerms} unique terms, {maxDictionaryTermLength} characters each, and {maxDictionaryTextLength.toLocaleString()} input characters.
     </span>
   </div>
-  {#if !dictionaryRelevant}<p class="dictionary-note">Choose Impersonation or All families to use custom terms.</p>{/if}
+  {#if !dictionaryRelevant}<p class="dictionary-note">Select a dictionary family, or choose Impersonation or All families, to use custom terms.</p>{/if}
   {#if dictionarySummary.rejectedCount}<p class="dictionary-note">{dictionarySummary.rejectedCount} invalid term{dictionarySummary.rejectedCount === 1 ? '' : 's'} will be ignored.</p>{/if}
   {#if dictionarySummary.truncated}<p class="dictionary-note">The dictionary limit was reached. Narrow the list for complete coverage.</p>{/if}
   {#if dictionaryFileStatus}<p class="dictionary-note" role="status">{dictionaryFileStatus}</p>{/if}

@@ -227,8 +227,9 @@ with `--tlds com,net` when narrower coverage is wanted.
 
 Generation presets are `common`, `impersonation`, and `all` (the default).
 Keyboard-aware mutations support `qwerty` (the default), `azerty`, and
-`qwertz`; `--keyboard all` uses their bounded combined neighbour set. Supply a
-UTF-8 text file with `--dictionary terms.txt` to add up to 100 local terms when
+`qwertz`; `--keyboard all` uses their bounded combined neighbour set, including
+adjacent number-row keys. Supply a UTF-8 text file with
+`--dictionary terms.txt` to add up to 100 local terms when
 using the `impersonation` or `all` preset. Dictionary input is capped at 4,096
 bytes and individual terms at 32 characters. Machine output records accepted
 and rejected term counts but never copies the private terms into its metadata.
@@ -239,9 +240,10 @@ selection. Supported IDs are `character_addition`, `character_omission`,
 `tld_embedding`, `www_prefix`, `hyphenation`, `separator_omission`,
 `word_reordering`, `keyboard_substitution`, `keyboard_insertion`, `vowel_swap`,
 `bitsquatting`, `ascii_homoglyph`, `unicode_homoglyph`,
-`unicode_whole_label`, `dictionary`, `tld_typo`, and `tld_substitution`.
-Machine output records the normalized custom selection. A custom dictionary
-file requires `dictionary` in that selection.
+`unicode_whole_label`, `dictionary`, `dictionary_token_replacement`, `tld_typo`,
+and `tld_substitution`. Machine output records the normalized custom selection.
+A custom dictionary file requires `dictionary` or
+`dictionary_token_replacement` in that selection.
 
 Dotted subdomain permutations are intentionally excluded because the lookup
 pipeline validates a hostname's registrable parent. The CLI does not present

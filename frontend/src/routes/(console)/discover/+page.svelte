@@ -272,7 +272,10 @@
     effectiveMutationFamilies.includes('keyboard_substitution')
       || effectiveMutationFamilies.includes('keyboard_insertion'),
   );
-  const dictionaryRelevant = $derived(effectiveMutationFamilies.includes('dictionary'));
+  const dictionaryRelevant = $derived(
+    effectiveMutationFamilies.includes('dictionary')
+      || effectiveMutationFamilies.includes('dictionary_token_replacement'),
+  );
   const customDictionary = $derived(normalizeCustomDictionaryTerms(customDictionaryText));
 
   function clearGeneratedResults() {

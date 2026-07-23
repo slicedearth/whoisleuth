@@ -37,12 +37,6 @@ export type TyposquatGenerationResult = {
   limits: { tlds: number; nameVariants: number; candidates: number };
 };
 
-const QWERTY_ADJACENT: Readonly<Record<string, string>> = {
-  q: 'wa', w: 'qeas', e: 'wrds', r: 'etdf', t: 'ryfg', y: 'tugh', u: 'yihj', i: 'uojk', o: 'iplk', p: 'ol',
-  a: 'qwsz', s: 'awedxz', d: 'serfcx', f: 'drtgvc', g: 'ftyhbv', h: 'gyujnb', j: 'huikmn', k: 'jiolm', l: 'kop',
-  z: 'asx', x: 'zsdc', c: 'xdfv', v: 'cfgb', b: 'vghn', n: 'bhjm', m: 'njk',
-};
-
 function buildKeyboardAdjacency(rows: KeyboardRow[]): Readonly<Record<string, string>> {
   const positions = new Map<string, KeyboardPosition>();
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
@@ -69,15 +63,23 @@ function buildKeyboardAdjacency(rows: KeyboardRow[]): Readonly<Record<string, st
   return Object.freeze(adjacency);
 }
 
+const QWERTY_ADJACENT = buildKeyboardAdjacency([
+  { keys: '1234567890', offset: 0 },
+  { keys: 'qwertyuiop', offset: 0.5 },
+  { keys: 'asdfghjkl', offset: 1 },
+  { keys: 'zxcvbnm', offset: 1.5 },
+]);
 const AZERTY_ADJACENT = buildKeyboardAdjacency([
-  { keys: 'azertyuiop', offset: 0 },
-  { keys: 'qsdfghjklm', offset: 0.5 },
-  { keys: 'wxcvbn', offset: 1 },
+  { keys: '1234567890', offset: 0 },
+  { keys: 'azertyuiop', offset: 0.5 },
+  { keys: 'qsdfghjklm', offset: 1 },
+  { keys: 'wxcvbn', offset: 1.5 },
 ]);
 const QWERTZ_ADJACENT = buildKeyboardAdjacency([
-  { keys: 'qwertzuiop', offset: 0 },
-  { keys: 'asdfghjkl', offset: 0.5 },
-  { keys: 'yxcvbnm', offset: 1 },
+  { keys: '1234567890', offset: 0 },
+  { keys: 'qwertzuiop', offset: 0.5 },
+  { keys: 'asdfghjkl', offset: 1 },
+  { keys: 'yxcvbnm', offset: 1.5 },
 ]);
 
 function combineKeyboardAdjacency(layouts: ReadonlyArray<Readonly<Record<string, string>>>): Readonly<Record<string, string>> {
@@ -172,6 +174,7 @@ const FAMILY_NEW_VARIANT_LIMITS: Readonly<Record<string, number>> = Object.freez
   unicode_homoglyph: 768,
   unicode_whole_label: 8,
   dictionary: 512,
+  dictionary_token_replacement: 200,
 });
 
 const COMMON_EDIT_MUTATIONS = Object.freeze([
@@ -196,6 +199,7 @@ const IMPERSONATION_MUTATIONS = Object.freeze([
   'unicode_homoglyph',
   'unicode_whole_label',
   'dictionary',
+  'dictionary_token_replacement',
   'hyphenation',
   'word_reordering',
   'tld_typo',
@@ -255,6 +259,7 @@ export const MUTATION_LABELS = {
   unicode_homoglyph: 'Unicode confusable',
   unicode_whole_label: 'Whole-label Unicode confusable',
   dictionary: 'Impersonation term',
+  dictionary_token_replacement: 'Dictionary token replacement',
   tld_typo: 'TLD typo',
   tld_substitution: 'Selected TLD substitution',
 };
@@ -579,6 +584,9 @@ export function estimateTyposquatCandidateCount(rawInput: unknown, fallbackTlds:
     unicode_homoglyph: unicodeHomoglyphCount,
     unicode_whole_label: wholeLabelConfusableVariantsForAscii(name).length,
     dictionary: [...new Set([...IMPERSONATION_TERMS, ...customDictionary.values])].length * 4,
+    dictionary_token_replacement: name.includes('-') && parts.wordTokens.length >= 2
+      ? customDictionary.values.length * 2
+      : 0,
   };
   let rawVariantMaximum = 0;
   let familyLimitPossible = false;
@@ -600,7 +608,8 @@ export function estimateTyposquatCandidateCount(rawInput: unknown, fallbackTlds:
     tldCount: selectedTlds.values.length,
     estimatedMaximum: Math.min(rawCandidateMaximum, MAX_GENERATED_CANDIDATES),
     mayReachLimit: selectedTlds.truncated
-      || (enabledFamilies.has('dictionary') && customDictionary.truncated)
+      || ((enabledFamilies.has('dictionary') || enabledFamilies.has('dictionary_token_replacement'))
+        && customDictionary.truncated)
       || familyLimitPossible
       || rawVariantMaximum > MAX_NAME_VARIANTS
       || rawCandidateMaximum > MAX_GENERATED_CANDIDATES,
@@ -645,7 +654,10 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
   }
 
   const state = generationState(name, enabledFamilies);
-  if (enabledFamilies.has('dictionary') && customDictionary.truncated) state.limitReasons.add('dictionary-terms');
+  if ((enabledFamilies.has('dictionary') || enabledFamilies.has('dictionary_token_replacement'))
+    && customDictionary.truncated) {
+    state.limitReasons.add('dictionary-terms');
+  }
 
   if (enabledFamilies.has('character_addition')) {
     const insertionPoints = [name.length];
@@ -773,6 +785,16 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
       addVariant(state, `${word}-${name}`, 'dictionary');
       addVariant(state, `${name}${word}`, 'dictionary');
       addVariant(state, `${name}-${word}`, 'dictionary');
+    }
+  }
+  if (enabledFamilies.has('dictionary_token_replacement')
+    && name.includes('-')
+    && parts.wordTokens.length >= 2) {
+    const firstTail = parts.wordTokens.slice(1).join('-');
+    const lastHead = parts.wordTokens.slice(0, -1).join('-');
+    for (const word of customDictionary.values) {
+      addVariant(state, `${word}-${firstTail}`, 'dictionary_token_replacement');
+      addVariant(state, `${lastHead}-${word}`, 'dictionary_token_replacement');
     }
   }
 

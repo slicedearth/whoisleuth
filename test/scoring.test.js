@@ -368,6 +368,7 @@ describe('explainRiskScore / computeRiskScore', () => {
 
   test('only allowlisted mutation provenance contributes bounded context', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['dictionary'] }), 28);
+    assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['dictionary_token_replacement'] }), 28);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['bitsquatting'] }), 22);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['tld_embedding'] }), 22);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', mutationTypes: ['tld_substitution'] }), 22);

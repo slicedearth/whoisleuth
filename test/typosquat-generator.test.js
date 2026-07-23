@@ -320,6 +320,55 @@ describe('provenance-aware typosquat generation', () => {
     assert.ok(generator.estimateTyposquatCandidateCount('acme.com', [], options).estimatedMaximum >= result.candidates.length);
   });
 
+  test('replaces only the first or last explicit token with analyst dictionary terms', () => {
+    const dictionaryTerms = ['account', 'support'];
+    const options = {
+      preset: 'custom',
+      mutationTypes: ['dictionary_token_replacement'],
+      dictionaryTerms,
+    };
+    const result = generator.generateTyposquatCandidateSet('alpha-portal.invalid', [], options);
+    assert.deepEqual(result.candidates, [
+      {
+        domain: 'account-portal.invalid',
+        source: 'alpha-portal.invalid',
+        tld: 'invalid',
+        mutationTypes: ['dictionary_token_replacement'],
+      },
+      {
+        domain: 'alpha-account.invalid',
+        source: 'alpha-portal.invalid',
+        tld: 'invalid',
+        mutationTypes: ['dictionary_token_replacement'],
+      },
+      {
+        domain: 'support-portal.invalid',
+        source: 'alpha-portal.invalid',
+        tld: 'invalid',
+        mutationTypes: ['dictionary_token_replacement'],
+      },
+      {
+        domain: 'alpha-support.invalid',
+        source: 'alpha-portal.invalid',
+        tld: 'invalid',
+        mutationTypes: ['dictionary_token_replacement'],
+      },
+    ]);
+    assert.equal(result.candidates.some((candidate) => candidate.domain === 'account-alpha-portal.invalid'), false);
+    assert.equal(result.candidates.some((candidate) => candidate.domain.includes('login')), false);
+    assert.equal(generator.estimateTyposquatCandidateCount('alpha-portal.invalid', [], options).estimatedMaximum, 4);
+  });
+
+  test('token replacement stays neutral when the seed has no explicit token boundary', () => {
+    const options = {
+      preset: 'custom',
+      mutationTypes: ['dictionary_token_replacement'],
+      dictionaryTerms: ['account'],
+    };
+    assert.deepEqual(generator.generateTyposquatCandidateSet('alphaportal.invalid', [], options).candidates, []);
+    assert.equal(generator.estimateTyposquatCandidateCount('alphaportal.invalid', [], options).estimatedMaximum, 0);
+  });
+
   test('bounds and reports excessive analyst dictionary input', () => {
     const terms = Array.from({ length: generator.MAX_CUSTOM_DICTIONARY_TERMS + 5 }, (_, index) => `term${index}`);
     const normalized = generator.normalizeCustomDictionaryTerms(terms);
@@ -431,6 +480,48 @@ describe('provenance-aware typosquat generation', () => {
     for (const layout of Object.values(generator.KEYBOARD_LAYOUTS)) {
       assert.equal(Object.isFrozen(layout), true);
       assert.equal(Object.isFrozen(layout.adjacent), true);
+    }
+  });
+
+  test('keyboard layouts include bounded number-row substitutions and insertions', () => {
+    for (const [keyboardLayout, seed] of [
+      ['qwerty', 'q'],
+      ['azerty', 'a'],
+      ['qwertz', 'q'],
+    ]) {
+      const substitutions = generator.generateTyposquatCandidateSet(`${seed}.invalid`, [], {
+        preset: 'custom',
+        mutationTypes: ['keyboard_substitution'],
+        keyboardLayout,
+      });
+      assert.deepEqual(
+        substitutions.candidates.filter((candidate) => /^[12]\.invalid$/.test(candidate.domain)),
+        [
+          {
+            domain: '1.invalid',
+            source: `${seed}.invalid`,
+            tld: 'invalid',
+            mutationTypes: ['keyboard_substitution'],
+          },
+          {
+            domain: '2.invalid',
+            source: `${seed}.invalid`,
+            tld: 'invalid',
+            mutationTypes: ['keyboard_substitution'],
+          },
+        ],
+      );
+    }
+
+    const insertions = generator.generateTyposquatCandidateSet('wlab.invalid', [], {
+      preset: 'custom',
+      mutationTypes: ['keyboard_insertion'],
+      keyboardLayout: 'qwerty',
+    });
+    for (const domain of ['2wlab.invalid', 'w2lab.invalid', '3wlab.invalid', 'w3lab.invalid']) {
+      assert.deepEqual(insertions.candidates.find((candidate) => candidate.domain === domain)?.mutationTypes, [
+        'keyboard_insertion',
+      ]);
     }
   });
 

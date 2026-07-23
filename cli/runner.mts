@@ -307,8 +307,10 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       }
       let dictionaryText = '';
       if (args.dictionarySource) {
-        if (args.preset === 'custom' && !mutationFamilies.includes('dictionary')) {
-          throw new CliUsageError('--dictionary requires the dictionary mutation family.');
+        if (args.preset === 'custom'
+          && !mutationFamilies.includes('dictionary')
+          && !mutationFamilies.includes('dictionary_token_replacement')) {
+          throw new CliUsageError('--dictionary requires a dictionary mutation family.');
         }
         try {
           dictionaryText = dependencies.readDiscoveryDictionary

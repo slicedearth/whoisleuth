@@ -259,6 +259,30 @@ test('all-layout mode and a local custom dictionary add bounded reviewable candi
   await expectNoHorizontalOverflow(page);
 });
 
+test('custom dictionary can replace explicit first and last domain tokens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /^Custom families\b/u }).click();
+  for (const checkbox of await page.locator('.family-grid input[type="checkbox"]').all()) await checkbox.uncheck();
+  await page.getByRole('checkbox', { name: 'Dictionary token replacement' }).check();
+  await page.getByText(/^Custom dictionary/u).click();
+  await page.getByRole('textbox', { name: 'Dictionary terms' }).fill('account\nsupport');
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('alpha-portal.test');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  for (const domain of [
+    'account-portal.test',
+    'alpha-account.test',
+    'support-portal.test',
+    'alpha-support.test',
+  ]) {
+    await expect(page.locator('.candidate').filter({
+      has: page.locator('strong', { hasText: new RegExp(`^${domain.replace('.', '\\.')}$`) }),
+    })).toContainText('Dictionary token replacement');
+  }
+  await expect(page.locator('.candidate strong', { hasText: /^login-alpha-portal\.test$/ })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('custom family mode generates only the analyst-selected mutation families', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: /^Custom families\b/u }).click();
