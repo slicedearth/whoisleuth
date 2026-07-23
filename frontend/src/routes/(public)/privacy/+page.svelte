@@ -106,7 +106,7 @@
   .policy li+li{margin-top:.35rem}
   @media(max-width:820px){
     .policy-layout{display:block}
-    .policy-index{position:relative;top:auto;display:flex;gap:3px;margin-bottom:12px;overflow-x:auto}
+    .policy-index{position:relative;top:auto;display:flex;gap:3px;margin-bottom:12px;overflow-x:auto;mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent)}
     .policy-index p{flex:0 0 auto;align-self:center;margin:0 7px}
     .policy-index a{flex:0 0 auto;white-space:nowrap}
     .policy h2{scroll-margin-top:18px}

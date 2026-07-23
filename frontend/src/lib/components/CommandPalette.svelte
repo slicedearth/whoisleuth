@@ -21,10 +21,15 @@
   let selectedIndex = $state(0);
   let searchInput = $state<HTMLInputElement>();
   let dialog = $state<HTMLElement>();
+  let resultsList = $state<HTMLElement>();
   const normalizedQuery = $derived(query.trim().toLowerCase());
   const filteredCommands = $derived(commands
     .filter((command) => !normalizedQuery || `${command.label} ${command.detail} ${command.group}`.toLowerCase().includes(normalizedQuery))
     .slice(0, 12));
+  const activeOptionId = $derived(filteredCommands[selectedIndex] ? `command-option-${selectedIndex}` : undefined);
+  const selectedAnnouncement = $derived(filteredCommands[selectedIndex]
+    ? `${filteredCommands[selectedIndex].label}, ${filteredCommands[selectedIndex].group}.`
+    : 'No matching destination.');
 
   onMount(() => {
     void tick().then(() => searchInput?.focus());
@@ -46,6 +51,20 @@
       .filter((element) => element.getClientRects().length > 0);
   }
 
+  function keepSelectedVisible() {
+    if (!activeOptionId) return;
+    resultsList?.querySelector<HTMLElement>(`#${activeOptionId}`)?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function selectIndex(index: number) {
+    selectedIndex = index;
+    void tick().then(keepSelectedVisible);
+  }
+
+  function resetSelection() {
+    selectIndex(0);
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -56,7 +75,7 @@
       event.preventDefault();
       if (!filteredCommands.length) return;
       const delta = event.key === 'ArrowDown' ? 1 : -1;
-      selectedIndex = (selectedIndex + delta + filteredCommands.length) % filteredCommands.length;
+      selectIndex((selectedIndex + delta + filteredCommands.length) % filteredCommands.length);
       return;
     }
     if (event.key === 'Enter' && document.activeElement === searchInput) {
@@ -107,27 +126,33 @@
         id="command-search"
         bind:this={searchInput}
         bind:value={query}
-        oninput={() => selectedIndex = 0}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls="command-results"
+        aria-expanded="true"
+        aria-activedescendant={activeOptionId}
+        oninput={resetSelection}
         autocomplete="off"
         spellcheck="false"
         placeholder="Lookup, Monitor, Guide…"
       >
     </div>
+    <span class="sr-only" role="status" aria-live="polite">{selectedAnnouncement}</span>
     {#if filteredCommands.length}
-      <ul aria-label="Console destinations">
+      <ul id="command-results" role="listbox" aria-label="Console destinations" bind:this={resultsList}>
         {#each filteredCommands as command,index (command.href)}
-          <li class:selected={index === selectedIndex}>
-            <a
-              href={command.href}
-              onmouseenter={() => selectedIndex = index}
-              onclick={(event) => {
-                event.preventDefault();
-                void activate(command);
-              }}
+          <li role="presentation" class:selected={index === selectedIndex}>
+            <button
+              id={`command-option-${index}`}
+              type="button"
+              role="option"
+              aria-selected={index === selectedIndex}
+              onmouseenter={() => selectIndex(index)}
+              onclick={() => void activate(command)}
             >
               <span><strong>{command.label}</strong><small>{command.detail}</small></span>
               <em>{command.group}</em>
-            </a>
+            </button>
           </li>
         {/each}
       </ul>
@@ -150,10 +175,10 @@
   .command-search span{padding-left:10px;color:var(--accent2);font:700 var(--text-sm) var(--mono)}
   input{width:100%;min-width:0;padding:12px 12px 12px 2px;border:0;background:transparent;font:650 var(--text-sm) var(--mono);outline:0}
   ul{display:grid;gap:4px;max-height:360px;margin:0;padding:0 10px 12px;overflow-y:auto;list-style:none}
-  li a{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm)}
-  li.selected a,li a:hover,li a:focus-visible{border-color:var(--border);background:rgb(var(--accent-rgb) / .08)}
-  li.selected a{box-shadow:inset 2px 0 var(--accent2)}
-  a>span{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
+  li button{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--text);text-align:left}
+  li.selected button,li button:hover,li button:focus-visible{border-color:var(--border);background:rgb(var(--accent-rgb) / .08)}
+  li.selected button{box-shadow:inset 2px 0 var(--accent2)}
+  button>span{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
   em{flex:0 0 auto;color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
   .no-results{margin:0;padding:28px;color:var(--muted);text-align:center}
   footer{display:flex;flex-wrap:wrap;gap:12px;padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono)}

@@ -32,8 +32,13 @@ async function returnToGuide(page: import('@playwright/test').Page, step: string
 }
 
 async function markReviewed(page: import('@playwright/test').Page, step: string) {
-  await returnToGuide(page, step);
+  await useGuideReturn(page, step);
   await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await expect.poll(async () => {
+    const action = currentAction(page);
+    if (await action.isVisible()) return !(await action.innerText()).includes(step);
+    return page.locator('.guide-complete').isVisible();
+  }).toBe(true);
 }
 
 async function useGuideReturn(page: import('@playwright/test').Page, step: string) {
@@ -105,8 +110,7 @@ async function runLookupStep(page: import('@playwright/test').Page, label: strin
   await expect(page.locator('#query')).toHaveValue(expectedDomain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
-  await useGuideReturn(page, label);
-  await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await markReviewed(page, label);
 }
 
 async function runBulkStep(
@@ -119,8 +123,7 @@ async function runBulkStep(
   const count = (await page.locator('#domains').inputValue()).split(/\s+/u).filter(Boolean).length;
   await page.getByRole('button', { name: `Scan ${count} domain${count === 1 ? '' : 's'}` }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(count);
-  await useGuideReturn(page, label);
-  await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await markReviewed(page, label);
 }
 
 async function retainCases(page: import('@playwright/test').Page, label: string, domains: string[]) {
@@ -144,8 +147,7 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
     await expect(caseHeader).toBeVisible();
     await expect(caseHeader).toBeFocused();
   }
-  await useGuideReturn(page, label);
-  await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await markReviewed(page, label);
   await expect(page.locator('.guide-complete')).toContainText('All');
 }
 

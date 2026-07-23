@@ -69,6 +69,8 @@ test('privacy policy offers compact section navigation without changing policy c
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/privacy');
   await expect(sectionNavigation).toBeVisible();
+  expect(await sectionNavigation.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await sectionNavigation.evaluate((element) => getComputedStyle(element).maskImage)).toContain('linear-gradient');
   await expectNoHorizontalOverflow(page);
 });
 

@@ -107,6 +107,13 @@ test('completes the public synthetic workflow without investigation requests or 
 test('keeps the public demo usable without mobile overflow', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto('/demo');
+  const stagePositions = await page.locator('.demo-steps button').evaluateAll((buttons) => buttons.slice(0, 3).map((button) => {
+    const rect = button.getBoundingClientRect();
+    return { top: rect.top, left: rect.left };
+  }));
+  expect(Math.abs(stagePositions[0].top - stagePositions[1].top)).toBeLessThanOrEqual(1);
+  expect(stagePositions[1].left).toBeGreaterThan(stagePositions[0].left);
+  expect(stagePositions[2].top).toBeGreaterThan(stagePositions[0].top);
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await page.getByRole('button', { name: 'Load synthetic candidates' }).click();

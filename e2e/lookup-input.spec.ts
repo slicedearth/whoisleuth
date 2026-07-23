@@ -1013,7 +1013,10 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(postureCard.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
   await expect(postureCard.locator(':scope > summary .evidence-status')).toHaveText('success');
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeHidden();
-  await postureCard.locator(':scope > summary').click();
+  const postureSummary = postureCard.locator(':scope > summary');
+  await postureSummary.focus();
+  await postureSummary.press('Enter');
+  await expect(postureCard).toHaveAttribute('open', '');
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Content Security Policy not observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Review', { exact: true }).first()).toBeVisible();

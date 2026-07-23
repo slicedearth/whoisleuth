@@ -390,6 +390,20 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
   background: rgb(var(--bg-rgb) / .94);
   backdrop-filter: blur(6px);
 }
+.local-nav-shell::before, .local-nav-shell::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 1px;
+  bottom: 1px;
+  width: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s;
+}
+.local-nav-shell::before { left: 0; background: linear-gradient(90deg, rgb(var(--bg-rgb) / .98), transparent); }
+.local-nav-shell::after { right: 0; background: linear-gradient(270deg, rgb(var(--bg-rgb) / .98), transparent); }
+.local-nav-shell.show-start-fade::before, .local-nav-shell.show-end-fade::after { opacity: 1; }
 .local-nav { display: flex; max-width: 100%; gap: 4px; margin: 0; padding: 5px; overflow-x: auto; }
 .local-nav-prompt { flex: 0 0 auto; align-self: center; padding: 0 7px; color: var(--accent2); font: 700 var(--text-2xs) var(--mono); text-shadow: 0 0 7px rgb(var(--accent2-rgb) / .3); }
 .local-nav a { position: relative; flex: 0 0 auto; margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .04em; white-space: nowrap; }
@@ -404,6 +418,9 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 @media (max-width: 600px) {
   .local-nav-shell { top: 68px; }
   .result-section { scroll-margin-top: 126px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .local-nav-shell::before, .local-nav-shell::after { transition: none; }
 }
 
 /* ---------- Application shell ---------- */

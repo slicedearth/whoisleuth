@@ -174,14 +174,22 @@ test('the console command palette filters destinations and remains keyboard oper
   await page.goto('/dashboard');
   const trigger = page.getByRole('button', { name: 'Open command palette' });
   await expect(trigger).toBeVisible();
+  await expect(trigger.locator('.shortcut-wide')).toBeVisible();
+  await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
+  await expect(trigger.locator('.shortcut-compact')).toBeHidden();
 
   await page.keyboard.press('Control+K');
   const dialog = page.getByRole('dialog', { name: 'Go to' });
-  const search = dialog.getByRole('textbox', { name: 'Search pages' });
+  const search = dialog.getByRole('combobox', { name: 'Search pages' });
   await expect(dialog).toBeVisible();
   await expect(search).toBeFocused();
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
+  await search.press('ArrowDown');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-1');
+  await expect(dialog.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
   await search.fill('monitor');
-  await expect(dialog.getByRole('link', { name: /Monitor/ })).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('Enter');
   await expect(page).toHaveURL(/\/monitor$/);
 
@@ -193,6 +201,8 @@ test('the console command palette filters destinations and remains keyboard oper
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(trigger).toBeVisible();
+  await expect(trigger.locator('.shortcut-wide')).toBeHidden();
+  await expect(trigger.locator('.shortcut-compact')).toBeVisible();
   await trigger.click();
   await expect(dialog).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -342,9 +352,26 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   }))).toBe(true);
 
   // The local navigation stays a single scrollable row on narrow screens
-  // rather than stacking into a tall block.
+  // rather than stacking into a tall block. It also exposes overflow and
+  // keeps the active destination inside the visible strip.
   const navBox = await boundingBox(localNav);
   expect(navBox.height).toBeLessThanOrEqual(64);
+  expect(await localNav.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await localNav.evaluate((element) => {
+    element.scrollLeft = 0;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await expect(page.locator('.local-nav-shell')).toHaveClass(/show-end-fade/);
+  await page.locator('#raw-data').evaluate((element) => element.scrollIntoView({ block: 'start' }));
+  const rawDataLink = localNav.getByRole('link', { name: 'Raw data' });
+  await expect(rawDataLink).toHaveAttribute('aria-current', 'location');
+  await expect.poll(async () => rawDataLink.evaluate((link) => {
+    const navigation = link.closest('nav');
+    if (!navigation) return false;
+    const navigationRect = navigation.getBoundingClientRect();
+    const linkRect = link.getBoundingClientRect();
+    return linkRect.left >= navigationRect.left - 0.5 && linkRect.right <= navigationRect.right + 0.5;
+  })).toBe(true);
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
