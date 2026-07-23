@@ -792,7 +792,7 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const card = page.locator('.idn-card');
   await expect(card.getByRole('heading', { name: 'IDN and confusable review' })).toBeVisible();
-  await expect(card.getByText('tr39-17.0-curated-ascii-v2', { exact: true })).toBeVisible();
+  await expect(card.getByText('tr39-17.0.0-bounded-ascii-v3', { exact: true })).toBeVisible();
   await expect(card.getByText('раypal.com', { exact: true })).toBeVisible();
   await expect(card.getByText('xn--ypal-43d9g.com', { exact: true })).toBeVisible();
   await expect(card.getByText('Cyrillic, Latin', { exact: true })).toBeVisible();

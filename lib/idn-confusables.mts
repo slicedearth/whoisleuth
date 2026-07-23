@@ -1,12 +1,19 @@
 // Shared internationalized-domain analysis. This module performs no
 // network requests and deliberately produces explainable similarity evidence,
-// not a malicious/benign verdict. The small mapping is a versioned, curated
-// subset of the character relationships described by Unicode Technical
-// Standard #39 (Unicode Security Mechanisms); it focuses on characters that
-// visually collapse to common ASCII domain-label characters.
+// not a malicious/benign verdict. The small generated mapping is a versioned,
+// bounded projection of Unicode Technical Standard #39 data plus the existing
+// reviewed compatibility set. It focuses on characters that visually collapse
+// to common ASCII domain-label characters.
+
+import {
+  GENERATED_CONFUSABLE_GROUPS,
+  GENERATED_CONFUSABLE_MAPPING_VERSION,
+  GENERATED_GENERATION_CONFUSABLE_GROUPS,
+} from './generated/unicode-confusables-17.mts';
+import { MAX_GENERATION_CONFUSABLES_PER_ASCII } from './idn-confusable-policy.mts';
 
 export const IDN_ANALYSIS_VERSION = 1;
-export const CONFUSABLE_MAPPING_VERSION = 'tr39-17.0-curated-ascii-v2';
+export const CONFUSABLE_MAPPING_VERSION = GENERATED_CONFUSABLE_MAPPING_VERSION;
 
 const MAX_DOMAIN_LENGTH = 253;
 const MAX_LABELS = 20;
@@ -14,83 +21,13 @@ const MAX_UNICODE_LABEL_CODEPOINTS = 128;
 const MAX_REFERENCE_DOMAINS = 50;
 const MAX_REFERENCE_MATCHES = 20;
 const MAX_FINDINGS = 20;
-const MAX_GENERATION_CONFUSABLES = 8;
 
 type ScriptLabel = { label: string; scripts: string[]; mixed: boolean };
 type ReferenceMatch = { asciiDomain: string; unicodeDomain: string; skeleton: string };
 type IdnFinding = { id: string; tone: string; label: string; detail: string };
 
-// NFKD handles full-width and mathematical presentation forms before this
-// table is consulted. Version 2 broadens the original visual set with a small
-// reviewed subset of single-code-point mappings from Unicode 17 UTS #39 data.
-// Candidate-generation additions must produce a distinct ACE label through
-// the platform IDNA conversion, and each ASCII source remains capped below.
-const CONFUSABLE_GROUPS: Readonly<Record<string, string>> = Object.freeze({
-  a: 'аαɑ',
-  b: 'ьƄ',
-  c: 'сϲⅽᴄⲥ𐐽',
-  d: 'ԁⅾꓒ',
-  e: 'еεҽꬲ',
-  f: 'ϝꞙƒ',
-  g: 'ɡ',
-  h: 'һհ',
-  i: 'іιıɪɩⲓꙇ',
-  j: 'јϳ',
-  k: 'κк',
-  l: 'ӏⅼǀꓲ',
-  m: 'мⅿ',
-  n: 'ոռ',
-  o: 'оοօᴏⲟ',
-  p: 'рρϱⲣ',
-  q: 'ԛգզ',
-  r: 'гꭇ',
-  s: 'ѕꜱƽ',
-  t: 'тτ',
-  u: 'υսᴜꭎ',
-  v: 'ѵνᴠ',
-  w: 'ԝաᴡш',
-  x: 'хχ',
-  y: 'уүʏγⲩ',
-  z: 'ᴢ',
-});
-
-// Generation is intentionally narrower than skeleton analysis. Compatibility
-// forms that native IDNA processing folds back to plain ASCII remain useful
-// for comparison but are omitted here because they cannot produce a distinct
-// registrable label. Tests verify every checked-in character produces an ACE
-// label whose visual skeleton returns to the source, and the per-source cap
-// limits any future additions.
-const GENERATION_CONFUSABLE_GROUPS: Readonly<Record<string, string>> = Object.freeze({
-  a: 'аαɑ',
-  b: 'ь',
-  c: 'сᴄⲥ𐐽',
-  d: 'ԁꓒ',
-  e: 'еεҽꬲ',
-  f: 'ϝꞙƒ',
-  g: 'ɡ',
-  h: 'һհ',
-  i: 'іιıɪɩⲓꙇ',
-  j: 'јϳ',
-  k: 'κк',
-  l: 'ӏǀꓲ',
-  m: 'м',
-  n: 'ոռ',
-  o: 'оοօᴏⲟ',
-  p: 'рρⲣ',
-  q: 'ԛգզ',
-  r: 'гꭇ',
-  s: 'ѕꜱƽ',
-  t: 'тτ',
-  u: 'υսᴜꭎ',
-  v: 'ѵνᴠ',
-  w: 'ԝաᴡш',
-  x: 'хχ',
-  y: 'уүʏγⲩ',
-  z: 'ᴢ',
-});
-
 const CONFUSABLE_TO_ASCII = new Map<string, string>();
-for (const [ascii, values] of Object.entries(CONFUSABLE_GROUPS)) {
+for (const [ascii, values] of Object.entries(GENERATED_CONFUSABLE_GROUPS)) {
   for (const value of values) CONFUSABLE_TO_ASCII.set(value, ascii);
 }
 
@@ -263,7 +200,8 @@ export function unicodeSkeleton(raw: unknown): string | null {
 
 export function confusableCharactersForAscii(character: unknown): string[] {
   const source = String(character || '').toLowerCase();
-  return [...(GENERATION_CONFUSABLE_GROUPS[source] || '')].slice(0, MAX_GENERATION_CONFUSABLES);
+  return [...(GENERATED_GENERATION_CONFUSABLE_GROUPS[source] || '')]
+    .slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII);
 }
 
 function analyzeLabels(unicodeDomain: string): { labels: ScriptLabel[]; scripts: string[] } {
@@ -340,7 +278,7 @@ export function analyzeDomainIdn(rawDomain: unknown, referenceDomains: unknown =
     findings,
     truncated: Array.isArray(referenceDomains) && referenceDomains.length > MAX_REFERENCE_DOMAINS,
     limitations: [
-      'Confusable analysis uses a bounded curated mapping and cannot identify every visual similarity.',
+      'Confusable analysis uses a bounded generated mapping and cannot identify every visual similarity.',
       'Script mixing and skeleton matches are contextual indicators, not maliciousness verdicts.',
     ],
   };

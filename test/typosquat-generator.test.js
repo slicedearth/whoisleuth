@@ -102,6 +102,18 @@ describe('provenance-aware typosquat generation', () => {
     });
   });
 
+  test('generates bounded Unicode-projected additions with unchanged provenance', () => {
+    const expected = domainToASCII('ցateway.com');
+    const result = generator.generateTyposquatCandidateSet('gateway.com', [], { preset: 'impersonation' });
+    assert.ok(expected.startsWith('xn--'));
+    assert.deepEqual(result.candidates.find((candidate) => candidate.domain === expected), {
+      domain: expected,
+      source: 'gateway.com',
+      tld: 'com',
+      mutationTypes: ['unicode_homoglyph'],
+    });
+  });
+
   test('caps unique candidates and reports the limiting boundary', () => {
     const tlds = Array.from({ length: 20 }, (_, index) =>
       `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,

@@ -63,6 +63,14 @@ separator, word-order, dictionary, and selected-TLD families. Presets narrow
 the generation families without changing the global safety limits. Candidate
 provenance remains attached when several algorithms produce the same domain.
 
+Unicode-confusable generation and Lookup skeleton comparison share a
+versioned, checked-in projection of Unicode UTS #39 data. The projection is
+generated offline from a pinned source file, limited to reviewed domain-label
+scripts, and capped per ASCII letter. It does not download Unicode data, send
+the seed anywhere, or load the complete upstream table in the browser. A
+skeleton match is visual-similarity evidence, not a claim about ownership,
+intent, activity, or maliciousness.
+
 Certificate Transparency search is a separate hosted action. It groups
 observed hostnames by canonical registrable domain and retains bounded first
 and last observation times plus certificate counts. These timestamps describe
