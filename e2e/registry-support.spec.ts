@@ -109,8 +109,10 @@ test('the local inspector explains explicit and generic suffix support without a
   await page.goto('/registry-support');
 
   const input = page.getByRole('searchbox', { name: 'Domain or suffix', exact: true });
+  const inspectButton = page.getByRole('button', { name: 'Inspect support' });
+  await expect(inspectButton).toBeEnabled();
   await input.fill('.com');
-  await page.getByRole('button', { name: 'Inspect support' }).click();
+  await inspectButton.click();
   const result = page.locator('.inspection-card');
   await expect(result).toContainText('Generic fallback');
   await expect(result).toContainText('.com');
@@ -118,18 +120,18 @@ test('the local inspector explains explicit and generic suffix support without a
   await expect(result).toContainText('IANA bootstrap discovery');
 
   await input.fill('.mil');
-  await page.getByRole('button', { name: 'Inspect support' }).click();
+  await inspectButton.click();
   await expect(result).toContainText('Explicit suffix profile');
   await expect(result).toContainText('Sponsored');
   await expect(result).toContainText('No service published by IANA');
 
   await input.fill('portal.example.uk');
-  await page.getByRole('button', { name: 'Inspect support' }).click();
+  await inspectButton.click();
   await expect(result).toContainText('Explicit suffix profile');
   await expect(result).toContainText('.uk');
 
   await input.fill('https://example.invalid/path');
-  await page.getByRole('button', { name: 'Inspect support' }).click();
+  await inspectButton.click();
   await expect(page.getByRole('heading', { name: 'Unsupported input format' })).toBeVisible();
   await page.getByRole('button', { name: 'Clear' }).click();
   await expect(page.locator('.inspection-output')).toHaveCount(0);
