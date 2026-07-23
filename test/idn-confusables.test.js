@@ -181,4 +181,46 @@ describe('shared candidate-generation mapping', () => {
     assert.ok(variants.length <= 6);
     assert.equal(Object.isFrozen(variants[0]), true);
   });
+
+  test('builds deterministic two-character candidates within one reviewed script', () => {
+    const result = idn.advancedConfusableVariantsForAscii('scope');
+    assert.equal(result.eligibleVariantCount, 59);
+    assert.equal(result.variants.length, 59);
+    assert.equal(result.omittedByPolicy, 225);
+    assert.equal(result.omittedByBudget, 0);
+    assert.equal(Object.isFrozen(result), true);
+    assert.equal(Object.isFrozen(result.variants), true);
+    assert.ok(result.variants.some((variant) => variant.visualClass === 'reviewed'));
+    assert.ok(result.variants.some((variant) => variant.visualClass === 'projected'));
+    for (const variant of result.variants) {
+      assert.equal([...variant.unicodeLabel].filter((character, index) => character !== 'scope'[index]).length, 2);
+      assert.equal(idn.unicodeSkeleton(variant.unicodeLabel), 'scope');
+      assert.match(variant.script, /^(Armenian|Coptic|Cyrillic|Deseret|Greek|Latin|Lisu)$/);
+    }
+    assert.deepEqual(
+      idn.advancedConfusableVariantsForAscii('scope'),
+      result,
+    );
+  });
+
+  test('caps advanced output independently and reports policy and budget omissions', () => {
+    const result = idn.advancedConfusableVariantsForAscii('oooooooooooo');
+    assert.equal(result.eligibleVariantCount, 1056);
+    assert.equal(result.variants.length, idn.MAX_ADVANCED_CONFUSABLE_VARIANTS);
+    assert.equal(result.omittedByPolicy, 3168);
+    assert.equal(result.omittedByBudget, 800);
+    assert.deepEqual(idn.estimateAdvancedConfusableVariants('oooooooooooo'), {
+      eligibleVariantCount: 1056,
+      omittedByPolicy: 3168,
+      omittedByBudget: 800,
+    });
+    for (const input of ['', 'a', '-scope', 'bad_label', null]) {
+      assert.deepEqual(idn.advancedConfusableVariantsForAscii(input), {
+        variants: [],
+        eligibleVariantCount: 0,
+        omittedByPolicy: 0,
+        omittedByBudget: 0,
+      }, String(input));
+    }
+  });
 });

@@ -240,10 +240,10 @@ selection. Supported IDs are `character_addition`, `character_omission`,
 `tld_embedding`, `www_prefix`, `hyphenation`, `separator_omission`,
 `word_reordering`, `keyboard_substitution`, `keyboard_insertion`, `vowel_swap`,
 `bitsquatting`, `ascii_homoglyph`, `unicode_homoglyph`,
-`unicode_whole_label`, `dictionary`, `dictionary_token_replacement`, `tld_typo`,
-and `tld_substitution`. Machine output records the normalized custom selection.
-A custom dictionary file requires `dictionary` or
-`dictionary_token_replacement` in that selection.
+`unicode_whole_label`, `unicode_homoglyph_depth_2`, `dictionary`,
+`dictionary_token_replacement`, `tld_typo`, and `tld_substitution`. Machine
+output records the normalized custom selection. A custom dictionary file
+requires `dictionary` or `dictionary_token_replacement` in that selection.
 
 Dotted subdomain permutations are intentionally excluded because the lookup
 pipeline validates a hostname's registrable parent. The CLI does not present
@@ -258,6 +258,13 @@ terminal output. The Impersonation and All presets can add up to six
 deterministic whole-label Unicode candidates when every letter has a reviewed
 same-script replacement. The command generates candidates only. It does not
 claim that a domain is registered, active, or malicious.
+
+`unicode_homoglyph_depth_2` is an explicit `--families` option and is never
+enabled by a preset. It replaces exactly two ASCII letters with characters
+from the same reviewed script, ranks curated mappings first, and returns at
+most 256 candidates. JSON and terminal output report generated candidates,
+cross-script or invalid combinations omitted by policy, and lower-ranked
+label variants omitted by the family or overall generation budget.
 
 ## Domain posture audit
 

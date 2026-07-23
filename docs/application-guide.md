@@ -95,6 +95,14 @@ This generation is capped at one candidate per reviewed non-Latin script and
 six candidates overall. It is not a formal Unicode whole-script verdict and
 does not add a new Risk contribution.
 
+Custom selection exposes a separate advanced family that replaces exactly two
+ASCII letters with confusable characters from the same reviewed script. It is
+excluded from every preset and from the initial Custom selection, ranks curated
+mappings before projected additions, and retains at most 256 candidates.
+Discover reports cross-script or invalid combinations excluded by policy and
+lower-ranked label variants omitted by that independent family or overall
+generation budget.
+
 Discover shows the DNS-safe ASCII domain as the selectable value and adds the
 readable Unicode form, observed scripts, and contextual mixed-script or
 source/profile visual-match badges. A matching candidate names up to three

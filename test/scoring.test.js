@@ -190,6 +190,13 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.deepEqual(wholeLabel, existing);
   });
 
+  test('advanced Unicode provenance uses the existing high-context contribution', () => {
+    assert.equal(scoring.computeRiskScore({
+      availability: 'registered',
+      mutationTypes: ['unicode_homoglyph_depth_2'],
+    }), 28);
+  });
+
   test('SPF+DMARC together score higher than either alone', () => {
     assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: true }), 13);
     assert.equal(scoring.computeRiskScore({ availability: 'registered', hasSpf: true, hasDmarc: false }), 11);

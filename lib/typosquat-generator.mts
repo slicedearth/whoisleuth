@@ -3,9 +3,14 @@
 // that only need the historical string list can use the compatibility wrapper.
 
 import {
+  advancedConfusableVariantsForAscii,
   confusableCharactersForAscii,
+  estimateAdvancedConfusableVariants,
+  MAX_ADVANCED_CONFUSABLE_VARIANTS,
   wholeLabelConfusableVariantsForAscii,
 } from './idn-confusables.mts';
+
+export { MAX_ADVANCED_CONFUSABLE_VARIANTS };
 
 type KeyboardRow = { keys: string; offset: number };
 type KeyboardPosition = { rowIndex: number; index: number; x: number };
@@ -34,6 +39,11 @@ export type TyposquatGenerationResult = {
   truncated: boolean;
   limitReasons: string[];
   rejectedVariantCount: number;
+  advancedConfusable?: {
+    generated: number;
+    omittedByPolicy: number;
+    omittedByBudget: number;
+  };
   limits: { tlds: number; nameVariants: number; candidates: number };
 };
 
@@ -173,9 +183,13 @@ const FAMILY_NEW_VARIANT_LIMITS: Readonly<Record<string, number>> = Object.freez
   ascii_homoglyph: 128,
   unicode_homoglyph: 768,
   unicode_whole_label: 8,
+  unicode_homoglyph_depth_2: MAX_ADVANCED_CONFUSABLE_VARIANTS,
   dictionary: 512,
   dictionary_token_replacement: 200,
 });
+const ADVANCED_ONLY_MUTATIONS: readonly string[] = Object.freeze([
+  'unicode_homoglyph_depth_2',
+]);
 
 const COMMON_EDIT_MUTATIONS = Object.freeze([
   'character_addition',
@@ -206,11 +220,17 @@ const IMPERSONATION_MUTATIONS = Object.freeze([
   'tld_substitution',
 ]);
 const ALL_MUTATIONS = Object.freeze([
+  ...Object.keys(FAMILY_NEW_VARIANT_LIMITS)
+    .filter((mutationType) => !ADVANCED_ONLY_MUTATIONS.includes(mutationType)),
+  'tld_typo',
+  'tld_substitution',
+]);
+export const DEFAULT_CUSTOM_MUTATION_FAMILY_IDS = ALL_MUTATIONS;
+export const MUTATION_FAMILY_IDS = Object.freeze([
   ...Object.keys(FAMILY_NEW_VARIANT_LIMITS),
   'tld_typo',
   'tld_substitution',
 ]);
-export const MUTATION_FAMILY_IDS = ALL_MUTATIONS;
 
 export const DEFAULT_GENERATION_PRESET = 'all';
 export const GENERATION_PRESETS: Readonly<Record<string, GenerationPreset>> = Object.freeze({
@@ -229,7 +249,7 @@ export const GENERATION_PRESETS: Readonly<Record<string, GenerationPreset>> = Ob
   all: Object.freeze({
     id: 'all',
     label: 'All families',
-    description: 'Every bounded mutation family, including keyboard insertions.',
+    description: 'Every standard bounded family, including keyboard insertions.',
     mutationTypes: ALL_MUTATIONS,
   }),
   custom: Object.freeze({
@@ -258,6 +278,7 @@ export const MUTATION_LABELS = {
   ascii_homoglyph: 'ASCII lookalike',
   unicode_homoglyph: 'Unicode confusable',
   unicode_whole_label: 'Whole-label Unicode confusable',
+  unicode_homoglyph_depth_2: 'Advanced two-character Unicode confusable',
   dictionary: 'Impersonation term',
   dictionary_token_replacement: 'Dictionary token replacement',
   tld_typo: 'TLD typo',
@@ -583,6 +604,7 @@ export function estimateTyposquatCandidateCount(rawInput: unknown, fallbackTlds:
     ascii_homoglyph: asciiHomoglyphCount,
     unicode_homoglyph: unicodeHomoglyphCount,
     unicode_whole_label: wholeLabelConfusableVariantsForAscii(name).length,
+    unicode_homoglyph_depth_2: estimateAdvancedConfusableVariants(name).eligibleVariantCount,
     dictionary: [...new Set([...IMPERSONATION_TERMS, ...customDictionary.values])].length * 4,
     dictionary_token_replacement: name.includes('-') && parts.wordTokens.length >= 2
       ? customDictionary.values.length * 2
@@ -654,6 +676,7 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
   }
 
   const state = generationState(name, enabledFamilies);
+  let advancedConfusable: TyposquatGenerationResult['advancedConfusable'];
   if ((enabledFamilies.has('dictionary') || enabledFamilies.has('dictionary_token_replacement'))
     && customDictionary.truncated) {
     state.limitReasons.add('dictionary-terms');
@@ -777,6 +800,33 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
       }
     }
   }
+  if (enabledFamilies.has('unicode_homoglyph_depth_2')) {
+    const advanced = advancedConfusableVariantsForAscii(name);
+    const rejectedBefore = state.rejectedVariantCount;
+    let rejectedByEncoding = 0;
+    for (const variant of advanced.variants) {
+      const ascii = toAsciiLabel(variant.unicodeLabel);
+      if (!ascii) {
+        rejectedByEncoding += 1;
+        continue;
+      }
+      addVariant(state, ascii, 'unicode_homoglyph_depth_2');
+    }
+    const generated = [...state.variants.values()]
+      .filter((mutationTypes) => mutationTypes.has('unicode_homoglyph_depth_2'))
+      .length;
+    const rejectedByValidation = state.rejectedVariantCount - rejectedBefore;
+    const omittedByBudget = advanced.omittedByBudget
+      + Math.max(0, advanced.variants.length - rejectedByEncoding - rejectedByValidation - generated);
+    advancedConfusable = {
+      generated,
+      omittedByPolicy: advanced.omittedByPolicy + rejectedByEncoding + rejectedByValidation,
+      omittedByBudget,
+    };
+    if (advanced.omittedByBudget > 0) {
+      state.limitReasons.add('family:unicode_homoglyph_depth_2');
+    }
+  }
   if (enabledFamilies.has('dictionary')) {
     // Analyst-supplied terms are deliberate inputs, so they precede the
     // built-in vocabulary when the per-family or global cap applies.
@@ -851,6 +901,7 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
     truncated: state.limitReasons.size > 0,
     limitReasons: [...state.limitReasons],
     rejectedVariantCount: state.rejectedVariantCount,
+    ...(advancedConfusable ? { advancedConfusable } : {}),
     limits: { tlds: MAX_GENERATION_TLDS, nameVariants: MAX_NAME_VARIANTS, candidates: MAX_GENERATED_CANDIDATES },
   };
 }

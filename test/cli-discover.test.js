@@ -60,7 +60,13 @@ function generationResult(overrides = {}) {
 }
 
 function fakeGenerator(run) {
-  const mutationFamilies = ['character_omission', 'dictionary', 'dictionary_token_replacement', 'pluralization'];
+  const mutationFamilies = [
+    'character_omission',
+    'dictionary',
+    'dictionary_token_replacement',
+    'pluralization',
+    'unicode_homoglyph_depth_2',
+  ];
   return {
     MAX_GENERATION_TLDS: 20,
     MUTATION_FAMILY_IDS: mutationFamilies,
@@ -255,6 +261,16 @@ describe('discover output', () => {
     assert.match(output, /xn--e1argc3h\.invalid \[Unicode: ѕсоре\.invalid\]/u);
     assert.match(output, /Unicode confusable, Whole-label Unicode confusable/u);
   });
+
+  test('terminal and machine output retain advanced-family diagnostics', () => {
+    const result = generationResult({
+      advancedConfusable: { generated: 59, omittedByPolicy: 225, omittedByBudget: 0 },
+    });
+    const document = buildCliDiscoverDocument(metadata.seed, result, metadata);
+    const output = formatTerminalDiscover(document);
+    assert.match(output, /Advanced IDN   59 generated, 225 policy-omitted, 0 budget-omitted/u);
+    assert.deepEqual(document.advancedConfusable, result.advancedConfusable);
+  });
 });
 
 describe('discover runner', () => {
@@ -356,6 +372,26 @@ describe('discover runner', () => {
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.deepEqual(received.options.mutationTypes, ['pluralization', 'dictionary']);
     assert.deepEqual(JSON.parse(stdout.value()).mutationFamilies, ['pluralization', 'dictionary']);
+  });
+
+  test('accepts the explicit advanced Unicode family without enabling other families', async () => {
+    const stdout = capture();
+    let received;
+    const code = await runCli([
+      'discover', 'scope.invalid', '--families', 'unicode_homoglyph_depth_2', '--json',
+    ], {
+      stdout: stdout.stream,
+      stderr: capture().stream,
+      loadTyposquatGenerator: async () => fakeGenerator((seed, tlds, options) => {
+        received = { seed, tlds, options };
+        return generationResult({
+          advancedConfusable: { generated: 59, omittedByPolicy: 225, omittedByBudget: 0 },
+        });
+      }),
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.deepEqual(received.options.mutationTypes, ['unicode_homoglyph_depth_2']);
+    assert.deepEqual(JSON.parse(stdout.value()).mutationFamilies, ['unicode_homoglyph_depth_2']);
   });
 
   test('accepts a local dictionary for token-replacement-only generation', async () => {

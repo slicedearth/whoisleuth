@@ -172,6 +172,9 @@ function formatTerminalCtSearch(document: TerminalRecord): string {
 function formatTerminalDiscover(document: TerminalRecord, mutationLabels: MutationLabels = {}): string {
   const candidates = Array.isArray(document.candidates) ? document.candidates : [];
   const visible = candidates.slice(0, MAX_DISCOVER_TERMINAL_CANDIDATES);
+  const advanced = document.advancedConfusable && typeof document.advancedConfusable === 'object'
+    ? document.advancedConfusable as TerminalRecord
+    : null;
   const lines = [
     `Seed           ${safeTerminalValue(document.seed)}`,
     `Preset         ${safeTerminalValue(document.preset)}`,
@@ -181,8 +184,11 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
     `Dictionary     ${safeTerminalValue(document.dictionaryTermCount, '0')} accepted custom terms${Number(document.rejectedDictionaryTermCount) > 0 ? `, ${safeTerminalValue(document.rejectedDictionaryTermCount)} rejected` : ''}`,
     `Candidates     ${safeTerminalValue(candidates.length, '0')}`,
     `Truncated      ${document.truncated ? 'Yes' : 'No'}`,
-    '',
   ];
+  if (advanced) {
+    lines.push(`Advanced IDN   ${safeTerminalValue(advanced.generated, '0')} generated, ${safeTerminalValue(advanced.omittedByPolicy, '0')} policy-omitted, ${safeTerminalValue(advanced.omittedByBudget, '0')} budget-omitted`);
+  }
+  lines.push('');
   for (const candidate of visible) {
     const labels = (Array.isArray(candidate.mutationTypes) ? candidate.mutationTypes : [])
       .map((value: string) => safeTerminalValue(mutationLabels[value] || value));

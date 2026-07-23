@@ -126,6 +126,40 @@ describe('provenance-aware typosquat generation', () => {
     assert.ok(generator.estimateTyposquatCandidateCount('scope.invalid', [], { preset: 'impersonation' }).estimatedMaximum >= result.candidates.length);
   });
 
+  test('generates the advanced two-character family only when explicitly selected', () => {
+    const options = {
+      preset: 'custom',
+      mutationTypes: ['unicode_homoglyph_depth_2'],
+    };
+    const result = generator.generateTyposquatCandidateSet('scope.invalid', [], options);
+    assert.equal(result.candidates.length, 59);
+    assert.ok(result.candidates.every((candidate) =>
+      candidate.mutationTypes.length === 1
+      && candidate.mutationTypes[0] === 'unicode_homoglyph_depth_2'));
+    assert.deepEqual(result.advancedConfusable, {
+      generated: 59,
+      omittedByPolicy: 225,
+      omittedByBudget: 0,
+    });
+    assert.equal(result.truncated, false);
+    assert.ok(generator.estimateTyposquatCandidateCount('scope.invalid', [], options).estimatedMaximum >= result.candidates.length);
+  });
+
+  test('caps advanced two-character variants and exposes the exact omissions', () => {
+    const result = generator.generateTyposquatCandidateSet('oooooooooooo.invalid', [], {
+      preset: 'custom',
+      mutationTypes: ['unicode_homoglyph_depth_2'],
+    });
+    assert.equal(result.candidates.length, generator.MAX_ADVANCED_CONFUSABLE_VARIANTS);
+    assert.deepEqual(result.advancedConfusable, {
+      generated: generator.MAX_ADVANCED_CONFUSABLE_VARIANTS,
+      omittedByPolicy: 3168,
+      omittedByBudget: 800,
+    });
+    assert.equal(result.truncated, true);
+    assert.ok(result.limitReasons.includes('family:unicode_homoglyph_depth_2'));
+  });
+
   test('caps unique candidates and reports the limiting boundary', () => {
     const tlds = Array.from({ length: 20 }, (_, index) =>
       `${String.fromCharCode(97 + Math.floor(index / 26))}${String.fromCharCode(97 + (index % 26))}`,
@@ -395,7 +429,7 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(oversized.rejectedCount, 1);
   });
 
-  test('keeps all mutation families as the explicit and implicit default', () => {
+  test('keeps every standard mutation family as the explicit and implicit default', () => {
     const implicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net']);
     const explicit = generator.generateTyposquatCandidateSet('acme.com', ['com', 'net'], {
       preset: 'all',
@@ -404,6 +438,11 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(generator.DEFAULT_GENERATION_PRESET, 'all');
     assert.equal(generator.DEFAULT_KEYBOARD_LAYOUT, 'qwerty');
     assert.deepEqual(explicit, implicit);
+    assert.ok(generator.MUTATION_FAMILY_IDS.includes('unicode_homoglyph_depth_2'));
+    assert.equal(generator.DEFAULT_CUSTOM_MUTATION_FAMILY_IDS.includes('unicode_homoglyph_depth_2'), false);
+    assert.equal(generator.GENERATION_PRESETS.all.mutationTypes.includes('unicode_homoglyph_depth_2'), false);
+    assert.equal(implicit.candidates.some((candidate) =>
+      candidate.mutationTypes.includes('unicode_homoglyph_depth_2')), false);
   });
 
   test('custom preset uses only normalized analyst-selected families', () => {
@@ -442,6 +481,7 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(mutationTypes.has('ascii_homoglyph'), false);
     assert.equal(mutationTypes.has('unicode_homoglyph'), false);
     assert.equal(mutationTypes.has('unicode_whole_label'), false);
+    assert.equal(mutationTypes.has('unicode_homoglyph_depth_2'), false);
     assert.equal(mutationTypes.has('keyboard_insertion'), false);
     assert.equal(result.candidates.some((candidate) => candidate.domain === 'loginacme.com'), false);
   });
@@ -452,6 +492,7 @@ describe('provenance-aware typosquat generation', () => {
     assert.ok(mutationTypes.has('dictionary'));
     assert.ok(mutationTypes.has('unicode_homoglyph'));
     assert.ok(mutationTypes.has('unicode_whole_label'));
+    assert.equal(mutationTypes.has('unicode_homoglyph_depth_2'), false);
     assert.ok(mutationTypes.has('tld_substitution'));
     assert.equal(mutationTypes.has('character_omission'), false);
     assert.equal(mutationTypes.has('keyboard_substitution'), false);

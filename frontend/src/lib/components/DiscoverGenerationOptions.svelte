@@ -1,7 +1,7 @@
 <script lang="ts">
   type Preset = { id: string; label: string; description: string };
   type KeyboardLayout = { id: string; label: string };
-  type MutationFamily = { id: string; label: string };
+  type MutationFamily = { id: string; label: string; advanced?: boolean };
 
   let {
     presets,
@@ -94,10 +94,14 @@
             checked={selectedMutationFamilies.includes(family.id)}
             onchange={() => toggleMutationFamily(family.id)}
           >
-          <span>{family.label}</span>
+          <span>
+            {family.label}
+            {#if family.advanced}<small>Opt-in only · exactly two same-script substitutions</small>{/if}
+          </span>
         </label>
       {/each}
     </div>
+    <p class="advanced-family-note">Advanced generation is excluded from every preset and from the initial Custom selection. Enable it deliberately for a focused run.</p>
     {#if selectedMutationFamilies.length === 0}
       <p role="status">Select at least one family before generating candidates.</p>
     {/if}
@@ -173,7 +177,9 @@
   .family-grid label{display:flex;align-items:flex-start;gap:7px;min-width:0;color:var(--muted);font-size:var(--text-xs);line-height:1.4}
   .family-grid input{flex:0 0 auto;margin-top:2px}
   .family-grid span{min-width:0;overflow-wrap:anywhere}
+  .family-grid small{display:block;margin-top:2px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
   .family-selection p{margin:8px 0 0;color:var(--amber);font-size:var(--text-xs)}
+  .family-selection .advanced-family-note{color:var(--muted)}
   .custom-dictionary{margin-top:12px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .35)}
   .custom-dictionary summary{color:var(--text);cursor:pointer;font:700 var(--text-xs) var(--mono)}
   .custom-dictionary>p,.dictionary-file span{color:var(--muted);font-size:var(--text-xs);line-height:1.5}

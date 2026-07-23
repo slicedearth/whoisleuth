@@ -311,6 +311,34 @@ test('custom family mode generates only the analyst-selected mutation families',
   await expectNoHorizontalOverflow(page);
 });
 
+test('advanced two-character Unicode generation is explicit, bounded, and reviewable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await expect(page.getByRole('combobox', { name: 'Mutation family' })
+    .locator('option[value="unicode_homoglyph_depth_2"]')).toHaveCount(0);
+
+  await page.getByRole('button', { name: /^Custom families\b/u }).click();
+  const advanced = page.getByRole('checkbox', { name: /Advanced two-character Unicode confusable/u });
+  await expect(advanced).not.toBeChecked();
+  await expect(page.getByText(/Advanced generation is excluded from every preset/u)).toBeVisible();
+  for (const checkbox of await page.locator('.family-grid input[type="checkbox"]').all()) await checkbox.uncheck();
+  await advanced.check();
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+
+  await expect(page.locator('.status')).toContainText('generated 59 label variants');
+  await expect(page.locator('.status')).toContainText('excluded 225 cross-script or invalid combinations by policy');
+  await expect(page.getByRole('combobox', { name: 'Mutation family' })
+    .locator('option[value="unicode_homoglyph_depth_2"]'))
+    .toHaveText('Advanced two-character Unicode confusable (59)');
+  await expect(page.locator('.candidate')).toHaveCount(59);
+  await expect(page.locator('.candidate').first()).toContainText('Unicode:');
+  await expect(page.locator('.candidate').first()).toContainText('Advanced two-character Unicode confusable');
+  await expect(page.locator('.candidate').first()).toContainText('Source or profile visual match');
+  await expectNoHorizontalOverflow(page);
+});
+
 test('multi-word lookalikes retain separator and reordering provenance', async ({ page }) => {
   await page.getByRole('button', { name: /^Common edits\b/u }).click();
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('Acme Pay');

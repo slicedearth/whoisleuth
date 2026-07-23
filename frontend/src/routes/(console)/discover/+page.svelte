@@ -7,6 +7,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import {
     DEFAULT_GENERATION_PRESET,
+    DEFAULT_CUSTOM_MUTATION_FAMILY_IDS,
     DEFAULT_KEYBOARD_LAYOUT,
     estimateTyposquatCandidateCount,
     GENERATION_PRESETS,
@@ -48,7 +49,7 @@
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
   let keyboardLayout = $state<KeyboardLayoutId>(DEFAULT_KEYBOARD_LAYOUT as KeyboardLayoutId);
-  let customMutationFamilies = $state<string[]>([...MUTATION_FAMILY_IDS]);
+  let customMutationFamilies = $state<string[]>([...DEFAULT_CUSTOM_MUTATION_FAMILY_IDS]);
   let seed = $state('');
   let tldText = $state('com, net, org');
   let customDictionaryText = $state('');
@@ -99,6 +100,7 @@
   const mutationFamilyOptions = MUTATION_FAMILY_IDS.map((id) => ({
     id,
     label: mutationLabels[id] || id.replaceAll('_', ' '),
+    advanced: id === 'unicode_homoglyph_depth_2',
   }));
   const maxTldTextLength = 2_048;
 
@@ -390,7 +392,10 @@
     const dictionaryNote = dictionaryRelevant && customDictionary.rejectedCount
       ? ` Ignored ${customDictionary.rejectedCount} invalid custom dictionary term${customDictionary.rejectedCount===1?'':'s'}.`
       : '';
-    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${dictionaryNote}${capNote}`, generated);
+    const advancedNote = result.advancedConfusable
+      ? ` Advanced two-character confusables generated ${result.advancedConfusable.generated} label variant${result.advancedConfusable.generated===1?'':'s'}; excluded ${result.advancedConfusable.omittedByPolicy} cross-script or invalid combination${result.advancedConfusable.omittedByPolicy===1?'':'s'} by policy${result.advancedConfusable.omittedByBudget ? ` and omitted ${result.advancedConfusable.omittedByBudget} lower-ranked label variant${result.advancedConfusable.omittedByBudget===1?'':'s'} at the active budgets` : ''}.`
+      : '';
+    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${dictionaryNote}${advancedNote}${capNote}`, generated);
   }
 
   async function searchCt() {

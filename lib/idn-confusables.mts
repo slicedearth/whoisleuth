@@ -10,7 +10,10 @@ import {
   GENERATED_CONFUSABLE_MAPPING_VERSION,
   GENERATED_GENERATION_CONFUSABLE_GROUPS,
 } from './generated/unicode-confusables-17.mts';
-import { MAX_GENERATION_CONFUSABLES_PER_ASCII } from './idn-confusable-policy.mts';
+import {
+  MAX_GENERATION_CONFUSABLES_PER_ASCII,
+  REVIEWED_GENERATION_CONFUSABLES,
+} from './idn-confusable-policy.mts';
 
 export const IDN_ANALYSIS_VERSION = 1;
 export const CONFUSABLE_MAPPING_VERSION = GENERATED_CONFUSABLE_MAPPING_VERSION;
@@ -26,6 +29,17 @@ type ScriptLabel = { label: string; scripts: string[]; mixed: boolean };
 type ReferenceMatch = { asciiDomain: string; unicodeDomain: string; skeleton: string };
 type IdnFinding = { id: string; tone: string; label: string; detail: string };
 export type WholeLabelConfusableVariant = Readonly<{ unicodeLabel: string; script: string }>;
+export type AdvancedConfusableVariant = Readonly<{
+  unicodeLabel: string;
+  script: string;
+  visualClass: 'reviewed' | 'projected';
+}>;
+export type AdvancedConfusableResult = Readonly<{
+  variants: readonly AdvancedConfusableVariant[];
+  eligibleVariantCount: number;
+  omittedByPolicy: number;
+  omittedByBudget: number;
+}>;
 
 const CONFUSABLE_TO_ASCII = new Map<string, string>();
 for (const [ascii, values] of Object.entries(GENERATED_CONFUSABLE_GROUPS)) {
@@ -71,6 +85,37 @@ const WHOLE_LABEL_TARGET_SCRIPTS = Object.freeze([
 ]);
 const MAX_WHOLE_LABEL_VARIANTS = WHOLE_LABEL_TARGET_SCRIPTS.length;
 const ASCII_GENERATION_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
+export const MAX_ADVANCED_CONFUSABLE_VARIANTS = 256;
+const ADVANCED_CONFUSABLE_SCRIPT_ORDER = Object.freeze([
+  'Cyrillic',
+  'Greek',
+  'Latin',
+  'Armenian',
+  'Coptic',
+  'Lisu',
+  'Deseret',
+]);
+
+type AdvancedReplacement = Readonly<{
+  character: string;
+  reviewed: boolean;
+}>;
+type AdvancedPosition = Readonly<{
+  index: number;
+  byScript: ReadonlyMap<string, readonly AdvancedReplacement[]>;
+  total: number;
+}>;
+type AdvancedPositionPair = Readonly<{
+  left: AdvancedPosition;
+  right: AdvancedPosition;
+  span: number;
+}>;
+type AdvancedConfusablePlan = Readonly<{
+  label: string;
+  pairs: readonly AdvancedPositionPair[];
+  eligibleVariantCount: number;
+  omittedByPolicy: number;
+}>;
 
 function decodeDigit(codePoint: number): number {
   if (codePoint >= 0x61 && codePoint <= 0x7a) return codePoint - 0x61;
@@ -213,6 +258,117 @@ export function confusableCharactersForAscii(character: unknown): string[] {
   const source = String(character || '').toLowerCase();
   return [...(GENERATED_GENERATION_CONFUSABLE_GROUPS[source] || '')]
     .slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII);
+}
+
+function advancedConfusablePlan(raw: unknown): AdvancedConfusablePlan {
+  if (typeof raw !== 'string') {
+    return Object.freeze({ label: '', pairs: Object.freeze([]), eligibleVariantCount: 0, omittedByPolicy: 0 });
+  }
+  const label = raw.trim().toLowerCase();
+  if (!ASCII_GENERATION_LABEL_RE.test(label)) {
+    return Object.freeze({ label: '', pairs: Object.freeze([]), eligibleVariantCount: 0, omittedByPolicy: 0 });
+  }
+
+  const positions: AdvancedPosition[] = [];
+  for (const [index, character] of [...label].entries()) {
+    if (!/^[a-z]$/u.test(character)) continue;
+    const reviewedCharacters = REVIEWED_GENERATION_CONFUSABLES[character] || '';
+    const grouped = new Map<string, AdvancedReplacement[]>();
+    for (const replacement of confusableCharactersForAscii(character)) {
+      const script = scriptForCharacter(replacement);
+      if (!script || !ADVANCED_CONFUSABLE_SCRIPT_ORDER.includes(script)) continue;
+      const values = grouped.get(script) || [];
+      values.push(Object.freeze({
+        character: replacement,
+        reviewed: reviewedCharacters.includes(replacement),
+      }));
+      grouped.set(script, values);
+    }
+    const byScript = new Map<string, readonly AdvancedReplacement[]>();
+    for (const [script, values] of grouped) byScript.set(script, Object.freeze(values));
+    const total = [...byScript.values()].reduce((sum, values) => sum + values.length, 0);
+    if (total > 0) positions.push(Object.freeze({ index, byScript, total }));
+  }
+
+  const pairs: AdvancedPositionPair[] = [];
+  let eligibleVariantCount = 0;
+  let omittedByPolicy = 0;
+  for (let leftIndex = 0; leftIndex < positions.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < positions.length; rightIndex += 1) {
+      const left = positions[leftIndex];
+      const right = positions[rightIndex];
+      let eligibleForPair = 0;
+      for (const script of ADVANCED_CONFUSABLE_SCRIPT_ORDER) {
+        eligibleForPair += (left.byScript.get(script)?.length || 0)
+          * (right.byScript.get(script)?.length || 0);
+      }
+      eligibleVariantCount += eligibleForPair;
+      omittedByPolicy += (left.total * right.total) - eligibleForPair;
+      if (eligibleForPair > 0) {
+        pairs.push(Object.freeze({ left, right, span: right.index - left.index }));
+      }
+    }
+  }
+  pairs.sort((left, right) =>
+    left.span - right.span
+    || left.left.index - right.left.index
+    || left.right.index - right.right.index);
+  return Object.freeze({
+    label,
+    pairs: Object.freeze(pairs),
+    eligibleVariantCount,
+    omittedByPolicy,
+  });
+}
+
+export function estimateAdvancedConfusableVariants(raw: unknown): Omit<AdvancedConfusableResult, 'variants'> {
+  const plan = advancedConfusablePlan(raw);
+  return Object.freeze({
+    eligibleVariantCount: plan.eligibleVariantCount,
+    omittedByPolicy: plan.omittedByPolicy,
+    omittedByBudget: Math.max(0, plan.eligibleVariantCount - MAX_ADVANCED_CONFUSABLE_VARIANTS),
+  });
+}
+
+// Produces an explicit advanced candidate family. Exactly two ASCII-letter
+// positions are replaced, both with characters from the same reviewed script.
+// Curated compatibility mappings rank before later projected additions, then
+// stable script and position order applies before the independent output cap.
+export function advancedConfusableVariantsForAscii(raw: unknown): AdvancedConfusableResult {
+  const plan = advancedConfusablePlan(raw);
+  const variants: AdvancedConfusableVariant[] = [];
+  const seen = new Set<string>();
+
+  candidateLoop:
+  for (const visualClass of ['reviewed', 'projected'] as const) {
+    for (const script of ADVANCED_CONFUSABLE_SCRIPT_ORDER) {
+      for (const pair of plan.pairs) {
+        const leftValues = pair.left.byScript.get(script) || [];
+        const rightValues = pair.right.byScript.get(script) || [];
+        for (const left of leftValues) {
+          for (const right of rightValues) {
+            const candidateClass = left.reviewed && right.reviewed ? 'reviewed' : 'projected';
+            if (candidateClass !== visualClass) continue;
+            const characters = [...plan.label];
+            characters[pair.left.index] = left.character;
+            characters[pair.right.index] = right.character;
+            const unicodeLabel = characters.join('');
+            if (seen.has(unicodeLabel)) continue;
+            seen.add(unicodeLabel);
+            variants.push(Object.freeze({ unicodeLabel, script, visualClass }));
+            if (variants.length >= MAX_ADVANCED_CONFUSABLE_VARIANTS) break candidateLoop;
+          }
+        }
+      }
+    }
+  }
+
+  return Object.freeze({
+    variants: Object.freeze(variants),
+    eligibleVariantCount: plan.eligibleVariantCount,
+    omittedByPolicy: plan.omittedByPolicy,
+    omittedByBudget: Math.max(0, plan.eligibleVariantCount - variants.length),
+  });
 }
 
 // Builds at most one deterministic candidate per reviewed non-Latin script.
