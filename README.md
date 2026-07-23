@@ -130,6 +130,7 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | --- | --- |
 | [Application guide](docs/application-guide.md) | Tool workflow, Fast and Deep modes, result states, scoring, saved work, guided investigations, and exports. |
 | [Getting started](docs/getting-started.md) | Installation, local development, verification commands, browser tests, and CLI entry points. |
+| [Release discipline](docs/releasing.md) | Semantic-version selection, manifest checks, protected-branch delivery, tagging, and rollback evidence. |
 | [Operations and deployment](docs/operations.md) | Authentication, proxy trust, feature switches, optional providers, rate and operation limits, hosted monitoring, Netlify, and deployment checks. |
 | [Architecture orientation](docs/architecture.md) | Components, request flow, outbound trust boundaries, persistence, and deliberate trade-offs. |
 | [Registry data contract](docs/registry-data-contract.md) | Normalized RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
@@ -163,6 +164,7 @@ Additional offline or bounded maintainer checks include:
 npm run schema:inventory
 npm run benchmark:workflow
 npm run platform:local-data
+npm run release:check
 npm run security:codeql
 npm run registry:drift
 npm run deployment:self-check -- https://your-deployment.example

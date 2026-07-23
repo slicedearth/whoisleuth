@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { app } = require('../server.mts');
+const { app, apiErrorHandler } = require('../server.mts');
+const { buildSessionCookie, createSessionToken } = require('../lib/auth.mts');
 
 let server;
 let origin;
@@ -63,5 +64,52 @@ describe('Express API request-body errors', () => {
       error: 'Request bodies are limited to 1 MiB.',
       errorCode: 'REQUEST_TOO_LARGE',
     });
+  });
+});
+
+describe('Express API response parity', () => {
+  test('preserves success and expected validation responses', async () => {
+    const session = buildSessionCookie(createSessionToken(), { secure: false }).split(';')[0];
+    const success = await fetch(`${origin}/api/session`, {
+      headers: { Cookie: session },
+    });
+    assert.equal(success.status, 200);
+    assert.deepEqual(await success.json(), { authenticated: true });
+
+    const expectedError = await fetch(`${origin}/api/lookup?q=${encodeURIComponent('not a valid domain')}`, {
+      headers: { Cookie: session },
+    });
+    assert.equal(expectedError.status, 400);
+    const expectedBody = await expectedError.json();
+    assert.equal(expectedBody.errorCode, 'INVALID_QUERY');
+    assert.match(expectedBody.error, /not a valid domain, IP, or ASN/i);
+  });
+
+  test('sanitizes unexpected errors without exposing internal details', () => {
+    let statusCode = null;
+    let body = null;
+    const response = {
+      headersSent: false,
+      status(value) {
+        statusCode = value;
+        return this;
+      },
+      json(value) {
+        body = value;
+        return value;
+      },
+    };
+    apiErrorHandler(
+      new Error('/private/path secret upstream detail'),
+      {},
+      response,
+      () => assert.fail('unexpected errors should be handled before next()'),
+    );
+    assert.equal(statusCode, 500);
+    assert.deepEqual(body, {
+      error: 'Internal server error',
+      errorCode: 'INTERNAL_ERROR',
+    });
+    assert.doesNotMatch(JSON.stringify(body), /private|secret|upstream|path/i);
   });
 });

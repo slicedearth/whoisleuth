@@ -3,10 +3,10 @@ import { runUnifiedLookup, LOOKUP_ERROR_CODES } from '../../lib/lookup.mts';
 import { createLookupHttpResponse } from '../../lib/lookup-response-contract.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
-import { json } from '../../lib/http.mts';
+import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handler: NetlifyFunctionHandler = async (event) => {
+const handleLookup: NetlifyFunctionHandler = async (event) => {
   const guard = guardNetlifyNetworkRequest(event, 'lookup');
   if (guard.response) return guard.response;
 
@@ -28,21 +28,19 @@ const handler: NetlifyFunctionHandler = async (event) => {
   const malwareIocIntelligence = params.ioc === '1' || params.ioc === 'true';
   const securityTxt = params.security_txt === '1' || params.security_txt === 'true';
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
-    try {
-      const result = await runUnifiedLookup(classified, {
-        fast,
-        compact,
-        externalIntelligence,
-        malwareHostIntelligence,
-        malwareIocIntelligence,
-        securityTxt,
-        featurePolicy: guard.featurePolicy,
-      });
-      return json(200, createLookupHttpResponse(q, classified, result));
-    } catch (err) {
-      return json(500, { error: err.message, errorCode: LOOKUP_ERROR_CODES.LOOKUP_FAILED });
-    }
+    const result = await runUnifiedLookup(classified, {
+      fast,
+      compact,
+      externalIntelligence,
+      malwareHostIntelligence,
+      malwareIocIntelligence,
+      securityTxt,
+      featurePolicy: guard.featurePolicy,
+    });
+    return json(200, createLookupHttpResponse(q, classified, result));
   });
 };
+
+const handler = withNetlifyApiErrorBoundary(handleLookup, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
 
 export { handler };

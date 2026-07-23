@@ -34,7 +34,7 @@ import {
 } from './lib/operation-budget.mts';
 import { featureDisabledError, networkFeaturePolicy } from './lib/feature-policy.mts';
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './lib/feature-policy.mts';
-import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor } from './lib/http.mts';
+import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse } from './lib/http.mts';
 
 type RequestLike = {
   protocol: string;
@@ -70,6 +70,14 @@ function queryText(value: unknown): string {
 
 function errorMessage(value: unknown): unknown {
   return recordValue(value, 'message');
+}
+
+function sendUnexpectedApiError(
+  res: ResponseLike,
+  errorCode: unknown = 'INTERNAL_ERROR',
+) {
+  const response = apiUnexpectedErrorResponse(errorCode);
+  return res.status(response.statusCode).json(response.body);
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -246,7 +254,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
       });
       res.json(createLookupHttpResponse(q, classified, result));
     } catch (err) {
-      res.status(500).json({ error: errorMessage(err), errorCode: LOOKUP_ERROR_CODES.LOOKUP_FAILED });
+      sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
     }
   });
 });
@@ -277,7 +285,7 @@ app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (r
         ...record,
       });
     } catch (err) {
-      res.status(500).json({ error: errorMessage(err) });
+      sendUnexpectedApiError(res);
     }
   });
 });
@@ -305,7 +313,7 @@ app.get('/api/whois', apiRateLimit, requireAuth, requireFeature('whois'), async 
         parsed: parseWhoisChain(chain),
       });
     } catch (err) {
-      res.status(500).json({ error: errorMessage(err) });
+      sendUnexpectedApiError(res);
     }
   });
 });
@@ -344,7 +352,7 @@ app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availabi
         ...result,
       });
     } catch (err) {
-      res.status(500).json({ error: errorMessage(err) });
+      sendUnexpectedApiError(res);
     }
   });
 });
@@ -364,7 +372,7 @@ app.get('/api/ct-search', apiRateLimit, requireAuth, requireFeature('certificate
       const result = await searchCertificateTransparency(q);
       res.json({ keyword: q, ...result });
     } catch (err) {
-      res.status(500).json({ error: errorMessage(err) });
+      sendUnexpectedApiError(res);
     }
   });
 });
@@ -388,7 +396,7 @@ app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain
     try {
       res.json(await checkDomainPosture(domain, { dkimSelectors: selectors }));
     } catch (err) {
-      res.status(500).json({ error: errorMessage(err) });
+      sendUnexpectedApiError(res);
     }
   });
 });
@@ -415,4 +423,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requireAuth, rateLimit, requireFeature, apiErrorHandler, startServer };
+export { app, isHttps, usesSecureCookies, requireAuth, rateLimit, requireFeature, apiErrorHandler, sendUnexpectedApiError, startServer };

@@ -48,6 +48,7 @@
 </script>
 
 <div class="public-shell">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="public-header">
     <a class="public-brand" href="/"><span class="mark"><img src="/favicon.svg" alt=""></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
     <nav aria-label="Public navigation">
@@ -60,7 +61,7 @@
     </nav>
   </header>
 
-  <main class="public-content" id="main-content">{@render children()}</main>
+  <main class="public-content" id="main-content" tabindex="-1">{@render children()}</main>
 
   <footer class="public-footer">
     <p>WHOISleuth keeps registration and supporting evidence separate, so missing or inconclusive data is not presented as proof.</p>

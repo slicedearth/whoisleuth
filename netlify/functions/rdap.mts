@@ -2,10 +2,10 @@ import { classifyQuery } from '../../lib/classify.mts';
 import { fetchRdapRecord } from '../../lib/rdap.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
-import { json } from '../../lib/http.mts';
+import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
 
-const handler: NetlifyFunctionHandler = async (event) => {
+const handleRdap: NetlifyFunctionHandler = async (event) => {
   const guard = guardNetlifyNetworkRequest(event, 'rdap');
   if (guard.response) return guard.response;
 
@@ -20,23 +20,21 @@ const handler: NetlifyFunctionHandler = async (event) => {
   }
 
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('rdap'), async () => {
-    try {
-      const record = await fetchRdapRecord(classified.type, classified.value);
-      if (!record) {
-        return json(404, { error: `No RDAP registry found for "${q}" via IANA bootstrap` });
-      }
-
-      return json(200, {
-        query: q,
-        type: classified.type,
-        inputHostname: classified.inputHostname,
-        registrableDomain: classified.registrableDomain,
-        ...record,
-      });
-    } catch (err) {
-      return json(500, { error: err.message });
+    const record = await fetchRdapRecord(classified.type, classified.value);
+    if (!record) {
+      return json(404, { error: `No RDAP registry found for "${q}" via IANA bootstrap` });
     }
+
+    return json(200, {
+      query: q,
+      type: classified.type,
+      inputHostname: classified.inputHostname,
+      registrableDomain: classified.registrableDomain,
+      ...record,
+    });
   });
 };
+
+const handler = withNetlifyApiErrorBoundary(handleRdap);
 
 export { handler };

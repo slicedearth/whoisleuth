@@ -200,6 +200,14 @@ HTTP `429`, `errorCode: NETWORK_USAGE_LIMITED`, a bounded `Retry-After`, and a
 30-day window is fixed and UTC-epoch-aligned; it is not a calendar month,
 rolling window, or hosting-provider billing statement.
 
+Unexpected Express and Netlify failures use the same bounded public error
+boundary. Unified Lookup preserves `errorCode: LOOKUP_FAILED`; other unexpected
+lookup-family failures use `errorCode: INTERNAL_ERROR`. Both return the generic
+message `Internal server error` and never expose exception messages, stack
+traces, filesystem paths, upstream internals, or secrets. Expected validation,
+authentication, policy, rate-limit, operation-budget, unsupported, partial,
+and not-found responses retain their existing specific messages and codes.
+
 ## Diagnostics version 7
 
 `diagnostics.version` is `7`. Version 7 retains the version-5 source fields,

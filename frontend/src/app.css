@@ -135,6 +135,24 @@ button { cursor: pointer; }
 button, select { font-family: var(--mono); }
 input, select, textarea { caret-color: var(--accent2); }
 
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  max-width: calc(100vw - 16px);
+  padding: 10px 13px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgb(var(--shadow-rgb) / .28);
+  font: 700 var(--text-xs) var(--mono);
+  transform: translateY(calc(-100% - 16px));
+  transition: transform .12s ease-out;
+}
+.skip-link:focus, .skip-link:focus-visible { transform: translateY(0); }
+
 /* ---------- Form controls ----------
    Text-like fields get the boxed treatment; checkboxes and radios keep their
    native size so a bare <input type="checkbox"> can never inflate into a
