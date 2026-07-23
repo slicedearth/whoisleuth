@@ -164,9 +164,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
 
-  // Structured registry sources stay open for review; the raw unified
-  // response stays collapsed and subordinate.
-  await expect(page.locator('.sources > details').first()).toHaveAttribute('open', '');
+  // Detailed registry and raw unified records stay collapsed and subordinate.
+  await expect(page.locator('.sources > details').first()).not.toHaveAttribute('open', '');
   await expect(page.locator('details.raw')).not.toHaveAttribute('open', '');
 
   // Keyboard operation: activating an anchor link moves to the section.
@@ -176,7 +175,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(page).toHaveURL(/#registry$/);
   await expect(page.locator('#registry')).toBeInViewport();
 
-  // The DNS partial-observation warning is visible without extra interaction.
+  // The DNS status stays visible while its detailed warning is disclosed on demand.
+  const dnsCard = page.locator('.dns-card');
+  await expect(dnsCard.locator(':scope > summary .evidence-status')).toHaveText('partial');
+  await expect(page.getByText(/A resolver failure is not evidence that a record is absent/)).toBeHidden();
+  await dnsCard.locator(':scope > summary').click();
   await expect(page.getByText(/A resolver failure is not evidence that a record is absent/)).toBeVisible();
 
   for (const size of [

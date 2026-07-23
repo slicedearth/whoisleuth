@@ -48,7 +48,7 @@ type TechnologySignature = {
   evidence: SignatureEvidence[];
 };
 
-const TECHNOLOGY_PROFILE_VERSION = 1;
+const TECHNOLOGY_PROFILE_VERSION = 2;
 const MAX_TECHNOLOGY_HTML_CHARS = 300_000;
 const MAX_TECHNOLOGY_TAGS = 2_048;
 const MAX_TECHNOLOGY_TAG_LENGTH = 4_096;
@@ -131,6 +131,15 @@ function resourceEvidence(hosts: string[], description: string): SignatureEviden
   };
 }
 
+function resourcePatternEvidence(pattern: RegExp, description: string): SignatureEvidence {
+  return {
+    source: 'resource origin',
+    description,
+    confidence: 'medium',
+    matches: ({ resourceHosts }) => [...resourceHosts].some((host) => pattern.test(host)),
+  };
+}
+
 function serverEvidence(pattern: RegExp, description: string, confidence: TechnologyConfidence = 'high'): SignatureEvidence {
   return {
     source: 'HTTP server header',
@@ -171,6 +180,25 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     evidence: [
       htmlEvidence(['shopify-section', 'shopify.theme', 'cdn.shopify.com'], 'Static markup contains Shopify-specific storefront markers.'),
       resourceEvidence(['cdn.shopify.com'], 'A retained resource origin uses the Shopify content network.'),
+    ],
+  },
+  {
+    id: 'adobe-commerce-magento', name: 'Adobe Commerce / Magento Open Source', category: 'commerce',
+    evidence: [
+      htmlEvidence(['data-mage-init=', 'type="text/x-magento-init"', "type='text/x-magento-init'"], 'Static markup contains Commerce frontend initialization markers.'),
+    ],
+  },
+  {
+    id: 'bigcommerce', name: 'BigCommerce', category: 'commerce',
+    evidence: [
+      htmlEvidence(['cdn11.bigcommerce.com/s-', 'stencil-utils'], 'Static markup contains BigCommerce storefront asset markers.', 'medium'),
+      resourcePatternEvidence(/^cdn\d+\.bigcommerce\.com$/i, 'A retained resource origin uses BigCommerce storefront delivery infrastructure.'),
+    ],
+  },
+  {
+    id: 'woocommerce', name: 'WooCommerce', category: 'commerce',
+    evidence: [
+      htmlEvidence(['/wp-content/plugins/woocommerce/'], 'Static resource paths identify the WooCommerce plugin.'),
     ],
   },
   {
@@ -227,6 +255,13 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'cloudflare', name: 'Cloudflare', category: 'delivery platform',
     evidence: [serverEvidence(/^cloudflare(?:\s|$|\/)/i, 'The selected response server header identifies Cloudflare.')],
+  },
+  {
+    id: 'cloudfront', name: 'Amazon CloudFront', category: 'delivery platform',
+    evidence: [
+      serverEvidence(/^cloudfront(?:\s|$|\/)/i, 'The selected response server header identifies Amazon CloudFront.'),
+      resourceEvidence(['cloudfront.net'], 'A retained resource origin uses Amazon CloudFront delivery infrastructure.'),
+    ],
   },
   {
     id: 'netlify', name: 'Netlify', category: 'delivery platform',

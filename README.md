@@ -736,12 +736,20 @@ covered by the provider's community terms or an appropriate paid agreement.
   origins, and capped static HTML. Curated signatures currently cover common
   content-management systems, commerce and site-building platforms, web
   frameworks, static-site generators, web servers, and delivery platforms.
+  Version 2 adds distinctive passive indicators for additional commerce
+  storefronts and a major content-delivery service. A match identifies an
+  observed implementation clue, not the origin host or hosting account.
   Each finding retains only a fixed technology name, category, confidence,
   evidence class, and explanation. Matched markup, arbitrary header values,
   resource paths, and signature input are not retained. Unmatched signatures
   are neutral because static or deliberately concealed technologies may not be
   observable. The profile makes no additional request, remains outside compact
   browser stores, and does not change availability or Risk scoring.
+- Lookup keeps primary assessment, source-health information, and material
+  registry comparison warnings expanded. Long RDAP and WHOIS records and
+  secondary DNS, HTTP, page, passive-posture, technology, TLS, and
+  observed-network cards start collapsed so a Deep result is easier to scan.
+  Their headings, states, and bounded summaries remain visible.
 - Deep Lookup also derives a versioned passive security-posture profile from
   the HTTP response, static form and resource summaries, one TLS handshake,
   registry or WHOIS DNSSEC publication, and the existing CAA query. Findings

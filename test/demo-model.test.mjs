@@ -86,11 +86,15 @@ describe('synthetic demo state', () => {
     const lookup = syntheticDemoLookupView('credential-lure');
     assert.equal(lookup.assessment.risk.score, 78);
     assert.equal(lookup.registry.rdapParsed.domain, 'northstar-login.example');
+    assert.deepEqual(
+      [lookup.dns.status, lookup.http.status, lookup.securityPosture.status, lookup.technology.status, lookup.network.status, lookup.tls.status],
+      ['Success', 'Success', 'Success', 'Success', 'Success', 'Success'],
+    );
     assert.equal(lookup.dns.rows[0].label, 'Nameservers');
     assert.equal(lookup.http.attempts[0].detail, 'Synthetic fixture; no connection was attempted');
     assert.equal(lookup.securityTxt.state, 'present');
     assert.equal(lookup.securityPosture.summary.potentialExposure, 1);
-    assert.equal(lookup.technology.findings[0].name, 'Example CMS');
+    assert.deepEqual(lookup.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(lookup.network.address, '203.0.113.44');
     assert.equal(lookup.tls.alternativeNames.length, 2);
     assert.equal(syntheticDemoLookupView('unknown'), null);
@@ -118,7 +122,7 @@ describe('synthetic demo export', () => {
     assert.equal(payload.timeline.length, 2);
     assert.equal(payload.provenance.source, 'Certificate Transparency');
     assert.equal(payload.evidence.securityTxt.state, 'present');
-    assert.equal(payload.evidence.technology.findings[0].name, 'Example CMS');
+    assert.deepEqual(payload.evidence.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(payload.evidence.observedNetwork.address, '203.0.113.44');
     assert.match(payload.warning, /Synthetic demonstration data only/);
     assert.ok(payload.limitations.every((item) => /fixture|request|live assessment/i.test(item)));

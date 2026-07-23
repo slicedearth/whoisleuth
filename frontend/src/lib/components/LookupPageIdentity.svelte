@@ -16,6 +16,7 @@
     trackingIdentifiers,
     fingerprints,
     limitations,
+    initiallyExpanded = false,
   }: {
     status: string;
     complete: boolean;
@@ -30,45 +31,48 @@
     trackingIdentifiers: Row[];
     fingerprints: FingerprintRow[];
     limitations: string[];
+    initiallyExpanded?: boolean;
   } = $props();
 </script>
 
-<section class="page-card evidence-card card" aria-labelledby="page-identity-title">
-  <header class="section-head">
-    <div><p class="eyebrow">Deep-scan evidence</p><h4 id="page-identity-title">Page identity</h4></div>
-    <span class:partial={!complete}>{status}</span>
-  </header>
-  <div class="page-grid stat-grid">
-    {#each facts as row}<article><small>{row.label}</small><strong class:danger-text={row.danger}>{row.value}</strong></article>{/each}
+<details class="page-card evidence-card card" aria-labelledby="page-identity-title" open={initiallyExpanded}>
+  <summary class="evidence-summary">
+    <span class="evidence-summary-row">
+      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="page-identity-title" role="heading" aria-level="4">Page identity</span><span class="evidence-summary-detail">{facts.length} summary field{facts.length === 1 ? '' : 's'} · Expand for page metadata, fingerprints, and limitations</span></span>
+      <span class:partial={!complete} class="evidence-status">{status}</span>
+    </span>
+  </summary>
+  <div class="evidence-body">
+    <div class="page-grid stat-grid">
+      {#each facts as row}<article><small>{row.label}</small><strong class:danger-text={row.danger}>{row.value}</strong></article>{/each}
+    </div>
+    {#if externalFormOrigins.length}
+      <details class="page-detail disclosure"><summary>External form destinations · {externalFormOrigins.length}</summary><ul>{#each externalFormOrigins as origin}<li>{origin}</li>{/each}</ul></details>
+    {/if}
+    {#if resourceCount > 0}
+      <details class="page-detail disclosure"><summary>Resource summary · {resourceCount}</summary><dl>{#each resourceSummary as row}<dt>{row.label}</dt><dd>{row.value}</dd>{/each}</dl></details>
+    {/if}
+    {#if embeddedOrigins.length}
+      <details class="page-detail disclosure"><summary>Embedded origins · {embeddedOrigins.length}</summary><ul>{#each embeddedOrigins as origin}<li>{origin}</li>{/each}</ul></details>
+    {/if}
+    {#if contactDomains.length}
+      <details class="page-detail disclosure"><summary>Contact domains · {contactDomains.length}</summary><ul>{#each contactDomains as domain}<li>{domain}</li>{/each}</ul></details>
+    {/if}
+    {#if downloadCount > 0}
+      <details class="page-detail disclosure"><summary>Download context · {downloadCount}</summary><dl>{#each downloadSummary as row}<dt>{row.label}</dt><dd>{row.value}</dd>{/each}</dl></details>
+    {/if}
+    {#if trackingIdentifiers.length}
+      <details class="page-detail disclosure"><summary>Tracking identifiers · {trackingIdentifiers.length}</summary><ul>{#each trackingIdentifiers as identifier}<li><strong>{identifier.label}</strong><span>{identifier.value}</span></li>{/each}</ul></details>
+    {/if}
+    {#if fingerprints.length}
+      <details class="page-detail page-fingerprints disclosure"><summary>Page fingerprints · {fingerprints.length}</summary><dl>{#each fingerprints as row}<dt>{row.label}</dt><dd><code>{row.value}</code>{#if row.detail}<small>{row.detail}</small>{/if}</dd>{/each}</dl><p>SHA-256 components support exact equality checks. Visible-text SimHash is fuzzy comparison data, not a cryptographic digest or proof of common ownership.</p></details>
+    {/if}
+    {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
+    <p class="card-note">Bounded metadata and versioned fingerprints from the static HTML already captured for this lookup. Resource and embedded locations retain origins only; contact links retain domains only; download paths, URL queries, normalized markup, and visible text are not retained. These fields provide comparison and review context rather than proof of ownership or maliciousness.</p>
   </div>
-  {#if externalFormOrigins.length}
-    <details class="page-detail disclosure"><summary>External form destinations · {externalFormOrigins.length}</summary><ul>{#each externalFormOrigins as origin}<li>{origin}</li>{/each}</ul></details>
-  {/if}
-  {#if resourceCount > 0}
-    <details class="page-detail disclosure"><summary>Resource summary · {resourceCount}</summary><dl>{#each resourceSummary as row}<dt>{row.label}</dt><dd>{row.value}</dd>{/each}</dl></details>
-  {/if}
-  {#if embeddedOrigins.length}
-    <details class="page-detail disclosure"><summary>Embedded origins · {embeddedOrigins.length}</summary><ul>{#each embeddedOrigins as origin}<li>{origin}</li>{/each}</ul></details>
-  {/if}
-  {#if contactDomains.length}
-    <details class="page-detail disclosure"><summary>Contact domains · {contactDomains.length}</summary><ul>{#each contactDomains as domain}<li>{domain}</li>{/each}</ul></details>
-  {/if}
-  {#if downloadCount > 0}
-    <details class="page-detail disclosure"><summary>Download context · {downloadCount}</summary><dl>{#each downloadSummary as row}<dt>{row.label}</dt><dd>{row.value}</dd>{/each}</dl></details>
-  {/if}
-  {#if trackingIdentifiers.length}
-    <details class="page-detail disclosure"><summary>Tracking identifiers · {trackingIdentifiers.length}</summary><ul>{#each trackingIdentifiers as identifier}<li><strong>{identifier.label}</strong><span>{identifier.value}</span></li>{/each}</ul></details>
-  {/if}
-  {#if fingerprints.length}
-    <details class="page-detail page-fingerprints disclosure"><summary>Page fingerprints · {fingerprints.length}</summary><dl>{#each fingerprints as row}<dt>{row.label}</dt><dd><code>{row.value}</code>{#if row.detail}<small>{row.detail}</small>{/if}</dd>{/each}</dl><p>SHA-256 components support exact equality checks. Visible-text SimHash is fuzzy comparison data, not a cryptographic digest or proof of common ownership.</p></details>
-  {/if}
-  {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-  <p class="card-note">Bounded metadata and versioned fingerprints from the static HTML already captured for this lookup. Resource and embedded locations retain origins only; contact links retain domains only; download paths, URL queries, normalized markup, and visible text are not retained. These fields provide comparison and review context rather than proof of ownership or maliciousness.</p>
-</section>
+</details>
 
 <style>
-  .evidence-card{padding:var(--card-pad)}
-  .evidence-card .stat-grid{margin-top:14px}
   .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .page-grid .danger-text{color:var(--danger)}
   .disclosure ul{display:grid;gap:7px;margin:10px 12px;padding-left:18px}

@@ -8,6 +8,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.hero-kicker')).toHaveText('Domain intelligence console');
   await expect(page.locator('.public-header .mark')).toHaveCount(1);
   await expect(page.locator('.hero .mark')).toHaveCount(0);
+  await expect(page.locator('.terminal-preview').getByText(/Static markup/)).toBeVisible();
+  await expect(page.locator('.terminal-preview').getByText(/IP RDAP/)).toBeVisible();
   await expect(page.locator('.goal-grid article')).toHaveCount(3);
   await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
@@ -30,7 +32,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
   await expect(page.locator('.state-grid article')).toHaveCount(9);
   await expect(page.locator('.glossary-grid > div')).toHaveCount(39);
-  await expect(page.locator('.faq-list details')).toHaveCount(15);
+  await expect(page.locator('.faq-list details')).toHaveCount(17);
 
   const question = page.getByText('Does WHOISleuth decide whether a domain is malicious?', { exact: true });
   await question.click();

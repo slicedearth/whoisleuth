@@ -16,12 +16,14 @@
     summary,
     findings,
     limitations,
+    initiallyExpanded = false,
   }: {
     status: string;
     complete: boolean;
     summary: Summary;
     findings: Finding[];
     limitations: string[];
+    initiallyExpanded?: boolean;
   } = $props();
 
   function stateLabel(value: string) {
@@ -32,39 +34,41 @@
   }
 </script>
 
-<section class="security-posture-card evidence-card card" aria-labelledby="security-posture-title">
-  <header class="section-head">
-    <div><p class="eyebrow">Derived deep-scan analysis</p><h4 id="security-posture-title">Passive security posture</h4></div>
-    <span class:partial={!complete}>{status}</span>
-  </header>
+<details class="security-posture-card evidence-card card" aria-labelledby="security-posture-title" open={initiallyExpanded}>
+  <summary class="evidence-summary">
+    <span class="evidence-summary-row">
+      <span class="evidence-summary-copy"><span class="eyebrow">Derived deep-scan analysis</span><span class="evidence-summary-title" id="security-posture-title" role="heading" aria-level="4">Passive security posture</span><span class="evidence-summary-detail">Observed {summary.observed} · Review {summary.potentialExposure} · Not observed {summary.observedAbsence} · Unavailable {summary.unavailable}</span></span>
+      <span class:partial={!complete} class="evidence-status">{status}</span>
+    </span>
+  </summary>
 
-  <div class="posture-summary stat-grid" aria-label="Passive security posture summary">
-    <article><small>Observed</small><strong>{summary.observed}</strong></article>
-    <article class:review={summary.potentialExposure > 0}><small>Review</small><strong>{summary.potentialExposure}</strong></article>
-    <article><small>Not observed</small><strong>{summary.observedAbsence}</strong></article>
-    <article><small>Unavailable</small><strong>{summary.unavailable}</strong></article>
+  <div class="evidence-body">
+    <div class="posture-summary stat-grid" aria-label="Passive security posture summary">
+      <article><small>Observed</small><strong>{summary.observed}</strong></article>
+      <article class:review={summary.potentialExposure > 0}><small>Review</small><strong>{summary.potentialExposure}</strong></article>
+      <article><small>Not observed</small><strong>{summary.observedAbsence}</strong></article>
+      <article><small>Unavailable</small><strong>{summary.unavailable}</strong></article>
+    </div>
+
+    <div class="posture-grid">
+      {#each findings as finding}
+        <article class:review={finding.tone === 'review'} class:configured={finding.tone === 'configured'}>
+          <div class="finding-head">
+            <div><p>{finding.category}</p><h5>{finding.label}</h5></div>
+            <span class="state state-{finding.tone}">{stateLabel(finding.state)}</span>
+          </div>
+          <p class="detail">{finding.detail}</p>
+          {#if finding.evidence.length}<p class="evidence">Evidence: {finding.evidence.join(', ')}</p>{/if}
+        </article>
+      {/each}
+    </div>
+
+    {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
+    <p class="card-note">These findings interpret existing point-in-time HTTP, static page, TLS, DNSSEC, and CAA evidence. They make no additional request and are review signals, not confirmed vulnerabilities or a claim that the site is safe.</p>
   </div>
-
-  <div class="posture-grid">
-    {#each findings as finding}
-      <article class:review={finding.tone === 'review'} class:configured={finding.tone === 'configured'}>
-        <div class="finding-head">
-          <div><p>{finding.category}</p><h5>{finding.label}</h5></div>
-          <span class="state state-{finding.tone}">{stateLabel(finding.state)}</span>
-        </div>
-        <p class="detail">{finding.detail}</p>
-        {#if finding.evidence.length}<p class="evidence">Evidence: {finding.evidence.join(', ')}</p>{/if}
-      </article>
-    {/each}
-  </div>
-
-  {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-  <p class="card-note">These findings interpret existing point-in-time HTTP, static page, TLS, DNSSEC, and CAA evidence. They make no additional request and are review signals, not confirmed vulnerabilities or a claim that the site is safe.</p>
-</section>
+</details>
 
 <style>
-  .evidence-card{padding:var(--card-pad)}
-  .posture-summary{margin-top:14px}
   .posture-summary .review strong{color:var(--danger)}
   .posture-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:10px;margin-top:14px}
   .posture-grid>article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}

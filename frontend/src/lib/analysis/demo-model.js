@@ -383,7 +383,7 @@ export function syntheticDemoLookupView(id) {
       registrar: { visible: false, label: '', endpoint: '', detail: '', stateDetail: '', error: false, success: false, parsed: {} },
     },
     dns: {
-      status: dns.status,
+      status: conclusive ? 'Success' : 'Partial',
       complete: conclusive,
       rows: [
         { label: 'Nameservers', value: dns.nameservers.join(', ') || 'Not evaluated' },
@@ -394,7 +394,7 @@ export function syntheticDemoLookupView(id) {
       truncated: false,
     },
     http: {
-      status: website.status,
+      status: /inconclusive/i.test(website.status) ? 'Partial' : 'Success',
       complete: !/inconclusive/i.test(website.status),
       rows: [
         { label: 'Observation', value: website.detail },
@@ -422,7 +422,7 @@ export function syntheticDemoLookupView(id) {
       limitations: ['Fixed synthetic disclosure fixture; no request was performed and no testing is authorized.'],
     },
     securityPosture: {
-      status: conclusive ? 'Complete' : 'Partial',
+      status: conclusive ? 'Success' : 'Partial',
       complete: conclusive,
       summary: conclusive ? { observed: 2, potentialExposure: active ? 1 : 0, observedAbsence: active ? 1 : 0, unavailable: 0 } : { observed: 0, potentialExposure: 0, observedAbsence: 0, unavailable: 4 },
       findings: conclusive ? [
@@ -438,13 +438,17 @@ export function syntheticDemoLookupView(id) {
       limitations: ['Fixed derived findings for demonstration only; no active vulnerability test was performed.'],
     },
     technology: {
-      status: conclusive ? 'Complete' : 'Partial',
+      status: conclusive ? 'Success' : 'Partial',
       complete: conclusive,
-      findings: active ? [{ id: 'synthetic-example-cms', name: 'Example CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'Generator metadata', description: 'Example CMS 2.1 synthetic fixture' }] }] : [],
+      findings: active ? [
+        { id: 'synthetic-example-cms', name: 'Example CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'Generator metadata', description: 'A fixed generator fixture identifies the example CMS.' }] },
+        { id: 'synthetic-example-commerce', name: 'Example Commerce', category: 'commerce', confidence: 'medium', evidence: [{ source: 'Resource origin', description: 'A fixed resource-origin fixture resembles a commerce delivery service.' }] },
+        { id: 'synthetic-example-edge', name: 'Example Edge', category: 'delivery platform', confidence: 'high', evidence: [{ source: 'HTTP server header', description: 'A fixed response-header fixture identifies the example edge service.' }] },
+      ] : [],
       limitations: ['Fixed technology indicators for demonstration only; no additional request was performed.'],
     },
     network: {
-      status: conclusive ? 'success' : 'unsupported',
+      status: conclusive ? 'Success' : 'Unsupported',
       detail: conclusive ? 'A fixed reserved-address fixture demonstrates separately attributed network registration.' : 'No observed network fixture is represented for this inconclusive candidate.',
       address: conclusive ? fixtureAddress : '',
       addressSource: conclusive ? 'TLS connection fixture' : '',
@@ -460,7 +464,7 @@ export function syntheticDemoLookupView(id) {
       provenance: 'This fixed reserved-address fixture demonstrates the network-context presentation only. It is not a public endpoint observation and does not identify hosting, ownership, control, intent, or maliciousness.',
     },
     tls: {
-      status: certificate.status,
+      status: certificate.status === 'Observed' ? 'Success' : 'Partial',
       complete: certificate.status === 'Observed',
       rows: [
         { label: 'Observation', value: certificate.detail },

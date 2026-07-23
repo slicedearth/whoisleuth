@@ -7,48 +7,57 @@
     complete,
     findings,
     limitations,
+    initiallyExpanded = false,
   }: {
     status: string;
     complete: boolean;
     findings: Finding[];
     limitations: string[];
+    initiallyExpanded?: boolean;
   } = $props();
 </script>
 
-<section class="technology-card evidence-card card" aria-labelledby="technology-profile-title">
-  <header class="section-head">
-    <div><p class="eyebrow">Derived deep-scan analysis</p><h4 id="technology-profile-title">Technology indicators</h4></div>
-    <span class:partial={!complete}>{status}</span>
-  </header>
+<details class="technology-card evidence-card card" aria-labelledby="technology-profile-title" open={initiallyExpanded}>
+  <summary class="evidence-summary">
+    <span class="evidence-summary-row">
+    <span class="evidence-summary-copy">
+      <span class="eyebrow">Derived deep-scan analysis</span>
+      <span class="evidence-summary-title" id="technology-profile-title" role="heading" aria-level="4">Technology indicators</span>
+      <span class="evidence-summary-detail">{findings.length ? `${findings.length} matched indicator${findings.length === 1 ? '' : 's'}` : 'No curated match'} · Expand for evidence and limitations</span>
+    </span>
+    <span class:partial={!complete} class="evidence-status">{status}</span>
+    </span>
+  </summary>
 
-  {#if findings.length}
-    <div class="technology-grid">
-      {#each findings as finding}
-        <article>
-          <div class="finding-head">
-            <h5>{finding.name}</h5>
-            <span class="confidence">{finding.confidence} confidence</span>
-          </div>
-          <p class="category">{finding.category}</p>
-          <ul aria-label={`${finding.name} evidence`}>
-            {#each finding.evidence as evidence}
-              <li><strong>{evidence.source}</strong><span>{evidence.description}</span></li>
-            {/each}
-          </ul>
-        </article>
-      {/each}
-    </div>
-  {:else}
-    <p class="callout info">No curated technology signature matched the captured response. This does not mean that no framework, service, or delivery platform is present.</p>
-  {/if}
+  <div class="evidence-body">
+    {#if findings.length}
+      <div class="technology-grid">
+        {#each findings as finding}
+          <article>
+            <div class="finding-head">
+              <h5>{finding.name}</h5>
+              <span class="confidence">{finding.confidence} confidence</span>
+            </div>
+            <p class="category">{finding.category}</p>
+            <ul aria-label={`${finding.name} evidence`}>
+              {#each finding.evidence as evidence}
+                <li><strong>{evidence.source}</strong><span>{evidence.description}</span></li>
+              {/each}
+            </ul>
+          </article>
+        {/each}
+      </div>
+    {:else}
+      <p class="callout info">No curated technology signature matched the captured response. This does not mean that no framework, service, or delivery platform is present.</p>
+    {/if}
 
-  {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-  <p class="card-note">These indicators are derived from the selected HTTP server header, generator metadata, resource origins, and static HTML already collected by this deep lookup. They make no additional request and do not affect availability or Risk scoring.</p>
-</section>
+    {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
+    <p class="card-note">These indicators are derived from the selected HTTP server header, generator metadata, resource origins, and static HTML already collected by this deep lookup. They make no additional request and do not affect availability or Risk scoring.</p>
+  </div>
+</details>
 
 <style>
-  .evidence-card{padding:var(--card-pad)}
-  .technology-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:10px;margin-top:14px}
+  .technology-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:10px}
   .technology-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}
   .finding-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .finding-head h5{min-width:0;margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}

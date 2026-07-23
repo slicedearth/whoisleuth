@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import {
@@ -22,6 +23,7 @@
   let inspectionInput = $state('');
   let inspectedValue = $state('');
   let inspectionActive = $state(false);
+  let hydrated = $state(false);
   const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage));
   const sortedRows = $derived(sortRegistrySupportRows(filteredRows, sortKey, sortDirection));
   const pageCount = $derived(Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE)));
@@ -30,6 +32,10 @@
   const firstVisibleRow = $derived(sortedRows.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0);
   const lastVisibleRow = $derived((currentPage - 1) * PAGE_SIZE + visibleRows.length);
   const inspection = $derived(inspectRegistrySupport(inspectedValue));
+
+  onMount(() => {
+    hydrated = true;
+  });
 
   function setPage(value: number) {
     page = Math.max(1, Math.min(pageCount, Math.trunc(value) || 1));
@@ -115,8 +121,8 @@
       <input id="support-inspection" type="search" maxlength="253" placeholder="For example: example.invalid or .uk" aria-describedby="inspector-help" autocapitalize="none" spellcheck="false" bind:value={inspectionInput}>
     </label>
     <div class="inspector-actions">
-      <button class="btn primary" type="submit">Inspect support</button>
-      <button class="btn" type="button" onclick={clearInspection} disabled={!inspectionInput && !inspectionActive}>Clear</button>
+      <button class="btn primary" type="submit" disabled={!hydrated}>Inspect support</button>
+      <button class="btn" type="button" onclick={clearInspection} disabled={!hydrated || (!inspectionInput && !inspectionActive)}>Clear</button>
     </div>
   </form>
 

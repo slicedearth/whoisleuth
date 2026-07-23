@@ -71,7 +71,7 @@
 {/if}
 
 <div class="sources">
-  <details class="card" open>
+  <details class="card">
     <summary>RDAP structured data</summary>
     {#if rdapError}<p class="error source-error">{rdapError}</p>
     {:else if resultType === 'domain'}<RdapDomainSource parsed={rdapParsed} source="Registry" />
@@ -80,7 +80,7 @@
       <dl>{#each rdapRows as row}<dt>{row.label}</dt><dd>{#if row.datetime}<time datetime={row.datetime}>{row.value}</time>{:else}{row.value}{/if}</dd>{/each}</dl>
     {/if}
   </details>
-  <details class="card" open>
+  <details class="card">
     <summary>WHOIS structured data</summary>
     {#if whoisError}<p class="error source-error">{whoisError}</p>
     {:else}

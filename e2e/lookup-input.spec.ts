@@ -339,8 +339,11 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
 
   await page.locator('#query').fill('example.com');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await page.getByText('Published contacts · 2 roles').click();
   const rdapSection = page.locator('.sources > details').first();
+  await expect(rdapSection).not.toHaveAttribute('open', '');
+  await expect(rdapSection.getByText('Published contacts · 2 roles')).toBeHidden();
+  await rdapSection.locator(':scope > summary').click();
+  await page.getByText('Published contacts · 2 roles').click();
   await expect(rdapSection.getByText('rdap_level_0, redacted_0', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText(/Registrant Email · removal · Server Policy/)).toBeVisible();
   await expect(rdapSection.getByText(/registered, Example table: éxample.com/)).toBeVisible();
@@ -445,7 +448,10 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(section.getByText('Email: abuse@registrar.example')).toBeVisible();
 
   const network = page.locator('.network-context');
+  await expect(network).not.toHaveAttribute('open', '');
   await expect(network.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
+  await expect(network.getByText('93.184.216.34', { exact: true })).toBeHidden();
+  await network.locator(':scope > summary').click();
   await expect(network.getByText('93.184.216.34', { exact: true })).toBeVisible();
   await expect(network.getByText('TLS connection', { exact: true })).toBeVisible();
   await expect(network.getByText('Example network holder', { exact: true })).toBeVisible();
@@ -744,6 +750,9 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
   await page.locator('#query').fill('example.com');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const whoisSection = page.locator('.sources > details').nth(1);
+  await expect(whoisSection).not.toHaveAttribute('open', '');
+  await expect(whoisSection.getByText('Published contacts · 2 roles · capped')).toBeHidden();
+  await whoisSection.locator(':scope > summary').click();
   await expect(whoisSection.getByText('Published contacts · 2 roles · capped')).toBeVisible();
   await whoisSection.getByText('Published contacts · 2 roles · capped').click();
   await expect(whoisSection.getByText('Example Person', { exact: true })).toBeVisible();
@@ -821,7 +830,11 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await page.locator('#query').fill('dns-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const card = page.locator('.dns-card');
+  await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
+  await expect(card.locator(':scope > summary .evidence-status')).toHaveText('partial');
+  await expect(card.getByText('192.0.2.10', { exact: true })).toBeHidden();
+  await card.locator(':scope > summary').click();
   await expect(card.getByText('192.0.2.10', { exact: true })).toBeVisible();
   await expect(card.getByText('0 issue ca.example', { exact: true })).toBeVisible();
   await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
@@ -934,7 +947,11 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await page.locator('#query').fill('http-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const card = page.locator('.http-card');
+  await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
+  await expect(card.locator(':scope > summary .evidence-status')).toHaveText('success');
+  await expect(card.getByText('https://login.example.test/final', { exact: true })).toBeHidden();
+  await card.locator(':scope > summary').click();
   await expect(card.getByText('https://login.example.test/final', { exact: true })).toBeVisible();
   await expect(card.getByText('Cross-origin redirect', { exact: true })).toBeVisible();
   await card.getByText('Redirect chain · 1 hop', { exact: true }).click();
@@ -947,7 +964,11 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(card.getByText(/missing security headers do not establish maliciousness/i)).toBeVisible();
 
   const pageCard = page.locator('.page-card');
+  await expect(pageCard).not.toHaveAttribute('open', '');
   await expect(pageCard.getByRole('heading', { name: 'Page identity' })).toBeVisible();
+  await expect(pageCard.locator(':scope > summary .evidence-status')).toHaveText('partial');
+  await expect(pageCard.getByText('https://login.example.test/account', { exact: true })).toBeHidden();
+  await pageCard.locator(':scope > summary').click();
   await expect(pageCard.getByText('https://login.example.test/account', { exact: true })).toBeVisible();
   await expect(pageCard.getByText('Account centre', { exact: true })).toBeVisible();
   await expect(pageCard.getByText('Example portal', { exact: true })).toBeVisible();
@@ -975,7 +996,12 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
 
   const technologyCard = page.locator('.technology-card');
+  await expect(technologyCard).not.toHaveAttribute('open', '');
   await expect(technologyCard.getByRole('heading', { name: 'Technology indicators' })).toBeVisible();
+  await expect(technologyCard.getByRole('heading', { name: 'Fixture CMS' })).toBeHidden();
+  const technologySummary = technologyCard.locator(':scope > summary');
+  await technologySummary.focus();
+  await technologySummary.press('Enter');
   await expect(technologyCard.getByRole('heading', { name: 'Fixture CMS' })).toBeVisible();
   await expect(technologyCard.getByText('high confidence', { exact: true })).toBeVisible();
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
@@ -983,7 +1009,11 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(technologyCard.getByText(/make no additional request and do not affect availability or Risk scoring/i)).toBeVisible();
 
   const postureCard = page.locator('.security-posture-card');
+  await expect(postureCard).not.toHaveAttribute('open', '');
   await expect(postureCard.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
+  await expect(postureCard.locator(':scope > summary .evidence-status')).toHaveText('success');
+  await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeHidden();
+  await postureCard.locator(':scope > summary').click();
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Content Security Policy not observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Review', { exact: true }).first()).toBeVisible();
@@ -1050,7 +1080,11 @@ test('TLS intelligence presents one-connection certificate evidence without narr
   await page.locator('#query').fill('tls-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const card = page.locator('.tls-card');
+  await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(card.locator(':scope > summary .evidence-status')).toHaveText('success');
+  await expect(card.getByText('93.184.216.34', { exact: true })).toBeHidden();
+  await card.locator(':scope > summary').click();
   await expect(card.getByText('93.184.216.34', { exact: true })).toBeVisible();
   await expect(card.getByText('TLSv1.3', { exact: true })).toBeVisible();
   await expect(card.getByText('Not authorized', { exact: true })).toBeVisible();
@@ -1089,6 +1123,8 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await page.locator('#query').fill('192.0.2.1');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const rdapSection = page.locator('.sources > details').first();
+  await expect(rdapSection).not.toHaveAttribute('open', '');
+  await rdapSection.locator(':scope > summary').click();
   await expect(rdapSection.getByText('Example Network', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('192.0.2.0 – 192.0.2.255', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('CIDRs')).toBeVisible();
@@ -1118,6 +1154,8 @@ test('ASN results retain allocation status and lifecycle metadata at narrow widt
   await page.locator('#query').fill('AS64496');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   const rdapSection = page.locator('.sources > details').first();
+  await expect(rdapSection).not.toHaveAttribute('open', '');
+  await rdapSection.locator(':scope > summary').click();
   await expect(rdapSection.getByText('Example Autonomous System', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('64496 – 64500', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();

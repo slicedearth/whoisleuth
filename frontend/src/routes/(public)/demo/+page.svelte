@@ -130,7 +130,7 @@
 {:else if view==='lookup'&&selected&&lookupView}
   <section class="demo-panel" aria-labelledby="lookup-heading">
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
-    <p>The production Lookup components render the synthetic view model below. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety.</p>
+    <p>The production Lookup components render the synthetic view model below. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety. Long source records and secondary Deep evidence start collapsed with their headings, states, and summaries still visible.</p>
     <div class="shared-evidence"><LookupAssessment {...lookupView.assessment} /></div>
     <div class="shared-evidence"><LookupRegistrySources {...lookupView.registry} /></div>
     <div class="shared-evidence"><LookupDnsEvidence {...lookupView.dns} /></div>

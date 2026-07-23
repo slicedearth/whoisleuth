@@ -53,6 +53,38 @@ describe('website technology profile', () => {
     assert.deepEqual(item.evidence.map((entry) => entry.source), ['static HTML', 'resource origin']);
   });
 
+  test('recognizes distinctive commerce platform markers without another request', () => {
+    const result = analyze({
+      html: `
+        <main data-mage-init='{"fixture":{}}'></main>
+        <link rel="stylesheet" href="/wp-content/plugins/woocommerce/assets/css/store.css">
+        <script src="https://cdn11.bigcommerce.com/s/fixture/stencil-utils.js"></script>
+      `,
+      resourceOrigins: ['https://cdn11.bigcommerce.com'],
+    });
+
+    assert.deepEqual(result.findings.filter((item) => item.category === 'commerce').map((item) => item.id), [
+      'adobe-commerce-magento',
+      'bigcommerce',
+      'woocommerce',
+    ]);
+    assert.equal(finding(result, 'adobe-commerce-magento').confidence, 'high');
+    assert.equal(finding(result, 'bigcommerce').confidence, 'medium');
+    assert.equal(finding(result, 'woocommerce').confidence, 'high');
+    assert.equal(finding(result, 'wordpress').confidence, 'medium');
+  });
+
+  test('does not infer commerce platforms from ordinary page text or unrelated origins', () => {
+    const result = analyze({
+      html: '<main>Migration notes mention Magento, BigCommerce, and WooCommerce.</main>',
+      resourceOrigins: ['https://developer.bigcommerce.com'],
+    });
+
+    assert.equal(finding(result, 'adobe-commerce-magento'), undefined);
+    assert.equal(finding(result, 'bigcommerce'), undefined);
+    assert.equal(finding(result, 'woocommerce'), undefined);
+  });
+
   test('treats a recognized resource origin alone as medium-confidence evidence', () => {
     const result = analyze({ resourceOrigins: ['https://assets.wixstatic.com'] });
     const item = finding(result, 'wix');
@@ -84,6 +116,14 @@ describe('website technology profile', () => {
       ['cloudflare', 'delivery platform'],
       ['nextjs', 'web framework'],
     ]);
+  });
+
+  test('recognizes CloudFront from selected server or retained resource evidence', () => {
+    const serverResult = analyze({ httpServer: 'CloudFront' });
+    assert.equal(finding(serverResult, 'cloudfront').confidence, 'high');
+
+    const resourceResult = analyze({ resourceOrigins: ['https://assets.fixture.cloudfront.net'] });
+    assert.equal(finding(resourceResult, 'cloudfront').confidence, 'medium');
   });
 
   test('sorts findings deterministically by category and name', () => {
