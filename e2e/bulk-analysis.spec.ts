@@ -426,6 +426,10 @@ test('deep results present bounded relationship evidence including exact native 
   await expect(section.getByText('Shared tracking identifier', { exact: true })).toBeVisible();
   await expect(section.getByText('Similar favicon', { exact: true })).toBeVisible();
   await expect(section.getByText('Official asset relationship', { exact: true })).toBeVisible();
+  await expect(section.locator('.relationship-glyph svg')).toHaveCount(6);
+  await expect(section.locator('article', { hasText: 'Shared nameserver set' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
+  await expect(section.locator('article', { hasText: 'Shared TLS certificate' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'tls');
+  await expect(section.locator('article', { hasText: 'Similar favicon' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'favicon');
   await expect(section).toContainText('not ownership or maliciousness conclusions');
   await section.getByText('Interpretation limits').click();
   await expect(section).toContainText('does not establish common control');

@@ -127,7 +127,12 @@ test('the Dashboard groups core tasks without duplicating the sidebar tool map',
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
   await expect(page.locator('.quick-card')).toHaveCount(3);
+  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(3);
+  await expect(page.locator('.quick-card', { hasText: 'Check one target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
+  await expect(page.locator('.quick-card', { hasText: 'Find lookalike domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'discover');
+  await expect(page.locator('.quick-card', { hasText: 'Compare domain candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
   await expect(page.locator('.workspace-card')).toHaveCount(0);
+  await expect(page.locator('.summary-card .summary-icon svg')).toHaveCount(3);
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
   await expect(page.locator('.summary-card', { hasText: 'Watchlists' })).toHaveAttribute('href', '/monitor?view=watchlists');
   await expect(page.getByRole('link', { name: /Check domain-ending support/ })).toHaveAttribute('href', '/registry-support');

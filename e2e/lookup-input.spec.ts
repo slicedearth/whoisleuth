@@ -348,7 +348,12 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expect(rdapSection).not.toHaveAttribute('open', '');
   await expect(rdapSection.getByText('Published contacts · 2 roles')).toBeHidden();
   await rdapSection.locator(':scope > summary').click();
-  await page.getByText('Published contacts · 2 roles').click();
+  await expect(rdapSection).toHaveAttribute('open', '');
+  const contactInventory = rdapSection.locator('details.contact-inventory');
+  const contactSummary = contactInventory.locator(':scope > summary');
+  await expect(contactSummary).toBeVisible();
+  await contactSummary.dispatchEvent('click');
+  await expect(contactInventory).toHaveAttribute('open', '');
   await expect(rdapSection.getByText('rdap_level_0, redacted_0', { exact: true })).toBeVisible();
   await expect(rdapSection.getByText(/Registrant Email · removal · Server Policy/)).toBeVisible();
   await expect(rdapSection.getByText(/registered, Example table: éxample.com/)).toBeVisible();

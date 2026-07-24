@@ -242,7 +242,7 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(trigger).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
-  await expect(trigger.locator('.shortcut-compact')).toBeHidden();
+  await expect(trigger.locator('.command-icon')).toBeHidden();
 
   await page.keyboard.press('Control+K');
   const dialog = page.getByRole('dialog', { name: 'Go to' });
@@ -268,7 +268,12 @@ test('the console command palette filters destinations and remains keyboard oper
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(trigger).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toBeHidden();
-  await expect(trigger.locator('.shortcut-compact')).toBeVisible();
+  const compactIcon = trigger.locator('.command-icon');
+  await expect(compactIcon).toBeVisible();
+  const compactIconSvg = compactIcon.locator('svg');
+  await expect(compactIconSvg).toHaveAttribute('data-icon', 'command');
+  await expect(compactIconSvg).toHaveAttribute('width', '18');
+  await expect(compactIconSvg).toHaveAttribute('height', '18');
   await trigger.click();
   await expect(dialog).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -357,7 +362,24 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   }))).toBe(true);
   const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
   await expect(sourceRail.locator('.source-icon')).toHaveCount(await sourceRail.locator('li').count());
-  await expect(topology.locator('.node-source-icon .source-icon')).toHaveCount(await sourceRail.locator('li').count());
+  const desktopSourceIcons = topology.locator('.node-source-icon .source-icon');
+  await expect(desktopSourceIcons).toHaveCount(await sourceRail.locator('li').count());
+  await expect(desktopSourceIcons.first()).toBeVisible();
+  expect(await desktopSourceIcons.evaluateAll((icons) => icons.every((icon) => {
+    const iconRect = icon.getBoundingClientRect();
+    const discRect = icon.closest('.source-node')?.querySelector('.glyph-disc')?.getBoundingClientRect();
+    return Boolean(
+      discRect
+      && iconRect.width > 0
+      && iconRect.width <= 32
+      && iconRect.height > 0
+      && iconRect.height <= 32
+      && iconRect.left >= discRect.left - 2
+      && iconRect.right <= discRect.right + 2
+      && iconRect.top >= discRect.top - 2
+      && iconRect.bottom <= discRect.bottom + 2
+    );
+  }))).toBe(true);
   await expect(sourceRail.getByRole('link', { name: /Registry RDAP.*success/i })).toHaveAttribute('href', '#evidence-registry');
   await expect(sourceRail.getByRole('link', { name: /WHOIS.*partial/i })).toHaveAttribute('href', '#evidence-registry');
   const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
@@ -421,6 +443,23 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeHidden();
   await expect(topology.locator('.mobile-target')).toBeVisible();
   await expect(sourceRail.locator('.source-copy small').first()).toBeVisible();
+  const mobileSourceIcons = sourceRail.locator('.source-glyph .source-icon');
+  await expect(mobileSourceIcons.first()).toBeVisible();
+  expect(await mobileSourceIcons.evaluateAll((icons) => icons.every((icon) => {
+    const iconRect = icon.getBoundingClientRect();
+    const holderRect = icon.closest('.source-glyph')?.getBoundingClientRect();
+    return Boolean(
+      holderRect
+      && iconRect.width > 0
+      && iconRect.width <= 20
+      && iconRect.height > 0
+      && iconRect.height <= 20
+      && iconRect.left >= holderRect.left - 0.5
+      && iconRect.right <= holderRect.right + 0.5
+      && iconRect.top >= holderRect.top - 0.5
+      && iconRect.bottom <= holderRect.bottom + 0.5
+    );
+  }))).toBe(true);
   expect(await sourceRail.locator('li').evaluateAll((items) => items.every((item) => {
     const listRect = item.parentElement?.getBoundingClientRect();
     const itemRect = item.getBoundingClientRect();

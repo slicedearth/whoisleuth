@@ -1095,9 +1095,28 @@ test.describe('accessible cross-case relationship table', () => {
       caseRecord({ id: 'graph-b', domain: 'bravo-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
     ]);
 
-    const graph = page.locator('.graph-scroll svg');
+    const graph = page.locator('.graph-scroll > svg');
     await expect(graph).toBeVisible();
-    await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toBeVisible();
+    const nameserverNode = graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' });
+    await expect(nameserverNode).toBeVisible();
+    await expect(nameserverNode.locator('.graph-node-icon')).toHaveAttribute('data-icon', 'nameserver');
+    const graphIcons = graph.locator('.graph-node-icon');
+    await expect(graphIcons).toHaveCount(4);
+    expect(await graphIcons.evaluateAll((icons) => icons.every((icon) => {
+      const iconRect = icon.getBoundingClientRect();
+      const discRect = icon.parentElement?.querySelector('.node-icon-disc')?.getBoundingClientRect();
+      return Boolean(
+        discRect
+        && iconRect.width > 0
+        && iconRect.width <= 14
+        && iconRect.height > 0
+        && iconRect.height <= 14
+        && iconRect.left >= discRect.left - 1
+        && iconRect.right <= discRect.right + 1
+        && iconRect.top >= discRect.top - 1
+        && iconRect.bottom <= discRect.bottom + 1
+      );
+    }))).toBe(true);
 
     const caseNode = graph.getByRole('button', { name: 'Case alpha-graph.invalid' });
     await caseNode.focus();
@@ -1108,7 +1127,9 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(inspector).toContainText('Shared nameserver set: ns.shared-graph.invalid');
 
     await page.locator('.graph-controls select').first().selectOption('http_final_origin');
-    await expect(graph.getByRole('button', { name: 'Shared final website origin: https://shared-graph.invalid' })).toBeVisible();
+    const originNode = graph.getByRole('button', { name: 'Shared final website origin: https://shared-graph.invalid' });
+    await expect(originNode).toBeVisible();
+    await expect(originNode.locator('.graph-node-icon')).toHaveAttribute('data-icon', 'origin');
     await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toHaveCount(0);
 
     await inspector.getByRole('button', { name: 'Open case', exact: true }).click();
@@ -1130,7 +1151,7 @@ test.describe('accessible cross-case relationship table', () => {
     ]);
 
     const region = page.getByRole('region', { name: 'Relationship graph' });
-    const graph = region.locator('.graph-scroll svg');
+    const graph = region.locator('.graph-scroll > svg');
     const controls = region.getByRole('group', { name: 'Relationship graph view controls' });
     await graph.getByRole('button', { name: 'Case alpha-view.invalid', exact: true }).click();
     await controls.getByRole('button', { name: 'Focus one hop' }).click();
@@ -1181,7 +1202,7 @@ test.describe('accessible cross-case relationship table', () => {
     ]);
 
     const region = page.getByRole('region', { name: 'Relationship graph' });
-    const visual = region.locator('.graph-scroll svg');
+    const visual = region.locator('.graph-scroll > svg');
     await visual.getByRole('button', { name: 'Shared final website origin: https://shared-export.invalid', exact: true }).click();
     await region.getByRole('group', { name: 'Relationship graph view controls' }).getByRole('button', { name: 'Hide selected' }).click();
     await expect(visual.getByRole('button', { name: /Shared final website origin/ })).toHaveCount(0);
@@ -1315,7 +1336,7 @@ test.describe('accessible cross-case relationship table', () => {
     ]);
     await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toBeVisible();
     const graph = page.getByRole('region', { name: 'Relationship graph' });
-    await graph.locator('.graph-scroll svg').getByRole('button', { name: 'Case long-mobile-relationship-member-a.invalid', exact: true }).click();
+    await graph.locator('.graph-scroll > svg').getByRole('button', { name: 'Case long-mobile-relationship-member-a.invalid', exact: true }).click();
     await graph.getByRole('button', { name: 'Add to comparison group' }).click();
     await expect(graph.getByRole('region', { name: 'Comparison group' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
