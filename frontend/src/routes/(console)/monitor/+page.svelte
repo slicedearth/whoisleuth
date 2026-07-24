@@ -16,6 +16,7 @@
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
+  import RetainedRelationshipObservations from '$lib/components/RetainedRelationshipObservations.svelte';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.js';
   import { parseDomainInput } from '$lib/analysis/utils.js';
   import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
@@ -26,6 +27,11 @@
   } from '$lib/cases';
   import { loadCampaigns } from '$lib/campaigns';
   import { loadDetectionRules } from '$lib/detection-rules';
+  import {
+    deleteRelationshipObservation,
+    loadRelationshipObservations,
+    type RelationshipObservation,
+  } from '$lib/relationship-observations';
   import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
 
@@ -58,9 +64,10 @@
   let casePage=$state(1);
   let campaignCount=$state(0);
   let investigationProjection=$state<unknown>(null);
+  let retainedRelationships=$state<RelationshipObservation[]>([]);
   let customRuleCount=$state(0);
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
-  const relationshipCount=$derived(relationshipSummary.groups.length);
+  const relationshipCount=$derived(relationshipSummary.groups.length+retainedRelationships.length);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
   let guidedDomains=$state<string[]>([]);let guidedDomainsTruncated=$state(false);
@@ -85,6 +92,15 @@
   function setCasePage(value:number){casePage=Math.min(casePageCount,Math.max(1,Math.trunc(value)));}
   function showCasePage(record:CaseRecord){const index=filteredCases.findIndex(item=>item.id===record.id);if(index>=0)casePage=Math.floor(index/CASE_PAGE_SIZE)+1;}
   async function refreshRelationships(){investigationProjection=await loadLocalCaseInvestigationProjection();}
+  async function refreshRetainedRelationships(){retainedRelationships=await loadRelationshipObservations();}
+  async function removeRetainedRelationship(record:RelationshipObservation){
+    if(!confirm(`Delete the retained ${record.label.toLowerCase()} observation for ${record.domains.length} domain${record.domains.length===1?'':'s'}?`))return;
+    try{
+      retainedRelationships=await deleteRelationshipObservation(record.id);
+      await refreshRelationships();
+      caseMessage=`Deleted the retained relationship observation. Source cases and watchlists were not changed.`;
+    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the retained relationship observation.';}
+  }
   async function refreshCases(){cases=await loadCases();await refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
   function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);}
@@ -121,7 +137,7 @@
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=await importCases(JSON.parse(await file.text()));await refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{void (async()=>{
-    await Promise.all([refresh(),refreshCases()]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
+    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships()]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';if(cases.some(record=>record.id===focus)){const target=cases.find(record=>record.id===focus)!;showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');}}
     else if(page.url.searchParams.get('view')==='watchlists')view='watchlists';
@@ -161,6 +177,11 @@
 
 {#if view==='relationships'}
 <div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
+  <RetainedRelationshipObservations
+    records={retainedRelationships}
+    focusId={page.url.searchParams.get('observation')||''}
+    ondelete={removeRetainedRelationship}
+  />
   <CaseRelationshipGraph records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
   <CaseRelationshipTable records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
 </div>

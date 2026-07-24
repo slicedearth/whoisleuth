@@ -371,6 +371,14 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
 });
 
 test('deep Lookup presents registrar and observed network RDAP as separate sources', async ({ page }) => {
+  const lookupOrigin = new URL(page.url()).origin;
+  const thirdPartyRequests: string[] = [];
+  page.on('request', (request) => {
+    const requestUrl = new URL(request.url());
+    if (requestUrl.origin !== lookupOrigin && !['data:', 'blob:'].includes(requestUrl.protocol)) {
+      thirdPartyRequests.push(request.url());
+    }
+  });
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -432,6 +440,33 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.locator('#query').fill('registrar-source.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const analystPivots = page.locator('details.analyst-pivots');
+  await expect(analystPivots).not.toHaveAttribute('open', '');
+  await expect(analystPivots.getByText('External evidence pivots', { exact: true })).toBeVisible();
+  await expect(analystPivots.getByText('Compare registration data', { exact: true })).toBeHidden();
+  await analystPivots.locator(':scope > summary').click();
+  await expect(analystPivots.getByText(/does not contact these destinations/i)).toBeVisible();
+  await expect(analystPivots.getByRole('link', { name: /Open ICANN Lookup/u })).toHaveAttribute(
+    'href',
+    'https://lookup.icann.org/en/lookup?name=registrar-source.example',
+  );
+  await expect(analystPivots.getByRole('link', { name: /Open IANA Root Zone Database/u })).toHaveAttribute(
+    'href',
+    'https://www.iana.org/domains/root/db/example.html',
+  );
+  await expect(analystPivots.getByRole('link', { name: /Open RIPEstat/u })).toHaveAttribute(
+    'href',
+    'https://stat.ripe.net/app/launchpad/93.184.216.0%2F24',
+  );
+  const pivotLinks = await analystPivots.getByRole('link').all();
+  expect(pivotLinks).toHaveLength(6);
+  for (const link of pivotLinks) {
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  }
+  expect(thirdPartyRequests).toEqual([]);
+
   const section = page.locator('details.registrar-rdap');
   await expect(section).not.toHaveAttribute('open', '');
   const summary = section.locator(':scope > summary');
@@ -478,6 +513,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(exported.sources.network.network.holder).toBe('Example network holder');
   expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
   expect(JSON.stringify(exported)).not.toContain('abuse@registrar.example');
+  expect(JSON.stringify(exported)).not.toContain('stat.ripe.net');
 
   await page.setViewportSize({ width: 360, height: 780 });
   await expectNoHorizontalOverflow(page);

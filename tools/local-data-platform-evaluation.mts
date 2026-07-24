@@ -18,6 +18,9 @@ import {
   MAX_RULE_STORE_BYTES,
 } from '../frontend/src/lib/analysis/detection-rule-model.js';
 import {
+  MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
+} from '../frontend/src/lib/analysis/relationship-observation-model.ts';
+import {
   MAX_SHORTLIST_STORE_BYTES,
 } from '../frontend/src/lib/analysis/shortlist-model.js';
 import {
@@ -35,13 +38,13 @@ type StoreAssessment = Readonly<{
   id: string;
   label: string;
   maximumBytes: number;
-  access: 'whole_document';
-  backend: 'localStorage';
+  access: 'keyed_records';
+  backend: 'indexedDB';
 }>;
 
 type CandidateAssessment = Readonly<{
   id: 'native_indexeddb' | 'indexeddb_wrapper' | 'sqlite_wasm' | 'localstorage';
-  disposition: 'recommended' | 'optional_later' | 'defer' | 'transitional';
+  disposition: 'implemented' | 'optional_later' | 'defer' | 'rollback_only';
   productionDependency: boolean;
   sameOriginLocal: boolean;
   supportsTransactions: boolean;
@@ -50,31 +53,32 @@ type CandidateAssessment = Readonly<{
 }>;
 
 export const LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA = 'whoisleuth.local-data-platform-evaluation';
-export const LOCAL_DATA_PLATFORM_EVALUATION_VERSION = 1;
+export const LOCAL_DATA_PLATFORM_EVALUATION_VERSION = 2;
 export const LOCAL_STORAGE_REFERENCE_BYTES = 5 * 1024 * 1024;
 export const MAX_LOCAL_DATA_EVALUATION_STORES = 16;
 export const MAX_LOCAL_DATA_EVALUATION_CANDIDATES = 8;
 export const MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH = 320;
 
 const CURRENT_STORES = Object.freeze<StoreAssessment[]>([
-  Object.freeze({ id: 'cases', label: 'Cases', maximumBytes: MAX_CASE_STORE_BYTES, access: 'whole_document', backend: 'localStorage' }),
-  Object.freeze({ id: 'watchlists', label: 'Watchlists', maximumBytes: MAX_WATCHLIST_STORE_BYTES, access: 'whole_document', backend: 'localStorage' }),
-  Object.freeze({ id: 'brand_profiles', label: 'Brand Profiles', maximumBytes: MAX_PROFILE_STORE_BYTES, access: 'whole_document', backend: 'localStorage' }),
-  Object.freeze({ id: 'campaigns', label: 'Campaigns', maximumBytes: MAX_CAMPAIGN_STORE_BYTES, access: 'whole_document', backend: 'localStorage' }),
-  Object.freeze({ id: 'shortlist', label: 'Shortlist', maximumBytes: MAX_SHORTLIST_STORE_BYTES, access: 'whole_document', backend: 'localStorage' }),
-  Object.freeze({ id: 'ct_history', label: 'Certificate Transparency history', maximumBytes: MAX_CT_HISTORY_STORE_BYTES, access: 'whole_document', backend: 'localStorage' }),
-  Object.freeze({ id: 'detection_rules', label: 'Detection rules', maximumBytes: MAX_RULE_STORE_BYTES, access: 'whole_document', backend: 'localStorage' }),
+  Object.freeze({ id: 'cases', label: 'Cases', maximumBytes: MAX_CASE_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
+  Object.freeze({ id: 'watchlists', label: 'Watchlists', maximumBytes: MAX_WATCHLIST_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
+  Object.freeze({ id: 'brand_profiles', label: 'Brand Profiles', maximumBytes: MAX_PROFILE_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
+  Object.freeze({ id: 'campaigns', label: 'Campaigns', maximumBytes: MAX_CAMPAIGN_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
+  Object.freeze({ id: 'shortlist', label: 'Shortlist', maximumBytes: MAX_SHORTLIST_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
+  Object.freeze({ id: 'ct_history', label: 'Certificate Transparency history', maximumBytes: MAX_CT_HISTORY_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
+  Object.freeze({ id: 'detection_rules', label: 'Detection rules', maximumBytes: MAX_RULE_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
+  Object.freeze({ id: 'relationship_observations', label: 'Retained relationship observations', maximumBytes: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, access: 'keyed_records', backend: 'indexedDB' }),
 ]);
 
 const CANDIDATES = Object.freeze<CandidateAssessment[]>([
   Object.freeze({
     id: 'native_indexeddb',
-    disposition: 'recommended',
+    disposition: 'implemented',
     productionDependency: false,
     sameOriginLocal: true,
     supportsTransactions: true,
     supportsIndexedQueries: true,
-    detail: 'Prototype the browser-native asynchronous database first, behind an application-owned interface.',
+    detail: 'The dependency-free native IndexedDB provider is the production browser-local storage backend.',
   }),
   Object.freeze({
     id: 'indexeddb_wrapper',
@@ -96,12 +100,12 @@ const CANDIDATES = Object.freeze<CandidateAssessment[]>([
   }),
   Object.freeze({
     id: 'localstorage',
-    disposition: 'transitional',
+    disposition: 'rollback_only',
     productionDependency: false,
     sameOriginLocal: true,
     supportsTransactions: false,
     supportsIndexedQueries: false,
-    detail: 'Keep existing stores authoritative until a non-destructive migration is separately approved and verified.',
+    detail: 'Retained legacy documents support one deliberate rollback compatibility copy; IndexedDB is authoritative after migration.',
   }),
 ]);
 
@@ -144,19 +148,19 @@ export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () =>
       localStorageReferenceMiB: mebibytes(LOCAL_STORAGE_REFERENCE_BYTES),
       exceedsReferenceByBytes,
       exceedsReferenceByMiB: mebibytes(exceedsReferenceByBytes),
-      crossStoreTransactions: false,
-      investigationSearchBuild: 'disposable_full_store_projection',
+      crossStoreTransactions: true,
+      investigationSearchBuild: 'disposable_bounded_projection',
     }),
     findings: Object.freeze([
       Object.freeze({
         id: 'aggregate_capacity',
         status: exceedsReferenceByBytes > 0 ? 'threshold_met' : 'not_demonstrated',
-        detail: boundedDetail(`The ${stores.length} declared browser-store budgets total ${mebibytes(declaredMaximumBytes)} MiB, compared with the existing 5 MiB localStorage planning reference.`),
+        detail: boundedDetail(`The ${stores.length} declared browser-store budgets total ${mebibytes(declaredMaximumBytes)} MiB, compared with the former 5 MiB localStorage planning reference.`),
       }),
       Object.freeze({
         id: 'queryability',
         status: 'threshold_met',
-        detail: boundedDetail('Investigation search currently parses complete bounded source documents and rebuilds a disposable projection and index.'),
+        detail: boundedDetail('Investigation search reads bounded source collections and rebuilds a disposable typed projection and index without persisting query terms.'),
       }),
       Object.freeze({
         id: 'privacy',
@@ -171,11 +175,11 @@ export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () =>
     ]),
     candidates: Object.freeze(candidates),
     decision: Object.freeze({
-      state: 'proceed_with_native_indexeddb_prototype',
+      state: 'native_indexeddb_in_production',
       recommendedCandidate: 'native_indexeddb',
-      rationale: boundedDetail('The aggregate capacity and whole-document query thresholds justify a dependency-free IndexedDB prototype, but not an automatic production migration.'),
-      migrationApproved: false,
-      independentFutureWork: Object.freeze(['production_migration', 'encryption', 'pwa']),
+      rationale: boundedDetail('The verified non-destructive migration now uses the dependency-free IndexedDB provider while retaining collection bounds and explicit rollback copies.'),
+      migrationApproved: true,
+      independentFutureWork: Object.freeze(['encryption', 'pwa', 'synchronization']),
     }),
     limitations: Object.freeze([
       boundedDetail('Declared store budgets are safety ceilings, not a measurement of one user workspace or a browser quota guarantee.'),
@@ -190,11 +194,11 @@ export function formatLocalDataPlatformEvaluation(report: ReturnType<typeof buil
   return [
     'WHOISleuth local data platform evaluation',
     `Declared browser-store budgets: ${report.current.declaredMaximumMiB} MiB across ${report.current.storeCount} stores`,
-    `Existing localStorage planning reference: ${report.current.localStorageReferenceMiB} MiB`,
+    `Former localStorage planning reference: ${report.current.localStorageReferenceMiB} MiB`,
     `Capacity above reference: ${report.current.exceedsReferenceByMiB} MiB`,
     `Decision: ${report.decision.state}`,
     `Candidate: ${recommended?.id || 'none'} (${recommended?.productionDependency ? 'dependency required' : 'no production dependency'})`,
-    'Migration, encryption, and PWA support remain separately gated.',
+    'Encryption, PWA support, and synchronization remain separately gated.',
     'Use --json for the complete versioned report.',
   ].join('\n');
 }

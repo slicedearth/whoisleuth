@@ -61,6 +61,17 @@ default (see the README), so many lookups return no personal data at all.
   briefly cached in server memory like other RDAP responses. The selected
   address can belong to a CDN, proxy, load balancer, or shared edge and is not
   proof of an origin host, hosting control, ownership, intent, or maliciousness.
+- **Analyst-controlled external evidence pivots**: a completed Lookup can show
+  a collapsed set of ordinary links to reviewed public registration,
+  top-level-domain delegation, Certificate Transparency, archived-page,
+  routing, interconnection, and site-status tools. The links are constructed
+  only from a locally revalidated canonical domain, top-level domain, public
+  address or prefix, or public ASN already present in the Lookup result.
+  WHOISleuth does not prefetch those destinations, call their APIs, embed their
+  pages, retain their responses, or use them for availability, Risk, cases,
+  exports, Bulk, or monitoring. Each link names the destination and exact value
+  it will receive. That value leaves WHOISleuth only after the analyst opens
+  the link, under the destination's own privacy and retention terms.
 - **Optional security.txt disclosure lookup**: when selected for a deep
   single-domain Lookup, the server starts one bounded HTTPS collection at the
   standardized security.txt location on the exact entered hostname. It retains
@@ -131,8 +142,9 @@ default (see the README), so many lookups return no personal data at all.
   transport, redirect count/flags, MIME type, and presence-only security-header
   tokens. Monitor can derive a capped relationship graph and table from the
   typed projection of bounded final-origin and nameserver-set observations
-  already retained in browser-local case histories. This makes no request and
-  saves no separate relationship record. A deliberate local graph download can
+  already retained in browser-local case histories. That automatic projection
+  makes no request and saves no separate relationship record. A deliberate
+  local graph download can
   include the filtered case domains, exact retained relationship values,
   method, classification, source, observation time, completeness, truncation,
   limitations, and up to 8 bounded source observations per relationship as
@@ -140,6 +152,19 @@ default (see the README), so many lookups return no personal data at all.
   raw registry or page responses, contacts, credentials, and transient graph
   view state. Raw header values, attempt errors, and redirect inventories are
   not copied into browser-local investigation stores or graph exports.
+- **Analyst-selected relationship observations**: Bulk can compare bounded
+  nameserver, IP-address, native certificate, public tracking-identifier,
+  favicon, and configured official-asset-host observations inside the current
+  result set. Nothing is saved automatically. Selecting **Retain observation**
+  stores only one normalized relationship value, its bounded member domains,
+  method, observed and retained times, source and schema version, completeness,
+  truncation, fixed description, and stated limitations in the browser's
+  IndexedDB database. It excludes the complete Bulk result, raw RDAP/WHOIS or
+  page responses, contacts, credentials, and unrelated DNS or HTTP evidence.
+  Monitor can review or delete the record, local search can find its known
+  fields, and the typed projection can connect it to existing cases without a
+  new request. The record is derived evidence and does not prove ownership,
+  coordination, intent, or maliciousness.
 - **Public synthetic demo** - the unauthenticated demo uses fixed fictional
   fixtures on reserved domains to represent Dashboard, Brands, Discover, Bulk,
   Lookup, and Monitor without performing a live analysis request. Its bounded
@@ -258,10 +283,11 @@ default (see the README), so many lookups return no personal data at all.
   Bulk results, but is included when the user deliberately downloads a full
   Lookup evidence export.
 - **Brand Profiles / Shortlist / Watchlist / Cases / Campaigns / Certificate
-  search history / Custom rules**: saved as bounded records in your own
-  browser's IndexedDB database, not on the server, and visible to whoever can
-  use that browser profile. On the first authenticated load after this storage
-  change, WHOISleuth normalizes supported legacy `localStorage` documents and
+  search history / Custom rules / Retained relationship observations**: saved
+  as bounded records in your own browser's IndexedDB database, not on the
+  server, and visible to whoever can use that browser profile. On the first
+  authenticated load after this storage change, WHOISleuth normalizes
+  supported legacy `localStorage` documents and
   copies them into a versioned IndexedDB manifest without deleting the source
   documents. Later IndexedDB writes are authoritative and do not automatically
   update those legacy sources. A deliberate Dashboard control can refresh the
@@ -322,8 +348,9 @@ default (see the README), so many lookups return no personal data at all.
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
   registry-published contact data. A deliberate unified workspace archive can
   contain cases and their analyst notes, campaigns, Brand Profiles, watchlists,
-  shortlist entries, custom detection rules, active-profile selection, and
-  theme preference. It uses a versioned manifest with per-section SHA-256
+  shortlist entries, custom detection rules, retained relationship
+  observations, active-profile selection, and theme preference. It uses a
+  versioned manifest with per-section SHA-256
   checksums, previews conflicts before a non-destructive merge, and excludes
   sessions, passwords, API credentials, hosted-monitor encryption keys, raw
   upstream payloads, tab state, Certificate Transparency history, and unrelated

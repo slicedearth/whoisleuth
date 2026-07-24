@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
+  import BrandMark from '$lib/components/BrandMark.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
   import {
@@ -50,7 +51,7 @@
 <div class="public-shell">
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="public-header">
-    <a class="public-brand" href="/"><span class="mark"><img src="/favicon.svg" alt=""></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
+    <a class="public-brand" href="/"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
     <nav aria-label="Public navigation">
       <a class="overview-link" class:active={page.url.pathname==='/' } aria-current={page.url.pathname==='/'?'page':undefined} href="/">Overview</a>
       <a class:active={page.url.pathname==='/demo'} aria-current={page.url.pathname==='/demo'?'page':undefined} href="/demo">Demo</a>

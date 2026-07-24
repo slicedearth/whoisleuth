@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
   import { page } from '$app/state';
+  import AnalystEvidencePivots from '$lib/components/AnalystEvidencePivots.svelte';
   import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
@@ -30,6 +31,7 @@
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compactHttpObservation } from '$lib/analysis/http-summary.js';
+  import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.js';
   import {
     normalizeEvidenceTopologyStatus,
@@ -166,6 +168,15 @@
   const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
+  const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
+    type:result?.type,
+    query:result?.query,
+    registrableDomain:result?.registrableDomain,
+    observedAddress:observedNetworkEndpoint.address,
+    observedCidrs:observedNetwork.cidrs,
+    startAutnum:rdapParsed.startAutnum,
+    endAutnum:rdapParsed.endAutnum,
+  }));
   const lifecycleEvents=$derived([
     {id:'domain-created',label:'Domain created',date:created(),detail:'Registry lifecycle',kind:'registry' as const},
     {id:'domain-updated',label:'Registry updated',date:updated(),detail:'Most recent registry change',kind:'registry' as const},
@@ -610,6 +621,8 @@
         nodes={evidenceTopologyNodes}
       />
 
+      <AnalystEvidencePivots pivots={analystEvidencePivots} />
+
       <LookupLifecycle events={lifecycleEvents} />
 
       <LookupOverviewFacts facts={overviewFacts()} diagnostics={sourceDiagnostics()} hasAssessment={availability.applicable!==false} />
@@ -772,7 +785,7 @@
   .result-section>h3::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--section-accent) 60%,var(--border)),var(--border) 42%)}
   .result-section>.card,.result-section>.evidence-component{margin-top:12px}
   .result-section>:nth-child(2){margin-top:0}
-  .evidence-component[id]{position:relative;padding-left:3px;border-left:2px solid var(--evidence-rail,var(--accent));border-radius:var(--radius-md);scroll-margin-top:88px}
+  .evidence-component[id]{position:relative;padding-left:3px;border-left:2px solid var(--evidence-rail,var(--accent));border-radius:var(--radius-md);scroll-margin-top:var(--local-nav-anchor-offset,88px)}
   #evidence-page,#evidence-security-txt,#evidence-http,#evidence-tls{--evidence-rail:var(--amber)}
   #evidence-dns,#evidence-network{--evidence-rail:var(--accent)}
   #evidence-posture,#evidence-technology{--evidence-rail:var(--violet)}

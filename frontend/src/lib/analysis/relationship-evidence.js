@@ -164,9 +164,9 @@ function addBucket(buckets, value, domain) {
   buckets.get(value)?.add(domain);
 }
 
-/** @param {string} type @param {string} label @param {string} method @param {string} value @param {Array<string>} domains @param {string} description */
-function group(type, label, method, value, domains, description) {
-  return { type, label, method, value, domains, description };
+/** @param {string} type @param {string} label @param {string} method @param {string} value @param {Array<string>} domains @param {string} description @param {string} [normalizedValue] */
+function group(type, label, method, value, domains, description, normalizedValue = value) {
+  return { type, label, method, value, normalizedValue, domains, description };
 }
 
 /**
@@ -227,7 +227,25 @@ export function buildScanRelationships(rawRows) {
   if (rows.length > MAX_FAVICON_ROWS) truncated = true;
   for (const domains of groupBySimilarFavicon(faviconRows, 6)) {
     const distinctDomains = [...new Set(domains)].sort();
-    if (distinctDomains.length >= 2) output.push(group('favicon', 'Similar favicon', 'Exact SHA-256 or perceptual dHash distance ≤ 6', '', distinctDomains, 'These domains used an identical or perceptually similar favicon in this scan.'));
+    if (distinctDomains.length >= 2) {
+      const evidenceByDomain = new Map(faviconRows.map((row) => [row.domain, row]));
+      const normalizedValue = distinctDomains.map((domain) => {
+        const evidence = evidenceByDomain.get(domain);
+        return `${domain}=${[
+          evidence?.faviconHash ? `sha256:${evidence.faviconHash}` : '',
+          evidence?.faviconPHash ? `dhash:${evidence.faviconPHash}` : '',
+        ].filter(Boolean).join(',')}`;
+      }).join('|');
+      output.push(group(
+        'favicon',
+        'Similar favicon',
+        'Exact SHA-256 or perceptual dHash distance ≤ 6',
+        '',
+        distinctDomains,
+        'These domains used an identical or perceptually similar favicon in this scan.',
+        normalizedValue,
+      ));
+    }
   }
   for (const [value, domains] of officialAssets) output.push(group('official_asset', 'Official asset relationship', 'Configured-domain host match', value, [...domains].sort(), 'One or more pages loaded an asset from this configured official domain or its subdomain.'));
 

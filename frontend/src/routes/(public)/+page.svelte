@@ -67,7 +67,7 @@
 </section>
 
 <section class="principles card" aria-labelledby="principles-title">
-  <div><p class="eyebrow">Privacy and storage</p><h2 id="principles-title">Keep core investigation work in your browser.</h2><p>Profiles, cases, watchlists, campaigns and search baselines stay in the current browser by default. Optional hosted monitoring stores only compact encrypted evidence for scheduled checks.</p></div>
+  <div><p class="eyebrow">Privacy and storage</p><h2 id="principles-title">Keep core investigation work in your browser.</h2><p>Profiles, cases, watchlists, campaigns, selected relationship pivots and search baselines stay in the current browser by default. Optional hosted monitoring stores only compact encrypted evidence for scheduled checks.</p></div>
   <ul><li>No advertising profiles or cross-site tracking</li><li>The public demo uses fixed fictional data</li><li>Compact stores exclude raw registry responses</li><li>A failed check is not treated as a negative finding</li></ul>
 </section>
 

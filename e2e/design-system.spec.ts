@@ -22,7 +22,7 @@ const INTELLIGENCE_CAPABILITIES = {
   limitations: [],
 };
 
-test('the phosphorous brand cursor stays aligned across public and console layouts', async ({ page }) => {
+test('the phosphorous brand cursor stays aligned and static across public and console layouts', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
 
   const variants = [
@@ -47,6 +47,7 @@ test('the phosphorous brand cursor stays aligned across public and console layou
         display: cursorStyle.display,
         heightRatio: Number.parseFloat(cursorStyle.height) / fontSize,
         verticalAlignRatio: Number.parseFloat(cursorStyle.verticalAlign) / fontSize,
+        animationName: cursorStyle.animationName,
       };
     });
 
@@ -54,8 +55,73 @@ test('the phosphorous brand cursor stays aligned across public and console layou
     expect(cursor.display).toBe('inline-block');
     expect(cursor.heightRatio).toBeCloseTo(0.76, 2);
     expect(cursor.verticalAlignRatio).toBeCloseTo(-0.02, 2);
+    expect(cursor.animationName).toBe('none');
     await expectNoHorizontalOverflow(page);
   }
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  const motion = await page.locator('.public-brand strong').evaluate((element) => {
+    const cursorStyle = getComputedStyle(element, '::after');
+    return {
+      animationName: cursorStyle.animationName,
+      boxShadow: cursorStyle.boxShadow,
+    };
+  });
+  expect(motion.animationName).toBe('none');
+  expect(motion.boxShadow).not.toBe('none');
+});
+
+test('the Signal Lens mark stays transparent, theme-aware, and contained across layouts', async ({ page }) => {
+  await useTheme(page, 'dark');
+  await page.goto('/');
+
+  const publicMark = page.locator('.public-brand .brand-mark');
+  await expect(publicMark).toBeVisible();
+  await expect(publicMark.locator('.primary')).toHaveCount(2);
+  await expect(publicMark.locator('.secondary-fill')).toHaveCount(3);
+  await expect(publicMark.locator('circle.primary')).toHaveAttribute('fill', 'none');
+
+  const darkColors = await publicMark.evaluate((element) => {
+    const primary = element.querySelector<SVGElement>('.primary');
+    const secondary = element.querySelector<SVGElement>('.secondary');
+    return {
+      primary: primary ? getComputedStyle(primary).stroke : '',
+      secondary: secondary ? getComputedStyle(secondary).stroke : '',
+    };
+  });
+
+  await page.getByRole('button', { name: /Colour theme/ }).click();
+  await page.getByRole('option', { name: 'Light theme' }).click();
+  const lightMark = page.locator('.public-brand .brand-mark');
+  const lightColors = await lightMark.evaluate((element) => {
+    const primary = element.querySelector<SVGElement>('.primary');
+    const secondary = element.querySelector<SVGElement>('.secondary');
+    return {
+      primary: primary ? getComputedStyle(primary).stroke : '',
+      secondary: secondary ? getComputedStyle(secondary).stroke : '',
+    };
+  });
+  expect(lightColors.primary).not.toBe(darkColors.primary);
+  expect(lightColors.secondary).not.toBe(darkColors.secondary);
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload();
+  const mobileBrandBox = await boundingBox(page.locator('.public-brand'));
+  const mobileMarkBox = await boundingBox(page.locator('.public-brand .brand-mark'));
+  expect(mobileMarkBox.x).toBeGreaterThanOrEqual(mobileBrandBox.x);
+  expect(mobileMarkBox.x + mobileMarkBox.width).toBeLessThanOrEqual(mobileBrandBox.x + mobileBrandBox.width + 1);
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/dashboard');
+  await expect(page.locator('.brand .brand-mark')).toBeVisible();
+  await expect(page.locator('.shell > header .brand-mark')).toHaveCount(1);
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload();
+  await expect(page.locator('.shell > header .brand-mark')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 });
 
 // A deep-ish result with enough evidence groups to exercise the section
@@ -290,6 +356,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
     );
   }))).toBe(true);
   const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
+  await expect(sourceRail.locator('.source-icon')).toHaveCount(await sourceRail.locator('li').count());
+  await expect(topology.locator('.node-source-icon .source-icon')).toHaveCount(await sourceRail.locator('li').count());
   await expect(sourceRail.getByRole('link', { name: /Registry RDAP.*success/i })).toHaveAttribute('href', '#evidence-registry');
   await expect(sourceRail.getByRole('link', { name: /WHOIS.*partial/i })).toHaveAttribute('href', '#evidence-registry');
   const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
@@ -348,6 +416,23 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
     await expectNoHorizontalOverflow(page);
   }
 
+  // The desktop source graph becomes a connected, full-width source map on
+  // narrow screens instead of shrinking every label into the wide SVG.
+  await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeHidden();
+  await expect(topology.locator('.mobile-target')).toBeVisible();
+  await expect(sourceRail.locator('.source-copy small').first()).toBeVisible();
+  expect(await sourceRail.locator('li').evaluateAll((items) => items.every((item) => {
+    const listRect = item.parentElement?.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    return Boolean(
+      listRect
+      && itemRect.width >= 180
+      && itemRect.height >= 58
+      && itemRect.left >= listRect.left - 0.5
+      && itemRect.right <= listRect.right + 0.5
+    );
+  }))).toBe(true);
+
   // The wide chronological plot becomes a connected vertical timeline on
   // narrow screens rather than requiring a nested horizontal scrollbar.
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeHidden();
@@ -373,6 +458,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await page.locator('#raw-data').evaluate((element) => element.scrollIntoView({ block: 'start' }));
   const rawDataLink = localNav.getByRole('link', { name: 'Raw data' });
   await expect(rawDataLink).toHaveAttribute('aria-current', 'location');
+  await expect.poll(async () => page.locator('#raw-data').evaluate((section) => {
+    const sectionTop = section.getBoundingClientRect().top;
+    const navigation = document.querySelector('.local-nav-shell');
+    return navigation ? sectionTop >= navigation.getBoundingClientRect().bottom + 4 : false;
+  })).toBe(true);
   await expect.poll(async () => rawDataLink.evaluate((link) => {
     const navigation = link.closest('nav');
     if (!navigation) return false;

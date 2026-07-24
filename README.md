@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="frontend/static/favicon.svg" width="72" height="72" alt="WHOISleuth logo" />
-</p>
-
-<h1 align="center">WHOISleuth</h1>
+<h1 align="center"><img src="frontend/static/favicon.svg" width="48" height="48" alt="" /> WHOISleuth</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
@@ -34,9 +30,11 @@ automated verdicts.
 The demo uses fixed fictional evidence on reserved domains. Its six-stage
 progress rail distinguishes the current, completed, available, and upcoming
 parts of the workflow. It does not sign in, run live analysis, or write to the
-protected Console's investigation data. The public Guide maps common goals to
-the relevant tool and interpretation sections, while the Privacy page provides
-local section navigation without shortening the policy.
+protected Console's investigation data. Its later stages reuse the production
+source-map, lifecycle, activity, and evidence-card components with fixed
+fixtures. The public Guide maps common goals to the relevant tool and
+interpretation sections, while the Privacy page provides local section
+navigation without shortening the policy.
 
 ## What it does
 
@@ -44,9 +42,9 @@ local section navigation without shortening the policy.
 | --- | --- | --- |
 | **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. |
 | **Discover** | Generate bounded typo, Unicode-confusable, keyboard, plural, separator, word-order, WWW-style, TLD, and dictionary candidates, including analyst-controlled token replacements and an opt-in two-character Unicode family, with optional Certificate Transparency discovery. Presets or an exact family selection control the local generator. | Candidate generation and optional custom dictionary input stay local. The advanced Unicode family is never preset-enabled. Confusability is a review lead, while certificate-log observations do not prove site activity or maliciousness. |
-| **Bulk** | Compare multiple domains with filters, sorting, score explanations, CSV export, and scan-local relationship evidence. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. |
+| **Bulk** | Compare multiple domains with filters, sorting, score explanations, CSV export, and scan-local relationship evidence. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. Relationships remain transient unless the analyst explicitly retains one bounded observation. |
 | **Brands** | Save official domains, product names, allowlists, posture settings, and optional page-identity baselines. | Profiles stay in the current browser unless deliberately exported in a workspace archive. |
-| **Monitor** | Manage cases, campaigns, relationships, watchlists, timelines, and evidence reports. | Ordinary investigation state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
+| **Monitor** | Manage cases, campaigns, analyst-selected relationship observations, watchlists, timelines, and evidence reports. | Ordinary investigation state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
 | **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
 
 Deep domain Lookup can combine:
@@ -59,7 +57,15 @@ Deep domain Lookup can combine:
 - passive technology and security-posture indicators derived from the captured
   response, without vulnerability testing;
 - one observed public endpoint mapped to its IP RDAP network registration;
-- optional security.txt and configured external intelligence sources.
+- optional security.txt and configured external intelligence sources;
+- a collapsed set of analyst-controlled links to relevant public registration,
+  certificate, routing, interconnection, history, and site-status tools.
+
+The external evidence pivots are ordinary links, not integrations. WHOISleuth
+does not prefetch them, call their APIs, cache or store their results, or use
+them for availability or scoring. Each link identifies the destination and
+exact domain, top-level domain, public address/prefix, or ASN that the browser
+will share only after the analyst opens it.
 
 Long source records and secondary Deep evidence start collapsed. Their status
 and summary remain visible so the page can be scanned before opening the

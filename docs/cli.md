@@ -107,6 +107,15 @@ point-in-time edge or network-registration context, not proof of the origin
 host, hosting control, ownership, intent, or maliciousness. Fast and compact
 commands do not run the enrichment.
 
+The deep terminal summary also reports the website activity state, page title,
+DNS, HTTP, and TLS source states, up to six bounded technology indicators, and
+the four passive security-posture counts. These are concise projections of the
+same evidence already present in the lookup response. They make no extra
+request, omit raw evidence descriptions, and do not turn a technology match or
+missing posture signal into a vulnerability, hosting-control, ownership, or
+maliciousness claim. Use `--json` when the full bounded evidence, limitations,
+and source diagnostics are required.
+
 When diagnostics version 5, 6, or 7 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it

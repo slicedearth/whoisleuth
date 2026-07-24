@@ -96,7 +96,8 @@ Usage:
   whoisleuth --version
 
 Lookup defaults to fast mode. Deep mode must be requested explicitly and may
-perform WHOIS, website, DNS, and TLS work through the shared bounded pipeline.
+perform WHOIS, website, DNS, TLS, technology, posture, and network-context work
+through the shared bounded pipeline.
 Machine-readable output is written to stdout; diagnostics are written to stderr.
 Registry support is an offline catalogue view and never tests live reachability.
 Risk calibration is an offline fixture replay and never changes the scoring model.

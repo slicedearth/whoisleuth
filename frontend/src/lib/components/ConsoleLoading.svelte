@@ -1,4 +1,6 @@
 <script lang="ts">
+  import BrandMark from '$lib/components/BrandMark.svelte';
+
   let {
     stage,
     title,
@@ -27,7 +29,7 @@
 
     <div class="loading-content">
       <div class="loading-identity">
-        <span class="loading-mark"><img src="/favicon.svg" alt=""></span>
+        <span class="loading-mark"><BrandMark /></span>
         <div>
           <p class="eyebrow">Protected console</p>
           <h1>{title}</h1>
@@ -68,7 +70,7 @@
   .loading-content{padding:clamp(22px,5vw,38px)}
   .loading-identity{display:flex;align-items:center;gap:15px}
   .loading-mark{display:grid;width:54px;height:54px;flex:0 0 auto;place-items:center}
-  .loading-mark img{display:block;width:100%;height:100%}
+  .loading-mark :global(.brand-mark){display:block;width:100%;height:100%}
   .eyebrow{margin:0}
   h1{margin:4px 0 0;font:700 clamp(1.45rem,4vw,2rem)/1.1 var(--mono);letter-spacing:-.04em}
   .loading-detail{max-width:58ch;margin:18px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}

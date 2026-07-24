@@ -58,7 +58,7 @@ test('public pages expose prerendered search and sharing metadata', async ({ req
       expect(schema).toBeTruthy();
       const parsed = JSON.parse(schema!);
       expect(parsed).toMatchObject({ '@context': 'https://schema.org', '@type': 'FAQPage' });
-      expect(parsed.mainEntity).toHaveLength(17);
+      expect(parsed.mainEntity).toHaveLength(18);
       expect(parsed.mainEntity[0]).toMatchObject({ '@type': 'Question', acceptedAnswer: { '@type': 'Answer' } });
     }
   }

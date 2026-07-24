@@ -216,6 +216,68 @@ test('terminal lookup presents bounded observed network registration context', (
   assert.doesNotMatch(terminal, /must-not-render/);
 });
 
+test('terminal deep lookup summarizes current website evidence without exposing raw details', () => {
+  const result = lookupResult({
+    availability: {
+      applicable: true,
+      domain: 'example.com',
+      state: 'registered',
+      confidence: 'high',
+      activityStatus: 'active',
+      pageTitle: 'Example account portal',
+      dns: { source: 'dns', status: 'partial', complete: false },
+      http: {
+        source: 'http',
+        status: 'success',
+        transportSecurity: 'https',
+        response: { status: 200 },
+      },
+      tls: { source: 'tls', status: 'success', protocol: 'TLSv1.3' },
+      technologyProfile: {
+        source: 'derived',
+        status: 'success',
+        findings: [
+          {
+            name: 'Example Commerce',
+            category: 'commerce platform',
+            confidence: 'high',
+            evidence: [{ description: 'private-marker-must-not-render' }],
+          },
+          { name: `Example Edge\n${'x'.repeat(500)}`, category: 'delivery platform', confidence: 'medium' },
+        ],
+      },
+      securityPosture: {
+        source: 'derived',
+        status: 'partial',
+        summary: { observed: 3, potentialExposure: 1, observedAbsence: 2, unavailable: 1 },
+        findings: [{ detail: 'private-posture-detail-must-not-render' }],
+      },
+    },
+  });
+  const document = buildCliLookupDocument(
+    'example.com',
+    { type: 'domain', value: 'example.com', registrableDomain: 'example.com' },
+    result,
+    '2026-07-24T00:00:00.000Z',
+    'deep',
+  );
+  const terminal = formatTerminalLookup(document);
+
+  assert.match(terminal, /Web activity\s+Active/);
+  assert.match(terminal, /Page title\s+Example account portal/);
+  assert.match(terminal, /DNS evidence\s+Partial/);
+  assert.match(terminal, /HTTP evidence\s+Success/);
+  assert.match(terminal, /HTTP response\s+HTTP 200 · HTTPS/);
+  assert.match(terminal, /TLS evidence\s+Success/);
+  assert.match(terminal, /TLS protocol\s+TLSv1\.3/);
+  assert.match(terminal, /Technology\s+Success · 2 indicators/);
+  assert.match(terminal, /Example Commerce \(commerce platform, high\)/);
+  assert.match(terminal, /Posture\s+Partial/);
+  assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
+  assert.doesNotMatch(terminal, /private-marker|private-posture-detail/);
+  assert.doesNotMatch(terminal, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+});
+
 test('terminal lookup explains represented registry access constraints', () => {
   const restricted = lookupResult({
     diagnostics: {

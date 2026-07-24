@@ -1,9 +1,10 @@
 // Browser-only adapter for the pure investigation projection and search index.
-// It reads three bounded provider collections, never writes derived data, and
+// It reads four bounded provider collections, never writes derived data, and
 // never sends retained values to the server.
 import { loadProfiles } from './brand-profiles';
 import { loadCampaigns } from './campaigns';
 import { loadCases } from './cases';
+import { loadRelationshipObservations } from './relationship-observations';
 import { buildInvestigationProjection } from './analysis/investigation-projection.ts';
 import {
   buildInvestigationSearchIndex,
@@ -13,20 +14,31 @@ import type { InvestigationProjection } from './analysis/investigation-projectio
 
 /** Builds a disposable projection from the current browser's bounded stores. */
 export async function loadLocalInvestigationProjection(): Promise<InvestigationProjection> {
-  const [cases, campaigns, brandProfiles] = await Promise.all([loadCases(), loadCampaigns(), loadProfiles()]);
+  const [cases, campaigns, brandProfiles, relationshipObservations] = await Promise.all([
+    loadCases(),
+    loadCampaigns(),
+    loadProfiles(),
+    loadRelationshipObservations(),
+  ]);
   return buildInvestigationProjection({
     cases,
     campaigns,
     brandProfiles,
+    relationshipObservations,
   });
 }
 
 /** Builds the relationship workspace projection without unrelated profile data. */
 export async function loadLocalCaseInvestigationProjection(): Promise<InvestigationProjection> {
-  const [cases, campaigns] = await Promise.all([loadCases(), loadCampaigns()]);
+  const [cases, campaigns, relationshipObservations] = await Promise.all([
+    loadCases(),
+    loadCampaigns(),
+    loadRelationshipObservations(),
+  ]);
   return buildInvestigationProjection({
     cases,
     campaigns,
+    relationshipObservations,
   });
 }
 

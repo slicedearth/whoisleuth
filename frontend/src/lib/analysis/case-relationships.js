@@ -41,12 +41,37 @@ const PROJECTION_RELATIONSHIP_TYPES = new Map([
     label: 'Shared final website origin',
     description: 'Retained comparable deep observations connect these cases to the same normalized website origin. Redirectors, parking services, CDNs, and shared platforms are common.',
   }],
+  ['domain_resolved_to_ip', {
+    type: 'ip_address',
+    label: 'Shared IP address',
+    description: 'An analyst-retained Bulk observation connects these cases to the same normalized IP address. Shared hosting, CDNs, and managed platforms are common.',
+  }],
+  ['domain_presented_certificate', {
+    type: 'certificate',
+    label: 'Shared TLS certificate',
+    description: 'An analyst-retained observation connects these cases to the same exact leaf-certificate SHA-256. Multi-domain certificates and shared infrastructure are common.',
+  }],
+  ['domain_exposed_tracking_identifier', {
+    type: 'tracking_identifier',
+    label: 'Shared tracking identifier',
+    description: 'An analyst-retained observation connects these cases to the same recognized public page identifier.',
+  }],
+  ['domain_related_by_favicon', {
+    type: 'favicon',
+    label: 'Similar favicon',
+    description: 'An analyst-retained observation records an exact or bounded perceptual favicon comparison between these cases.',
+  }],
+  ['domain_loaded_official_asset', {
+    type: 'official_asset',
+    label: 'Official asset relationship',
+    description: 'An analyst-retained observation records that these cases loaded an asset from the same configured official domain or subdomain.',
+  }],
 ]);
 const PROJECTION_FILTER_TYPES = new Set(['all', ...[...PROJECTION_RELATIONSHIP_TYPES.values()].map((value) => value.type)]);
 const PROJECTION_FILTER_PERIODS = new Set(['all', '7d', '30d', '365d']);
 const PROJECTION_FILTER_COMPLETENESS = new Set(['all', 'complete', 'partial', 'unknown']);
 const PERIOD_MILLISECONDS = new Map([['7d', 7 * 86400000], ['30d', 30 * 86400000], ['365d', 365 * 86400000]]);
-const PROJECTION_SCHEMA_VERSION_FIELDS = ['case', 'riskModel', 'httpSummary', 'brandProfile', 'pageBaseline', 'pageIdentity', 'pageFingerprint', 'campaign', 'relationshipEvidence'];
+const PROJECTION_SCHEMA_VERSION_FIELDS = ['case', 'riskModel', 'httpSummary', 'brandProfile', 'pageBaseline', 'pageIdentity', 'pageFingerprint', 'campaign', 'relationshipEvidence', 'relationshipObservation'];
 
 /** @param {unknown} value */
 function safeCaseId(value) {
@@ -162,7 +187,15 @@ export function buildCaseRelationships(rawCases) {
     ));
   }
 
-  const order = new Map(['nameserver_set', 'http_final_origin'].map((value, index) => [value, index]));
+  const order = new Map([
+    'nameserver_set',
+    'http_final_origin',
+    'ip_address',
+    'certificate',
+    'tracking_identifier',
+    'favicon',
+    'official_asset',
+  ].map((value, index) => [value, index]));
   output.sort((left, right) => (Number(order.get(left.type)) - Number(order.get(right.type)))
     || left.value.localeCompare(right.value)
     || left.cases.map((item) => item.domain).join('|').localeCompare(right.cases.map((item) => item.domain).join('|')));
@@ -385,7 +418,15 @@ export function buildInvestigationCaseRelationships(rawProjection) {
     }
   }
 
-  const order = new Map(['nameserver_set', 'http_final_origin'].map((value, index) => [value, index]));
+  const order = new Map([
+    'nameserver_set',
+    'http_final_origin',
+    'ip_address',
+    'certificate',
+    'tracking_identifier',
+    'favicon',
+    'official_asset',
+  ].map((value, index) => [value, index]));
   const candidates = [...buckets.values()].filter((bucket) => bucket.cases.size >= 2).map((bucket) => {
     const allCases = [...bucket.cases.values()].sort((left, right) => left.domain.localeCompare(right.domain));
     const allCampaigns = [...bucket.campaigns.values()].sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));

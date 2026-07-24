@@ -158,6 +158,7 @@ describe('buildScanRelationships', () => {
       label: 'Official asset relationship',
       method: 'Configured-domain host match',
       value: 'static.official.example',
+      normalizedValue: 'static.official.example',
       domains: ['candidate.example'],
       description: 'One or more pages loaded an asset from this configured official domain or its subdomain.',
     }]);
@@ -195,6 +196,7 @@ describe('buildScanRelationships', () => {
       label: 'Shared TLS certificate',
       method: 'Exact leaf-certificate SHA-256',
       value: 'c'.repeat(64),
+      normalizedValue: 'c'.repeat(64),
       domains: ['one.example', 'two.example'],
       description: 'These domains presented the same leaf certificate in this scan. Multi-domain certificates, shared hosting, CDNs, and managed platforms are common.',
     }]);

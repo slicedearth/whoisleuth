@@ -36,6 +36,9 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.locator('.candidate')).toHaveCount(1);
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Synthetic evidence topology' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
+  await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
   await expect(page.getByText('security.txt', { exact: true })).toBeVisible();
@@ -67,11 +70,14 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(registrySources.nth(0).getByText('RDAP structured data')).toBeVisible();
   await expect(registrySources.nth(1).getByText('WHOIS structured data')).toBeVisible();
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
+  await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toBeVisible();
+  await expect(page.locator('#watchlist-activity .activity-summary')).toContainText(/1\s*retained checks/);
   await page.getByLabel('Status').selectOption('reviewing');
   await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
   await page.getByLabel('Analyst note').fill('Fixture reviewed for demonstration.');
   await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
+  await expect(page.locator('#watchlist-activity .activity-summary')).toContainText(/2\s*retained checks/);
   await expect(page.locator('.timeline-entry')).toHaveCount(2);
   await expect(page.getByText(/First observed/)).toBeVisible();
   await page.getByRole('button', { name: 'Material changes only' }).click();

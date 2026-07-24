@@ -55,6 +55,15 @@ import {
   normalizeDetectionRuleStore,
   serializeDetectionRuleStore,
 } from './analysis/detection-rule-model.js';
+import {
+  MAX_RELATIONSHIP_OBSERVATIONS,
+  MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
+  RELATIONSHIP_OBSERVATION_SCHEMA,
+  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+  normalizeRelationshipObservationStore,
+  relationshipObservationStoreVersion,
+  serializeRelationshipObservationStore,
+} from './analysis/relationship-observation-model.ts';
 import type { LocalDataCollectionDefinition, LocalDataRecord } from './browser-local-data.js';
 
 export const LEGACY_CASES_KEY = 'whois-rdap-cases-v1';
@@ -64,6 +73,7 @@ export const LEGACY_WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 export const LEGACY_SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
 export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
+export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
 
 function recordsFromArray(values: readonly unknown[], key: (value: any) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
@@ -182,6 +192,25 @@ export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<any[]> = 
   join: (records, schemaVersion) => ({ version: schemaVersion, rules: arrayFromRecords(records) }),
 });
 
+export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+  id: 'relationship_observations',
+  label: 'Retained relationship observations',
+  legacyKey: LEGACY_RELATIONSHIP_OBSERVATIONS_KEY,
+  schemaVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+  maximumBytes: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
+  maximumRecords: MAX_RELATIONSHIP_OBSERVATIONS,
+  empty: () => [],
+  normalize: (raw) => normalizeRelationshipObservationStore(raw).observations,
+  version: relationshipObservationStoreVersion,
+  serialize: serializeRelationshipObservationStore,
+  split: (observations) => recordsFromArray(observations, (record) => record.id),
+  join: (records, schemaVersion) => ({
+    schema: RELATIONSHIP_OBSERVATION_SCHEMA,
+    version: schemaVersion,
+    observations: arrayFromRecords(records),
+  }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
@@ -190,4 +219,5 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   SHORTLIST_COLLECTION,
   CT_HISTORY_COLLECTION,
   DETECTION_RULES_COLLECTION,
+  RELATIONSHIP_OBSERVATIONS_COLLECTION,
 ]);

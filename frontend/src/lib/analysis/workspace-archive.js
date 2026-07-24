@@ -43,6 +43,12 @@ import {
   DETECTION_RULE_SCHEMA_VERSION,
   mergeDetectionRules,
 } from './detection-rule-model.js';
+import {
+  buildRelationshipObservationExport,
+  mergeRelationshipObservations,
+  RELATIONSHIP_OBSERVATION_SCHEMA,
+  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+} from './relationship-observation-model.ts';
 
 export const WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.workspace-archive';
 export const WORKSPACE_ARCHIVE_VERSION = 1;
@@ -50,7 +56,7 @@ export const WORKSPACE_SETTINGS_SCHEMA = 'whoisleuth.workspace-settings';
 export const WORKSPACE_SETTINGS_VERSION = 1;
 export const MAX_WORKSPACE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_WORKSPACE_ARCHIVE_SECTION_BYTES = 5 * 1024 * 1024;
-export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 7;
+export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 8;
 
 export const WORKSPACE_ARCHIVE_SECTION_IDS = Object.freeze([
   'cases',
@@ -59,6 +65,7 @@ export const WORKSPACE_ARCHIVE_SECTION_IDS = Object.freeze([
   'watchlists',
   'shortlist',
   'detectionRules',
+  'relationshipObservations',
   'settings',
 ]);
 
@@ -199,6 +206,15 @@ const SECTION_DEFINITIONS = Object.freeze([
     },
   },
   {
+    id: 'relationshipObservations',
+    label: 'Retained relationship observations',
+    schema: RELATIONSHIP_OBSERVATION_SCHEMA,
+    version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+    build: (input, now) => buildRelationshipObservationExport(input.relationshipObservations, now),
+    count: (data) => Array.isArray(data?.observations) ? data.observations.length : 0,
+    merge: (local, data) => mergeRelationshipObservations(local.relationshipObservations, data),
+  },
+  {
     id: 'settings', label: 'Workspace settings', schema: WORKSPACE_SETTINGS_SCHEMA, version: WORKSPACE_SETTINGS_VERSION,
     build: (input) => settingsDocument(input),
     count: () => 1,
@@ -224,6 +240,7 @@ function normalizedInput(input) {
     watchlists: record(value.watchlists) || {},
     shortlist: Array.isArray(value.shortlist) ? value.shortlist : [],
     detectionRules: Array.isArray(value.detectionRules) ? value.detectionRules : [],
+    relationshipObservations: Array.isArray(value.relationshipObservations) ? value.relationshipObservations : [],
     settings: record(value.settings) || {},
   };
 }

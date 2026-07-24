@@ -10,10 +10,12 @@ import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/br
 import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.js';
 import { assertShortlistStoreBudget, mergeShortlistStores } from './analysis/shortlist-model.js';
 import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.js';
+import { mergeRelationshipObservations } from './analysis/relationship-observation-model.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { loadCampaigns } from './campaigns';
 import { loadCases } from './cases';
 import { loadDetectionRules } from './detection-rules';
+import { loadRelationshipObservations } from './relationship-observations';
 import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import { loadWatchlists } from './watchlists';
@@ -25,6 +27,7 @@ import {
   PROFILES_COLLECTION,
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
+  RELATIONSHIP_OBSERVATIONS_COLLECTION,
 } from './browser-local-data-definitions.js';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.js';
 
@@ -36,13 +39,14 @@ const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
 const profileId = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 async function localInput() {
-  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules] = await Promise.all([
+  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations] = await Promise.all([
     loadCases(),
     loadCampaigns(),
     loadProfiles(),
     loadWatchlists(),
     loadShortlist(),
     loadDetectionRules(),
+    loadRelationshipObservations(),
   ]);
   return {
     cases,
@@ -51,6 +55,7 @@ async function localInput() {
     watchlists,
     shortlist,
     detectionRules,
+    relationshipObservations,
     settings: {
       activeProfileId: activeProfileId(),
       theme: readThemePreference(),
@@ -126,6 +131,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     ['watchlists', WATCHLISTS_COLLECTION],
     ['shortlist', SHORTLIST_COLLECTION],
     ['detectionRules', DETECTION_RULES_COLLECTION],
+    ['relationshipObservations', RELATIONSHIP_OBSERVATIONS_COLLECTION],
   ]);
   const definitions = dataSections.map((section: any) => definitionBySection.get(section.id)).filter(Boolean) as AnyLocalDataCollectionDefinition[];
   let results: any[] = [];
@@ -158,6 +164,9 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
           } else if (section.id === 'detectionRules') {
             result = mergeDetectionRules(documents.get('detection_rules'), section.data);
             next.set('detection_rules', assertDetectionRuleStoreBudget(result.rules).rules);
+          } else if (section.id === 'relationshipObservations') {
+            result = mergeRelationshipObservations(documents.get('relationship_observations'), section.data);
+            next.set('relationship_observations', result.observations);
           } else continue;
           summaries.push({ id: section.id, added: result.added || 0, updated: result.updated || 0, skipped: result.skipped || 0, pruned: result.pruned || 0 });
         }

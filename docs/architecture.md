@@ -50,7 +50,7 @@ profiles, notes, raw registry payloads, or deep website evidence.
 | --- | --- | --- |
 | `frontend/src/routes/` | Public overview, demo, guide, sign-in, and privacy pages plus the protected Dashboard, Lookup, Discover, Bulk, Monitor, Brands, and Registry support interfaces. | Registry protocol logic, authentication enforcement, outbound-request trust decisions, or deployment-wide budgets. |
 | `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
-| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, and cross-tool handoff state. | General server persistence, cross-device synchronization, accounts, or a general background-job system. |
+| Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, custom rules, and analyst-selected relationship observations. | General server persistence, cross-device synchronization, accounts, or a general background-job system. |
 | `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, response shaping, and the optional Netlify scheduled-watchlist boundary. | Separate copies of lookup and parsing rules. |
 | `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security.txt collection, optional external intelligence adapters, derived technology and passive-posture analysis, observed network context, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
 | Optional distributed budget provider | Opaque expiring leases and bounded operation counters when explicitly configured. | Query targets, responses, evidence, notes, profiles, or session tokens. |
@@ -162,23 +162,25 @@ Because the deployment uses one shared login, every signed-in person can manage
 that same hosted projection when the feature is enabled.
 
 `investigation-projection.ts` provides a separate read-only view over current
-case, campaign, Brand Profile, page-baseline, and explicitly supplied scan-local
-relationship contracts. It revalidates each source, refuses newer schemas, and
-emits bounded typed entities, observations, and provenance-backed relationships
+case, campaign, Brand Profile, page-baseline, explicitly supplied scan-local
+relationship contracts, and relationship observations retained through an
+analyst action. It revalidates each source, refuses newer schemas, and emits
+bounded typed entities, observations, and provenance-backed relationships
 without mutating or migrating a store. Compact case evidence keeps completeness
 and truncation unknown when its source-health envelope was not retained; the
 projection never fills that gap by inference.
 
 `investigation-search.ts` builds a second bounded, disposable index over that
-projection. The browser adapter reads the existing case, campaign, and Brand
-Profile stores within their established byte limits, then discards the index
-when the page is left. Search is restricted to known entity fields, returns at
-most 50 deterministically ranked matches, carries source completeness and
-truncation into every result, and performs no provider request or persisted
-write. Result links are passive pivots into the exact retained case, campaign,
-or Brand Profile where one exists.
+projection. The browser adapter reads the existing case, campaign, Brand
+Profile, and relationship-observation stores within their established byte
+limits, then discards the index when the page is left. Search is restricted to
+known entity fields, returns at most 50 deterministically ranked matches,
+carries source completeness and truncation into every result, and performs no
+provider request or persisted write. Result links are passive pivots into the
+exact retained case, campaign, Brand Profile, or relationship observation where
+one exists.
 
-The independent browser-store ceilings total 9.75 MiB, which is greater than
+The independent browser-store ceilings total 10.5 MiB, which is greater than
 the 5 MiB local-storage planning reference used by the former design. The
 maintainer-run `npm run platform:local-data` command derives that total from the
 owning constants without reading user data. The native provider preserves those
