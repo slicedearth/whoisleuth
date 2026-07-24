@@ -21,17 +21,6 @@
     })),
   };
 
-  const workflowLinks: Record<string, string> = {
-    Lookup: '#tool-lookup',
-    'Review sources': '#results',
-    'Save useful evidence': '#tool-monitor',
-    Brands: '#tool-brands',
-    Discover: '#tool-discover',
-    Bulk: '#tool-bulk',
-    Save: '#tool-monitor',
-    Monitor: '#tool-monitor',
-    'Review changes': '#tool-monitor',
-  };
 </script>
 
 <PublicSeo
@@ -68,7 +57,7 @@
         <p>{goal.summary}</p>
         <ol aria-label={`${goal.title} workflow`}>
           {#each goal.steps as step,stepIndex}
-            <li><a href={workflowLinks[step] ?? '#tools'}><span>{stepIndex + 1}</span>{step}</a></li>
+            <li><a href={step.href}><span>{stepIndex + 1}</span>{step.label}</a></li>
           {/each}
         </ol>
       </article>

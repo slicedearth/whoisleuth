@@ -60,7 +60,10 @@ test('privacy policy offers compact section navigation without changing policy c
 
   const sectionNavigation = page.getByRole('navigation', { name: 'Privacy policy sections' });
   await expect(sectionNavigation).toBeVisible();
-  await expect(sectionNavigation.getByRole('link')).toHaveCount(10);
+  await expect(sectionNavigation.getByRole('link')).toHaveCount(13);
+  const headingIds = await page.locator('.policy h2[id]').evaluateAll((headings) => headings.map((heading) => heading.id));
+  const indexedIds = await sectionNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')?.slice(1)));
+  expect(indexedIds).toEqual(headingIds);
   const security = sectionNavigation.getByRole('link', { name: 'Security' });
   await expect(security).toHaveAttribute('href', '#privacy-security');
   await security.click();

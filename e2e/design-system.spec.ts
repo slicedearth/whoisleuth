@@ -298,6 +298,14 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(dnsSource.locator('xpath=..')).toHaveClass(/active/);
   await expect(topology.locator('.source-node.family-network.active')).toHaveCount(1);
   await expect(topology.locator('.topology-edges path.active')).toHaveCount(1);
+
+  const linkedVisualNode = topology.locator('.source-nodes > g.linked').first();
+  const hashBeforeDrag = await page.evaluate(() => window.location.hash);
+  await linkedVisualNode.dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 20, button: 0 });
+  await linkedVisualNode.dispatchEvent('pointermove', { pointerId: 1, pointerType: 'touch', clientX: 50, clientY: 20, button: 0 });
+  await linkedVisualNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 50, clientY: 20, button: 0 });
+  expect(await page.evaluate(() => window.location.hash)).toBe(hashBeforeDrag);
+
   await dnsSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-dns$/);
   await expect(page.locator('#evidence-dns')).toBeInViewport();

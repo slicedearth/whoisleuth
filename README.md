@@ -220,7 +220,10 @@ licences and terms.
 
 The [trademark policy](TRADEMARKS.md) covers the WHOISleuth name and logo
 separately from the source licence. Copyright and attribution details are in
-[NOTICE](NOTICE).
+[NOTICE](NOTICE). The generated
+[third-party production notices](frontend/static/third-party-notices.txt)
+retain the exact locked package inventory and the licence documents distributed
+with those packages.
 
 The software is provided **as is, without warranty**. Registration data can be
 redacted, stale, incomplete, or parsed imperfectly. Scores and generated

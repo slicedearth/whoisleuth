@@ -22,6 +22,7 @@
     type InvestigationGuide,
     type InvestigationRecipeStage,
   } from '$lib/investigation-guide';
+  let { revealOnMount = false }: { revealOnMount?: boolean } = $props();
   const toolLabels = new Map(toolNavigation.map((tool) => [tool.href, tool.label]));
   const targetLabels = new Map([
     ['/brands', 'profile controls'],
@@ -127,13 +128,13 @@
     await afterLayout();
     const panel = actionPanel;
     if (!panel) return;
-    panel.focus({ preventScroll: true });
-    panel.scrollIntoView({ behavior: 'auto', block: 'center' });
-    await afterLayout();
-    if (actionExposureRatio(panel) < usefulActionExposure) {
-      panel.scrollIntoView({ behavior: 'auto', block: 'start' });
+    for (const block of ['center', 'start', 'center'] as const) {
+      panel.scrollIntoView({ behavior: 'auto', block });
       await afterLayout();
+      if (actionExposureRatio(panel) >= usefulActionExposure) break;
     }
+    panel.focus({ preventScroll: true });
+    await afterLayout();
     await observeAction();
   }
 
@@ -146,12 +147,12 @@
     }
     if (!guideTargetIds.has(targetId)) return;
     await tick();
-    requestAnimationFrame(() => {
-      const target = document.getElementById(targetId);
-      if (!target) return;
-      target.scrollIntoView({ block: 'center' });
-      target.focus({ preventScroll: true });
-    });
+    await afterLayout();
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    target.scrollIntoView({ block: 'center' });
+    target.focus({ preventScroll: true });
+    await afterLayout();
   }
 
   async function refreshFromEvent() {
@@ -280,7 +281,10 @@
 
   onMount(() => {
     mounted = true;
-    void refresh().then(observeAction);
+    void refresh().then(async () => {
+      if (revealOnMount) await revealGuide();
+      await observeAction();
+    });
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     return () => {
       actionObserver?.disconnect();
@@ -295,7 +299,8 @@
       selectedStageId = '';
       reviewingStageId = '';
       guide = recordInvestigationGuideVisit(pathname);
-      if (hash) void focusRouteTarget(hash);
+      if (hash) void focusRouteTarget(hash).then(observeAction);
+      else void observeAction();
     }
   });
 </script>

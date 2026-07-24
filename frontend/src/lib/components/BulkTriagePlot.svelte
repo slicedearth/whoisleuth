@@ -55,6 +55,12 @@
         <li><span class="trusted"></span>Trusted by active profile</li>
         <li><span class="error"></span>Error</li>
       </ul>
+      <dl class="quadrant-summary" aria-label="Risk and opportunity quadrant counts">
+        <div><dt>Available / review</dt><dd>{plot.quadrants.availableReview}</dd></div>
+        <div><dt>Priority review</dt><dd>{plot.quadrants.priorityReview}</dd></div>
+        <div><dt>Lower scores</dt><dd>{plot.quadrants.lowerScores}</dd></div>
+        <div><dt>Risk-led review</dt><dd>{plot.quadrants.riskLedReview}</dd></div>
+      </dl>
       <p class="plot-note">
         Plotted {plot.points.length} of {plot.eligibleCount} results with both scores.
         {#if plot.omittedCount}{plot.omittedCount} filtered result{plot.omittedCount === 1 ? '' : 's'} lacked a complete score pair.{/if}
@@ -89,9 +95,14 @@
   .plot-legend .available{background:var(--accent)}
   .plot-legend .trusted{background:var(--accent2)}
   .plot-legend .error{background:var(--danger)}
+  .quadrant-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:10px 0 0}
+  .quadrant-summary div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .quadrant-summary dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .quadrant-summary dd{margin:0;color:var(--text);font:750 var(--text-xs) var(--mono);font-variant-numeric:tabular-nums}
   .plot-note,.empty-plot{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:620px){
     .plot-frame{overflow-x:auto;overscroll-behavior-x:contain}
     svg{min-width:680px}
+    .quadrant-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
 </style>

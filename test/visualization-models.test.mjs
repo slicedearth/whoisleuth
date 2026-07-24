@@ -65,6 +65,9 @@ describe('bounded visualization models', () => {
     assert.equal(first.sampled, true);
     assert.equal(first.omittedCount, 1);
     assert.deepEqual(first, second);
+    assert.equal(Object.values(first.quadrants).reduce((total, count) => total + count, 0), first.eligibleCount);
+    assert.equal(first.quadrants.priorityReview > 0, true);
+    assert.equal(first.quadrants.riskLedReview > 0, true);
     assert.ok(first.points.every((point) => point.x >= 58 && point.x <= 842 && point.y >= 28 && point.y <= 308));
   });
 

@@ -48,6 +48,30 @@
   const openNodeHref = (href: string) => {
     if (href) window.location.hash = href.slice(1);
   };
+  type PointerStart = { nodeId: string; x: number; y: number };
+  let pointerStart: PointerStart | null = null;
+  const startNodePointer = (event: PointerEvent, nodeId: string, href: string) => {
+    if (!href || (event.pointerType === 'mouse' && event.button !== 0)) {
+      pointerStart = null;
+      return;
+    }
+    pointerStart = { nodeId, x: event.clientX, y: event.clientY };
+  };
+  const moveNodePointer = (event: PointerEvent) => {
+    if (!pointerStart) return;
+    if (Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 8) {
+      pointerStart = null;
+    }
+  };
+  const finishNodePointer = (event: PointerEvent, nodeId: string, href: string) => {
+    const start = pointerStart;
+    pointerStart = null;
+    if (!start || start.nodeId !== nodeId) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 8) openNodeHref(href);
+  };
+  const cancelNodePointer = () => {
+    pointerStart = null;
+  };
 </script>
 
 <section
@@ -143,7 +167,10 @@
             class:linked={Boolean(node.href)}
             onmouseenter={() => setActiveNode(node.id)}
             onmouseleave={() => clearActiveNode(node.id)}
-            onpointerup={() => openNodeHref(node.href)}
+            onpointerdown={(event) => startNodePointer(event, node.id, node.href)}
+            onpointermove={moveNodePointer}
+            onpointerup={(event) => finishNodePointer(event, node.id, node.href)}
+            onpointercancel={cancelNodePointer}
           >
             <g
               class={`source-node family-${node.family} state-${node.status}`}

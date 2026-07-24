@@ -16,12 +16,15 @@
   <p class="eyebrow">On this page</p>
   <a href="#privacy-introduction">Introduction</a>
   <a href="#privacy-information">Information processed</a>
-  <a href="#privacy-use">Use and legal basis</a>
+  <a href="#privacy-use">How information is used</a>
+  <a href="#privacy-legal">Legal basis</a>
   <a href="#privacy-third-parties">Third parties</a>
   <a href="#privacy-storage">Cookies and storage</a>
   <a href="#privacy-retention">Retention</a>
   <a href="#privacy-security">Security</a>
-  <a href="#privacy-rights">Rights and transfers</a>
+  <a href="#privacy-rights">Your rights</a>
+  <a href="#privacy-transfers">International transfers</a>
+  <a href="#privacy-children">Children's privacy</a>
   <a href="#privacy-changes">Changes</a>
   <a href="#privacy-contact">Contact</a>
 </nav>

@@ -22,9 +22,13 @@ test('a single domain can be entered normally', async ({ page }) => {
 });
 
 test('fast lookup mode is explicit and sends the fast contract parameter', async ({ page }) => {
+  let releaseLookup: (() => void) | undefined;
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await lookupGate;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -49,6 +53,7 @@ test('fast lookup mode is explicit and sends the fast contract parameter', async
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await requestPromise;
   await expect(page.getByText(/Fast lookup is checking authoritative registration evidence/u)).toBeVisible();
+  releaseLookup?.();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
 });
 

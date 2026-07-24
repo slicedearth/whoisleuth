@@ -12,6 +12,11 @@ Development-only accessibility tests use @axe-core/playwright and axe-core,
 which are licensed under the Mozilla Public License 2.0. These packages are not
 part of the production runtime.
 
+The exact locked production-dependency inventory and the licence documents
+distributed by those packages are retained in
+frontend/static/third-party-notices.txt. The same file is served by the static
+website at /third-party-notices.txt and is checked for lockfile drift in CI.
+
 The generated Unicode confusable projection is derived from Unicode UTS #39
 data file confusables.txt, Unicode version 17.0.0.
 

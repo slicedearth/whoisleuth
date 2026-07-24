@@ -1,15 +1,18 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { onMount, setContext, tick } from 'svelte';
+  import { onMount, setContext, tick, type Component } from 'svelte';
   import { consoleNavigation, protectedDestinations, referenceNavigation } from '$lib/workspaces';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
-  import InvestigationGuide from '$lib/components/InvestigationGuide.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
+  import {
+    hasStoredInvestigationGuide,
+    INVESTIGATION_GUIDE_EVENT,
+  } from '$lib/investigation-guide-storage';
 
   let { children } = $props();
   let session = $state<'checking'|'authenticated'|'unavailable'>('checking');
@@ -23,6 +26,9 @@
   let navigationPanel = $state<HTMLElement>();
   let navigationToggle = $state<HTMLButtonElement>();
   let commandTrigger = $state<HTMLButtonElement>();
+  let InvestigationGuideView = $state<Component | null>(null);
+  let revealInvestigationGuideOnMount = $state(false);
+  let investigationGuideLoad: Promise<void> | null = null;
   type ConsoleCommand = { href: string; label: string; detail: string; group: string };
   const consoleCommands: ConsoleCommand[] = [
     ...consoleNavigation.map((item) => ({ ...item, group: 'Console' })),
@@ -33,13 +39,39 @@
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => {
     void checkSession();
+    if (hasStoredInvestigationGuide()) void loadInvestigationGuideView();
+    const showInvestigationGuide = () => {
+      if (!InvestigationGuideView) revealInvestigationGuideOnMount = true;
+      void loadInvestigationGuideView();
+    };
+    window.addEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
     const mobileNavigation = window.matchMedia('(max-width: 900px)');
     const closeAtDesktopWidth = (event: MediaQueryListEvent) => {
       if (!event.matches) navOpen = false;
     };
     mobileNavigation.addEventListener('change', closeAtDesktopWidth);
-    return () => mobileNavigation.removeEventListener('change', closeAtDesktopWidth);
+    return () => {
+      mobileNavigation.removeEventListener('change', closeAtDesktopWidth);
+      window.removeEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
+    };
   });
+
+  function loadInvestigationGuideView(): Promise<void> {
+    if (InvestigationGuideView) return Promise.resolve();
+    if (!investigationGuideLoad) {
+      investigationGuideLoad = import('$lib/components/InvestigationGuide.svelte')
+        .then((module) => {
+          InvestigationGuideView = module.default;
+        })
+        .catch(() => {
+          InvestigationGuideView = null;
+        })
+        .finally(() => {
+          investigationGuideLoad = null;
+        });
+    }
+    return investigationGuideLoad;
+  }
 
   function signInTarget(){
     const path = protectedDestinations.some((item) => item.href === page.url.pathname) ? page.url.pathname : '/dashboard';
@@ -201,7 +233,7 @@
       <div class="session"><ThemeSelector /><div class="session-row"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}><InvestigationGuide />{@render children()}<footer class="site-footer"><p>WHOISleuth uses <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap data</a> to query relevant registry services and can also check public DNS, Certificate Transparency, and website endpoints. Missing registrant fields often reflect registry redaction rather than a lookup failure.</p><p class="credit">© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a> · <a href="/privacy">Privacy</a></p></footer></main>
+    <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if InvestigationGuideView}<InvestigationGuideView revealOnMount={revealInvestigationGuideOnMount} />{/if}{@render children()}<footer class="site-footer"><p>WHOISleuth uses <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap data</a> to query relevant registry services and can also check public DNS, Certificate Transparency, and website endpoints. Missing registrant fields often reflect registry redaction rather than a lookup failure.</p><p class="credit">© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a> · <a href="/privacy">Privacy</a></p></footer></main>
     {#if commandOpen}<CommandPalette commands={consoleCommands} onclose={()=>void closeCommandPalette()} />{/if}
   </div>
 {/if}

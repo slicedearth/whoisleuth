@@ -52,7 +52,7 @@
 
 <section class="workflow" id="features" aria-labelledby="workflow-title">
   <div class="section-intro"><p class="eyebrow">Choose a starting point</p><h2 id="workflow-title">Use the path that matches your task.</h2><p>WHOISleuth does not force every investigation through the same sequence. Start with one domain, a brand search, or saved evidence that needs another review.</p></div>
-  <div class="goal-grid">{#each publicGuideGoals as goal,index}<article class="card"><span>0{index+1}</span><h3>{goal.title}</h3><p>{goal.summary}</p><ol>{#each goal.steps as step}<li>{step}</li>{/each}</ol><a href={`/guide#${goal.id}`}>Follow this path <span aria-hidden="true">→</span></a></article>{/each}</div>
+  <div class="goal-grid">{#each publicGuideGoals as goal,index}<article class="card"><span>0{index+1}</span><h3>{goal.title}</h3><p>{goal.summary}</p><ol>{#each goal.steps as step}<li>{step.label}</li>{/each}</ol><a href={`/guide#${goal.id}`}>Follow this path <span aria-hidden="true">→</span></a></article>{/each}</div>
 </section>
 
 <section class="product-tour" aria-labelledby="product-tour-title">

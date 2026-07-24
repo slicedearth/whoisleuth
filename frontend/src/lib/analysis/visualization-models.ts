@@ -165,9 +165,12 @@ export function projectRedirectPath(rawRedirects: RedirectInput[]) {
 }
 
 function deterministicSample<T>(items: T[], limit: number) {
-  if (items.length <= limit) return items;
-  return Array.from({ length: limit }, (_, index) => {
-    const sourceIndex = Math.round(index * (items.length - 1) / (limit - 1));
+  const boundedLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  if (boundedLimit === 0) return [];
+  if (items.length <= boundedLimit) return items;
+  if (boundedLimit === 1) return [items[0]];
+  return Array.from({ length: boundedLimit }, (_, index) => {
+    const sourceIndex = Math.round(index * (items.length - 1) / (boundedLimit - 1));
     return items[sourceIndex];
   });
 }
@@ -184,6 +187,22 @@ export function projectTriagePoints(rawPoints: TriagePointInput[]) {
     .filter((point) => point.domain && point.risk !== null && point.opportunity !== null)
     .sort((a, b) => a.domain.localeCompare(b.domain));
   const sampled = deterministicSample(eligible, MAX_TRIAGE_PLOT_POINTS);
+  const quadrants = eligible.reduce((counts, point) => {
+    if ((point.risk as number) >= 50) {
+      if ((point.opportunity as number) >= 50) counts.priorityReview += 1;
+      else counts.riskLedReview += 1;
+    } else if ((point.opportunity as number) >= 50) {
+      counts.availableReview += 1;
+    } else {
+      counts.lowerScores += 1;
+    }
+    return counts;
+  }, {
+    availableReview: 0,
+    priorityReview: 0,
+    lowerScores: 0,
+    riskLedReview: 0,
+  });
   const x = scaleLinear().domain([0, 100]).range([58, 842]).clamp(true);
   const y = scaleLinear().domain([0, 100]).range([308, 28]).clamp(true);
   const points = sampled.map((point) => ({
@@ -207,6 +226,7 @@ export function projectTriagePoints(rawPoints: TriagePointInput[]) {
     eligibleCount: eligible.length,
     omittedCount: Math.max(0, (Array.isArray(rawPoints) ? rawPoints.length : 0) - eligible.length),
     sampled: eligible.length > sampled.length,
+    quadrants,
   };
 }
 
