@@ -7,7 +7,6 @@
 {@render children()}
 
 <style>
-  :global(html){scroll-behavior:smooth}
   :global(button),:global(a),:global(input),:global(select),:global(textarea),:global(summary){outline-offset:3px}
   :global(:focus-visible){outline:2px solid var(--accent)}
   :global(button:disabled){cursor:not-allowed;opacity:.58}
