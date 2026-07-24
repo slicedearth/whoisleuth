@@ -31,11 +31,34 @@
   let InvestigationGuideView = $state<Component | null>(null);
   let revealInvestigationGuideOnMount = $state(false);
   let investigationGuideLoad: Promise<void> | null = null;
-  type ConsoleCommand = { href: string; label: string; detail: string; group: string };
+  type ConsoleCommand = {
+    href: string;
+    label: string;
+    detail: string;
+    group: string;
+    icon: 'analysis' | 'lookup' | 'discover' | 'bulk' | 'watchlist' | 'brand' | 'registry' | 'page';
+  };
+  const commandIcons: Record<string, ConsoleCommand['icon']> = {
+    '/dashboard': 'analysis',
+    '/lookup': 'lookup',
+    '/discover': 'discover',
+    '/bulk': 'bulk',
+    '/monitor': 'watchlist',
+    '/brands': 'brand',
+    '/registry-support': 'registry',
+    '/guide': 'page',
+    '/': 'page',
+  };
   const consoleCommands: ConsoleCommand[] = [
-    ...consoleNavigation.map((item) => ({ ...item, group: 'Console' })),
-    ...referenceNavigation.map((item) => ({ ...item, group: 'Reference' })),
-    { href: '/', label: 'Public homepage', detail: 'Return to the public WHOISleuth overview', group: 'Public' },
+    ...consoleNavigation.map((item) => ({ ...item, group: 'Console', icon: commandIcons[item.href] })),
+    ...referenceNavigation.map((item) => ({ ...item, group: 'Reference', icon: commandIcons[item.href] })),
+    {
+      href: '/',
+      label: 'Public homepage',
+      detail: 'Return to the public WHOISleuth overview',
+      group: 'Public',
+      icon: commandIcons['/'],
+    },
   ];
 
   setContext(CAPABILITY_CONTEXT, () => capabilities);

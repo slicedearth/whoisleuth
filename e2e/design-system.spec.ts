@@ -264,9 +264,25 @@ test('the console command palette filters destinations and remains keyboard oper
     return matchesAccent;
   })).toBe(true);
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
+  await expect(dialog.getByRole('option', { name: /Dashboard/ })).toHaveAttribute('aria-current', 'page');
+  await expect.poll(() => dialog.getByRole('option').evaluateAll((options) =>
+    options.every((option) => option.getAttribute('tabindex') === '-1')
+  )).toBe(true);
+  const destinationIcons = dialog.locator('[role="option"] svg[data-icon]');
+  await expect(destinationIcons).toHaveCount(9);
+  await expect(dialog.getByRole('option', { name: /Lookup/ }).locator('svg')).toHaveAttribute('data-icon', 'lookup');
+  await expect(dialog.getByRole('option', { name: /Registry support/ }).locator('svg')).toHaveAttribute('data-icon', 'registry');
+  await search.press('End');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-8');
+  await search.press('Home');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('ArrowDown');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-1');
   await expect(dialog.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+  await search.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(search).toBeFocused();
   await search.fill('monitor');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
@@ -278,6 +294,14 @@ test('the console command palette filters destinations and remains keyboard oper
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
+
+  await page.goto('/lookup');
+  await expect(trigger).toBeVisible();
+  await page.keyboard.press('Control+K');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('Escape');
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(trigger).toBeVisible();

@@ -1,12 +1,15 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
+  import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
 
   type ConsoleCommand = {
     href: string;
     label: string;
     detail: string;
     group: string;
+    icon: 'analysis' | 'lookup' | 'discover' | 'bulk' | 'watchlist' | 'brand' | 'registry' | 'page';
   };
 
   let {
@@ -28,10 +31,11 @@
     .slice(0, 12));
   const activeOptionId = $derived(filteredCommands[selectedIndex] ? `command-option-${selectedIndex}` : undefined);
   const selectedAnnouncement = $derived(filteredCommands[selectedIndex]
-    ? `${filteredCommands[selectedIndex].label}, ${filteredCommands[selectedIndex].group}.`
+    ? `${filteredCommands[selectedIndex].label}, ${filteredCommands[selectedIndex].group}${filteredCommands[selectedIndex].href === page.url.pathname ? ', current page' : ''}.`
     : 'No matching destination.');
 
   onMount(() => {
+    selectedIndex = Math.max(0, commands.findIndex((command) => command.href === page.url.pathname));
     void tick().then(() => searchInput?.focus());
   });
 
@@ -47,7 +51,7 @@
 
   function focusables() {
     if (!dialog) return [];
-    return [...dialog.querySelectorAll<HTMLElement>('input,a[href],button:not([disabled])')]
+    return [...dialog.querySelectorAll<HTMLElement>('input,a[href],button:not([disabled]):not([tabindex="-1"])')]
       .filter((element) => element.getClientRects().length > 0);
   }
 
@@ -71,11 +75,17 @@
       close();
       return;
     }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (document.activeElement === searchInput && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
       if (!filteredCommands.length) return;
       const delta = event.key === 'ArrowDown' ? 1 : -1;
       selectIndex((selectedIndex + delta + filteredCommands.length) % filteredCommands.length);
+      return;
+    }
+    if (document.activeElement === searchInput && (event.key === 'Home' || event.key === 'End')) {
+      event.preventDefault();
+      if (!filteredCommands.length) return;
+      selectIndex(event.key === 'Home' ? 0 : filteredCommands.length - 1);
       return;
     }
     if (event.key === 'Enter' && document.activeElement === searchInput) {
@@ -146,12 +156,17 @@
               id={`command-option-${index}`}
               type="button"
               role="option"
+              tabindex="-1"
               aria-selected={index === selectedIndex}
+              aria-current={command.href === page.url.pathname ? 'page' : undefined}
               onmouseenter={() => selectIndex(index)}
               onclick={() => void activate(command)}
             >
-              <span><strong>{command.label}</strong><small>{command.detail}</small></span>
-              <em>{command.group}</em>
+              <span class="command-main">
+                <span class="command-glyph" aria-hidden="true"><IntelligenceIcon name={command.icon} size={18} /></span>
+                <span class="command-copy"><strong>{command.label}</strong><small>{command.detail}</small></span>
+              </span>
+              <em class:current={command.href === page.url.pathname}>{command.href === page.url.pathname ? 'Current' : command.group}</em>
             </button>
           </li>
         {/each}
@@ -180,8 +195,12 @@
   li button{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--text);text-align:left}
   li.selected button,li button:hover,li button:focus-visible{border-color:var(--border);background:rgb(var(--accent-rgb) / .08)}
   li.selected button{box-shadow:inset 2px 0 var(--accent2)}
-  button>span{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
+  .command-main{display:grid;grid-template-columns:28px minmax(0,1fr);min-width:0;align-items:center}
+  .command-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:rgb(var(--overlay-rgb) / .025)}
+  li.selected .command-glyph{border-color:rgb(var(--accent2-rgb) / .42);color:var(--accent2);background:rgb(var(--accent2-rgb) / .07)}
+  .command-copy{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
   em{flex:0 0 auto;color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
+  em.current{color:var(--accent2)}
   .no-results{margin:0;padding:28px;color:var(--muted);text-align:center}
   footer{display:flex;flex-wrap:wrap;gap:12px;padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono)}
   kbd{margin-right:3px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--panel-raised);font:inherit}
@@ -193,7 +212,8 @@
     .command-search{margin:10px}
     ul{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;max-height:none;padding:0 8px 9px;overflow-y:auto}
     li button{min-height:38px;padding:7px 9px}
-    small,em,footer{display:none}
+    small,em:not(.current),footer{display:none}
+    em.current{font-size:.5rem}
     strong{text-overflow:ellipsis}
   }
   @media(max-width:399px){ul{grid-template-columns:minmax(0,1fr)}}
