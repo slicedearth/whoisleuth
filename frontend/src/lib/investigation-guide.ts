@@ -25,10 +25,17 @@ import {
   type InvestigationGuideOutcome,
   type InvestigationRecipeId,
 } from './analysis/investigation-guide.ts';
+import {
+  INVESTIGATION_GUIDE_EVENT,
+  INVESTIGATION_GUIDE_KEY,
+  LEGACY_INVESTIGATION_GUIDE_KEY,
+} from './investigation-guide-storage.ts';
 
-export const INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v2';
-export const LEGACY_INVESTIGATION_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
-export const INVESTIGATION_GUIDE_EVENT = 'whoisleuth:investigation-guide-change';
+export {
+  INVESTIGATION_GUIDE_EVENT,
+  INVESTIGATION_GUIDE_KEY,
+  LEGACY_INVESTIGATION_GUIDE_KEY,
+} from './investigation-guide-storage.ts';
 
 export type {
   InvestigationGuide,

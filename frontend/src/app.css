@@ -1,5 +1,5 @@
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   color-scheme: dark;
   --bg: #0f1115;
   --bg-rgb: 15 17 21;
@@ -20,6 +20,8 @@
   --danger-rgb: 255 107 107;
   --amber: #f2b84b;
   --amber-rgb: 242 184 75;
+  --violet: #b89cff;
+  --violet-rgb: 184 156 255;
   --overlay-rgb: 255 255 255;
   --shadow-rgb: 0 0 0;
   --card-shadow-alpha: .22;
@@ -48,13 +50,16 @@
   --terminal-shadow-rgb: 0 0 0;
   --theme-color: #0f1115;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* Type scale. --text-2xs is reserved for uppercase micro-labels that carry
      letter-spacing; running text and data values use --text-xs and up. */
-  --text-2xs: .68rem;
-  --text-xs: .74rem;
-  --text-sm: .8rem;
-  --text-md: .875rem;
+  --text-2xs: .7rem;
+  --text-xs: .77rem;
+  --text-sm: .84rem;
+  --text-md: .92rem;
+  --text-lg: 1.05rem;
+  --text-xl: 1.3rem;
 
   --radius-sm: 7px;
   --radius-md: 10px;
@@ -84,6 +89,8 @@
   --danger-rgb: 180 35 54;
   --amber: #775800;
   --amber-rgb: 119 88 0;
+  --violet: #6846a5;
+  --violet-rgb: 104 70 165;
   --overlay-rgb: 15 23 42;
   --shadow-rgb: 38 56 77;
   --card-shadow-alpha: .1;
@@ -123,6 +130,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  line-height: 1.5;
   background:
     repeating-linear-gradient(0deg, rgb(var(--overlay-rgb) / var(--body-grid-alpha)) 0, rgb(var(--overlay-rgb) / var(--body-grid-alpha)) 1px, transparent 1px, transparent 3px),
     radial-gradient(ellipse 900px 500px at 50% 0, rgb(var(--accent2-rgb) / var(--body-ambient-alpha)), transparent 65%),
@@ -196,7 +204,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
 .choice > span > small { color: var(--muted); font-size: var(--text-xs); }
 
 .field { display: block; font: 600 var(--text-xs) var(--mono); color: var(--text); }
-.field > input, .field > select, .field > textarea { display: block; margin-top: 6px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.field > input, .field > select, .field > textarea { display: block; margin-top: 6px; font-family: var(--font-sans); }
 .field > small { color: var(--muted); font-weight: 400; }
 
 /* ---------- Buttons ----------
@@ -309,7 +317,7 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 .stat-grid p { margin: 5px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
 
 /* ---------- Cards, sections, disclosures ---------- */
-.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: rgb(var(--panel-rgb) / .96); box-shadow: 0 6px 24px rgb(var(--shadow-rgb) / var(--card-shadow-alpha)); }
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(180deg,rgb(var(--panel-rgb) / .98),rgb(var(--panel-rgb) / .94)); box-shadow: 0 6px 24px rgb(var(--shadow-rgb) / var(--card-shadow-alpha)),inset 0 1px rgb(var(--overlay-rgb) / .025); }
 a.card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
 a.card:hover, a.card:focus-visible { border-color: rgb(var(--accent-rgb) / .65); box-shadow: 0 8px 28px rgb(var(--shadow-rgb) / var(--card-hover-shadow-alpha)), inset 0 1px rgb(var(--accent2-rgb) / .08); transform: translateY(-2px); }
 .card > summary { list-style: none; }
@@ -358,7 +366,8 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 
 /* ---------- Toolbars and empty states ---------- */
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
-.empty-state { display: grid; min-height: 240px; place-content: center; gap: 6px; padding: 30px; text-align: center; }
+.empty-state { position: relative; isolation: isolate; display: grid; min-height: 240px; place-content: center; gap: 6px; padding: 30px; overflow: hidden; text-align: center; }
+.empty-state::before { content: ""; position: absolute; inset: 12% 6%; z-index: -1; opacity: .22; background: radial-gradient(circle at 12% 28%, var(--accent2) 0 2px, transparent 3px), radial-gradient(circle at 82% 24%, var(--accent) 0 2px, transparent 3px), radial-gradient(circle at 70% 78%, var(--violet) 0 2px, transparent 3px), linear-gradient(26deg,transparent 0 31%,color-mix(in srgb,var(--accent) 32%,transparent) 31.2% 31.5%,transparent 31.7% 100%), linear-gradient(154deg,transparent 0 53%,color-mix(in srgb,var(--accent2) 28%,transparent) 53.2% 53.5%,transparent 53.7% 100%); mask-image:radial-gradient(ellipse at center,#000,transparent 74%); pointer-events:none; }
 .empty-state h2, .empty-state h3 { margin: 0; }
 .empty-state p { margin: 0; color: var(--muted); max-width: 46ch; }
 .empty-state a { color: var(--accent); font-weight: 700; }
@@ -381,17 +390,37 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
   background: rgb(var(--bg-rgb) / .94);
   backdrop-filter: blur(6px);
 }
+.local-nav-shell::before, .local-nav-shell::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 1px;
+  bottom: 1px;
+  width: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s;
+}
+.local-nav-shell::before { left: 0; background: linear-gradient(90deg, rgb(var(--bg-rgb) / .98), transparent); }
+.local-nav-shell::after { right: 0; background: linear-gradient(270deg, rgb(var(--bg-rgb) / .98), transparent); }
+.local-nav-shell.show-start-fade::before, .local-nav-shell.show-end-fade::after { opacity: 1; }
 .local-nav { display: flex; max-width: 100%; gap: 4px; margin: 0; padding: 5px; overflow-x: auto; }
-.local-nav a { flex: 0 0 auto; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .04em; white-space: nowrap; }
+.local-nav-prompt { flex: 0 0 auto; align-self: center; padding: 0 7px; color: var(--accent2); font: 700 var(--text-2xs) var(--mono); text-shadow: 0 0 7px rgb(var(--accent2-rgb) / .3); }
+.local-nav a { position: relative; flex: 0 0 auto; margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .04em; white-space: nowrap; }
 .local-nav a:hover, .local-nav a:focus-visible { color: var(--text); background: rgb(var(--accent-rgb) / .09); }
+.local-nav a.active { padding-left: 20px; color: var(--text); background: rgb(var(--accent-rgb) / .1); box-shadow: inset 0 -2px var(--accent2); }
+.local-nav a.active::before { content: "❯"; left: 7px; top: 9px; color: var(--accent2); }
 .result-section { scroll-margin-top: 72px; }
 @media (max-width: 900px) {
   .local-nav-shell { top: 70px; }
   .result-section { scroll-margin-top: 134px; }
 }
 @media (max-width: 600px) {
-  .local-nav-shell { position: relative; top: auto; }
-  .result-section { scroll-margin-top: 72px; }
+  .local-nav-shell { top: 68px; }
+  .result-section { scroll-margin-top: 126px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .local-nav-shell::before, .local-nav-shell::after { transition: none; }
 }
 
 /* ---------- Application shell ---------- */
@@ -452,7 +481,7 @@ nav a small { margin-top: 2px; }
 .site-footer a { color: var(--accent); }
 .site-footer a:hover { color: var(--text); }
 
-main { grid-area: main; width: min(1220px,100%); margin: auto; padding: 30px clamp(24px,4vw,58px) 72px; }
+main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px clamp(24px,4vw,58px) 72px; }
 .public-content { width: min(960px,100%); }
 .shell > header { position: sticky; top: 0; z-index: 18; grid-area: header; display: flex; min-width: 0; height: 54px; align-items: center; justify-content: flex-end; padding: 0 clamp(24px,4vw,58px); border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); backdrop-filter: blur(8px); }
 .shell > header > a { display: none; }
@@ -463,7 +492,8 @@ main { grid-area: main; width: min(1220px,100%); margin: auto; padding: 30px cla
 .navigation-drawer-close { display: none; }
 
 /* Page heading: compact identity band rather than a display headline. */
-.heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 24px; align-items: end; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.heading { position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 24px; align-items: end; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.heading::after { content: ""; position: absolute; bottom: -1px; left: 0; width: 72px; height: 2px; background: linear-gradient(90deg,var(--accent2),var(--accent)); box-shadow: 0 0 10px rgb(var(--accent2-rgb) / .22); }
 .heading .eyebrow::before { content: "// "; color: var(--muted); }
 .heading h1 { margin: 2px 0 0; font: 700 clamp(1.45rem,2.6vw,1.95rem) var(--mono); letter-spacing: -.035em; }
 .heading p:not(.eyebrow), .muted { color: var(--muted); line-height: 1.55; }

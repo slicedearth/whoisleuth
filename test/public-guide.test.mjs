@@ -37,6 +37,10 @@ test('public guide exposes three distinct task-focused starting points', () => {
     'Track important findings',
   ]);
   assert.equal(publicGuideGoals.every((goal) => goal.steps.length >= 3 && goal.steps.length <= 4), true);
+  for (const goal of publicGuideGoals) {
+    assert.equal(unique(goal.steps.map((step) => step.id)), true);
+    assert.equal(goal.steps.every((step) => /^#[a-z][a-z0-9-]*$/u.test(step.href)), true);
+  }
 });
 
 test('tool guide covers every public-facing investigation tool once', () => {
@@ -71,6 +75,7 @@ test('glossary, FAQ, state, and mistake content is bounded and deterministic', (
   assert.equal(unique(guideFaqs.map((item) => item.question)), true);
   assert.deepEqual(glossaryTerms.map((item) => item.term), [...glossaryTerms].map((item) => item.term).sort((a, b) => a.localeCompare(b)));
   assert.match(glossaryTerms.find((item) => item.term === 'Unicode confusable')?.definition || '', /not proof/i);
+  assert.doesNotMatch(guideFaqs.find((item) => item.question === 'How do I export or delete saved work?')?.answer || '', /local-storage controls/iu);
 
   const strings = allStrings({ publicGuideGoals, toolGuides, referenceGuides, resultStates, glossaryTerms, guideFaqs, commonMistakes });
   assert.equal(strings.every((value) => value.length > 0 && value.length <= 500), true);

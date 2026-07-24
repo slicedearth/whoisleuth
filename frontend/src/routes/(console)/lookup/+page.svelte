@@ -2,8 +2,10 @@
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
   import { page } from '$app/state';
+  import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
+  import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
@@ -29,6 +31,10 @@
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compactHttpObservation } from '$lib/analysis/http-summary.js';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.js';
+  import {
+    normalizeEvidenceTopologyStatus,
+    type EvidenceTopologyInput,
+  } from '$lib/analysis/evidence-topology.ts';
   import {
     createLookupViewModel,
     lookupHttpErrorMessage,
@@ -159,6 +165,20 @@
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
   const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
+  const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
+  const lifecycleEvents=$derived([
+    {id:'domain-created',label:'Domain created',date:created(),detail:'Registry lifecycle',kind:'registry' as const},
+    {id:'domain-updated',label:'Registry updated',date:updated(),detail:'Most recent registry change',kind:'registry' as const},
+    {id:'tls-valid-from',label:'Certificate valid',date:tlsCertificate.validFrom,detail:'Observed leaf certificate',kind:'certificate' as const},
+    {id:'lookup-observed',label:'Lookup observed',date:result?.fetchedAt||diagnostics.rdap?.fetchedAt||diagnostics.whois?.queriedAt,detail:'Point-in-time collection',kind:'observation' as const},
+    {id:'tls-valid-to',label:'Certificate expires',date:tlsCertificate.validTo,detail:'Observed leaf certificate',kind:'certificate' as const},
+    {id:'domain-expires',label:'Domain expires',date:expires(),detail:'Registry lifecycle',kind:'registry' as const},
+  ]);
+  const evidenceTopologyTarget=$derived({
+    label:show(result?.registrableDomain||result?.query),
+    detail:`${show(result?.type)} · ${lookupEvidenceDepth} lookup`,
+    status:show(availability.state),
+  });
   const caseEvidence=$derived({
     availability:String(availability.state||''),
     confidence:availability.confidence?String(availability.confidence):null,
@@ -453,6 +473,96 @@
     ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
     {href:'#raw-data',label:'Raw data'},
   ];}
+  function topologyStatus(value:any,complete=true,truncated=false){
+    return normalizeEvidenceTopologyStatus(value,{complete,truncated});
+  }
+  function topologyDiagnosticDetail(source:SourceStatus){
+    return[
+      source.endpoint,
+      source.transportSecurity==='https'?'HTTPS':source.transportSecurity==='http'?'Cleartext HTTP':null,
+      source.httpStatus?`HTTP ${source.httpStatus}`:null,
+    ].filter(Boolean).join(' · ')||diagnosticLabel(source);
+  }
+  function buildEvidenceTopologyNodes():EvidenceTopologyInput[]{
+    if(!result)return[];
+    const nodes:EvidenceTopologyInput[]=[];
+    const rdapDiagnostic=rec(diagnostics.rdap) as SourceStatus;
+    const whoisDiagnostic=rec(diagnostics.whois) as SourceStatus;
+    nodes.push({
+      id:'registry-rdap',label:result.type==='domain'?'Registry RDAP':'RDAP',
+      detail:topologyDiagnosticDetail(rdapDiagnostic),status:topologyStatus(rdapDiagnostic.status),
+      href:'#evidence-registry',side:'left',glyph:'R',family:'registry',
+    });
+    if(result.type==='domain'||whoisDiagnostic.status){
+      nodes.push({
+        id:'whois',label:'WHOIS',detail:topologyDiagnosticDetail(whoisDiagnostic),
+        status:topologyStatus(whoisDiagnostic.status),href:'#evidence-registry',side:'left',glyph:'W',family:'registry',
+      });
+    }
+    if(registrarRdap.status){
+      nodes.push({
+        id:'registrar-rdap',label:'Registrar RDAP',
+        detail:show(registrarRdap.detail||registrarRdap.endpoint||registrarRdap.status),
+        status:topologyStatus(registrarRdap.status),href:'#evidence-registry',side:'left',glyph:'RR',family:'registry',
+      });
+    }
+    if(observedNetworkContext.contextVersion===1){
+      nodes.push({
+        id:'network',label:'Network context',
+        detail:show(observedNetworkEndpoint.address||observedNetworkContext.detail),
+        status:topologyStatus(observedNetworkContext.status),href:'#evidence-network',side:'left',glyph:'N',family:'network',
+      });
+    }
+    if(dnsEvidence.source==='dns'){
+      nodes.push({
+        id:'dns',label:'DNS',detail:dnsEvidence.complete===false?'Collection is explicitly partial':'Record families collected',
+        status:topologyStatus(dnsEvidence.status,dnsEvidence.complete!==false,Boolean(dnsEvidence.truncated)),
+        href:'#evidence-dns',side:'right',glyph:'D',family:'network',
+      });
+    }
+    if(httpEvidence.source==='http'){
+      nodes.push({
+        id:'http',label:'HTTP',detail:httpResponse.status?`HTTP ${show(httpResponse.status)} · ${show(httpEvidence.transportSecurity)}`:show(httpEvidence.status),
+        status:topologyStatus(httpEvidence.status,httpEvidence.complete!==false,Boolean(httpEvidence.truncated)),
+        href:'#evidence-http',side:'right',glyph:'H',family:'web',
+      });
+    }
+    if(tlsEvidence.source==='tls'){
+      nodes.push({
+        id:'tls',label:'TLS',detail:show(tlsEvidence.protocol||(tlsAuthorization.authorized===true?'Validated certificate':tlsEvidence.status)),
+        status:topologyStatus(tlsEvidence.status,tlsEvidence.complete!==false,Boolean(tlsEvidence.chainTruncated)),
+        href:'#evidence-tls',side:'right',glyph:'T',family:'web',
+      });
+    }
+    if(pageIdentity.source==='html'){
+      nodes.push({
+        id:'page',label:'Page identity',detail:show(pageIdentity.title||availability.pageTitle||pageIdentity.status),
+        status:topologyStatus(pageIdentity.status,Boolean(pageIdentity.complete),Boolean(pageIdentity.truncated)),
+        href:'#evidence-page',side:'right',glyph:'P',family:'web',
+      });
+    }
+    if(securityTxt.securityTxtVersion===1){
+      nodes.push({
+        id:'security-txt',label:'security.txt',detail:show(securityTxt.detail||securityTxt.state),
+        status:topologyStatus(securityTxt.state),href:'#evidence-security-txt',side:'right',glyph:'S',family:'web',
+      });
+    }
+    if(technologyProfile.source==='derived'){
+      nodes.push({
+        id:'technology',label:'Technology',detail:`${technologyFindingRows().length} bounded indicator${technologyFindingRows().length===1?'':'s'}`,
+        status:topologyStatus(technologyProfile.status,Boolean(technologyProfile.complete),Boolean(technologyProfile.truncated)),
+        href:'#evidence-technology',side:'right',provenance:'derived',glyph:'TC',
+      });
+    }
+    if(securityPosture.source==='derived'){
+      nodes.push({
+        id:'posture',label:'Security posture',detail:show(securityPostureSummary.label||securityPosture.status),
+        status:topologyStatus(securityPosture.status,Boolean(securityPosture.complete),Boolean(securityPosture.truncated)),
+        href:'#evidence-posture',side:'right',provenance:'derived',glyph:'SP',
+      });
+    }
+    return nodes;
+  }
   async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){result=null;error='';saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=await activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(lookupMode==='fast')params.set('fast','1');if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(lookupMode==='deep'&&includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');if(lookupMode==='deep'&&includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');const response=await fetch(`/api/lookup?${params}`);const body:unknown=await response.json().catch(()=>({}));if(!response.ok)throw new Error(lookupHttpErrorMessage(body,response.status));const parsed=parseLookupHttpResponse(body);if(!parsed.ok)throw new Error(parsed.error);result=parsed.value;await refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
 </script>
 
@@ -483,14 +593,24 @@
   <section class="result-root" id="result">
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} />
 
-    <LocalSectionNav label="Result sections" links={resultSectionLinks()} />
+    <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 
-    <section class="result-section" id="overview" aria-labelledby="overview-title">
+    <section class="result-section family-overview" id="overview" aria-labelledby="overview-title">
       <h3 id="overview-title">Overview</h3>
 
       {#if availability.applicable!==false}
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={signals()} trusted={String(profileSignals.trusted||'')} />
       {/if}
+
+      <EvidenceTopology
+        id="lookup-evidence-topology"
+        title="Evidence topology"
+        description="Use this bounded map to jump to separately attributed source and derived-evidence sections. A missing or failed source remains explicit and is not treated as evidence of absence."
+        target={evidenceTopologyTarget}
+        nodes={evidenceTopologyNodes}
+      />
+
+      <LookupLifecycle events={lifecycleEvents} />
 
       <LookupOverviewFacts facts={overviewFacts()} diagnostics={sourceDiagnostics()} hasAssessment={availability.applicable!==false} />
 
@@ -505,23 +625,23 @@
     </section>
 
     {#if hasWebEvidence}
-    <section class="result-section" id="web-evidence" aria-labelledby="web-evidence-title">
+    <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
       <h3 id="web-evidence-title">Web and DNS evidence</h3>
 
       {#if dnsEvidence.source==='dns'}
-        <div class="evidence-component"><LookupDnsEvidence status={show(dnsEvidence.status)} complete={dnsEvidence.complete!==false} rows={dnsEvidenceRows()} failureDetail={dnsQueryFailures()} truncated={Boolean(dnsEvidence.truncated)} /></div>
+        <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence status={show(dnsEvidence.status)} complete={dnsEvidence.complete!==false} rows={dnsEvidenceRows()} failureDetail={dnsQueryFailures()} truncated={Boolean(dnsEvidence.truncated)} /></div>
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <div class="evidence-component"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={httpEvidenceRows()} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={httpRedirectRows()} attempts={httpAttemptRows()} metadata={httpMetadataRows()} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
+        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={httpEvidenceRows()} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={httpRedirectRows()} attempts={httpAttemptRows()} metadata={httpMetadataRows()} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={tlsEvidenceRows()} findings={tlsFindingRows()} leafCertificate={tlsLeafCertificateRows()} alternativeNames={tlsAlternativeNameRows()} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={tlsChainRows()} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={tlsValidationRows()} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} /></div>
+        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={tlsEvidenceRows()} findings={tlsFindingRows()} leafCertificate={tlsLeafCertificateRows()} alternativeNames={tlsAlternativeNameRows()} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={tlsChainRows()} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={tlsValidationRows()} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} /></div>
       {/if}
 
       {#if securityTxt.securityTxtVersion===1}
-        <div class="evidence-component"><LookupSecurityTxt
+        <div class="evidence-component" id="evidence-security-txt"><LookupSecurityTxt
           state={boundedTechnologyText(securityTxt.state||'unavailable',40)}
           detail={boundedTechnologyText(securityTxt.detail||'Disclosure contact collection was unavailable.',300)}
           endpoint={boundedTechnologyText(securityTxt.finalUrl,2048)}
@@ -537,7 +657,7 @@
       {/if}
 
       {#if pageIdentity.source==='html'}
-        <div class="evidence-component"><LookupPageIdentity
+        <div class="evidence-component" id="evidence-page"><LookupPageIdentity
           status={statusLabel(show(pageIdentity.status))}
           complete={Boolean(pageIdentity.complete)}
           facts={pageIdentityFactRows()}
@@ -555,7 +675,7 @@
       {/if}
 
       {#if securityPosture.source==='derived'}
-        <div class="evidence-component"><LookupSecurityPosture
+        <div class="evidence-component" id="evidence-posture"><LookupSecurityPosture
           status={statusLabel(show(securityPosture.status))}
           complete={Boolean(securityPosture.complete)}
           summary={securityPostureDisplaySummary()}
@@ -565,7 +685,7 @@
       {/if}
 
       {#if technologyProfile.source==='derived'}
-        <div class="evidence-component"><LookupTechnologyProfile
+        <div class="evidence-component" id="evidence-technology"><LookupTechnologyProfile
           status={statusLabel(show(technologyProfile.status))}
           complete={Boolean(technologyProfile.complete)}
           findings={technologyFindingRows()}
@@ -579,14 +699,14 @@
     </section>
     {/if}
 
-    <section class="result-section" id="registry" aria-labelledby="registry-title">
+    <section class="result-section family-registry" id="registry" aria-labelledby="registry-title">
       <h3 id="registry-title">Registry sources</h3>
 
       {#if registryAccess.suffix}
         <RegistryAccessNotice access={registryAccess} />
       {/if}
 
-      <div class="evidence-component"><LookupRegistrySources
+      <div class="evidence-component" id="evidence-registry"><LookupRegistrySources
         comparisonSummary={`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`}
         comparisonRows={comparisonDisplayRows()}
         comparisonHasConflicts={comparison.counts.conflict>0}
@@ -603,7 +723,7 @@
       /></div>
 
       {#if observedNetworkContext.contextVersion===1}
-        <div class="evidence-component"><LookupNetworkContext
+        <div class="evidence-component" id="evidence-network"><LookupNetworkContext
           status={statusLabel(boundedTechnologyText(observedNetworkContext.status||'unsupported',40))}
           detail={boundedTechnologyText(observedNetworkContext.detail||'Observed network context was unavailable.',300)}
           address={boundedTechnologyText(observedNetworkEndpoint.address,64)}
@@ -618,21 +738,21 @@
     </section>
 
     {#if threatIntelligenceProviders.length}
-      <section class="result-section" id="external-intelligence" aria-labelledby="external-intelligence-title">
+      <section class="result-section family-network" id="external-intelligence" aria-labelledby="external-intelligence-title">
         <h3 id="external-intelligence-title">External intelligence</h3>
         <LookupExternalIntelligence providers={threatIntelligenceProviders} riskContext={externalRiskContext} riskModelVersion={risk?.modelVersion ?? null} showValue={show} {formatDate} />
       </section>
     {/if}
 
     {#if hasCaseSection}
-      <section class="result-section" id="case-response" aria-labelledby="case-response-title">
+      <section class="result-section family-analyst" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
 
         <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuse} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
       </section>
     {/if}
 
-    <section class="result-section" id="raw-data" aria-labelledby="raw-data-title">
+    <section class="result-section family-raw" id="raw-data" aria-labelledby="raw-data-title">
       <h3 id="raw-data-title">Raw evidence</h3>
       <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
     </section>
@@ -641,12 +761,21 @@
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
-  .result-section{margin-top:26px}
-  .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
+  .result-section{--section-accent:var(--accent2);margin-top:26px}
+  .result-section.family-web{--section-accent:var(--amber)}
+  .result-section.family-registry{--section-accent:var(--accent2)}
+  .result-section.family-network{--section-accent:var(--accent)}
+  .result-section.family-analyst{--section-accent:var(--violet)}
+  .result-section.family-raw{--section-accent:var(--muted)}
+  .result-section>h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--section-accent);font:700 var(--text-2xs) var(--mono);letter-spacing:.09em;text-transform:uppercase}
   .result-section>h3::before{content:"//";color:var(--muted)}
-  .result-section>h3::after{content:"";flex:1;height:1px;background:var(--border)}
+  .result-section>h3::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--section-accent) 60%,var(--border)),var(--border) 42%)}
   .result-section>.card,.result-section>.evidence-component{margin-top:12px}
   .result-section>:nth-child(2){margin-top:0}
+  .evidence-component[id]{position:relative;padding-left:3px;border-left:2px solid var(--evidence-rail,var(--accent));border-radius:var(--radius-md);scroll-margin-top:88px}
+  #evidence-page,#evidence-security-txt,#evidence-http,#evidence-tls{--evidence-rail:var(--amber)}
+  #evidence-dns,#evidence-network{--evidence-rail:var(--accent)}
+  #evidence-posture,#evidence-technology{--evidence-rail:var(--violet)}
 
   .evidence-card{padding:var(--card-pad)}
   .evidence-card .section-head p:not(.eyebrow){margin:4px 0 0;color:var(--muted);font-size:var(--text-xs)}

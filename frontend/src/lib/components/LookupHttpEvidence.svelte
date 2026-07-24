@@ -1,4 +1,6 @@
 <script lang="ts">
+  import HttpRedirectPath from '$lib/components/HttpRedirectPath.svelte';
+
   type Row = { label: string; value: string; hash?: boolean };
   type Redirect = { status: string; from: string; to: string; queryOmitted: boolean };
   type Attempt = { url: string; detail: string };
@@ -48,6 +50,7 @@
     {#if redirects.length}
       <details class="http-detail disclosure">
         <summary>Redirect chain · {redirects.length} hop{redirects.length === 1 ? '' : 's'}</summary>
+        <HttpRedirectPath {redirects} />
         <ol>{#each redirects as redirect}<li><span>HTTP {redirect.status}</span><strong>{redirect.from}</strong><b>→ {redirect.to}</b>{#if redirect.queryOmitted}<small>Query omitted from retained provenance</small>{/if}</li>{/each}</ol>
       </details>
     {/if}

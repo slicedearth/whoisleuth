@@ -24,6 +24,8 @@ jobs:
         run: npm ci --include=optional
       - name: Verify release version
         run: npm run release:check
+      - name: Verify production dependency notices
+        run: npm run licenses:check
       - name: Audit production dependencies
         run: npm audit --omit=dev
       - name: Run tests

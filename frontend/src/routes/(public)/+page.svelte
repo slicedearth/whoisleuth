@@ -2,6 +2,7 @@
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import HomepageProductPreview from '$lib/components/HomepageProductPreview.svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
+  import SyntheticTopologyBackdrop from '$lib/components/SyntheticTopologyBackdrop.svelte';
   import { publicGuideGoals } from '$lib/public-guide';
 
   const evidenceSources = [
@@ -26,6 +27,7 @@
 />
 
 <section class="hero">
+  <SyntheticTopologyBackdrop />
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
@@ -50,7 +52,7 @@
 
 <section class="workflow" id="features" aria-labelledby="workflow-title">
   <div class="section-intro"><p class="eyebrow">Choose a starting point</p><h2 id="workflow-title">Use the path that matches your task.</h2><p>WHOISleuth does not force every investigation through the same sequence. Start with one domain, a brand search, or saved evidence that needs another review.</p></div>
-  <div class="goal-grid">{#each publicGuideGoals as goal,index}<article class="card"><span>0{index+1}</span><h3>{goal.title}</h3><p>{goal.summary}</p><ol>{#each goal.steps as step}<li>{step}</li>{/each}</ol><a href={`/guide#${goal.id}`}>Follow this path <span aria-hidden="true">→</span></a></article>{/each}</div>
+  <div class="goal-grid">{#each publicGuideGoals as goal,index}<article class="card"><span>0{index+1}</span><h3>{goal.title}</h3><p>{goal.summary}</p><ol>{#each goal.steps as step}<li>{step.label}</li>{/each}</ol><a href={`/guide#${goal.id}`}>Follow this path <span aria-hidden="true">→</span></a></article>{/each}</div>
 </section>
 
 <section class="product-tour" aria-labelledby="product-tour-title">
@@ -75,7 +77,8 @@
 </section>
 
 <style>
-  .hero{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(390px,.92fr);gap:clamp(34px,7vw,82px);align-items:center;padding:18px 0 90px}
+  .hero{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(390px,.92fr);gap:clamp(34px,7vw,82px);align-items:center;padding:18px 0 90px;overflow:hidden}
+  .hero-copy,.terminal-preview{position:relative;z-index:1}
   .hero-kicker{margin:0 0 18px}
   .hero h1{max-width:760px;margin:.35rem 0 1rem;font:750 clamp(2.6rem,6.5vw,5.4rem)/.97 var(--mono);letter-spacing:-.075em}
   .hero h1 span{color:var(--accent)}

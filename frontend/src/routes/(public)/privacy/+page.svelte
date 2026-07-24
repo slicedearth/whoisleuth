@@ -11,13 +11,31 @@
 
 <PageHeading eyebrow="Policy" title="Privacy policy" description="How this deployment processes registry data, local investigation state, and session information." />
 
+<div class="policy-layout">
+<nav class="policy-index card" aria-label="Privacy policy sections">
+  <p class="eyebrow">On this page</p>
+  <a href="#privacy-introduction">Introduction</a>
+  <a href="#privacy-information">Information processed</a>
+  <a href="#privacy-use">How information is used</a>
+  <a href="#privacy-legal">Legal basis</a>
+  <a href="#privacy-third-parties">Third parties</a>
+  <a href="#privacy-storage">Cookies and storage</a>
+  <a href="#privacy-retention">Retention</a>
+  <a href="#privacy-security">Security</a>
+  <a href="#privacy-rights">Your rights</a>
+  <a href="#privacy-transfers">International transfers</a>
+  <a href="#privacy-children">Children's privacy</a>
+  <a href="#privacy-changes">Changes</a>
+  <a href="#privacy-contact">Contact</a>
+</nav>
+
 <article class="policy card">
   <p><em>Last updated: 23 July 2026</em></p>
 
-  <h2>1. Introduction</h2>
+  <h2 id="privacy-introduction">1. Introduction</h2>
   <p>This policy explains what WHOISleuth processes when you use it, why, and what choices you have. It applies to this deployment. By using the service, you agree to the practices described here.</p>
 
-  <h2>2. Information processed</h2>
+  <h2 id="privacy-information">2. Information processed</h2>
   <p><strong>Registry data.</strong> Looking up a domain returns whatever registrant contact data its registry or sponsoring registrar publishes through RDAP or WHOIS. The service relays this already-public registry-ecosystem data at your request; most sources redact it by default.</p>
 
   <p><strong>Custom Discover dictionary.</strong> Optional pasted or imported terms are normalized and capped at 100 unique entries, 32 characters per term, and 4,096 input characters. They remain transient in the current browser tab, are not sent to the server or saved in the browser-local workspace, and are used only after you select <strong>Generate candidates</strong>. If selected candidates continue to Bulk, only the resulting domain names and bounded mutation provenance follow the normal lookup path; the original dictionary list does not.</p>
@@ -33,17 +51,17 @@
   <p><strong>Deep lookup evidence.</strong> A requested deep lookup can display bounded HTTP metadata and static page-identity fields derived from the homepage response already fetched for analysis. Page identity can include language, canonical and meta-refresh targets, selected Open Graph fields, generator metadata, forms, normalized resource counts, external resource and embedded origins, mail-contact domains, download context, recognized public tracking identifiers, and versioned page fingerprints. Fingerprints cover the exact captured body, noise-reduced normalized HTML, visible text, static tag structure, form structure, external resource hosts, and public tracking identifiers. Intermediate normalized markup and visible text are discarded after hashing. URL credentials, queries, fragments, resource and download paths, form-action paths, and complete email addresses are not retained. Deep Lookup can also derive a versioned technology profile from the selected HTTP server header, generator metadata, normalized resource origins, and capped static HTML already collected. It retains only curated technology names, categories, confidence levels, evidence classes, and fixed explanations. It does not retain matched markup, arbitrary header values, paths, or signature input, and an unmatched signature is not evidence that a technology is absent. Deep Lookup can separately interpret the existing HTTP response, bounded static form and resource summaries, one TLS handshake, DNSSEC publication, and CAA query as a versioned passive security-posture profile. That profile retains fixed finding identifiers, categories, state and tone labels, explanations, evidence classes, and bounded counts rather than header values, TLS errors, URLs, certificate contents, DNS record contents, or page markup. Observed absence is limited to the selected response or retained static evidence. These analyses make no additional request, perform no active vulnerability testing, and do not affect availability or Risk scoring. The complete rich page-identity, technology, and passive-posture records are excluded from compact browser-local cases, watchlists, profiles, and Bulk results, but technology and posture can appear when the user deliberately downloads the full Lookup evidence response. When the active Brand Profile has a compatible official-site baseline, Lookup compares these bounded components locally and independently. It creates no combined page-similarity score, does not change the Risk score, and does not persist or export the derived comparison. Bulk can also compare bounded nameserver, IP-address, favicon, public-tracking-identifier, and configured official-asset-host observations within its current result set. Monitor can derive a capped local graph and table from exact nameserver-set and final-origin observations already retained in browser-local case histories. A deliberate local graph download can include filtered case domains, exact relationship values, methods, classifications, sources, observation times, completeness, truncation, limitations, and up to 8 bounded source observations per relationship as versioned JSON, GraphML, or GEXF. It excludes case notes, status, disposition, raw registry or page responses, contacts, credentials, and transient graph view state. These comparisons and downloads make no additional requests and are not saved as relationship records. Fingerprints and shared observations support comparison but do not prove authorship, ownership, coordination, intent, or maliciousness.</p>
   <p><strong>Audience measurement.</strong> The service does not use advertising, behavioural profiling, or cross-site tracking. Any privacy-preserving audience measurement introduced by the operator must stay on public pages and be described in this policy before it is enabled. Protected investigation routes, lookup terms, saved evidence, and session identifiers remain outside that scope.</p>
 
-  <h2>3. How information is used</h2>
+  <h2 id="privacy-use">3. How information is used</h2>
   <ul><li>To perform a lookup, scan, posture audit, or search you request.</li><li>To keep you signed in.</li><li>To enforce limits that protect the service and upstream registries.</li></ul>
   <p>Published registrant data is not used to build profiles, sold, or shared with advertisers.</p>
 
-  <h2>4. Legal basis</h2>
+  <h2 id="privacy-legal">4. Legal basis</h2>
   <p>Where GDPR or similar law applies, operation of requested lookups and anti-abuse controls relies on legitimate interest. Exporting, saving, or acting on displayed data is your decision. Any registrant outreach should remain low-volume, human-reviewed, compliant with applicable law, and stop when requested.</p>
 
-  <h2>5. Third parties</h2>
+  <h2 id="privacy-third-parties">5. Third parties</h2>
   <p>Requests may reach the relevant registry or registrar, public DNS, a domain's homepage, favicon, TLS endpoint, optional security.txt endpoint, or MTA-STS policy host, <a href="https://crt.sh/" target="_blank" rel="noopener">crt.sh</a>, and the infrastructure hosting this deployment. When the optional archived-verdict adapter is configured and explicitly selected, <a href="https://urlscan.io/privacy/" target="_blank" rel="noopener">URLscan</a> receives the canonical registrable domain and ordinary API request metadata for a search-only request under its own terms, privacy policy, and account quota. When an optional abuse.ch adapter is configured and explicitly selected, <a href="https://abuse.ch/privacy-policy/" target="_blank" rel="noopener">URLhaus or ThreatFox</a> receives the same bounded domain target and ordinary request metadata for a host or exact-match IOC lookup under its own fair-use terms, privacy policy, account quota, and retention rules. These integrations do not submit a target for scanning or reporting. If distributed operation limits are enabled, their configured REST service processes the minimal lease and optional fixed-window counter metadata described above. If hosted scheduled monitoring is enabled, Netlify Functions performs the bounded lookups and Netlify Blobs retains its application-encrypted state and ordinary object metadata. No advertising or CRM processors are used. Any audience-measurement processor would be identified here before it is enabled.</p>
 
-  <h2>6. Cookies and browser storage</h2>
+  <h2 id="privacy-storage">6. Cookies and browser storage</h2>
   <p>The service sets one signed session cookie, <code>wrt_session</code>, for up to 30 days. It is HttpOnly, SameSite=Lax, and Secure over HTTPS. It is required for authentication and is not used for tracking.</p>
   <p><strong>Appearance preference.</strong> The Theme selector can retain one bounded <code>dark</code>, <code>light</code>, or <code>system</code> value in this browser's local storage under <code>whoisleuth:theme:v1</code>. It is not sent to the server. It is included only when you deliberately download a unified workspace archive so the receiving browser can restore the selected appearance. Without a saved value WHOISleuth follows the browser's operating-system preference. Clearing site data removes the preference.</p>
   <p>Brand profiles, shortlist entries, ordinary watchlists, analyst cases, campaigns, custom rules, and bounded Certificate Transparency search baselines stay as bounded records in your browser's IndexedDB database. They are not sent to the server and are visible to whoever can use that browser profile. On the first authenticated load after the storage change, WHOISleuth normalises supported legacy local-storage documents and copies them into a versioned IndexedDB manifest without deleting the source documents. Later IndexedDB writes are authoritative and do not automatically update those legacy sources. A deliberate Dashboard control can refresh the legacy compatibility copies before returning to an older build, subject to local-storage quota. The IndexedDB record codec is currently plaintext JSON; SHA-256 manifest digests detect corruption but are not encryption. A downloaded workspace archive remains the safer portable backup. Only a separately selected scheduled watchlist may enter the optional encrypted hosted store described above. Campaigns contain a bounded label, optional description, and normalised case-domain membership only; they do not copy case evidence, notes, status, or disposition. Watchlists and cases may retain compact HTTP facts from deep checks: the final origin without its path or query, response status, transport, redirect count and flags, MIME type, and which selected security headers were present. Header values are not retained. CT baselines retain normalised search keywords, observed public domains, timestamps, and result counts so later searches can identify new observations; they can be deleted individually or cleared from Discover. A posture audit sends only the selected official domain and configured DKIM selectors to this deployment. Clearing site data removes all saved browser-local state but does not delete separately retained hosted-monitoring ciphertext.</p>
@@ -52,35 +70,48 @@
   <p><strong>Guided investigations.</strong> An authenticated user can optionally start a fixed brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical domain. The versioned storage contract calls the selected guide a recipe; schema version 2 keeps only that recipe identifier, official or starting domain, an optional analyst-selected candidate domain, up to 25 canonical domains carried from a guided Bulk comparison, an explicit truncation marker, creation/update timestamps, active or paused state, and bounded stage approval, opened, and outcome markers in the current tab's <code>sessionStorage</code> under <code>whoisleuth:investigation-guide:v2</code>. A deployed version 1 navigation record can normalize into the new-domain triage recipe when no current record exists; future records remain untouched. Guide progress is not sent to the server or copied into persistent browser stores, and it is not treated as evidence completion. The guide can pre-fill or preserve a bounded profile, discovery, lookup, Bulk, or case target and carries the bounded comparison set into a Monitor review queue without creating cases automatically. It focuses the relevant tool control and can show a compact return control while its main panel is outside the viewport; none of those behaviours submits the focused form. A network stage displays its request implications and requires an explicit approval marker before navigation, but opening that tool still never starts a lookup, search, scan, submission, export, or Monitor action. <strong>Export summary</strong> requires confirmation and deliberately downloads only a versioned compact progress record without raw evidence, notes, credentials, provider responses, or scan results. A read-only local checkpoint derives retained observation and relationship counts from the typed investigation projection without deciding stage completion. <strong>End guide</strong> removes both current and migrated legacy tab records, and closing the tab session removes them with the rest of that tab's session storage.</p>
   <p>CSV, JSON, Markdown, HTML, GraphML, GEXF, and other stated local exports are generated in your browser. Campaign exports contain their labels, descriptions, domain membership, and timestamps, so review them before sharing. Relationship graph exports contain the bounded filtered relationship evidence described above. A deliberate unified workspace archive can contain cases and their analyst notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom detection rules, active-profile selection, and theme preference. It uses a versioned manifest with per-section SHA-256 checksums, previews conflicts before a non-destructive merge, and excludes sessions, passwords, API credentials, hosted-monitor encryption keys, raw upstream payloads, tab state, Certificate Transparency history, and unrelated browser storage. The archive is unencrypted, so secure it like the analyst records it contains. Evidence exports may contain contact data published in raw RDAP or WHOIS responses and the bounded page-identity evidence displayed by Lookup.</p>
 
-  <h2>7. Retention</h2>
+  <h2 id="privacy-retention">7. Retention</h2>
   <p>Ordinary lookup and posture results are not written to an investigation database. Bounded registry bootstrap and selected public registration responses can remain briefly in server memory to reduce duplicate upstream requests; optional security.txt and external intelligence results are not cached. Browser-local investigation data persists until you remove it or clear site data. Optional hosted scheduled-monitoring ciphertext persists until the operator removes its Blob; disabling the worker does not delete it. You are responsible for securing and deleting downloaded exports.</p>
 
-  <h2>8. Security</h2>
+  <h2 id="privacy-security">8. Security</h2>
   <p>Controls include a shared-password gate, signed HttpOnly cookies, per-IP rate limiting, a restrictive Content Security Policy, and SSRF/DNS-rebinding protections for outbound checks. No system is perfectly secure, and the service is provided as is.</p>
 
-  <h2>9. Your rights</h2>
+  <h2 id="privacy-rights">9. Your rights</h2>
   <p>Depending on your jurisdiction, you may have rights to access, correct, delete, restrict, or object to processing. The service has no individual user-account database. Requests concerning registry-published data should generally go to the responsible registry or registrar; saved lists and exports remain under your control, and an operator who enables hosted scheduled monitoring must also manage its encrypted Blob state.</p>
 
-  <h2>10. International transfers</h2>
+  <h2 id="privacy-transfers">10. International transfers</h2>
   <p>Registries and hosting infrastructure may operate in other countries, so requested lookups can involve international processing inherent to RDAP, WHOIS, DNS, and web hosting.</p>
 
-  <h2>11. Children's privacy</h2>
+  <h2 id="privacy-children">11. Children's privacy</h2>
   <p>The service is not directed at children and is not knowingly used to collect personal data from children.</p>
 
-  <h2>12. Changes</h2>
+  <h2 id="privacy-changes">12. Changes</h2>
   <p>This policy may change over time. Material changes will update the date shown above.</p>
 
-  <h2>13. Contact</h2>
+  <h2 id="privacy-contact">13. Contact</h2>
   <p>Public support requests are not handled through this site. People authorised to use the protected console should contact the operator who provided access; data-subject requests should use the contact designated by that operator. The repository contains the complete <a href="https://github.com/slicedearth/whoisleuth/blob/main/PRIVACY.md" target="_blank" rel="noopener">privacy documentation</a>.</p>
 </article>
+</div>
 
 <style>
-  .policy{max-width:860px;padding:clamp(22px,4vw,42px)}
+  .policy-layout{display:grid;grid-template-columns:190px minmax(0,860px);align-items:start;gap:14px}
+  .policy-index{position:sticky;top:18px;display:grid;gap:3px;padding:12px}
+  .policy-index p{margin:3px 8px 8px}
+  .policy-index a{padding:7px 8px;border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .policy-index a:hover,.policy-index a:focus-visible{background:rgb(var(--accent-rgb) / .07);color:var(--accent)}
+  .policy{min-width:0;padding:clamp(22px,4vw,42px)}
   .policy>p:first-child{margin-top:0;color:var(--muted)}
-  .policy h2{margin:2rem 0 .65rem;font:700 1.05rem var(--mono);color:var(--accent2)}
+  .policy h2{margin:2rem 0 .65rem;font:700 1.05rem var(--mono);color:var(--accent2);scroll-margin-top:24px}
   .policy p,.policy li{color:var(--muted);line-height:1.7}
   .policy strong{color:var(--text)}
   .policy a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
   .policy code{padding:2px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text)}
   .policy li+li{margin-top:.35rem}
+  @media(max-width:820px){
+    .policy-layout{display:block}
+    .policy-index{position:relative;top:auto;display:flex;gap:3px;margin-bottom:12px;overflow-x:auto;mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent)}
+    .policy-index p{flex:0 0 auto;align-self:center;margin:0 7px}
+    .policy-index a{flex:0 0 auto;white-space:nowrap}
+    .policy h2{scroll-margin-top:18px}
+  }
 </style>

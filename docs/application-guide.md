@@ -2,8 +2,10 @@
 
 WHOISleuth supports a domain-intelligence workflow from initial discovery to a
 documented case. The public `/guide` page provides the shortest introduction.
-This document explains the same workflow with additional source, storage, and
-interpretation detail.
+Its task cards link directly to the relevant tool and interpretation sections,
+and the public synthetic demo identifies the current, completed, available, and
+upcoming stage of its six-step workflow. This document explains the same
+workflow with additional source, storage, and interpretation detail.
 
 ## A practical workflow
 
@@ -36,8 +38,18 @@ Dashboard is the landing page inside the signed-in Console. It provides:
   triage; and
 - deliberate export and import of the versioned workspace archive.
 
+While the Console opens, it distinguishes session confirmation, browser-local
+workspace preparation, and destination loading. Those phases describe the
+current boundary only; they do not imply that an evidence source has been
+queried or completed.
+
 Search does not contact a provider or create a persistent index. An empty
 result means only that the bounded local projection had no match.
+
+Press `Ctrl+K` or `Cmd+K` anywhere in the signed-in Console to search its
+destinations without opening the mobile navigation drawer. This changes pages
+only; it does not submit a target, run a lookup, or search retained
+investigation data.
 
 ### Lookup
 
@@ -50,6 +62,13 @@ remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
 passive-posture, technology, TLS, and observed-network cards start collapsed.
 Their state and summary remain visible. Expand a section before relying on its
 evidence, collection time, or limitations.
+
+During collection, Lookup identifies the requested source families without
+pretending that any one source has completed before the bounded unified
+response arrives. Once a result is available, the sticky section rail tracks
+the current evidence group. The topology uses separate visual families for
+registry, network, web, derived, and analyst evidence, with an adjacent key;
+source status remains an independent label and colour.
 
 After a successful single Lookup, the deliberate JSON evidence export can
 include normalized and raw registration sources, supporting observations,

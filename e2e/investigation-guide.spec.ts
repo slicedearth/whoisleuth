@@ -32,36 +32,48 @@ async function returnToGuide(page: import('@playwright/test').Page, step: string
 }
 
 async function markReviewed(page: import('@playwright/test').Page, step: string) {
-  await returnToGuide(page, step);
+  await useGuideReturn(page, step);
   await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await expect.poll(async () => {
+    const action = currentAction(page);
+    if (await action.isVisible()) return !(await action.innerText()).includes(step);
+    return page.locator('.guide-complete').isVisible();
+  }).toBe(true);
 }
 
 async function useGuideReturn(page: import('@playwright/test').Page, step: string) {
   const action = currentAction(page);
   const control = page.getByRole('button', { name: `Return to guided investigation: ${step}` });
-  const hasUsefulExposure = () => action.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
-    const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
-    const area = Math.max(1, rect.width * rect.height);
-    return (visibleWidth * visibleHeight) / area >= 0.2;
+  const hasStableUsefulExposure = () => action.evaluate(async (element) => {
+    const exposed = () => {
+      const rect = element.getBoundingClientRect();
+      const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+      const area = Math.max(1, rect.width * rect.height);
+      return (visibleWidth * visibleHeight) / area >= 0.2;
+    };
+    for (let sample = 0; sample < 3; sample += 1) {
+      if (!exposed()) return false;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+    return exposed();
   });
   await expect.poll(
-    async () => await hasUsefulExposure() || await control.isVisible(),
+    async () => await hasStableUsefulExposure() || await control.isVisible(),
     { timeout: 15_000 },
   ).toBe(true);
-  if (!await hasUsefulExposure()) {
+  if (!await hasStableUsefulExposure()) {
     await expect(control).toBeVisible();
     let usedControl = false;
     try {
       await control.click({ timeout: 5_000 });
       usedControl = true;
     } catch (cause) {
-      if (!await hasUsefulExposure()) throw cause;
+      if (!await hasStableUsefulExposure()) throw cause;
     }
     if (usedControl) await expect(action).toBeFocused();
   }
-  await expect.poll(hasUsefulExposure, { timeout: 15_000 }).toBe(true);
+  await expect.poll(hasStableUsefulExposure, { timeout: 15_000 }).toBe(true);
 }
 
 async function installLookupFixture(page: import('@playwright/test').Page) {
@@ -105,8 +117,7 @@ async function runLookupStep(page: import('@playwright/test').Page, label: strin
   await expect(page.locator('#query')).toHaveValue(expectedDomain);
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
-  await useGuideReturn(page, label);
-  await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await markReviewed(page, label);
 }
 
 async function runBulkStep(
@@ -119,8 +130,7 @@ async function runBulkStep(
   const count = (await page.locator('#domains').inputValue()).split(/\s+/u).filter(Boolean).length;
   await page.getByRole('button', { name: `Scan ${count} domain${count === 1 ? '' : 's'}` }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(count);
-  await useGuideReturn(page, label);
-  await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await markReviewed(page, label);
 }
 
 async function retainCases(page: import('@playwright/test').Page, label: string, domains: string[]) {
@@ -144,8 +154,7 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
     await expect(caseHeader).toBeVisible();
     await expect(caseHeader).toBeFocused();
   }
-  await useGuideReturn(page, label);
-  await currentAction(page).getByRole('button', { name: 'Mark reviewed' }).click();
+  await markReviewed(page, label);
   await expect(page.locator('.guide-complete')).toContainText('All');
 }
 

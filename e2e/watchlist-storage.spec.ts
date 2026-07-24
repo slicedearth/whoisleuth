@@ -63,6 +63,11 @@ test('watchlist history filters material changes and hands retained domains back
   };
   await seed(page, { Priority: retained });
 
+  const activity = page.getByRole('region', { name: 'Watchlist activity' });
+  await expect(activity).toBeVisible();
+  await expect(activity.getByRole('img', { name: '2 retained watchlist checks with 1 material changes' })).toBeVisible();
+  await expect(activity.getByRole('list', { name: 'Retained watchlist activity by day' })).toContainText(/14 Jul/);
+
   await page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'History' }).click();
   const history = page.locator('.history');
   await expect(history.getByRole('heading', { name: 'Priority' })).toBeVisible();

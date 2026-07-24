@@ -22,9 +22,13 @@ test('a single domain can be entered normally', async ({ page }) => {
 });
 
 test('fast lookup mode is explicit and sends the fast contract parameter', async ({ page }) => {
+  let releaseLookup: (() => void) | undefined;
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await lookupGate;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -49,6 +53,7 @@ test('fast lookup mode is explicit and sends the fast contract parameter', async
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await requestPromise;
   await expect(page.getByText(/Fast lookup is checking authoritative registration evidence/u)).toBeVisible();
+  releaseLookup?.();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
 });
 
@@ -1013,7 +1018,10 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(postureCard.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
   await expect(postureCard.locator(':scope > summary .evidence-status')).toHaveText('success');
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeHidden();
-  await postureCard.locator(':scope > summary').click();
+  const postureSummary = postureCard.locator(':scope > summary');
+  await postureSummary.focus();
+  await postureSummary.press('Enter');
+  await expect(postureCard).toHaveAttribute('open', '');
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Content Security Policy not observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Review', { exact: true }).first()).toBeVisible();

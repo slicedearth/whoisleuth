@@ -20,6 +20,7 @@
       acceptedAnswer: { '@type': 'Answer', text: item.answer },
     })),
   };
+
 </script>
 
 <PublicSeo
@@ -48,12 +49,17 @@
 
 <section id="start" class="guide-section" aria-labelledby="start-title">
   <div class="section-intro"><p class="eyebrow">Start here</p><h2 id="start-title">Choose the outcome you need.</h2><p>There is no single required route through the console. These paths cover the most common starting points.</p></div>
-  <div class="goal-grid">
-    {#each publicGuideGoals as goal}
+  <div class="goal-grid" role="region" aria-label="Common WHOISleuth workflow map">
+    {#each publicGuideGoals as goal,index}
       <article class="card" id={goal.id}>
+        <span class="workflow-number">Path {String(index + 1).padStart(2, '0')}</span>
         <h3>{goal.title}</h3>
         <p>{goal.summary}</p>
-        <ol>{#each goal.steps as step}<li>{step}</li>{/each}</ol>
+        <ol aria-label={`${goal.title} workflow`}>
+          {#each goal.steps as step,stepIndex}
+            <li><a href={step.href}><span>{stepIndex + 1}</span>{step.label}</a></li>
+          {/each}
+        </ol>
       </article>
     {/each}
   </div>
@@ -135,7 +141,7 @@
   .guide-actions,.closing-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.guide-actions a,.closing-actions a{min-height:42px}
   .guide-index{display:flex;position:sticky;top:8px;z-index:10;gap:5px;margin:0 0 52px;padding:6px;overflow-x:auto;background:rgb(var(--panel-rgb) / .94);backdrop-filter:blur(8px)}.guide-index a{flex:0 0 auto;padding:9px 11px;border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}.guide-index a:hover,.guide-index a:focus-visible{color:var(--text);background:rgb(var(--accent-rgb) / .08)}
   .guide-section{padding:62px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.6rem,3.4vw,2.45rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
-  .goal-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.goal-grid article{padding:20px}.goal-grid h3{margin:0;font:700 1.05rem var(--mono)}.goal-grid p{min-height:72px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.goal-grid ol{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 0;padding:0;list-style:none;counter-reset:steps}.goal-grid li{counter-increment:steps;padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono)}.goal-grid li::before{content:counter(steps) ". ";color:var(--accent2)}
+  .goal-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.goal-grid article{position:relative;padding:20px;overflow:hidden}.goal-grid article::after{content:"";position:absolute;inset:auto -18px -28px auto;width:100px;height:100px;border:1px solid rgb(var(--accent-rgb) / .12);border-radius:50%;pointer-events:none}.workflow-number{display:block;margin-bottom:10px;color:var(--accent2);font:700 .58rem var(--mono);letter-spacing:.08em;text-transform:uppercase}.goal-grid h3{margin:0;font:700 1.05rem var(--mono)}.goal-grid p{min-height:72px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.goal-grid ol{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:18px 0 0;padding:0;list-style:none}.goal-grid li{display:flex;align-items:center}.goal-grid li:not(:last-child)::after{content:"›";margin-left:5px;color:var(--muted);font:700 var(--text-sm) var(--mono)}.goal-grid li a{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono)}.goal-grid li a span{display:grid;width:16px;height:16px;place-items:center;border-radius:50%;background:rgb(var(--accent2-rgb) / .1);color:var(--accent2);font-size:.55rem}.goal-grid li a:hover,.goal-grid li a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .07);color:var(--accent)}
   .tool-guide,.reference-guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tool-guide article,.reference-guide article{padding:20px}.tool-guide h3,.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--text-xs);line-height:1.5}
   .state-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));gap:8px}.state-grid article{padding:16px}.state-grid h3{margin:0;color:var(--accent2);font:700 var(--text-sm) var(--mono)}.state-grid p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation{margin-top:12px;padding:19px;border-left:3px solid var(--amber)}.interpretation strong{font:700 var(--text-sm) var(--mono)}.interpretation p{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}
   .glossary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}.glossary-grid>div{display:grid;grid-template-columns:145px minmax(0,1fr);gap:15px;padding:16px}.glossary-grid dt{color:var(--accent);font:700 var(--text-xs) var(--mono)}.glossary-grid dd{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}

@@ -15,6 +15,10 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Track important findings' })).toBeVisible();
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
+  const topology = page.getByRole('region', { name: 'Synthetic lookup evidence topology' });
+  await expect(topology).toBeVisible();
+  await expect(topology.getByRole('img', { name: 'Synthetic lookup evidence topology visual overview' })).toBeVisible();
+  await expect(topology.getByRole('list', { name: 'Evidence source status' }).getByRole('listitem')).toHaveCount(5);
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Explore the interactive demo' })).toHaveAttribute('href', '/demo');
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
@@ -27,6 +31,13 @@ test('public guide explains tasks, result states, glossary terms, and common que
 
   await expect(page.getByRole('heading', { name: 'Use WHOISleuth with confidence.' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();
+  const workflowMap = page.getByRole('region', { name: 'Common WHOISleuth workflow map' });
+  await expect(workflowMap).toBeVisible();
+  await expect(workflowMap.getByText('Path 01')).toBeVisible();
+  const lookupStep = workflowMap.getByRole('link', { name: /1.*Lookup/ }).first();
+  await expect(lookupStep).toHaveAttribute('href', '#tool-lookup');
+  await lookupStep.click();
+  await expect(page.locator('#tool-lookup')).toBeInViewport();
   await expect(page.locator('.goal-grid article')).toHaveCount(3);
   await expect(page.locator('.tool-guide article')).toHaveCount(5);
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
@@ -44,6 +55,28 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expectNoHorizontalOverflow(page);
 });
 
+test('privacy policy offers compact section navigation without changing policy content', async ({ page }) => {
+  await page.goto('/privacy');
+
+  const sectionNavigation = page.getByRole('navigation', { name: 'Privacy policy sections' });
+  await expect(sectionNavigation).toBeVisible();
+  await expect(sectionNavigation.getByRole('link')).toHaveCount(13);
+  const headingIds = await page.locator('.policy h2[id]').evaluateAll((headings) => headings.map((heading) => heading.id));
+  const indexedIds = await sectionNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')?.slice(1)));
+  expect(indexedIds).toEqual(headingIds);
+  const security = sectionNavigation.getByRole('link', { name: 'Security' });
+  await expect(security).toHaveAttribute('href', '#privacy-security');
+  await security.click();
+  await expect(page.locator('#privacy-security')).toBeInViewport();
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/privacy');
+  await expect(sectionNavigation).toBeVisible();
+  expect(await sectionNavigation.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await sectionNavigation.evaluate((element) => getComputedStyle(element).maskImage)).toContain('linear-gradient');
+  await expectNoHorizontalOverflow(page);
+});
+
 test('homepage and guide remain usable on a narrow mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
 
@@ -55,6 +88,7 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
 
   await page.goto('/guide');
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Common WHOISleuth workflow map' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#tools');
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
   await expect(page.getByRole('heading', { name: 'Domain investigation terms.' })).toBeVisible();

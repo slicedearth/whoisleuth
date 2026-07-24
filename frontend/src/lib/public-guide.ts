@@ -1,8 +1,14 @@
+export type PublicGuideStep = {
+  id: string;
+  label: string;
+  href: string;
+};
+
 export type PublicGuideGoal = {
   id: string;
   title: string;
   summary: string;
-  steps: readonly string[];
+  steps: readonly PublicGuideStep[];
 };
 
 export type GuideEntry = {
@@ -29,28 +35,41 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
     id: 'inspect-one-domain',
     title: 'Inspect one domain',
     summary: 'Check registration first, then review DNS, certificate and website context.',
-    steps: Object.freeze(['Lookup', 'Review sources', 'Save useful evidence']),
+    steps: Object.freeze([
+      Object.freeze({ id: 'lookup', label: 'Lookup', href: '#tool-lookup' }),
+      Object.freeze({ id: 'review-sources', label: 'Review sources', href: '#results' }),
+      Object.freeze({ id: 'save-evidence', label: 'Save useful evidence', href: '#tool-monitor' }),
+    ]),
   }),
   Object.freeze({
     id: 'find-brand-lookalikes',
     title: 'Find brand lookalikes',
     summary: 'Define the official brand, find candidates and focus deeper checks on the most useful leads.',
-    steps: Object.freeze(['Brands', 'Discover', 'Bulk', 'Lookup']),
+    steps: Object.freeze([
+      Object.freeze({ id: 'brands', label: 'Brands', href: '#tool-brands' }),
+      Object.freeze({ id: 'discover', label: 'Discover', href: '#tool-discover' }),
+      Object.freeze({ id: 'bulk', label: 'Bulk', href: '#tool-bulk' }),
+      Object.freeze({ id: 'lookup', label: 'Lookup', href: '#tool-lookup' }),
+    ]),
   }),
   Object.freeze({
     id: 'track-important-findings',
     title: 'Track important findings',
     summary: 'Keep a case or watchlist and compare later observations without treating a failed check as absence.',
-    steps: Object.freeze(['Save', 'Monitor', 'Review changes']),
+    steps: Object.freeze([
+      Object.freeze({ id: 'save', label: 'Save', href: '#tool-monitor' }),
+      Object.freeze({ id: 'monitor', label: 'Monitor', href: '#tool-monitor' }),
+      Object.freeze({ id: 'review-changes', label: 'Review changes', href: '#tool-monitor' }),
+    ]),
   }),
 ]);
 
 export const toolGuides: readonly GuideEntry[] = Object.freeze([
-  Object.freeze({ id: 'lookup', name: 'Lookup', useWhen: 'You have one domain, IP address or ASN to investigate.', input: 'Enter one target and choose Fast or Deep. Deep is the default; optional security.txt and external intelligence sources run only when selected.', result: 'Registration evidence and available supporting context are shown by source. Long source records and secondary Deep evidence start collapsed while their headings, states, and summaries remain visible.', next: 'Review conflicting or incomplete sources, then save a useful domain finding to Monitor.' }),
+  Object.freeze({ id: 'lookup', name: 'Lookup', useWhen: 'You have one domain, IP address or ASN to investigate.', input: 'Enter one target and choose Fast or Deep. Deep is the default; optional security.txt and external intelligence sources run only when selected.', result: 'A bounded evidence map links separately attributed sources to their detail, while an ordered lifecycle shows dated registry and certificate events. Long source records and secondary Deep evidence start collapsed while their headings, states, and summaries remain visible.', next: 'Use the source map and lifecycle to review conflicting, partial, unavailable, or time-sensitive evidence, then save a useful domain finding to Monitor.' }),
   Object.freeze({ id: 'brands', name: 'Brands', useWhen: 'You want searches and comparisons to reflect an official brand.', input: 'Add official domains, product names, preferred domain endings and known trusted infrastructure.', result: 'A browser-local profile provides a comparison boundary for discovery and analysis.', next: 'Open Discover to generate or find related candidates.' }),
   Object.freeze({ id: 'discover', name: 'Discover', useWhen: 'You want possible lookalikes or names observed in public certificate logs.', input: 'Choose a Brand Profile or enter a focused keyword. Use a preset or select exact mutation families; optional custom dictionary terms stay local to the current tab and can replace the first or last token of a hyphenated seed. Custom selection also offers an advanced, opt-in two-character Unicode family that is never enabled by a preset.', result: 'Generated and certificate-log candidates retain their source and limits. Internationalised candidates show both their DNS-safe ASCII form and readable Unicode form.', next: 'Filter and sort the bounded candidate set, then send a focused shortlist to Bulk rather than scanning every possible name.' }),
-  Object.freeze({ id: 'bulk', name: 'Bulk', useWhen: 'You need to compare several candidate domains consistently.', input: 'Paste domains or accept a shortlist from Discover. Bulk Deep uses compact WHOIS, DNS, website, TLS, and mail evidence rather than the complete single-domain response.', result: 'Fast or Deep checks prioritise candidates and expose related infrastructure already observed in the scan.', next: 'Open the strongest or most uncertain leads in Lookup for complete source-level review and optional enrichments.' }),
-  Object.freeze({ id: 'monitor', name: 'Monitor', useWhen: 'You want to retain a finding, document a decision or compare later observations.', input: 'Save a case or watchlist from Lookup or Bulk.', result: 'Browser-local timelines, notes, relationships and exports keep the review trail together.', next: 'Rescan deliberately or use optional hosted monitoring when it is configured.' }),
+  Object.freeze({ id: 'bulk', name: 'Bulk', useWhen: 'You need to compare several candidate domains consistently.', input: 'Paste domains or accept a shortlist from Discover. Bulk Deep uses compact WHOIS, DNS, website, TLS, and mail evidence rather than the complete single-domain response.', result: 'Fast or Deep checks prioritise candidates and expose related infrastructure already observed in the scan. A bounded Risk/Opportunity matrix summarizes the current filters while the table retains every result.', next: 'Open the strongest or most uncertain leads in Lookup for complete source-level review and optional enrichments.' }),
+  Object.freeze({ id: 'monitor', name: 'Monitor', useWhen: 'You want to retain a finding, document a decision or compare later observations.', input: 'Save a case or watchlist from Lookup or Bulk.', result: 'Browser-local timelines, notes, relationships and exports keep the review trail together. The activity heatmap covers retained watchlist checks only and does not imply uninterrupted monitoring.', next: 'Rescan deliberately or use optional hosted monitoring when it is configured.' }),
 ]);
 
 export const referenceGuides: readonly GuideEntry[] = Object.freeze([
@@ -129,7 +148,7 @@ export const guideFaqs: readonly GuideFaq[] = Object.freeze([
   Object.freeze({ question: 'Where are cases and watchlists saved?', answer: 'They are stored in the current browser profile by default. A workspace archive can move supported records deliberately. Optional hosted monitoring is a separate configured feature.' }),
   Object.freeze({ question: 'Can another person using the shared login see my saved browser work?', answer: 'Browser-local cases, profiles, and watchlists remain in the browser profile where they were saved. If optional hosted monitoring is configured, its encrypted compact watchlist is deployment-wide and available to signed-in users.' }),
   Object.freeze({ question: 'What is sent to optional intelligence providers?', answer: 'Only enabled providers run. Each provider states the target representation, privacy decision, request limits and result provenance. A provider miss or outage does not imply safety.' }),
-  Object.freeze({ question: 'How do I export or delete saved work?', answer: 'Monitor can export individual cases, and Dashboard can export or import a bounded workspace archive. Saved browser records can be removed from the tool that stores them or cleared through the documented local-storage controls.' }),
+  Object.freeze({ question: 'How do I export or delete saved work?', answer: 'Monitor can export individual cases, and Dashboard can export or import a bounded workspace archive. Saved browser records can be removed from the tool that stores them or by clearing WHOISleuth site data in your browser.' }),
 ]);
 
 export const commonMistakes: readonly string[] = Object.freeze([

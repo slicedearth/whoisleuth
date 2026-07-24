@@ -79,6 +79,22 @@ test('sorts complete results by registration, confidence, website, registrar, an
 
   await runBulkScan(page, ['charlie.example', 'alpha.example', 'bravo.example']);
   const domains = () => page.locator('.results-table tbody td[data-label="Domain"] strong').allTextContents();
+  const triagePlot = page.getByRole('region', { name: 'Risk and opportunity matrix' });
+  await expect(triagePlot).toBeVisible();
+  await expect(triagePlot.getByRole('img', { name: /2 filtered domains plotted/ })).toBeVisible();
+  const quadrantSummary = triagePlot.getByLabel('Risk and opportunity quadrant counts');
+  await expect(quadrantSummary).toBeVisible();
+  await expect(quadrantSummary.locator('dt')).toHaveText([
+    'Available / review',
+    'Priority review',
+    'Lower scores',
+    'Risk-led review',
+  ]);
+  expect(
+    (await quadrantSummary.locator('dd').allTextContents())
+      .map(Number)
+      .reduce((total, count) => total + count, 0),
+  ).toBe(2);
 
   await page.getByLabel('Sort').selectOption('registrar');
   await expect.poll(domains).toEqual(['alpha.example', 'bravo.example', 'charlie.example']);

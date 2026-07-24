@@ -12,6 +12,7 @@ const EXPECTED_PACKAGE_FILES = [
   'docs/cli.md',
   'LICENSE',
   'NOTICE',
+  'frontend/static/third-party-notices.txt',
   'TRADEMARKS.md',
 ];
 

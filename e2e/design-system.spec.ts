@@ -66,6 +66,8 @@ function sectionedLookupFixture(domain: string) {
     query: domain, type: 'domain', registrableDomain: domain,
     availability: {
       state: 'registered', confidence: 'high', domain,
+      createdDateIso: '2020-01-02T00:00:00.000Z',
+      expiryDateIso: '2027-01-02T00:00:00.000Z',
       registrar: { name: 'Fixture Registrar LLC' },
       nameservers: [`ns1.${domain}`, `ns2.${domain}`],
       dns: {
@@ -76,9 +78,9 @@ function sectionedLookupFixture(domain: string) {
       http: {
         version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z', scanMode: 'deep', source: 'http',
         durationMs: 100, complete: true, truncated: false, limitations: [], diagnostics: {},
-        requestUrl: `https://${domain}/`, finalUrl: `https://${domain}/`, transportSecurity: 'https',
-        redirectCount: 0, redirectLimitReached: false, crossOriginRedirect: false, httpsDowngrade: false,
-        redirects: [], attempts: [],
+        requestUrl: `https://${domain}/`, finalUrl: `https://www.${domain}/home`, transportSecurity: 'https',
+        redirectCount: 1, redirectLimitReached: false, crossOriginRedirect: false, httpsDowngrade: false,
+        redirects: [{ status: 301, from: `https://${domain}/`, to: `https://www.${domain}/home`, queryOmitted: false }], attempts: [],
         response: {
           status: 200, contentType: 'text/html', contentLanguage: null, server: null,
           declaredContentLength: null, capturedBodyBytes: 1024, bodyInspected: true, bodyTruncated: false,
@@ -86,7 +88,7 @@ function sectionedLookupFixture(domain: string) {
         },
       },
     },
-    rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {} } },
+    rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } } },
     whois: { parsed: {}, chain: [] },
     diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
   };
@@ -140,6 +142,98 @@ test('empty Lookup shows the compact query card without result sections or local
   await expectNoHorizontalOverflow(page);
 });
 
+test('the protected Console opens through an intentional responsive loading state', async ({ page }) => {
+  let releaseSession: (() => void) | undefined;
+  const sessionGate = new Promise<void>((resolve) => {
+    releaseSession = resolve;
+  });
+  await page.route('**/api/session', async (route) => {
+    await sessionGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ authenticated: true }),
+    });
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/dashboard');
+
+  const loadingStatus = page.getByRole('status', { name: 'Console loading status' });
+  await expect(loadingStatus).toContainText('Opening WHOISleuth');
+  await expect(loadingStatus).toContainText('Confirm session');
+  await expect(loadingStatus).toContainText('Prepare workspace');
+  await expect(loadingStatus).toContainText('Open destination');
+  await expectNoHorizontalOverflow(page);
+
+  releaseSession?.();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+});
+
+test('the console command palette filters destinations and remains keyboard operable', async ({ page }) => {
+  await page.goto('/dashboard');
+  const trigger = page.getByRole('button', { name: 'Open command palette' });
+  await expect(trigger).toBeVisible();
+  await expect(trigger.locator('.shortcut-wide')).toBeVisible();
+  await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
+  await expect(trigger.locator('.shortcut-compact')).toBeHidden();
+
+  await page.keyboard.press('Control+K');
+  const dialog = page.getByRole('dialog', { name: 'Go to' });
+  const search = dialog.getByRole('combobox', { name: 'Search pages' });
+  await expect(dialog).toBeVisible();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
+  await search.press('ArrowDown');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-1');
+  await expect(dialog.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+  await search.fill('monitor');
+  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
+  await search.press('Enter');
+  await expect(page).toHaveURL(/\/monitor$/);
+
+  await page.keyboard.press('Control+K');
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expect(trigger).toBeVisible();
+  await expect(trigger.locator('.shortcut-wide')).toBeHidden();
+  await expect(trigger.locator('.shortcut-compact')).toBeVisible();
+  await trigger.click();
+  await expect(dialog).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('Lookup reports requested source families without implying staged completion', async ({ page }) => {
+  let releaseLookup: (() => void) | undefined;
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    await lookupGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(sectionedLookupFixture('collection-state.invalid')),
+    });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill('collection-state.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const loadingStatus = page.getByRole('status');
+  await expect(loadingStatus).toContainText('Deep lookup is collecting');
+  await expect(page.locator('.collection-trace')).toContainText('Authority');
+  await expect(page.locator('.collection-trace')).toContainText('Enrichment');
+  await expect(page.locator('.collection-trace')).not.toContainText('complete');
+  releaseLookup?.();
+  await expect(page.locator('#result')).toBeVisible();
+});
+
 test('a data-heavy Lookup result groups evidence into navigable sections', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/lookup?*', (route) => route.fulfill({
@@ -164,6 +258,63 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
 
+  // The D3-backed visual is paired with a complete, keyboard-operable source
+  // rail. It does not replace the detailed source sections.
+  const topology = page.getByRole('region', { name: 'Evidence topology' });
+  await expect(topology).toBeVisible();
+  await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeVisible();
+  const visualKey = topology.getByRole('group', { name: 'Evidence topology visual key' });
+  await expect(visualKey).toContainText('Registry');
+  await expect(visualKey).toContainText('Network');
+  await expect(visualKey).toContainText('Web');
+  await expect(visualKey).toContainText('Derived');
+  await expect(visualKey).toContainText('Analyst');
+  await expect(visualKey).toContainText('Dot and label show source state');
+  const topologyCopies = topology.locator('foreignObject.node-copy');
+  await expect(topologyCopies.first()).toBeVisible();
+  expect(await topologyCopies.evaluateAll((copies) => copies.every((copy) => {
+    const text = copy.firstElementChild;
+    const copyRect = copy.getBoundingClientRect();
+    const nodeRect = copy.closest('g')?.querySelector(':scope > .node-surface')?.getBoundingClientRect();
+    const styles = text ? getComputedStyle(text) : null;
+    return Boolean(
+      text
+      && nodeRect
+      && copyRect.left >= nodeRect.left - 0.5
+      && copyRect.right <= nodeRect.right + 0.5
+      && copyRect.top >= nodeRect.top - 0.5
+      && copyRect.bottom <= nodeRect.bottom + 0.5
+      && styles?.overflow === 'hidden'
+      && styles.textOverflow === 'ellipsis'
+      && styles.whiteSpace === 'nowrap'
+    );
+  }))).toBe(true);
+  const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
+  await expect(sourceRail.getByRole('link', { name: /Registry RDAP.*success/i })).toHaveAttribute('href', '#evidence-registry');
+  await expect(sourceRail.getByRole('link', { name: /WHOIS.*partial/i })).toHaveAttribute('href', '#evidence-registry');
+  const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
+  await expect(dnsSource).toHaveAttribute('href', '#evidence-dns');
+  await dnsSource.focus();
+  await expect(dnsSource.locator('xpath=..')).toHaveClass(/active/);
+  await expect(topology.locator('.source-node.family-network.active')).toHaveCount(1);
+  await expect(topology.locator('.topology-edges path.active')).toHaveCount(1);
+
+  const linkedVisualNode = topology.locator('.source-nodes > g.linked').first();
+  const hashBeforeDrag = await page.evaluate(() => window.location.hash);
+  await linkedVisualNode.dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 20, button: 0 });
+  await linkedVisualNode.dispatchEvent('pointermove', { pointerId: 1, pointerType: 'touch', clientX: 50, clientY: 20, button: 0 });
+  await linkedVisualNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 50, clientY: 20, button: 0 });
+  expect(await page.evaluate(() => window.location.hash)).toBe(hashBeforeDrag);
+
+  await dnsSource.press('Enter');
+  await expect(page).toHaveURL(/#evidence-dns$/);
+  await expect(page.locator('#evidence-dns')).toBeInViewport();
+
+  const lifecycle = page.getByRole('region', { name: 'Observed lifecycle' });
+  await expect(lifecycle).toBeVisible();
+  await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeVisible();
+  await expect(lifecycle.getByRole('list', { name: 'Lookup lifecycle events' })).toContainText('Domain created');
+
   // Detailed registry and raw unified records stay collapsed and subordinate.
   await expect(page.locator('.sources > details').first()).not.toHaveAttribute('open', '');
   await expect(page.locator('details.raw')).not.toHaveAttribute('open', '');
@@ -174,6 +325,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await registryLink.press('Enter');
   await expect(page).toHaveURL(/#registry$/);
   await expect(page.locator('#registry')).toBeInViewport();
+  await expect(registryLink).toHaveAttribute('aria-current', 'location');
 
   // The DNS status stays visible while its detailed warning is disclosed on demand.
   const dnsCard = page.locator('.dns-card');
@@ -181,6 +333,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(page.getByText(/A resolver failure is not evidence that a record is absent/)).toBeHidden();
   await dnsCard.locator(':scope > summary').click();
   await expect(page.getByText(/A resolver failure is not evidence that a record is absent/)).toBeVisible();
+
+  const httpCard = page.locator('.http-card');
+  await httpCard.locator(':scope > summary').click();
+  const redirectDisclosure = httpCard.getByText('Redirect chain · 1 hop');
+  await redirectDisclosure.click();
+  await expect(httpCard.getByRole('img', { name: 'HTTP redirect path with 1 hop' })).toBeVisible();
 
   for (const size of [
     { width: 1920, height: 1080 },
@@ -190,10 +348,38 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
     await expectNoHorizontalOverflow(page);
   }
 
+  // The wide chronological plot becomes a connected vertical timeline on
+  // narrow screens rather than requiring a nested horizontal scrollbar.
+  await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeHidden();
+  const mobileTimeline = lifecycle.getByRole('list', { name: 'Lookup lifecycle events' });
+  await expect(mobileTimeline).toBeVisible();
+  expect(await mobileTimeline.locator('li').evaluateAll((items) => items.every((item) => {
+    const listRect = item.parentElement?.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    return Boolean(listRect && itemRect.left >= listRect.left - 0.5 && itemRect.right <= listRect.right + 0.5);
+  }))).toBe(true);
+
   // The local navigation stays a single scrollable row on narrow screens
-  // rather than stacking into a tall block.
+  // rather than stacking into a tall block. It also exposes overflow and
+  // keeps the active destination inside the visible strip.
   const navBox = await boundingBox(localNav);
   expect(navBox.height).toBeLessThanOrEqual(64);
+  expect(await localNav.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await localNav.evaluate((element) => {
+    element.scrollLeft = 0;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await expect(page.locator('.local-nav-shell')).toHaveClass(/show-end-fade/);
+  await page.locator('#raw-data').evaluate((element) => element.scrollIntoView({ block: 'start' }));
+  const rawDataLink = localNav.getByRole('link', { name: 'Raw data' });
+  await expect(rawDataLink).toHaveAttribute('aria-current', 'location');
+  await expect.poll(async () => rawDataLink.evaluate((link) => {
+    const navigation = link.closest('nav');
+    if (!navigation) return false;
+    const navigationRect = navigation.getBoundingClientRect();
+    const linkRect = link.getBoundingClientRect();
+    return linkRect.left >= navigationRect.left - 0.5 && linkRect.right <= navigationRect.right + 0.5;
+  })).toBe(true);
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();

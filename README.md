@@ -31,8 +31,12 @@ automated verdicts.
   <a href="https://whoisleuth.com/guide"><strong>Read the public guide</strong></a>
 </p>
 
-The demo uses fixed fictional evidence on reserved domains. It does not sign
-in, run live analysis, or write to the protected Console's investigation data.
+The demo uses fixed fictional evidence on reserved domains. Its six-stage
+progress rail distinguishes the current, completed, available, and upcoming
+parts of the workflow. It does not sign in, run live analysis, or write to the
+protected Console's investigation data. The public Guide maps common goals to
+the relevant tool and interpretation sections, while the Privacy page provides
+local section navigation without shortening the policy.
 
 ## What it does
 
@@ -59,7 +63,21 @@ Deep domain Lookup can combine:
 
 Long source records and secondary Deep evidence start collapsed. Their status
 and summary remain visible so the page can be scanned before opening the
-evidence, provenance, and limitations that matter to the investigation.
+evidence, provenance, and limitations that matter to the investigation. A
+bounded source map uses locally rendered D3 geometry to connect the target to
+separately attributed evidence and provide direct links to each visible source.
+Registry, network, web, derived, and analyst evidence retain consistent visual
+cues and an accompanying key without changing their status or authority. The
+in-result section rail
+tracks the current evidence family, while `Ctrl+K` or `Cmd+K` opens a
+keyboard-searchable Console destination palette.
+An ordered lifecycle view adds dated registry and certificate context without
+pretending that visual spacing represents elapsed duration. HTTP redirect paths,
+the Bulk Risk/Opportunity matrix, and retained watchlist activity use the same
+bounded local visual layer. Large Bulk sets use a deterministic capped plot
+while the table retains every result; watchlist activity covers retained history
+only. These visuals make no additional request and do not replace their
+accessible lists, tables, or source records.
 
 ## Design principles
 
@@ -78,6 +96,9 @@ evidence, provenance, and limitations that matter to the investigation.
   browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
+- **Supplementary visuals.** Charts summarize bounded data already present in
+  the page. Accessible source lists and tables remain the complete review
+  surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
 
@@ -199,7 +220,10 @@ licences and terms.
 
 The [trademark policy](TRADEMARKS.md) covers the WHOISleuth name and logo
 separately from the source licence. Copyright and attribution details are in
-[NOTICE](NOTICE).
+[NOTICE](NOTICE). The generated
+[third-party production notices](frontend/static/third-party-notices.txt)
+retain the exact locked package inventory and the licence documents distributed
+with those packages.
 
 The software is provided **as is, without warranty**. Registration data can be
 redacted, stale, incomplete, or parsed imperfectly. Scores and generated
