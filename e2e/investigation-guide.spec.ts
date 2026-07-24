@@ -12,6 +12,8 @@ async function startRecipe(page: import('@playwright/test').Page, recipe: Recipe
   const targetLabel = recipe === 'Brand sweep' ? 'Official domain' : recipe === 'Infrastructure pivot' ? 'Starting domain' : 'Domain';
   await page.getByRole('textbox', { name: targetLabel, exact: true }).fill('Portal.Example.Test.');
   await page.getByRole('button', { name: 'Start guide' }).click();
+  await expect(page.locator('.guide')).toBeFocused();
+  await expect(currentAction(page)).toBeVisible();
 }
 
 function currentAction(page: import('@playwright/test').Page) {
