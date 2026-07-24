@@ -34,9 +34,11 @@ automated verdicts.
 The demo uses fixed fictional evidence on reserved domains. Its six-stage
 progress rail distinguishes the current, completed, available, and upcoming
 parts of the workflow. It does not sign in, run live analysis, or write to the
-protected Console's investigation data. The public Guide maps common goals to
-the relevant tool and interpretation sections, while the Privacy page provides
-local section navigation without shortening the policy.
+protected Console's investigation data. Its later stages reuse the production
+source-map, lifecycle, activity, and evidence-card components with fixed
+fixtures. The public Guide maps common goals to the relevant tool and
+interpretation sections, while the Privacy page provides local section
+navigation without shortening the policy.
 
 ## What it does
 

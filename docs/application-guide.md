@@ -4,7 +4,9 @@ WHOISleuth supports a domain-intelligence workflow from initial discovery to a
 documented case. The public `/guide` page provides the shortest introduction.
 Its task cards link directly to the relevant tool and interpretation sections,
 and the public synthetic demo identifies the current, completed, available, and
-upcoming stage of its six-step workflow. This document explains the same
+upcoming stage of its six-step workflow. Its Lookup and Monitor stages also use
+the production source-topology, lifecycle, retained-activity, and evidence-card
+components with fixed reserved fixtures. This document explains the same
 workflow with additional source, storage, and interpretation detail.
 
 ## A practical workflow

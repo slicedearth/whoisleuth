@@ -36,6 +36,17 @@ function titleCase(value: unknown): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function terminalRecord(value: unknown): TerminalRecord {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as TerminalRecord
+    : {};
+}
+
+function terminalCount(value: unknown): number {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? Math.min(count, 999) : 0;
+}
+
 function formatTerminalLookup(document: TerminalRecord): string {
   const lines = [
     `Query          ${safeTerminalValue(document.query)}`,
@@ -58,6 +69,54 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
   }
   lines.push(`WHOIS          ${titleCase(document.diagnostics?.whois?.status)}`);
+  const availability = terminalRecord(document.availability);
+  if (document.mode === 'deep' && document.type === 'domain') {
+    const dns = terminalRecord(availability.dns);
+    const http = terminalRecord(availability.http);
+    const httpResponse = terminalRecord(http.response);
+    const tls = terminalRecord(availability.tls);
+    const technology = terminalRecord(availability.technologyProfile);
+    const posture = terminalRecord(availability.securityPosture);
+    const postureSummary = terminalRecord(posture.summary);
+
+    if (availability.activityStatus) lines.push(`Web activity   ${titleCase(availability.activityStatus)}`);
+    if (availability.pageTitle) lines.push(`Page title     ${safeTerminalValue(availability.pageTitle)}`);
+    if (dns.status) lines.push(`DNS evidence   ${titleCase(dns.status)}`);
+    if (http.status) {
+      lines.push(`HTTP evidence  ${titleCase(http.status)}`);
+      const responseDetail = [
+        httpResponse.status ? `HTTP ${safeTerminalValue(httpResponse.status)}` : null,
+        http.transportSecurity ? safeTerminalValue(http.transportSecurity).toUpperCase() : null,
+      ].filter(Boolean).join(' · ');
+      if (responseDetail) lines.push(`HTTP response  ${responseDetail}`);
+    }
+    if (tls.status) {
+      lines.push(`TLS evidence   ${titleCase(tls.status)}`);
+      if (tls.protocol) lines.push(`TLS protocol   ${safeTerminalValue(tls.protocol)}`);
+    }
+    if (technology.status || technology.source === 'derived') {
+      const findings = Array.isArray(technology.findings) ? technology.findings : [];
+      lines.push(`Technology     ${titleCase(technology.status)} · ${findings.length} indicator${findings.length === 1 ? '' : 's'}`);
+      const visible = findings.slice(0, 6).map((finding: unknown) => {
+        const item = terminalRecord(finding);
+        const qualifiers = [item.category, item.confidence].filter(Boolean).map((value) => safeTerminalValue(value));
+        return `${safeTerminalValue(item.name, 'Unnamed indicator')}${qualifiers.length ? ` (${qualifiers.join(', ')})` : ''}`;
+      });
+      if (visible.length) {
+        const omitted = findings.length - visible.length;
+        lines.push(`Indicators     ${safeTerminalValue(`${visible.join('; ')}${omitted > 0 ? `; +${omitted} more` : ''}`)}`);
+      }
+    }
+    if (posture.status || posture.source === 'derived') {
+      lines.push(`Posture        ${titleCase(posture.status)}`);
+      lines.push(
+        `Posture counts ${terminalCount(postureSummary.observed)} observed · `
+        + `${terminalCount(postureSummary.potentialExposure)} potential exposure · `
+        + `${terminalCount(postureSummary.observedAbsence)} observed absence · `
+        + `${terminalCount(postureSummary.unavailable)} unavailable`,
+      );
+    }
+  }
   const network = document.networkContext;
   if (network?.contextVersion === 1) {
     lines.push(`Network RDAP   ${titleCase(network.status)}`);
