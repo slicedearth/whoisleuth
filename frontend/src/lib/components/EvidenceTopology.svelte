@@ -258,6 +258,12 @@
     </svg>
   </div>
 
+  <div class="mobile-target" aria-hidden="true">
+    <span>Lookup target</span>
+    <strong>{graph.target.label}</strong>
+    <small>{graph.target.detail || graph.target.status}</small>
+  </div>
+
   <ol class="source-rail" aria-label="Evidence source status">
     {#each graph.nodes as node (node.id)}
       <li
@@ -352,6 +358,7 @@
   .source-node.state-partial .status-dot,.source-node.state-warning .status-dot,.source-node.state-inconclusive .status-dot,.source-node.state-rate_limited .status-dot{fill:var(--amber)}
   .source-node.state-error .status-dot{fill:var(--danger)}
   .source-node.state-unavailable .status-dot,.source-node.state-unsupported .status-dot,.source-node.state-not_found .status-dot,.source-node.state-skipped .status-dot,.source-node.state-disabled .status-dot{fill:var(--muted)}
+  .mobile-target{display:none}
   .source-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(138px,100%),1fr));gap:7px;margin:10px 0 0;padding:0;list-style:none}
   .source-rail li{min-width:0}
   .source-rail li{--family-color:var(--accent)}
@@ -389,9 +396,23 @@
   @media(max-width:700px){
     .topology-heading{align-items:stretch;flex-direction:column}.topology-summary{display:flex;align-items:baseline;justify-content:flex-start;gap:6px;min-width:0;text-align:left}
     .key-intro{flex-basis:100%}.key-state{flex-basis:100%;margin-left:0}
-    svg{min-width:0}
-    .source-rail{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .compact .source-rail{grid-template-columns:minmax(0,1fr)}
-    .compact .source-rail a,.compact .source-rail li>div{display:grid;grid-template-columns:minmax(0,1fr) auto}
+    .topology-frame{display:none}
+    .mobile-target{display:grid;position:relative;gap:2px;margin-top:14px;padding:10px 12px 11px;border:1px solid var(--accent);border-radius:var(--radius-md);background:color-mix(in srgb,var(--accent) 9%,var(--panel));box-shadow:0 0 18px rgb(var(--accent-rgb) / .08)}
+    .mobile-target::after{content:"";position:absolute;bottom:-19px;left:11px;height:18px;border-left:1.5px solid color-mix(in srgb,var(--accent) 58%,var(--border))}
+    .mobile-target span{color:var(--accent);font:750 .52rem var(--mono);letter-spacing:.12em;text-transform:uppercase}
+    .mobile-target strong,.mobile-target small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mobile-target strong{font:750 var(--text-sm) var(--mono)}
+    .mobile-target small{color:var(--muted);font:var(--text-2xs) var(--mono)}
+    .source-rail,.compact .source-rail{position:relative;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:18px;padding:0 0 0 22px;border-top:0}
+    .source-rail::before{content:"";position:absolute;top:-18px;bottom:28px;left:11px;border-left:1.5px solid color-mix(in srgb,var(--accent) 58%,var(--border))}
+    .source-rail li{position:relative}
+    .source-rail li::before{content:"";position:absolute;z-index:0;top:29px;left:-11px;width:11px;border-top:1.5px solid color-mix(in srgb,var(--accent) 58%,var(--border))}
+    .source-rail a,.source-rail li>div,.compact .source-rail a,.compact .source-rail li>div{display:grid;position:relative;z-index:1;grid-template-columns:30px minmax(0,1fr);gap:8px;min-height:58px;padding:8px 9px}
+    .source-glyph,.compact .source-glyph{display:grid;width:28px;height:28px;grid-row:1 / span 2}
+    .source-glyph :global(.source-icon){width:18px;height:18px}
+    .source-copy strong,.compact .source-copy strong{font-size:var(--text-xs)}
+    .source-copy small,.compact .source-copy small{display:block;overflow:hidden;margin-top:2px;color:var(--muted);font-size:.6rem;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+    .source-family,.compact .source-family{display:inline;margin-right:6px;font-size:.5rem}
+    .source-state,.compact .source-state{grid-column:2;margin:0;padding:0;font-size:.52rem}
   }
 </style>

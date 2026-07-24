@@ -416,6 +416,23 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
     await expectNoHorizontalOverflow(page);
   }
 
+  // The desktop source graph becomes a connected, full-width source map on
+  // narrow screens instead of shrinking every label into the wide SVG.
+  await expect(topology.getByRole('img', { name: 'Evidence topology visual overview' })).toBeHidden();
+  await expect(topology.locator('.mobile-target')).toBeVisible();
+  await expect(sourceRail.locator('.source-copy small').first()).toBeVisible();
+  expect(await sourceRail.locator('li').evaluateAll((items) => items.every((item) => {
+    const listRect = item.parentElement?.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    return Boolean(
+      listRect
+      && itemRect.width >= 180
+      && itemRect.height >= 58
+      && itemRect.left >= listRect.left - 0.5
+      && itemRect.right <= listRect.right + 0.5
+    );
+  }))).toBe(true);
+
   // The wide chronological plot becomes a connected vertical timeline on
   // narrow screens rather than requiring a nested horizontal scrollbar.
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeHidden();
