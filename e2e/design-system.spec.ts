@@ -249,21 +249,85 @@ test('the console command palette filters destinations and remains keyboard oper
   const search = dialog.getByRole('combobox', { name: 'Search pages' });
   await expect(dialog).toBeVisible();
   await expect(search).toBeFocused();
+  const searchFrame = dialog.locator('.command-search');
+  await expect(search).toHaveCSS('box-shadow', 'none');
+  await expect.poll(() => dialog.getByRole('status').evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return `${styles.width} ${styles.height} ${styles.clip}`;
+  })).toBe('1px 1px rect(0px, 0px, 0px, 0px)');
+  await expect.poll(() => searchFrame.evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--accent2)';
+    document.body.append(probe);
+    const matchesAccent = getComputedStyle(element).borderColor === getComputedStyle(probe).color;
+    probe.remove();
+    return matchesAccent;
+  })).toBe(true);
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
+  await expect(dialog.getByRole('option', { name: /Dashboard/ })).toHaveAttribute('aria-current', 'page');
+  await expect.poll(() => dialog.getByRole('option').evaluateAll((options) =>
+    options.every((option) => option.getAttribute('tabindex') === '-1')
+  )).toBe(true);
+  const destinationIcons = dialog.locator('[role="option"] svg[data-icon]');
+  await expect(destinationIcons).toHaveCount(9);
+  await expect(dialog.getByRole('option', { name: /Lookup/ }).locator('svg')).toHaveAttribute('data-icon', 'lookup');
+  await expect(dialog.getByRole('option', { name: /Registry support/ }).locator('svg')).toHaveAttribute('data-icon', 'registry');
+  await search.press('End');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-8');
+  await search.press('Home');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('ArrowDown');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-1');
   await expect(dialog.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+  await search.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(search).toBeFocused();
+  await search.fill('whois');
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await search.fill('dns whois');
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await search.fill('tld');
+  await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await search.fill('campaign');
+  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
   await search.fill('monitor');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('Enter');
   await expect(page).toHaveURL(/\/monitor$/);
+  await expect(page.locator('#main-content')).toBeFocused();
 
+  await trigger.focus();
   await page.keyboard.press('Control+K');
   await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
+
+  await page.goto('/lookup');
+  await expect(trigger).toBeVisible();
+  const lookupQuery = page.locator('#query');
+  await lookupQuery.focus();
+  await page.keyboard.press('Control+K');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('Escape');
+  await expect(lookupQuery).toBeFocused();
+  await lookupQuery.dispatchEvent('keydown', {
+    key: 'k',
+    code: 'KeyK',
+    ctrlKey: true,
+    repeat: true,
+    bubbles: true,
+  });
+  await expect(dialog).toHaveCount(0);
+  await expect(lookupQuery).toBeFocused();
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(trigger).toBeVisible();
@@ -276,6 +340,17 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(compactIconSvg).toHaveAttribute('height', '18');
   await trigger.click();
   await expect(dialog).toBeVisible();
+  await expect.poll(async () => dialog.evaluate((element) => {
+    const list = element.querySelector<HTMLElement>('#command-results');
+    const bounds = element.getBoundingClientRect();
+    return {
+      fitsViewport: bounds.left >= 0 && bounds.right <= document.documentElement.clientWidth,
+      listFitsWithoutScrolling: (list?.scrollHeight ?? 0) <= (list?.clientHeight ?? 0) + 1,
+    };
+  })).toEqual({
+    fitsViewport: true,
+    listFitsWithoutScrolling: true,
+  });
   await expectNoHorizontalOverflow(page);
 });
 

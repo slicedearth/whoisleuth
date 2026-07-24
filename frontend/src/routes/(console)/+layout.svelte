@@ -2,7 +2,13 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, setContext, tick, type Component } from 'svelte';
-  import { consoleNavigation, protectedDestinations, referenceNavigation } from '$lib/workspaces';
+  import {
+    consoleNavigation,
+    protectedDestinations,
+    publicHomepage,
+    referenceNavigation,
+    type NavigationItem,
+  } from '$lib/workspaces';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
@@ -28,14 +34,17 @@
   let navigationPanel = $state<HTMLElement>();
   let navigationToggle = $state<HTMLButtonElement>();
   let commandTrigger = $state<HTMLButtonElement>();
+  let commandReturnFocus: HTMLElement | undefined;
   let InvestigationGuideView = $state<Component | null>(null);
   let revealInvestigationGuideOnMount = $state(false);
   let investigationGuideLoad: Promise<void> | null = null;
-  type ConsoleCommand = { href: string; label: string; detail: string; group: string };
+  type ConsoleCommand = NavigationItem & {
+    group: string;
+  };
   const consoleCommands: ConsoleCommand[] = [
     ...consoleNavigation.map((item) => ({ ...item, group: 'Console' })),
     ...referenceNavigation.map((item) => ({ ...item, group: 'Reference' })),
-    { href: '/', label: 'Public homepage', detail: 'Return to the public WHOISleuth overview', group: 'Public' },
+    { ...publicHomepage, group: 'Public' },
   ];
 
   setContext(CAPABILITY_CONTEXT, () => capabilities);
@@ -151,14 +160,21 @@
   }
 
   async function openCommandPalette(){
+    if(commandOpen)return;
+    const focusedElement=document.activeElement instanceof HTMLElement?document.activeElement:undefined;
+    commandReturnFocus=navOpen?commandTrigger:(focusedElement??commandTrigger);
     if(navOpen)await closeNavigation(false);
     commandOpen=true;
   }
 
-  async function closeCommandPalette(){
+  async function closeCommandPalette(restoreFocus=true){
+    const focusTarget=commandReturnFocus;
+    commandReturnFocus=undefined;
     commandOpen=false;
     await tick();
-    commandTrigger?.focus();
+    if(!restoreFocus)return;
+    if(focusTarget?.isConnected&&!focusTarget.closest('[inert]'))focusTarget.focus();
+    else commandTrigger?.focus();
   }
 
   function toggleNavigation(event:MouseEvent){
@@ -171,6 +187,7 @@
   function handleKeydown(event:KeyboardEvent){
     if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){
       event.preventDefault();
+      if(event.repeat)return;
       if(commandOpen)void closeCommandPalette();
       else void openCommandPalette();
       return;
@@ -236,7 +253,7 @@
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
     <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if InvestigationGuideView}<InvestigationGuideView revealOnMount={revealInvestigationGuideOnMount} />{/if}{@render children()}<footer class="site-footer"><p>WHOISleuth uses <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap data</a> to query relevant registry services and can also check public DNS, Certificate Transparency, and website endpoints. Missing registrant fields often reflect registry redaction rather than a lookup failure.</p><p class="credit">© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a> · <a href="/privacy">Privacy</a></p></footer></main>
-    {#if commandOpen}<CommandPalette commands={consoleCommands} onclose={()=>void closeCommandPalette()} />{/if}
+    {#if commandOpen}<CommandPalette commands={consoleCommands} onclose={closeCommandPalette} />{/if}
   </div>
 {/if}
 
