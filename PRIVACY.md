@@ -61,6 +61,17 @@ default (see the README), so many lookups return no personal data at all.
   briefly cached in server memory like other RDAP responses. The selected
   address can belong to a CDN, proxy, load balancer, or shared edge and is not
   proof of an origin host, hosting control, ownership, intent, or maliciousness.
+- **Analyst-controlled external evidence pivots**: a completed Lookup can show
+  a collapsed set of ordinary links to reviewed public registration,
+  top-level-domain delegation, Certificate Transparency, archived-page,
+  routing, interconnection, and site-status tools. The links are constructed
+  only from a locally revalidated canonical domain, top-level domain, public
+  address or prefix, or public ASN already present in the Lookup result.
+  WHOISleuth does not prefetch those destinations, call their APIs, embed their
+  pages, retain their responses, or use them for availability, Risk, cases,
+  exports, Bulk, or monitoring. Each link names the destination and exact value
+  it will receive. That value leaves WHOISleuth only after the analyst opens
+  the link, under the destination's own privacy and retention terms.
 - **Optional security.txt disclosure lookup**: when selected for a deep
   single-domain Lookup, the server starts one bounded HTTPS collection at the
   standardized security.txt location on the exact entered hostname. It retains

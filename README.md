@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="frontend/static/favicon.svg" width="72" height="72" alt="WHOISleuth logo" />
-</p>
-
-<h1 align="center">WHOISleuth</h1>
+<h1 align="center"><img src="frontend/static/favicon.svg" width="48" height="48" alt="" /> WHOISleuth</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
@@ -61,7 +57,15 @@ Deep domain Lookup can combine:
 - passive technology and security-posture indicators derived from the captured
   response, without vulnerability testing;
 - one observed public endpoint mapped to its IP RDAP network registration;
-- optional security.txt and configured external intelligence sources.
+- optional security.txt and configured external intelligence sources;
+- a collapsed set of analyst-controlled links to relevant public registration,
+  certificate, routing, interconnection, history, and site-status tools.
+
+The external evidence pivots are ordinary links, not integrations. WHOISleuth
+does not prefetch them, call their APIs, cache or store their results, or use
+them for availability or scoring. Each link identifies the destination and
+exact domain, top-level domain, public address/prefix, or ASN that the browser
+will share only after the analyst opens it.
 
 Long source records and secondary Deep evidence start collapsed. Their status
 and summary remain visible so the page can be scanned before opening the

@@ -72,6 +72,58 @@ test('the phosphorous brand cursor stays aligned and static across public and co
   expect(motion.boxShadow).not.toBe('none');
 });
 
+test('the Signal Lens mark stays transparent, theme-aware, and contained across layouts', async ({ page }) => {
+  await useTheme(page, 'dark');
+  await page.goto('/');
+
+  const publicMark = page.locator('.public-brand .brand-mark');
+  await expect(publicMark).toBeVisible();
+  await expect(publicMark.locator('.primary')).toHaveCount(2);
+  await expect(publicMark.locator('.secondary-fill')).toHaveCount(3);
+  await expect(publicMark.locator('circle.primary')).toHaveAttribute('fill', 'none');
+
+  const darkColors = await publicMark.evaluate((element) => {
+    const primary = element.querySelector<SVGElement>('.primary');
+    const secondary = element.querySelector<SVGElement>('.secondary');
+    return {
+      primary: primary ? getComputedStyle(primary).stroke : '',
+      secondary: secondary ? getComputedStyle(secondary).stroke : '',
+    };
+  });
+
+  await page.getByRole('button', { name: /Colour theme/ }).click();
+  await page.getByRole('option', { name: 'Light theme' }).click();
+  const lightMark = page.locator('.public-brand .brand-mark');
+  const lightColors = await lightMark.evaluate((element) => {
+    const primary = element.querySelector<SVGElement>('.primary');
+    const secondary = element.querySelector<SVGElement>('.secondary');
+    return {
+      primary: primary ? getComputedStyle(primary).stroke : '',
+      secondary: secondary ? getComputedStyle(secondary).stroke : '',
+    };
+  });
+  expect(lightColors.primary).not.toBe(darkColors.primary);
+  expect(lightColors.secondary).not.toBe(darkColors.secondary);
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload();
+  const mobileBrandBox = await boundingBox(page.locator('.public-brand'));
+  const mobileMarkBox = await boundingBox(page.locator('.public-brand .brand-mark'));
+  expect(mobileMarkBox.x).toBeGreaterThanOrEqual(mobileBrandBox.x);
+  expect(mobileMarkBox.x + mobileMarkBox.width).toBeLessThanOrEqual(mobileBrandBox.x + mobileBrandBox.width + 1);
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/dashboard');
+  await expect(page.locator('.brand .brand-mark')).toBeVisible();
+  await expect(page.locator('.shell > header .brand-mark')).toHaveCount(1);
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload();
+  await expect(page.locator('.shell > header .brand-mark')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 // A deep-ish result with enough evidence groups to exercise the section
 // navigation: assessment + DNS + HTTP evidence plus the always-present
 // registry sources and raw response.

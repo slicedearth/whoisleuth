@@ -1,10 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <circle cx="26" cy="26" r="18" fill="none" stroke="#5eb3ff" stroke-width="5"/>
-  <line x1="39" y1="39" x2="56" y2="56" stroke="#5eb3ff" stroke-width="6" stroke-linecap="round"/>
-  <circle cx="19" cy="20" r="2.6" fill="#7ee0a8"/>
-  <circle cx="32" cy="18" r="2.6" fill="#7ee0a8"/>
-  <circle cx="24" cy="33" r="2.6" fill="#7ee0a8"/>
-  <line x1="19" y1="20" x2="32" y2="18" stroke="#7ee0a8" stroke-width="1.6"/>
-  <line x1="19" y1="20" x2="24" y2="33" stroke="#7ee0a8" stroke-width="1.6"/>
-  <line x1="32" y1="18" x2="24" y2="33" stroke="#7ee0a8" stroke-width="1.6"/>
+  <style>
+    .primary{stroke:#5eb3ff}.secondary{stroke:#7ee0a8}.secondary-fill{fill:#7ee0a8}.compact{display:none}
+    @media(prefers-color-scheme:light){.primary{stroke:#075f9f}.secondary{stroke:#0b6e47}.secondary-fill{fill:#0b6e47}}
+    @media(max-width:20px){.full{display:none}.compact{display:inline}.lens{stroke-width:7}.handle{stroke-width:8}}
+  </style>
+  <circle class="primary lens" cx="26" cy="26" r="17" fill="none" stroke-width="5"/>
+  <path class="primary handle" d="M38 39 55 56" fill="none" stroke-width="6" stroke-linecap="round"/>
+  <g class="full">
+    <path class="secondary" d="m18 20 14-2-7 16-7-14Z" fill="none" stroke-width="1.8"/>
+    <circle class="secondary-fill" cx="18" cy="20" r="3"/>
+    <circle class="secondary-fill" cx="32" cy="18" r="3"/>
+    <circle class="secondary-fill" cx="25" cy="34" r="3"/>
+  </g>
+  <g class="compact">
+    <circle class="secondary-fill" cx="21" cy="22" r="5"/>
+    <circle class="secondary-fill" cx="31" cy="29" r="5"/>
+  </g>
 </svg>

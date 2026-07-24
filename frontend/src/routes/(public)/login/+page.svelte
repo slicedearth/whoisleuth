@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
+  import BrandMark from '$lib/components/BrandMark.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { protectedDestinations } from '$lib/workspaces';
 
@@ -51,7 +52,7 @@
 <section class="login-view" aria-labelledby="login-title">
   <div class="login-copy"><p class="eyebrow">Protected console</p><h1 id="login-title">Continue to WHOISleuth.</h1><p>The public overview and synthetic demo make no live investigation request. Sign in to use registry, DNS, certificate, website, monitoring, and brand-analysis tools.</p><a href="/demo">Explore the synthetic demo first <span aria-hidden="true">→</span></a></div>
   <form class="login card" onsubmit={login}>
-    <div class="mark"><img src="/favicon.svg" alt=""></div>
+    <div class="mark"><BrandMark /></div>
     <h2>Console sign-in</h2>
     <p class="muted">Enter the deployment password.</p>
     <label for="password">Password</label>

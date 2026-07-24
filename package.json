@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",

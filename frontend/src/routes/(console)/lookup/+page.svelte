@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
   import { page } from '$app/state';
+  import AnalystEvidencePivots from '$lib/components/AnalystEvidencePivots.svelte';
   import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
@@ -30,6 +31,7 @@
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
   import { compactHttpObservation } from '$lib/analysis/http-summary.js';
+  import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.js';
   import {
     normalizeEvidenceTopologyStatus,
@@ -166,6 +168,15 @@
   const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
+  const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
+    type:result?.type,
+    query:result?.query,
+    registrableDomain:result?.registrableDomain,
+    observedAddress:observedNetworkEndpoint.address,
+    observedCidrs:observedNetwork.cidrs,
+    startAutnum:rdapParsed.startAutnum,
+    endAutnum:rdapParsed.endAutnum,
+  }));
   const lifecycleEvents=$derived([
     {id:'domain-created',label:'Domain created',date:created(),detail:'Registry lifecycle',kind:'registry' as const},
     {id:'domain-updated',label:'Registry updated',date:updated(),detail:'Most recent registry change',kind:'registry' as const},
@@ -609,6 +620,8 @@
         target={evidenceTopologyTarget}
         nodes={evidenceTopologyNodes}
       />
+
+      <AnalystEvidencePivots pivots={analystEvidencePivots} />
 
       <LookupLifecycle events={lifecycleEvents} />
 
