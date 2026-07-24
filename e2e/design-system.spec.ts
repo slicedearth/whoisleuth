@@ -249,6 +249,20 @@ test('the console command palette filters destinations and remains keyboard oper
   const search = dialog.getByRole('combobox', { name: 'Search pages' });
   await expect(dialog).toBeVisible();
   await expect(search).toBeFocused();
+  const searchFrame = dialog.locator('.command-search');
+  await expect(search).toHaveCSS('box-shadow', 'none');
+  await expect.poll(() => dialog.getByRole('status').evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return `${styles.width} ${styles.height} ${styles.clip}`;
+  })).toBe('1px 1px rect(0px, 0px, 0px, 0px)');
+  await expect.poll(() => searchFrame.evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--accent2)';
+    document.body.append(probe);
+    const matchesAccent = getComputedStyle(element).borderColor === getComputedStyle(probe).color;
+    probe.remove();
+    return matchesAccent;
+  })).toBe(true);
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('ArrowDown');
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-1');
@@ -276,6 +290,17 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(compactIconSvg).toHaveAttribute('height', '18');
   await trigger.click();
   await expect(dialog).toBeVisible();
+  await expect.poll(async () => dialog.evaluate((element) => {
+    const list = element.querySelector<HTMLElement>('#command-results');
+    const bounds = element.getBoundingClientRect();
+    return {
+      fitsViewport: bounds.left >= 0 && bounds.right <= document.documentElement.clientWidth,
+      listFitsWithoutScrolling: (list?.scrollHeight ?? 0) <= (list?.clientHeight ?? 0) + 1,
+    };
+  })).toEqual({
+    fitsViewport: true,
+    listFitsWithoutScrolling: true,
+  });
   await expectNoHorizontalOverflow(page);
 });
 
