@@ -309,9 +309,11 @@ export function syntheticDemoRelationshipGroups() {
     if (!candidate.relationship) continue;
     const key = `${candidate.relationship.label}\u0000${candidate.relationship.value}`;
     const existing = groups.get(key) || {
+      type: 'nameserver_set',
       label: candidate.relationship.label,
       method: 'Exact normalized infrastructure value',
       value: candidate.relationship.value,
+      normalizedValue: candidate.relationship.value.toLowerCase(),
       domains: [],
       description: 'This shared synthetic observation is an investigation pivot, not proof of ownership, coordination, or maliciousness.',
     };

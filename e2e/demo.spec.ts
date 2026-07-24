@@ -19,6 +19,9 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.locator('form.login')).toHaveCount(0);
   await expect(page.locator('.demo-stage-summary')).toContainText('Stage 1 of 6');
   await expect(page.getByRole('button', { name: /Dashboard.*Current/ })).toHaveAttribute('aria-current', 'step');
+  const upcomingStage = page.getByRole('button', { name: /Monitor.*Upcoming/ });
+  await expect(upcomingStage).toBeDisabled();
+  await expect(upcomingStage).toHaveCSS('opacity', '1');
 
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
@@ -30,6 +33,7 @@ test('completes the public synthetic workflow without investigation requests or 
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
   await page.getByRole('button', { name: 'Load related domains' }).click();
+  await expect(page.locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
   await expect(page.locator('.candidate')).toHaveCount(2);
   await page.getByRole('button', { name: 'All candidates · 3' }).click();
   await page.getByRole('button', { name: 'High priority · 1' }).click();

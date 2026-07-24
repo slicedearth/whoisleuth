@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
   import {
     projectEvidenceTopology,
     type EvidenceTopologyInput,
@@ -45,6 +46,20 @@
   const clearActiveNode = (nodeId: string) => {
     if (activeNodeId === nodeId) activeNodeId = '';
   };
+  const sourceIconName = (sourceId: string): IntelligenceIconName => {
+    if (sourceId === 'registry-rdap' || sourceId === 'registry') return 'registry';
+    if (sourceId === 'registrar-rdap') return 'registrar';
+    if (sourceId === 'whois') return 'whois';
+    if (sourceId === 'network') return 'network';
+    if (sourceId === 'dns') return 'dns';
+    if (sourceId === 'http' || sourceId === 'website') return 'http';
+    if (sourceId === 'tls' || sourceId === 'certificate') return 'tls';
+    if (sourceId === 'page') return 'page';
+    if (sourceId === 'security-txt') return 'security';
+    if (sourceId === 'technology') return 'technology';
+    if (sourceId === 'posture' || sourceId === 'analysis' || sourceId === 'assessment') return 'analysis';
+    return 'search';
+  };
   const openNodeHref = (href: string) => {
     if (href) window.location.hash = href.slice(1);
   };
@@ -75,41 +90,7 @@
 </script>
 
 {#snippet sourceIcon(sourceId: string, family: string)}
-  <svg class={`source-icon family-${family}`} viewBox="0 0 24 24" aria-hidden="true">
-    {#if sourceId === 'registry-rdap' || sourceId === 'registry'}
-      <ellipse cx="12" cy="5.5" rx="7.5" ry="3"/>
-      <path d="M4.5 5.5v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6M4.5 11.5v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6"/>
-    {:else if sourceId === 'registrar-rdap'}
-      <path d="M4 20V8l8-4 8 4v12M8 20v-8h8v8M3 20h18"/>
-      <circle cx="12" cy="8" r="1.5"/>
-    {:else if sourceId === 'whois'}
-      <path d="M6 3.5h8l4 4V20.5H6zM14 3.5v4h4M9 12h6M9 16h6"/>
-    {:else if sourceId === 'network'}
-      <circle cx="5" cy="12" r="2.5"/><circle cx="18.5" cy="6" r="2.5"/><circle cx="18.5" cy="18" r="2.5"/>
-      <path d="m7.3 10.9 8.9-4M7.3 13.1l8.9 4"/>
-    {:else if sourceId === 'dns'}
-      <circle cx="12" cy="12" r="8.5"/>
-      <path d="M3.8 12h16.4M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5S14.3 18.1 12 20.5M12 3.5C9.7 5.9 8.5 8.7 8.5 12s1.2 6.1 3.5 8.5"/>
-    {:else if sourceId === 'http' || sourceId === 'website'}
-      <rect x="3.5" y="5" width="17" height="14" rx="2"/>
-      <path d="M3.5 9h17M7 7h.1M10 7h.1"/>
-    {:else if sourceId === 'tls' || sourceId === 'certificate'}
-      <rect x="5" y="10" width="14" height="10" rx="2"/>
-      <path d="M8 10V7.5a4 4 0 0 1 8 0V10M12 14v2.5"/>
-    {:else if sourceId === 'page'}
-      <path d="M6 3.5h9l3 3V20.5H6zM15 3.5v3h3"/>
-      <path d="M9 11c1.8-2 4.2-2 6 0M9 14c1.8-2 4.2-2 6 0M10.5 17c1-1 2-1 3 0"/>
-    {:else if sourceId === 'security-txt'}
-      <path d="M12 3.5 19 6v5.5c0 4.4-2.8 7.4-7 9-4.2-1.6-7-4.6-7-9V6zM12 8v7M8.5 11.5h7"/>
-    {:else if sourceId === 'technology'}
-      <path d="m12 3.5 8 4-8 4-8-4zM4 12l8 4 8-4M4 16.5l8 4 8-4"/>
-    {:else if sourceId === 'posture' || sourceId === 'analysis'}
-      <path d="M12 3.5 19 6v5.5c0 4.4-2.8 7.4-7 9-4.2-1.6-7-4.6-7-9V6z"/>
-      <path d="m8.5 12 2.2 2.2 4.8-5"/>
-    {:else}
-      <circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>
-    {/if}
-  </svg>
+  <IntelligenceIcon name={sourceIconName(sourceId)} className={`source-icon family-${family}`} />
 {/snippet}
 
 <section
@@ -323,7 +304,7 @@
   .key-state{margin-left:auto}
   .key-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent2);box-shadow:0 0 5px rgb(var(--accent2-rgb) / .35)}
   .topology-frame{max-width:100%;margin-top:14px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
-  svg{display:block;width:100%;min-width:680px;height:auto;max-height:500px}
+  .topology-frame>svg{display:block;width:100%;min-width:680px;height:auto;max-height:500px}
   .graph-background{fill:var(--panel-raised)}
   .grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 55%,transparent);stroke-width:1}
   .topology-edges path{fill:none;stroke:color-mix(in srgb,var(--accent) 58%,var(--border));stroke-width:2;transition:opacity .16s,stroke-width .16s,filter .16s}
@@ -350,7 +331,7 @@
   .source-node.family-derived .node-surface{stroke-dasharray:5 3}
   .source-node .glyph-disc{fill:color-mix(in srgb,var(--family-color) 9%,transparent);stroke:color-mix(in srgb,var(--family-color) 58%,var(--border))}
   .node-source-icon{color:var(--family-color)}
-  :global(.source-icon){display:block;width:20px;height:20px;overflow:visible;color:var(--family-color);fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+  :global(.source-icon){display:block;width:20px;min-width:0;max-width:20px;height:20px;max-height:20px;overflow:visible;color:var(--family-color)}
   .source-node.active{filter:drop-shadow(0 0 7px color-mix(in srgb,var(--family-color) 55%,transparent));transform:translateY(-1px)}
   .source-node.dimmed{opacity:.32}
   .source-node .status-dot{fill:var(--muted)}
@@ -385,7 +366,7 @@
   .derived-sample{margin-left:8px;border-top-style:dashed}
   .embedded{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
   .embedded .topology-frame{margin-top:0;border:0;border-radius:0}
-  .compact svg{min-width:0;max-height:260px}
+  .compact .topology-frame>svg{min-width:0;max-height:260px}
   .compact .source-rail{grid-template-columns:repeat(3,minmax(0,1fr));padding:8px;margin:0;border-top:1px solid var(--border)}
   .compact .source-rail a,.compact .source-rail li>div{display:flex;gap:6px;min-height:0;padding:5px 7px}
   .compact .source-copy small,.compact .source-glyph,.compact .source-family{display:none}

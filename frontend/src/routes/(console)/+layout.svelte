@@ -7,6 +7,7 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
+  import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
@@ -220,7 +221,7 @@
     <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">
-        <button class="command-trigger" type="button" aria-label="Open command palette" bind:this={commandTrigger} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="shortcut-compact" aria-hidden="true">K</span><strong>Commands</strong></button>
+        <button class="command-trigger" type="button" aria-label="Open command palette" bind:this={commandTrigger} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Commands</strong></button>
         <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
         <button class="navigation-toggle" type="button" aria-label="Toggle navigation" aria-expanded={navOpen} aria-controls="console-navigation" bind:this={navigationToggle} onclick={toggleNavigation}>☰</button>
       </div>
@@ -246,7 +247,7 @@
   .command-trigger{display:flex;min-height:34px;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
   .command-trigger:hover,.command-trigger:focus-visible{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}
   .command-trigger span{padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit}
-  .command-trigger .shortcut-compact{display:none}
+  .command-trigger .command-icon{display:none;padding:0;border:0;color:currentColor}
   .command-trigger strong{font:inherit}
-  @media(max-width:900px){.command-trigger{width:36px;padding:0;justify-content:center}.command-trigger span{padding:0;border:0}.command-trigger .shortcut-wide,.command-trigger strong{display:none}.command-trigger .shortcut-compact{display:inline}}
+  @media(max-width:900px){.command-trigger{width:36px;padding:0;justify-content:center}.command-trigger span{padding:0;border:0}.command-trigger .shortcut-wide,.command-trigger strong{display:none}.command-trigger .command-icon{display:grid;place-items:center}}
 </style>
