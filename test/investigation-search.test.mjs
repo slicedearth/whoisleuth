@@ -19,6 +19,10 @@ import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.js'
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/brand-profile-model.js';
 import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.js';
 import { RELATIONSHIP_EVIDENCE_VERSION } from '../frontend/src/lib/analysis/relationship-evidence.js';
+import {
+  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+  createRelationshipObservation,
+} from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 
 const EARLY = '2026-07-01T00:00:00.000Z';
 const LATE = '2026-07-19T00:00:00.000Z';
@@ -165,6 +169,42 @@ describe('local investigation search index', () => {
     const certificate = searchInvestigationIndex(index, 'b'.repeat(64)).results[0];
     assert.equal(certificate.entityType, 'certificate');
     assert.equal(certificate.href, '/lookup?q=scan.invalid');
+  });
+
+  test('searches analyst-retained relationship values and opens the exact Monitor record', () => {
+    const retained = createRelationshipObservation({
+      type: 'tracking_identifier',
+      label: 'Shared tracking identifier',
+      method: 'Exact public identifier',
+      normalizedValue: 'tag-container:GTM-RETAINED',
+      value: 'tag-container:GTM-RETAINED',
+      domains: ['first.invalid', 'second.invalid'],
+      description: 'Bounded retained pivot.',
+    }, {
+      observedAt: LATE,
+      retainedAt: LATE,
+      complete: true,
+      sourceVersion: RELATIONSHIP_EVIDENCE_VERSION,
+    });
+    const index = indexFor(projectionInput({
+      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-retained-domain', 'first.invalid', {
+        evidenceHistory: [snapshot({ capturedAt: EARLY })],
+      })] },
+      relationshipObservations: {
+        version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+        observations: [retained],
+      },
+    }));
+    const result = searchInvestigationIndex(index, 'GTM-RETAINED').results[0];
+
+    assert.equal(result.entityType, 'tracking_identifier');
+    assert.equal(result.sourceStore, 'relationshipObservations');
+    assert.equal(result.href, `/monitor?view=relationships&observation=${retained.id}`);
+    assert.equal(result.action, 'Open retained observation');
+    assert.equal(result.classification, 'derived');
+    const domain = searchInvestigationIndex(index, 'first.invalid').results.find((item) => item.entityType === 'domain');
+    assert.equal(domain.href, '/monitor?case=case-retained-domain');
+    assert.equal(domain.action, 'Open source case');
   });
 
   test('matches bounded multi-term queries across known fields only', () => {

@@ -20,17 +20,18 @@ The owning browser-store models declare these independent serialized ceilings:
 | Shortlist | IndexedDB | 1 MiB |
 | Certificate Transparency history | IndexedDB | 1 MiB |
 | Detection rules | IndexedDB | 0.25 MiB |
+| Retained relationship observations | IndexedDB | 0.75 MiB |
 
-The combined declared ceiling is 9.75 MiB. These are safety limits rather than
+The combined declared ceiling is 10.5 MiB. These are safety limits rather than
 expected usage, and a browser may enforce a different origin quota. However,
 the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
 the backend does not make any collection unbounded.
 
 Investigation search still builds a disposable bounded projection from cases,
-campaigns, and Brand Profiles. Individual records are stored under stable
-collection keys, and workspace imports can update several collections in one
-IndexedDB transaction.
+campaigns, Brand Profiles, and analyst-selected relationship observations.
+Individual records are stored under stable collection keys, and workspace
+imports can update several collections in one IndexedDB transaction.
 
 Run the deterministic evaluation without reading browser data:
 

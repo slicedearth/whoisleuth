@@ -15,7 +15,7 @@ import {
 } from '../tools/local-data-platform-evaluation.mts';
 
 const NOW = new Date('2026-07-22T00:00:00.000Z');
-const DECLARED_BROWSER_STORE_BYTES = 10_223_616;
+const DECLARED_BROWSER_STORE_BYTES = 11_010_048;
 
 function capture() {
   let value = '';
@@ -29,13 +29,13 @@ describe('local data platform evaluation', () => {
     assert.equal(report.version, LOCAL_DATA_PLATFORM_EVALUATION_VERSION);
     assert.equal(report.generatedAt, NOW.toISOString());
     assert.equal(report.mode, 'offline_contract_evaluation');
-    assert.equal(report.current.storeCount, 7);
+    assert.equal(report.current.storeCount, 8);
     assert.ok(report.current.storeCount <= MAX_LOCAL_DATA_EVALUATION_STORES);
     assert.equal(report.current.declaredMaximumBytes, DECLARED_BROWSER_STORE_BYTES);
-    assert.equal(report.current.declaredMaximumMiB, 9.75);
+    assert.equal(report.current.declaredMaximumMiB, 10.5);
     assert.equal(report.current.localStorageReferenceBytes, LOCAL_STORAGE_REFERENCE_BYTES);
-    assert.equal(report.current.exceedsReferenceByBytes, 4_980_736);
-    assert.equal(report.current.exceedsReferenceByMiB, 4.75);
+    assert.equal(report.current.exceedsReferenceByBytes, 5_767_168);
+    assert.equal(report.current.exceedsReferenceByMiB, 5.5);
   });
 
   test('keeps the evaluation offline and does not inspect or change browser data', () => {
@@ -46,31 +46,31 @@ describe('local data platform evaluation', () => {
       userDataRead: false,
       productionStorageChanged: false,
     });
-    assert.equal(report.current.crossStoreTransactions, false);
-    assert.equal(report.current.investigationSearchBuild, 'disposable_full_store_projection');
+    assert.equal(report.current.crossStoreTransactions, true);
+    assert.equal(report.current.investigationSearchBuild, 'disposable_bounded_projection');
   });
 
-  test('recommends a dependency-free native prototype without approving migration', () => {
+  test('reports the dependency-free native provider as the approved production backend', () => {
     const report = buildLocalDataPlatformEvaluation({ now: () => NOW });
-    assert.equal(report.decision.state, 'proceed_with_native_indexeddb_prototype');
+    assert.equal(report.decision.state, 'native_indexeddb_in_production');
     assert.equal(report.decision.recommendedCandidate, 'native_indexeddb');
-    assert.equal(report.decision.migrationApproved, false);
-    assert.deepEqual(report.decision.independentFutureWork, ['production_migration', 'encryption', 'pwa']);
+    assert.equal(report.decision.migrationApproved, true);
+    assert.deepEqual(report.decision.independentFutureWork, ['encryption', 'pwa', 'synchronization']);
     assert.ok(report.candidates.length <= MAX_LOCAL_DATA_EVALUATION_CANDIDATES);
 
     const native = report.candidates.find((candidate) => candidate.id === 'native_indexeddb');
     assert.deepEqual(native, {
       id: 'native_indexeddb',
-      disposition: 'recommended',
+      disposition: 'implemented',
       productionDependency: false,
       sameOriginLocal: true,
       supportsTransactions: true,
       supportsIndexedQueries: true,
-      detail: 'Prototype the browser-native asynchronous database first, behind an application-owned interface.',
+      detail: 'The dependency-free native IndexedDB provider is the production browser-local storage backend.',
     });
     assert.equal(report.candidates.find((candidate) => candidate.id === 'indexeddb_wrapper')?.disposition, 'optional_later');
     assert.equal(report.candidates.find((candidate) => candidate.id === 'sqlite_wasm')?.disposition, 'defer');
-    assert.equal(report.candidates.find((candidate) => candidate.id === 'localstorage')?.disposition, 'transitional');
+    assert.equal(report.candidates.find((candidate) => candidate.id === 'localstorage')?.disposition, 'rollback_only');
   });
 
   test('retains bounded explanatory text and distinguishes measured thresholds from limitations', () => {
@@ -103,9 +103,9 @@ describe('local data platform evaluation', () => {
   test('formats a concise maintainer decision and rejects unsupported arguments', async () => {
     const report = buildLocalDataPlatformEvaluation({ now: () => NOW });
     const output = formatLocalDataPlatformEvaluation(report);
-    assert.match(output, /9\.75 MiB across 7 stores/);
+    assert.match(output, /10\.5 MiB across 8 stores/);
     assert.match(output, /native_indexeddb \(no production dependency\)/);
-    assert.match(output, /Migration, encryption, and PWA support remain separately gated/);
+    assert.match(output, /Encryption, PWA support, and synchronization remain separately gated/);
 
     assert.deepEqual(parseArguments([]), { json: false });
     assert.deepEqual(parseArguments(['--json']), { json: true });

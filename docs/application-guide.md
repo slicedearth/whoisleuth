@@ -157,6 +157,15 @@ identifiers, favicons, official asset hosts, and native certificate hashes. A
 shared observation is a pivot for investigation, not proof of common ownership,
 control, intent, coordination, or abuse.
 
+Relationship groups remain transient with the Bulk result unless the analyst
+selects **Retain observation**. That action saves only the normalized value,
+member domains, method, collection time, completeness, truncation, and stated
+limitations in the current browser. It does not save the complete Bulk result,
+raw lookup responses, or expanded contacts. Retained observations can be
+reviewed and deleted under Monitor Relationships, included in the workspace
+archive, found through local investigation search, and projected into the
+relationship graph when at least two member domains also have local cases.
+
 Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered
 exposures, available gaps, and unknown results without making extra requests.
@@ -185,8 +194,9 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   history of compact normalized evidence snapshots.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution.
-- **Relationships** project typed, provenance-backed links across stored case
-  evidence and campaign membership without another network request.
+- **Relationships** review analyst-selected Bulk observations and project
+  typed, provenance-backed links across those records, stored case evidence,
+  and campaign membership without another network request.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
   deliberately.
 
@@ -309,15 +319,18 @@ each collection action and marking its outcome.
 ## Browser-local storage and archives
 
 Cases, campaigns, Brand Profiles, watchlists, shortlist entries, Certificate
-Transparency history, and detection rules use bounded native IndexedDB stores.
-Browser storage can still be cleared or evicted and does not synchronize across
-devices.
+Transparency history, detection rules, and analyst-selected relationship
+observations use bounded native IndexedDB stores. Relationship observations
+are never retained automatically: Bulk writes one only after the analyst
+selects **Retain observation**. Browser storage can still be cleared or evicted
+and does not synchronize across devices.
 
 Dashboard can create one deliberate, unencrypted workspace archive for the
-supported collections and preferences. Import previews changes and uses the
-existing non-destructive merge rules. The archive excludes sessions,
-passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
-state, and unrelated browser storage.
+supported collections and preferences, including retained relationship
+observations. Import previews changes and uses the existing non-destructive
+merge rules. The archive excludes sessions, passwords, API credentials,
+hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser
+storage.
 
 The active IndexedDB codec is plaintext JSON. Application-level encryption is
 a separate design decision. See [browser-local data architecture](browser-local-data.md)

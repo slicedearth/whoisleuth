@@ -23,6 +23,13 @@ import {
   MAX_RELATIONSHIP_ROWS,
   RELATIONSHIP_EVIDENCE_VERSION,
 } from './relationship-evidence.js';
+import {
+  MAX_RELATIONSHIP_OBSERVATIONS,
+  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+  normalizeRelationshipObservationStore,
+  type RelationshipObservation,
+  type RelationshipObservationType,
+} from './relationship-observation-model.ts';
 
 export const INVESTIGATION_PROJECTION_SCHEMA = 'whoisleuth.investigation-projection';
 export const INVESTIGATION_PROJECTION_VERSION = 1;
@@ -38,6 +45,10 @@ export type InvestigationEntityType =
   | 'http_origin'
   | 'favicon'
   | 'certificate'
+  | 'ip_address'
+  | 'tracking_identifier'
+  | 'favicon_cluster'
+  | 'official_asset_host'
   | 'brand'
   | 'case'
   | 'campaign';
@@ -51,8 +62,9 @@ export type InvestigationObservationKind =
   | 'brand_profile'
   | 'brand_page_baseline'
   | 'campaign_record'
-  | 'scan_relationship_evidence';
-export type InvestigationStoreName = 'cases' | 'campaigns' | 'brandProfiles' | 'relationshipRows';
+  | 'scan_relationship_evidence'
+  | 'retained_relationship_observation';
+export type InvestigationStoreName = 'cases' | 'campaigns' | 'brandProfiles' | 'relationshipRows' | 'relationshipObservations';
 export type InvestigationRelationshipType =
   | 'domain_uses_nameserver_set'
   | 'domain_reached_http_origin'
@@ -62,7 +74,11 @@ export type InvestigationRelationshipType =
   | 'domain_observed_favicon'
   | 'campaign_contains_domain'
   | 'campaign_contains_case'
-  | 'domain_presented_certificate';
+  | 'domain_presented_certificate'
+  | 'domain_resolved_to_ip'
+  | 'domain_exposed_tracking_identifier'
+  | 'domain_related_by_favicon'
+  | 'domain_loaded_official_asset';
 export type InvestigationRelationshipClassification = 'direct' | 'normalized' | 'derived';
 
 export interface InvestigationProjectionInput {
@@ -70,6 +86,7 @@ export interface InvestigationProjectionInput {
   campaigns?: unknown;
   brandProfiles?: unknown;
   relationshipRows?: unknown;
+  relationshipObservations?: unknown;
 }
 
 export interface InvestigationProjectionOptions {
@@ -86,6 +103,7 @@ export interface InvestigationSchemaVersions {
   pageFingerprint?: number | null;
   campaign?: number | null;
   relationshipEvidence?: number | null;
+  relationshipObservation?: number | null;
 }
 
 export interface InvestigationEntity {
@@ -149,6 +167,7 @@ export interface InvestigationProjection {
     campaigns: InvestigationSourceSummary;
     brandProfiles: InvestigationSourceSummary;
     relationshipRows: InvestigationSourceSummary;
+    relationshipObservations: InvestigationSourceSummary;
   };
   entities: InvestigationEntity[];
   observations: InvestigationObservation[];
@@ -245,6 +264,10 @@ const ENTITY_TYPES = new Set<InvestigationEntityType>([
   'http_origin',
   'favicon',
   'certificate',
+  'ip_address',
+  'tracking_identifier',
+  'favicon_cluster',
+  'official_asset_host',
   'brand',
   'case',
   'campaign',
@@ -255,6 +278,18 @@ const BASE_LIMITATIONS = Object.freeze([
   'Shared infrastructure and identifiers are investigation pivots, not proof of ownership, coordination, intent, or maliciousness.',
   'Missing, unsupported, partial, or inconclusive source data does not create a negative finding or an evidence edge.',
 ]);
+
+const RETAINED_RELATIONSHIP_PROJECTION = Object.freeze({
+  nameserver_set: { entity: 'nameserver_set', relationship: 'domain_uses_nameserver_set' },
+  ip_address: { entity: 'ip_address', relationship: 'domain_resolved_to_ip' },
+  certificate: { entity: 'certificate', relationship: 'domain_presented_certificate' },
+  tracking_identifier: { entity: 'tracking_identifier', relationship: 'domain_exposed_tracking_identifier' },
+  favicon: { entity: 'favicon_cluster', relationship: 'domain_related_by_favicon' },
+  official_asset: { entity: 'official_asset_host', relationship: 'domain_loaded_official_asset' },
+} satisfies Record<RelationshipObservationType, {
+  entity: InvestigationEntityType;
+  relationship: InvestigationRelationshipType;
+}>);
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -405,8 +440,8 @@ function mergeTruncated(left: boolean | null, right: boolean | null): boolean | 
 /**
  * Builds a deterministic, bounded typed projection from the current local
  * case, campaign, and Brand Profile contracts plus optional scan-local
- * relationship observations. Source values are normalized again at this trust
- * boundary and are never mutated.
+ * relationship rows and analyst-retained relationship observations. Source
+ * values are normalized again at this trust boundary and are never mutated.
  */
 export function buildInvestigationProjection(
   rawInput: unknown,
@@ -417,7 +452,14 @@ export function buildInvestigationProjection(
   const campaigns = readStore<NormalizedCampaign>(input.campaigns, 'campaigns', CAMPAIGN_SCHEMA_VERSION, MAX_CAMPAIGNS, normalizeCampaignStore);
   const brands = readStore<NormalizedBrandProfile>(input.brandProfiles, 'profiles', BRAND_PROFILE_SCHEMA_VERSION, MAX_PROFILES, normalizeBrandProfileStore);
   const relationshipRows = readRelationshipRows(input.relationshipRows);
-  const sourceReads = { cases, campaigns, brandProfiles: brands, relationshipRows };
+  const relationshipObservations = readStore<RelationshipObservation>(
+    input.relationshipObservations,
+    'observations',
+    RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+    MAX_RELATIONSHIP_OBSERVATIONS,
+    normalizeRelationshipObservationStore,
+  );
+  const sourceReads = { cases, campaigns, brandProfiles: brands, relationshipRows, relationshipObservations };
 
   const entities = new Map<string, InvestigationEntity>();
   const observations = new Map<string, InvestigationObservation>();
@@ -863,6 +905,60 @@ export function buildInvestigationProjection(
     }
   }
 
+  for (const retained of relationshipObservations.records) {
+    const definition = RETAINED_RELATIONSHIP_PROJECTION[retained.type];
+    const observedAt = timestamp(retained.observedAt);
+    if (!definition || !observedAt) continue;
+    const canonical = retained.normalizedValue.length <= 300 ? retained.normalizedValue : retained.id;
+    const display = text(retained.displayValue, 300) || text(retained.label, 100) || retained.type.replaceAll('_', ' ');
+    const properties: Record<string, unknown> = {
+      observationId: retained.id,
+      relationshipType: retained.type,
+      value: retained.normalizedValue.length <= 300 ? retained.normalizedValue : '',
+    };
+    if (retained.type === 'nameserver_set') {
+      properties.nameservers = retained.normalizedValue.split(' · ').map(normalizeDomain).filter(Boolean).slice(0, MAX_NAMESERVERS_PER_ROW);
+    } else if (retained.type === 'certificate' && sha256(retained.normalizedValue)) {
+      properties.sha256 = sha256(retained.normalizedValue);
+    } else if (retained.type === 'ip_address') properties.ipAddress = retained.normalizedValue;
+    else if (retained.type === 'tracking_identifier') properties.identifier = retained.normalizedValue;
+    else if (retained.type === 'official_asset') properties.domain = normalizeDomain(retained.normalizedValue);
+    const targetEntity = addEntity(definition.entity, canonical, display, properties);
+    if (!targetEntity) continue;
+    const domainEntities = retained.domains.map((domain) => addEntity('domain', domain, domain, { domain })).filter(Boolean) as InvestigationEntity[];
+    if (!domainEntities.length) continue;
+    const observation = addObservation({
+      id: stableId('observation', `retained-relationship|${retained.id}|${observedAt}`),
+      kind: 'retained_relationship_observation',
+      entityIds: [targetEntity.id, ...domainEntities.map((entity) => entity.id)],
+      store: 'relationshipObservations',
+      recordId: retained.id,
+      source: retained.source,
+      observedAt,
+      scanDepth: null,
+      status: retained.complete && !retained.truncated ? 'success' : 'partial',
+      complete: retained.complete,
+      truncated: retained.truncated,
+      schemaVersions: {
+        relationshipEvidence: retained.sourceVersion,
+        relationshipObservation: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+      },
+      limitations: [
+        ...retained.limitations,
+        'This relationship was retained by an explicit analyst action after Bulk derived it from bounded observations.',
+      ],
+    });
+    for (const domainEntity of domainEntities) {
+      addRelationship({
+        type: definition.relationship,
+        from: domainEntity.id,
+        to: targetEntity.id,
+        classification: 'derived',
+        method: retained.method,
+      }, observation);
+    }
+  }
+
   for (const entity of entities.values()) entity.observationIds.sort();
   const summarizeSource = <T>(value: StoreRead<T>): InvestigationSourceSummary => ({
     state: value.state,
@@ -875,6 +971,7 @@ export function buildInvestigationProjection(
     campaigns: summarizeSource(sourceReads.campaigns),
     brandProfiles: summarizeSource(sourceReads.brandProfiles),
     relationshipRows: summarizeSource(sourceReads.relationshipRows),
+    relationshipObservations: summarizeSource(sourceReads.relationshipObservations),
   };
   const generatedAt = timestamp(options.generatedAt) || new Date().toISOString();
   const entityList = [...entities.values()]

@@ -22,7 +22,16 @@ const CASE_X = 30;
 const RELATIONSHIP_X = 570;
 const NODE_WIDTH = 300;
 const NODE_HEIGHT = 32;
-const RELATIONSHIP_TYPES = new Set(['all', 'nameserver_set', 'http_final_origin']);
+const RELATIONSHIP_TYPES = new Set([
+  'all',
+  'nameserver_set',
+  'http_final_origin',
+  'ip_address',
+  'certificate',
+  'tracking_identifier',
+  'favicon',
+  'official_asset',
+]);
 
 function label(value, maxLength = 40) {
   const normalized = String(value || '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();

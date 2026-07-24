@@ -10,6 +10,7 @@ import {
   previewWorkspaceArchive,
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.js';
+import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 
 const NOW = '2026-07-19T02:00:00.000Z';
 
@@ -60,6 +61,23 @@ function profile() {
   };
 }
 
+function relationshipObservation() {
+  return createRelationshipObservation({
+    type: 'ip_address',
+    label: 'Shared IP address',
+    method: 'Exact normalized address',
+    normalizedValue: '192.0.2.20',
+    value: '192.0.2.20',
+    domains: ['archive-one.invalid', 'archive-two.invalid'],
+    description: 'Bounded archive fixture.',
+  }, {
+    observedAt: NOW,
+    retainedAt: NOW,
+    complete: true,
+    sourceVersion: 2,
+  });
+}
+
 function input() {
   return {
     cases: [caseRecord()],
@@ -78,13 +96,14 @@ function input() {
       riskDelta: 0,
       tag: 'review',
     }],
+    relationshipObservations: [relationshipObservation()],
     settings: { activeProfileId: 'profile-one', theme: 'light' },
   };
 }
 
 function emptyInput() {
   return {
-    cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [],
+    cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [], relationshipObservations: [],
     settings: { activeProfileId: '', theme: 'dark' },
   };
 }
@@ -101,8 +120,8 @@ describe('portable workspace archive', () => {
     assert.equal(left.schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(left.version, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(left.manifest.sections.map((section) => section.id), [...WORKSPACE_ARCHIVE_SECTION_IDS]);
-    assert.equal(left.manifest.sectionCount, 7);
-    assert.equal(left.manifest.totalRecords, 7);
+    assert.equal(left.manifest.sectionCount, 8);
+    assert.equal(left.manifest.totalRecords, 8);
     assert.ok(left.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum)));
     assert.equal(left.sections.settings.activeProfileId, 'profile-one');
     assert.equal(left.sections.settings.theme, 'light');
@@ -113,9 +132,10 @@ describe('portable workspace archive', () => {
     const parsed = await readWorkspaceArchive(archive);
 
     assert.equal(parsed.generatedAt, NOW);
-    assert.equal(parsed.sections.length, 7);
+    assert.equal(parsed.sections.length, 8);
     assert.equal(parsed.sections.every((section) => section.status === 'ready'), true);
     assert.equal(parsed.sections.find((section) => section.id === 'cases').recordCount, 1);
+    assert.equal(parsed.sections.find((section) => section.id === 'relationshipObservations').recordCount, 1);
     assert.ok(parsed.bytes > 0 && parsed.bytes < MAX_WORKSPACE_ARCHIVE_BYTES);
   });
 

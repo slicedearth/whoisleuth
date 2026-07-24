@@ -22,7 +22,7 @@ const INTELLIGENCE_CAPABILITIES = {
   limitations: [],
 };
 
-test('the phosphorous brand cursor stays aligned across public and console layouts', async ({ page }) => {
+test('the phosphorous brand cursor stays aligned and static across public and console layouts', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
 
   const variants = [
@@ -47,6 +47,7 @@ test('the phosphorous brand cursor stays aligned across public and console layou
         display: cursorStyle.display,
         heightRatio: Number.parseFloat(cursorStyle.height) / fontSize,
         verticalAlignRatio: Number.parseFloat(cursorStyle.verticalAlign) / fontSize,
+        animationName: cursorStyle.animationName,
       };
     });
 
@@ -54,8 +55,21 @@ test('the phosphorous brand cursor stays aligned across public and console layou
     expect(cursor.display).toBe('inline-block');
     expect(cursor.heightRatio).toBeCloseTo(0.76, 2);
     expect(cursor.verticalAlignRatio).toBeCloseTo(-0.02, 2);
+    expect(cursor.animationName).toBe('none');
     await expectNoHorizontalOverflow(page);
   }
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  const motion = await page.locator('.public-brand strong').evaluate((element) => {
+    const cursorStyle = getComputedStyle(element, '::after');
+    return {
+      animationName: cursorStyle.animationName,
+      boxShadow: cursorStyle.boxShadow,
+    };
+  });
+  expect(motion.animationName).toBe('none');
+  expect(motion.boxShadow).not.toBe('none');
 });
 
 // A deep-ish result with enough evidence groups to exercise the section
@@ -290,6 +304,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
     );
   }))).toBe(true);
   const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
+  await expect(sourceRail.locator('.source-icon')).toHaveCount(await sourceRail.locator('li').count());
+  await expect(topology.locator('.node-source-icon .source-icon')).toHaveCount(await sourceRail.locator('li').count());
   await expect(sourceRail.getByRole('link', { name: /Registry RDAP.*success/i })).toHaveAttribute('href', '#evidence-registry');
   await expect(sourceRail.getByRole('link', { name: /WHOIS.*partial/i })).toHaveAttribute('href', '#evidence-registry');
   const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/i });
@@ -373,6 +389,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await page.locator('#raw-data').evaluate((element) => element.scrollIntoView({ block: 'start' }));
   const rawDataLink = localNav.getByRole('link', { name: 'Raw data' });
   await expect(rawDataLink).toHaveAttribute('aria-current', 'location');
+  await expect.poll(async () => page.locator('#raw-data').evaluate((section) => {
+    const sectionTop = section.getBoundingClientRect().top;
+    const navigation = document.querySelector('.local-nav-shell');
+    return navigation ? sectionTop >= navigation.getBoundingClientRect().bottom + 4 : false;
+  })).toBe(true);
   await expect.poll(async () => rawDataLink.evaluate((link) => {
     const navigation = link.closest('nav');
     if (!navigation) return false;

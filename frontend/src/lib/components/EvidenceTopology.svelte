@@ -74,6 +74,44 @@
   };
 </script>
 
+{#snippet sourceIcon(sourceId: string, family: string)}
+  <svg class={`source-icon family-${family}`} viewBox="0 0 24 24" aria-hidden="true">
+    {#if sourceId === 'registry-rdap' || sourceId === 'registry'}
+      <ellipse cx="12" cy="5.5" rx="7.5" ry="3"/>
+      <path d="M4.5 5.5v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6M4.5 11.5v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6"/>
+    {:else if sourceId === 'registrar-rdap'}
+      <path d="M4 20V8l8-4 8 4v12M8 20v-8h8v8M3 20h18"/>
+      <circle cx="12" cy="8" r="1.5"/>
+    {:else if sourceId === 'whois'}
+      <path d="M6 3.5h8l4 4V20.5H6zM14 3.5v4h4M9 12h6M9 16h6"/>
+    {:else if sourceId === 'network'}
+      <circle cx="5" cy="12" r="2.5"/><circle cx="18.5" cy="6" r="2.5"/><circle cx="18.5" cy="18" r="2.5"/>
+      <path d="m7.3 10.9 8.9-4M7.3 13.1l8.9 4"/>
+    {:else if sourceId === 'dns'}
+      <circle cx="12" cy="12" r="8.5"/>
+      <path d="M3.8 12h16.4M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5S14.3 18.1 12 20.5M12 3.5C9.7 5.9 8.5 8.7 8.5 12s1.2 6.1 3.5 8.5"/>
+    {:else if sourceId === 'http' || sourceId === 'website'}
+      <rect x="3.5" y="5" width="17" height="14" rx="2"/>
+      <path d="M3.5 9h17M7 7h.1M10 7h.1"/>
+    {:else if sourceId === 'tls' || sourceId === 'certificate'}
+      <rect x="5" y="10" width="14" height="10" rx="2"/>
+      <path d="M8 10V7.5a4 4 0 0 1 8 0V10M12 14v2.5"/>
+    {:else if sourceId === 'page'}
+      <path d="M6 3.5h9l3 3V20.5H6zM15 3.5v3h3"/>
+      <path d="M9 11c1.8-2 4.2-2 6 0M9 14c1.8-2 4.2-2 6 0M10.5 17c1-1 2-1 3 0"/>
+    {:else if sourceId === 'security-txt'}
+      <path d="M12 3.5 19 6v5.5c0 4.4-2.8 7.4-7 9-4.2-1.6-7-4.6-7-9V6zM12 8v7M8.5 11.5h7"/>
+    {:else if sourceId === 'technology'}
+      <path d="m12 3.5 8 4-8 4-8-4zM4 12l8 4 8-4M4 16.5l8 4 8-4"/>
+    {:else if sourceId === 'posture' || sourceId === 'analysis'}
+      <path d="M12 3.5 19 6v5.5c0 4.4-2.8 7.4-7 9-4.2-1.6-7-4.6-7-9V6z"/>
+      <path d="m8.5 12 2.2 2.2 4.8-5"/>
+    {:else}
+      <circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>
+    {/if}
+  </svg>
+{/snippet}
+
 <section
   class:embedded
   class:compact
@@ -191,7 +229,9 @@
                 />
               {/if}
               <circle cx={node.x + 22} cy={node.y + 23} r="12" class="glyph-disc" />
-              <text x={node.x + 22} y={node.y + 27} text-anchor="middle" class="node-glyph">{node.glyph}</text>
+              <g transform={`translate(${node.x + 12} ${node.y + 13})`} class="node-source-icon">
+                {@render sourceIcon(node.id, node.family)}
+              </g>
               <foreignObject
                 x={node.x + 42}
                 y={node.y + 10}
@@ -230,13 +270,13 @@
       >
         {#if node.href}
           <a href={node.href}>
-            <span class="source-glyph" aria-hidden="true">{node.glyph}</span>
+            <span class="source-glyph" aria-hidden="true">{@render sourceIcon(node.id, node.family)}</span>
             <span class="source-copy"><strong>{node.label}</strong><small>{node.detail || 'No additional source detail'}</small><span class="source-family">{node.family}</span></span>
             <span class="source-state">{statusLabel(node.status)}</span>
           </a>
         {:else}
           <div>
-            <span class="source-glyph" aria-hidden="true">{node.glyph}</span>
+            <span class="source-glyph" aria-hidden="true">{@render sourceIcon(node.id, node.family)}</span>
             <span class="source-copy"><strong>{node.label}</strong><small>{node.detail || 'No additional source detail'}</small><span class="source-family">{node.family}</span></span>
             <span class="source-state">{statusLabel(node.status)}</span>
           </div>
@@ -288,7 +328,7 @@
   .topology-edges path.failed{stroke:color-mix(in srgb,var(--danger) 56%,var(--border));stroke-dasharray:3 5}
   .topology-edges path.limited{stroke:color-mix(in srgb,var(--muted) 55%,var(--border));stroke-dasharray:2 6}
   .target-node rect{fill:color-mix(in srgb,var(--accent) 11%,var(--panel));stroke:var(--accent);stroke-width:2}
-  .node-kicker,.node-title,.node-detail,.node-glyph{font-family:var(--mono)}
+  .node-kicker,.node-title,.node-detail{font-family:var(--mono)}
   .node-kicker{fill:var(--accent);font-size:9px;font-weight:750;letter-spacing:.12em}
   .node-copy{overflow:hidden}
   .node-copy div{display:block;min-width:0;overflow:hidden;color:var(--text);font-family:var(--mono);font-size:12px;font-weight:700;line-height:16px;text-overflow:ellipsis;white-space:nowrap}
@@ -303,7 +343,8 @@
   .source-node .node-surface{fill:var(--panel);stroke:color-mix(in srgb,var(--family-color) 58%,var(--border));stroke-width:1.5}
   .source-node.family-derived .node-surface{stroke-dasharray:5 3}
   .source-node .glyph-disc{fill:color-mix(in srgb,var(--family-color) 9%,transparent);stroke:color-mix(in srgb,var(--family-color) 58%,var(--border))}
-  .source-node .node-glyph{fill:var(--family-color);font-size:9px;font-weight:800}
+  .node-source-icon{color:var(--family-color)}
+  :global(.source-icon){display:block;width:20px;height:20px;overflow:visible;color:var(--family-color);fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
   .source-node.active{filter:drop-shadow(0 0 7px color-mix(in srgb,var(--family-color) 55%,transparent));transform:translateY(-1px)}
   .source-node.dimmed{opacity:.32}
   .source-node .status-dot{fill:var(--muted)}
@@ -321,7 +362,8 @@
   .source-rail li.family-analyst{--family-color:var(--text)}
   .source-rail a,.source-rail li>div{display:grid;grid-template-columns:26px minmax(0,1fr);gap:7px;align-items:center;min-height:42px;padding:6px 7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);text-decoration:none;transition:border-color .16s,background .16s,box-shadow .16s}
   .source-rail a:hover,.source-rail a:focus-visible,.source-rail li.active a,.source-rail li.active>div{border-color:var(--family-color);background:color-mix(in srgb,var(--family-color) 5%,var(--panel));box-shadow:inset 2px 0 var(--family-color)}
-  .source-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid color-mix(in srgb,var(--family-color) 45%,var(--border));border-radius:50%;color:var(--family-color);font:750 var(--text-2xs) var(--mono)}
+  .source-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid color-mix(in srgb,var(--family-color) 45%,var(--border));border-radius:50%;color:var(--family-color)}
+  .source-glyph :global(.source-icon){width:16px;height:16px}
   .source-copy{min-width:0}
   .source-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .source-copy strong{font:650 var(--text-xs) var(--mono)}

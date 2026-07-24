@@ -410,14 +410,14 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .local-nav a:hover, .local-nav a:focus-visible { color: var(--text); background: rgb(var(--accent-rgb) / .09); }
 .local-nav a.active { padding-left: 20px; color: var(--text); background: rgb(var(--accent-rgb) / .1); box-shadow: inset 0 -2px var(--accent2); }
 .local-nav a.active::before { content: "❯"; left: 7px; top: 9px; color: var(--accent2); }
-.result-section { scroll-margin-top: 72px; }
+.result-section { --local-nav-anchor-offset: 72px; scroll-margin-top: var(--local-nav-anchor-offset); }
 @media (max-width: 900px) {
   .local-nav-shell { top: 70px; }
-  .result-section { scroll-margin-top: 134px; }
+  .result-section { --local-nav-anchor-offset: 134px; }
 }
 @media (max-width: 600px) {
   .local-nav-shell { top: 68px; }
-  .result-section { scroll-margin-top: 126px; }
+  .result-section { --local-nav-anchor-offset: 126px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .local-nav-shell::before, .local-nav-shell::after { transition: none; }
@@ -447,14 +447,11 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .brand { display: flex; gap: 11px; align-items: center; margin: 20px 16px 0; }
 .brand span span, .brand strong, .brand small, nav a strong, nav a small { display: block; }
 .brand strong { font: 700 1.13rem var(--mono); letter-spacing: -.02em; }
-.brand strong::after, .shell > header > a > strong::after, .public-brand strong::after { content: ""; display: inline-block; width: .42em; height: .76em; margin-left: .16em; background: var(--accent2); box-shadow: 0 0 8px rgb(var(--accent2-rgb) / var(--cursor-glow-alpha)); vertical-align: -.02em; animation: brand-cursor-blink 1.1s steps(1, end) infinite; }
-/* Phosphorous terminal cursor blink. Keyframes hold the cursor solid at 0%
-   and 100% so if a reduced-motion setting collapses the animation it settles
-   visible, not hidden; the media query below also disables it outright. */
-@keyframes brand-cursor-blink { 0%, 55% { opacity: 1; } 55.01%, 99.99% { opacity: 0; } 100% { opacity: 1; } }
+.brand strong::after, .shell > header > a > strong::after, .public-brand strong::after { content: ""; display: inline-block; width: .42em; height: .76em; margin-left: .16em; background: var(--accent2); box-shadow: 0 0 7px rgb(var(--accent2-rgb) / calc(var(--cursor-glow-alpha) * .82)); vertical-align: -.02em; }
+/* The terminal cursor is a static brand mark rather than a status indicator.
+   Motion is reserved for real loading and collection activity. */
 @media (prefers-reduced-motion: reduce) {
   .skip-link { transition: none; }
-  .brand strong::after, .shell > header > a > strong::after, .public-brand strong::after { animation: none; opacity: 1; }
 }
 .brand small, nav a small { color: var(--muted); font-size: var(--text-2xs); line-height: 1.4; }
 .mark { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; }

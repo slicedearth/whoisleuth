@@ -23,6 +23,10 @@
     http_origin: 'HTTP origin',
     favicon: 'Favicon',
     certificate: 'Certificate',
+    ip_address: 'IP address',
+    tracking_identifier: 'Tracking identifier',
+    favicon_cluster: 'Favicon relationship',
+    official_asset_host: 'Official asset host',
     brand: 'Brand profile',
     case: 'Case',
     campaign: 'Campaign',
@@ -35,12 +39,16 @@
     nameserver: 'Nameserver',
     origin: 'HTTP origin',
     sha256: 'SHA-256',
+    ip: 'IP address',
+    identifier: 'Identifier',
+    value: 'Relationship value',
   };
   const storeLabels: Record<string, string> = {
     cases: 'Cases',
     campaigns: 'Campaigns',
     brandProfiles: 'Brand profiles',
     relationshipRows: 'Scan relationship evidence',
+    relationshipObservations: 'Retained relationship observations',
   };
 
   function evidenceState(result: InvestigationSearchResult): string {
@@ -121,6 +129,7 @@
               <dl>
                 <div><dt>{fieldLabels[result.matchedField]}</dt><dd>{result.matchedValue}</dd></div>
                 <div><dt>Source</dt><dd>{storeLabels[result.sourceStore] || result.sourceStore} · {result.source}</dd></div>
+                {#if result.classification}<div><dt>Classification</dt><dd>{result.classification === 'derived' ? 'Derived observation' : 'Normalized observation'}</dd></div>{/if}
                 <div><dt>Observed</dt><dd>{formatDate(result.observedAt)}</dd></div>
               </dl>
               {#if result.limitations.length || result.truncated === true}

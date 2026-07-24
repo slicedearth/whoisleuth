@@ -430,8 +430,34 @@ test('deep results present bounded relationship evidence including exact native 
   await section.getByText('Interpretation limits').click();
   await expect(section).toContainText('does not establish common control');
 
+  const certificateRelationship = section.locator('article', { hasText: 'Shared TLS certificate' });
+  await certificateRelationship.getByRole('button', { name: 'Retain observation' }).click();
+  await expect(certificateRelationship.getByRole('button', { name: 'Retained in Monitor' })).toBeDisabled();
+  await expect(section.getByRole('status')).toContainText('Retained shared tls certificate for 2 domains in this browser');
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+
+  await page.goto('/monitor?view=relationships');
+  const retained = page.getByRole('region', { name: 'Retained relationship observations' });
+  await expect(retained).toContainText('Shared TLS certificate');
+  await expect(retained).toContainText('Exact leaf-certificate SHA-256');
+  await expect(retained).toContainText('Derived observation');
+  await expect(retained.getByRole('link', { name: 'first.example' })).toHaveAttribute('href', '/lookup?q=first.example');
+  await expectNoHorizontalOverflow(page);
+
+  const retainedItem = retained.locator('li[id^="retained-"]').first();
+  const retainedElementId = await retainedItem.getAttribute('id');
+  expect(retainedElementId).toMatch(/^retained-relationship-/);
+  const retainedId = retainedElementId!.slice('retained-'.length);
+  await page.goto(`/monitor?view=relationships&observation=${encodeURIComponent(retainedId)}`);
+  await expect(page.locator(`#retained-${retainedId}`)).toBeFocused();
+  await expect(page.locator(`#retained-${retainedId}`)).toHaveClass(/focused/);
+
+  page.once('dialog', (dialog) => dialog.accept());
+  const focusedRetained = page.getByRole('region', { name: 'Retained relationship observations' });
+  await focusedRetained.getByRole('button', { name: 'Delete retained observation' }).click();
+  await expect(focusedRetained.getByRole('heading', { name: 'No retained relationship observations' })).toBeVisible();
 });
 
 test('candidate handoff presents defensive coverage actions and export', async ({ page }) => {

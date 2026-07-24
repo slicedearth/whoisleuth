@@ -99,8 +99,10 @@ discarded to make room for machine observations.
 The backend does not write ordinary lookup material to an investigation
 database. Bounded process caches can briefly retain validated bootstrap or
 upstream results, while Brand Profiles, watchlists, cases, campaigns, shortlist
-entries, and CT baselines use versioned browser-local schemas with normalization
-and migration on read. Deliberate exports are the portability boundary.
+entries, CT baselines, custom rules, and analyst-selected relationship
+observations use versioned browser-local schemas with normalization and
+migration on read. Relationship observations are written only after an
+explicit analyst action. Deliberate exports are the portability boundary.
 
 An optional Netlify worker is narrower by design: it stores one
 application-encrypted, bounded compact watchlist projection so scheduled fast

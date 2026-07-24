@@ -20,7 +20,9 @@
   import { buildCoverageReport } from '$lib/analysis/coverage.js';
   import { computeOpportunityScore, explainRiskScore, formatActivityCell } from '$lib/analysis/scoring.js';
   import { entityDisplayName, parseDomainInput, rowsToCsv } from '$lib/analysis/utils.js';
-  import { buildScanRelationships, relationshipObservation } from '$lib/analysis/relationship-evidence.js';
+  import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.js';
+  import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
+  import { loadRelationshipObservations, retainRelationshipObservation } from '$lib/relationship-observations';
   import { ctCsvFields } from '$lib/analysis/bulk-export.js';
   import { buildDefensiveIndicatorExport, isDefensiveIndicatorCandidate } from '$lib/analysis/defensive-indicator-export.js';
   import { buildStixIndicatorExport } from '$lib/analysis/stix-indicator-export.js';
@@ -30,7 +32,7 @@
   import { defaultBulkSortDirection, sortBulkResults, type BulkSortDirection, type BulkSortKey } from '$lib/analysis/bulk-sort.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readBulkWorkflowState, writeBulkWorkflowState } from '$lib/console-workflow-state.js';
-import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInvestigationGuideReviewDomains } from '$lib/investigation-guide';
+  import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInvestigationGuideReviewDomains } from '$lib/investigation-guide';
 
   type ScanMode = 'fast' | 'deep';
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
@@ -59,6 +61,7 @@ import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInve
   let profile = $state<BrandProfile|null>(null);
   let shortlist=$state<ShortlistRecord[]>([]);let shortlistStatus=$state('');let draftStatus=$state('');
   let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');
+  let retainedRelationshipIds=$state<Set<string>>(new Set());let relationshipRetentionStatus=$state('');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
@@ -86,7 +89,7 @@ import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInve
     const candidateState=handoffNavigation?null:readBulkWorkflowState<ScanResult>();
     const restored=candidateState&&(!investigationTarget||candidateState.guideContext===guideContext)?candidateState:null;
     if(restored){input=restored.input;mode=restored.mode;completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;watchlistName=restored.watchlistName;}
-    void (async()=>{[profile,shortlist,cases]=await Promise.all([activeProfile(),loadShortlist(),loadCases()]);handoff=loadCandidateHandoff();if(handoffNavigation&&handoff)input=handoff.candidates.map(c=>c.domain).join('\n');else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}})();
+    void (async()=>{let retained;[profile,shortlist,cases,retained]=await Promise.all([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations()]);retainedRelationshipIds=new Set(retained.map((item)=>item.id));handoff=loadCandidateHandoff();if(handoffNavigation&&handoff)input=handoff.candidates.map(c=>c.domain).join('\n');else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}})();
     return()=>{
       resume();
       controller?.abort();
@@ -107,6 +110,21 @@ import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInve
   function setSortKey(key:BulkSortKey){if(sortKey!==key){sortKey=key;sortDirection=defaultBulkSortDirection(key);}page=1;}
   function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
   function loadDomains(domains:string[]){input=domains.join('\n');status=`Loaded ${domains.length} related domains into the scan queue.`;document.querySelector('.queue')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
+  async function retainObservation(relationship:Record<string,unknown>){
+    relationshipRetentionStatus='';
+    try{
+      const result=await retainRelationshipObservation(relationship,{
+        observedAt:new Date().toISOString(),
+        retainedAt:new Date().toISOString(),
+        complete:!relationshipSummary.truncated,
+        truncated:relationshipSummary.truncated,
+        limitations:relationshipSummary.limitations,
+        sourceVersion:RELATIONSHIP_EVIDENCE_VERSION,
+      });
+      retainedRelationshipIds=new Set([...retainedRelationshipIds,result.record.id]);
+      relationshipRetentionStatus=`${result.added?'Retained':'Refreshed'} ${result.record.label.toLowerCase()} for ${result.record.domains.length} domain${result.record.domains.length===1?'':'s'} in this browser${result.pruned?`; pruned ${result.pruned} older observation${result.pruned===1?'':'s'} to stay within storage`:''}.`;
+    }catch(cause){relationshipRetentionStatus=cause instanceof Error?cause.message:'Could not retain that relationship observation.';}
+  }
   function isShortlisted(domain:string){return shortlistedDomains.has(domain);}
   async function toggleSaved(row:ScanResult){try{const added=await toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
   async function removeAllShortlisted(){if(!shortlist.length||!confirm('Remove every domain from the shortlist?'))return;try{await clearShortlist();shortlist=[];shortlistStatus='Shortlist cleared.';}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not clear the shortlist.';}}
@@ -248,7 +266,16 @@ import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInve
     />
   </section>
 
-  <BulkRelationships groups={relationshipSummary.groups} truncated={relationshipSummary.truncated} limitations={relationshipSummary.limitations} {loadDomains} />
+  <BulkRelationships
+    groups={relationshipSummary.groups}
+    truncated={relationshipSummary.truncated}
+    limitations={relationshipSummary.limitations}
+    {loadDomains}
+    {retainObservation}
+    observationId={relationshipObservationId}
+    retainedIds={retainedRelationshipIds}
+    retainStatus={relationshipRetentionStatus}
+  />
   <BulkCoverage {coverage} {exportCoverage} {loadDomains} />
 {/if}
 

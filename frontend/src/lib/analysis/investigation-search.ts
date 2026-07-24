@@ -24,7 +24,7 @@ export const MAX_INVESTIGATION_SEARCH_LIMITATIONS = 20;
 
 export type InvestigationSearchIndexState = 'ready' | 'invalid' | 'unsupported';
 export type InvestigationSearchState = 'idle' | 'invalid' | 'no_matches' | 'results';
-export type InvestigationSearchField = 'canonical' | 'label' | 'domain' | 'name' | 'nameserver' | 'origin' | 'sha256';
+export type InvestigationSearchField = 'canonical' | 'label' | 'domain' | 'name' | 'nameserver' | 'origin' | 'sha256' | 'ip' | 'identifier' | 'value';
 
 export interface InvestigationSearchSourceSummary {
   state: InvestigationSourceState;
@@ -48,6 +48,7 @@ export interface InvestigationSearchEntry {
   termsTruncated: boolean;
   sourceStore: InvestigationStoreName;
   source: string;
+  classification: 'derived' | 'normalized' | null;
   observedAt: string;
   complete: boolean | null;
   truncated: boolean | null;
@@ -116,6 +117,10 @@ const ENTITY_TYPES = new Set<InvestigationEntityType>([
   'http_origin',
   'favicon',
   'certificate',
+  'ip_address',
+  'tracking_identifier',
+  'favicon_cluster',
+  'official_asset_host',
   'brand',
   'case',
   'campaign',
@@ -127,8 +132,9 @@ const OBSERVATION_KINDS = new Set<InvestigationObservationKind>([
   'brand_page_baseline',
   'campaign_record',
   'scan_relationship_evidence',
+  'retained_relationship_observation',
 ]);
-const STORES = new Set<InvestigationStoreName>(['cases', 'campaigns', 'brandProfiles', 'relationshipRows']);
+const STORES = new Set<InvestigationStoreName>(['cases', 'campaigns', 'brandProfiles', 'relationshipRows', 'relationshipObservations']);
 const SOURCE_STATES = new Set<InvestigationSourceState>(['absent', 'invalid', 'unsupported', 'supported']);
 const FIELD_PRIORITY: Record<InvestigationSearchField, number> = {
   canonical: 0,
@@ -138,6 +144,9 @@ const FIELD_PRIORITY: Record<InvestigationSearchField, number> = {
   nameserver: 4,
   origin: 5,
   sha256: 6,
+  ip: 7,
+  identifier: 8,
+  value: 9,
 };
 const TYPE_PRIORITY: Record<InvestigationEntityType, number> = {
   domain: 0,
@@ -148,6 +157,10 @@ const TYPE_PRIORITY: Record<InvestigationEntityType, number> = {
   http_origin: 5,
   certificate: 6,
   favicon: 7,
+  ip_address: 8,
+  tracking_identifier: 9,
+  favicon_cluster: 10,
+  official_asset_host: 11,
 };
 
 function record(value: unknown): UnknownRecord | null {
@@ -220,6 +233,7 @@ function emptySources(): Record<InvestigationStoreName, InvestigationSearchSourc
     campaigns: { state: 'invalid', version: null, records: 0, truncated: false },
     brandProfiles: { state: 'invalid', version: null, records: 0, truncated: false },
     relationshipRows: { state: 'invalid', version: null, records: 0, truncated: false },
+    relationshipObservations: { state: 'invalid', version: null, records: 0, truncated: false },
   };
 }
 
@@ -243,6 +257,7 @@ function normalizeSources(value: unknown): Record<InvestigationStoreName, Invest
     campaigns: normalizeSourceSummary(sources.campaigns),
     brandProfiles: normalizeSourceSummary(sources.brandProfiles),
     relationshipRows: normalizeSourceSummary(sources.relationshipRows),
+    relationshipObservations: normalizeSourceSummary(sources.relationshipObservations),
   };
 }
 
@@ -308,6 +323,9 @@ function searchableTerms(entity: IndexedEntity): { terms: InvestigationSearchTer
   addTerm(terms, seen, 'name', entity.properties.name);
   addTerm(terms, seen, 'origin', entity.properties.origin);
   addTerm(terms, seen, 'sha256', entity.properties.sha256);
+  addTerm(terms, seen, 'ip', entity.properties.ipAddress);
+  addTerm(terms, seen, 'identifier', entity.properties.identifier);
+  addTerm(terms, seen, 'value', entity.properties.value);
   const nameservers = Array.isArray(entity.properties.nameservers) ? entity.properties.nameservers : [];
   for (const nameserver of nameservers.slice(0, MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY * 2)) {
     addTerm(terms, seen, 'nameserver', nameserver);
@@ -320,6 +338,7 @@ function searchableTerms(entity: IndexedEntity): { terms: InvestigationSearchTer
 
 function preferredObservationKind(type: InvestigationEntityType): InvestigationObservationKind | null {
   if (type === 'case') return 'case_record';
+  if (type === 'domain') return 'case_evidence';
   if (type === 'campaign') return 'campaign_record';
   if (type === 'brand') return 'brand_profile';
   return null;
@@ -356,8 +375,17 @@ function pivotFor(entity: IndexedEntity, observation: IndexedObservation): { hre
   if (observation.store === 'brandProfiles') {
     return { href: `/brands?profile=${encodeURIComponent(observation.recordId)}`, action: 'Open source profile' };
   }
+  if (observation.store === 'relationshipObservations') {
+    return { href: `/monitor?view=relationships&observation=${encodeURIComponent(observation.recordId)}`, action: 'Open retained observation' };
+  }
   const lookupTarget = entity.type === 'domain' ? entity.canonical : observation.recordId;
   return { href: `/lookup?q=${encodeURIComponent(lookupTarget)}`, action: 'Open Lookup' };
+}
+
+function evidenceClassification(observation: IndexedObservation): 'derived' | 'normalized' | null {
+  if (observation.kind === 'retained_relationship_observation') return 'derived';
+  if (observation.kind === 'scan_relationship_evidence') return 'normalized';
+  return null;
 }
 
 function emptyIndex(
@@ -429,6 +457,7 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
       termsTruncated: searchable.truncated || terms.length < searchable.terms.length,
       sourceStore: observation.store,
       source: observation.source,
+      classification: evidenceClassification(observation),
       observedAt: observation.observedAt,
       complete: observation.complete,
       truncated: observation.truncated,

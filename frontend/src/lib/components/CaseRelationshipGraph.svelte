@@ -47,7 +47,7 @@
     return graph.relationshipNodes.filter((item:any)=>ids.has(item.id));
   }
   function edgePath(edge:any){return horizontalConnectionPath({x:edge.x1,y:edge.y1},{x:edge.x2,y:edge.y2});}
-  function relationshipGlyph(node:any){return node.type==='nameserver_set'?'NS':node.type==='http_final_origin'?'OR':'R';}
+  function relationshipGlyph(node:any){return({nameserver_set:'NS',http_final_origin:'OR',ip_address:'IP',certificate:'TLS',tracking_identifier:'ID',favicon:'FV',official_asset:'OA'} as Record<string,string>)[node.type]||'R';}
   function downloadGraph(){
     try{
       const output=buildRelationshipGraphExport(summary,{format:exportFormat,type,source,period,completeness,scope});
@@ -69,7 +69,7 @@
   {#if graph.totalRelationships}
     <fieldset class="graph-controls">
       <legend>Relationship graph filters</legend>
-      <label class="field">Relationship<select bind:value={type}><option value="all">All relationships</option><option value="nameserver_set">Nameserver sets</option><option value="http_final_origin">Final website origins</option></select></label>
+      <label class="field">Relationship<select bind:value={type}><option value="all">All relationships</option><option value="nameserver_set">Nameserver sets</option><option value="http_final_origin">Final website origins</option><option value="ip_address">IP addresses</option><option value="certificate">TLS certificates</option><option value="tracking_identifier">Tracking identifiers</option><option value="favicon">Favicons</option><option value="official_asset">Official assets</option></select></label>
       <label class="field">Source<select bind:value={source}><option value="all">All sources</option>{#each graph.sources as item}<option value={item}>{sourceLabel(item)}</option>{/each}</select></label>
       <label class="field">Observed within<select bind:value={period}><option value="all">All retained time</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="365d">Last 365 days</option></select></label>
       <label class="field">Completeness<select bind:value={completeness}><option value="all">All states</option><option value="complete">Complete</option><option value="partial">Partial or truncated</option><option value="unknown">Unknown</option></select></label>

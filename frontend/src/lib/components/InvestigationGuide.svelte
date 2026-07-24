@@ -40,6 +40,7 @@
   ]);
   const guideTargetIds = new Set(['official-domains', 'discovery-seed', 'domains', 'query', 'new-case', 'case-review-queue', 'results']);
   const usefulActionExposure = 0.2;
+  const returnControlHideExposure = 0.6;
 
   let guide = $state<InvestigationGuide | null>(null);
   let mounted = $state(false);
@@ -117,8 +118,8 @@
     if (typeof IntersectionObserver === 'undefined') return;
     actionObserver = new IntersectionObserver(([entry]) => {
       const ratio = entry?.isIntersecting ? entry.intersectionRatio : 0;
-      actionVisible = ratio >= usefulActionExposure;
-    }, { threshold: [0, usefulActionExposure] });
+      actionVisible = ratio >= (actionVisible ? usefulActionExposure : returnControlHideExposure);
+    }, { threshold: [0, usefulActionExposure, returnControlHideExposure] });
     actionObserver.observe(actionPanel);
   }
 

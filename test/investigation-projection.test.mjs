@@ -16,6 +16,10 @@ import {
   MAX_RELATIONSHIP_ROWS,
   RELATIONSHIP_EVIDENCE_VERSION,
 } from '../frontend/src/lib/analysis/relationship-evidence.js';
+import {
+  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+  createRelationshipObservation,
+} from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 
 const EARLY = '2026-07-01T00:00:00.000Z';
 const LATE = '2026-07-19T00:00:00.000Z';
@@ -103,6 +107,7 @@ describe('typed local investigation projection', () => {
       campaigns: { state: 'absent', version: null, records: 0, truncated: false },
       brandProfiles: { state: 'absent', version: null, records: 0, truncated: false },
       relationshipRows: { state: 'absent', version: null, records: 0, truncated: false },
+      relationshipObservations: { state: 'absent', version: null, records: 0, truncated: false },
     });
     assert.equal(result.truncated, false);
   });
@@ -241,6 +246,46 @@ describe('typed local investigation projection', () => {
     assert.ok(entity(result, 'certificate').observationIds.length > 0);
   });
 
+  test('projects analyst-retained Bulk relationships as separately attributed derived evidence', () => {
+    const retained = createRelationshipObservation({
+      type: 'ip_address',
+      label: 'Shared IP address',
+      method: 'Exact normalized address',
+      normalizedValue: '192.0.2.20',
+      value: '192.0.2.20',
+      domains: ['first.invalid', 'second.invalid'],
+      description: 'Bounded retained pivot.',
+    }, {
+      observedAt: EARLY,
+      retainedAt: LATE,
+      complete: true,
+      truncated: false,
+      sourceVersion: RELATIONSHIP_EVIDENCE_VERSION,
+      limitations: ['Shared hosting is common.'],
+    });
+    const result = buildInvestigationProjection(currentInput({
+      relationshipObservations: {
+        version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+        observations: [retained],
+      },
+    }), { generatedAt: LATE });
+    const retainedObservation = result.observations.find((item) => item.kind === 'retained_relationship_observation');
+    const retainedRelationship = relationship(result, 'domain_resolved_to_ip');
+
+    assert.equal(result.sources.relationshipObservations.state, 'supported');
+    assert.equal(entity(result, 'ip_address').properties.ipAddress, '192.0.2.20');
+    assert.equal(retainedObservation.store, 'relationshipObservations');
+    assert.equal(retainedObservation.source, 'bulk_relationship_analysis');
+    assert.equal(retainedObservation.status, 'success');
+    assert.deepEqual(retainedObservation.schemaVersions, {
+      relationshipEvidence: RELATIONSHIP_EVIDENCE_VERSION,
+      relationshipObservation: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+    });
+    assert.equal(retainedRelationship.classification, 'derived');
+    assert.equal(result.relationships.filter((item) => item.type === 'domain_resolved_to_ip').length, 2);
+    assert.match(retainedRelationship.limitations.join(' '), /explicit analyst action/i);
+  });
+
   test('drops malformed identity values and absent deep evidence without negative edges', () => {
     const result = buildInvestigationProjection(currentInput({
       relationshipRows: [{
@@ -290,10 +335,15 @@ describe('typed local investigation projection', () => {
         observedAt: LATE,
         relationship: { version: RELATIONSHIP_EVIDENCE_VERSION + 1 },
       }],
+      relationshipObservations: {
+        version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION + 1,
+        observations: [],
+      },
     }), { generatedAt: LATE });
     assert.equal(result.sources.cases.state, 'unsupported');
     assert.equal(result.sources.campaigns.state, 'unsupported');
     assert.equal(result.sources.brandProfiles.state, 'unsupported');
+    assert.equal(result.sources.relationshipObservations.state, 'unsupported');
     assert.equal(result.entities.length, 0);
     assert.ok(result.limitations.some((value) => value.includes(`cases schema ${CASE_SCHEMA_VERSION + 1}`)));
     assert.ok(result.limitations.some((value) => value.includes(`relationship observation used unsupported schema ${RELATIONSHIP_EVIDENCE_VERSION + 1}`)));
@@ -306,7 +356,7 @@ describe('typed local investigation projection', () => {
       brandProfiles: 42,
       relationshipRows: {},
     }, { generatedAt: LATE });
-    assert.deepEqual(Object.values(result.sources).map((source) => source.state), ['invalid', 'invalid', 'invalid', 'invalid']);
+    assert.deepEqual(Object.values(result.sources).map((source) => source.state), ['invalid', 'invalid', 'invalid', 'invalid', 'absent']);
     assert.equal(result.entities.length, 0);
     assert.equal(result.limitations.filter((value) => value.includes('malformed')).length, 4);
   });

@@ -31,6 +31,11 @@ import {
   RELATIONSHIP_GRAPH_EXPORT_VERSION,
 } from '../frontend/src/lib/analysis/case-relationship-graph-export.js';
 import {
+  RELATIONSHIP_OBSERVATION_SCHEMA,
+  RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
+  buildRelationshipObservationExport,
+} from '../frontend/src/lib/analysis/relationship-observation-model.ts';
+import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
   WORKSPACE_ARCHIVE_SCHEMA,
   WORKSPACE_ARCHIVE_VERSION,
@@ -111,7 +116,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 49);
+    assert.equal(inventory.entries.length, 51);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -124,6 +129,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.relationship-graph').currentVersion, RELATIONSHIP_GRAPH_EXPORT_VERSION);
     assert.equal(byId(inventory, 'export.relationship-graph').byteBudget, MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES);
+    assert.equal(byId(inventory, 'browser.relationship-observations').schema, RELATIONSHIP_OBSERVATION_SCHEMA);
+    assert.equal(byId(inventory, 'browser.relationship-observations').currentVersion, RELATIONSHIP_OBSERVATION_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
@@ -204,6 +211,7 @@ describe('schema compatibility inventory', () => {
       ['export.watchlists', buildWatchlistExport({}, NOW), WATCHLIST_SCHEMA, WATCHLIST_SCHEMA_VERSION],
       ['export.shortlist', buildShortlistExport([], NOW), SHORTLIST_SCHEMA, SHORTLIST_SCHEMA_VERSION],
       ['export.detection-rules', buildDetectionRuleExport([], NOW), DETECTION_RULE_SCHEMA, DETECTION_RULE_SCHEMA_VERSION],
+      ['export.relationship-observations', buildRelationshipObservationExport([], NOW), RELATIONSHIP_OBSERVATION_SCHEMA, RELATIONSHIP_OBSERVATION_SCHEMA_VERSION],
     ];
     for (const [id, document, schema, version] of fixtures) {
       const listed = byId(inventory, id);

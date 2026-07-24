@@ -13,10 +13,27 @@ export const MAX_RELATIONSHIP_TABLE_ROWS = 50;
 export const MAX_RELATIONSHIP_TABLE_MEMBERS = 20;
 export const MAX_RELATIONSHIP_TABLE_QUERY_LENGTH = 100;
 
-const TYPES = new Set(['all', 'nameserver_set', 'http_final_origin']);
+const TYPES = new Set([
+  'all',
+  'nameserver_set',
+  'http_final_origin',
+  'ip_address',
+  'certificate',
+  'tracking_identifier',
+  'favicon',
+  'official_asset',
+]);
 const SORTS = new Set(['type', 'value', 'member_count']);
 const DIRECTIONS = new Set(['asc', 'desc']);
-const TYPE_ORDER = new Map(['nameserver_set', 'http_final_origin'].map((value, index) => [value, index]));
+const TYPE_ORDER = new Map([
+  'nameserver_set',
+  'http_final_origin',
+  'ip_address',
+  'certificate',
+  'tracking_identifier',
+  'favicon',
+  'official_asset',
+].map((value, index) => [value, index]));
 
 function normalizeQuery(value) {
   return String(value == null ? '' : value)
