@@ -286,6 +286,9 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.fill('whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
+  await search.fill('dns whois');
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
   await search.fill('tld');
   await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
@@ -297,6 +300,7 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('Enter');
   await expect(page).toHaveURL(/\/monitor$/);
+  await expect(page.locator('#main-content')).toBeFocused();
 
   await trigger.focus();
   await page.keyboard.press('Control+K');

@@ -175,7 +175,11 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   await expect(currentAction(page).getByRole('heading', { name: 'What to do' })).toBeVisible();
   await expect(currentAction(page).getByRole('listitem')).toHaveCount(3);
   await expect(guide.locator('#investigation-plan')).toHaveCount(0);
-  await guide.getByRole('button', { name: 'Show full plan (5 steps)' }).click();
+  const planToggle = guide.getByRole('button', { name: 'Show full plan (5 steps)' });
+  await planToggle.focus();
+  await expect(planToggle).toBeFocused();
+  await planToggle.press('Enter');
+  await expect(guide.getByRole('button', { name: 'Hide full plan' })).toHaveAttribute('aria-expanded', 'true');
   await expect(guide.locator('#investigation-plan > li')).toHaveCount(5);
   expect(analysisRequests).toEqual([]);
 

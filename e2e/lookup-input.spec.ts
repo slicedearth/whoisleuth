@@ -794,7 +794,9 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
   }));
 
   await page.locator('#query').fill('example.com');
-  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const runLookup = page.getByRole('button', { name: 'Run lookup' });
+  await runLookup.click();
+  await expect(runLookup).toBeEnabled();
   const whoisSection = page.locator('.sources > details').nth(1);
   await expect(whoisSection).not.toHaveAttribute('open', '');
   await expect(whoisSection.getByText('Published contacts · 2 roles · capped')).toBeHidden();

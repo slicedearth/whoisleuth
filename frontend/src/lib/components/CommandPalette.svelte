@@ -14,7 +14,7 @@
     onclose,
   }: {
     commands: ConsoleCommand[];
-    onclose: (restoreFocus?: boolean) => void;
+    onclose: (restoreFocus?: boolean) => void | Promise<void>;
   } = $props();
 
   let query = $state('');
@@ -22,12 +22,14 @@
   let searchInput = $state<HTMLInputElement>();
   let dialog = $state<HTMLElement>();
   let resultsList = $state<HTMLElement>();
-  const normalizedQuery = $derived(query.trim().toLowerCase());
+  const queryTerms = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const filteredCommands = $derived(commands
-    .filter((command) => !normalizedQuery
-      || `${command.label} ${command.detail} ${command.group} ${command.keywords.join(' ')}`
-        .toLowerCase()
-        .includes(normalizedQuery))
+    .filter((command) => {
+      if (!queryTerms.length) return true;
+      const searchableText = `${command.label} ${command.detail} ${command.group} ${command.keywords.join(' ')}`
+        .toLowerCase();
+      return queryTerms.every((term) => searchableText.includes(term));
+    })
     .slice(0, 12));
   const activeOptionId = $derived(filteredCommands[selectedIndex] ? `command-option-${selectedIndex}` : undefined);
   const selectedAnnouncement = $derived(filteredCommands[selectedIndex]
@@ -40,13 +42,15 @@
   });
 
   function close() {
-    onclose();
+    void onclose();
   }
 
   async function activate(command: ConsoleCommand | undefined) {
     if (!command) return;
-    onclose(false);
+    await onclose(false);
     await goto(command.href);
+    await tick();
+    document.querySelector<HTMLElement>('#main-content')?.focus();
   }
 
   function focusables() {
