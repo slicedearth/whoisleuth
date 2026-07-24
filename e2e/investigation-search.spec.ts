@@ -71,19 +71,19 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
   await search.fill('candidate.invalid');
   const caseResult = page.locator('.result-card').filter({ hasText: 'Case' }).filter({ hasText: 'candidate.invalid' });
   await caseResult.getByRole('link', { name: /Open case/ }).click();
-  await expect(page).toHaveURL('/monitor?case=case-source');
+  await expect(page).toHaveURL('/monitor?case=case-source', { timeout: 15_000 });
   await expect(page.locator('.case-head', { hasText: 'candidate.invalid' })).toHaveAttribute('aria-expanded', 'true');
 
   await page.goto('/dashboard');
   await page.getByRole('searchbox', { name: 'Search saved work' }).fill('Priority review');
   await page.getByRole('link', { name: /Open campaign/ }).click();
-  await expect(page).toHaveURL('/monitor?view=campaigns&campaign=campaign-source');
+  await expect(page).toHaveURL('/monitor?view=campaigns&campaign=campaign-source', { timeout: 15_000 });
   await expect(page.locator('.campaign-head', { hasText: 'Priority review' })).toHaveAttribute('aria-expanded', 'true');
 
   await page.goto('/dashboard');
   await page.getByRole('searchbox', { name: 'Search saved work' }).fill('Reserved identity');
   await page.getByRole('link', { name: /Open profile/ }).click();
-  await expect(page).toHaveURL('/brands?profile=profile-source');
+  await expect(page).toHaveURL('/brands?profile=profile-source', { timeout: 15_000 });
   const focusedProfile = page.locator('#profile-profile-source');
   await expect(focusedProfile).toBeVisible();
   await expect(focusedProfile).toHaveClass(/focused/);

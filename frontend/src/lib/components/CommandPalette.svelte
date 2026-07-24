@@ -3,13 +3,10 @@
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
+  import type { NavigationItem } from '$lib/workspaces';
 
-  type ConsoleCommand = {
-    href: string;
-    label: string;
-    detail: string;
+  type ConsoleCommand = NavigationItem & {
     group: string;
-    icon: 'analysis' | 'lookup' | 'discover' | 'bulk' | 'watchlist' | 'brand' | 'registry' | 'page';
   };
 
   let {
@@ -17,7 +14,7 @@
     onclose,
   }: {
     commands: ConsoleCommand[];
-    onclose: () => void;
+    onclose: (restoreFocus?: boolean) => void;
   } = $props();
 
   let query = $state('');
@@ -27,7 +24,10 @@
   let resultsList = $state<HTMLElement>();
   const normalizedQuery = $derived(query.trim().toLowerCase());
   const filteredCommands = $derived(commands
-    .filter((command) => !normalizedQuery || `${command.label} ${command.detail} ${command.group}`.toLowerCase().includes(normalizedQuery))
+    .filter((command) => !normalizedQuery
+      || `${command.label} ${command.detail} ${command.group} ${command.keywords.join(' ')}`
+        .toLowerCase()
+        .includes(normalizedQuery))
     .slice(0, 12));
   const activeOptionId = $derived(filteredCommands[selectedIndex] ? `command-option-${selectedIndex}` : undefined);
   const selectedAnnouncement = $derived(filteredCommands[selectedIndex]
@@ -45,7 +45,7 @@
 
   async function activate(command: ConsoleCommand | undefined) {
     if (!command) return;
-    onclose();
+    onclose(false);
     await goto(command.href);
   }
 

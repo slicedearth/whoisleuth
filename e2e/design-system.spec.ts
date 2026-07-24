@@ -283,12 +283,22 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(search).toBeFocused();
+  await search.fill('whois');
+  await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await search.fill('tld');
+  await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await search.fill('campaign');
+  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(1);
   await search.fill('monitor');
   await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('Enter');
   await expect(page).toHaveURL(/\/monitor$/);
 
+  await trigger.focus();
   await page.keyboard.press('Control+K');
   await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
@@ -297,11 +307,23 @@ test('the console command palette filters destinations and remains keyboard oper
 
   await page.goto('/lookup');
   await expect(trigger).toBeVisible();
+  const lookupQuery = page.locator('#query');
+  await lookupQuery.focus();
   await page.keyboard.press('Control+K');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toHaveAttribute('aria-selected', 'true');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toHaveAttribute('aria-current', 'page');
   await page.keyboard.press('Escape');
+  await expect(lookupQuery).toBeFocused();
+  await lookupQuery.dispatchEvent('keydown', {
+    key: 'k',
+    code: 'KeyK',
+    ctrlKey: true,
+    repeat: true,
+    bubbles: true,
+  });
+  await expect(dialog).toHaveCount(0);
+  await expect(lookupQuery).toBeFocused();
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(trigger).toBeVisible();
