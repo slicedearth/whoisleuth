@@ -7,6 +7,7 @@
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
+  import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
@@ -209,6 +210,7 @@
     <div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidence {...lookupView.http} /></div>
     <div class="shared-evidence"><LookupSecurityTxt {...lookupView.securityTxt} /></div>
     <div class="shared-evidence" id="demo-evidence-structured-identity"><LookupStructuredDataIdentity {...lookupView.structuredIdentity} /></div>
+    <div class="shared-evidence"><LookupCredentialSurfaceProfile {...lookupView.credentialSurface} /></div>
     <div class="shared-evidence"><LookupSecurityPosture {...lookupView.securityPosture} /></div>
     <div class="shared-evidence" id="demo-evidence-technology"><LookupTechnologyProfile {...lookupView.technology} /></div>
     <div class="shared-evidence" id="demo-evidence-tls"><LookupTlsEvidence {...lookupView.tls} /></div>

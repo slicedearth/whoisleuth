@@ -281,6 +281,7 @@ describe('pageIdentity', () => {
       includePageIdentity: false,
     });
     assert.equal(result.pageIdentity, null);
+    assert.equal(result.credentialSurfaceProfile, null);
     assert.equal(result.structuredDataIdentity, null);
     assert.equal(result.technologyProfile, null);
     assert.equal(result.pageTitle, 'Example');
@@ -316,6 +317,35 @@ describe('pageIdentity', () => {
     }]);
   });
 
+  test('derives a privacy-minimized credential surface from the same captured HTML', () => {
+    const result = extractHtmlSignals(`
+      <form method="post" action="https://identity.example/private?token=secret">
+        <input type="email" name="private-email">
+        <input autocomplete="current-password" value="private-password">
+      </form>
+    `, 'example.com', {
+      baseUrl: 'https://www.example.com/start',
+      observedAt,
+      includeCredentialSurfaceProfile: true,
+    });
+
+    assert.equal(result.credentialSurfaceProfile.source, 'html');
+    assert.equal(result.credentialSurfaceProfile.observedAt, observedAt);
+    assert.deepEqual(result.credentialSurfaceProfile.inputs, {
+      count: 2,
+      classifiedCount: 2,
+      categories: { password: 1, email: 1, username: 0, one_time_code: 0, payment: 0 },
+    });
+    assert.deepEqual(result.credentialSurfaceProfile.forms.actions, {
+      sameOrigin: 0,
+      external: 1,
+      missing: 0,
+      cleartext: 0,
+      unclassified: 0,
+    });
+    assert.doesNotMatch(JSON.stringify(result.credentialSurfaceProfile), /private-email|private-password|token=|\/private/iu);
+  });
+
   test('can omit technology analysis while preserving page identity', () => {
     const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1">', 'example.com', {
       includeTechnologyProfile: false,
@@ -332,6 +362,16 @@ describe('pageIdentity', () => {
     );
     assert.equal(result.pageIdentity.source, 'html');
     assert.equal(result.structuredDataIdentity, null);
+  });
+
+  test('can omit credential-surface analysis while preserving page identity', () => {
+    const result = extractHtmlSignals(
+      '<form><input type="password"></form>',
+      'example.com',
+      { includeCredentialSurfaceProfile: false },
+    );
+    assert.equal(result.pageIdentity.source, 'html');
+    assert.equal(result.credentialSurfaceProfile, null);
   });
 
   test('summarizes normalized resource types and external origins without retaining paths', () => {

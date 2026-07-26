@@ -384,7 +384,8 @@ The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
 and the shared registry-source comparison. Registrar RDAP raw data, contacts,
 entities, links, notices, and source-specific handles remain excluded. Schema
-version 18 additionally retains the bounded structured identity projection
+version 19 additionally retains the bounded credential-surface projection
+when the saved deep lookup represents it. Version 18 retains the bounded structured identity projection
 when the saved deep lookup represents it. Version 17 retains the normalized portable-field comparison, explicit
 source-health states, a strict bounded projection of observed network
 registration, an optional normalized security.txt disclosure source, HTTPS

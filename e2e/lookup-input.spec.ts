@@ -662,7 +662,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(18);
+  expect(exported.schemaVersion).toBe(19);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -1158,6 +1158,25 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             complete: true, truncated: false, limitations: [],
           },
         },
+        credentialSurfaceProfile: {
+          credentialSurfaceVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'html', durationMs: null, complete: true, truncated: false,
+          limitations: [
+            'Fixed semantic categories and counts only.',
+            'External form submission is a review pivot, not a finding of unsafe or deceptive behaviour.',
+          ],
+          diagnostics: { formsObserved: 2, inputsObserved: 4, classifiedInputs: 3, unclassifiedActions: 0 },
+          forms: {
+            count: 2,
+            methods: { missing: 0, get: 1, post: 1, dialog: 0, other: 0 },
+            actions: { sameOrigin: 1, external: 1, missing: 0, cleartext: 0, unclassified: 0 },
+          },
+          inputs: {
+            count: 4,
+            classifiedCount: 3,
+            categories: { password: 1, email: 1, username: 1, one_time_code: 0, payment: 0 },
+          },
+        },
         structuredDataIdentity: {
           structuredDataVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'html', durationMs: null, complete: true, truncated: false,
@@ -1271,6 +1290,17 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(structuredCard.getByText('https://login.example.test', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText('social.example.test', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText(/does not use this evidence for availability or Risk scoring/i)).toBeVisible();
+
+  const credentialCard = page.locator('.credential-card');
+  await expect(credentialCard).not.toHaveAttribute('open', '');
+  await expect(credentialCard.getByRole('heading', { name: 'Credential collection surface' })).toBeVisible();
+  await expect(credentialCard.getByText(/3 classified inputs across 2 forms/)).toBeVisible();
+  await credentialCard.locator(':scope > summary').click();
+  await expect(credentialCard.locator('section').filter({ hasText: 'Input purposes' }).getByText('Password')).toBeVisible();
+  await expect(credentialCard.locator('section').filter({ hasText: 'Action relationships' }).getByText('External origin')).toBeVisible();
+  await expect(credentialCard.getByText(/external form submission is common for legitimate/i)).toBeVisible();
+  await expect(credentialCard.getByText(/does not retain field names or content/i)).toBeVisible();
+  await expect(credentialCard).not.toContainText('secret');
 
   const technologyCard = page.locator('.technology-card');
   await expect(technologyCard).not.toHaveAttribute('open', '');

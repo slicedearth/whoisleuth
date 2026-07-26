@@ -259,6 +259,22 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         response: { status: 200 },
       },
       tls: { source: 'tls', status: 'success', protocol: 'TLSv1.3' },
+      credentialSurfaceProfile: {
+        source: 'html',
+        status: 'success',
+        complete: true,
+        forms: {
+          count: 2,
+          methods: { missing: 0, get: 1, post: 1, dialog: 0, other: 0 },
+          actions: { sameOrigin: 1, external: 1, missing: 0, cleartext: 0, unclassified: 0 },
+        },
+        inputs: {
+          count: 4,
+          classifiedCount: 3,
+          categories: { password: 1, email: 1, username: 1, one_time_code: 0, payment: 0 },
+        },
+        privateField: 'credential-private-marker-must-not-render',
+      },
       structuredDataIdentity: {
         source: 'html',
         status: 'success',
@@ -316,6 +332,9 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /HTTP response\s+HTTP 200 · HTTPS/);
   assert.match(terminal, /TLS evidence\s+Success/);
   assert.match(terminal, /TLS protocol\s+TLSv1\.3/);
+  assert.match(terminal, /Credential UI\s+Success · 3 classified inputs/);
+  assert.match(terminal, /Form surface\s+2 forms · 4 inputs · 1 external action/);
+  assert.match(terminal, /Input purposes\s+password 1 · email 1 · username 1/);
   assert.match(terminal, /Structured ID\s+Success · 1 declared entity/);
   assert.match(terminal, /Declarations\s+Example publisher \(Organization\/WebSite\)/);
   assert.match(terminal, /Technology\s+Success · 2 indicators/);
@@ -323,7 +342,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
   assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
-  assert.doesNotMatch(terminal, /private-marker|private-posture-detail|must-not-render/);
+  assert.doesNotMatch(terminal, /private-marker|private-posture-detail|credential-private-marker|must-not-render/);
   assert.doesNotMatch(terminal, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
 });
 

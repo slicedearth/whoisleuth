@@ -74,6 +74,7 @@ type DnsDelegation = {
 type AvailabilityOptions = {
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
+  includeCredentialSurfaceProfile?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
   includeSecurityPosture?: boolean;
@@ -632,6 +633,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     phishingLanguageMatch: null,
     externalAssetHosts: [],
     pageIdentity: null,
+    credentialSurfaceProfile: null,
     structuredDataIdentity: null,
     technologyProfile: null,
   };
@@ -654,6 +656,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         exactBodyHash: homepage.http?.response?.bodyHash,
         httpServer: homepage.http?.response?.server,
         includePageIdentity: pageIdentityEligible,
+        includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile,
         includeStructuredDataIdentity: options.includeStructuredDataIdentity,
         includeTechnologyProfile: options.includeTechnologyProfile,
       });

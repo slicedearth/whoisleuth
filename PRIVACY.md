@@ -287,6 +287,20 @@ default (see the README), so many lookups return no personal data at all.
   results and browser-local cases, watchlists, and profiles. It appears in the
   transient deep Lookup result and can be included in a deliberate full Lookup
   evidence export.
+- **Credential collection surface**: a requested deep Lookup can classify
+  capped live input elements already present in the captured homepage response
+  from semantic `type` and `autocomplete` declarations. It retains only fixed
+  counts for password, email, username, one-time-code, and payment-related
+  purposes, form methods, and same-origin, external-origin, missing, cleartext,
+  or unclassified action relationships. Category counts can overlap, and
+  cleartext is a transport subset of a same-origin or external-origin count.
+  Field names, values, labels, placeholders, arbitrary attributes, complete
+  action URLs, paths, queries, and fragments are never retained. External form
+  submission can be legitimate and is not a phishing, vulnerability, ownership,
+  intent, or maliciousness finding. This analysis makes no additional request,
+  does not interact with a form, does not affect availability or Risk scoring,
+  and is excluded from compact Bulk results and browser-local cases, watchlists,
+  and profiles. It can appear in a deliberate full Lookup evidence export.
 - **Technology indicators**: a requested deep Lookup can derive a versioned
   technology profile from the selected HTTP server header, generator metadata,
   normalized resource origins, and capped static HTML already collected for

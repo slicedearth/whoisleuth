@@ -218,6 +218,22 @@ function fixtureResponse() {
           complete: true, truncated: false, limitations: [],
         },
       },
+      credentialSurfaceProfile: {
+        credentialSurfaceVersion: 1, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
+        scanMode: 'deep', source: 'html', complete: true, truncated: false,
+        limitations: ['Fixed semantic categories and counts only.'],
+        diagnostics: { formsObserved: 1, inputsObserved: 2, classifiedInputs: 2, unclassifiedActions: 0 },
+        forms: {
+          count: 1,
+          methods: { missing: 0, get: 0, post: 1, dialog: 0, other: 0 },
+          actions: { sameOrigin: 0, external: 1, missing: 0, cleartext: 0, unclassified: 0 },
+        },
+        inputs: {
+          count: 2,
+          classifiedCount: 2,
+          categories: { password: 1, email: 1, username: 0, one_time_code: 0, payment: 0 },
+        },
+      },
       structuredDataIdentity: {
         structuredDataVersion: 1, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
         scanMode: 'deep', source: 'html', complete: true, truncated: false,
@@ -294,7 +310,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 18);
+    assert.equal(result.schemaVersion, 19);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -343,6 +359,9 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.visibleText.value, 'c'.repeat(16));
     assert.deepEqual(result.analysis.availability.pageIdentity.fingerprints.resourceHosts.values, ['cdn.example']);
+    assert.equal(result.analysis.availability.credentialSurfaceProfile.credentialSurfaceVersion, 1);
+    assert.equal(result.analysis.availability.credentialSurfaceProfile.inputs.categories.password, 1);
+    assert.equal(result.analysis.availability.credentialSurfaceProfile.forms.actions.external, 1);
     assert.equal(result.analysis.availability.structuredDataIdentity.structuredDataVersion, 1);
     assert.equal(result.analysis.availability.structuredDataIdentity.entities[0].name, 'Example publisher');
     assert.equal(result.analysis.availability.dns.records.https[0].parameters.opaque[0].name, 'ech');
@@ -379,7 +398,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 18);
+    assert.equal(result.schemaVersion, 19);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });

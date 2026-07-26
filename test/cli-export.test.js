@@ -95,6 +95,22 @@ function savedLookup(overrides = {}) {
       confidence: 'high',
       hasMx: true,
       tls: { version: 1, status: 'success', protocol: 'TLSv1.3' },
+      credentialSurfaceProfile: {
+        credentialSurfaceVersion: 1, version: 1, status: 'success', observedAt: '2026-07-14T07:59:53.000Z',
+        scanMode: 'deep', source: 'html', complete: true, truncated: false,
+        limitations: ['Fixed semantic categories and counts only.'],
+        diagnostics: { formsObserved: 1, inputsObserved: 2, classifiedInputs: 2, unclassifiedActions: 0 },
+        forms: {
+          count: 1,
+          methods: { missing: 0, get: 0, post: 1, dialog: 0, other: 0 },
+          actions: { sameOrigin: 1, external: 0, missing: 0, cleartext: 0, unclassified: 0 },
+        },
+        inputs: {
+          count: 2,
+          classifiedCount: 2,
+          categories: { password: 1, email: 0, username: 1, one_time_code: 0, payment: 0 },
+        },
+      },
     },
     networkContext: {
       contextVersion: 1, version: 1, status: 'success', observedAt: '2026-07-14T07:59:53.000Z',
@@ -184,13 +200,14 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 18);
+    assert.equal(result.schemaVersion, 19);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     assert.equal(result.query.submitted, 'login.example.test');
     assert.equal(result.query.registrableDomain, 'example.test');
     assert.equal(result.sources.rdap.raw.publicContact, 'published@example.test');
     assert.match(result.sources.whois.chain[0].response, /Registrant Email/);
     assert.equal(result.analysis.availability.tls.protocol, 'TLSv1.3');
+    assert.equal(result.analysis.availability.credentialSurfaceProfile.inputs.categories.username, 1);
     assert.equal(result.sources.network.network.name, 'Example edge network');
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);

@@ -234,7 +234,7 @@ Fast and Deep are collection profiles, not confidence ratings.
 | Profile | Intended use | Collection boundary |
 | --- | --- | --- |
 | **Fast Lookup or Bulk** | Lower-request registration-first triage. | Uses RDAP-led registration analysis and a bounded authoritative DNS-delegation fallback where needed. WHOIS, website, TLS, and Deep enrichments are skipped explicitly. |
-| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context and HTTPS service-binding publications, public-IP PTR context, HTTP, favicon, page identity, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
+| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context and HTTPS service-binding publications, public-IP PTR context, HTTP, favicon, page identity, privacy-minimized credential-surface counts, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
 | **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, and mail context needed for triage. Full raw sources and single-Lookup-only enrichments remain omitted. |
 
 Deep single Lookup is the default in the Lookup page. Bulk keeps its own
@@ -284,6 +284,9 @@ Deep single Lookup can derive several views from one bounded homepage response:
   and bounded fingerprints;
 - curated publisher-declared JSON-LD identity fields, reduced to schema types,
   labels, declared origins, and `sameAs` hostnames;
+- fixed semantic input-purpose, form-method, and action-relationship counts
+  that describe a credential collection surface without retaining field
+  metadata or complete form destinations;
 - curated technology indicators for common content, commerce, site-building,
   framework, server, and delivery products;
 - apparent browser-library versions and bounded advisory references inferred
@@ -306,6 +309,15 @@ examines only bounded JSON-LD already present in the captured response, does
 not fetch referenced metadata, and discards raw JSON, contact fields, URL
 paths, queries, and arbitrary properties. A declaration does not prove
 identity, ownership, control, safety, or maliciousness.
+
+Credential-surface evidence is a static semantic summary, not a vulnerability
+or phishing finding. It classifies capped input elements from `type` and
+`autocomplete` declarations and counts form methods plus action relationships.
+External submission can be legitimate, category counts can overlap, and
+JavaScript-rendered or non-semantic controls may be absent. WHOISleuth retains
+no field names, values, labels, placeholders, arbitrary attributes, complete
+action URLs, paths, queries, or fragments. It does not interact with forms,
+make another request, or affect availability or Risk scoring.
 
 Observed network context maps one public endpoint address to its registered IP
 network. A delivery network, proxy, shared host, load balancer, or

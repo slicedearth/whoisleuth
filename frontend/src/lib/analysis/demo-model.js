@@ -10,7 +10,7 @@ import { deriveTimeline } from './evidence-display.js';
 import { RISK_MODEL_VERSION } from './scoring.js';
 
 export const SYNTHETIC_DEMO_VERSION = 1;
-export const SYNTHETIC_DEMO_EXPORT_VERSION = 4;
+export const SYNTHETIC_DEMO_EXPORT_VERSION = 5;
 export const SYNTHETIC_DEMO_STORAGE_KEY = 'whoisleuth:synthetic-demo:v1';
 export const SYNTHETIC_DEMO_EXPORT_SCHEMA = 'whoisleuth.synthetic-demo-case';
 export const MAX_SYNTHETIC_DEMO_NOTE_LENGTH = 800;
@@ -448,6 +448,17 @@ export function syntheticDemoLookupView(id) {
       }] : [],
       limitations: ['Fixed publisher-declared JSON-LD fixture; it does not verify identity, ownership, control, safety, or maliciousness.'],
     },
+    credentialSurface: {
+      status: conclusive ? 'Success' : 'Partial',
+      complete: conclusive,
+      formCount: active ? 1 : 0,
+      inputCount: active ? 3 : 0,
+      classifiedCount: active ? 3 : 0,
+      categories: { password: active ? 1 : 0, email: active ? 1 : 0, username: active ? 1 : 0, oneTimeCode: 0, payment: 0 },
+      methods: { missing: 0, get: 0, post: active ? 1 : 0, dialog: 0, other: 0 },
+      actions: { sameOrigin: active ? 1 : 0, external: 0, missing: 0, cleartext: 0, unclassified: 0 },
+      limitations: ['Fixed semantic-input fixture; no field values or complete form destinations are retained.'],
+    },
     securityPosture: {
       status: conclusive ? 'Success' : 'Partial',
       complete: conclusive,
@@ -553,6 +564,7 @@ export function buildSyntheticDemoExport(state, generatedAt) {
       certificate: { ...candidate.evidence.certificate },
       securityTxt: structuredClone(lookupView.securityTxt),
       structuredIdentity: structuredClone(lookupView.structuredIdentity),
+      credentialSurface: structuredClone(lookupView.credentialSurface),
       securityPosture: structuredClone(lookupView.securityPosture),
       technology: structuredClone(lookupView.technology),
       observedNetwork: structuredClone(lookupView.network),

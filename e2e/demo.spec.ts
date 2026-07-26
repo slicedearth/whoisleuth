@@ -54,6 +54,12 @@ test('completes the public synthetic workflow without investigation requests or 
   const structuredIdentity = page.locator('.structured-card');
   await expect(structuredIdentity.getByRole('heading', { name: 'Structured identity metadata' })).toBeVisible();
   await expect(structuredIdentity).not.toHaveAttribute('open', '');
+  const credentialSurface = page.locator('.credential-card');
+  await expect(credentialSurface.getByRole('heading', { name: 'Credential collection surface' })).toBeVisible();
+  await expect(credentialSurface).not.toHaveAttribute('open', '');
+  await credentialSurface.locator(':scope > summary').click();
+  await expect(credentialSurface.getByText('Classified inputs', { exact: true })).toBeVisible();
+  await expect(credentialSurface.getByText(/does not retain field names or content/i)).toBeVisible();
   for (const selector of ['.dns-card', '.http-card', '.security-posture-card', '.tls-card']) {
     const card = page.locator(selector);
     await expect(card).not.toHaveAttribute('open', '');
@@ -110,10 +116,11 @@ test('completes the public synthetic workflow without investigation requests or 
   const body = await (await download.createReadStream()).toArray();
   const payload = JSON.parse(Buffer.concat(body).toString('utf-8'));
   expect(download.suggestedFilename()).toBe('whoisleuth-synthetic-demo-case.json');
-  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 4, synthetic: true, case: { domain: 'northstar-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
+  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 5, synthetic: true, case: { domain: 'northstar-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
   expect(payload.timeline).toHaveLength(2);
   expect(payload.evidence.registry.source).toBe('Registry RDAP fixture');
   expect(payload.evidence.securityTxt.state).toBe('present');
+  expect(payload.evidence.credentialSurface.categories.password).toBe(1);
   expect(payload.evidence.structuredIdentity.entities[0].name).toBe('Northstar account service');
   expect(payload.evidence.observedNetwork.address).toBe('203.0.113.44');
 

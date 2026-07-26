@@ -7,6 +7,7 @@
 import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
+import { analyzeCredentialSurfaceProfile } from './credential-surface-profile.mts';
 import { createObservation } from './observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
 import { analyzeStaticHtml } from './static-html-analysis.mts';
@@ -22,6 +23,7 @@ type HtmlSignalOptions = {
   httpServer?: unknown;
   observedAt?: string;
   includePageIdentity?: boolean;
+  includeCredentialSurfaceProfile?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
 };
@@ -592,10 +594,12 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
 function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
   const phishingMatch = html.match(PHISHING_LANGUAGE_RE);
   const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options);
+  const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
   const includeStructuredDataIdentity = pageIdentity && options.includeStructuredDataIdentity !== false;
   const includeTechnologyProfile = pageIdentity && options.includeTechnologyProfile !== false;
-  const htmlAnalysis = includeStructuredDataIdentity || includeTechnologyProfile
-    ? analyzeStaticHtml(html)
+  const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
+  const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile
+    ? analyzeStaticHtml(html, { baseUrl })
     : null;
   return {
     pageTitle: extractPageTitle(html),
@@ -603,9 +607,14 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
     phishingLanguageMatch: phishingMatch ? boundedHtmlText(phishingMatch[0], MAX_PHISHING_MATCH_LENGTH) : null,
     externalAssetHosts: extractExternalAssetHosts(html, domain),
     pageIdentity,
+    credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({
+      htmlAnalysis,
+      observedAt: options.observedAt,
+      sourceTruncated: options.sourceTruncated,
+    }) : null,
     structuredDataIdentity: includeStructuredDataIdentity && htmlAnalysis ? analyzeStructuredDataIdentity({
       htmlAnalysis,
-      baseUrl: resolvedBaseUrl(domain, options.baseUrl),
+      baseUrl,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,

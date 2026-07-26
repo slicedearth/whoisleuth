@@ -60,6 +60,8 @@ Deep domain Lookup can combine:
 - passive technology, browser-library catalogue, and security-posture
   indicators derived from the captured response, without fetching referenced
   scripts or performing vulnerability testing;
+- a privacy-minimized credential collection surface with fixed semantic input,
+  form-method, and action-relationship counts from the captured static HTML;
 - one observed public endpoint mapped to its IP RDAP network registration;
 - bounded reverse-DNS names for a directly entered public IP address;
 - optional security.txt and configured external intelligence sources;

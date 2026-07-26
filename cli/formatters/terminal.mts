@@ -75,6 +75,7 @@ function formatTerminalLookup(document: TerminalRecord): string {
     const http = terminalRecord(availability.http);
     const httpResponse = terminalRecord(http.response);
     const tls = terminalRecord(availability.tls);
+    const credentialSurface = terminalRecord(availability.credentialSurfaceProfile);
     const structuredIdentity = terminalRecord(availability.structuredDataIdentity);
     const technology = terminalRecord(availability.technologyProfile);
     const browserLibraries = terminalRecord(technology.browserLibraryProfile);
@@ -95,6 +96,25 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (tls.status) {
       lines.push(`TLS evidence   ${titleCase(tls.status)}`);
       if (tls.protocol) lines.push(`TLS protocol   ${safeTerminalValue(tls.protocol)}`);
+    }
+    if (credentialSurface.status || credentialSurface.source === 'html') {
+      const forms = terminalRecord(credentialSurface.forms);
+      const inputs = terminalRecord(credentialSurface.inputs);
+      const categories = terminalRecord(inputs.categories);
+      const actions = terminalRecord(forms.actions);
+      const formCount = terminalCount(forms.count);
+      const inputCount = terminalCount(inputs.count);
+      const externalActionCount = terminalCount(actions.external);
+      lines.push(`Credential UI  ${titleCase(credentialSurface.status)} · ${safeTerminalValue(inputs.classifiedCount, '0')} classified input${Number(inputs.classifiedCount) === 1 ? '' : 's'}`);
+      lines.push(`Form surface   ${safeTerminalValue(formCount)} form${formCount === 1 ? '' : 's'} · ${safeTerminalValue(inputCount)} input${inputCount === 1 ? '' : 's'} · ${safeTerminalValue(externalActionCount)} external action${externalActionCount === 1 ? '' : 's'}`);
+      const visible = [
+        ['password', categories.password],
+        ['email', categories.email],
+        ['username', categories.username],
+        ['one-time code', categories.one_time_code],
+        ['payment related', categories.payment],
+      ].filter(([, count]) => Number(count) > 0).map(([label, count]) => `${safeTerminalValue(label)} ${safeTerminalValue(count)}`);
+      if (visible.length) lines.push(`Input purposes ${safeTerminalValue(visible.join(' · '))}`);
     }
     if (structuredIdentity.status || structuredIdentity.source === 'html') {
       const entities = Array.isArray(structuredIdentity.entities) ? structuredIdentity.entities : [];
