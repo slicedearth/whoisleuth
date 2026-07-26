@@ -93,6 +93,8 @@ describe('synthetic demo state', () => {
     assert.equal(lookup.dns.rows[0].label, 'Nameservers');
     assert.equal(lookup.http.attempts[0].detail, 'Synthetic fixture; no connection was attempted');
     assert.equal(lookup.securityTxt.state, 'present');
+    assert.equal(lookup.credentialSurface.classifiedCount, 3);
+    assert.equal(lookup.credentialSurface.categories.password, 1);
     assert.equal(lookup.securityPosture.summary.potentialExposure, 1);
     assert.deepEqual(lookup.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(lookup.network.address, '203.0.113.44');
@@ -122,6 +124,8 @@ describe('synthetic demo export', () => {
     assert.equal(payload.timeline.length, 2);
     assert.equal(payload.provenance.source, 'Certificate Transparency');
     assert.equal(payload.evidence.securityTxt.state, 'present');
+    assert.equal(payload.evidence.credentialSurface.categories.password, 1);
+    assert.equal(payload.evidence.structuredIdentity.entities[0].name, 'Northstar account service');
     assert.deepEqual(payload.evidence.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(payload.evidence.observedNetwork.address, '203.0.113.44');
     assert.match(payload.warning, /Synthetic demonstration data only/);

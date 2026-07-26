@@ -125,6 +125,8 @@ type LookupViewModel = {
   readonly pageResourceTypes: JsonObject;
   readonly pageDownloads: JsonObject;
   readonly pageFingerprints: JsonObject;
+  readonly credentialSurfaceProfile: JsonObject;
+  readonly structuredDataIdentity: JsonObject;
   readonly technologyProfile: JsonObject;
   readonly securityPosture: JsonObject;
   readonly securityPostureSummary: JsonObject;
@@ -460,6 +462,8 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     pageResourceTypes: record(pageResources.byType),
     pageDownloads: record(pageIdentity.downloads),
     pageFingerprints: record(pageIdentity.fingerprints),
+    credentialSurfaceProfile: record(availability.credentialSurfaceProfile),
+    structuredDataIdentity: record(availability.structuredDataIdentity),
     technologyProfile: record(availability.technologyProfile),
     securityPosture,
     securityPostureSummary: record(securityPosture.summary),

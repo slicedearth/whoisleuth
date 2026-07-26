@@ -55,10 +55,13 @@ Deep domain Lookup can combine:
 - authority-aware availability analysis;
 - DNS, including deep-only SOA zone context and HTTPS service-binding
   publication, plus HTTP, favicon,
-  page-identity, mail, and one-connection TLS evidence;
+  page-identity, bounded publisher-declared structured identity, mail, and
+  one-connection TLS evidence;
 - passive technology, browser-library catalogue, and security-posture
   indicators derived from the captured response, without fetching referenced
   scripts or performing vulnerability testing;
+- a privacy-minimized credential collection surface with fixed semantic input,
+  form-method, and action-relationship counts from the captured static HTML;
 - one observed public endpoint mapped to its IP RDAP network registration;
 - bounded reverse-DNS names for a directly entered public IP address;
 - optional security.txt and configured external intelligence sources;

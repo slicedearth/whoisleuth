@@ -115,8 +115,9 @@ host, hosting control, ownership, intent, or maliciousness. Fast and compact
 commands do not run the enrichment.
 
 The deep terminal summary also reports the website activity state, page title,
-DNS, HTTP, and TLS source states, up to six bounded technology indicators, a
-browser-library profile count, and the four passive security-posture counts.
+DNS, HTTP, and TLS source states, bounded publisher-declared structured
+identity entities, up to six bounded technology indicators, a browser-library
+profile count, and the four passive security-posture counts.
 These are concise projections of the same evidence already present in the
 lookup response. The browser-library line counts apparent components and
 catalogue advisory matches without retaining script references or raw
@@ -383,7 +384,9 @@ The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
 and the shared registry-source comparison. Registrar RDAP raw data, contacts,
 entities, links, notices, and source-specific handles remain excluded. Schema
-version 17 retains that normalized portable-field comparison, explicit
+version 19 additionally retains the bounded credential-surface projection
+when the saved deep lookup represents it. Version 18 retains the bounded structured identity projection
+when the saved deep lookup represents it. Version 17 retains the normalized portable-field comparison, explicit
 source-health states, a strict bounded projection of observed network
 registration, an optional normalized security.txt disclosure source, HTTPS
 service-binding publications, and the passive browser-library profile when the

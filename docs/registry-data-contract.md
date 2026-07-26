@@ -31,14 +31,36 @@ full successful response contains:
   its IP RDAP network registration.
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
-  curated software and delivery indicators. Profile version 3 uses
-  one standards-compliant bounded HTML tokenization pass and adds a nested version-1
-  browser-library profile derived from a pinned Retire.js catalogue. It
+  curated software and delivery indicators. Profile version 4 uses one
+  standards-compliant bounded HTML tokenization pass and expands the curated
+  generator, element, attribute, static-asset, and resource-origin catalogue
+  for common content, commerce, site-building, framework, and static-site
+  platforms. It also carries a nested version-1 browser-library profile
+  derived from a pinned Retire.js catalogue. It
   retains only apparent component versions, detection classes, and bounded
   advisory context without fetching referenced scripts or making another
   request. The advisory count covers every matching entry in the already
   bounded projected catalogue; retained advisory identifiers and weakness
   classes remain capped independently.
+- `availability.structuredDataIdentity`: for eligible deep non-compact domain
+  results with captured HTML, a version-1 projection of publisher-declared
+  JSON-LD. It retains only curated schema types, bounded labels, declared
+  origins, and `sameAs` hostnames. Raw JSON-LD, contacts, arbitrary
+  properties, URL paths, queries, and fragments are discarded. Referenced
+  JSON-LD is not fetched. The projection is additive, makes no identity or
+  ownership claim, and is never consulted by availability or Risk scoring.
+- `availability.credentialSurfaceProfile`: for eligible deep non-compact
+  domain results with captured HTML, a version-1 projection of capped live
+  input and form start tags. It retains fixed counts for password, email,
+  username, one-time-code, and payment-related semantic declarations, form
+  methods, and same-origin, external-origin, missing, cleartext, or
+  unclassified action relationships. Category counts can overlap, and
+  cleartext is a transport subset of a same-origin or external-origin count.
+  Field names, values, labels, placeholders, arbitrary attributes, complete
+  action URLs, paths, queries, and fragments are never retained. The
+  projection makes no additional request, does not interact with a form,
+  cannot decide availability or Risk, and does not claim a vulnerability,
+  phishing behavior, ownership, intent, or maliciousness.
 - `securityTxt`: only when explicitly selected for a deep single-domain
   request, a bounded normalized disclosure file for the exact submitted
   hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.
@@ -48,7 +70,8 @@ raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
 downloaded into Bulk or copied into watchlists and analyst cases. Deep compact
 collection still runs the bounded WHOIS, DNS, website, TLS, and mail checks
 used by triage, but omits the single-domain registrar-RDAP follow-up, observed
-network RDAP, technology profile, passive security-posture detail,
+network RDAP, credential-surface profile, structured-data identity, technology profile, passive
+security-posture detail,
 `security.txt`, and optional external-intelligence providers.
 
 Fast mode is WHOIS-free. It uses RDAP first and may perform a bounded NS lookup
@@ -536,10 +559,12 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `17`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `19`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 17 adds the bounded HTTPS service-binding
+registry comparison. Version 19 adds the bounded credential-surface projection
+when eligible deep availability evidence represents it. Version 18 adds bounded publisher-declared structured
+identity metadata to eligible deep availability evidence. Version 17 adds the bounded HTTPS service-binding
 publication to eligible deep DNS evidence and the nested passive
 browser-library profile to eligible technology evidence. The service-binding
 projection excludes opaque parameter values and does not follow or connect to
@@ -597,7 +622,7 @@ payloads, WHOIS response bodies, expanded contacts, scripts, and remote assets
 before formatting. IP and ASN results do not offer this first readable format.
 Their separate JSON evidence action, and the domain JSON action, retain the
 richer schema contract described above.
-When schema-version 17 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17, 18, or 19 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -605,7 +630,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema version 17 can also retain the bounded normalized security.txt source
+Schema versions 17, 18, and 19 can also retain the bounded normalized security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorization, availability, or Risk signal.
 

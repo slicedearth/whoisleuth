@@ -46,7 +46,7 @@
     />
     <ul class="mobile-source-summary" aria-label="Synthetic evidence source status">
       {#each topologyNodes as node}
-        <li><span>{node.label}</span><strong>{node.status}</strong></li>
+        <li class={`state-${node.status}`}><span>{node.label}</span><strong>{node.status}</strong></li>
       {/each}
     </ul>
   </article>
@@ -93,6 +93,9 @@
     .mobile-source-summary li{display:flex;min-height:42px;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;background:var(--panel)}
     .mobile-source-summary li:last-child{grid-column:1 / -1}
     .mobile-source-summary span{min-width:0;overflow:hidden;font:650 .62rem var(--mono);text-overflow:ellipsis;white-space:nowrap}
-    .mobile-source-summary strong{color:var(--accent2);font:700 .5rem var(--mono);text-transform:uppercase}
+    .mobile-source-summary strong{color:var(--muted);font:700 .5rem var(--mono);text-transform:uppercase}
+    .mobile-source-summary .state-success strong{color:var(--accent2)}
+    .mobile-source-summary .state-warning strong,.mobile-source-summary .state-partial strong,.mobile-source-summary .state-inconclusive strong{color:var(--amber)}
+    .mobile-source-summary .state-error strong,.mobile-source-summary .state-unavailable strong{color:var(--danger)}
   }
 </style>

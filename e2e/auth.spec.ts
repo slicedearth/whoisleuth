@@ -22,7 +22,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Inspect domains. Verify sources.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toBeVisible();
   await expect(page.locator('.public-header').getByRole('link', { name: 'Privacy' })).toHaveCount(0);
   await expect(page.locator('.public-footer').getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
@@ -32,6 +32,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+  const publicFooterText = await page.locator('footer.site-footer').innerText();
   const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(publicNavigation).toHaveCSS('display', 'flex');
@@ -78,6 +79,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(signOutButton).toBeVisible();
   await expect(signOutButton).toHaveCSS('white-space', 'nowrap');
   await expect(page.getByRole('link', { name: 'Privacy' })).toHaveCount(1);
+  await expect(page.locator('footer.site-footer')).toHaveText(publicFooterText);
 
   const dashboardLink = page.locator('#console-navigation').getByRole('link', { name: /^WHOISleuth\s+Domain intelligence console$/u });
   await expect(dashboardLink).toBeVisible();
@@ -87,7 +89,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page).toHaveURL('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'View public homepage' }).click();
-  await expect(page.getByRole('heading', { name: 'Inspect domains. Verify sources.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
   await expect(publicNavigation.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);

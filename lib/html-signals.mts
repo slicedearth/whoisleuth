@@ -1,14 +1,17 @@
-// Lightweight, dependency-free signals extracted from a domain's already-
-// fetched homepage HTML (see fetchHomepage in availability.js) - no
-// extra network call or HTML-parsing dependency. The small tokenizer below is
-// deliberately bounded and extracts identity, form, resource, and relationship
-// context; it is not a browser DOM and never executes page JavaScript.
+// Bounded signals extracted from a domain's already-fetched homepage HTML (see
+// fetchHomepage in availability.mts), with no extra network request. Existing
+// conservative field extractors share one standards-compliant static parser
+// pass for technology, browser-library, and structured-data projections. None
+// of these helpers creates a browser DOM or executes page JavaScript.
 
 import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
+import { analyzeCredentialSurfaceProfile } from './credential-surface-profile.mts';
 import { createObservation } from './observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
+import { analyzeStaticHtml } from './static-html-analysis.mts';
+import { analyzeStructuredDataIdentity } from './structured-data-identity.mts';
 import { analyzeWebsiteTechnology } from './website-technology.mts';
 
 type NormalizedIdentityUrl = { url: string; queryOmitted: boolean; pathTruncated: boolean };
@@ -20,6 +23,8 @@ type HtmlSignalOptions = {
   httpServer?: unknown;
   observedAt?: string;
   includePageIdentity?: boolean;
+  includeCredentialSurfaceProfile?: boolean;
+  includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
 };
 type ResourceType = 'image' | 'script' | 'stylesheet' | 'link' | 'frame' | 'media' | 'object';
@@ -589,14 +594,32 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
 function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
   const phishingMatch = html.match(PHISHING_LANGUAGE_RE);
   const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, options);
+  const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
+  const includeStructuredDataIdentity = pageIdentity && options.includeStructuredDataIdentity !== false;
+  const includeTechnologyProfile = pageIdentity && options.includeTechnologyProfile !== false;
+  const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
+  const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile
+    ? analyzeStaticHtml(html, { baseUrl })
+    : null;
   return {
     pageTitle: extractPageTitle(html),
     hasPasswordField: PASSWORD_FIELD_RE.test(html),
     phishingLanguageMatch: phishingMatch ? boundedHtmlText(phishingMatch[0], MAX_PHISHING_MATCH_LENGTH) : null,
     externalAssetHosts: extractExternalAssetHosts(html, domain),
     pageIdentity,
-    technologyProfile: pageIdentity && options.includeTechnologyProfile !== false ? analyzeWebsiteTechnology({
-      html,
+    credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({
+      htmlAnalysis,
+      observedAt: options.observedAt,
+      sourceTruncated: options.sourceTruncated,
+    }) : null,
+    structuredDataIdentity: includeStructuredDataIdentity && htmlAnalysis ? analyzeStructuredDataIdentity({
+      htmlAnalysis,
+      baseUrl,
+      observedAt: options.observedAt,
+      sourceTruncated: options.sourceTruncated,
+    }) : null,
+    technologyProfile: includeTechnologyProfile && htmlAnalysis ? analyzeWebsiteTechnology({
+      htmlAnalysis,
       generator: pageIdentity.generator,
       httpServer: options.httpServer,
       resourceOrigins: pageIdentity.resources.externalOrigins,

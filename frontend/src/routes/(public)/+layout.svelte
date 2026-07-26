@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
+  import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
   import {
@@ -64,17 +65,7 @@
 
   <main class="public-content" id="main-content" tabindex="-1">{@render children()}</main>
 
-  <footer class="public-footer">
-    <p>WHOISleuth keeps registration and supporting evidence separate, so missing or inconclusive data is not presented as proof.</p>
-    <div class="footer-meta">
-      <p>© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a></p>
-      <nav class="footer-links" aria-label="Footer">
-        <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a>
-        <a href="/guide">Guide</a>
-        <a href="/privacy">Privacy</a>
-      </nav>
-    </div>
-  </footer>
+  <SiteFooter />
 </div>
 
 <style>
@@ -97,11 +88,6 @@
   .public-header nav button.sign-out{color:var(--muted)}
   .public-header nav .session-error{color:var(--danger);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
   .public-content{width:100%;margin:0;padding:clamp(44px,7vw,82px) 0 72px}
-  .public-footer{display:flex;justify-content:space-between;gap:30px;padding:22px 0 30px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono);line-height:1.6}
-  .public-footer p{max-width:72ch;margin:0}
-  .footer-meta{display:grid;flex:none;gap:8px;text-align:right}
-  .footer-links{display:flex;justify-content:flex-end;gap:14px}
-  .public-footer a{color:var(--accent)}
   @media(max-width:720px){
     .public-shell{padding-inline:12px}
     .public-header{align-items:center;flex-direction:row;gap:6px;padding:12px 0}
@@ -118,9 +104,6 @@
     .console-label-full{display:none}
     .console-label-short{display:inline}
     .public-content{padding-top:38px}
-    .public-footer{align-items:flex-start;flex-direction:column}
-    .footer-meta{text-align:left}
-    .footer-links{justify-content:flex-start;flex-wrap:wrap}
   }
   @media(max-width:360px){
     .public-shell{padding-inline:8px}

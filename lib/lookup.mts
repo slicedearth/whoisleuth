@@ -225,6 +225,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? timing.measure('domain_evidence', () => checkAvailability(classified.value, {
         fast,
         includeExtendedDnsContext: !compact,
+        includeCredentialSurfaceProfile: !fast && !compact,
+        includeStructuredDataIdentity: !fast && !compact,
         includeTechnologyProfile: !compact,
         includeSecurityPosture: !compact,
         featurePolicy,
@@ -420,6 +422,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? 'skipped'
     : whoisResult.status === 'rejected' || !Array.isArray(whoisChain)
       ? 'error'
+      : whoisChain.length === 1
+        ? 'unsupported'
       : whois.parsed && whois.parsed.chainStatus === 'complete' ? 'complete' : 'partial';
   const availabilityStatus = classified.type !== 'domain'
     ? 'not_applicable'
@@ -542,6 +546,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   // same registry payloads the backend already used to build `availability`.
   if (compact) {
     const {
+      credentialSurfaceProfile: _credentialSurfaceProfile,
+      structuredDataIdentity: _structuredDataIdentity,
       technologyProfile: _technologyProfile,
       securityPosture: _securityPosture,
       ...compactAvailability

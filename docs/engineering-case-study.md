@@ -141,10 +141,13 @@ occurrence of a domain string as authoritative registration proof.
 
 One bounded homepage observation feeds activity classification, parking and
 for-sale signals, redirect provenance, favicon analysis, response fingerprints,
-static page identity, curated technology indicators, and passive security
-posture. Reusing that capture avoids a series of slightly different requests
-while keeping the exact source and truncation boundary visible. Technology and
-posture findings are derived review aids, not active vulnerability checks.
+static page identity, privacy-minimized credential-surface counts, curated
+technology indicators, and passive security posture. Reusing that capture
+avoids a series of slightly different requests while keeping the exact source
+and truncation boundary visible. The credential summary retains only fixed
+semantic categories and action relationships, never field metadata or complete
+form destinations. These derived findings are review aids, not active
+vulnerability checks.
 
 Page identity deliberately avoids retaining full HTML or form destinations in
 browser-local cases. Component fingerprints enable comparison without implying

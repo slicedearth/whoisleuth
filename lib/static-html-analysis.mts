@@ -8,11 +8,31 @@ import { Tokenizer, TokenizerMode, type TokenHandler } from 'parse5';
 type StaticScript = {
   reference: string | null;
   inlineContent: string;
+  mediaType: string | null;
+};
+
+type StaticCredentialCategory = 'password' | 'email' | 'username' | 'one_time_code' | 'payment';
+type StaticFormMethod = 'missing' | 'get' | 'post' | 'dialog' | 'other';
+type StaticFormAnalysis = {
+  formsObserved: number;
+  inputsObserved: number;
+  classifiedInputs: number;
+  categories: Record<StaticCredentialCategory, number>;
+  methods: Record<StaticFormMethod, number>;
+  actions: {
+    sameOrigin: number;
+    external: number;
+    missing: number;
+    cleartext: number;
+    unclassified: number;
+  };
+  truncated: boolean;
 };
 
 type StaticHtmlAnalysis = {
   markup: string;
   scripts: StaticScript[];
+  forms: StaticFormAnalysis;
   inputLimitReached: boolean;
   tagLimitReached: boolean;
   scriptLimitReached: boolean;
@@ -28,9 +48,27 @@ const MAX_TAG_LENGTH = 4_096;
 const MAX_ATTRIBUTES_PER_TAG = 128;
 const MAX_SCRIPT_ELEMENTS = 64;
 const MAX_SCRIPT_REFERENCE_LENGTH = 2_048;
+const MAX_SCRIPT_MEDIA_TYPE_LENGTH = 120;
 const MAX_INLINE_SCRIPT_CHARS = 32_768;
 const MAX_INLINE_SCRIPT_TOTAL_CHARS = 65_536;
+const MAX_STATIC_FORMS = 50;
+const MAX_STATIC_INPUTS = 500;
+const MAX_FORM_ATTRIBUTE_LENGTH = 2_048;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
+const PAYMENT_AUTOCOMPLETE_TOKENS = new Set([
+  'cc-name',
+  'cc-given-name',
+  'cc-additional-name',
+  'cc-family-name',
+  'cc-number',
+  'cc-exp',
+  'cc-exp-month',
+  'cc-exp-year',
+  'cc-csc',
+  'cc-type',
+  'transaction-currency',
+  'transaction-amount',
+]);
 const RAW_TEXT_MODES: Readonly<Record<string, number>> = Object.freeze({
   iframe: TokenizerMode.RAWTEXT,
   noembed: TokenizerMode.RAWTEXT,
@@ -43,6 +81,113 @@ const RAW_TEXT_MODES: Readonly<Record<string, number>> = Object.freeze({
   xmp: TokenizerMode.RAWTEXT,
 });
 
+type StaticHtmlAnalysisOptions = {
+  baseUrl?: unknown;
+};
+
+function attributeValue(
+  attributes: Array<{ name: string; value: string }>,
+  name: string,
+  maximumLength = MAX_FORM_ATTRIBUTE_LENGTH,
+): { present: boolean; value: string | null; truncated: boolean } {
+  const attribute = attributes
+    .slice(0, MAX_ATTRIBUTES_PER_TAG)
+    .find((candidate) => candidate.name.toLowerCase() === name);
+  if (!attribute) return { present: false, value: null, truncated: attributes.length > MAX_ATTRIBUTES_PER_TAG };
+  if (attribute.value.length > maximumLength || CONTROL_CHARACTER_RE.test(attribute.value)) {
+    return { present: true, value: null, truncated: true };
+  }
+  return {
+    present: true,
+    value: attribute.value.trim().toLowerCase(),
+    truncated: attributes.length > MAX_ATTRIBUTES_PER_TAG,
+  };
+}
+
+function safeBaseUrl(value: unknown): URL | null {
+  if (typeof value !== 'string' || value.length > MAX_FORM_ATTRIBUTE_LENGTH || CONTROL_CHARACTER_RE.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password && parsed.hostname
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function formMethod(attributes: Array<{ name: string; value: string }>): { value: StaticFormMethod; truncated: boolean } {
+  const method = attributeValue(attributes, 'method', 24);
+  if (!method.present && method.truncated) return { value: 'other', truncated: true };
+  if (!method.present || method.value === '') return { value: 'missing', truncated: method.truncated };
+  if (method.value === null) return { value: 'other', truncated: true };
+  return {
+    value: ['get', 'post', 'dialog'].includes(method.value)
+      ? method.value as StaticFormMethod
+      : 'other',
+    truncated: method.truncated,
+  };
+}
+
+function formAction(
+  attributes: Array<{ name: string; value: string }>,
+  baseUrl: URL | null,
+): {
+  relationship: 'sameOrigin' | 'external' | 'missing' | 'unclassified';
+  cleartext: boolean;
+  truncated: boolean;
+} {
+  const action = attributeValue(attributes, 'action');
+  if (!action.present && action.truncated) {
+    return { relationship: 'unclassified', cleartext: false, truncated: true };
+  }
+  if (!action.present || action.value === '') {
+    return { relationship: 'missing', cleartext: false, truncated: action.truncated };
+  }
+  if (action.value === null) {
+    return { relationship: 'unclassified', cleartext: false, truncated: true };
+  }
+  if (!baseUrl) {
+    return { relationship: 'unclassified', cleartext: false, truncated: action.truncated };
+  }
+  try {
+    const parsed = new URL(action.value, baseUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) {
+      return { relationship: 'unclassified', cleartext: false, truncated: action.truncated };
+    }
+    return {
+      relationship: parsed.origin === baseUrl.origin ? 'sameOrigin' : 'external',
+      cleartext: parsed.protocol === 'http:',
+      truncated: action.truncated,
+    };
+  } catch {
+    return { relationship: 'unclassified', cleartext: false, truncated: action.truncated };
+  }
+}
+
+function inputCategories(
+  attributes: Array<{ name: string; value: string }>,
+): { values: StaticCredentialCategory[]; truncated: boolean } {
+  if (attributes.length > MAX_ATTRIBUTES_PER_TAG) return { values: [], truncated: true };
+  const type = attributeValue(attributes, 'type', 40);
+  const autocomplete = attributeValue(attributes, 'autocomplete', 160);
+  const disabled = attributeValue(attributes, 'disabled', 10).present;
+  const truncated = type.truncated || autocomplete.truncated;
+  if (disabled || type.value === 'hidden') return { values: [], truncated };
+
+  const normalizedType = type.value || 'text';
+  const autocompleteTokens = (autocomplete.value || '').split(/\s+/u).filter(Boolean).slice(0, 16);
+  const categories = new Set<StaticCredentialCategory>();
+  if (normalizedType === 'password' || autocompleteTokens.some((token) => ['current-password', 'new-password'].includes(token))) {
+    categories.add('password');
+  }
+  if (normalizedType === 'email' || autocompleteTokens.includes('email')) categories.add('email');
+  if (autocompleteTokens.includes('username')) categories.add('username');
+  if (autocompleteTokens.includes('one-time-code')) categories.add('one_time_code');
+  if (autocompleteTokens.some((token) => PAYMENT_AUTOCOMPLETE_TOKENS.has(token))) categories.add('payment');
+  return { values: [...categories], truncated };
+}
+
 function scriptReference(attributes: Array<{ name: string; value: string }>): string | null {
   for (const attribute of attributes.slice(0, MAX_ATTRIBUTES_PER_TAG)) {
     if (attribute.name.toLowerCase() !== 'src') continue;
@@ -52,6 +197,19 @@ function scriptReference(attributes: Array<{ name: string; value: string }>): st
       || CONTROL_CHARACTER_RE.test(attribute.value)
     ) return null;
     return attribute.value;
+  }
+  return null;
+}
+
+function scriptMediaType(attributes: Array<{ name: string; value: string }>): string | null {
+  for (const attribute of attributes.slice(0, MAX_ATTRIBUTES_PER_TAG)) {
+    if (attribute.name.toLowerCase() !== 'type') continue;
+    if (
+      attribute.value.length === 0
+      || attribute.value.length > MAX_SCRIPT_MEDIA_TYPE_LENGTH
+      || CONTROL_CHARACTER_RE.test(attribute.value)
+    ) return null;
+    return attribute.value.trim().toLowerCase().split(';', 1)[0] || null;
   }
   return null;
 }
@@ -76,12 +234,22 @@ function serializedStartTag(
   };
 }
 
-function analyzeStaticHtml(value: unknown): StaticHtmlAnalysis {
+function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = {}): StaticHtmlAnalysis {
   const supplied = typeof value === 'string' ? value : '';
   const inputLimitReached = supplied.length > MAX_STATIC_HTML_CHARS;
   const html = supplied.slice(0, MAX_STATIC_HTML_CHARS);
+  const baseUrl = safeBaseUrl(options.baseUrl);
   const markup: string[] = [];
   const scripts: StaticScript[] = [];
+  const forms: StaticFormAnalysis = {
+    formsObserved: 0,
+    inputsObserved: 0,
+    classifiedInputs: 0,
+    categories: { password: 0, email: 0, username: 0, one_time_code: 0, payment: 0 },
+    methods: { missing: 0, get: 0, post: 0, dialog: 0, other: 0 },
+    actions: { sameOrigin: 0, external: 0, missing: 0, cleartext: 0, unclassified: 0 },
+    truncated: false,
+  };
   let tokenizer: Tokenizer;
   let activeInlineScript: StaticScript | null = null;
   let tagsExamined = 0;
@@ -123,6 +291,30 @@ function analyzeStaticHtml(value: unknown): StaticHtmlAnalysis {
         tagLimitReached = true;
       }
 
+      if (tagName === 'form') {
+        if (forms.formsObserved >= MAX_STATIC_FORMS) {
+          forms.truncated = true;
+        } else {
+          forms.formsObserved += 1;
+          const method = formMethod(token.attrs);
+          forms.methods[method.value] += 1;
+          const action = formAction(token.attrs, baseUrl);
+          forms.actions[action.relationship] += 1;
+          if (action.cleartext) forms.actions.cleartext += 1;
+          if (method.truncated || action.truncated) forms.truncated = true;
+        }
+      } else if (tagName === 'input') {
+        if (forms.inputsObserved >= MAX_STATIC_INPUTS) {
+          forms.truncated = true;
+        } else {
+          forms.inputsObserved += 1;
+          const categories = inputCategories(token.attrs);
+          if (categories.truncated) forms.truncated = true;
+          if (categories.values.length) forms.classifiedInputs += 1;
+          for (const category of categories.values) forms.categories[category] += 1;
+        }
+      }
+
       if (tagName !== 'script') {
         activeInlineScript = null;
         return;
@@ -133,7 +325,11 @@ function analyzeStaticHtml(value: unknown): StaticHtmlAnalysis {
         return;
       }
       const reference = scriptReference(token.attrs);
-      const script = { reference, inlineContent: '' };
+      const script = {
+        reference,
+        inlineContent: '',
+        mediaType: scriptMediaType(token.attrs),
+      };
       scripts.push(script);
       activeInlineScript = reference ? null : script;
     },
@@ -160,6 +356,7 @@ function analyzeStaticHtml(value: unknown): StaticHtmlAnalysis {
   return {
     markup: markup.join('\n'),
     scripts,
+    forms,
     inputLimitReached,
     tagLimitReached,
     scriptLimitReached,
@@ -174,7 +371,10 @@ export {
   MAX_INLINE_SCRIPT_CHARS,
   MAX_INLINE_SCRIPT_TOTAL_CHARS,
   MAX_SCRIPT_ELEMENTS,
+  MAX_SCRIPT_MEDIA_TYPE_LENGTH,
+  MAX_STATIC_FORMS,
   MAX_STATIC_HTML_CHARS,
+  MAX_STATIC_INPUTS,
   MAX_STATIC_HTML_TAGS,
   MAX_TAG_LENGTH,
   MAX_TECHNOLOGY_TAGS,
@@ -182,6 +382,10 @@ export {
 };
 
 export type {
+  StaticCredentialCategory,
+  StaticFormAnalysis,
+  StaticFormMethod,
   StaticHtmlAnalysis,
+  StaticHtmlAnalysisOptions,
   StaticScript,
 };

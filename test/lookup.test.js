@@ -43,6 +43,7 @@ describe('runUnifiedLookup', () => {
         availabilityCalls += 1;
         assert.equal(domain, 'example.com');
         assert.equal(options.includeExtendedDnsContext, true);
+        assert.equal(options.includeCredentialSurfaceProfile, true);
         assert.equal(await options.rdapRecordPromise, rdapRecord);
         assert.equal(await options.whoisChainPromise, whoisChain);
         return { state: 'registered', confidence: 'high' };
@@ -84,6 +85,30 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.rdap.status, 'error');
     assert.equal(result.diagnostics.rdap.errorCode, 'RDAP_UPSTREAM_FAILED');
     assert.equal(result.diagnostics.whois.status, 'complete');
+  });
+
+  test('reports a root-only IANA WHOIS response as unsupported domain WHOIS', async () => {
+    const rootOnlyChain = [{
+      server: 'whois.iana.org',
+      response: 'domain: TEST\norganisation: Example Registry\nwhois:        \nstatus: ACTIVE\nsource: IANA\n',
+    }];
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => ({
+        rdapServer: 'https://rdap.example/domain/example.com',
+        transportSecurity: 'https',
+        upstreamStatus: 200,
+        data: { ldhName: 'EXAMPLE.COM' },
+        parsed: { domain: 'EXAMPLE.COM', statuses: [], nameservers: [], events: [] },
+      }),
+      buildWhoisChain: async () => rootOnlyChain,
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+    });
+
+    assert.deepEqual(result.whois.chain, rootOnlyChain);
+    assert.equal(result.whois.parsed.registrationStatus, 'inconclusive');
+    assert.equal(result.whois.parsed.authoritativeHop, null);
+    assert.equal(result.diagnostics.whois.status, 'unsupported');
+    assert.equal(result.diagnostics.whois.errorCode, null);
   });
 
   test('retains bounded RDAP attempt provenance when every endpoint fails', async () => {
@@ -144,11 +169,15 @@ describe('runUnifiedLookup', () => {
       }),
       buildWhoisChain: async () => [{ server: 'whois.example', response: 'large raw WHOIS body' }],
       checkDomainAvailability: async (_domain, options) => {
+        assert.equal(options.includeCredentialSurfaceProfile, false);
+        assert.equal(options.includeStructuredDataIdentity, false);
         assert.equal(options.includeTechnologyProfile, false);
         assert.equal(options.includeSecurityPosture, false);
         assert.equal(options.includeExtendedDnsContext, false);
         return {
           state: 'registered', confidence: 'high', registrar: 'Example Registrar',
+          credentialSurfaceProfile: { source: 'html', inputs: { classifiedCount: 1 } },
+          structuredDataIdentity: { source: 'html', entities: [{ name: 'must be omitted' }] },
           technologyProfile: { source: 'derived', findings: [{ name: 'must be omitted' }] },
           securityPosture: { source: 'derived', findings: [{ label: 'must be omitted' }] },
         };
@@ -160,6 +189,8 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result, 'rdap'), false);
     assert.equal(Object.hasOwn(result, 'whois'), false);
     assert.equal(Object.hasOwn(result.availability, 'technologyProfile'), false);
+    assert.equal(Object.hasOwn(result.availability, 'credentialSurfaceProfile'), false);
+    assert.equal(Object.hasOwn(result.availability, 'structuredDataIdentity'), false);
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
   });
 
@@ -340,6 +371,8 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (_domain, options) => {
         assert.equal(await options.rdapRecordPromise, rdapRecord);
         assert.equal(await options.whoisChainPromise, null);
+        assert.equal(options.includeCredentialSurfaceProfile, false);
+        assert.equal(options.includeStructuredDataIdentity, false);
         return { state: 'registered', confidence: 'high' };
       },
     });

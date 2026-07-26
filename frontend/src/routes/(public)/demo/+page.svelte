@@ -7,11 +7,13 @@
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
+  import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
   import LookupNetworkContext from '$lib/components/LookupNetworkContext.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
+  import LookupStructuredDataIdentity from '$lib/components/LookupStructuredDataIdentity.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
@@ -47,6 +49,7 @@
     {id:'network',label:'Network',detail:lookupView.network.status,status:lookupView.network.status,href:'#demo-evidence-network',side:'left' as const,glyph:'N',family:'network' as const},
     {id:'http',label:'HTTP',detail:lookupView.http.status,status:lookupView.http.status,href:'#demo-evidence-http',side:'right' as const,glyph:'H',family:'web' as const},
     {id:'tls',label:'TLS',detail:lookupView.tls.status,status:lookupView.tls.status,href:'#demo-evidence-tls',side:'right' as const,glyph:'T',family:'web' as const},
+    {id:'structured-identity',label:'Structured identity',detail:lookupView.structuredIdentity.status,status:lookupView.structuredIdentity.status,href:'#demo-evidence-structured-identity',side:'right' as const,glyph:'SI',family:'web' as const},
     {id:'technology',label:'Technology',detail:lookupView.technology.status,status:lookupView.technology.status,href:'#demo-evidence-technology',side:'right' as const,glyph:'W',provenance:'derived' as const},
     {id:'assessment',label:'Assessment',detail:`Risk ${selected.risk}`,status:'warning',href:'#demo-assessment',side:'right' as const,glyph:'A',provenance:'derived' as const},
   ]:[]);
@@ -206,6 +209,8 @@
     <div class="shared-evidence" id="demo-evidence-dns"><LookupDnsEvidence {...lookupView.dns} /></div>
     <div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidence {...lookupView.http} /></div>
     <div class="shared-evidence"><LookupSecurityTxt {...lookupView.securityTxt} /></div>
+    <div class="shared-evidence" id="demo-evidence-structured-identity"><LookupStructuredDataIdentity {...lookupView.structuredIdentity} /></div>
+    <div class="shared-evidence"><LookupCredentialSurfaceProfile {...lookupView.credentialSurface} /></div>
     <div class="shared-evidence"><LookupSecurityPosture {...lookupView.securityPosture} /></div>
     <div class="shared-evidence" id="demo-evidence-technology"><LookupTechnologyProfile {...lookupView.technology} /></div>
     <div class="shared-evidence" id="demo-evidence-tls"><LookupTlsEvidence {...lookupView.tls} /></div>

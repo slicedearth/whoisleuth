@@ -662,7 +662,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(17);
+  expect(exported.schemaVersion).toBe(19);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -1158,6 +1158,37 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             complete: true, truncated: false, limitations: [],
           },
         },
+        credentialSurfaceProfile: {
+          credentialSurfaceVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'html', durationMs: null, complete: true, truncated: false,
+          limitations: [
+            'Fixed semantic categories and counts only.',
+            'External form submission is a review pivot, not a finding of unsafe or deceptive behaviour.',
+          ],
+          diagnostics: { formsObserved: 2, inputsObserved: 4, classifiedInputs: 3, unclassifiedActions: 0 },
+          forms: {
+            count: 2,
+            methods: { missing: 0, get: 1, post: 1, dialog: 0, other: 0 },
+            actions: { sameOrigin: 1, external: 1, missing: 0, cleartext: 0, unclassified: 0 },
+          },
+          inputs: {
+            count: 4,
+            classifiedCount: 3,
+            categories: { password: 1, email: 1, username: 1, one_time_code: 0, payment: 0 },
+          },
+        },
+        structuredDataIdentity: {
+          structuredDataVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'html', durationMs: null, complete: true, truncated: false,
+          limitations: ['Publisher-declared metadata does not prove identity, ownership, control, safety, or maliciousness.'],
+          diagnostics: { scriptsObserved: 1, scriptsExamined: 1, entities: 1 },
+          entities: [{
+            types: ['Organization', 'WebSite'],
+            name: 'Example publisher',
+            declaredOrigin: 'https://login.example.test',
+            sameAsHosts: ['social.example.test'],
+          }],
+        },
         technologyProfile: {
           profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
@@ -1184,11 +1215,12 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
           limitations: ['This is a passive fixture interpretation, not an active vulnerability assessment.'],
-          diagnostics: { findings: 2, observed: 1, potentialExposure: 0, observedAbsence: 1, unavailable: 0 },
-          summary: { observed: 1, potentialExposure: 0, observedAbsence: 1, unavailable: 0 },
+          diagnostics: { findings: 3, observed: 1, potentialExposure: 0, observedAbsence: 2, unavailable: 0 },
+          summary: { observed: 1, potentialExposure: 0, observedAbsence: 2, unavailable: 0 },
           findings: [
             { id: 'fixture-https', category: 'transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The selected homepage response was reached over HTTPS.', evidence: ['HTTP response'] },
             { id: 'fixture-csp', category: 'response headers', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The selected response did not include the header.', evidence: ['Selected HTTP response headers'] },
+            { id: 'fixture-cleartext-resources', category: 'forms and resources', state: 'observed_absence', tone: 'configured', label: 'No cleartext resource origin observed', detail: 'No retained resource origin used cleartext HTTP.', evidence: ['Static page evidence'] },
           ],
         },
       },
@@ -1248,6 +1280,28 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard).not.toContainText('secret');
   await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
 
+  const structuredCard = page.locator('.structured-card');
+  await expect(structuredCard).not.toHaveAttribute('open', '');
+  await expect(structuredCard.getByRole('heading', { name: 'Structured identity metadata' })).toBeVisible();
+  await expect(structuredCard.getByRole('heading', { name: 'Example publisher' })).toBeHidden();
+  await structuredCard.locator(':scope > summary').click();
+  await expect(structuredCard.getByRole('heading', { name: 'Example publisher' })).toBeVisible();
+  await expect(structuredCard.getByText('Organization, WebSite', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText('https://login.example.test', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText('social.example.test', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText(/does not use this evidence for availability or Risk scoring/i)).toBeVisible();
+
+  const credentialCard = page.locator('.credential-card');
+  await expect(credentialCard).not.toHaveAttribute('open', '');
+  await expect(credentialCard.getByRole('heading', { name: 'Credential collection surface' })).toBeVisible();
+  await expect(credentialCard.getByText(/3 classified inputs across 2 forms/)).toBeVisible();
+  await credentialCard.locator(':scope > summary').click();
+  await expect(credentialCard.locator('section').filter({ hasText: 'Input purposes' }).getByText('Password')).toBeVisible();
+  await expect(credentialCard.locator('section').filter({ hasText: 'Action relationships' }).getByText('External origin')).toBeVisible();
+  await expect(credentialCard.getByText(/external form submission is common for legitimate/i)).toBeVisible();
+  await expect(credentialCard.getByText(/does not retain field names or content/i)).toBeVisible();
+  await expect(credentialCard).not.toContainText('secret');
+
   const technologyCard = page.locator('.technology-card');
   await expect(technologyCard).not.toHaveAttribute('open', '');
   await expect(technologyCard.getByRole('heading', { name: 'Technology indicators' })).toBeVisible();
@@ -1276,6 +1330,8 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(postureCard).toHaveAttribute('open', '');
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Content Security Policy not observed', { exact: true })).toBeVisible();
+  await expect(postureCard.getByText('Not observed', { exact: true }).last()).toBeVisible();
+  await expect(postureCard.getByText('No exposure observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Review', { exact: true }).first()).toBeVisible();
   await expect(postureCard.getByText(/review signals, not confirmed vulnerabilities/i)).toBeVisible();
 
@@ -1288,6 +1344,73 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/does not combine these observations into a page-similarity score or use them to change the Risk score/i)).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('completed technology analysis distinguishes an unmatched catalogue from source success', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'unmatched-technology.test',
+      type: 'domain',
+      registrableDomain: 'unmatched-technology.test',
+      availability: {
+        state: 'registered',
+        confidence: 'high',
+        domain: 'unmatched-technology.test',
+        technologyProfile: {
+          profileVersion: 1,
+          version: 1,
+          status: 'success',
+          observedAt: '2026-07-27T00:00:00.000Z',
+          scanMode: 'deep',
+          source: 'derived',
+          durationMs: null,
+          complete: true,
+          truncated: false,
+          limitations: ['Curated signature matching is selective; an unmatched technology may still be present.'],
+          diagnostics: { findings: 0, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 0 },
+          findings: [],
+          browserLibraryProfile: {
+            profileVersion: 1,
+            version: 1,
+            status: 'success',
+            observedAt: '2026-07-27T00:00:00.000Z',
+            scanMode: 'deep',
+            source: 'derived',
+            durationMs: null,
+            complete: true,
+            truncated: false,
+            catalog: { name: 'Retire.js', version: 'fixture-catalogue', sourceRevision: 'fixture-revision' },
+            limitations: ['Static signatures are selective.'],
+            diagnostics: { scriptsExamined: 1, referencesExamined: 1, inlineScriptsExamined: 0, findings: 0, advisoryMatches: 0 },
+            findings: [],
+          },
+        },
+      },
+      rdap: { upstreamStatus: 200, parsed: {} },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        rdap: { status: 'success' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('unmatched-technology.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const technologyCard = page.locator('.technology-card');
+  await expect(technologyCard.locator(':scope > summary .evidence-status')).toHaveText('No recognised matches');
+  await expect(technologyCard.getByText(/Analysis complete; no curated signatures matched/u)).toBeVisible();
+  await technologyCard.locator(':scope > summary').click();
+  await expect(technologyCard.getByText(/does not mean that no framework, service, or delivery platform is present/i)).toBeVisible();
+  await expect(technologyCard.locator('.library-profile .evidence-status')).toHaveText('No catalogue matches');
+  await expect(technologyCard.getByText('success', { exact: true })).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

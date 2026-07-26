@@ -12,6 +12,7 @@ import {
   MAX_TAG_LENGTH,
   MAX_TECHNOLOGY_TAGS,
   analyzeStaticHtml,
+  type StaticHtmlAnalysis,
 } from './static-html-analysis.mts';
 
 type TechnologyCategory =
@@ -37,6 +38,7 @@ type TechnologyInput = {
   generator?: unknown;
   httpServer?: unknown;
   resourceOrigins?: unknown;
+  htmlAnalysis?: StaticHtmlAnalysis;
   observedAt?: unknown;
   sourceTruncated?: unknown;
 };
@@ -57,7 +59,7 @@ type TechnologySignature = {
   evidence: SignatureEvidence[];
 };
 
-const TECHNOLOGY_PROFILE_VERSION = 3;
+const TECHNOLOGY_PROFILE_VERSION = 4;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -159,6 +161,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     ],
   },
   {
+    id: 'craft-cms', name: 'Craft CMS', category: 'content management',
+    evidence: [generatorEvidence(/^craft cms(?:\s|$)/i, 'Generator metadata identifies Craft CMS.')],
+  },
+  {
+    id: 'typo3', name: 'TYPO3 CMS', category: 'content management',
+    evidence: [generatorEvidence(/^typo3(?:\s+cms)?(?:\s|$)/i, 'Generator metadata identifies TYPO3 CMS.')],
+  },
+  {
     id: 'shopify', name: 'Shopify', category: 'commerce',
     evidence: [
       htmlEvidence(['shopify-section', 'shopify.theme', 'cdn.shopify.com'], 'Static markup contains Shopify-specific storefront markers.'),
@@ -185,6 +195,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     ],
   },
   {
+    id: 'opencart', name: 'OpenCart', category: 'commerce',
+    evidence: [generatorEvidence(/^opencart(?:\s|$)/i, 'Generator metadata identifies OpenCart.')],
+  },
+  {
+    id: 'prestashop', name: 'PrestaShop', category: 'commerce',
+    evidence: [generatorEvidence(/^prestashop(?:\s|$)/i, 'Generator metadata identifies PrestaShop.')],
+  },
+  {
     id: 'wix', name: 'Wix', category: 'site builder',
     evidence: [
       generatorEvidence(/^wix(?:\s|$)/i, 'Generator metadata identifies Wix.'),
@@ -208,6 +226,29 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     ],
   },
   {
+    id: 'framer', name: 'Framer', category: 'site builder',
+    evidence: [
+      generatorEvidence(/^framer(?:\s|$)/i, 'Generator metadata identifies Framer.'),
+      htmlEvidence(['data-framer-name='], 'Static markup contains Framer-specific component attributes.'),
+      resourceEvidence(['framerusercontent.com'], 'A retained resource origin uses Framer delivery infrastructure.'),
+    ],
+  },
+  {
+    id: 'weebly', name: 'Weebly', category: 'site builder',
+    evidence: [
+      generatorEvidence(/^weebly(?:\s|$)/i, 'Generator metadata identifies Weebly.'),
+      resourceEvidence(['editmysite.com'], 'A retained resource origin uses Weebly delivery infrastructure.'),
+    ],
+  },
+  {
+    id: 'angular', name: 'Angular', category: 'web framework',
+    evidence: [htmlEvidence([' ng-version='], 'Static markup contains Angular version metadata.')],
+  },
+  {
+    id: 'aspnet-web-forms', name: 'ASP.NET Web Forms', category: 'web framework',
+    evidence: [htmlEvidence([' name="__viewstate"', ' id="__viewstate"'], 'Static form markup contains the ASP.NET Web Forms view-state field.')],
+  },
+  {
     id: 'nextjs', name: 'Next.js', category: 'web framework',
     evidence: [htmlEvidence(['id="__next_data__"', "id='__next_data__'", '/_next/static/'], 'Static markup contains Next.js bootstrap or asset markers.')],
   },
@@ -221,11 +262,17 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'sveltekit', name: 'SvelteKit', category: 'web framework',
-    evidence: [htmlEvidence(['data-sveltekit-preload-data=', 'data-sveltekit-reload='], 'Static markup contains SvelteKit-specific navigation attributes.')],
+    evidence: [
+      htmlEvidence(['data-sveltekit-preload-data=', 'data-sveltekit-reload='], 'Static markup contains SvelteKit-specific navigation attributes.'),
+      htmlEvidence(['href="/_app/immutable/', 'src="/_app/immutable/'], 'Static asset paths use SvelteKit build conventions.', 'medium'),
+    ],
   },
   {
     id: 'astro', name: 'Astro', category: 'web framework',
-    evidence: [htmlEvidence(['<astro-island', '<astro-slot'], 'Static markup contains Astro component-island elements.')],
+    evidence: [
+      htmlEvidence(['<astro-island', '<astro-slot'], 'Static markup contains Astro component-island elements.'),
+      htmlEvidence(['href="/_astro/', 'src="/_astro/'], 'Static asset paths use Astro build conventions.', 'medium'),
+    ],
   },
   {
     id: 'hugo', name: 'Hugo', category: 'static site generator',
@@ -234,6 +281,18 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'jekyll', name: 'Jekyll', category: 'static site generator',
     evidence: [generatorEvidence(/^jekyll(?:\s|$)/i, 'Generator metadata identifies Jekyll.')],
+  },
+  {
+    id: 'docusaurus', name: 'Docusaurus', category: 'static site generator',
+    evidence: [generatorEvidence(/^docusaurus(?:\s|$)/i, 'Generator metadata identifies Docusaurus.')],
+  },
+  {
+    id: 'eleventy', name: 'Eleventy', category: 'static site generator',
+    evidence: [generatorEvidence(/^(?:eleventy|11ty)(?:\s|$)/i, 'Generator metadata identifies Eleventy.')],
+  },
+  {
+    id: 'hexo', name: 'Hexo', category: 'static site generator',
+    evidence: [generatorEvidence(/^hexo(?:\s|$)/i, 'Generator metadata identifies Hexo.')],
   },
   {
     id: 'cloudflare', name: 'Cloudflare', category: 'delivery platform',
@@ -277,7 +336,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
 ];
 
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
-  const htmlAnalysis = analyzeStaticHtml(input.html);
+  const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
   const browserLibraryProfile = analyzeBrowserLibraries({
     htmlAnalysis,
     observedAt: input.observedAt,

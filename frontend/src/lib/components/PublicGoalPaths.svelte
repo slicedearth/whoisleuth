@@ -55,9 +55,8 @@
   article.featured{
     grid-column:1 / -1;
     padding:clamp(24px,4vw,38px);
-    border-color:color-mix(in srgb,var(--accent2) 44%,var(--border));
     background:
-      linear-gradient(145deg,rgb(var(--accent2-rgb) / .075),transparent 64%),
+      linear-gradient(145deg,rgb(var(--overlay-rgb) / .025),transparent 64%),
       rgb(var(--panel-rgb) / .78);
   }
   h3{margin:0;font:700 clamp(1.05rem,2vw,1.28rem) var(--mono);letter-spacing:-.025em}

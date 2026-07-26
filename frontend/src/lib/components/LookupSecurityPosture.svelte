@@ -26,10 +26,10 @@
     initiallyExpanded?: boolean;
   } = $props();
 
-  function stateLabel(value: string) {
-    if (value === 'potential_exposure') return 'Review';
-    if (value === 'observed_absence') return 'Not observed';
-    if (value === 'unavailable') return 'Unavailable';
+  function stateLabel(finding: Finding) {
+    if (finding.state === 'potential_exposure') return 'Review';
+    if (finding.state === 'observed_absence') return finding.tone === 'configured' ? 'No exposure observed' : 'Not observed';
+    if (finding.state === 'unavailable') return 'Unavailable';
     return 'Observed';
   }
 </script>
@@ -55,7 +55,7 @@
         <article class:review={finding.tone === 'review'} class:configured={finding.tone === 'configured'}>
           <div class="finding-head">
             <div><p>{finding.category}</p><h5>{finding.label}</h5></div>
-            <span class="state state-{finding.tone}">{stateLabel(finding.state)}</span>
+            <span class="state state-{finding.tone}">{stateLabel(finding)}</span>
           </div>
           <p class="detail">{finding.detail}</p>
           {#if finding.evidence.length}<p class="evidence">Evidence: {finding.evidence.join(', ')}</p>{/if}

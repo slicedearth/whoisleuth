@@ -70,6 +70,16 @@ describe('bounded browser-library profile', () => {
     assert.match(profile.limitations.join(' '), /unmatched scripts are not evidence/i);
   });
 
+  test('does not interpret JSON-LD metadata as executable library evidence', () => {
+    const profile = analyzeBrowserLibraries({
+      html: '<script type="application/ld+json">{"name":"jQuery v1.12.4"}</script>',
+      observedAt: OBSERVED_AT,
+    });
+
+    assert.deepEqual(profile.findings, []);
+    assert.equal(profile.diagnostics.inlineScriptsExamined, 0);
+  });
+
   test('counts every advisory match while retaining bounded advisory details', () => {
     const profile = analyzeBrowserLibraries({
       html: '<script>version="15.0.0";document.getElementById("__NEXT_DATA__").textContent</script>',

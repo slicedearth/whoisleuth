@@ -171,6 +171,7 @@ describe('website activity classification', () => {
     assert.equal(result.pageIdentity.canonical.url, 'https://www.example.test/account');
     assert.deepEqual(result.pageIdentity.forms.externalActionOrigins, ['https://collect.example']);
     assert.doesNotMatch(JSON.stringify(result.pageIdentity), /token=|key=|secret|submit/);
+    assert.equal(result.credentialSurfaceProfile, null);
     assert.equal(result.technologyProfile.status, 'partial');
     assert.deepEqual(result.technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
     assert.doesNotMatch(JSON.stringify(result.technologyProfile), /token=|key=|secret|submit|0\.1/);

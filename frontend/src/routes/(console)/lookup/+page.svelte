@@ -7,6 +7,7 @@
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
+  import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
   import LookupForm from '$lib/components/LookupForm.svelte';
@@ -19,6 +20,7 @@
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
+  import LookupStructuredDataIdentity from '$lib/components/LookupStructuredDataIdentity.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
@@ -159,6 +161,13 @@
   const pageResourceTypes=$derived(lookupView.pageResourceTypes as JsonRecord);
   const pageDownloads=$derived(lookupView.pageDownloads as JsonRecord);
   const pageFingerprints=$derived(lookupView.pageFingerprints as JsonRecord);
+  const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile as JsonRecord);
+  const credentialSurfaceForms=$derived(rec(credentialSurfaceProfile.forms));
+  const credentialSurfaceMethods=$derived(rec(credentialSurfaceForms.methods));
+  const credentialSurfaceActions=$derived(rec(credentialSurfaceForms.actions));
+  const credentialSurfaceInputs=$derived(rec(credentialSurfaceProfile.inputs));
+  const credentialSurfaceCategories=$derived(rec(credentialSurfaceInputs.categories));
+  const structuredDataIdentity=$derived(lookupView.structuredDataIdentity as JsonRecord);
   const technologyProfile=$derived(lookupView.technologyProfile as JsonRecord);
   const browserLibraryProfile=$derived(technologyProfile.browserLibraryProfile as JsonRecord);
   const securityPosture=$derived(lookupView.securityPosture as JsonRecord);
@@ -188,7 +197,7 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
@@ -309,6 +318,41 @@
     {label:'External origins',value:stringList(pageDownloads.externalOrigins).join(', ')||'None observed'},
   ];}
   function pageTrackingIdentifierRows(){return records(pageIdentity.trackingIdentifiers).map((identifier)=>({label:trackingIdentifierLabel(identifier.type),value:show(identifier.value)}));}
+  function boundedCredentialCount(value:unknown,maximum=500){return Number.isSafeInteger(value)&&Number(value)>=0?Math.min(Number(value),maximum):0;}
+  function credentialSurfaceDisplay(){return{
+    formCount:boundedCredentialCount(credentialSurfaceForms.count,50),
+    inputCount:boundedCredentialCount(credentialSurfaceInputs.count),
+    classifiedCount:boundedCredentialCount(credentialSurfaceInputs.classifiedCount),
+    categories:{
+      password:boundedCredentialCount(credentialSurfaceCategories.password),
+      email:boundedCredentialCount(credentialSurfaceCategories.email),
+      username:boundedCredentialCount(credentialSurfaceCategories.username),
+      oneTimeCode:boundedCredentialCount(credentialSurfaceCategories.one_time_code),
+      payment:boundedCredentialCount(credentialSurfaceCategories.payment),
+    },
+    methods:{
+      missing:boundedCredentialCount(credentialSurfaceMethods.missing,50),
+      get:boundedCredentialCount(credentialSurfaceMethods.get,50),
+      post:boundedCredentialCount(credentialSurfaceMethods.post,50),
+      dialog:boundedCredentialCount(credentialSurfaceMethods.dialog,50),
+      other:boundedCredentialCount(credentialSurfaceMethods.other,50),
+    },
+    actions:{
+      sameOrigin:boundedCredentialCount(credentialSurfaceActions.sameOrigin,50),
+      external:boundedCredentialCount(credentialSurfaceActions.external,50),
+      missing:boundedCredentialCount(credentialSurfaceActions.missing,50),
+      cleartext:boundedCredentialCount(credentialSurfaceActions.cleartext,50),
+      unclassified:boundedCredentialCount(credentialSurfaceActions.unclassified,50),
+    },
+  };}
+  function credentialSurfaceLimitations(){return stringList(credentialSurfaceProfile.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
+  function structuredIdentityRows(){return records(structuredDataIdentity.entities).slice(0,16).map((entity)=>({
+    types:stringList(entity.types).slice(0,8).map((item)=>boundedTechnologyText(item,80)).filter(Boolean).join(', '),
+    name:boundedTechnologyText(entity.name,160),
+    declaredOrigin:boundedTechnologyText(entity.declaredOrigin,2048),
+    sameAsHosts:stringList(entity.sameAsHosts).slice(0,12).map((item)=>boundedTechnologyText(item,253)).filter(Boolean).join(', '),
+  }));}
+  function structuredIdentityLimitations(){return stringList(structuredDataIdentity.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
   function technologyFindingRows(){return records(technologyProfile.findings).slice(0,24).map((finding)=>({
     id:boundedTechnologyText(finding?.id,80),name:boundedTechnologyText(finding?.name||'Unknown indicator',120),category:statusLabel(boundedTechnologyText(finding?.category||'technology',80)),
     confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:records(finding.evidence).slice(0,4).map((item)=>({source:statusLabel(boundedTechnologyText(item.source||'evidence',80)),description:boundedTechnologyText(item.description||'Observed signature matched.',300)}))
@@ -623,6 +667,14 @@
         href:'#evidence-page',side:'right',glyph:'P',family:'web',
       });
     }
+    if(structuredDataIdentity.source==='html'){
+      nodes.push({
+        id:'structured-identity',label:'Structured identity',
+        detail:`${structuredIdentityRows().length} publisher-declared entit${structuredIdentityRows().length===1?'y':'ies'}`,
+        status:topologyStatus(structuredDataIdentity.status,Boolean(structuredDataIdentity.complete),Boolean(structuredDataIdentity.truncated)),
+        href:'#evidence-structured-identity',side:'right',glyph:'SI',family:'web',
+      });
+    }
     if(securityTxt.securityTxtVersion===1){
       nodes.push({
         id:'security-txt',label:'security.txt',detail:show(securityTxt.detail||securityTxt.state),
@@ -821,6 +873,21 @@
         /></div>
       {/if}
 
+      {#if credentialSurfaceProfile.source==='html'}
+        {@const credentialSurface=credentialSurfaceDisplay()}
+        <div class="evidence-component" id="evidence-credential-surface"><LookupCredentialSurfaceProfile
+          status={statusLabel(show(credentialSurfaceProfile.status))}
+          complete={Boolean(credentialSurfaceProfile.complete)}
+          formCount={credentialSurface.formCount}
+          inputCount={credentialSurface.inputCount}
+          classifiedCount={credentialSurface.classifiedCount}
+          categories={credentialSurface.categories}
+          methods={credentialSurface.methods}
+          actions={credentialSurface.actions}
+          limitations={credentialSurfaceLimitations()}
+        /></div>
+      {/if}
+
       {#if securityPosture.source==='derived'}
         <div class="evidence-component" id="evidence-posture"><LookupSecurityPosture
           status={statusLabel(show(securityPosture.status))}
@@ -828,6 +895,15 @@
           summary={securityPostureDisplaySummary()}
           findings={securityPostureFindingRows()}
           limitations={securityPostureLimitations()}
+        /></div>
+      {/if}
+
+      {#if structuredDataIdentity.source==='html'}
+        <div class="evidence-component" id="evidence-structured-identity"><LookupStructuredDataIdentity
+          status={statusLabel(show(structuredDataIdentity.status))}
+          complete={Boolean(structuredDataIdentity.complete)}
+          entities={structuredIdentityRows()}
+          limitations={structuredIdentityLimitations()}
         /></div>
       {/if}
 
