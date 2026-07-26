@@ -69,7 +69,22 @@ function lookupResponse(overrides = {}) {
       confidence: 'medium',
       detail: 'Registry evidence supports a registered assessment.',
       deepScanComplete: false,
-      dns: { status: 'partial', observedAt: '2026-07-26T01:02:05.000Z' },
+      dns: {
+        status: 'partial',
+        observedAt: '2026-07-26T01:02:05.000Z',
+        records: {
+          soa: [{
+            nsname: 'ns1.example.test',
+            hostmaster: 'hostmaster.example.test',
+            serial: 2026072601,
+            refresh: 3600,
+            retry: 600,
+            expire: 1_209_600,
+            minttl: 300,
+            privateField: 'must-not-enter-readable-report',
+          }],
+        },
+      },
       http: { status: 'unavailable' },
       tls: { status: 'partial' },
     },
@@ -109,6 +124,9 @@ describe('browser-local readable Lookup report', () => {
     assert.equal(serialized.includes('privateDiagnostic'), false);
     assert.equal(serialized.includes('rawNetworkMarker'), false);
     assert.equal(serialized.includes('REGISTRAR-1'), false);
+    assert.equal(serialized.includes('must-not-enter-readable-report'), false);
+    assert.equal(projected.availability.dns.records.soa[0].nsname, 'ns1.example.test');
+    assert.equal(projected.availability.dns.records.soa[0].serial, 2026072601);
     assert.deepEqual(source, before);
   });
 
@@ -137,6 +155,8 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /Server-declared truncation:\*\* Yes/u);
     assert.match(report, /Truncated response:\*\* Yes/u);
     assert.match(report, /One bounded network record was omitted/u);
+    assert.match(report, /SOA primary server:\*\* ns1\\\.example\\\.test/u);
+    assert.match(report, /SOA serial:\*\* 2026072601/u);
     assert.match(report, /heuristic review priority/u);
     assert.doesNotMatch(report, /must-not-enter-readable-report/u);
     assert.doesNotMatch(report, /contact@example\.test/u);

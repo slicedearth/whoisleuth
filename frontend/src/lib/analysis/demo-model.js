@@ -147,7 +147,13 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
     relationship: { label: 'Shared nameserver', value: 'ns1.shared-example.invalid', relatedCandidates: 2 },
     evidence: {
       registry: { status: 'Registered', registrar: 'Example Registrar (synthetic)', registeredAt: '2026-06-24', source: 'Registry RDAP fixture' },
-      dns: { status: 'Observed', nameservers: ['ns1.shared-example.invalid', 'ns2.shared-example.invalid'], mail: 'MX and SPF observed', source: 'DNS fixture' },
+      dns: {
+        status: 'Observed',
+        nameservers: ['ns1.shared-example.invalid', 'ns2.shared-example.invalid'],
+        mail: 'MX and SPF observed',
+        soa: 'ns1.shared-example.invalid · serial 2026072701',
+        source: 'DNS fixture',
+      },
       website: { status: 'Active synthetic landing page', detail: 'Password form present; page identity differs from the official baseline', source: 'HTTP fixture' },
       certificate: { status: 'Observed', detail: 'Synthetic certificate for the candidate hostname', source: 'TLS fixture' },
     },
@@ -173,7 +179,13 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
     relationship: { label: 'Shared nameserver', value: 'ns1.shared-example.invalid', relatedCandidates: 2 },
     evidence: {
       registry: { status: 'Registered', registrar: 'Example Registrar (synthetic)', registeredAt: '2025-11-08', source: 'Registry RDAP fixture' },
-      dns: { status: 'Observed', nameservers: ['ns1.shared-example.invalid'], mail: 'No MX observed', source: 'DNS fixture' },
+      dns: {
+        status: 'Observed',
+        nameservers: ['ns1.shared-example.invalid'],
+        mail: 'No MX observed',
+        soa: 'ns1.shared-example.invalid · serial 2026072701',
+        source: 'DNS fixture',
+      },
       website: { status: 'Synthetic parked page', detail: 'Parking-pattern fixture; no ownership inference', source: 'HTTP fixture' },
       certificate: { status: 'Not observed', detail: 'No certificate fixture retained', source: 'TLS fixture' },
     },
@@ -191,7 +203,7 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
     relationship: null,
     evidence: {
       registry: { status: 'Inconclusive', registrar: 'Not observed', registeredAt: 'Not observed', source: 'Registry fixture' },
-      dns: { status: 'Not evaluated', nameservers: [], mail: 'Not evaluated', source: 'DNS fixture' },
+      dns: { status: 'Not evaluated', nameservers: [], mail: 'Not evaluated', soa: '', source: 'DNS fixture' },
       website: { status: 'Probe inconclusive', detail: 'No negative activity finding is inferred', source: 'HTTP fixture' },
       certificate: { status: 'Not evaluated', detail: 'No certificate fixture evaluated', source: 'TLS fixture' },
     },
@@ -390,6 +402,7 @@ export function syntheticDemoLookupView(id) {
       rows: [
         { label: 'Nameservers', value: dns.nameservers.join(', ') || 'Not evaluated' },
         { label: 'Mail posture', value: dns.mail },
+        ...(dns.soa ? [{ label: 'SOA', value: dns.soa }] : []),
         { label: 'Observed records', value: dns.nameservers.length ? `${dns.nameservers.length} nameserver${dns.nameservers.length === 1 ? '' : 's'}` : 'None evaluated' },
       ],
       failureDetail: conclusive ? '' : 'the synthetic DNS collection was not evaluated',

@@ -134,7 +134,14 @@ default (see the README), so many lookups return no personal data at all.
   and DMARC policy TXT records are retained; unrelated TXT records are
   discarded. Full Lookup and deliberate exports can contain these point-in-time
   records, while watchlists and analyst cases keep only their existing compact
-  mail and nameserver fields.
+  mail and nameserver fields. Deep non-compact domain Lookup can add one SOA
+  query and retain its bounded zone-maintenance fields. A deep non-compact
+  Lookup of a public IP address can add one PTR query and retain up to eight
+  normalized reverse-DNS names as a separately attributed source. Fast,
+  compact, Bulk, monitoring, private/special-purpose IP, and availability/Risk
+  paths do not run the PTR query. These requests use the deployment's DNS
+  resolver. PTR and SOA publications are public point-in-time context and do
+  not prove ownership, hosting control, intent, or safety.
 - **HTTP intelligence**: Lookup can display the bounded final URL, redirect
   provenance, selected response/header metadata, and response-body fingerprint
   collected by a requested deep check. Bulk results, watchlists, and analyst

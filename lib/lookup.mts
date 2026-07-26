@@ -10,6 +10,11 @@ import { fetchRdapRecord, fetchRegistrarRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
 import { OPERATION_BUDGET_ERROR_CODE } from './operation-budget.mts';
 import { checkDomainAvailability } from './availability.mts';
+import {
+  collectReverseDnsIntelligence,
+  failedReverseDnsIntelligence,
+  skippedReverseDnsIntelligence,
+} from './dns-intelligence.mts';
 import { collectObservedNetworkContext } from './observed-network-context.mts';
 import { collectSecurityTxt, securityTxtUnavailable } from './security-txt.mts';
 import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
@@ -26,6 +31,7 @@ type LookupOptions = {
   fetchRegistrarRdapRecord?: typeof fetchRegistrarRdapRecord;
   buildWhoisChain?: typeof buildWhoisChain;
   checkDomainAvailability?: typeof checkDomainAvailability;
+  collectReverseDnsIntelligence?: typeof collectReverseDnsIntelligence;
   collectObservedNetworkContext?: typeof collectObservedNetworkContext;
   collectSecurityTxt?: typeof collectSecurityTxt;
   lookupUrlscanDomain?: typeof lookupUrlscanDomain;
@@ -72,6 +78,7 @@ const LOOKUP_TIMING_SOURCE_ORDER = Object.freeze([
   'rdap',
   'whois',
   'domain_evidence',
+  'reverse_dns',
   'registrar_rdap',
   'network_context',
   'security_txt',
@@ -179,6 +186,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const fetchRegistrarRdap = options.fetchRegistrarRdapRecord || fetchRegistrarRdapRecord;
   const fetchWhois = options.buildWhoisChain || buildWhoisChain;
   const checkAvailability = options.checkDomainAvailability || checkDomainAvailability;
+  const collectReverseDns = options.collectReverseDnsIntelligence || collectReverseDnsIntelligence;
   const collectNetworkContext = options.collectObservedNetworkContext || collectObservedNetworkContext;
   const collectDisclosureContacts = options.collectSecurityTxt || collectSecurityTxt;
   const fetchUrlscanIntelligence = options.lookupUrlscanDomain || lookupUrlscanDomain;
@@ -196,6 +204,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
   const availabilityEnabled = featureDecision('availability', featurePolicy).enabled;
   const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
+  const dnsIntelligenceEnabled = featureDecision('dns_intelligence', featurePolicy).enabled;
   const skipWhois = fast || !whoisEnabled;
 
   const rdapPromise = rdapEnabled
@@ -215,12 +224,22 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const availabilityPromise = classified.type === 'domain' && availabilityEnabled
     ? timing.measure('domain_evidence', () => checkAvailability(classified.value, {
         fast,
+        includeExtendedDnsContext: !compact,
         includeTechnologyProfile: !compact,
         includeSecurityPosture: !compact,
         featurePolicy,
         rdapRecordPromise: rdapPromise,
         whoisChainPromise: whoisPromise,
       }))
+    : null;
+  // Reverse DNS is separately attributed operator context for deep public-IP
+  // lookups. It is never used by RDAP, WHOIS, availability, Risk, fast,
+  // compact, Bulk, or monitoring contracts.
+  const reverseDnsEligible = (classified.type === 'ipv4' || classified.type === 'ipv6')
+    && !fast
+    && !compact;
+  const reverseDnsPromise = reverseDnsEligible && dnsIntelligenceEnabled
+    ? timing.measure('reverse_dns', () => collectReverseDns(classified.value))
     : null;
   // Network registration is an additive deep-only source. It starts only
   // after availability has produced the existing TLS/DNS observations and
@@ -281,10 +300,11 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
       )
     : null;
 
-  const [rdapResult, whoisResult, availabilityResult, registrarRdapResult, networkContextResult, securityTxtResult, urlscanIntelligenceResult, urlhausIntelligenceResult, threatfoxIntelligenceResult] = await Promise.allSettled([
+  const [rdapResult, whoisResult, availabilityResult, reverseDnsResult, registrarRdapResult, networkContextResult, securityTxtResult, urlscanIntelligenceResult, urlhausIntelligenceResult, threatfoxIntelligenceResult] = await Promise.allSettled([
     rdapPromise,
     whoisPromise,
     availabilityPromise,
+    reverseDnsPromise,
     registrarRdapPromise,
     networkContextPromise,
     securityTxtPromise,
@@ -405,6 +425,17 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? 'not_applicable'
     : !availabilityEnabled ? 'disabled'
     : availabilityResult.status === 'rejected' ? 'error' : 'complete';
+  const reverseDns = reverseDnsEligible
+    ? !dnsIntelligenceEnabled
+      ? skippedReverseDnsIntelligence()
+      : reverseDnsResult.status === 'fulfilled' && reverseDnsResult.value
+        ? reverseDnsResult.value
+        : failedReverseDnsIntelligence(
+            reverseDnsResult.status === 'rejected'
+              ? reverseDnsResult.reason
+              : 'Reverse DNS lookup returned no result',
+          )
+    : null;
   // This is static access-policy context only. It performs no network work and
   // is deliberately excluded from compact Bulk responses and from every
   // availability input.
@@ -471,6 +502,14 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         : availabilityStatus === 'error' ? LOOKUP_ERROR_CODES.AVAILABILITY_CHECK_FAILED : null,
       resultState: availability.applicable === true ? availability.state || 'unknown' : null,
     },
+    ...(reverseDns ? {
+      reverseDns: {
+        status: reverseDns.status,
+        observedAt: reverseDns.observedAt,
+        complete: reverseDns.complete,
+        truncated: reverseDns.truncated,
+      },
+    } : {}),
     ...(networkContext ? {
       network: {
         status: networkContext.status,
@@ -546,6 +585,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     whois,
     availability,
     diagnostics,
+    ...(reverseDns ? { reverseDns } : {}),
     ...(networkContext ? { networkContext } : {}),
     ...(securityTxt ? { securityTxt } : {}),
     ...(threatIntelligence ? { threatIntelligence } : {}),

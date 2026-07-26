@@ -8,14 +8,32 @@ import * as net from 'node:net';
 
 import { classifyMxRecords } from './dns-mx.mts';
 import { createObservation } from './observation.mts';
+import { isPrivateAddress } from './safe-fetch.mts';
 
 type MxRecord = { priority: number; exchange: string };
 type CaaRecord = { critical: number; tag: string; value: string };
+type SoaRecord = {
+  nsname: string;
+  hostmaster: string;
+  serial: number;
+  refresh: number;
+  retry: number;
+  expire: number;
+  minttl: number;
+};
 type NormalizedRecords<T> = { records: T[]; truncated: boolean; discarded: number };
 type DnsQueryResult<T> = NormalizedRecords<T> & { status: 'success' | 'not_found' | 'error'; error: string | null };
 type DnsResolver = (value: string) => Promise<unknown>;
 type DnsIntelligenceOptions = {
   resolvers?: Record<string, DnsResolver>;
+  includeExtendedContext?: boolean;
+  timeoutMs?: number;
+  now?: () => number;
+  observedAt?: () => string;
+};
+type ReverseDnsIntelligenceOptions = {
+  resolver?: DnsResolver;
+  isEligibleAddress?: (value: string) => boolean;
   timeoutMs?: number;
   now?: () => number;
   observedAt?: () => string;
@@ -23,14 +41,21 @@ type DnsIntelligenceOptions = {
 
 const DNS_TIMEOUT_MS = 5000;
 const MAX_RECORDS_PER_TYPE = 16;
+const MAX_PTR_RECORDS = 8;
 const MAX_HOSTNAME_LENGTH = 253;
 const MAX_POLICY_LENGTH = 1024;
 const MAX_ERROR_LENGTH = 180;
+const MAX_DNS_UINT32 = 0xffff_ffff;
 const MISSING_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
 
-function skippedDnsIntelligence(detail = 'DNS intelligence is disabled by deployment policy.') {
+function skippedDnsIntelligence(
+  detail = 'DNS intelligence is disabled by deployment policy.',
+  { includeExtendedContext = false }: { includeExtendedContext?: boolean } = {},
+) {
   const skipped = { status: 'skipped', error: null, truncated: false, discarded: 0 };
-  const diagnostics = Object.fromEntries(['a', 'aaaa', 'cname', 'ns', 'mx', 'spf', 'dmarc', 'caa']
+  const recordTypes = ['a', 'aaaa', 'cname', 'ns', 'mx', 'spf', 'dmarc', 'caa'];
+  if (includeExtendedContext) recordTypes.push('soa');
+  const diagnostics = Object.fromEntries(recordTypes
     .map((name) => [name, { ...skipped }]));
   return {
     ...createObservation({
@@ -41,12 +66,50 @@ function skippedDnsIntelligence(detail = 'DNS intelligence is disabled by deploy
       limitations: [detail],
       diagnostics,
     }),
-    records: { a: [], aaaa: [], cname: [], ns: [], mx: [], spf: [], dmarc: [], caa: [] },
+    records: {
+      a: [], aaaa: [], cname: [], ns: [], mx: [], spf: [], dmarc: [], caa: [],
+      ...(includeExtendedContext ? { soa: [] } : {}),
+    },
     hasMx: null,
     hasNullMx: null,
     mxHosts: [],
     hasSpf: null,
     hasDmarc: null,
+  };
+}
+
+function skippedReverseDnsIntelligence(detail = 'Reverse DNS intelligence is disabled by deployment policy.') {
+  return {
+    ...createObservation({
+      status: 'skipped',
+      scanMode: 'deep',
+      source: 'reverse_dns',
+      complete: false,
+      limitations: [detail],
+      diagnostics: {
+        ptr: { status: 'skipped', error: null, truncated: false, discarded: 0 },
+      },
+    }),
+    records: { ptr: [] },
+  };
+}
+
+function failedReverseDnsIntelligence(error: unknown) {
+  const detail = boundedError(error);
+  return {
+    ...createObservation({
+      status: 'error',
+      scanMode: 'deep',
+      source: 'reverse_dns',
+      complete: false,
+      limitations: [
+        'Reverse DNS collection failed. Resolver failure is not evidence that no PTR record exists.',
+      ],
+      diagnostics: {
+        ptr: { status: 'error', error: detail, truncated: false, discarded: 0 },
+      },
+    }),
+    records: { ptr: [] },
   };
 }
 
@@ -136,6 +199,51 @@ function normalizeCaa(records: unknown): NormalizedRecords<CaaRecord> {
   return { records: values.slice(0, MAX_RECORDS_PER_TYPE), truncated: values.length > MAX_RECORDS_PER_TYPE, discarded };
 }
 
+function dnsUint32(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 && number <= MAX_DNS_UINT32
+    ? number
+    : null;
+}
+
+function normalizeSoa(record: unknown): NormalizedRecords<SoaRecord> {
+  const entry = record && typeof record === 'object' && !Array.isArray(record)
+    ? record as Record<string, unknown>
+    : {};
+  const nsname = normalizeHostname(entry.nsname);
+  const hostmaster = normalizeHostname(entry.hostmaster);
+  const serial = dnsUint32(entry.serial);
+  const refresh = dnsUint32(entry.refresh);
+  const retry = dnsUint32(entry.retry);
+  const expire = dnsUint32(entry.expire);
+  const minttl = dnsUint32(entry.minttl);
+  if (!nsname || !hostmaster || [serial, refresh, retry, expire, minttl].some((value) => value === null)) {
+    return { records: [], truncated: false, discarded: 1 };
+  }
+  return {
+    records: [{
+      nsname,
+      hostmaster,
+      serial: serial as number,
+      refresh: refresh as number,
+      retry: retry as number,
+      expire: expire as number,
+      minttl: minttl as number,
+    }],
+    truncated: false,
+    discarded: 0,
+  };
+}
+
+function normalizePtr(records: unknown): NormalizedRecords<string> {
+  const normalized = normalizeHostnames(records);
+  return {
+    records: normalized.records.slice(0, MAX_PTR_RECORDS),
+    truncated: normalized.truncated || normalized.records.length > MAX_PTR_RECORDS,
+    discarded: normalized.discarded,
+  };
+}
+
 function withTimeout<T>(factory: () => Promise<T> | T, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('DNS query timed out')), timeoutMs);
@@ -164,11 +272,12 @@ async function query<T>(factory: () => Promise<unknown>, normalize: (value: unkn
 
 async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOptions = {}) {
   const resolvers = options.resolvers || {};
+  const includeExtendedContext = options.includeExtendedContext === true;
   const timeoutMs = options.timeoutMs || DNS_TIMEOUT_MS;
   const now = options.now || Date.now;
   const started = now();
   const invoke = (name: string, fallback: DnsResolver, value = domain) => () => (resolvers[name] || fallback)(value);
-  const [a, aaaa, cname, ns, mx, spf, dmarc, caa] = await Promise.all([
+  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, soa] = await Promise.all([
     query(invoke('resolve4', dns.resolve4), (records) => normalizeAddresses(records, 4), timeoutMs),
     query(invoke('resolve6', dns.resolve6), (records) => normalizeAddresses(records, 6), timeoutMs),
     query(invoke('resolveCname', dns.resolveCname), normalizeHostnames, timeoutMs),
@@ -177,8 +286,11 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     query(invoke('resolveTxt', dns.resolveTxt), (records) => normalizeTxtPolicies(records, 'v=spf1'), timeoutMs),
     query(invoke('resolveTxt', dns.resolveTxt, `_dmarc.${domain}`), (records) => normalizeTxtPolicies(records, 'v=dmarc1'), timeoutMs),
     query(invoke('resolveCaa', dns.resolveCaa), normalizeCaa, timeoutMs),
+    includeExtendedContext
+      ? query(invoke('resolveSoa', dns.resolveSoa), normalizeSoa, timeoutMs)
+      : Promise.resolve(null),
   ]);
-  const queries = { a, aaaa, cname, ns, mx, spf, dmarc, caa };
+  const queries = { a, aaaa, cname, ns, mx, spf, dmarc, caa, ...(soa ? { soa } : {}) };
   const values = Object.values(queries);
   const errorCount = values.filter((item) => item.status === 'error').length;
   const truncated = values.some((item) => item.truncated);
@@ -199,6 +311,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
       'DNS answers are point-in-time resolver observations and may change or differ by location.',
       'CNAME targets are not followed recursively, and shared DNS infrastructure does not prove common ownership.',
       'Only SPF and DMARC policy TXT records are retained; unrelated TXT records are discarded.',
+      ...(soa ? ['SOA publication is operator context and does not prove hosting control, ownership, intent, or maliciousness.'] : []),
     ],
     diagnostics: Object.fromEntries(Object.entries(queries).map(([name, item]) => [name, {
       status: item.status,
@@ -216,6 +329,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
       spf: spf.records,
       dmarc: dmarc.records,
       caa: caa.records,
+      ...(soa ? { soa: soa.records } : {}),
     },
     hasMx: classifiedMx ? classifiedMx.hasMx : null,
     hasNullMx: classifiedMx ? classifiedMx.hasNullMx : null,
@@ -225,12 +339,85 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
   };
 }
 
+async function collectReverseDnsIntelligence(
+  address: string,
+  options: ReverseDnsIntelligenceOptions = {},
+) {
+  const eligible = options.isEligibleAddress
+    || ((value: string) => net.isIP(value) !== 0 && !isPrivateAddress(value));
+  if (!eligible(address)) {
+    return {
+      ...createObservation({
+        status: 'unsupported',
+        scanMode: 'deep',
+        source: 'reverse_dns',
+        complete: false,
+        limitations: [
+          'Reverse DNS is collected only for validated public IP addresses.',
+        ],
+        diagnostics: {
+          ptr: {
+            status: 'unsupported',
+            detail: 'The address is invalid, private, reserved, or otherwise outside the public PTR lookup boundary.',
+            truncated: false,
+            discarded: 0,
+          },
+        },
+      }),
+      records: { ptr: [] },
+    };
+  }
+
+  const timeoutMs = options.timeoutMs || DNS_TIMEOUT_MS;
+  const now = options.now || Date.now;
+  const started = now();
+  const ptr = await query(
+    () => (options.resolver || dns.resolvePtr)(address),
+    normalizePtr,
+    timeoutMs,
+  );
+  const incomplete = ptr.status === 'error' || ptr.truncated || ptr.discarded > 0;
+  return {
+    ...createObservation({
+      status: ptr.status === 'error'
+        ? 'error'
+        : incomplete
+          ? 'partial'
+          : ptr.status,
+      observedAt: (options.observedAt || (() => new Date().toISOString()))(),
+      scanMode: 'deep',
+      source: 'reverse_dns',
+      durationMs: Math.max(0, now() - started),
+      complete: !incomplete,
+      truncated: ptr.truncated,
+      limitations: [
+        'PTR records are point-in-time reverse-DNS publications controlled by the address operator.',
+        'A PTR name can be absent, stale, generic, or misleading and does not prove hosting control, ownership, service identity, intent, or maliciousness.',
+      ],
+      diagnostics: {
+        ptr: {
+          status: ptr.status,
+          error: ptr.error,
+          truncated: ptr.truncated,
+          discarded: ptr.discarded,
+        },
+      },
+    }),
+    records: { ptr: ptr.records },
+  };
+}
+
 export {
   collectDnsIntelligence,
+  collectReverseDnsIntelligence,
+  failedReverseDnsIntelligence,
   skippedDnsIntelligence,
+  skippedReverseDnsIntelligence,
   normalizeAddresses,
   normalizeHostnames,
   normalizeMx,
   normalizeTxtPolicies,
   normalizeCaa,
+  normalizeSoa,
+  normalizePtr,
 };

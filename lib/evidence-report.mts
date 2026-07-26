@@ -145,6 +145,8 @@ function buildLookupEvidenceReport(
   const registrarRdap = objectOrEmpty(options.registrarRdap);
   const registrarRdapParsed = objectOrEmpty(registrarRdap.parsed);
   const dns = objectOrEmpty(availability.dns);
+  const dnsRecords = objectOrEmpty(dns.records);
+  const soa = objectOrEmpty(Array.isArray(dnsRecords.soa) ? dnsRecords.soa[0] : null);
   const http = objectOrEmpty(availability.http);
   const httpResponse = objectOrEmpty(http.response);
   const tls = objectOrEmpty(availability.tls);
@@ -232,6 +234,13 @@ function buildLookupEvidenceReport(
         reportField('Observed', dns.observedAt),
         reportField('Name servers', listText(availability.nameservers)),
         reportField('MX hosts', listText(availability.mxHosts)),
+        reportField('SOA primary server', soa.nsname),
+        reportField('SOA hostmaster', soa.hostmaster),
+        reportField('SOA serial', soa.serial),
+        reportField('SOA refresh', soa.refresh),
+        reportField('SOA retry', soa.retry),
+        reportField('SOA expire', soa.expire),
+        reportField('SOA minimum TTL', soa.minttl),
       ],
     },
     website: {

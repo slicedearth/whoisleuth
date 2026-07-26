@@ -117,6 +117,15 @@ function formatTerminalLookup(document: TerminalRecord): string {
       );
     }
   }
+  if (document.mode === 'deep' && (document.type === 'ipv4' || document.type === 'ipv6')) {
+    const reverseDns = terminalRecord(document.reverseDns);
+    const reverseDnsRecords = terminalRecord(reverseDns.records);
+    const ptrNames = Array.isArray(reverseDnsRecords.ptr)
+      ? reverseDnsRecords.ptr.slice(0, 5).map((value: unknown) => safeTerminalValue(value))
+      : [];
+    if (reverseDns.status) lines.push(`Reverse DNS    ${titleCase(reverseDns.status)}`);
+    if (ptrNames.length) lines.push(`PTR names      ${safeTerminalValue(ptrNames.join(', '))}`);
+  }
   const network = document.networkContext;
   if (network?.contextVersion === 1) {
     lines.push(`Network RDAP   ${titleCase(network.status)}`);

@@ -121,6 +121,8 @@
   const diagnostics=$derived(lookupView.diagnostics as JsonRecord);
   const lookupTiming=$derived(lookupView.timing);
   const registryAccess=$derived(lookupView.registryAccess as JsonRecord);
+  const reverseDns=$derived(lookupView.reverseDns as JsonRecord);
+  const reverseDnsRecords=$derived(lookupView.reverseDnsRecords as JsonRecord);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext as JsonRecord);
   const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint as JsonRecord);
   const observedNetworkRdap=$derived(lookupView.observedNetworkRdap as JsonRecord);
@@ -178,7 +180,7 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
@@ -437,13 +439,16 @@
     comparisonSummary:`Registry / registrar publication comparison · ${registrarPublicationComparison.counts.conflict} conflicts · ${registrarPublicationComparison.counts.registry_only+registrarPublicationComparison.counts.registrar_only} source-only · ${registrarPublicationComparison.counts.registry_redacted+registrarPublicationComparison.counts.registrar_redacted} redacted · ${registrarPublicationComparison.counts.registry_unavailable+registrarPublicationComparison.counts.registrar_unavailable+registrarPublicationComparison.counts.registry_incomplete+registrarPublicationComparison.counts.registrar_incomplete} unavailable/incomplete · ${registrarPublicationComparison.counts.equivalent} equivalent`,
     comparisonRows:registrarPublicationRows(),
   };}
-  function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:String(record)).join(' · ');}
+  function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:name==='soa'?`${record.nsname} · hostmaster ${record.hostmaster} · serial ${record.serial} · refresh ${record.refresh}s · retry ${record.retry}s · expire ${record.expire}s · minimum TTL ${record.minttl}s`:String(record)).join(' · ');}
   function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}
   function dnsQueryFailures(){return Object.entries(rec(dnsEvidence.diagnostics)).filter(([,item])=>rec(item).status==='error').map(([name,item])=>`${name.toUpperCase()}: ${rec(item).error||'query failed'}`).join(' · ');}
   function dnsEvidenceRows(){return[
     {label:'DNSSEC',value:show(availability.dnssec)},
     ...[['A','a'],['AAAA','aaaa'],['CNAME','cname'],['Nameservers','ns'],['MX','mx'],['SPF','spf'],['DMARC','dmarc'],['CAA','caa']].map(([label,name])=>({label,value:dnsDisplay(name)})),
+    ...(Array.isArray(dnsRecords.soa)||rec(dnsEvidence.diagnostics).soa?[{label:'SOA',value:dnsDisplay('soa')}]:[]),
   ];}
+  function reverseDnsRows(){const records=Array.isArray(reverseDnsRecords.ptr)?reverseDnsRecords.ptr.map(String):[];return[{label:'PTR names',value:records.join(' · ')||'Not observed'}];}
+  function reverseDnsFailure(){const diagnostic=rec(rec(reverseDns.diagnostics).ptr);return diagnostic.status==='error'?String(diagnostic.error||'query failed'):'';}
   function formatBytes(value:any){const bytes=Number(value);if(!Number.isFinite(bytes)||bytes<0)return'—';return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(bytes<10240?1:0)} KiB`;}
   function tlsName(value:JsonRecord){const common=Array.isArray(value.commonNames)?value.commonNames:[];const organizations=Array.isArray(value.organizations)?value.organizations:[];return[...common,...organizations].join(' · ')||'—';}
   function tlsTrust(){return tlsAuthorization.authorized===true?'Authorized':tlsAuthorization.authorized===false?'Not authorized':'Not observed';}
@@ -498,13 +503,13 @@
     {label:'Updated',value:formatDate(updated()),detail:'Most recent registry change'},
     {label:'Website',value:show(availability.activityStatus),detail:show(availability.websiteProbeDetail)},
   ];}
-  function sourceDiagnostics(){return['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});}
+  function sourceDiagnostics(){const sources=['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});if(rec(diagnostics.reverseDns).status){const item=rec(diagnostics.reverseDns) as SourceStatus;sources.push({source:'reverse DNS',status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)});}return sources;}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return[
     {href:'#overview',label:'Overview'},
-    ...(hasWebEvidence?[{href:'#web-evidence' as const,label:'Web & DNS'}]:[]),
+    ...(hasWebEvidence?[{href:'#web-evidence' as const,label:result?.type==='domain'?'Web & DNS':'DNS'}]:[]),
     {href:'#registry',label:'Registry'},
     ...(threatIntelligenceProviders.length?[{href:'#external-intelligence' as const,label:'External intel'}]:[]),
     ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
@@ -555,6 +560,14 @@
         id:'dns',label:'DNS',detail:dnsEvidence.complete===false?'Collection is explicitly partial':'Record families collected',
         status:topologyStatus(dnsEvidence.status,dnsEvidence.complete!==false,Boolean(dnsEvidence.truncated)),
         href:'#evidence-dns',side:'right',glyph:'D',family:'network',
+      });
+    }
+    if(reverseDns.source==='reverse_dns'){
+      nodes.push({
+        id:'reverse-dns',label:'Reverse DNS',
+        detail:Array.isArray(reverseDnsRecords.ptr)&&reverseDnsRecords.ptr.length?`${reverseDnsRecords.ptr.length} PTR name${reverseDnsRecords.ptr.length===1?'':'s'}`:show(reverseDns.status),
+        status:topologyStatus(reverseDns.status,reverseDns.complete!==false,Boolean(reverseDns.truncated)),
+        href:'#evidence-reverse-dns',side:'right',glyph:'D',family:'network',
       });
     }
     if(httpEvidence.source==='http'){
@@ -715,7 +728,20 @@
 
     {#if hasWebEvidence}
     <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
-      <h3 id="web-evidence-title">Web and DNS evidence</h3>
+      <h3 id="web-evidence-title">{result.type==='domain'?'Web and DNS evidence':'DNS evidence'}</h3>
+
+      {#if reverseDns.source==='reverse_dns'}
+        <div class="evidence-component" id="evidence-reverse-dns"><LookupDnsEvidence
+          title="Reverse DNS context"
+          summaryDetail="Expand for PTR names, provenance, and limitations"
+          status={show(reverseDns.status)}
+          complete={reverseDns.complete!==false}
+          rows={reverseDnsRows()}
+          failureDetail={reverseDnsFailure()}
+          truncated={Boolean(reverseDns.truncated)}
+          note="Point-in-time PTR evidence is controlled by the address operator. It may be absent, stale, generic, or misleading and does not prove hosting control, ownership, service identity, intent, or maliciousness."
+        /></div>
+      {/if}
 
       {#if dnsEvidence.source==='dns'}
         <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence status={show(dnsEvidence.status)} complete={dnsEvidence.complete!==false} rows={dnsEvidenceRows()} failureDetail={dnsQueryFailures()} truncated={Boolean(dnsEvidence.truncated)} /></div>

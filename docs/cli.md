@@ -49,6 +49,12 @@ observed-network IP RDAP work for a domain. The browser Console's optional
 security.txt and external intelligence selections are not CLI flags; the CLI
 does not run those actions implicitly.
 
+For a directly entered public IP address, `lookup --deep` can also run one
+bounded reverse-DNS query. Terminal output shows the explicit source state and
+up to five normalized PTR names; JSON retains up to eight. PTR names are
+operator-published routing context, not proof of hosting control or ownership.
+Fast lookups do not run this query.
+
 Only one query is accepted by `lookup`. Multiple-input processing belongs to
 the explicit `bulk` command rather than being silently inferred by `lookup`.
 Standard input is capped at 4 KiB and must contain one non-empty line.

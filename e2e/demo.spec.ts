@@ -44,6 +44,9 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
   await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
+  await page.locator('.dns-card > summary').click();
+  await expect(page.locator('.dns-card').getByText('ns1.shared-example.invalid · serial 2026072701', { exact: true })).toBeVisible();
+  await page.locator('.dns-card > summary').click();
   await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
   await expect(page.getByText('security.txt', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();

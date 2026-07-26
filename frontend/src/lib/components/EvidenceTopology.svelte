@@ -53,7 +53,7 @@
     if (sourceId === 'registrar-rdap') return 'registrar';
     if (sourceId === 'whois') return 'whois';
     if (sourceId === 'network') return 'network';
-    if (sourceId === 'dns') return 'dns';
+    if (sourceId === 'dns' || sourceId === 'reverse-dns') return 'dns';
     if (sourceId === 'http' || sourceId === 'website') return 'http';
     if (sourceId === 'tls' || sourceId === 'certificate') return 'tls';
     if (sourceId === 'page') return 'page';

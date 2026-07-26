@@ -10,6 +10,7 @@
     rdap: 'Registry RDAP',
     whois: 'WHOIS chain',
     domain_evidence: 'Domain evidence',
+    reverse_dns: 'Reverse DNS',
     registrar_rdap: 'Registrar RDAP',
     network_context: 'Network context',
     security_txt: 'security.txt',

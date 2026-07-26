@@ -15,6 +15,7 @@ type LookupTimingSource =
   | 'rdap'
   | 'whois'
   | 'domain_evidence'
+  | 'reverse_dns'
   | 'registrar_rdap'
   | 'network_context'
   | 'security_txt'
@@ -50,6 +51,7 @@ type LookupHttpResponse = JsonObject & {
   readonly whois: JsonObject;
   readonly availability: JsonObject;
   readonly diagnostics: JsonObject;
+  readonly reverseDns?: JsonObject;
   readonly networkContext?: JsonObject;
   readonly securityTxt?: JsonObject;
   readonly threatIntelligence?: JsonObject;
@@ -66,6 +68,8 @@ type LookupViewModel = {
   readonly diagnostics: JsonObject;
   readonly timing: LookupTiming | null;
   readonly registryAccess: JsonObject;
+  readonly reverseDns: JsonObject;
+  readonly reverseDnsRecords: JsonObject;
   readonly observedNetworkContext: JsonObject;
   readonly observedNetworkEndpoint: JsonObject;
   readonly observedNetworkRdap: JsonObject;
@@ -116,13 +120,14 @@ const MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 32;
 const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
 const MAX_THREAT_INTELLIGENCE_PROVIDERS = 10;
 const MAX_LOOKUP_TIMING_MS = 120_000;
-const MAX_LOOKUP_TIMING_SOURCES = 9;
+const MAX_LOOKUP_TIMING_SOURCES = 10;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
 const QUERY_TYPES = new Set<LookupQueryType>(['domain', 'ipv4', 'ipv6', 'asn']);
 const LOOKUP_TIMING_SOURCES = new Set<LookupTimingSource>([
   'rdap',
   'whois',
   'domain_evidence',
+  'reverse_dns',
   'registrar_rdap',
   'network_context',
   'security_txt',
@@ -180,7 +185,7 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
     return invalidLookupResponse();
   }
 
-  for (const key of ['networkContext', 'securityTxt', 'threatIntelligence']) {
+  for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'threatIntelligence']) {
     const section = value[key];
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
   }
@@ -271,6 +276,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const registrarRdap = record(rdap.registrarRdap);
   const whois = record(response?.whois);
   const diagnostics = record(response?.diagnostics);
+  const reverseDns = record(response?.reverseDns);
   const observedNetworkContext = record(response?.networkContext);
   const securityTxt = record(response?.securityTxt);
   const threatIntelligence = record(response?.threatIntelligence);
@@ -300,6 +306,8 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     diagnostics,
     timing: normalizeLookupTiming(diagnostics.timing),
     registryAccess: record(diagnostics.registryAccess),
+    reverseDns,
+    reverseDnsRecords: record(reverseDns.records),
     observedNetworkContext,
     observedNetworkEndpoint: record(observedNetworkContext.endpoint),
     observedNetworkRdap: record(observedNetworkContext.rdap),

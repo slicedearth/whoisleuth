@@ -11,6 +11,7 @@ const REGISTRAR_RDAP_STATUSES = new Set([
 ]);
 const NETWORK_CONTEXT_STATUSES = new Set(['success', 'partial', 'not_found', 'unsupported', 'error']);
 const NETWORK_ADDRESS_SOURCES = new Set(['tls_connection', 'dns_a', 'dns_aaaa']);
+const REVERSE_DNS_STATUSES = new Set(['success', 'partial', 'not_found', 'unsupported', 'skipped', 'error']);
 const SECURITY_TXT_STATES = new Set(['present', 'stale', 'partial', 'absent', 'malformed', 'unsupported', 'unavailable']);
 
 function recordOrNull(value: unknown): LooseRecord | null {
@@ -61,6 +62,14 @@ function boundedStringList(value: unknown, count: number, length: number): strin
     .slice(0, count)
     .map((item) => boundedString(item, length))
     .filter((item): item is string => item !== null))];
+}
+
+function boundedHostname(value: unknown): string | null {
+  const text = boundedString(value, 253)?.toLowerCase().replace(/\.+$/u, '') || null;
+  if (!text || !text.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(label))) {
+    return null;
+  }
+  return text;
 }
 
 function boundedPublishedUri(value: unknown, protocols: string[]): string | null {
@@ -180,6 +189,43 @@ function networkSource(value: unknown) {
   };
 }
 
+function reverseDnsSource(value: unknown) {
+  const source = recordOrNull(value);
+  if (!source
+    || source.version !== 1
+    || source.source !== 'reverse_dns'
+    || !REVERSE_DNS_STATUSES.has(source.status)) {
+    return null;
+  }
+  const records = recordOrNull(source.records);
+  const diagnostics = recordOrNull(source.diagnostics);
+  const ptrDiagnostics = recordOrNull(diagnostics?.ptr);
+  const ptr = [...new Set((Array.isArray(records?.ptr) ? records.ptr : [])
+    .slice(0, 8)
+    .map(boundedHostname)
+    .filter((item): item is string => item !== null))].sort();
+  return {
+    version: 1,
+    status: source.status,
+    observedAt: boundedTimestamp(source.observedAt),
+    scanMode: source.scanMode === 'deep' ? 'deep' : null,
+    source: 'reverse_dns',
+    durationMs: boundedInteger(source.durationMs, 120_000),
+    complete: source.complete === true,
+    truncated: source.truncated === true,
+    limitations: boundedStringList(source.limitations, 10, 300),
+    diagnostics: ptrDiagnostics ? {
+      ptr: {
+        status: boundedString(ptrDiagnostics.status, 40),
+        error: boundedString(ptrDiagnostics.error, 180),
+        truncated: ptrDiagnostics.truncated === true,
+        discarded: boundedInteger(ptrDiagnostics.discarded, 1000),
+      },
+    } : null,
+    records: { ptr },
+  };
+}
+
 function rdapSource(rdap: LooseRecord | null | undefined) {
   const source = rdap || {};
   if (source.error) return {
@@ -253,6 +299,7 @@ export function buildLookupEvidence(response: LooseRecord | null | undefined, op
     sources: {
       rdap: rdapSource(body.rdap),
       whois: whoisSource(body.whois),
+      reverseDns: reverseDnsSource(body.reverseDns),
       network: networkSource(body.networkContext),
       securityTxt: securityTxtSource(body.securityTxt),
     },

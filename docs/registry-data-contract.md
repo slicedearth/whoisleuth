@@ -79,9 +79,12 @@ fully overlap the WHOIS referral chain.
 Deep registered-domain assessments additionally expose a bounded
 `availability.dns` observation. The collector runs A, AAAA, CNAME, NS, MX,
 SPF, DMARC, and CAA queries in parallel, reusing the existing mail-policy
-queries rather than running a second mail scan. Each record family has an
-independent `success`/`not_found`/`error` diagnostic, malformed neighbours are
-counted and discarded, and capped inventories set their truncation flag.
+queries rather than running a second mail scan. Deep non-compact Lookup adds
+one SOA query to retain the bounded primary nameserver, responsible mailbox,
+serial, refresh, retry, expiry, and minimum-TTL values. Compact Bulk keeps the
+existing eight-query profile. Each record family has an independent
+`success`/`not_found`/`error` diagnostic, malformed neighbours are counted and
+discarded, and capped inventories set their truncation flag.
 Resolver failure produces `null` for the compatible `hasMx`, `hasSpf`, or
 `hasDmarc` signal; authoritative absence produces `false`. DNSSEC remains
 registry-derived because recursive-resolver validation is not equivalent to
@@ -93,6 +96,23 @@ infrastructure is not proof of common ownership or maliciousness. Full Lookup
 and deliberate evidence exports retain the bounded observation. Compact Bulk
 responses may display or export it, but watchlists and analyst cases continue
 to store only their existing compact compatibility fields.
+
+HTTPS and SVCB service-binding records were evaluated for this increment. The
+documented Node.js 24 resolver interface used by the shared runtime does not
+expose those record families. WHOISleuth therefore does not add an undocumented
+runtime call, raw DNS packet implementation, new dependency, or third-party
+resolver disclosure. They remain deferred until the runtime exposes a
+documented bounded resolver path.
+
+Deep non-compact Lookup of a directly entered public IPv4 or IPv6 address can
+also expose a separately attributed version-1 `reverseDns` observation. It
+runs one five-second PTR query, retains at most eight normalized hostnames, and
+keeps success, partial, not-found, unsupported, and error states distinct.
+Private, loopback, link-local, multicast, documentation, and otherwise
+special-purpose addresses are rejected before resolution. PTR data never enters
+availability or Risk and is omitted from Fast, compact, Bulk, monitoring, and
+browser-local stores. A published PTR name is routing context, not proof of
+hosting control, ownership, intent, or maliciousness.
 
 After deep availability collection completes, Lookup prefers the public address
 used by the successful TLS connection. If no eligible TLS address was retained,
@@ -220,7 +240,8 @@ and not-found responses retain their existing specific messages and codes.
 
 Fast and compact responses retain `diagnostics.version: 7` and their existing
 shape. Deep non-compact responses use `diagnostics.version: 8`. Version 8
-retains the version-7 source fields and adds `diagnostics.timing`:
+retains the version-7 source fields, adds the optional `diagnostics.reverseDns`
+source state for IP lookups, and adds `diagnostics.timing`:
 
 ```json
 {
@@ -237,7 +258,8 @@ retains the version-7 source fields and adds `diagnostics.timing`:
 }
 ```
 
-Timing retains at most nine fixed source identifiers. Millisecond values are
+Timing retains at most ten fixed source identifiers, including `reverse_dns`.
+Millisecond values are
 non-negative integers capped at 120,000 and every source is recorded only
 after its promise settles. `durationMs` measures that branch;
 `completedAfterMs` is its settle offset from the unified request start.
@@ -498,8 +520,9 @@ Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `16`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
 registry comparison. Version 16 can add the normalized, bounded security.txt
-disclosure-contact result when that optional deep action was selected; raw
-file text is never included. Version 15 added a strict, bounded projection of
+disclosure-contact result when that optional deep action was selected and the
+strict reverse-DNS projection when deep public-IP Lookup represented it; raw
+resolver answers and file text are never included. Version 15 added a strict, bounded projection of
 observed network context and never includes its raw IP RDAP object or contact
 entities. Version 14 added passive security-posture findings derived from
 already-retained deep evidence, and version 13 added curated technology

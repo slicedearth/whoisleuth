@@ -73,6 +73,7 @@ type DnsDelegation = {
 };
 type AvailabilityOptions = {
   fast?: boolean;
+  includeExtendedDnsContext?: boolean;
   includeTechnologyProfile?: boolean;
   includeSecurityPosture?: boolean;
   collectDnsIntelligence?: typeof collectDnsIntelligence;
@@ -608,8 +609,11 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       http: skippedHttpObservation(),
     }),
     dnsIntelligenceEnabled
-      ? collectDns(domain)
-      : Promise.resolve(skippedDnsIntelligence()),
+      ? collectDns(domain, { includeExtendedContext: options.includeExtendedDnsContext === true })
+      : Promise.resolve(skippedDnsIntelligence(
+          'DNS intelligence is disabled by deployment policy.',
+          { includeExtendedContext: options.includeExtendedDnsContext === true },
+        )),
     tlsIntelligenceEnabled
       ? collectTls(domain)
       : Promise.resolve(skippedTlsObservation()),

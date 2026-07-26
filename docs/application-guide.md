@@ -57,7 +57,9 @@ investigation data.
 
 Lookup accepts one domain, IPv4 or IPv6 address, or ASN. A domain Lookup keeps
 registry, registrar, WHOIS, DNS, HTTP, TLS, page, network, and optional provider
-evidence separately attributed.
+evidence separately attributed. Deep domain Lookup can add the zone's bounded
+SOA publication. Deep public-IP Lookup can add separately attributed PTR names.
+Neither source decides domain availability, Risk, ownership, or hosting control.
 
 The primary assessment, source health, and material registration conflicts
 remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
@@ -231,7 +233,7 @@ Fast and Deep are collection profiles, not confidence ratings.
 | Profile | Intended use | Collection boundary |
 | --- | --- | --- |
 | **Fast Lookup or Bulk** | Lower-request registration-first triage. | Uses RDAP-led registration analysis and a bounded authoritative DNS-delegation fallback where needed. WHOIS, website, TLS, and Deep enrichments are skipped explicitly. |
-| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS, HTTP, favicon, page identity, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
+| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context, public-IP PTR context, HTTP, favicon, page identity, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
 | **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, and mail context needed for triage. Full raw sources and single-Lookup-only enrichments remain omitted. |
 
 Deep single Lookup is the default in the Lookup page. Bulk keeps its own
@@ -293,6 +295,12 @@ network. A delivery network, proxy, shared host, load balancer, or
 location-dependent DNS response may hide the origin. Neither the technology
 profile nor network registration identifies a hosting account or proves
 control.
+
+When the submitted target is a public IP address, Deep Lookup can make one
+bounded reverse-DNS query and show the returned PTR names as operator-published
+routing context. A PTR name can be stale, generic, delegated, or shared. It
+does not prove that the named party owns or controls the address or any hosted
+service.
 
 Passive posture is not vulnerability scanning. WHOISleuth does not deliver
 payloads, authenticate to the target, crawl for flaws, enumerate every

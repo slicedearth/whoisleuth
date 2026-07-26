@@ -216,6 +216,30 @@ test('terminal lookup presents bounded observed network registration context', (
   assert.doesNotMatch(terminal, /must-not-render/);
 });
 
+test('terminal deep IP lookup presents separately attributed reverse DNS names', () => {
+  const result = lookupResult({
+    reverseDns: {
+      version: 1,
+      status: 'success',
+      source: 'reverse_dns',
+      records: { ptr: ['edge.example.test', 'fallback.example.test'] },
+      rawAnswer: 'must-not-render',
+    },
+  });
+  const document = buildCliLookupDocument(
+    '192.0.2.1',
+    { type: 'ipv4', value: '192.0.2.1' },
+    result,
+    '2026-07-14T00:00:00.000Z',
+    'deep',
+  );
+  const terminal = formatTerminalLookup(document);
+
+  assert.match(terminal, /Reverse DNS\s+Success/);
+  assert.match(terminal, /PTR names\s+edge\.example\.test, fallback\.example\.test/);
+  assert.doesNotMatch(terminal, /must-not-render/);
+});
+
 test('terminal deep lookup summarizes current website evidence without exposing raw details', () => {
   const result = lookupResult({
     availability: {

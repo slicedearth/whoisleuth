@@ -42,6 +42,7 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (domain, options) => {
         availabilityCalls += 1;
         assert.equal(domain, 'example.com');
+        assert.equal(options.includeExtendedDnsContext, true);
         assert.equal(await options.rdapRecordPromise, rdapRecord);
         assert.equal(await options.whoisChainPromise, whoisChain);
         return { state: 'registered', confidence: 'high' };
@@ -145,6 +146,7 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (_domain, options) => {
         assert.equal(options.includeTechnologyProfile, false);
         assert.equal(options.includeSecurityPosture, false);
+        assert.equal(options.includeExtendedDnsContext, false);
         return {
           state: 'registered', confidence: 'high', registrar: 'Example Registrar',
           technologyProfile: { source: 'derived', findings: [{ name: 'must be omitted' }] },
@@ -207,6 +209,77 @@ describe('runUnifiedLookup', () => {
       assert.equal(compatible.diagnostics.version, 7);
       assert.equal(Object.hasOwn(compatible.diagnostics, 'timing'), false);
     }
+  });
+
+  test('adds one separately attributed reverse-DNS observation only to deep public-IP lookups', async () => {
+    let reverseDnsCalls = 0;
+    const common = {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      collectReverseDnsIntelligence: async (address) => {
+        reverseDnsCalls += 1;
+        assert.equal(address, '192.0.2.10');
+        return {
+          version: 1,
+          status: 'success',
+          observedAt: '2026-07-27T00:00:00.000Z',
+          scanMode: 'deep',
+          source: 'reverse_dns',
+          durationMs: 5,
+          complete: true,
+          truncated: false,
+          limitations: ['PTR is non-authoritative context.'],
+          diagnostics: {
+            ptr: { status: 'success', error: null, truncated: false, discarded: 0 },
+          },
+          records: { ptr: ['ptr.example.test'] },
+        };
+      },
+    };
+    const classifiedIp = { type: 'ipv4', value: '192.0.2.10' };
+    const deep = await runUnifiedLookup(classifiedIp, common);
+
+    assert.equal(reverseDnsCalls, 1);
+    assert.equal(deep.reverseDns.status, 'success');
+    assert.deepEqual(deep.reverseDns.records.ptr, ['ptr.example.test']);
+    assert.deepEqual(deep.availability, { applicable: false, type: 'ipv4' });
+    assert.deepEqual(deep.diagnostics.reverseDns, {
+      status: 'success',
+      observedAt: '2026-07-27T00:00:00.000Z',
+      complete: true,
+      truncated: false,
+    });
+    assert.equal(
+      deep.diagnostics.timing.sources.some((source) => source.source === 'reverse_dns'),
+      true,
+    );
+
+    const fast = await runUnifiedLookup(classifiedIp, { ...common, fast: true });
+    const compact = await runUnifiedLookup(classifiedIp, { ...common, compact: true });
+    const asn = await runUnifiedLookup({ type: 'asn', value: '64496' }, common);
+    assert.equal(reverseDnsCalls, 1);
+    for (const result of [fast, compact, asn]) {
+      assert.equal(Object.hasOwn(result, 'reverseDns'), false);
+      assert.equal(Object.hasOwn(result.diagnostics, 'reverseDns'), false);
+    }
+  });
+
+  test('keeps disabled reverse DNS explicit without calling the collector', async () => {
+    let reverseDnsCalls = 0;
+    const result = await runUnifiedLookup({ type: 'ipv6', value: '2001:db8::10' }, {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      collectReverseDnsIntelligence: async () => {
+        reverseDnsCalls += 1;
+        throw new Error('must not run');
+      },
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+    });
+
+    assert.equal(reverseDnsCalls, 0);
+    assert.equal(result.reverseDns.status, 'skipped');
+    assert.equal(result.reverseDns.complete, false);
+    assert.equal(result.diagnostics.reverseDns.status, 'skipped');
   });
 
   test('adds non-authoritative registry-access context without changing source work or availability', async () => {

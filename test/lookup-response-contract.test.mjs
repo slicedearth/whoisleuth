@@ -54,6 +54,7 @@ describe('Lookup HTTP response contract', () => {
       const parsed = parseLookupHttpResponse(response({
         type,
         networkContext: { contextVersion: 1 },
+        reverseDns: { version: 1, source: 'reverse_dns', records: { ptr: ['ptr.example.test'] } },
         securityTxt: { securityTxtVersion: 1 },
         threatIntelligence: { version: 1, providers: [] },
       }));
@@ -67,6 +68,8 @@ describe('Lookup HTTP response contract', () => {
 
     const view = createLookupViewModel(parsed.value);
     assert.deepEqual(view.observedNetworkContext, {});
+    assert.deepEqual(view.reverseDns, {});
+    assert.deepEqual(view.reverseDnsRecords, {});
     assert.deepEqual(view.securityTxt, {});
     assert.deepEqual(view.threatIntelligenceProviders, []);
     assert.equal(view.timing, null);
@@ -78,6 +81,7 @@ describe('Lookup HTTP response contract', () => {
       totalMs: 2_500,
       sources: [
         { source: 'rdap', outcome: 'fulfilled', durationMs: 400, completedAfterMs: 400 },
+        { source: 'reverse_dns', outcome: 'fulfilled', durationMs: 100, completedAfterMs: 500 },
         { source: 'whois', outcome: 'rejected', durationMs: 2_000, completedAfterMs: 2_100 },
       ],
     };
@@ -139,6 +143,7 @@ describe('Lookup HTTP response contract', () => {
       response({ registrableDomain: 'bad\tdomain' }),
       response({ isSubdomain: 'yes' }),
       response({ networkContext: [] }),
+      response({ reverseDns: [] }),
       response({ securityTxt: false }),
       response({ threatIntelligence: [] }),
     ];
@@ -174,6 +179,12 @@ describe('Lookup HTTP response contract', () => {
       },
       diagnostics: { registryAccess: { suffix: 'test' } },
       networkContext: { endpoint: { address: '192.0.2.1' }, rdap: { status: 'success' }, network: { handle: 'NET-1' } },
+      reverseDns: {
+        version: 1,
+        source: 'reverse_dns',
+        status: 'success',
+        records: { ptr: ['ptr.example.test'] },
+      },
     });
     const before = structuredClone(raw);
     const parsed = parseLookupHttpResponse(raw);
@@ -189,6 +200,8 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(view.securityPostureSummary.observed, 1);
     assert.equal(view.registryAccess.suffix, 'test');
     assert.equal(view.observedNetworkEndpoint.address, '192.0.2.1');
+    assert.equal(view.reverseDns.source, 'reverse_dns');
+    assert.deepEqual(view.reverseDnsRecords.ptr, ['ptr.example.test']);
     assert.deepEqual(raw, before);
   });
 

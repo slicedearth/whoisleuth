@@ -1036,8 +1036,16 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
             a: ['192.0.2.10'], aaaa: ['2001:db8::10'], cname: [], ns: ['ns1.example'],
             mx: [{ priority: 10, exchange: 'mail.example' }], spf: ['v=spf1 -all'],
             dmarc: ['v=DMARC1; p=reject'], caa: [{ critical: 0, tag: 'issue', value: 'ca.example' }],
+            soa: [{
+              nsname: 'ns1.example', hostmaster: 'hostmaster.example', serial: 2026072701,
+              refresh: 3600, retry: 600, expire: 1209600, minttl: 300,
+            }],
           },
-          diagnostics: { a: { status: 'success' }, aaaa: { status: 'success' }, cname: { status: 'error', error: 'resolver timed out' } },
+          diagnostics: {
+            a: { status: 'success' }, aaaa: { status: 'success' },
+            cname: { status: 'error', error: 'resolver timed out' },
+            soa: { status: 'success' },
+          },
         },
       },
       rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
@@ -1055,6 +1063,7 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await card.locator(':scope > summary').click();
   await expect(card.getByText('192.0.2.10', { exact: true })).toBeVisible();
   await expect(card.getByText('0 issue ca.example', { exact: true })).toBeVisible();
+  await expect(card.getByText(/ns1\.example.*serial 2026072701/i)).toBeVisible();
   await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
   await expect(card.getByText(/does not prove common ownership or maliciousness/i)).toBeVisible();
 
@@ -1336,8 +1345,19 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
         lifecycle: { createdDate: '2001-02-03T04:05:06Z', updatedDate: '2025-06-07T08:09:10Z' },
         events: [{ action: 'registration', date: '2001-02-03T04:05:06Z' }], entitiesByRole: {},
       } },
+      reverseDns: {
+        version: 1, status: 'success', source: 'reverse_dns',
+        observedAt: '2026-07-27T00:00:00.000Z', scanMode: 'deep',
+        durationMs: 8, complete: true, truncated: false,
+        limitations: ['PTR names are operator-published routing context and do not prove hosting control.'],
+        diagnostics: { ptr: { status: 'success', answerCount: 1 } },
+        records: { ptr: ['edge.example.test'] },
+      },
       whois: { parsed: {}, chain: [] },
-      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'not_applicable' } },
+      diagnostics: {
+        rdap: { status: 'success' }, whois: { status: 'partial' },
+        availability: { status: 'not_applicable' }, reverseDns: { status: 'success' },
+      },
     }),
   }));
 
@@ -1352,7 +1372,20 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2001-02-03T04:05:06.000Z"]')).toBeVisible();
   await expect(rdapSection.getByText('Domain', { exact: true })).toHaveCount(0);
+  const reverseDnsCard = page.locator('.dns-card');
+  await expect(reverseDnsCard).not.toHaveAttribute('open', '');
+  await expect(reverseDnsCard.getByRole('heading', { name: 'Reverse DNS context' })).toBeVisible();
+  await expect(reverseDnsCard.locator(':scope > summary .evidence-status')).toHaveText('success');
+  await expect(reverseDnsCard.getByText('edge.example.test', { exact: true })).toBeHidden();
+  await expect(
+    page.getByRole('link', { name: 'Reverse DNS network success' }).locator('[data-icon="dns"]'),
+  ).toBeVisible();
+  await reverseDnsCard.locator(':scope > summary').click();
+  await expect(reverseDnsCard.getByText('edge.example.test', { exact: true })).toBeVisible();
+  await expect(reverseDnsCard.getByText(/does not prove hosting control/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Download report' })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
 });
 
 test('ASN results retain allocation status and lifecycle metadata at narrow widths', async ({ page }) => {

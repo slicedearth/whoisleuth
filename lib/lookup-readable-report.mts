@@ -70,10 +70,31 @@ function projectedRegistryPublication(
   return projected;
 }
 
+function projectedSoaRecords(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isJsonObject)
+    .slice(0, 1)
+    .map((record) => selectedObjectValues(record, [
+      'nsname',
+      'hostmaster',
+      'serial',
+      'refresh',
+      'retry',
+      'expire',
+      'minttl',
+    ]));
+}
+
 function projectedAvailability(value: JsonObject): Record<string, unknown> {
-  const dns = isJsonObject(value.dns)
-    ? selectedObjectValues(value.dns, ['status', 'observedAt'])
-    : {};
+  const dnsSource = isJsonObject(value.dns) ? value.dns : {};
+  const dnsRecords = isJsonObject(dnsSource.records) ? dnsSource.records : {};
+  const dns = {
+    ...selectedObjectValues(dnsSource, ['status', 'observedAt']),
+    records: {
+      soa: projectedSoaRecords(dnsRecords.soa),
+    },
+  };
   const httpSource = isJsonObject(value.http) ? value.http : {};
   const httpResponse = isJsonObject(httpSource.response)
     ? selectedObjectValues(httpSource.response, ['status', 'contentType'])
