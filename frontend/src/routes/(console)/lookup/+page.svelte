@@ -53,7 +53,7 @@
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
-  import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
+  import { comparePageBaselines } from '$lib/analysis/page-similarity.ts';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.ts';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';

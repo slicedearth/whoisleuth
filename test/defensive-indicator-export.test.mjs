@@ -5,7 +5,7 @@ import {
   isDefensiveIndicatorCandidate,
   MAX_DEFENSIVE_INDICATOR_INPUTS,
   MAX_DEFENSIVE_INDICATORS,
-} from '../frontend/src/lib/analysis/defensive-indicator-export.js';
+} from '../frontend/src/lib/analysis/defensive-indicator-export.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 

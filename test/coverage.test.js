@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 let coverage;
 let provenance;
 before(async () => {
-  coverage = await import('../frontend/src/lib/analysis/coverage.js');
+  coverage = await import('../frontend/src/lib/analysis/coverage.ts');
   provenance = await import('../frontend/src/lib/analysis/candidate-provenance.ts');
 });
 

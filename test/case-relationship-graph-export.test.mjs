@@ -15,8 +15,8 @@ import {
   MAX_RELATIONSHIP_GRAPH_EDGES,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
 } from '../frontend/src/lib/analysis/case-relationship-graph.js';
-import { MISP_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/misp-indicator-export.js';
-import { STIX_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/stix-indicator-export.js';
+import { MISP_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/misp-indicator-export.ts';
+import { STIX_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 

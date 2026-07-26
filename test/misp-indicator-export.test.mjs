@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMispIndicatorExport, MAX_MISP_ATTRIBUTES } from '../frontend/src/lib/analysis/misp-indicator-export.js';
+import { buildMispIndicatorExport, MAX_MISP_ATTRIBUTES } from '../frontend/src/lib/analysis/misp-indicator-export.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 

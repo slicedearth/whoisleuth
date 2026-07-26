@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStixIndicatorExport, MAX_STIX_INDICATORS } from '../frontend/src/lib/analysis/stix-indicator-export.js';
+import { buildStixIndicatorExport, MAX_STIX_INDICATORS } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 

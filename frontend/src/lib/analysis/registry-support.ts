@@ -4,6 +4,9 @@ import {
   registryCompatibilityMatrix,
   registryStandardsCoverageSnapshot,
 } from '../../../../lib/registry-capabilities.mts';
+import type {
+  RegistryCompatibilityRow,
+} from '../../../../lib/registry-capabilities.mts';
 
 export const MAX_REGISTRY_SUPPORT_ROWS = 500;
 export const MAX_REGISTRY_SUPPORT_FILTER_LENGTH = 100;
@@ -14,15 +17,16 @@ export const REGISTRY_SUPPORT_SORT_KEYS = Object.freeze([
   'registry_class',
   'whois_access',
   'whois_query',
-]);
+] as const);
+export type RegistrySupportSortKey = typeof REGISTRY_SUPPORT_SORT_KEYS[number];
 
-const COVERAGE_LABELS = Object.freeze({
+const COVERAGE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   discovery_only: 'Discovery only',
   access_documented: 'Access documented',
   fixture_verified: 'Fixture verified',
 });
 
-const ACCESS_LABELS = Object.freeze({
+const ACCESS_LABELS: Readonly<Record<string, string>> = Object.freeze({
   'iana-bootstrap': 'IANA bootstrap discovery',
   'iana-referral': 'IANA referral discovery',
   'no-iana-service': 'No service published by IANA',
@@ -30,8 +34,7 @@ const ACCESS_LABELS = Object.freeze({
   'source-ip-authorization-required': 'Source-IP authorization required',
 });
 
-/** @param {unknown} value */
-export function registrySupportLabel(value) {
+export function registrySupportLabel(value: unknown): string {
   const text = typeof value === 'string'
     ? value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 128)
     : '';
@@ -39,15 +42,13 @@ export function registrySupportLabel(value) {
   return text.replaceAll('_', ' ').replaceAll('-', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-/** @param {unknown} value */
-export function registryAccessLabel(value) {
+export function registryAccessLabel(value: unknown): string {
   return typeof value === 'string' && Object.hasOwn(ACCESS_LABELS, value)
     ? ACCESS_LABELS[value]
     : 'Unknown';
 }
 
-/** @param {unknown} value */
-export function registryCoverageLabel(value) {
+export function registryCoverageLabel(value: unknown): string {
   return typeof value === 'string' && Object.hasOwn(COVERAGE_LABELS, value)
     ? COVERAGE_LABELS[value]
     : 'Unknown';
@@ -71,8 +72,13 @@ export function registrySupportCatalogue() {
   };
 }
 
-/** @param {unknown} value */
-export function inspectRegistrySupport(value) {
+export function inspectRegistrySupport(value: unknown): {
+  state: 'invalid' | 'empty';
+  profile: null;
+} | {
+  state: 'resolved';
+  profile: RegistryCompatibilityRow;
+} {
   if (typeof value !== 'string' || value.length > MAX_REGISTRY_SUPPORT_LOOKUP_LENGTH
     || /[\u0000-\u001f\u007f]/.test(value)) {
     return { state: 'invalid', profile: null };
@@ -85,12 +91,11 @@ export function inspectRegistrySupport(value) {
     : { state: 'invalid', profile: null };
 }
 
-/**
- * @param {ReturnType<typeof registryCompatibilityMatrix>} rows
- * @param {unknown} query
- * @param {unknown} coverage
- */
-export function filterRegistrySupportRows(rows, query, coverage) {
+export function filterRegistrySupportRows(
+  rows: readonly RegistryCompatibilityRow[],
+  query: unknown,
+  coverage: unknown,
+): RegistryCompatibilityRow[] {
   const boundedRows = Array.isArray(rows) ? rows.slice(0, MAX_REGISTRY_SUPPORT_ROWS) : [];
   const normalizedQuery = typeof query === 'string'
     ? query.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, MAX_REGISTRY_SUPPORT_FILTER_LENGTH).toLowerCase()
@@ -116,16 +121,20 @@ export function filterRegistrySupportRows(rows, query, coverage) {
   });
 }
 
-/**
- * @param {ReturnType<typeof registryCompatibilityMatrix>} rows
- * @param {unknown} sortKey
- * @param {unknown} direction
- */
-export function sortRegistrySupportRows(rows, sortKey, direction) {
+export function sortRegistrySupportRows(
+  rows: readonly RegistryCompatibilityRow[],
+  sortKey: unknown,
+  direction: unknown,
+): RegistryCompatibilityRow[] {
   const boundedRows = Array.isArray(rows) ? rows.slice(0, MAX_REGISTRY_SUPPORT_ROWS) : [];
-  const normalizedKey = REGISTRY_SUPPORT_SORT_KEYS.includes(String(sortKey)) ? String(sortKey) : 'suffix';
+  const requestedKey = String(sortKey);
+  const normalizedKey: RegistrySupportSortKey = (
+    (REGISTRY_SUPPORT_SORT_KEYS as readonly string[]).includes(requestedKey)
+      ? requestedKey
+      : 'suffix'
+  ) as RegistrySupportSortKey;
   const multiplier = direction === 'desc' ? -1 : 1;
-  const valueFor = (row) => {
+  const valueFor = (row: RegistryCompatibilityRow): string | null => {
     if (normalizedKey === 'coverage') return row.coverageState;
     if (normalizedKey === 'registry_class') return row.registryClass;
     if (normalizedKey === 'whois_access') return row.whoisAccessProfile;

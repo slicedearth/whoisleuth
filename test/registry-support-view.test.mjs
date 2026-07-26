@@ -14,7 +14,7 @@ import {
   registrySupportCatalogue,
   registrySupportLabel,
   sortRegistrySupportRows,
-} from '../frontend/src/lib/analysis/registry-support.js';
+} from '../frontend/src/lib/analysis/registry-support.ts';
 import { registryCompatibilityMatrix } from '../lib/registry-capabilities.mts';
 
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {

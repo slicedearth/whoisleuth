@@ -4,7 +4,7 @@
 import {
   collectDefensiveIndicatorCandidates,
   MAX_DEFENSIVE_INDICATORS,
-} from './defensive-indicator-export.js';
+} from './defensive-indicator-export.ts';
 
 export const MISP_INDICATOR_EXPORT_VERSION = 1;
 export const MAX_MISP_ATTRIBUTES = MAX_DEFENSIVE_INDICATORS;
@@ -13,23 +13,35 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const WARNING = 'Review before operational use; false positives are possible.';
 
-function record(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+type UuidFactory = () => unknown;
+type MispExportOptions = {
+  generatedAt?: unknown;
+  uuidFactory?: unknown;
+};
+type ObservationTime = {
+  observedAt: string;
+  basis: 'scan' | 'export';
+};
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-function isoTimestamp(value) {
+function isoTimestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function defaultUuidFactory() {
+function defaultUuidFactory(): string {
   const uuid = globalThis.crypto?.randomUUID?.();
   if (!uuid) throw new Error('Secure random identifiers are unavailable for the MISP export.');
   return uuid;
 }
 
-function nextUuid(uuidFactory, used) {
+function nextUuid(uuidFactory: UuidFactory, used: Set<string>): string {
   const value = uuidFactory();
   if (typeof value !== 'string' || !UUID_RE.test(value)) {
     throw new Error('The MISP identifier factory returned an invalid UUID.');
@@ -40,7 +52,7 @@ function nextUuid(uuidFactory, used) {
   return uuid;
 }
 
-function riskScore(value) {
+function riskScore(value: unknown): number | null {
   const source = record(value);
   const score = source.risk ?? source.riskScore;
   return typeof score === 'number' && Number.isFinite(score)
@@ -48,21 +60,23 @@ function riskScore(value) {
     : null;
 }
 
-function riskModelVersion(value) {
+function riskModelVersion(value: unknown): number | null {
   const source = record(value);
   const saved = record(source.saved);
   const version = source.riskModelVersion ?? saved.riskModelVersion;
-  return Number.isSafeInteger(version) && version > 0 && version <= 1000 ? version : null;
+  return typeof version === 'number' && Number.isSafeInteger(version) && version > 0 && version <= 1000
+    ? version
+    : null;
 }
 
-function scanDepth(value) {
+function scanDepth(value: unknown): 'fast' | 'deep' | 'unknown' {
   const source = record(value);
   const saved = record(source.saved);
   const depth = source.scanDepth ?? saved.scanDepth;
   return depth === 'fast' || depth === 'deep' ? depth : 'unknown';
 }
 
-function observationTime(value, generatedAt) {
+function observationTime(value: unknown, generatedAt: string): ObservationTime {
   const source = record(value);
   const saved = record(source.saved);
   const observedAt = isoTimestamp(source.observedAt) || isoTimestamp(saved.observedAt);
@@ -71,7 +85,7 @@ function observationTime(value, generatedAt) {
     : { observedAt: generatedAt, basis: 'export' };
 }
 
-function attributeComment(source, observation) {
+function attributeComment(source: unknown, observation: ObservationTime): string {
   const score = riskScore(source);
   const modelVersion = riskModelVersion(source);
   return [
@@ -86,9 +100,11 @@ function attributeComment(source, observation) {
   ].join('; ');
 }
 
-export function buildMispIndicatorExport(records, options = {}) {
+export function buildMispIndicatorExport(records: unknown, options: MispExportOptions = {}) {
   const generatedAt = isoTimestamp(options.generatedAt) || new Date().toISOString();
-  const uuidFactory = typeof options.uuidFactory === 'function' ? options.uuidFactory : defaultUuidFactory;
+  const uuidFactory: UuidFactory = typeof options.uuidFactory === 'function'
+    ? options.uuidFactory as UuidFactory
+    : defaultUuidFactory;
   let collected;
   try {
     collected = collectDefensiveIndicatorCandidates(records, MAX_MISP_ATTRIBUTES);
@@ -96,7 +112,7 @@ export function buildMispIndicatorExport(records, options = {}) {
     if (cause instanceof TypeError) throw new TypeError('MISP indicator export requires an array of Bulk results.');
     throw cause;
   }
-  const used = new Set();
+  const used = new Set<string>();
   const eventUuid = nextUuid(uuidFactory, used);
   const epochSeconds = String(Math.floor(Date.parse(generatedAt) / 1000));
   const attributes = collected.entries.map(({ domain, source }) => {

@@ -11,7 +11,7 @@
     registrySupportCatalogue,
     registrySupportLabel,
     sortRegistrySupportRows,
-  } from '$lib/analysis/registry-support.js';
+  } from '$lib/analysis/registry-support.ts';
 
   const PAGE_SIZE = 50;
   const catalogue = registrySupportCatalogue();

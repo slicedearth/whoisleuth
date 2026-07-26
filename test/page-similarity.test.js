@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 let comparison;
 let baseline;
 before(async () => {
-  comparison = await import('../frontend/src/lib/analysis/page-similarity.js');
+  comparison = await import('../frontend/src/lib/analysis/page-similarity.ts');
   baseline = await import('../frontend/src/lib/analysis/page-baseline.js');
 });
 

@@ -8,8 +8,34 @@ import { hammingDistanceHex } from './utils.js';
 
 export const PAGE_COMPARISON_VERSION = 1;
 
-/** @param {string} id @param {string} label @param {string} method @param {string} status @param {string} outcome @param {string} detail @param {boolean} partial */
-function component(id, label, method, status, outcome, detail, partial) {
+type PageBaseline = NonNullable<ReturnType<typeof normalizePageBaseline>>;
+type DigestComponent = { value: string; truncated: boolean };
+type PageComparisonStatus = 'same' | 'overlap' | 'different' | 'not_observed' | 'unavailable';
+type PageComparisonComponent = {
+  id: string;
+  label: string;
+  method: string;
+  status: PageComparisonStatus;
+  outcome: string;
+  detail: string;
+  partial: boolean;
+  sharedValues: string[];
+  hammingDistance?: number;
+  agreementPercent?: number;
+  referenceCount?: number;
+  observedCount?: number;
+  sharedCount?: number;
+};
+
+function component(
+  id: string,
+  label: string,
+  method: string,
+  status: PageComparisonStatus,
+  outcome: string,
+  detail: string,
+  partial: boolean,
+): PageComparisonComponent {
   return { id, label, method, status, outcome, detail, partial, sharedValues: [] };
 }
 
@@ -20,10 +46,14 @@ function component(id, label, method, status, outcome, detail, partial) {
  * @param {string} id
  * @param {string} label
  * @param {string} detailLabel
- * @param {{value:string,truncated:boolean}} reference
- * @param {{value:string,truncated:boolean}} observed
  */
-function digestComponent(id, label, detailLabel, reference, observed) {
+function digestComponent(
+  id: string,
+  label: string,
+  detailLabel: string,
+  reference: DigestComponent,
+  observed: DigestComponent,
+): PageComparisonComponent {
   const same = reference.value === observed.value;
   const partial = reference.truncated || observed.truncated;
   return component(
@@ -37,8 +67,10 @@ function digestComponent(id, label, detailLabel, reference, observed) {
   );
 }
 
-/** @param {any} reference @param {any} observed */
-function visibleTextComponent(reference, observed) {
+function visibleTextComponent(
+  reference: PageBaseline['visibleText'],
+  observed: PageBaseline['visibleText'],
+): PageComparisonComponent {
   if (!reference && !observed) {
     return component('visible_text', 'Visible text', '64-bit SimHash distance', 'not_observed', 'Not observed', 'Neither capture produced a visible-text fingerprint.', false);
   }
@@ -65,8 +97,10 @@ function visibleTextComponent(reference, observed) {
   };
 }
 
-/** @param {any} reference @param {any} observed */
-function formComponent(reference, observed) {
+function formComponent(
+  reference: PageBaseline['formStructure'],
+  observed: PageBaseline['formStructure'],
+): PageComparisonComponent {
   if (!reference && !observed) {
     return component('form_structure', 'Form structure', 'Exact SHA-256 equality', 'not_observed', 'No forms fingerprinted', 'Neither capture contained a form structure to fingerprint.', false);
   }
@@ -76,8 +110,7 @@ function formComponent(reference, observed) {
   return digestComponent('form_structure', 'Form structure', 'Form-structure', reference, observed);
 }
 
-/** @param {Array<string>} left @param {Array<string>} right */
-function intersect(left, right) {
+function intersect(left: readonly string[], right: readonly string[]): string[] {
   const rightSet = new Set(right);
   return left.filter((value) => rightSet.has(value));
 }
@@ -86,16 +119,20 @@ function intersect(left, right) {
  * @param {string} id
  * @param {string} label
  * @param {string} noun
- * @param {{values:Array<any>,truncated:boolean}} reference
- * @param {{values:Array<any>,truncated:boolean}} observed
- * @param {(value:any)=>string} key
  */
-function setComponent(id, label, noun, reference, observed, key) {
+function setComponent<T>(
+  id: string,
+  label: string,
+  noun: string,
+  reference: { values: T[]; truncated: boolean },
+  observed: { values: T[]; truncated: boolean },
+  key: (value: T) => string,
+): PageComparisonComponent {
   const referenceValues = reference.values.map(key);
   const observedValues = observed.values.map(key);
   const sharedValues = intersect(referenceValues, observedValues);
   const partial = reference.truncated || observed.truncated;
-  const quantity = (count) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+  const quantity = (count: number) => `${count} ${noun}${count === 1 ? '' : 's'}`;
   if (!referenceValues.length && !observedValues.length) {
     return {
       ...component(id, label, 'Bounded set overlap', 'not_observed', `No ${noun}s observed`, `Neither capture retained any ${noun}s.`, partial),
@@ -135,7 +172,7 @@ function setComponent(id, label, noun, reference, observed, key) {
  * @param {unknown} rawReference
  * @param {unknown} rawObserved
  */
-export function comparePageBaselines(rawReference, rawObserved) {
+export function comparePageBaselines(rawReference: unknown, rawObserved: unknown) {
   const reference = normalizePageBaseline(rawReference);
   const observed = normalizePageBaseline(rawObserved);
   if (!reference || !observed) return null;
@@ -151,6 +188,7 @@ export function comparePageBaselines(rawReference, rawObserved) {
   const counts = { same: 0, overlap: 0, different: 0, notObserved: 0, unavailable: 0 };
   for (const item of components) {
     if (item.status === 'not_observed') counts.notObserved += 1;
+    else if (item.status === 'unavailable') counts.unavailable += 1;
     else counts[item.status] += 1;
   }
 

@@ -17,16 +17,16 @@
   import { CASE_DISPOSITIONS, dispositionLabel, editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
-  import { buildCoverageReport } from '$lib/analysis/coverage.js';
+  import { buildCoverageReport } from '$lib/analysis/coverage.ts';
   import { computeOpportunityScore, explainRiskScore, formatActivityCell } from '$lib/analysis/scoring.ts';
   import { entityDisplayName, parseDomainInput, rowsToCsv } from '$lib/analysis/utils.js';
   import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.js';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
   import { loadRelationshipObservations, retainRelationshipObservation } from '$lib/relationship-observations';
   import { ctCsvFields } from '$lib/analysis/bulk-export.ts';
-  import { buildDefensiveIndicatorExport, isDefensiveIndicatorCandidate } from '$lib/analysis/defensive-indicator-export.js';
-  import { buildStixIndicatorExport } from '$lib/analysis/stix-indicator-export.js';
-  import { buildMispIndicatorExport } from '$lib/analysis/misp-indicator-export.js';
+  import { buildDefensiveIndicatorExport, isDefensiveIndicatorCandidate } from '$lib/analysis/defensive-indicator-export.ts';
+  import { buildStixIndicatorExport } from '$lib/analysis/stix-indicator-export.ts';
+  import { buildMispIndicatorExport } from '$lib/analysis/misp-indicator-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { compactHttpObservation, normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
   import {

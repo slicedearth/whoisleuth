@@ -4,7 +4,7 @@
 
 import {
   collectDefensiveIndicatorCandidates,
-} from './defensive-indicator-export.js';
+} from './defensive-indicator-export.ts';
 
 export const STIX_INDICATOR_EXPORT_VERSION = 1;
 export const MAX_STIX_INDICATORS = 1000;
@@ -13,17 +13,29 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const WARNING = 'Heuristic finding; review before operational use because false positives are possible.';
 
-function record(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+type IdFactory = (type: string) => unknown;
+type StixExportOptions = {
+  generatedAt?: unknown;
+  idFactory?: unknown;
+};
+type ObservationTime = {
+  observedAt: string;
+  basis: 'scan' | 'export';
+};
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-function isoTimestamp(value) {
+function isoTimestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function riskScore(value) {
+function riskScore(value: unknown): number | null {
   const source = record(value);
   const score = source.risk ?? source.riskScore;
   return typeof score === 'number' && Number.isFinite(score)
@@ -31,21 +43,23 @@ function riskScore(value) {
     : null;
 }
 
-function riskModelVersion(value) {
+function riskModelVersion(value: unknown): number | null {
   const source = record(value);
   const saved = record(source.saved);
   const version = source.riskModelVersion ?? saved.riskModelVersion;
-  return Number.isSafeInteger(version) && version > 0 && version <= 1000 ? version : null;
+  return typeof version === 'number' && Number.isSafeInteger(version) && version > 0 && version <= 1000
+    ? version
+    : null;
 }
 
-function scanDepth(value) {
+function scanDepth(value: unknown): 'fast' | 'deep' | 'unknown' {
   const source = record(value);
   const saved = record(source.saved);
   const depth = source.scanDepth ?? saved.scanDepth;
   return depth === 'fast' || depth === 'deep' ? depth : 'unknown';
 }
 
-function observationTime(value, generatedAt) {
+function observationTime(value: unknown, generatedAt: string): ObservationTime {
   const source = record(value);
   const saved = record(source.saved);
   const observedAt = isoTimestamp(source.observedAt) || isoTimestamp(saved.observedAt);
@@ -54,13 +68,13 @@ function observationTime(value, generatedAt) {
     : { observedAt: generatedAt, basis: 'export' };
 }
 
-function defaultIdFactory(type) {
+function defaultIdFactory(type: string): string {
   const uuid = globalThis.crypto?.randomUUID?.();
   if (!uuid) throw new Error('Secure random identifiers are unavailable for the STIX export.');
   return `${type}--${uuid}`;
 }
 
-function stixId(type, idFactory) {
+function stixId(type: string, idFactory: IdFactory): string {
   const value = idFactory(type);
   const prefix = `${type}--`;
   if (typeof value !== 'string' || !value.startsWith(prefix) || !UUID_RE.test(value.slice(prefix.length))) {
@@ -69,9 +83,11 @@ function stixId(type, idFactory) {
   return value.toLowerCase();
 }
 
-export function buildStixIndicatorExport(records, options = {}) {
+export function buildStixIndicatorExport(records: unknown, options: StixExportOptions = {}) {
   const generatedAt = isoTimestamp(options.generatedAt) || new Date().toISOString();
-  const idFactory = typeof options.idFactory === 'function' ? options.idFactory : defaultIdFactory;
+  const idFactory: IdFactory = typeof options.idFactory === 'function'
+    ? options.idFactory as IdFactory
+    : defaultIdFactory;
   let collected;
   try {
     collected = collectDefensiveIndicatorCandidates(records, MAX_STIX_INDICATORS);
@@ -79,16 +95,15 @@ export function buildStixIndicatorExport(records, options = {}) {
     if (cause instanceof TypeError) throw new TypeError('STIX indicator export requires an array of Bulk results.');
     throw cause;
   }
-  const usedIds = new Set();
-  const nextId = (type) => {
+  const usedIds = new Set<string>();
+  const nextId = (type: string): string => {
     const id = stixId(type, idFactory);
     if (usedIds.has(id)) throw new Error('The STIX identifier factory returned a duplicate identifier.');
     usedIds.add(id);
     return id;
   };
   const producerId = nextId('identity');
-  /** @type {Array<Record<string, unknown>>} */
-  const objects = [{
+  const objects: Array<Record<string, unknown>> = [{
     type: 'identity', spec_version: '2.1', id: producerId,
     created: generatedAt, modified: generatedAt,
     name: 'WHOISleuth', identity_class: 'system',
