@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, pseudoContent, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
 
 // Default fixtures use dotless values so classifyQuery rejects them before
 // any upstream work. Tests that need completed result data install an explicit
@@ -34,6 +34,38 @@ test('a small scan completes and reports the correct error count', async ({ page
   await expect(page.locator('.filters button', { hasText: 'all' }).locator('span')).toHaveText(String(domains.length));
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText(String(domains.length));
   await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill('unknown confidence'));
+});
+
+test('a malformed successful response remains an explicit failure in exports and retained monitoring state', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ availability: 'registered', diagnostics: {} }),
+  }));
+
+  await runBulkScan(page, ['malformed-response.example']);
+  const row = page.locator('.results-table tbody tr');
+  await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText('1');
+  await expect(row.locator('td[data-label="Registration"]')).toContainText('error');
+  await expect(row.locator('td[data-label="Domain"]')).toContainText('Bulk lookup returned an invalid response.');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const csv = await readFile(path!, 'utf8');
+  expect(csv).toContain('malformed-response.example');
+  expect(csv).toContain('Bulk lookup returned an invalid response.');
+  expect(csv).not.toContain('malformed-response.example,,,,,unknown');
+
+  await page.getByLabel('Watchlist name').fill('Invalid response audit');
+  await page.getByRole('button', { name: 'Save to Monitor' }).click();
+  const retained = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(retained.records[0]?.value?.results?.[0]).toMatchObject({
+    domain: 'malformed-response.example',
+    availability: 'error',
+  });
 });
 
 test('results stay a sortable table at desktop width', async ({ page }) => {
@@ -71,8 +103,8 @@ test('sorts complete results by registration, confidence, website, registrar, an
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        availability: { domain, ...evidence },
-        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+        availability: { applicable: true, domain, ...evidence },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
       }),
     });
   });
@@ -155,8 +187,8 @@ test('leaving a paused scan retains every settled result and releases paused wor
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        availability: { domain, state: 'registered', confidence: 'high' },
-        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
       }),
     });
   });
@@ -270,10 +302,10 @@ test('IDN evidence renders and filters without changing the risk score', async (
     contentType: 'application/json',
     body: JSON.stringify({
       availability: {
-        domain: 'xn--ypal-43d9g.com', state: 'registered', confidence: 'high',
+        applicable: true, domain: 'xn--ypal-43d9g.com', state: 'registered', confidence: 'high',
         nameservers: [], privacyProtected: null, activityStatus: null,
       },
-      diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      diagnostics: { version: 7, rdap: { status: 'unsupported' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
     }),
   }));
 
@@ -314,11 +346,11 @@ test('risk model v6 exposes cross-family corroboration in Bulk triage', async ({
     contentType: 'application/json',
     body: JSON.stringify({
       availability: {
-        domain: 'candidate.example', state: 'registered', confidence: 'high',
+        applicable: true, domain: 'candidate.example', state: 'registered', confidence: 'high',
         faviconHash: 'a'.repeat(64), externalAssetHosts: ['official.example'],
         phishingLanguageMatch: 'verify your account', hasPasswordField: true,
       },
-      diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
     }),
   }));
 
@@ -394,7 +426,7 @@ test('deep results present bounded relationship evidence including exact native 
       contentType: 'application/json',
       body: JSON.stringify({
         availability: {
-          domain, state: 'registered', confidence: 'high', activityStatus: 'active', deepScanComplete: true,
+          applicable: true, domain, state: 'registered', confidence: 'high', activityStatus: 'active', deepScanComplete: true,
           nameservers: shared ? ['ns2.shared.example', 'ns1.shared.example'] : ['ns.third.example'],
           faviconHash: shared ? 'a'.repeat(64) : 'b'.repeat(64),
           externalAssetHosts: domain === 'third.example' ? ['static.official.example'] : [],
@@ -409,7 +441,7 @@ test('deep results present bounded relationship evidence including exact native 
             certificate: { fingerprintSha256: 'c'.repeat(64) },
           } : null,
         },
-        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
       }),
     });
   });
@@ -484,11 +516,12 @@ test('candidate handoff presents defensive coverage actions and export', async (
       contentType: 'application/json',
       body: JSON.stringify({
         availability: {
+          applicable: true,
           domain,
           state: domain.startsWith('login-') ? 'registered' : 'available',
           confidence: 'high',
         },
-        diagnostics: { rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
       }),
     });
   });

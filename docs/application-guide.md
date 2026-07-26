@@ -57,7 +57,10 @@ investigation data.
 
 Lookup accepts one domain, IPv4 or IPv6 address, or ASN. A domain Lookup keeps
 registry, registrar, WHOIS, DNS, HTTP, TLS, page, network, and optional provider
-evidence separately attributed.
+evidence separately attributed. Deep domain Lookup can add the zone's bounded
+SOA publication and HTTPS service-binding records published for the origin.
+Deep public-IP Lookup can add separately attributed PTR names. None of these
+sources decides domain availability, Risk, ownership, or hosting control.
 
 The primary assessment, source health, and material registration conflicts
 remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
@@ -67,12 +70,32 @@ evidence, collection time, or limitations.
 
 During collection, Lookup identifies the requested source families without
 pretending that any one source has completed before the bounded unified
-response arrives. Once a result is available, the sticky section rail tracks
-the current evidence group. The topology uses separate visual families for
-registry, network, web, derived, and analyst evidence, with an adjacent key;
-source status remains an independent label and colour.
+response arrives. It shows elapsed time and a 40-second browser deadline.
+**Cancel lookup** stops the browser from waiting and discards any incomplete
+response; already-admitted server work can still finish within its existing
+bounds. Leaving Lookup applies the same browser cancellation.
 
-After a successful single Lookup, the deliberate JSON evidence export can
+After a successful deep full response, **Collection timing** reports total
+request time plus the duration and settle offset of each source branch that
+actually ran. Branches overlap, so their durations are not additive. A settled
+branch can still have a partial, unavailable, not-found, or error state; use
+the source card for that evidence status. Fast and compact responses retain
+their existing diagnostics and omit this timing object.
+
+Once a result is available, the sticky section rail tracks the current
+evidence group. The topology uses separate visual families for registry,
+network, web, derived, and analyst evidence, with an adjacent key; source
+status remains an independent label and colour.
+
+After a successful single-domain Lookup, **Download report** creates a readable
+Markdown summary locally in the browser. It includes registry, registrar, and
+WHOIS source health and collection time, normalized findings, the explainable
+Risk assessment, and limitations. It deliberately excludes raw RDAP and WHOIS
+responses, expanded contacts, provider payloads, scripts, and remote assets.
+IP and ASN results retain the JSON evidence action but do not offer this first
+domain-focused readable report.
+
+**Export evidence JSON** remains the separate full-fidelity option. It can
 include normalized and raw registration sources, supporting observations,
 diagnostics, comparisons, and provenance. It can contain public contact data,
 so review and store it accordingly.
@@ -211,7 +234,7 @@ Fast and Deep are collection profiles, not confidence ratings.
 | Profile | Intended use | Collection boundary |
 | --- | --- | --- |
 | **Fast Lookup or Bulk** | Lower-request registration-first triage. | Uses RDAP-led registration analysis and a bounded authoritative DNS-delegation fallback where needed. WHOIS, website, TLS, and Deep enrichments are skipped explicitly. |
-| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS, HTTP, favicon, page identity, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
+| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context and HTTPS service-binding publications, public-IP PTR context, HTTP, favicon, page identity, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
 | **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, and mail context needed for triage. Full raw sources and single-Lookup-only enrichments remain omitted. |
 
 Deep single Lookup is the default in the Lookup page. Bulk keeps its own
@@ -260,19 +283,31 @@ Deep single Lookup can derive several views from one bounded homepage response:
 - static page identity, forms, external origins, public tracking identifiers,
   and bounded fingerprints;
 - curated technology indicators for common content, commerce, site-building,
-  framework, server, and delivery products; and
+  framework, server, and delivery products;
+- apparent browser-library versions and bounded advisory references inferred
+  from script names, versions, hashes, or capped inline signatures that were
+  already present in the captured page; and
 - passive security-posture findings from already-collected HTTP, page, TLS,
   DNSSEC, and CAA evidence.
 
 Technology indicators are evidence-backed clues, not a complete software
 inventory. Static collection does not execute JavaScript, and sites can conceal
-or remove distinctive indicators.
+or remove distinctive indicators. WHOISleuth does not fetch referenced scripts.
+A browser-library advisory match is a lead for review, not proof that the
+component is loaded, reachable, vulnerable in context, or exploitable. A
+non-match does not establish that no vulnerable component exists.
 
 Observed network context maps one public endpoint address to its registered IP
 network. A delivery network, proxy, shared host, load balancer, or
 location-dependent DNS response may hide the origin. Neither the technology
 profile nor network registration identifies a hosting account or proves
 control.
+
+When the submitted target is a public IP address, Deep Lookup can make one
+bounded reverse-DNS query and show the returned PTR names as operator-published
+routing context. A PTR name can be stale, generic, delegated, or shared. It
+does not prove that the named party owns or controls the address or any hosted
+service.
 
 Passive posture is not vulnerability scanning. WHOISleuth does not deliver
 payloads, authenticate to the target, crawl for flaws, enumerate every
@@ -342,6 +377,11 @@ Exports are created locally and only after an explicit action. Depending on the
 workflow they can contain public registration contacts, analyst notes, source
 observations, or compact case history.
 
+- Use a domain Lookup Markdown report for a bounded readable registry,
+  registrar, and WHOIS source summary. It omits raw registration payloads and
+  expanded contacts.
+- Use the Lookup JSON evidence package when complete captured source material
+  is required, and treat it as potentially containing public contact data.
 - Review each file before sharing it.
 - Keep sensitive analyst notes out of reports unless needed.
 - Treat source timestamps and fingerprints as provenance and deduplication

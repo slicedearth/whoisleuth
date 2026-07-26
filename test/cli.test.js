@@ -49,7 +49,9 @@ describe('CLI argument parsing', () => {
 
   test('help and version actions never require a command', () => {
     assert.deepEqual(parseCliArguments([]), { action: 'help' });
-    assert.deepEqual(parseCliArguments(['lookup', '--help']), { action: 'help' });
+    assert.deepEqual(parseCliArguments(['lookup', '--help']), { action: 'help', command: 'lookup' });
+    assert.deepEqual(parseCliArguments(['registry-support', '-h']), { action: 'help', command: 'registry-support' });
+    assert.throws(() => parseCliArguments(['lookup', 'example.com', '--help']), /Help accepts/);
     assert.deepEqual(parseCliArguments(['--version']), { action: 'version' });
   });
 });
@@ -216,6 +218,30 @@ test('terminal lookup presents bounded observed network registration context', (
   assert.doesNotMatch(terminal, /must-not-render/);
 });
 
+test('terminal deep IP lookup presents separately attributed reverse DNS names', () => {
+  const result = lookupResult({
+    reverseDns: {
+      version: 1,
+      status: 'success',
+      source: 'reverse_dns',
+      records: { ptr: ['edge.example.test', 'fallback.example.test'] },
+      rawAnswer: 'must-not-render',
+    },
+  });
+  const document = buildCliLookupDocument(
+    '192.0.2.1',
+    { type: 'ipv4', value: '192.0.2.1' },
+    result,
+    '2026-07-14T00:00:00.000Z',
+    'deep',
+  );
+  const terminal = formatTerminalLookup(document);
+
+  assert.match(terminal, /Reverse DNS\s+Success/);
+  assert.match(terminal, /PTR names\s+edge\.example\.test, fallback\.example\.test/);
+  assert.doesNotMatch(terminal, /must-not-render/);
+});
+
 test('terminal deep lookup summarizes current website evidence without exposing raw details', () => {
   const result = lookupResult({
     availability: {
@@ -245,6 +271,15 @@ test('terminal deep lookup summarizes current website evidence without exposing 
           },
           { name: `Example Edge\n${'x'.repeat(500)}`, category: 'delivery platform', confidence: 'medium' },
         ],
+        browserLibraryProfile: {
+          profileVersion: 1,
+          source: 'derived',
+          status: 'success',
+          findings: [
+            { name: 'fixture library', apparentVersion: '1.2.3', advisoryCount: 1 },
+            { name: 'fixture helper', apparentVersion: '2.0.0', advisoryCount: 0 },
+          ],
+        },
       },
       securityPosture: {
         source: 'derived',
@@ -272,6 +307,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /TLS protocol\s+TLSv1\.3/);
   assert.match(terminal, /Technology\s+Success · 2 indicators/);
   assert.match(terminal, /Example Commerce \(commerce platform, high\)/);
+  assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
   assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
   assert.doesNotMatch(terminal, /private-marker|private-posture-detail/);

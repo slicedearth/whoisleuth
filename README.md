@@ -53,13 +53,34 @@ Deep domain Lookup can combine:
 - separately attributed registrar RDAP when the registry publishes an eligible
   HTTPS link;
 - authority-aware availability analysis;
-- DNS, HTTP, favicon, page-identity, mail, and one-connection TLS evidence;
-- passive technology and security-posture indicators derived from the captured
-  response, without vulnerability testing;
+- DNS, including deep-only SOA zone context and HTTPS service-binding
+  publication, plus HTTP, favicon,
+  page-identity, mail, and one-connection TLS evidence;
+- passive technology, browser-library catalogue, and security-posture
+  indicators derived from the captured response, without fetching referenced
+  scripts or performing vulnerability testing;
 - one observed public endpoint mapped to its IP RDAP network registration;
+- bounded reverse-DNS names for a directly entered public IP address;
 - optional security.txt and configured external intelligence sources;
 - a collapsed set of analyst-controlled links to relevant public registration,
   certificate, routing, interconnection, history, and site-status tools.
+
+While a deep Lookup is pending, the Console shows elapsed time, the eligible
+source branches still awaiting the final response, a 40-second browser
+deadline, and a cancel action. It does not invent per-source completion.
+Successful deep full responses add bounded backend-reported settle timing for
+the branches that actually ran. Cancelling or leaving the page stops the
+browser from waiting but cannot recall work already admitted by the server;
+no incomplete response is retained or rendered.
+
+After a domain result arrives, **Download report** creates a bounded readable
+Markdown summary entirely in the browser. It records registry, registrar, and
+WHOIS source health and collection time alongside normalized findings, the
+explainable Risk assessment, and interpretation limits. It does not include raw
+RDAP or WHOIS responses, expanded contacts, provider payloads, scripts, or
+remote assets. The separate JSON evidence export remains the full-fidelity
+option and can contain public registration contacts. IP and ASN reports remain
+outside this first readable-report contract.
 
 The external evidence pivots are ordinary links, not integrations. WHOISleuth
 does not prefetch them, call their APIs, cache or store their results, or use

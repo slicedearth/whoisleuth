@@ -82,31 +82,34 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
     const domain = url.searchParams.get('q') || 'portal.example.test';
+    const compact = url.searchParams.get('compact') === '1';
+    const availability = {
+      applicable: true,
+      state: 'registered',
+      confidence: 'high',
+      domain,
+      deepScanComplete: url.searchParams.get('fast') !== '1',
+      registrar: { name: 'Example Registrar' },
+      nameservers: ['ns1.example.net'],
+      dns: { status: 'complete', records: { a: ['192.0.2.10'] } },
+    };
+    const diagnostics = {
+      version: 7,
+      rdap: { status: 'complete' },
+      whois: { status: url.searchParams.get('fast') === '1' ? 'skipped' : 'complete' },
+      availability: { status: 'complete' },
+    };
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
+      body: JSON.stringify(compact ? { availability, diagnostics } : {
         query: domain,
         type: 'domain',
         registrableDomain: domain,
-        availability: {
-          applicable: true,
-          state: 'registered',
-          confidence: 'high',
-          domain,
-          deepScanComplete: url.searchParams.get('fast') !== '1',
-          registrar: { name: 'Example Registrar' },
-          nameservers: ['ns1.example.net'],
-          dns: { status: 'complete', records: { a: ['192.0.2.10'] } },
-        },
+        availability,
         rdap: { parsed: { status: ['active'], entities: [] } },
         whois: { parsed: {}, chain: [] },
-        diagnostics: {
-          version: 7,
-          rdap: { status: 'complete' },
-          whois: { status: url.searchParams.get('fast') === '1' ? 'skipped' : 'complete' },
-          availability: { status: 'complete' },
-        },
+        diagnostics,
       }),
     });
   });

@@ -1,9 +1,18 @@
 // Versioned, bounded technology indicators derived from the HTTP and static
-// HTML evidence already collected by a deep lookup. Signatures emit only
-// curated labels and fixed evidence descriptions; matched markup, header
-// values, URL paths, and arbitrary upstream strings are never retained.
+// HTML evidence already collected by a deep lookup. A standards-compliant
+// parser identifies live elements and attributes without executing scripts.
+// Signatures emit only curated labels and fixed evidence descriptions; matched
+// markup, header values, URL paths, and arbitrary upstream strings are never
+// retained.
 
+import { analyzeBrowserLibraries } from './browser-library-profile.mts';
 import { createObservation } from './observation.mts';
+import {
+  MAX_STATIC_HTML_CHARS,
+  MAX_TAG_LENGTH,
+  MAX_TECHNOLOGY_TAGS,
+  analyzeStaticHtml,
+} from './static-html-analysis.mts';
 
 type TechnologyCategory =
   | 'content management'
@@ -48,20 +57,15 @@ type TechnologySignature = {
   evidence: SignatureEvidence[];
 };
 
-const TECHNOLOGY_PROFILE_VERSION = 2;
-const MAX_TECHNOLOGY_HTML_CHARS = 300_000;
-const MAX_TECHNOLOGY_TAGS = 2_048;
-const MAX_TECHNOLOGY_TAG_LENGTH = 4_096;
+const TECHNOLOGY_PROFILE_VERSION = 3;
+const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
+const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
 const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 const MAX_RESOURCE_ORIGINS = 30;
 const MAX_GENERATOR_INPUT = 160;
 const MAX_SERVER_INPUT = 240;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
-const HTML_COMMENT_RE = /<!--[\s\S]*?(?:-->|$)/g;
-const RAW_TEXT_BLOCK_RE = /<(script|style|textarea|template)\b([^>]*)>[\s\S]*?<\/\1\s*>/gi;
-const TECHNOLOGY_TAG_RE = /<[a-z][^>]{0,4096}>/gi;
-const OVERSIZED_TECHNOLOGY_TAG_RE = /<[a-z][^>]{4097}/i;
 
 function boundedLowercase(value: unknown, maxLength: number): string {
   if (typeof value !== 'string' || value.length > maxLength || CONTROL_CHARACTER_RE.test(value)) return '';
@@ -81,27 +85,6 @@ function normalizedResourceHosts(value: unknown): Set<string> {
     }
   }
   return hosts;
-}
-
-function searchableTagMarkup(value: unknown): { markup: string; inputLimitReached: boolean; tagLimitReached: boolean } {
-  const supplied = typeof value === 'string' ? value : '';
-  const inputLimitReached = supplied.length > MAX_TECHNOLOGY_HTML_CHARS;
-  const sanitized = supplied
-    .slice(0, MAX_TECHNOLOGY_HTML_CHARS)
-    .replace(HTML_COMMENT_RE, ' ')
-    .replace(RAW_TEXT_BLOCK_RE, '<$1$2>');
-  const tags: string[] = [];
-  let tagLimitReached = OVERSIZED_TECHNOLOGY_TAG_RE.test(sanitized);
-  let match;
-  TECHNOLOGY_TAG_RE.lastIndex = 0;
-  while ((match = TECHNOLOGY_TAG_RE.exec(sanitized))) {
-    if (tags.length >= MAX_TECHNOLOGY_TAGS) {
-      tagLimitReached = true;
-      break;
-    }
-    tags.push(match[0].toLowerCase());
-  }
-  return { markup: tags.join('\n'), inputLimitReached, tagLimitReached };
 }
 
 function generatorEvidence(pattern: RegExp, description: string): SignatureEvidence {
@@ -294,9 +277,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
 ];
 
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
-  const tagMarkup = searchableTagMarkup(input.html);
+  const htmlAnalysis = analyzeStaticHtml(input.html);
+  const browserLibraryProfile = analyzeBrowserLibraries({
+    htmlAnalysis,
+    observedAt: input.observedAt,
+    sourceTruncated: input.sourceTruncated,
+  });
   const context: MatchContext = {
-    html: tagMarkup.markup,
+    html: htmlAnalysis.markup,
     generator: boundedLowercase(input.generator, MAX_GENERATOR_INPUT),
     httpServer: boundedLowercase(input.httpServer, MAX_SERVER_INPUT),
     resourceHosts: normalizedResourceHosts(input.resourceOrigins),
@@ -317,15 +305,18 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
 
   findings.sort((left, right) => left.category.localeCompare(right.category) || left.name.localeCompare(right.name));
   const findingLimitReached = findings.length > MAX_TECHNOLOGY_FINDINGS;
-  const truncated = input.sourceTruncated === true || tagMarkup.inputLimitReached || tagMarkup.tagLimitReached || findingLimitReached;
+  const truncated = input.sourceTruncated === true
+    || htmlAnalysis.inputLimitReached
+    || htmlAnalysis.tagLimitReached
+    || findingLimitReached;
   const limitations = [
     'Curated signature matching is selective; an unmatched technology may still be present.',
     'Static response evidence cannot identify JavaScript-rendered or deliberately concealed technologies.',
     'Technology indicators describe observed implementation clues, not ownership, safety, or maliciousness.',
   ];
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so technology indicators may be incomplete.');
-  if (tagMarkup.inputLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_HTML_CHARS} HTML characters were evaluated.`);
-  if (tagMarkup.tagLimitReached) limitations.push(`Technology matching reached the ${MAX_TECHNOLOGY_TAGS}-tag or ${MAX_TECHNOLOGY_TAG_LENGTH}-character tag boundary.`);
+  if (htmlAnalysis.inputLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_HTML_CHARS} HTML characters were evaluated.`);
+  if (htmlAnalysis.tagLimitReached) limitations.push(`Technology matching reached the ${MAX_TECHNOLOGY_TAGS}-tag or ${MAX_TECHNOLOGY_TAG_LENGTH}-character tag boundary.`);
   if (findingLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_FINDINGS} technology findings were retained.`);
 
   return {
@@ -344,10 +335,11 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
         generatorEvaluated: Boolean(context.generator),
         serverEvaluated: Boolean(context.httpServer),
         resourceOriginsEvaluated: context.resourceHosts.size,
-        tagLimitReached: tagMarkup.tagLimitReached,
+        tagLimitReached: htmlAnalysis.tagLimitReached,
       },
     }),
     findings: findings.slice(0, MAX_TECHNOLOGY_FINDINGS),
+    browserLibraryProfile,
   };
 }
 

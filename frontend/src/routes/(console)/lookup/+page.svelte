@@ -23,6 +23,7 @@
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
+  import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
@@ -39,16 +40,23 @@
   } from '$lib/analysis/evidence-topology.ts';
   import {
     createLookupViewModel,
-    lookupHttpErrorMessage,
-    parseLookupHttpResponse,
+    type JsonObject,
     type LookupHttpResponse,
   } from '$lib/analysis/lookup-response.js';
+  import {
+    LOOKUP_CLIENT_TIMEOUT_MS,
+  } from '$lib/analysis/lookup-request.js';
+  import {
+    buildLookupReadableReport,
+    lookupReadableReportFilename,
+  } from '$lib/analysis/lookup-readable-report.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.js';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.js';
+  import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import {
     explainOpportunityScore,
     explainRiskScore,
@@ -58,7 +66,7 @@
     formatPrivacyCell,
   } from '$lib/analysis/scoring.js';
 
-  type JsonRecord = Record<string, any>;
+  type JsonRecord = JsonObject;
   type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; transportSecurity?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null; attempts?:Array<{outcome?:string}> };
   type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
   type ComparisonField = { label:string; status:string; rdapDisplay:string; whoisDisplay:string };
@@ -68,6 +76,7 @@
   let query=$state('');
   let lookupMode=$state<LookupMode>('deep');
   let loading=$state(false);
+  let loadingElapsedMs=$state(0);
   let includeExternalIntelligence=$state(false);
   let includeMalwareHostIntelligence=$state(false);
   let includeMalwareIocIntelligence=$state(false);
@@ -77,6 +86,8 @@
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let pageActive=false;
+  const lookupRequestController=new LookupRequestController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const lookupLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
@@ -89,8 +100,12 @@
   const websiteProbeCapability=$derived(featureCapability(capabilityReport?.()||null,'website_probe'));
   const securityTxtSupported=$derived(websiteProbeCapability?.status==='supported');
 
-  const rec=(value:any):JsonRecord=>value&&typeof value==='object'?value:{};
-  const show=(value:any):string=>value==null||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='object'?show(value.name||value.org||value.handle||value.domain):String(value);
+  const isRecord=(value:unknown):value is JsonRecord=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+  const rec=(value:unknown):JsonRecord=>isRecord(value)?value:{};
+  const records=(value:unknown):JsonRecord[]=>Array.isArray(value)?value.filter(isRecord):[];
+  const show=(value:unknown):string=>value==null||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='object'?show(rec(value).name||rec(value).org||rec(value).handle||rec(value).domain):String(value);
+  const textOrNull=(value:unknown):string|null=>typeof value==='string'&&value?value:null;
+  const firstText=(...values:unknown[]):string|null=>values.map(textOrNull).find((value):value is string=>value!==null)??null;
   const parsedInput=$derived(parseDomainInput(query));
   const entries=$derived(parsedInput.entries);
   const securityTxtEligible=$derived.by(()=>{
@@ -107,7 +122,10 @@
   const rdapParsed=$derived(lookupView.rdapParsed as JsonRecord);
   const whoisParsed=$derived(lookupView.whoisParsed as JsonRecord);
   const diagnostics=$derived(lookupView.diagnostics as JsonRecord);
+  const lookupTiming=$derived(lookupView.timing);
   const registryAccess=$derived(lookupView.registryAccess as JsonRecord);
+  const reverseDns=$derived(lookupView.reverseDns as JsonRecord);
+  const reverseDnsRecords=$derived(lookupView.reverseDnsRecords as JsonRecord);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext as JsonRecord);
   const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint as JsonRecord);
   const observedNetworkRdap=$derived(lookupView.observedNetworkRdap as JsonRecord);
@@ -142,13 +160,17 @@
   const pageDownloads=$derived(lookupView.pageDownloads as JsonRecord);
   const pageFingerprints=$derived(lookupView.pageFingerprints as JsonRecord);
   const technologyProfile=$derived(lookupView.technologyProfile as JsonRecord);
+  const browserLibraryProfile=$derived(technologyProfile.browserLibraryProfile as JsonRecord);
   const securityPosture=$derived(lookupView.securityPosture as JsonRecord);
   const securityPostureSummary=$derived(lookupView.securityPostureSummary as JsonRecord);
   const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
   const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
-  const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>Array.isArray(whoisParsed.contactsByRole?.[role])&&whoisParsed.contactsByRole[role].length));
-  const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed,{rdapStatus:diagnostics.rdap?.status,whoisStatus:diagnostics.whois?.status}):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0,rdap_unavailable:0,whois_unavailable:0,rdap_incomplete:0,whois_incomplete:0}});
-  const registrarPublicationComparison=$derived(result?.type==='domain'?compareRdapPublications(rdapParsed,registrarRdapParsed,{registryStatus:diagnostics.rdap?.status,registrarStatus:registrarRdap.status}):{fields:[],counts:{equivalent:0,conflict:0,registry_only:0,registrar_only:0,registry_redacted:0,registrar_redacted:0,registry_unavailable:0,registrar_unavailable:0,registry_incomplete:0,registrar_incomplete:0}});
+  const whoisContactsByRole=$derived(rec(whoisParsed.contactsByRole));
+  const rdapDiagnostic=$derived(rec(diagnostics.rdap));
+  const whoisDiagnostic=$derived(rec(diagnostics.whois));
+  const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>records(whoisContactsByRole[role]).length>0));
+  const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed,{rdapStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,whoisStatus:typeof whoisDiagnostic.status==='string'?whoisDiagnostic.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0,rdap_unavailable:0,whois_unavailable:0,rdap_incomplete:0,whois_incomplete:0}});
+  const registrarPublicationComparison=$derived(result?.type==='domain'?compareRdapPublications(rdapParsed,registrarRdapParsed,{registryStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,registrarStatus:typeof registrarRdap.status==='string'?registrarRdap.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,registry_only:0,registrar_only:0,registry_redacted:0,registrar_redacted:0,registry_unavailable:0,registrar_unavailable:0,registry_incomplete:0,registrar_incomplete:0}});
   const idnAnalysis=$derived(result?.type==='domain'?analyzeDomainIdn(String(result?.registrableDomain||availability.domain||''),profile?.officialDomains||[]):null);
   const profileSignals=$derived.by(()=>{
     return matchProfileSignals(String(availability.domain||result?.registrableDomain||''),availability,profile);
@@ -158,14 +180,15 @@
   const opportunity=$derived(explainOpportunityScore(scoredAvailability) as ScoreExplanation);
   const risk=$derived(explainRiskScore(scoredAvailability) as ScoreExplanation);
   const outreach=$derived(outreachAction(String(availability.domain||result?.registrableDomain||''),(availability.registrant||null) as Contact|null));
-  const abuse=$derived(profileSignals.trusted?null:abuseAction(String(availability.domain||result?.registrableDomain||''),availability.abuse?.email?{abuseEmail:String(availability.abuse.email),hasMx:availability.hasMx??null,activityStatus:availability.activityStatus||null,privacyProtected:availability.privacyProtected??null,domainAgeDays:availability.domainAgeDays??null} as AbuseEvidence:null));
+  const abuseContact=$derived(rec(availability.abuse));
+  const abuse=$derived(profileSignals.trusted?null:abuseAction(String(availability.domain||result?.registrableDomain||''),abuseContact.email?{abuseEmail:String(abuseContact.email),hasMx:availability.hasMx??null,activityStatus:availability.activityStatus||null,privacyProtected:availability.privacyProtected??null,domainAgeDays:availability.domainAgeDays??null} as AbuseEvidence:null));
   const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only);
   const redactedComparisonCount=$derived(comparison.counts.rdap_redacted+comparison.counts.whois_redacted);
   const limitedComparisonCount=$derived(comparison.counts.rdap_unavailable+comparison.counts.whois_unavailable+comparison.counts.rdap_incomplete+comparison.counts.whois_incomplete);
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
-  const hasWebEvidence=$derived(dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
   const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
@@ -180,9 +203,9 @@
   const lifecycleEvents=$derived([
     {id:'domain-created',label:'Domain created',date:created(),detail:'Registry lifecycle',kind:'registry' as const},
     {id:'domain-updated',label:'Registry updated',date:updated(),detail:'Most recent registry change',kind:'registry' as const},
-    {id:'tls-valid-from',label:'Certificate valid',date:tlsCertificate.validFrom,detail:'Observed leaf certificate',kind:'certificate' as const},
-    {id:'lookup-observed',label:'Lookup observed',date:result?.fetchedAt||diagnostics.rdap?.fetchedAt||diagnostics.whois?.queriedAt,detail:'Point-in-time collection',kind:'observation' as const},
-    {id:'tls-valid-to',label:'Certificate expires',date:tlsCertificate.validTo,detail:'Observed leaf certificate',kind:'certificate' as const},
+    {id:'tls-valid-from',label:'Certificate valid',date:textOrNull(tlsCertificate.validFrom),detail:'Observed leaf certificate',kind:'certificate' as const},
+    {id:'lookup-observed',label:'Lookup observed',date:typeof result?.fetchedAt==='string'?result.fetchedAt:typeof rdapDiagnostic.fetchedAt==='string'?rdapDiagnostic.fetchedAt:typeof whoisDiagnostic.queriedAt==='string'?whoisDiagnostic.queriedAt:null,detail:'Point-in-time collection',kind:'observation' as const},
+    {id:'tls-valid-to',label:'Certificate expires',date:textOrNull(tlsCertificate.validTo),detail:'Observed leaf certificate',kind:'certificate' as const},
     {id:'domain-expires',label:'Domain expires',date:expires(),detail:'Registry lifecycle',kind:'registry' as const},
   ]);
   const evidenceTopologyTarget=$derived({
@@ -217,7 +240,9 @@
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=await openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:lookupEvidenceDepth}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{const{record,pruned}=await addCaseNote(caseRecord.id,body);caseRecord=record;caseNote='';caseStatus=`Added a note to the case.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
+  function cancelLookup(){lookupRequestController.cancel();}
   onMount(()=>{
+    pageActive=true;
     const restored=readLookupWorkflowState();
     if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
     const q=page.url.searchParams.get('q');
@@ -228,24 +253,28 @@
     else if(q)query=q;
     if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
     void (async()=>{profile=await activeProfile();if(result)await refreshCase();})();
-    return()=>writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+    return()=>{
+      pageActive=false;
+      lookupRequestController.dispose();
+      writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+    };
   });
 
-  function eventDate(action:string){return rdapParsed.events?.find((item:JsonRecord)=>item.action===action)?.date||null;}
-  function created(){return availability.createdDateIso||availability.createdDate||rdapParsed.lifecycle?.createdDateIso||rdapParsed.lifecycle?.createdDate||eventDate('registration')||whoisParsed.createdDateIso||whoisParsed.lifecycle?.createdDateIso||whoisParsed.createdDate;}
-  function expires(){return availability.expiryDateIso||availability.expiryDate||rdapParsed.lifecycle?.expiryDateIso||rdapParsed.lifecycle?.expiryDate||eventDate('expiration')||whoisParsed.expiryDateIso||whoisParsed.lifecycle?.expiryDateIso||whoisParsed.expiryDate;}
-  function updated(){return rdapParsed.lifecycle?.updatedDateIso||rdapParsed.lifecycle?.updatedDate||eventDate('last changed')||whoisParsed.updatedDateIso||whoisParsed.lifecycle?.updatedDateIso||whoisParsed.updatedDate;}
-  function formatDate(value:any){if(!value)return'—';const parsed=new Date(value);return Number.isNaN(parsed.getTime())?String(value):parsed.toLocaleString();}
-  function dateTimeAttribute(value:any){if(!value)return undefined;const parsed=new Date(value);return Number.isNaN(parsed.getTime())?undefined:parsed.toISOString();}
+  function eventDate(action:string){return textOrNull(records(rdapParsed.events).find((item)=>item.action===action)?.date);}
+  function created(){const rdapLifecycle=rec(rdapParsed.lifecycle);const whoisLifecycle=rec(whoisParsed.lifecycle);return firstText(availability.createdDateIso,availability.createdDate,rdapLifecycle.createdDateIso,rdapLifecycle.createdDate,eventDate('registration'),whoisParsed.createdDateIso,whoisLifecycle.createdDateIso,whoisParsed.createdDate);}
+  function expires(){const rdapLifecycle=rec(rdapParsed.lifecycle);const whoisLifecycle=rec(whoisParsed.lifecycle);return firstText(availability.expiryDateIso,availability.expiryDate,rdapLifecycle.expiryDateIso,rdapLifecycle.expiryDate,eventDate('expiration'),whoisParsed.expiryDateIso,whoisLifecycle.expiryDateIso,whoisParsed.expiryDate);}
+  function updated(){const rdapLifecycle=rec(rdapParsed.lifecycle);const whoisLifecycle=rec(whoisParsed.lifecycle);return firstText(rdapLifecycle.updatedDateIso,rdapLifecycle.updatedDate,eventDate('last changed'),whoisParsed.updatedDateIso,whoisLifecycle.updatedDateIso,whoisParsed.updatedDate);}
+  function formatDate(value:unknown){if(!value)return'—';const parsed=new Date(String(value));return Number.isNaN(parsed.getTime())?String(value):parsed.toLocaleString();}
+  function dateTimeAttribute(value:unknown){if(!value)return undefined;const parsed=new Date(String(value));return Number.isNaN(parsed.getTime())?undefined:parsed.toISOString();}
   function statusLabel(value:string){return value.replaceAll('_',' ');}
-  function trackingIdentifierLabel(value:any){return({
+  function trackingIdentifierLabel(value:unknown){return({
     'advertising-property':'Advertising property',
     'analytics-property':'Analytics property',
     'legacy-analytics-property':'Legacy analytics property',
     'tag-container':'Tag container'
   } as Record<string,string>)[String(value)]||statusLabel(show(value));}
-  function stringList(value:any){return Array.isArray(value)?value.map((item)=>String(item)):[];}
-  function boundedTechnologyText(value:any,maxLength=240){return String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,maxLength);}
+  function stringList(value:unknown){return Array.isArray(value)?value.map((item)=>String(item)):[];}
+  function boundedTechnologyText(value:unknown,maxLength=240){return String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,maxLength);}
   function pageIdentityFactRows(){return[
     {label:'Document language',value:show(pageIdentity.documentLanguage)},
     {label:'Canonical URL',value:show(pageCanonical.url)},
@@ -279,51 +308,62 @@
     {label:'Review file types',value:stringList(pageDownloads.riskyFileTypes).join(', ')||'None observed'},
     {label:'External origins',value:stringList(pageDownloads.externalOrigins).join(', ')||'None observed'},
   ];}
-  function pageTrackingIdentifierRows(){return Array.isArray(pageIdentity.trackingIdentifiers)?pageIdentity.trackingIdentifiers.map((identifier:any)=>({label:trackingIdentifierLabel(identifier?.type),value:show(identifier?.value)})):[];}
-  function technologyFindingRows(){return Array.isArray(technologyProfile.findings)?technologyProfile.findings.slice(0,24).map((finding:any)=>({
+  function pageTrackingIdentifierRows(){return records(pageIdentity.trackingIdentifiers).map((identifier)=>({label:trackingIdentifierLabel(identifier.type),value:show(identifier.value)}));}
+  function technologyFindingRows(){return records(technologyProfile.findings).slice(0,24).map((finding)=>({
     id:boundedTechnologyText(finding?.id,80),name:boundedTechnologyText(finding?.name||'Unknown indicator',120),category:statusLabel(boundedTechnologyText(finding?.category||'technology',80)),
-    confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:Array.isArray(finding?.evidence)?finding.evidence.slice(0,4).map((item:any)=>({source:statusLabel(boundedTechnologyText(item?.source||'evidence',80)),description:boundedTechnologyText(item?.description||'Observed signature matched.',300)})):[]
-  })):[];}
-  function technologyLimitations(){return Array.isArray(technologyProfile.limitations)?technologyProfile.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
+    confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:records(finding.evidence).slice(0,4).map((item)=>({source:statusLabel(boundedTechnologyText(item.source||'evidence',80)),description:boundedTechnologyText(item.description||'Observed signature matched.',300)}))
+  }));}
+  function technologyLimitations(){return stringList(technologyProfile.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
+  function browserLibraryRows(){return records(browserLibraryProfile.findings).slice(0,16).map((finding)=>({
+    id:boundedTechnologyText(finding?.id,80),
+    name:statusLabel(boundedTechnologyText(finding?.name||'unknown library',80)),
+    version:boundedTechnologyText(finding?.apparentVersion||'unknown',64),
+    detection:stringList(finding?.detectionMethods).slice(0,4).map(statusLabel).join(', '),
+    advisoryCount:Math.max(0,Math.min(128,Number(finding?.advisoryCount)||0)),
+    severity:boundedTechnologyText(finding?.highestSeverity,16),
+    identifiers:stringList(finding?.advisoryIdentifiers).slice(0,16).join(', '),
+    weaknesses:stringList(finding?.weaknessClasses).slice(0,12).join(', '),
+  }));}
+  function browserLibraryLimitations(){return stringList(browserLibraryProfile.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
   function observedNetworkSourceLabel(){return({tls_connection:'TLS connection',dns_a:'DNS A fallback',dns_aaaa:'DNS AAAA fallback'} as Record<string,string>)[String(observedNetworkEndpoint.selectedFrom)]||'Unavailable';}
   function observedNetworkRows(){return Object.keys(observedNetwork).length?[
     {label:'Registered network',value:show(observedNetwork.name)},
     {label:'Network holder',value:show(observedNetwork.holder)},
     {label:'Handle',value:show(observedNetwork.handle)},
-    {label:'CIDR ranges',value:Array.isArray(observedNetwork.cidrs)?observedNetwork.cidrs.slice(0,16).map((item:any)=>boundedTechnologyText(item,96)).filter(Boolean).join(', ')||'—':'—'},
+    {label:'CIDR ranges',value:stringList(observedNetwork.cidrs).slice(0,16).map((item)=>boundedTechnologyText(item,96)).filter(Boolean).join(', ')||'—'},
     {label:'Address range',value:[boundedTechnologyText(observedNetwork.startAddress,64),boundedTechnologyText(observedNetwork.endAddress,64)].filter(Boolean).join(' to ')||'—'},
     {label:'Country',value:show(observedNetwork.country)},
     {label:'Network type',value:show(observedNetwork.networkType)},
     {label:'RDAP database updated',value:formatDate(observedNetwork.databaseUpdatedAt),datetime:dateTimeAttribute(observedNetwork.databaseUpdatedAt)},
   ]:[];}
-  function observedNetworkLimitations(){return Array.isArray(observedNetworkContext.limitations)?observedNetworkContext.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
-  function boundedPostureCount(value:any){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,20):0;}
+  function observedNetworkLimitations(){return stringList(observedNetworkContext.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
+  function boundedPostureCount(value:unknown){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,20):0;}
   function securityPostureDisplaySummary(){return{
     observed:boundedPostureCount(securityPostureSummary.observed),potentialExposure:boundedPostureCount(securityPostureSummary.potentialExposure),
     observedAbsence:boundedPostureCount(securityPostureSummary.observedAbsence),unavailable:boundedPostureCount(securityPostureSummary.unavailable),
   };}
-  function securityPostureFindingRows(){const states=new Set(['observed','potential_exposure','observed_absence','unavailable']);const tones=new Set(['configured','review','neutral']);return Array.isArray(securityPosture.findings)?securityPosture.findings.slice(0,20).map((finding:any)=>({
+  function securityPostureFindingRows(){const states=new Set(['observed','potential_exposure','observed_absence','unavailable']);const tones=new Set(['configured','review','neutral']);return records(securityPosture.findings).slice(0,20).map((finding)=>({
     id:boundedTechnologyText(finding?.id,80),category:statusLabel(boundedTechnologyText(finding?.category||'posture',80)),
     state:states.has(String(finding?.state))?String(finding.state):'unavailable',tone:tones.has(String(finding?.tone))?String(finding.tone):'neutral',
     label:boundedTechnologyText(finding?.label||'Posture finding',160),detail:boundedTechnologyText(finding?.detail||'No additional detail is available.',300),
-    evidence:Array.isArray(finding?.evidence)?finding.evidence.slice(0,4).map((item:any)=>boundedTechnologyText(item,120)).filter(Boolean):[],
-  })):[];}
-  function securityPostureLimitations(){return Array.isArray(securityPosture.limitations)?securityPosture.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
-  function pageFingerprintRows(){return[
-    {label:'Exact captured body',value:rec(pageFingerprints.exact).value,detail:rec(pageFingerprints.exact).scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
-    {label:'Normalized HTML',value:rec(pageFingerprints.normalizedHtml).value,detail:`${show(rec(pageFingerprints.normalizedHtml).tokenCount)} tokens`},
-    {label:'Visible text',value:rec(pageFingerprints.visibleText).value,detail:rec(pageFingerprints.visibleText).value?`${show(rec(pageFingerprints.visibleText).tokenCount)} tokens · fuzzy SimHash`:null},
-    {label:'Static tag structure',value:rec(pageFingerprints.domStructure).value,detail:`${show(rec(pageFingerprints.domStructure).nodeCount)} nodes`},
-    {label:'Form structure',value:rec(pageFingerprints.formStructure).value,detail:rec(pageFingerprints.formStructure).value?`${show(rec(pageFingerprints.formStructure).formCount)} forms · ${show(rec(pageFingerprints.formStructure).controlCount)} controls`:null},
-    {label:'External resource hosts',value:rec(pageFingerprints.resourceHosts).value,detail:rec(pageFingerprints.resourceHosts).value?`${Array.isArray(rec(pageFingerprints.resourceHosts).values)?rec(pageFingerprints.resourceHosts).values.length:0} hosts`:null},
-    {label:'Tracking identifiers',value:rec(pageFingerprints.identifiers).value,detail:rec(pageFingerprints.identifiers).value?`${Array.isArray(rec(pageFingerprints.identifiers).values)?rec(pageFingerprints.identifiers).values.length:0} identifiers`:null}
+    evidence:stringList(finding.evidence).slice(0,4).map((item)=>boundedTechnologyText(item,120)).filter(Boolean),
+  }));}
+  function securityPostureLimitations(){return stringList(securityPosture.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
+  function pageFingerprintRows(){const exact=rec(pageFingerprints.exact);const normalizedHtml=rec(pageFingerprints.normalizedHtml);const visibleText=rec(pageFingerprints.visibleText);const domStructure=rec(pageFingerprints.domStructure);const formStructure=rec(pageFingerprints.formStructure);const resourceHosts=rec(pageFingerprints.resourceHosts);const identifiers=rec(pageFingerprints.identifiers);const resourceHostValues=Array.isArray(resourceHosts.values)?resourceHosts.values:[];const identifierValues=Array.isArray(identifiers.values)?identifiers.values:[];return[
+    {label:'Exact captured body',value:exact.value,detail:exact.scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
+    {label:'Normalized HTML',value:normalizedHtml.value,detail:`${show(normalizedHtml.tokenCount)} tokens`},
+    {label:'Visible text',value:visibleText.value,detail:visibleText.value?`${show(visibleText.tokenCount)} tokens · fuzzy SimHash`:null},
+    {label:'Static tag structure',value:domStructure.value,detail:`${show(domStructure.nodeCount)} nodes`},
+    {label:'Form structure',value:formStructure.value,detail:formStructure.value?`${show(formStructure.formCount)} forms · ${show(formStructure.controlCount)} controls`:null},
+    {label:'External resource hosts',value:resourceHosts.value,detail:resourceHosts.value?`${resourceHostValues.length} hosts`:null},
+    {label:'Tracking identifiers',value:identifiers.value,detail:identifiers.value?`${identifierValues.length} identifiers`:null}
   ].filter((row)=>row.value).map((row)=>({...row,value:String(row.value)}));}
   function pageComparisonDisplay(){if(!pageComparison)return null;return{
     partial:Boolean(pageComparison.partial),
     referenceDomain:String(pageComparison.reference.domain),
     referenceObservedAt:String(pageComparison.reference.observedAt),
     referenceObservedLabel:formatDate(pageComparison.reference.observedAt),
-    components:Array.isArray(pageComparison.components)?pageComparison.components.map((item:any)=>({label:String(item.label),method:String(item.method),outcome:String(item.outcome),detail:String(item.detail),status:String(item.status),sharedValues:stringList(item.sharedValues)})):[],
+    components:records(pageComparison.components).map((item)=>({label:String(item.label),method:String(item.method),outcome:String(item.outcome),detail:String(item.detail),status:String(item.status),sharedValues:stringList(item.sharedValues)})),
   };}
   function assessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',rdap_only:'RDAP only',whois_only:'WHOIS only',rdap_redacted:'RDAP redacted',whois_redacted:'WHOIS redacted',rdap_unavailable:'RDAP unavailable',whois_unavailable:'WHOIS unavailable',rdap_incomplete:'RDAP incomplete',whois_incomplete:'WHOIS incomplete'} as Record<string,string>)[status]||status;}
   function publicationAssessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',registry_only:'Registry only',registrar_only:'Registrar only',registry_redacted:'Registry redacted',registrar_redacted:'Registrar redacted',registry_unavailable:'Registry unavailable',registrar_unavailable:'Registrar unavailable',registry_incomplete:'Registry incomplete',registrar_incomplete:'Registrar incomplete'} as Record<string,string>)[status]||status;}
@@ -336,8 +376,8 @@
     Array.isArray(contact.emails)&&contact.emails.length?`Email: ${contact.emails.join(', ')}`:null,
     Array.isArray(contact.phones)&&contact.phones.length?`Phone: ${contact.phones.join(', ')}`:null,
     Array.isArray(contact.addresses)&&contact.addresses.length?`Address: ${contact.addresses.join(' · ')}`:null,
-    Array.isArray(contact.publicIds)&&contact.publicIds.length?`IDs: ${contact.publicIds.map((item:JsonRecord)=>`${item.type}: ${item.identifier}`).join(', ')}`:null,
-    Array.isArray(contact.links)&&contact.links.length?`Links: ${contact.links.map((item:JsonRecord)=>item.href).join(', ')}`:null
+    records(contact.publicIds).length?`IDs: ${records(contact.publicIds).map((item)=>`${item.type}: ${item.identifier}`).join(', ')}`:null,
+    records(contact.links).length?`Links: ${records(contact.links).map((item)=>item.href).join(', ')}`:null
   ].filter(Boolean) as string[];}
   function comparisonDisplayRows(){return comparison.fields.map((field:ComparisonField)=>({
     label:field.label,
@@ -364,8 +404,8 @@
     {label:'Country',value:show(rdapParsed.country)},
     {label:'Type',value:show(rdapParsed.networkType)},
     {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
-    {label:'Registered',value:formatDate(rdapParsed.lifecycle?.createdDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.createdDate)},
-    {label:'Updated',value:formatDate(rdapParsed.lifecycle?.updatedDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.updatedDate)},
+    {label:'Registered',value:formatDate(rec(rdapParsed.lifecycle).createdDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).createdDate)},
+    {label:'Updated',value:formatDate(rec(rdapParsed.lifecycle).updatedDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).updatedDate)},
   );else if(result?.type==='asn')rows.push(
     {label:'Handle',value:show(rdapParsed.handle)},
     {label:'Name',value:show(rdapParsed.name)},
@@ -373,14 +413,14 @@
     {label:'Country',value:show(rdapParsed.country)},
     {label:'Type',value:show(rdapParsed.autnumType)},
     {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
-    {label:'Registered',value:formatDate(rdapParsed.lifecycle?.createdDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.createdDate)},
-    {label:'Updated',value:formatDate(rdapParsed.lifecycle?.updatedDate),datetime:dateTimeAttribute(rdapParsed.lifecycle?.updatedDate)},
+    {label:'Registered',value:formatDate(rec(rdapParsed.lifecycle).createdDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).createdDate)},
+    {label:'Updated',value:formatDate(rec(rdapParsed.lifecycle).updatedDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).updatedDate)},
   );rows.push(
     {label:'Object class',value:show(rdapParsed.objectClassName)},
     {label:'Language',value:show(rdapParsed.language)},
     {label:'Conformance',value:`${show(rdapParsed.conformance)}${rdapParsed.conformanceTruncated?' (capped)':''}`},
     {label:'Lifecycle events',value:`${Array.isArray(rdapParsed.events)?rdapParsed.events.length:0}${rdapParsed.eventsTruncated?' (capped)':''}`},
-    {label:'RDAP database updated',value:formatDate(rdapParsed.lifecycle?.databaseUpdatedDate)},
+    {label:'RDAP database updated',value:formatDate(rec(rdapParsed.lifecycle).databaseUpdatedDate)},
     {label:'Port 43',value:show(rdapParsed.port43)},
     {label:'Parent handle',value:show(rdapParsed.parentHandle)},
   );return rows;}
@@ -391,15 +431,15 @@
     {label:'Registrar ID',value:show(whoisParsed.registrarIanaId)},
     {label:'Registrar WHOIS',value:show(whoisParsed.registrarWhoisServer)},
     {label:'Reseller',value:show(whoisParsed.reseller)},
-    {label:'Created',value:formatDate(whoisParsed.lifecycle?.createdDate)},
-    {label:'Expires',value:formatDate(whoisParsed.lifecycle?.expiryDate)},
-    {label:'Updated',value:formatDate(whoisParsed.lifecycle?.updatedDate)},
+    {label:'Created',value:formatDate(rec(whoisParsed.lifecycle).createdDate)},
+    {label:'Expires',value:formatDate(rec(whoisParsed.lifecycle).expiryDate)},
+    {label:'Updated',value:formatDate(rec(whoisParsed.lifecycle).updatedDate)},
     {label:'DNSSEC',value:show(whoisParsed.dnssec)},
     {label:'Status',value:show(whoisParsed.statuses)},
     {label:'Nameservers',value:show(whoisParsed.nameservers)},
     {label:'Chain',value:show(whoisParsed.chainStatus)},
   ];}
-  function whoisContactRoleRows(){return populatedWhoisRoles.map((role)=>({role,contacts:whoisParsed.contactsByRole[role].map((contact:JsonRecord)=>({identity:contactIdentity(contact),details:contactDetails(contact)}))}));}
+  function whoisContactRoleRows(){return populatedWhoisRoles.map((role)=>({role,contacts:records(whoisContactsByRole[role]).map((contact)=>({identity:contactIdentity(contact),details:contactDetails(contact)}))}));}
   function registrarRdapDisplay(){return{
     visible:Boolean(registrarRdap.status),
     label:diagnosticLabel(registrarRdap),
@@ -412,19 +452,41 @@
     comparisonSummary:`Registry / registrar publication comparison · ${registrarPublicationComparison.counts.conflict} conflicts · ${registrarPublicationComparison.counts.registry_only+registrarPublicationComparison.counts.registrar_only} source-only · ${registrarPublicationComparison.counts.registry_redacted+registrarPublicationComparison.counts.registrar_redacted} redacted · ${registrarPublicationComparison.counts.registry_unavailable+registrarPublicationComparison.counts.registrar_unavailable+registrarPublicationComparison.counts.registry_incomplete+registrarPublicationComparison.counts.registrar_incomplete} unavailable/incomplete · ${registrarPublicationComparison.counts.equivalent} equivalent`,
     comparisonRows:registrarPublicationRows(),
   };}
-  function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:String(record)).join(' · ');}
+  function httpsServiceBindingValue(value:unknown){
+    const record=rec(value);
+    const parameters=rec(record.parameters);
+    const mode=record.mode==='alias'?'Alias':'Service';
+    const target=record.serviceUnavailable===true?'advisory unavailable':record.targetIsOwner===true?'owner':boundedTechnologyText(record.target,253)||'target unavailable';
+    const details=[
+      `${mode} priority ${Number.isInteger(Number(record.priority))?Number(record.priority):'—'} → ${target}`,
+      stringList(parameters.alpn).length?`ALPN ${stringList(parameters.alpn).slice(0,16).map((item)=>boundedTechnologyText(item,132)).join(', ')}`:'',
+      parameters.port!==null&&parameters.port!==undefined&&Number.isInteger(Number(parameters.port))?`port ${Number(parameters.port)}`:'',
+      stringList(parameters.ipv4hint).length?`IPv4 hints ${stringList(parameters.ipv4hint).slice(0,8).map((item)=>boundedTechnologyText(item,64)).join(', ')}`:'',
+      stringList(parameters.ipv6hint).length?`IPv6 hints ${stringList(parameters.ipv6hint).slice(0,8).map((item)=>boundedTechnologyText(item,64)).join(', ')}`:'',
+      records(parameters.opaque).length?`Published ${records(parameters.opaque).slice(0,24).map((item)=>boundedTechnologyText(item.name||`key ${item.key}`,63)).filter(Boolean).join(', ')}`:'',
+      Array.isArray(parameters.unsupportedMandatoryKeys)&&parameters.unsupportedMandatoryKeys.length?`unsupported mandatory keys ${parameters.unsupportedMandatoryKeys.slice(0,24).map(Number).join(', ')}`:'',
+      record.compatible===false?'not compatible with this parser':'',
+      Number.isInteger(Number(record.ttl))?`TTL ${Number(record.ttl)}s`:'',
+    ].filter(Boolean);
+    return details.join(' · ');
+  }
+  function dnsValues(name:string){const values=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return values.map((value)=>{if(typeof value==='string')return value;const record=rec(value);return name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:name==='soa'?`${record.nsname} · hostmaster ${record.hostmaster} · serial ${record.serial} · refresh ${record.refresh}s · retry ${record.retry}s · expire ${record.expire}s · minimum TTL ${record.minttl}s`:name==='https'?httpsServiceBindingValue(record):String(value);}).filter(Boolean).join(' | ');}
   function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}
   function dnsQueryFailures(){return Object.entries(rec(dnsEvidence.diagnostics)).filter(([,item])=>rec(item).status==='error').map(([name,item])=>`${name.toUpperCase()}: ${rec(item).error||'query failed'}`).join(' · ');}
   function dnsEvidenceRows(){return[
     {label:'DNSSEC',value:show(availability.dnssec)},
     ...[['A','a'],['AAAA','aaaa'],['CNAME','cname'],['Nameservers','ns'],['MX','mx'],['SPF','spf'],['DMARC','dmarc'],['CAA','caa']].map(([label,name])=>({label,value:dnsDisplay(name)})),
+    ...(Array.isArray(dnsRecords.soa)||rec(dnsEvidence.diagnostics).soa?[{label:'SOA',value:dnsDisplay('soa')}]:[]),
+    ...(Array.isArray(dnsRecords.https)||rec(dnsEvidence.diagnostics).https?[{label:'HTTPS service binding',value:dnsDisplay('https')}]:[]),
   ];}
-  function formatBytes(value:any){const bytes=Number(value);if(!Number.isFinite(bytes)||bytes<0)return'—';return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(bytes<10240?1:0)} KiB`;}
+  function reverseDnsRows(){const records=Array.isArray(reverseDnsRecords.ptr)?reverseDnsRecords.ptr.map(String):[];return[{label:'PTR names',value:records.join(' · ')||'Not observed'}];}
+  function reverseDnsFailure(){const diagnostic=rec(rec(reverseDns.diagnostics).ptr);return diagnostic.status==='error'?String(diagnostic.error||'query failed'):'';}
+  function formatBytes(value:unknown){const bytes=Number(value);if(!Number.isFinite(bytes)||bytes<0)return'—';return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(bytes<10240?1:0)} KiB`;}
   function tlsName(value:JsonRecord){const common=Array.isArray(value.commonNames)?value.commonNames:[];const organizations=Array.isArray(value.organizations)?value.organizations:[];return[...common,...organizations].join(' · ')||'—';}
   function tlsTrust(){return tlsAuthorization.authorized===true?'Authorized':tlsAuthorization.authorized===false?'Not authorized':'Not observed';}
   function tlsHostnameStatus(){return tlsHostname.matches===true?'Matches SNI':tlsHostname.matches===false?'Mismatch':'Not observed';}
   function tlsValidityStatus(){return tlsValidity.status==='valid'?'Valid now':tlsValidity.status==='expired'?'Expired':tlsValidity.status==='not_yet_valid'?'Not yet valid':'Unknown';}
-  function httpSecurityRows(){return[
+  function httpSecurityRows():Array<[string,unknown]>{return[
     ['HSTS',httpSecurityHeaders.strictTransportSecurity],
     ['Content Security Policy',httpSecurityHeaders.contentSecurityPolicy],
     ['Frame protection',httpSecurityHeaders.xFrameOptions],
@@ -439,9 +501,9 @@
     {label:'Content type',value:show(httpResponse.contentType)},
     {label:'Body captured',value:`${formatBytes(httpResponse.capturedBodyBytes)}${httpResponse.bodyTruncated?' · capped':''}`},
   ];}
-  function httpRedirectRows(){return Array.isArray(httpEvidence.redirects)?httpEvidence.redirects.map((redirect:JsonRecord)=>({status:show(redirect.status),from:show(redirect.from),to:show(redirect.to),queryOmitted:Boolean(redirect.queryOmitted)})):[];}
-  function httpAttemptRows(){const attempts=Array.isArray(httpEvidence.attempts)?httpEvidence.attempts:[];return attempts.some((attempt:JsonRecord)=>attempt.error)?attempts.map((attempt:JsonRecord)=>({url:show(attempt.url),detail:attempt.error?String(attempt.error):`HTTP ${show(attempt.httpStatus)}`})):[];}
-  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:show(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});if(httpResponse.bodyHash){rows.push({label:'Body SHA-256',value:show(httpResponse.bodyHash.value),hash:true},{label:'Hash scope',value:httpResponse.bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(httpResponse.bodyHash.bytes)})`:`Complete captured body (${formatBytes(httpResponse.bodyHash.bytes)})`});}return rows;}
+  function httpRedirectRows(){return records(httpEvidence.redirects).map((redirect)=>({status:show(redirect.status),from:show(redirect.from),to:show(redirect.to),queryOmitted:Boolean(redirect.queryOmitted)}));}
+  function httpAttemptRows(){const attempts=records(httpEvidence.attempts);return attempts.some((attempt)=>attempt.error)?attempts.map((attempt)=>({url:show(attempt.url),detail:attempt.error?String(attempt.error):`HTTP ${show(attempt.httpStatus)}`})):[];}
+  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:show(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});const bodyHash=rec(httpResponse.bodyHash);if(bodyHash.value){rows.push({label:'Body SHA-256',value:show(bodyHash.value),hash:true},{label:'Hash scope',value:bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(bodyHash.bytes)})`:`Complete captured body (${formatBytes(bodyHash.bytes)})`});}return rows;}
   function tlsEvidenceRows(){return[
     {label:'Connected address',value:show(tlsEvidence.connectedAddress)},
     {label:'SNI hostname',value:show(tlsEvidence.sniHost)},
@@ -452,19 +514,19 @@
     {label:'Hostname',value:tlsHostnameStatus(),danger:tlsHostname.matches===false},
     {label:'Validity',value:tlsValidityStatus(),danger:tlsValidity.status==='expired'||tlsValidity.status==='not_yet_valid'},
   ];}
-  function tlsFindingRows(){return Array.isArray(tlsEvidence.findings)?tlsEvidence.findings.map((finding:JsonRecord)=>({label:show(finding.label),detail:show(finding.detail),tone:String(finding.tone||'')})):[];}
+  function tlsFindingRows(){return records(tlsEvidence.findings).map((finding)=>({label:show(finding.label),detail:show(finding.detail),tone:String(finding.tone||'')}));}
   function tlsLeafCertificateRows(){if(!tlsCertificate.fingerprintSha256)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=[{label:'Subject',value:tlsName(tlsSubject)},{label:'Issuer',value:tlsName(tlsIssuer)},{label:'Serial number',value:show(tlsCertificate.serialNumber),hash:true},{label:'Valid from',value:formatDate(tlsCertificate.validFrom)},{label:'Valid to',value:formatDate(tlsCertificate.validTo)},{label:'Certificate SHA-256',value:show(tlsCertificate.fingerprintSha256),hash:true},{label:'Public key',value:`${show(tlsPublicKey.type)}${tlsPublicKey.bits?` · ${tlsPublicKey.bits} bits`:''}${tlsPublicKey.curve?` · ${tlsPublicKey.curve}`:''}`}];if(tlsPublicKey.fingerprintSha256)rows.push({label:'Public-key SHA-256',value:show(tlsPublicKey.fingerprintSha256),hash:true});return rows;}
   function tlsAlternativeNameRows(){return[
-    ...(Array.isArray(tlsAltNames.dnsNames)?tlsAltNames.dnsNames.map((value:any)=>({type:'DNS',value:show(value)})):[]),
-    ...(Array.isArray(tlsAltNames.ipAddresses)?tlsAltNames.ipAddresses.map((value:any)=>({type:'IP address',value:show(value)})):[]),
+    ...(Array.isArray(tlsAltNames.dnsNames)?tlsAltNames.dnsNames.map((value)=>({type:'DNS',value:show(value)})):[]),
+    ...(Array.isArray(tlsAltNames.ipAddresses)?tlsAltNames.ipAddresses.map((value)=>({type:'IP address',value:show(value)})):[]),
   ];}
-  function tlsChainRows(){return Array.isArray(tlsEvidence.chain)?tlsEvidence.chain.map((certificate:JsonRecord,index:number)=>({label:index===0?'Leaf certificate':`Chain certificate ${index+1}`,subject:tlsName(rec(certificate.subject)),fingerprint:show(certificate.fingerprintSha256)})):[];}
+  function tlsChainRows(){return records(tlsEvidence.chain).map((certificate,index)=>({label:index===0?'Leaf certificate':`Chain certificate ${index+1}`,subject:tlsName(rec(certificate.subject)),fingerprint:show(certificate.fingerprintSha256)}));}
   function tlsValidationRows(){return[
     ...(tlsDiagnostics.error?[{label:'Collection',value:String(tlsDiagnostics.error)}]:[]),
     ...(tlsAuthorization.error?[{label:'Authorization',value:String(tlsAuthorization.error)}]:[]),
     ...(tlsHostname.error?[{label:'Hostname',value:String(tlsHostname.error)}]:[]),
   ];}
-  function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField)values.push({label:'Password field',tone:'warn'});if(availability.phishingLanguageMatch)values.push({label:'Phishing language',tone:'danger',detail:availability.phishingLanguageMatch});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const age=fmtAge(availability.domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiry=fmtExpiresIn(availability.expiresInDays);if(expiry)values.push({label:expiry,tone:availability.expiresInDays<=60?'warn':'neutral'});if(availability.privacyProtected!==null&&availability.privacyProtected!==undefined)values.push({label:formatPrivacyCell(availability.privacyProtected),tone:availability.privacyProtected?'warn':'good'});if(availability.activityStatus)values.push({label:formatActivityCell(availability.activityStatus,availability.hasMx,availability.hasSpf,availability.hasDmarc),tone:availability.activityStatus==='active'?'good':availability.activityStatus==='parked'?'warn':'neutral',detail:availability.websiteProbeDetail});return values;}
+  function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField===true)values.push({label:'Password field',tone:'warn'});const phishingLanguage=typeof availability.phishingLanguageMatch==='string'?availability.phishingLanguageMatch:undefined;if(phishingLanguage)values.push({label:'Phishing language',tone:'danger',detail:phishingLanguage});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const domainAgeDays=typeof availability.domainAgeDays==='number'?availability.domainAgeDays:null;const age=fmtAge(domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiresInDays=typeof availability.expiresInDays==='number'?availability.expiresInDays:null;const expiry=fmtExpiresIn(expiresInDays);if(expiry&&expiresInDays!==null)values.push({label:expiry,tone:expiresInDays<=60?'warn':'neutral'});const privacyProtected=typeof availability.privacyProtected==='boolean'?availability.privacyProtected:null;if(privacyProtected!==null)values.push({label:formatPrivacyCell(privacyProtected),tone:privacyProtected?'warn':'good'});const activityStatus=typeof availability.activityStatus==='string'?availability.activityStatus:null;if(activityStatus)values.push({label:formatActivityCell(activityStatus,availability.hasMx===true,availability.hasSpf===true,availability.hasDmarc===true),tone:activityStatus==='active'?'good':activityStatus==='parked'?'warn':'neutral',detail:textOrNull(availability.websiteProbeDetail)??undefined});return values;}
   function overviewFacts(){return[
     {label:'Registration',value:show(availability.state||whoisParsed.registrationStatus),detail:`${show(availability.confidence)} confidence`},
     {label:'Registrar',value:show(availability.registrar||rdapParsed.registrar||whoisParsed.registrar),detail:show(whoisParsed.registrarUrl)},
@@ -473,18 +535,19 @@
     {label:'Updated',value:formatDate(updated()),detail:'Most recent registry change'},
     {label:'Website',value:show(availability.activityStatus),detail:show(availability.websiteProbeDetail)},
   ];}
-  function sourceDiagnostics(){return['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});}
+  function sourceDiagnostics(){const sources=['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});if(rec(diagnostics.reverseDns).status){const item=rec(diagnostics.reverseDns) as SourceStatus;sources.push({source:'reverse DNS',status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)});}return sources;}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return[
     {href:'#overview',label:'Overview'},
-    ...(hasWebEvidence?[{href:'#web-evidence' as const,label:'Web & DNS'}]:[]),
+    ...(hasWebEvidence?[{href:'#web-evidence' as const,label:result?.type==='domain'?'Web & DNS':'DNS'}]:[]),
     {href:'#registry',label:'Registry'},
     ...(threatIntelligenceProviders.length?[{href:'#external-intelligence' as const,label:'External intel'}]:[]),
     ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
     {href:'#raw-data',label:'Raw data'},
   ];}
-  function topologyStatus(value:any,complete=true,truncated=false){
+  function topologyStatus(value:unknown,complete=true,truncated=false){
     return normalizeEvidenceTopologyStatus(value,{complete,truncated});
   }
   function topologyDiagnosticDetail(source:SourceStatus){
@@ -531,6 +594,14 @@
         href:'#evidence-dns',side:'right',glyph:'D',family:'network',
       });
     }
+    if(reverseDns.source==='reverse_dns'){
+      nodes.push({
+        id:'reverse-dns',label:'Reverse DNS',
+        detail:Array.isArray(reverseDnsRecords.ptr)&&reverseDnsRecords.ptr.length?`${reverseDnsRecords.ptr.length} PTR name${reverseDnsRecords.ptr.length===1?'':'s'}`:show(reverseDns.status),
+        status:topologyStatus(reverseDns.status,reverseDns.complete!==false,Boolean(reverseDns.truncated)),
+        href:'#evidence-reverse-dns',side:'right',glyph:'D',family:'network',
+      });
+    }
     if(httpEvidence.source==='http'){
       nodes.push({
         id:'http',label:'HTTP',detail:httpResponse.status?`HTTP ${show(httpResponse.status)} · ${show(httpEvidence.transportSecurity)}`:show(httpEvidence.status),
@@ -574,7 +645,43 @@
     }
     return nodes;
   }
-  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){result=null;error='';saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=await activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(lookupMode==='fast')params.set('fast','1');if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(lookupMode==='deep'&&includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');if(lookupMode==='deep'&&includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');const response=await fetch(`/api/lookup?${params}`);const body:unknown=await response.json().catch(()=>({}));if(!response.ok)throw new Error(lookupHttpErrorMessage(body,response.status));const parsed=parseLookupHttpResponse(body);if(!parsed.ok)throw new Error(parsed.error);result=parsed.value;await refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
+  async function submit(event:SubmitEvent){
+    event.preventDefault();
+    if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
+    if(!entries.length||loading)return;
+    if(entries.length>1){
+      result=null;error='';
+      saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
+      await goto('/bulk?source=lookup');
+      return;
+    }
+
+    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';
+    const params=new URLSearchParams({q:entries[0]});
+    if(lookupMode==='fast')params.set('fast','1');
+    if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');
+    if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');
+    if(lookupMode==='deep'&&includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');
+    if(lookupMode==='deep'&&includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');
+
+    try{
+      const completed=await lookupRequestController.run(
+        `/api/lookup?${params}`,
+        (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
+        async()=>{profile=await activeProfile();},
+      );
+      if(completed.state==='stale'||!pageActive)return;
+      const outcome=completed.outcome;
+      if(!outcome.ok){error=outcome.message;return;}
+      result=outcome.value;
+      await refreshCase();
+      requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));
+    }catch{
+      if(pageActive)error='Lookup request could not be prepared.';
+    }finally{
+      if(pageActive)loading=false;
+    }
+  }
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
@@ -583,6 +690,8 @@
   bind:query
   bind:lookupMode
   {loading}
+  {loadingElapsedMs}
+  loadingDeadlineMs={LOOKUP_CLIENT_TIMEOUT_MS}
   entryCount={entries.length}
   duplicateCount={parsedInput.duplicates}
   {lookupDisabled}
@@ -598,11 +707,12 @@
   bind:includeSecurityTxt
   {error}
   onsubmit={submit}
+  oncancel={cancelLookup}
 />
 
 {#if result}
   <section class="result-root" id="result">
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} />
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={result.type==='domain'?downloadReadableReport:null} />
 
     <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 
@@ -611,6 +721,10 @@
 
       {#if availability.applicable!==false}
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={signals()} trusted={String(profileSignals.trusted||'')} />
+      {/if}
+
+      {#if lookupTiming}
+        <LookupCollectionTiming timing={lookupTiming} />
       {/if}
 
       <EvidenceTopology
@@ -639,10 +753,30 @@
 
     {#if hasWebEvidence}
     <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
-      <h3 id="web-evidence-title">Web and DNS evidence</h3>
+      <h3 id="web-evidence-title">{result.type==='domain'?'Web and DNS evidence':'DNS evidence'}</h3>
+
+      {#if reverseDns.source==='reverse_dns'}
+        <div class="evidence-component" id="evidence-reverse-dns"><LookupDnsEvidence
+          title="Reverse DNS context"
+          summaryDetail="Expand for PTR names, provenance, and limitations"
+          status={show(reverseDns.status)}
+          complete={reverseDns.complete!==false}
+          rows={reverseDnsRows()}
+          failureDetail={reverseDnsFailure()}
+          truncated={Boolean(reverseDns.truncated)}
+          note="Point-in-time PTR evidence is controlled by the address operator. It may be absent, stale, generic, or misleading and does not prove hosting control, ownership, service identity, intent, or maliciousness."
+        /></div>
+      {/if}
 
       {#if dnsEvidence.source==='dns'}
-        <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence status={show(dnsEvidence.status)} complete={dnsEvidence.complete!==false} rows={dnsEvidenceRows()} failureDetail={dnsQueryFailures()} truncated={Boolean(dnsEvidence.truncated)} /></div>
+        <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence
+          status={show(dnsEvidence.status)}
+          complete={dnsEvidence.complete!==false}
+          rows={dnsEvidenceRows()}
+          failureDetail={dnsQueryFailures()}
+          truncated={Boolean(dnsEvidence.truncated)}
+          note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
+        /></div>
       {/if}
 
       {#if httpEvidence.source==='http'}
@@ -703,6 +837,12 @@
           complete={Boolean(technologyProfile.complete)}
           findings={technologyFindingRows()}
           limitations={technologyLimitations()}
+          libraryAvailable={browserLibraryProfile.profileVersion===1}
+          libraryStatus={statusLabel(show(browserLibraryProfile.status))}
+          libraryComplete={Boolean(browserLibraryProfile.complete)}
+          libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}
+          libraries={browserLibraryRows()}
+          libraryLimitations={browserLibraryLimitations()}
         /></div>
       {/if}
 

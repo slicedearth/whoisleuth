@@ -1,21 +1,34 @@
 const { after, before, describe, test } = require('node:test');
 const assert = require('node:assert/strict');
+const { readdirSync } = require('node:fs');
+const { join, relative, sep } = require('node:path');
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
 const { app } = require('../server.mts');
+const {
+  CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PRERENDERED_ROUTES,
+} = require('../lib/prerendered-routes.mts');
 
-const canonicalRouteRedirects = [
-  ['/lookup/', '/lookup'],
-  ['/discover/', '/discover'],
-  ['/bulk/', '/bulk'],
-  ['/monitor/', '/monitor'],
-  ['/brands/', '/brands'],
-  ['/privacy/', '/privacy'],
-  ['/demo/', '/demo'],
-  ['/login/', '/login'],
-];
+function routeSourcePages(directory) {
+  const files = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const filename = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...routeSourcePages(filename));
+    else if (entry.name === '+page.svelte') files.push(filename);
+  }
+  return files;
+}
+
+function publicRouteForPage(filename) {
+  const routeDirectory = relative(join(process.cwd(), 'frontend', 'src', 'routes'), join(filename, '..'));
+  const segments = routeDirectory
+    .split(sep)
+    .filter((segment) => segment && !(segment.startsWith('(') && segment.endsWith(')')));
+  return segments.length ? `/${segments.join('/')}` : '/';
+}
 
 let server;
 let origin;
@@ -34,8 +47,15 @@ after(async () => {
 });
 
 describe('canonical route redirects', () => {
+  test('shared manifest covers every prerendered page source', () => {
+    const sourceRoutes = routeSourcePages(join(process.cwd(), 'frontend', 'src', 'routes'))
+      .map(publicRouteForPage)
+      .sort();
+    assert.deepEqual([...PRERENDERED_ROUTES].sort(), sourceRoutes);
+  });
+
   test('redirect each allowlisted trailing-slash route to its fixed local path', async () => {
-    for (const [sourcePath, canonicalPath] of canonicalRouteRedirects) {
+    for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
       const response = await fetch(`${origin}${sourcePath}?next=https%3A%2F%2Foutside.example`, {
         redirect: 'manual',
       });

@@ -201,6 +201,42 @@ review is required. Status 2 means setup or analysis was inconclusive. Hosted
 CodeQL remains authoritative when its managed bundle differs from the local
 version.
 
+### Browser-library retirement scan
+
+```bash
+npm run build
+npm run security:retire
+```
+
+Scans the generated static JavaScript bundles for known high-severity
+vulnerabilities in retired browser-library versions. The scanner downloads its
+public advisory catalogue to the operating system's temporary directory and
+does not receive lookup targets, evidence, credentials, or browser-local
+workspace data. It supplements the production dependency audit and CodeQL; it
+does not replace either check.
+
+This maintainer command is separate from the passive browser-library profile
+shown by an eligible Deep Lookup. Lookup uses a checked-in, pinned projection
+of the catalogue and examines only bounded script indicators already present in
+the captured homepage. It does not download a catalogue at request time, fetch
+or execute a referenced script, or establish that an apparent component is
+reachable or exploitable.
+
+The checked-in projection can be reproduced from the exact pinned source file:
+
+```bash
+npm run catalog:retire -- --source /path/to/pinned-jsrepository.json --check
+```
+
+The command verifies the source SHA-256 digest before parsing it, applies the
+same component, extractor, vulnerability, string, and output-byte limits as the
+generator, and compares the resulting module byte-for-byte. The ordinary unit
+suite also verifies the checked-in generated-module digest, so an unintended
+catalogue edit fails offline verification without requiring the source file.
+Replace `--check` with `--write` only when deliberately updating the generated
+projection and its digest together. The command reads only the supplied local
+file and does not download a catalogue.
+
 ### Registry drift
 
 ```bash

@@ -5,8 +5,9 @@ lookup modules as the Express and serverless adapters. It does not call the
 hosted WHOISleuth deployment.
 
 `whoisleuth --help` displays the copyright, AGPL-3.0-only licence, and official
-source location. Packaged copies include `LICENSE`, `NOTICE`, and
-`TRADEMARKS.md` alongside the CLI documentation.
+source location. `whoisleuth <command> --help` displays the focused invocation
+for one command without printing the full command list. Packaged copies include
+`LICENSE`, `NOTICE`, and `TRADEMARKS.md` alongside the CLI documentation.
 
 ## Commands
 
@@ -48,6 +49,12 @@ explicitly and can add bounded WHOIS, DNS, website, TLS, registrar RDAP, and
 observed-network IP RDAP work for a domain. The browser Console's optional
 security.txt and external intelligence selections are not CLI flags; the CLI
 does not run those actions implicitly.
+
+For a directly entered public IP address, `lookup --deep` can also run one
+bounded reverse-DNS query. Terminal output shows the explicit source state and
+up to five normalized PTR names; JSON retains up to eight. PTR names are
+operator-published routing context, not proof of hosting control or ownership.
+Fast lookups do not run this query.
 
 Only one query is accepted by `lookup`. Multiple-input processing belongs to
 the explicit `bulk` command rather than being silently inferred by `lookup`.
@@ -108,15 +115,18 @@ host, hosting control, ownership, intent, or maliciousness. Fast and compact
 commands do not run the enrichment.
 
 The deep terminal summary also reports the website activity state, page title,
-DNS, HTTP, and TLS source states, up to six bounded technology indicators, and
-the four passive security-posture counts. These are concise projections of the
-same evidence already present in the lookup response. They make no extra
-request, omit raw evidence descriptions, and do not turn a technology match or
-missing posture signal into a vulnerability, hosting-control, ownership, or
-maliciousness claim. Use `--json` when the full bounded evidence, limitations,
-and source diagnostics are required.
+DNS, HTTP, and TLS source states, up to six bounded technology indicators, a
+browser-library profile count, and the four passive security-posture counts.
+These are concise projections of the same evidence already present in the
+lookup response. The browser-library line counts apparent components and
+catalogue advisory matches without retaining script references or raw
+signatures. These summaries make no extra request, omit raw evidence
+descriptions, and do not turn a technology or advisory match, or a missing
+posture signal, into proof of exploitability, hosting control, ownership, or
+maliciousness. Use `--json` when the full bounded evidence, limitations, and
+source diagnostics are required.
 
-When diagnostics version 5, 6, or 7 reports a documented registry collection
+When diagnostics version 5, 6, 7, or 8 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it
 does not make another request, and restricted, unpublished, or unavailable
@@ -372,18 +382,24 @@ source-status, parsed-data, scalar, list, and event boundaries as `compare`.
 The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
 and the shared registry-source comparison. Registrar RDAP raw data, contacts,
-entities, links, notices, and source-specific handles remain excluded; schema
-version 16 retains that normalized portable-field comparison, explicit
+entities, links, notices, and source-specific handles remain excluded. Schema
+version 17 retains that normalized portable-field comparison, explicit
 source-health states, a strict bounded projection of observed network
-registration, and an optional normalized security.txt disclosure source when
-the saved deep lookup represents them. Raw IP RDAP payloads, security.txt
-response bodies, and contact entities remain excluded.
+registration, an optional normalized security.txt disclosure source, HTTPS
+service-binding publications, and the passive browser-library profile when the
+saved deep lookup represents them. Raw IP RDAP payloads, security.txt response
+bodies, script references, matched script content, and contact entities remain
+excluded.
 
 Markdown output summarizes query context, assessment state, registry sources,
 source reconciliation, network observations, and collection diagnostics. It
 escapes all upstream text as untrusted content, bounds displayed values and
 lists, and deliberately omits raw RDAP JSON and full WHOIS response bodies.
 Use JSON when the complete evidence package or machine processing is required.
+The browser Console reuses this bounded Markdown renderer for domain results
+after first reducing the typed Lookup response to the known normalized fields
+needed by the report. IP and ASN results do not offer that first browser
+format. The browser action does not change the CLI input or output contract.
 When a version-5, version-6, or version-7 lookup records a documented registry-access constraint, both
 Markdown and HTML include that context in collection diagnostics without
 changing its non-authoritative interpretation. Both formats also include the

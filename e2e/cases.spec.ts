@@ -1013,6 +1013,10 @@ test.describe('accessible cross-case relationship table', () => {
     await migrateLegacyBrowserData(page, {
       'whois-rdap-cases-v1': { version: 2, cases: records },
     });
+    await readBrowserLocalCollection(page, 'cases', {
+      minimumRecords: records.length,
+      timeout: 10_000,
+    });
     await expect(page.getByRole('tab', { name: new RegExp(`Cases ${records.length}`) })).toBeVisible();
     await page.getByRole('tab', { name: /Relationships/ }).click();
   }

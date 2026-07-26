@@ -6,6 +6,9 @@
     failureDetail,
     truncated,
     initiallyExpanded = false,
+    title = 'DNS intelligence',
+    summaryDetail = 'Expand for observed records, provenance, and limitations',
+    note = 'Point-in-time resolver evidence. Shared DNS infrastructure can connect investigations but does not prove common ownership or maliciousness.',
   }: {
     status: string;
     complete: boolean;
@@ -13,13 +16,16 @@
     failureDetail: string;
     truncated: boolean;
     initiallyExpanded?: boolean;
+    title?: string;
+    summaryDetail?: string;
+    note?: string;
   } = $props();
 </script>
 
 <details class="dns-card evidence-card card" aria-labelledby="dns-title" open={initiallyExpanded}>
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
-      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="dns-title" role="heading" aria-level="4">DNS intelligence</span><span class="evidence-summary-detail">Expand for observed records, provenance, and limitations</span></span>
+      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="dns-title" role="heading" aria-level="4">{title}</span><span class="evidence-summary-detail">{summaryDetail}</span></span>
       <span class:partial={!complete} class="evidence-status">{status}</span>
     </span>
   </summary>
@@ -30,7 +36,7 @@
     {#if failureDetail}
       <p class="callout warn dns-warning">Partial observation: {failureDetail}. A resolver failure is not evidence that a record is absent.</p>
     {/if}
-    <p class="card-note">Point-in-time resolver evidence. Shared DNS infrastructure can connect investigations but does not prove common ownership or maliciousness.{truncated ? ' Some record inventories were capped.' : ''}</p>
+    <p class="card-note">{note}{truncated ? ' Some record inventories were capped.' : ''}</p>
   </div>
 </details>
 

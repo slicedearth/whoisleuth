@@ -5,6 +5,8 @@
     query = $bindable(),
     lookupMode = $bindable(),
     loading,
+    loadingElapsedMs,
+    loadingDeadlineMs,
     entryCount,
     duplicateCount,
     lookupDisabled,
@@ -20,10 +22,13 @@
     includeSecurityTxt = $bindable(),
     error,
     onsubmit,
+    oncancel,
   }: {
     query: string;
     lookupMode: 'fast' | 'deep';
     loading: boolean;
+    loadingElapsedMs: number;
+    loadingDeadlineMs: number;
     entryCount: number;
     duplicateCount: number;
     lookupDisabled: Capability | null;
@@ -39,6 +44,7 @@
     includeSecurityTxt: boolean;
     error: string;
     onsubmit: (event: SubmitEvent) => void | Promise<void>;
+    oncancel: () => void;
   } = $props();
 
   const intelligenceOptionCount = $derived(
@@ -50,10 +56,24 @@
   const deepMode = $derived(lookupMode === 'deep');
   const loadingDetail = $derived(lookupMode === 'fast'
     ? 'Fast lookup is checking authoritative registration evidence and omitting slower web, WHOIS, and enrichment sources.'
-    : 'Deep lookup is collecting registry, WHOIS, DNS, web, TLS, and separately attributed enrichment sources. Some registries can take several seconds to answer.');
+    : 'Deep lookup is waiting for one final response covering registry, WHOIS, domain, web, TLS, and eligible enrichment branches. Some registries can take several seconds to answer.');
   const requestedSourceFamilies = $derived(lookupMode === 'fast'
     ? ['Authority', 'RDAP']
-    : ['Authority', 'WHOIS', 'DNS', 'HTTP', 'TLS', 'Enrichment']);
+    : [
+        'Registry RDAP',
+        'WHOIS',
+        'Domain evidence',
+        'Registrar RDAP',
+        'Network context',
+        ...(includeSecurityTxt ? ['security.txt'] : []),
+        ...(includeExternalIntelligence || includeMalwareHostIntelligence || includeMalwareIocIntelligence
+          ? ['Selected intelligence']
+          : []),
+      ]);
+  const elapsedLabel = $derived(loadingElapsedMs < 1_000
+    ? `${Math.max(0, Math.round(loadingElapsedMs))} ms elapsed`
+    : `${(loadingElapsedMs / 1_000).toFixed(1)} s elapsed`);
+  const deadlineLabel = $derived(`${Math.round(loadingDeadlineMs / 1_000)} s browser deadline`);
 </script>
 
 <form class="search card" {onsubmit}>
@@ -98,15 +118,18 @@
   </fieldset>
 
   {#if loading}
-    <div class="loading-note" role="status">
+    <div class="loading-note">
       <span class="spinner" aria-hidden="true"></span>
-      <div>
-        <p>{loadingDetail}</p>
+      <div class="loading-copy">
+        <p role="status">{loadingDetail}</p>
+        <p class="loading-meta"><strong>{elapsedLabel}</strong><span>{deadlineLabel}</span></p>
         <div class="collection-trace" aria-hidden="true">
           <span class="trace-prompt">collect://</span>
           {#each requestedSourceFamilies as source}<span>{source}</span>{/each}
         </div>
+        <p class="loading-caveat">Sources remain pending until the final response reports their state. Cancelling stops this browser from waiting; work already admitted by the server may continue within its existing bounds.</p>
       </div>
+      <button type="button" class="btn cancel-lookup" onclick={oncancel}>Cancel lookup</button>
     </div>
   {/if}
 
@@ -155,8 +178,13 @@
   .mode-options strong{font:700 var(--text-sm) var(--mono)}
   .mode-options small{color:var(--muted);font-size:var(--text-2xs)}
   .lookup-mode p,.loading-note{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .loading-note{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid rgb(var(--accent-rgb) / .32);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .08)}
-  .loading-note>div{min-width:0}.loading-note p{margin:0}
+  .loading-note{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:9px;padding:10px 12px;border:1px solid rgb(var(--accent-rgb) / .32);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .08)}
+  .loading-copy{min-width:0}.loading-note p{margin:0}
+  .loading-meta{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:7px!important;font:650 var(--text-2xs) var(--mono)}
+  .loading-meta strong{color:var(--text);font-variant-numeric:tabular-nums}
+  .loading-meta span{color:var(--muted)}
+  .loading-caveat{margin-top:8px!important;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .cancel-lookup{min-height:34px;padding:6px 9px;white-space:nowrap}
   .spinner{flex:0 0 auto;width:13px;height:13px;margin-top:2px;border:2px solid rgb(var(--accent-rgb) / .28);border-top-color:var(--accent);border-radius:50%;animation:lookup-spin .8s linear infinite}
   .collection-trace{position:relative;display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;overflow:hidden}
   .collection-trace::after{content:"";position:absolute;inset:0 auto 0 -25%;width:20%;background:linear-gradient(90deg,transparent,rgb(var(--accent-rgb) / .12),transparent);animation:collection-scan 1.8s linear infinite;pointer-events:none}
@@ -170,5 +198,11 @@
   .intelligence-hint{margin:0 0 10px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .intelligence-option{margin:8px 0 0}
   .intelligence-option span{color:var(--muted)}
-  @media(max-width:600px){.input-row{grid-template-columns:1fr}.input-row .primary{width:100%;min-height:44px}.mode-options{grid-template-columns:1fr}}
+  @media(max-width:600px){
+    .input-row{grid-template-columns:1fr}
+    .input-row .primary{width:100%;min-height:44px}
+    .mode-options{grid-template-columns:1fr}
+    .loading-note{grid-template-columns:auto minmax(0,1fr)}
+    .cancel-lookup{grid-column:2;justify-self:start}
+  }
 </style>

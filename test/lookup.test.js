@@ -42,6 +42,7 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (domain, options) => {
         availabilityCalls += 1;
         assert.equal(domain, 'example.com');
+        assert.equal(options.includeExtendedDnsContext, true);
         assert.equal(await options.rdapRecordPromise, rdapRecord);
         assert.equal(await options.whoisChainPromise, whoisChain);
         return { state: 'registered', confidence: 'high' };
@@ -55,7 +56,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
@@ -145,6 +146,7 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (_domain, options) => {
         assert.equal(options.includeTechnologyProfile, false);
         assert.equal(options.includeSecurityPosture, false);
+        assert.equal(options.includeExtendedDnsContext, false);
         return {
           state: 'registered', confidence: 'high', registrar: 'Example Registrar',
           technologyProfile: { source: 'derived', findings: [{ name: 'must be omitted' }] },
@@ -159,6 +161,125 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result, 'whois'), false);
     assert.equal(Object.hasOwn(result.availability, 'technologyProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
+  });
+
+  test('records bounded settle timing only for deep non-compact source branches', async () => {
+    let clock = 0;
+    const now = () => {
+      clock += 5;
+      return clock;
+    };
+    const result = await runUnifiedLookup(classifiedDomain, {
+      now,
+      fetchRdapRecord: async () => { throw new Error('RDAP timed out'); },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async (_domain, options) => {
+        await assert.rejects(options.rdapRecordPromise, /timed out/);
+        await options.whoisChainPromise;
+        return { state: 'unknown', confidence: 'low' };
+      },
+      collectObservedNetworkContext: async () => ({
+        contextVersion: 1,
+        status: 'unsupported',
+        detail: 'No eligible public endpoint address was observed.',
+      }),
+    });
+
+    assert.equal(result.diagnostics.version, 8);
+    assert.deepEqual(result.diagnostics.timing, {
+      version: 1,
+      totalMs: 45,
+      sources: [
+        { source: 'rdap', outcome: 'rejected', durationMs: 15, completedAfterMs: 20 },
+        { source: 'whois', outcome: 'fulfilled', durationMs: 15, completedAfterMs: 25 },
+        { source: 'domain_evidence', outcome: 'fulfilled', durationMs: 15, completedAfterMs: 30 },
+        { source: 'network_context', outcome: 'fulfilled', durationMs: 5, completedAfterMs: 40 },
+      ],
+    });
+
+    const ordinaryOptions = {
+      now,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
+    };
+    const fast = await runUnifiedLookup(classifiedDomain, { ...ordinaryOptions, fast: true });
+    const compact = await runUnifiedLookup(classifiedDomain, { ...ordinaryOptions, compact: true });
+    for (const compatible of [fast, compact]) {
+      assert.equal(compatible.diagnostics.version, 7);
+      assert.equal(Object.hasOwn(compatible.diagnostics, 'timing'), false);
+    }
+  });
+
+  test('adds one separately attributed reverse-DNS observation only to deep public-IP lookups', async () => {
+    let reverseDnsCalls = 0;
+    const common = {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      collectReverseDnsIntelligence: async (address) => {
+        reverseDnsCalls += 1;
+        assert.equal(address, '192.0.2.10');
+        return {
+          version: 1,
+          status: 'success',
+          observedAt: '2026-07-27T00:00:00.000Z',
+          scanMode: 'deep',
+          source: 'reverse_dns',
+          durationMs: 5,
+          complete: true,
+          truncated: false,
+          limitations: ['PTR is non-authoritative context.'],
+          diagnostics: {
+            ptr: { status: 'success', error: null, truncated: false, discarded: 0 },
+          },
+          records: { ptr: ['ptr.example.test'] },
+        };
+      },
+    };
+    const classifiedIp = { type: 'ipv4', value: '192.0.2.10' };
+    const deep = await runUnifiedLookup(classifiedIp, common);
+
+    assert.equal(reverseDnsCalls, 1);
+    assert.equal(deep.reverseDns.status, 'success');
+    assert.deepEqual(deep.reverseDns.records.ptr, ['ptr.example.test']);
+    assert.deepEqual(deep.availability, { applicable: false, type: 'ipv4' });
+    assert.deepEqual(deep.diagnostics.reverseDns, {
+      status: 'success',
+      observedAt: '2026-07-27T00:00:00.000Z',
+      complete: true,
+      truncated: false,
+    });
+    assert.equal(
+      deep.diagnostics.timing.sources.some((source) => source.source === 'reverse_dns'),
+      true,
+    );
+
+    const fast = await runUnifiedLookup(classifiedIp, { ...common, fast: true });
+    const compact = await runUnifiedLookup(classifiedIp, { ...common, compact: true });
+    const asn = await runUnifiedLookup({ type: 'asn', value: '64496' }, common);
+    assert.equal(reverseDnsCalls, 1);
+    for (const result of [fast, compact, asn]) {
+      assert.equal(Object.hasOwn(result, 'reverseDns'), false);
+      assert.equal(Object.hasOwn(result.diagnostics, 'reverseDns'), false);
+    }
+  });
+
+  test('keeps disabled reverse DNS explicit without calling the collector', async () => {
+    let reverseDnsCalls = 0;
+    const result = await runUnifiedLookup({ type: 'ipv6', value: '2001:db8::10' }, {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      collectReverseDnsIntelligence: async () => {
+        reverseDnsCalls += 1;
+        throw new Error('must not run');
+      },
+      featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1' }),
+    });
+
+    assert.equal(reverseDnsCalls, 0);
+    assert.equal(result.reverseDns.status, 'skipped');
+    assert.equal(result.reverseDns.complete, false);
+    assert.equal(result.diagnostics.reverseDns.status, 'skipped');
   });
 
   test('adds non-authoritative registry-access context without changing source work or availability', async () => {
@@ -179,7 +300,7 @@ describe('runUnifiedLookup', () => {
       applicable: true, domain: 'example.es', inputHostname: 'example.es',
       registrableDomain: 'example.es', isSubdomain: false, ...availability,
     });
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.registryAccess, {
       suffix: 'es', coverageState: 'access_documented',
       whoisAccessProfile: 'source-ip-authorization-required',
@@ -262,7 +383,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(registrarCalls, 1);
     assert.equal(result.rdap.registrarRdap.status, 'success');
     assert.equal(result.rdap.parsed, rdapRecord.parsed);
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.rdap.registrar, {
       status: 'success',
       endpoint: 'https://registrar.example/domain/example.com',
@@ -335,7 +456,7 @@ describe('runUnifiedLookup', () => {
     });
     assert.equal(result.networkContext.network.holder, 'Example network holder');
     assert.equal(result.networkContext.network.cidrs[0], '93.184.216.0/24');
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.network, {
       status: 'success',
       address: '93.184.216.34',

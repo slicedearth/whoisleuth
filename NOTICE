@@ -12,6 +12,12 @@ Development-only accessibility tests use @axe-core/playwright and axe-core,
 which are licensed under the Mozilla Public License 2.0. These packages are not
 part of the production runtime.
 
+The generated browser-library catalogue projection is derived from the
+Retire.js browser repository, version 5.4.3, and has been modified by selecting
+and bounding the fields used by WHOISleuth. Retire.js is licensed under the
+Apache License 2.0. See LICENSES/Retire.js-Apache-2.0.txt for the full licence
+text.
+
 The exact locked production-dependency inventory and the licence documents
 distributed by those packages are retained in
 frontend/static/third-party-notices.txt. The same file is served by the static

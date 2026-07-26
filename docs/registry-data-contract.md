@@ -24,14 +24,21 @@ full successful response contains:
 - `whois`: the raw referral chain and normalized WHOIS data or a source error.
 - `availability`: the derived domain-registration assessment, or a
   non-applicable result for IP/ASN input.
-- `diagnostics`: independent source status and provenance.
+- `diagnostics`: independent source status and provenance. Deep non-compact
+  responses also include bounded orchestration timing described below.
 - `networkContext`: for an eligible deep non-compact domain result, a
   separately attributed summary of one observed public endpoint address and
   its IP RDAP network registration.
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
-  curated software and delivery indicators. Profile version 2 broadens
-  commerce and content-delivery coverage without making another request.
+  curated software and delivery indicators. Profile version 3 uses
+  one standards-compliant bounded HTML tokenization pass and adds a nested version-1
+  browser-library profile derived from a pinned Retire.js catalogue. It
+  retains only apparent component versions, detection classes, and bounded
+  advisory context without fetching referenced scripts or making another
+  request. The advisory count covers every matching entry in the already
+  bounded projected catalogue; retained advisory identifiers and weakness
+  classes remain capped independently.
 - `securityTxt`: only when explicitly selected for a deep single-domain
   request, a bounded normalized disclosure file for the exact submitted
   hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.
@@ -57,6 +64,13 @@ or rendering evidence. Nested source records remain separately attributed and
 additive; an HTTP 200 response with a malformed envelope is reported as an
 invalid response rather than being interpreted as partial evidence.
 
+The browser waits for this single final response. It shows elapsed time and
+eligible branches as pending, without polling, streaming, or claiming that a
+source has completed early. Analyst cancellation, navigation away, or the
+40-second browser deadline stops the local wait and retains no incomplete
+response. Work already admitted by the server may still finish within its
+existing source and operation bounds.
+
 For a deep, non-compact domain Lookup only, a successful registry RDAP object
 may publish a complete `rel="related"` HTTPS domain-object link at the
 sponsoring registrar. Lookup follows at most one eligible link, validates the
@@ -71,9 +85,14 @@ fully overlap the WHOIS referral chain.
 Deep registered-domain assessments additionally expose a bounded
 `availability.dns` observation. The collector runs A, AAAA, CNAME, NS, MX,
 SPF, DMARC, and CAA queries in parallel, reusing the existing mail-policy
-queries rather than running a second mail scan. Each record family has an
-independent `success`/`not_found`/`error` diagnostic, malformed neighbours are
-counted and discarded, and capped inventories set their truncation flag.
+queries rather than running a second mail scan. Deep non-compact Lookup adds
+one SOA query to retain the bounded primary nameserver, responsible mailbox,
+serial, refresh, retry, expiry, and minimum-TTL values. It also adds one HTTPS
+resource-record query through the deployment's configured recursive DNS
+servers and retains up to sixteen normalized service-binding publications.
+Compact Bulk keeps the existing eight-query profile. Each record family has an independent
+`success`/`not_found`/`error` diagnostic, malformed neighbours are counted and
+discarded, and capped inventories set their truncation flag.
 Resolver failure produces `null` for the compatible `hasMx`, `hasSpf`, or
 `hasDmarc` signal; authoritative absence produces `false`. DNSSEC remains
 registry-derived because recursive-resolver validation is not equivalent to
@@ -85,6 +104,35 @@ infrastructure is not proof of common ownership or maliciousness. Full Lookup
 and deliberate evidence exports retain the bounded observation. Compact Bulk
 responses may display or export it, but watchlists and analyst cases continue
 to store only their existing compact compatibility fields.
+
+Node.js 24 does not expose HTTPS or SVCB through its documented high-level DNS
+resolver API, so WHOISleuth implements the small required DNS wire boundary
+in-house. It sends a type-65 HTTPS query to at most three validated literal
+addresses from the deployment's system resolver configuration, validates the
+transaction, question, response bounds, record ordering, and parameter
+encoding, and uses TCP only when that same resolver returns a truncated UDP
+answer. No third-party DNS service is introduced. The domain Lookup does not
+send a generic SVCB query because SVCB requires a protocol-specific query name;
+the shared parser supports type 64 for future explicit service queries.
+
+HTTPS service-binding evidence retains priority, alias/service mode, effective
+target, TTL, ALPN identifiers, port, address hints, mandatory keys, and only
+the names and byte lengths of other recognized parameters. Opaque values such
+as ECH configuration are discarded. WHOISleuth does not follow AliasMode
+targets or connect to published targets, ports, or address hints. Unsupported
+mandatory keys make a record explicitly incompatible with this parser, and
+AliasMode `.` remains an advisory service-unavailable publication rather than
+an availability or safety conclusion.
+
+Deep non-compact Lookup of a directly entered public IPv4 or IPv6 address can
+also expose a separately attributed version-1 `reverseDns` observation. It
+runs one five-second PTR query, retains at most eight normalized hostnames, and
+keeps success, partial, not-found, unsupported, and error states distinct.
+Private, loopback, link-local, multicast, documentation, and otherwise
+special-purpose addresses are rejected before resolution. PTR data never enters
+availability or Risk and is omitted from Fast, compact, Bulk, monitoring, and
+browser-local stores. A published PTR name is routing context, not proof of
+hosting control, ownership, intent, or maliciousness.
 
 After deep availability collection completes, Lookup prefers the public address
 used by the successful TLS connection. If no eligible TLS address was retained,
@@ -208,21 +256,51 @@ traces, filesystem paths, upstream internals, or secrets. Expected validation,
 authentication, policy, rate-limit, operation-budget, unsupported, partial,
 and not-found responses retain their existing specific messages and codes.
 
-## Diagnostics version 7
+## Diagnostics versions 7 and 8
 
-`diagnostics.version` is `7`. Version 7 retains the version-5 source fields,
-including the optional separately attributed registrar RDAP child and static
-`diagnostics.registryAccess` context, and adds optional
-`diagnostics.network` provenance introduced in version 6. When the optional
-security.txt action runs, it adds `diagnostics.securityTxt` with source state,
-endpoint, HTTP status, observation time, completeness, and truncation.
+Fast and compact responses retain `diagnostics.version: 7` and their existing
+shape. Deep non-compact responses use `diagnostics.version: 8`. Version 8
+retains the version-7 source fields, adds the optional `diagnostics.reverseDns`
+source state for IP lookups, and adds `diagnostics.timing`:
+
+```json
+{
+  "version": 1,
+  "totalMs": 2400,
+  "sources": [
+    {
+      "source": "rdap",
+      "outcome": "fulfilled",
+      "durationMs": 700,
+      "completedAfterMs": 700
+    }
+  ]
+}
+```
+
+Timing retains at most ten fixed source identifiers, including `reverse_dns`.
+Millisecond values are
+non-negative integers capped at 120,000 and every source is recorded only
+after its promise settles. `durationMs` measures that branch;
+`completedAfterMs` is its settle offset from the unified request start.
+Branches overlap, so their durations are not additive. `fulfilled` and
+`rejected` describe promise settlement only. They do not replace the
+source-specific `success`, `partial`, `not_found`, `unavailable`, `skipped`,
+or error state and are never inputs to availability or Risk.
+
+Version 7 retains the version-5 source fields, including the optional
+separately attributed registrar RDAP child and static
+`diagnostics.registryAccess` context, and adds optional `diagnostics.network`
+provenance introduced in version 6. When the optional security.txt action
+runs, it adds `diagnostics.securityTxt` with source state, endpoint, HTTP
+status, observation time, completeness, and truncation.
 The registry-access object records a documented machine-access constraint or
 the absence of an IANA-published service for the suffix. It is static context
 only, performs no network work, is omitted from compact Bulk responses, and is
 never consulted by availability or scoring. Consumers that do not recognize
-version 7 must fail conservatively rather than reinterpret a disabled, skipped,
-unsupported, or failed source as upstream absence. The source objects use
-explicit status values:
+the represented diagnostics version must fail conservatively rather than
+reinterpret a disabled, skipped, unsupported, or failed source as upstream
+absence. The source objects use explicit status values:
 
 - RDAP: `success`, `not_found`, `unsupported`, `disabled`, or `error`.
 - WHOIS: `complete`, `partial`, `skipped`, `disabled`, or `error`.
@@ -458,12 +536,19 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `16`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `17`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 16 can add the normalized, bounded security.txt
-disclosure-contact result when that optional deep action was selected; raw
-file text is never included. Version 15 added a strict, bounded projection of
+registry comparison. Version 17 adds the bounded HTTPS service-binding
+publication to eligible deep DNS evidence and the nested passive
+browser-library profile to eligible technology evidence. The service-binding
+projection excludes opaque parameter values and does not follow or connect to
+published targets. The browser-library projection excludes script references,
+matched content, and hashes and does not prove reachability or exploitability.
+Version 16 can add the normalized, bounded security.txt
+disclosure-contact result when that optional deep action was selected and the
+strict reverse-DNS projection when deep public-IP Lookup represented it; raw
+resolver answers and file text are never included. Version 15 added a strict, bounded projection of
 observed network context and never includes its raw IP RDAP object or contact
 entities. Version 14 added passive security-posture findings derived from
 already-retained deep evidence, and version 13 added curated technology
@@ -504,7 +589,15 @@ and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
 forms, active links, or external resources and includes a restrictive embedded
 Content Security Policy. The versioned JSON package remains the authoritative
 machine-readable export when complete captured source material is required.
-When schema-version 16 JSON retains a supported version-5, version-6, or version-7
+The Console's domain-focused readable Markdown download uses the same shared
+renderer after a strict known-field projection of the typed Lookup response.
+That projection is created entirely in the browser, makes no network request,
+writes no browser-local record, and excludes raw registry and provider
+payloads, WHOIS response bodies, expanded contacts, scripts, and remote assets
+before formatting. IP and ASN results do not offer this first readable format.
+Their separate JSON evidence action, and the domain JSON action, retain the
+richer schema contract described above.
+When schema-version 17 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -512,7 +605,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema version 16 can also retain the bounded normalized security.txt source
+Schema version 17 can also retain the bounded normalized security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorization, availability, or Risk signal.
 

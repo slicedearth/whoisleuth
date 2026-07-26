@@ -44,6 +44,10 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
   await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
+  await page.locator('.dns-card > summary').click();
+  await expect(page.locator('.dns-card').getByText('ns1.shared-example.invalid · serial 2026072701', { exact: true })).toBeVisible();
+  await expect(page.locator('.dns-card').getByText(/Service priority 1 → owner · ALPN h2, h3 · port 443/)).toBeVisible();
+  await page.locator('.dns-card > summary').click();
   await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
   await expect(page.getByText('security.txt', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
@@ -59,6 +63,9 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(technology.getByRole('heading', { name: 'Example Commerce' })).toBeHidden();
   await technology.locator(':scope > summary').click();
   await expect(technology.getByRole('heading', { name: 'Example Commerce' })).toBeVisible();
+  await expect(technology.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();
+  await expect(technology.getByRole('heading', { name: 'Example UI Library 1.2.3' })).toBeVisible();
+  await expect(technology.getByText(/fixed synthetic component and advisory context/i)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
   const network = page.locator('.network-context');
   await expect(network).not.toHaveAttribute('open', '');

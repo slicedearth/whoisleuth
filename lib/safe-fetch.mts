@@ -228,6 +228,12 @@ function normalizedFetchUrl(value: unknown): string {
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Refusing to fetch a non-HTTP URL');
   if (!parsed.hostname) throw new Error('Refusing to fetch a URL without a hostname');
   if (parsed.username || parsed.password) throw new Error('Refusing to fetch a URL containing credentials');
+  // Keep every safe-fetch caller on the ordinary web-service boundary. URL
+  // normalisation removes explicit default ports (:80 for HTTP and :443 for
+  // HTTPS), so any remaining port is non-default and must be rejected here.
+  // Applying the rule centrally also covers redirect targets and page-declared
+  // resources rather than relying on each entry-point parser to repeat it.
+  if (parsed.port) throw new Error('Refusing to fetch a URL with a non-default port');
   const normalized = parsed.toString();
   if (normalized.length > MAX_SAFE_FETCH_URL_LENGTH) throw new Error('Refusing to fetch an oversized URL');
   return normalized;

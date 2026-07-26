@@ -86,7 +86,7 @@ Fast and deep modes are execution profiles, not confidence labels:
 | Profile | Intended use | Hosted work |
 | --- | --- | --- |
 | **Fast** | High-volume candidate triage. | RDAP-led registration analysis, with bounded authoritative DNS delegation fallback where needed. WHOIS and deep website/TLS evidence are skipped explicitly. |
-| **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS, HTTP, favicon, page identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
+| **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS with domain SOA or public-IP PTR context, HTTP, favicon, page identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
 | **Deep, compact** | Analyst-selected richer Bulk triage. | RDAP, WHOIS, availability, DNS, bounded website evidence, and TLS evidence needed by the compact result. Registrar RDAP follow-up, raw registry payloads, technology and passive-posture detail, observed-address IP RDAP, security.txt, and external providers remain omitted. |
 
 Bulk uses the same `/api/lookup` orchestration one domain at a time and requests
@@ -94,6 +94,31 @@ a compact response. The compact profile does not collect omitted full-lookup
 sources and excludes raw RDAP JSON and multi-hop WHOIS bodies from its response.
 This keeps each serverless invocation bounded and avoids work and payloads that
 Bulk does not display or retain.
+
+Deep full Lookup keeps one authoritative HTTP response rather than splitting
+registration and enrichment into separate requests or depending on
+deployment-specific response streaming. The browser displays elapsed time and
+eligible branches as pending until that response arrives. It can stop waiting
+after an analyst cancellation, navigation away, or its 40-second deadline, but
+already-admitted server work remains bounded by the existing operation lease
+and source deadlines.
+
+Polling was not selected because it would require durable job state or risk
+repeating upstream work. Split registration and enrichment responses would
+change cache and request-budget semantics and could expose an assessment before
+all authority inputs settle. Response streaming is not the shared contract of
+the current Express, static-frontend, and serverless adapters. The selected
+single-response design therefore improves progress and cancellation feedback
+without introducing a second orchestration path.
+
+Diagnostics version 8 adds bounded settle timing and the optional separately
+attributed reverse-DNS diagnostic only to deep non-compact responses. Each
+recorded branch has a fulfilled or rejected promise outcome, duration, and
+completion offset relative to the unified request. These are orchestration
+measurements, not evidence-health claims: a fulfilled branch can still return
+partial, unavailable, not-found, or error evidence. Branches overlap and their
+durations must not be summed. Fast and compact responses retain diagnostics
+version 7 and their existing payload shape.
 
 ## Outbound evidence boundaries
 
@@ -117,7 +142,9 @@ Bulk does not display or retain.
   session material.
 - **DNS and Certificate Transparency** retain only the records or structured
   public-log provenance needed for the requested feature, with explicit row,
-  string, hostname, and response-size caps.
+  string, hostname, and response-size caps. Domain SOA and public-IP PTR
+  collection run only in deep non-compact Lookup. PTR names remain
+  non-authoritative context.
 - **External intelligence** is disabled until configured and runs only when a
   user selects the corresponding deep action. Each adapter sends a bounded
   canonical domain under its declared policy, retains no provider cache, and

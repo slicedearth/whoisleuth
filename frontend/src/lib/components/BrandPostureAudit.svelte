@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
-  type AuditResult = { domain: string; report: any | null; error: string };
+  import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
+  type AuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string };
   let { active, disabledReason, auditing, results, audit }: {
     active: BrandProfile;
     disabledReason: string;
@@ -10,7 +11,7 @@
   } = $props();
 </script>
 
-<section class="audit card"><header class="section-head"><div><p class="eyebrow">Prevention</p><h2>Official-domain security posture</h2><p>Audit SPF, DMARC, MTA-STS, TLS-RPT, BIMI, CAA, DNSSEC, and supplied DKIM selectors.</p></div><button class="primary" onclick={audit} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>{auditing ? 'Auditing…' : 'Audit official domains'}</button></header>{#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}{#if results.length}<div class="audit-results">{#each results as item}<article><h3>{item.domain}</h3>{#if item.error}<p class="error">{item.error}</p>{:else}<p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p><div class="checks">{#each item.report.checks as check}<details class={check.status}><summary><span>{check.label}</span><strong>{check.status}</strong></summary><p>{check.summary}</p>{#if check.detail}<p>{check.detail}</p>{/if}{#if check.remediation}<p><b>Next:</b> {check.remediation}</p>{/if}{#if check.records?.length}<pre>{check.records.join('\n')}</pre>{/if}</details>{/each}</div>{/if}</article>{/each}</div>{/if}</section>
+<section class="audit card"><header class="section-head"><div><p class="eyebrow">Prevention</p><h2>Official-domain security posture</h2><p>Audit SPF, DMARC, MTA-STS, TLS-RPT, BIMI, CAA, DNSSEC, and supplied DKIM selectors.</p></div><button class="primary" onclick={audit} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>{auditing ? 'Auditing…' : 'Audit official domains'}</button></header>{#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}{#if results.length}<div class="audit-results">{#each results as item}<article><h3>{item.domain}</h3>{#if item.error}<p class="error">{item.error}</p>{:else if item.report}<p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p><div class="checks">{#each item.report.checks as check}<details class={check.status}><summary><span>{check.label}</span><strong>{check.status}</strong></summary><p>{check.summary}</p>{#if check.detail}<p>{check.detail}</p>{/if}{#if check.remediation}<p><b>Next:</b> {check.remediation}</p>{/if}{#if check.records.length}<pre>{check.records.join('\n')}</pre>{/if}</details>{/each}</div>{:else}<p class="error">Official-domain audit returned an invalid response.</p>{/if}</article>{/each}</div>{/if}</section>
 
 <style>
   .audit{margin-top:16px;padding:var(--card-pad)}

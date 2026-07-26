@@ -1,5 +1,19 @@
 const MAX_CLI_ARGUMENTS = 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
+const CLI_COMMANDS = [
+  'lookup',
+  'bulk',
+  'ct-search',
+  'discover',
+  'posture',
+  'http',
+  'tls',
+  'registry-support',
+  'risk-calibrate',
+  'compare',
+  'export',
+] as const;
+type CliCommand = typeof CLI_COMMANDS[number];
 
 type TerminalOptions = {
   quiet: boolean;
@@ -7,7 +21,7 @@ type TerminalOptions = {
 };
 
 type CliArguments =
-  | { action: 'help' }
+  | { action: 'help'; command?: CliCommand }
   | { action: 'version' }
   | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json'; deep: boolean } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl'; deep: boolean; concurrency: number } & TerminalOptions)
@@ -35,20 +49,30 @@ function boundedArgument(value: unknown): string {
   return value;
 }
 
+function isCliCommand(value: string): value is CliCommand {
+  return (CLI_COMMANDS as readonly string[]).includes(value);
+}
+
 function parseCliArguments(rawArgv: unknown): CliArguments {
   if (!Array.isArray(rawArgv) || rawArgv.length > MAX_CLI_ARGUMENTS) {
     throw new CliUsageError(`At most ${MAX_CLI_ARGUMENTS} command arguments are supported.`);
   }
   const argv = rawArgv.map(boundedArgument);
-  if (!argv.length || argv.includes('--help') || argv.includes('-h')) return { action: 'help' };
+  if (!argv.length) return { action: 'help' };
+  const helpRequested = argv.includes('--help') || argv.includes('-h');
+  if (helpRequested) {
+    if (argv.length === 1) return { action: 'help' };
+    if (argv.length === 2 && isCliCommand(argv[0])) return { action: 'help', command: argv[0] };
+    throw new CliUsageError('Help accepts only an optional command name.');
+  }
   if (argv[0] === '--version' || argv[0] === '-V') {
     if (argv.length !== 1) throw new CliUsageError('--version does not accept other arguments.');
     return { action: 'version' };
   }
 
   const command = argv[0];
-  if (!['lookup', 'bulk', 'ct-search', 'discover', 'posture', 'http', 'tls', 'registry-support', 'risk-calibrate', 'compare', 'export'].includes(command)) {
-    throw new CliUsageError(`Unknown command "${command}". This release supports: lookup, bulk, ct-search, discover, posture, http, tls, registry-support, risk-calibrate, compare, export.`);
+  if (!isCliCommand(command)) {
+    throw new CliUsageError(`Unknown command "${command}". This release supports: ${CLI_COMMANDS.join(', ')}.`);
   }
   if (command === 'bulk') return parseBulkArguments(argv.slice(1));
   if (command === 'ct-search') return parseCtSearchArguments(argv.slice(1));
@@ -348,5 +372,5 @@ function parseExportArguments(argv: string[]): Extract<CliArguments, { action: '
   return { action: 'export', source, format, compact };
 }
 
-export { CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
-export type { CliArguments };
+export { CLI_COMMANDS, CliUsageError, MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, parseCliArguments };
+export type { CliArguments, CliCommand };

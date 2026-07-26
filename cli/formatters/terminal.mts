@@ -76,6 +76,7 @@ function formatTerminalLookup(document: TerminalRecord): string {
     const httpResponse = terminalRecord(http.response);
     const tls = terminalRecord(availability.tls);
     const technology = terminalRecord(availability.technologyProfile);
+    const browserLibraries = terminalRecord(technology.browserLibraryProfile);
     const posture = terminalRecord(availability.securityPosture);
     const postureSummary = terminalRecord(posture.summary);
 
@@ -106,6 +107,14 @@ function formatTerminalLookup(document: TerminalRecord): string {
         const omitted = findings.length - visible.length;
         lines.push(`Indicators     ${safeTerminalValue(`${visible.join('; ')}${omitted > 0 ? `; +${omitted} more` : ''}`)}`);
       }
+      if (browserLibraries.profileVersion === 1 || browserLibraries.source === 'derived') {
+        const libraries = Array.isArray(browserLibraries.findings) ? browserLibraries.findings : [];
+        const advisoryMatches = libraries.filter((finding: unknown) => terminalCount(terminalRecord(finding).advisoryCount) > 0).length;
+        lines.push(
+          `JS libraries   ${titleCase(browserLibraries.status)} · ${libraries.length} apparent · `
+          + `${advisoryMatches} with catalogue advisory match${advisoryMatches === 1 ? '' : 'es'}`,
+        );
+      }
     }
     if (posture.status || posture.source === 'derived') {
       lines.push(`Posture        ${titleCase(posture.status)}`);
@@ -116,6 +125,15 @@ function formatTerminalLookup(document: TerminalRecord): string {
         + `${terminalCount(postureSummary.unavailable)} unavailable`,
       );
     }
+  }
+  if (document.mode === 'deep' && (document.type === 'ipv4' || document.type === 'ipv6')) {
+    const reverseDns = terminalRecord(document.reverseDns);
+    const reverseDnsRecords = terminalRecord(reverseDns.records);
+    const ptrNames = Array.isArray(reverseDnsRecords.ptr)
+      ? reverseDnsRecords.ptr.slice(0, 5).map((value: unknown) => safeTerminalValue(value))
+      : [];
+    if (reverseDns.status) lines.push(`Reverse DNS    ${titleCase(reverseDns.status)}`);
+    if (ptrNames.length) lines.push(`PTR names      ${safeTerminalValue(ptrNames.join(', '))}`);
   }
   const network = document.networkContext;
   if (network?.contextVersion === 1) {

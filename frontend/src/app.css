@@ -26,7 +26,6 @@
   --shadow-rgb: 0 0 0;
   --card-shadow-alpha: .22;
   --card-hover-shadow-alpha: .3;
-  --terminal-shadow-alpha: .3;
   --body-grid-alpha: .015;
   --body-ambient-alpha: .05;
   --cursor-glow-alpha: .5;
@@ -38,16 +37,6 @@
   --primary-end: #4a9ff3;
   --primary-hover-start: #8ccbff;
   --primary-hover-end: #5babf6;
-  --terminal-bg: #11141a;
-  --terminal-panel: #11141a;
-  --terminal-text: #e6e8ee;
-  --terminal-muted: #8b93a7;
-  --terminal-border: #2a2e39;
-  --terminal-window-red: #ff6b6b;
-  --terminal-window-yellow: #f2b84b;
-  --terminal-window-green: #7ee0a8;
-  --terminal-overlay-rgb: 255 255 255;
-  --terminal-shadow-rgb: 0 0 0;
   --theme-color: #0f1115;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -95,7 +84,6 @@
   --shadow-rgb: 38 56 77;
   --card-shadow-alpha: .1;
   --card-hover-shadow-alpha: .16;
-  --terminal-shadow-alpha: .1;
   --body-grid-alpha: .007;
   --body-ambient-alpha: .025;
   --cursor-glow-alpha: .28;
@@ -107,13 +95,6 @@
   --primary-end: #075f9f;
   --primary-hover-start: #0869aa;
   --primary-hover-end: #054f86;
-  --terminal-bg: #f5f8fb;
-  --terminal-panel: #ffffff;
-  --terminal-text: #142033;
-  --terminal-muted: #5b6879;
-  --terminal-border: #c5cfda;
-  --terminal-overlay-rgb: 15 23 42;
-  --terminal-shadow-rgb: 38 56 77;
   --theme-color: #edf2f7;
 }
 
@@ -498,7 +479,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 
 .center { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
 .login { width: min(430px,100%); padding: 34px; }
-.login::before { content: "guest@whoisleuth — authentication"; display: block; margin: -34px -34px 28px; padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); background: rgb(var(--overlay-rgb) / .03); font: var(--text-2xs) var(--mono); }
+.login::before { content: "guest@whoisleuth / authentication"; display: block; margin: -34px -34px 28px; padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); background: rgb(var(--overlay-rgb) / .03); font: var(--text-2xs) var(--mono); }
 .login label { display: block; margin: 22px 0 7px; font: 600 var(--text-sm) var(--mono); }
 .login .primary { width: 100%; margin-top: 16px; }
 .error { color: var(--danger); }
