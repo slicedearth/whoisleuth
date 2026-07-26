@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 
 let utils;
 before(async () => {
-  utils = await import('../frontend/src/lib/analysis/utils.js');
+  utils = await import('../frontend/src/lib/analysis/utils.ts');
 });
 
 describe('isValidEmailAddress', () => {

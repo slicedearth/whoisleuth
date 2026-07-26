@@ -6,7 +6,7 @@
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
   import BrandPostureAudit from '$lib/components/BrandPostureAudit.svelte';
   import { activeProfileId, deleteProfile, exportProfiles, importProfiles, loadProfiles, MAX_PROFILE_IMPORT_BYTES, parseList, setActiveProfile, upsertProfile, type BrandProfile } from '$lib/brand-profiles';
-  import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.js';
+  import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
   import {
     clientHttpErrorMessage,
     parseAvailabilityCaptureResponse,

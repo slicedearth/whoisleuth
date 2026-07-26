@@ -4,7 +4,7 @@
 // cross this storage boundary.
 
 import { normalizeDomain } from './case-model.js';
-import { isInformativeFaviconHash } from './utils.js';
+import { isInformativeFaviconHash } from './utils.ts';
 
 export const PAGE_BASELINE_VERSION = 1;
 export const PAGE_IDENTITY_VERSION = 3;
@@ -22,50 +22,122 @@ const MAX_TEXT_TOKENS = 8192;
 const MAX_FORMS = 50;
 const MAX_FORM_CONTROLS = 500;
 
-/** @param {unknown} value */
-function record(value) {
+export type ShaComponent<K extends string> = {
+  algorithm: 'sha256';
+  value: string;
+  truncated: boolean;
+} & Record<K, number>;
+
+export type VisibleTextComponent = {
+  algorithm: 'simhash64-v1';
+  value: string;
+  tokenCount: number;
+  featureCount: number;
+  truncated: boolean;
+};
+
+export type DomStructureComponent = {
+  algorithm: 'sha256';
+  value: string;
+  nodeCount: number;
+  parser: 'static-tag-sequence-v1';
+  truncated: boolean;
+};
+
+export type FormStructureComponent = {
+  algorithm: 'sha256';
+  value: string;
+  formCount: number;
+  controlCount: number;
+  truncated: boolean;
+};
+
+export type ResourceHostComponent = {
+  algorithm: 'set-sha256';
+  value: string | null;
+  values: string[];
+  truncated: boolean;
+};
+
+export type TrackingIdentifier = {
+  type: string;
+  value: string;
+};
+
+export type TrackingIdentifierComponent = {
+  algorithm: 'set-sha256';
+  value: string | null;
+  values: TrackingIdentifier[];
+  truncated: boolean;
+};
+
+export type PageBaseline = {
+  baselineVersion: typeof PAGE_BASELINE_VERSION;
+  domain: string;
+  lookupDomain: string;
+  observedAt: string;
+  pageIdentityVersion: typeof PAGE_IDENTITY_VERSION;
+  fingerprintVersion: typeof PAGE_FINGERPRINT_VERSION;
+  pageTitle: string | null;
+  canonicalHost: string | null;
+  faviconHash: string | null;
+  faviconPHash: string | null;
+  normalizedHtml: ShaComponent<'tokenCount'>;
+  visibleText: VisibleTextComponent | null;
+  domStructure: DomStructureComponent;
+  formStructure: FormStructureComponent | null;
+  resourceHosts: ResourceHostComponent;
+  trackingIdentifiers: TrackingIdentifierComponent;
+  complete: boolean;
+  truncated: boolean;
+};
+
+function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? /** @type {Record<string, unknown>} */ (value)
+    ? value as Record<string, unknown>
     : null;
 }
 
-/** @param {unknown} value */
-function timestamp(value) {
+function timestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-/** @param {unknown} value @param {number} maximum */
-function count(value, maximum) {
+function count(value: unknown, maximum: number): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= maximum
     ? value
     : null;
 }
 
-/** @param {unknown} value */
-function sha256(value) {
+function sha256(value: unknown): string | null {
   return typeof value === 'string' && SHA256_RE.test(value) ? value.toLowerCase() : null;
 }
 
-/** @param {unknown} value */
-function boundedTitle(value) {
+function boundedTitle(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > MAX_BASELINE_TITLE_LENGTH || CONTROL_RE.test(value)) return null;
   return value.trim().replace(/\s+/g, ' ') || null;
 }
 
-/** @param {unknown} raw @param {string} countKey @param {number} maximum */
-function shaComponent(raw, countKey, maximum) {
+function shaComponent<K extends string>(
+  raw: unknown,
+  countKey: K,
+  maximum: number,
+): ShaComponent<K> | null {
   const value = record(raw);
   if (!value || value.algorithm !== 'sha256') return null;
   const digest = sha256(value.value);
   const observedCount = count(value[countKey], maximum);
   if (!digest || observedCount === null) return null;
-  return { algorithm: 'sha256', value: digest, [countKey]: observedCount, truncated: value.truncated === true };
+  return {
+    algorithm: 'sha256',
+    value: digest,
+    [countKey]: observedCount,
+    truncated: value.truncated === true,
+  } as ShaComponent<K>;
 }
 
-/** @param {unknown} raw */
-function visibleTextComponent(raw) {
+function visibleTextComponent(raw: unknown): VisibleTextComponent | null {
   const value = record(raw);
   if (!value || value.algorithm !== 'simhash64-v1' || typeof value.value !== 'string' || !SIMHASH_RE.test(value.value)) return null;
   const tokenCount = count(value.tokenCount, MAX_TEXT_TOKENS);
@@ -80,8 +152,7 @@ function visibleTextComponent(raw) {
   };
 }
 
-/** @param {unknown} raw */
-function domComponent(raw) {
+function domComponent(raw: unknown): DomStructureComponent | null {
   const value = record(raw);
   if (!value || value.algorithm !== 'sha256' || value.parser !== 'static-tag-sequence-v1') return null;
   const digest = sha256(value.value);
@@ -96,8 +167,7 @@ function domComponent(raw) {
   };
 }
 
-/** @param {unknown} raw */
-function formComponent(raw) {
+function formComponent(raw: unknown): FormStructureComponent | null {
   const value = record(raw);
   if (!value || value.algorithm !== 'sha256') return null;
   const digest = sha256(value.value);
@@ -113,11 +183,10 @@ function formComponent(raw) {
   };
 }
 
-/** @param {unknown} raw */
-function resourceHostComponent(raw) {
+function resourceHostComponent(raw: unknown): ResourceHostComponent | null {
   const value = record(raw);
   if (!value || value.algorithm !== 'set-sha256' || !Array.isArray(value.values)) return null;
-  const values = new Set();
+  const values = new Set<string>();
   for (const candidate of value.values.slice(0, MAX_BASELINE_RESOURCE_HOSTS * 4)) {
     const host = normalizeDomain(candidate);
     if (host) values.add(host);
@@ -134,12 +203,11 @@ function resourceHostComponent(raw) {
   };
 }
 
-/** @param {unknown} raw */
-function identifierComponent(raw) {
+function identifierComponent(raw: unknown): TrackingIdentifierComponent | null {
   const value = record(raw);
   if (!value || value.algorithm !== 'set-sha256' || !Array.isArray(value.values)) return null;
-  const values = [];
-  const seen = new Set();
+  const values: TrackingIdentifier[] = [];
+  const seen = new Set<string>();
   for (const candidate of value.values.slice(0, MAX_BASELINE_IDENTIFIERS * 4)) {
     const item = record(candidate);
     if (!item || typeof item.type !== 'string' || typeof item.value !== 'string') continue;
@@ -161,13 +229,11 @@ function identifierComponent(raw) {
   };
 }
 
-/** @param {unknown} value */
-function faviconSha(value) {
+function faviconSha(value: unknown): string | null {
   return sha256(value);
 }
 
-/** @param {unknown} value */
-function faviconPHash(value) {
+function faviconPHash(value: unknown): string | null {
   return typeof value === 'string' && isInformativeFaviconHash(value) ? value.toLowerCase() : null;
 }
 
@@ -177,7 +243,7 @@ function faviconPHash(value) {
  * fail closed so old code never misinterprets newer evidence.
  * @param {unknown} raw
  */
-export function normalizePageBaseline(raw) {
+export function normalizePageBaseline(raw: unknown): PageBaseline | null {
   const value = record(raw);
   if (!value || value.baselineVersion !== PAGE_BASELINE_VERSION) return null;
   const domain = normalizeDomain(value.domain);
@@ -222,8 +288,7 @@ export function normalizePageBaseline(raw) {
   };
 }
 
-/** @param {unknown} value */
-function canonicalHost(value) {
+function canonicalHost(value: unknown): string | null {
   const item = record(value);
   if (!item || typeof item.url !== 'string' || item.url.length > 2048 || CONTROL_RE.test(item.url)) return null;
   try {
@@ -242,7 +307,7 @@ function canonicalHost(value) {
  * @param {unknown} rawDomain
  * @param {unknown} rawAvailability
  */
-export function createPageBaseline(rawDomain, rawAvailability) {
+export function createPageBaseline(rawDomain: unknown, rawAvailability: unknown): PageBaseline | null {
   const domain = normalizeDomain(rawDomain);
   const availability = record(rawAvailability);
   const identity = record(availability?.pageIdentity);

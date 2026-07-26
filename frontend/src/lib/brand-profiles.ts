@@ -1,4 +1,4 @@
-import { hammingDistanceHex, isInformativeFaviconHash } from './analysis/utils.js';
+import { hammingDistanceHex, isInformativeFaviconHash } from './analysis/utils.ts';
 import {
   buildBrandProfileExport,
   mergeBrandProfiles,
@@ -7,7 +7,7 @@ import {
   MAX_PROFILES,
   MAX_PROFILE_VALUES,
 } from './analysis/brand-profile-model.js';
-import { normalizePageBaseline } from './analysis/page-baseline.js';
+import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.js';
 import { LEGACY_PROFILES_KEY, PROFILES_COLLECTION } from './browser-local-data-definitions.js';
 

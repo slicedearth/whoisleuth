@@ -3,8 +3,8 @@
 // produce an aggregate similarity score, risk factor, or maliciousness
 // verdict. Inputs pass through the strict baseline normalizer before use.
 
-import { normalizePageBaseline } from './page-baseline.js';
-import { hammingDistanceHex } from './utils.js';
+import { normalizePageBaseline } from './page-baseline.ts';
+import { hammingDistanceHex } from './utils.ts';
 
 export const PAGE_COMPARISON_VERSION = 1;
 

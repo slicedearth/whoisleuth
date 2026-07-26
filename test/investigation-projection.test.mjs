@@ -10,7 +10,7 @@ import {
 import { CASE_SCHEMA_VERSION, MAX_CASES } from '../frontend/src/lib/analysis/case-model.js';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/brand-profile-model.js';
 import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.js';
-import { createPageBaseline } from '../frontend/src/lib/analysis/page-baseline.js';
+import { createPageBaseline } from '../frontend/src/lib/analysis/page-baseline.ts';
 import {
   MAX_NAMESERVERS_PER_ROW,
   MAX_RELATIONSHIP_ROWS,

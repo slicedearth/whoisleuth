@@ -10,7 +10,7 @@
 const SIMPLE_EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const MAX_ENTITY_DISPLAY_LENGTH = 300;
 
-export function isValidEmailAddress(value) {
+export function isValidEmailAddress(value: unknown): value is string {
   return typeof value === 'string' && SIMPLE_EMAIL_RE.test(value.trim());
 }
 
@@ -20,10 +20,17 @@ export function isValidEmailAddress(value) {
 // calling String() on an entity would persist "[object Object]" and hide real
 // registrar changes. The backend already bounds these values, but this client
 // boundary revalidates the API response before retaining it.
-export function entityDisplayName(value) {
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function entityDisplayName(value: unknown): string | null {
   let candidate = value;
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    candidate = value.name || value.org || value.handle;
+  const record = plainRecord(value);
+  if (record) {
+    candidate = record.name || record.org || record.handle;
   }
   if (typeof candidate !== 'string' && typeof candidate !== 'number') return null;
   const normalized = String(candidate)
@@ -41,7 +48,7 @@ export function entityDisplayName(value) {
 // implementations target separate Node and browser execution boundaries.
 const HEX_HASH_RE = /^[0-9a-f]{16}$/;
 
-export function hammingDistanceHex(a, b) {
+export function hammingDistanceHex(a: unknown, b: unknown): number | null {
   if (typeof a !== 'string' || typeof b !== 'string') return null;
   if (!HEX_HASH_RE.test(a) || !HEX_HASH_RE.test(b)) return null;
   let distance = 0;
@@ -61,7 +68,7 @@ export function hammingDistanceHex(a, b) {
 // keep producing false near-matches.
 const MIN_INFORMATIVE_HASH_BITS = 10;
 
-export function isInformativeFaviconHash(hex) {
+export function isInformativeFaviconHash(hex: unknown): hex is string {
   if (typeof hex !== 'string' || !HEX_HASH_RE.test(hex)) return false;
   let bits = 0;
   for (let i = 0; i < 16; i += 1) {
@@ -81,31 +88,55 @@ export function isInformativeFaviconHash(hex) {
 // Union-find gives transitive grouping (A~B, B~C => one group); the pairwise
 // perceptual pass is O(n^2) but only over records that carry a favicon at all
 // (deep-scanned domains, capped well below the fast-scan ceiling).
-export function groupBySimilarFavicon(records, maxDistance) {
-  const items = (records || []).filter((r) => r
-    && (r.faviconHash || (typeof r.faviconPHash === 'string' && HEX_HASH_RE.test(r.faviconPHash))));
+type FaviconRecord = {
+  domain: string;
+  faviconHash: string | null;
+  faviconPHash: string | null;
+};
+
+function faviconRecord(value: unknown): FaviconRecord | null {
+  const record = plainRecord(value);
+  if (!record || typeof record.domain !== 'string') return null;
+  const faviconHash = typeof record.faviconHash === 'string' && record.faviconHash
+    ? record.faviconHash
+    : null;
+  const faviconPHash = typeof record.faviconPHash === 'string' && HEX_HASH_RE.test(record.faviconPHash)
+    ? record.faviconPHash
+    : null;
+  return faviconHash || faviconPHash
+    ? { domain: record.domain, faviconHash, faviconPHash }
+    : null;
+}
+
+export function groupBySimilarFavicon(records: unknown, maxDistance: number): string[][] {
+  const items = Array.isArray(records)
+    ? records.map(faviconRecord).filter((record): record is FaviconRecord => record !== null)
+    : [];
   const parent = items.map((_, i) => i);
-  const find = (x) => {
+  const find = (x: number): number => {
     let root = x;
     while (parent[root] !== root) root = parent[root];
     while (parent[x] !== root) { const next = parent[x]; parent[x] = root; x = next; }
     return root;
   };
-  const union = (a, b) => { const ra = find(a); const rb = find(b); if (ra !== rb) parent[ra] = rb; };
+  const union = (a: number, b: number): void => { const ra = find(a); const rb = find(b); if (ra !== rb) parent[ra] = rb; };
 
   // Exact-hash buckets first (cheap, and the only signal for undecodable icons).
-  const firstByHash = new Map();
+  const firstByHash = new Map<string, number>();
   items.forEach((r, i) => {
     if (!r.faviconHash) return;
-    if (firstByHash.has(r.faviconHash)) union(i, firstByHash.get(r.faviconHash));
+    const existing = firstByHash.get(r.faviconHash);
+    if (existing !== undefined) union(i, existing);
     else firstByHash.set(r.faviconHash, i);
   });
 
   // Perceptual near-matches among records with an *informative* phash -
   // degenerate hashes (solid/monotonic icons) are skipped so they don't all
   // cluster together; they can still group via an exact-hash match above.
-  const withPhash = [];
-  items.forEach((r, i) => { if (isInformativeFaviconHash(r.faviconPHash)) withPhash.push({ i, phash: r.faviconPHash }); });
+  const withPhash: Array<{ i: number; phash: string }> = [];
+  items.forEach((r, i) => {
+    if (isInformativeFaviconHash(r.faviconPHash)) withPhash.push({ i, phash: r.faviconPHash });
+  });
   for (let a = 0; a < withPhash.length; a += 1) {
     for (let b = a + 1; b < withPhash.length; b += 1) {
       const distance = hammingDistanceHex(withPhash[a].phash, withPhash[b].phash);
@@ -113,11 +144,11 @@ export function groupBySimilarFavicon(records, maxDistance) {
     }
   }
 
-  const groups = new Map();
+  const groups = new Map<number, string[]>();
   items.forEach((r, i) => {
     const root = find(i);
     if (!groups.has(root)) groups.set(root, []);
-    groups.get(root).push(r.domain);
+    groups.get(root)?.push(r.domain);
   });
   return [...groups.values()].filter((domains) => domains.length >= 2);
 }
@@ -131,19 +162,19 @@ export function groupBySimilarFavicon(records, maxDistance) {
 // visibly displayed for ordinary values).
 const CSV_FORMULA_TRIGGER_RE = /^(?:[\t\r\n ]*[=+\-@]|[\t\r\n])/;
 
-export function toCsvValue(v) {
+export function toCsvValue(v: unknown): string {
   let s = v === null || v === undefined ? '' : String(v);
   if (CSV_FORMULA_TRIGGER_RE.test(s)) s = `'${s}`;
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
-export function rowsToCsv(rows) {
+export function rowsToCsv(rows: readonly (readonly unknown[])[]): string {
   return rows.map((row) => row.map(toCsvValue).join(',')).join('\n');
 }
 
-function splitDelimitedLine(line, delimiter = ',') {
-  const result = [];
+function splitDelimitedLine(line: string, delimiter: string = ','): string[] {
+  const result: string[] = [];
   let cur = '';
   let inQuotes = false;
   for (let i = 0; i < line.length; i += 1) {
@@ -168,9 +199,9 @@ function splitDelimitedLine(line, delimiter = ',') {
 
 const DOMAIN_HEADER_NAMES = ['domain', 'domain_name', 'domain name', 'hostname', 'name'];
 
-function detectDelimiter(line) {
+function detectDelimiter(line: string): string | null {
   const candidates = [',', ';', '\t'];
-  let best = null;
+  let best: string | null = null;
   let bestCount = 0;
   for (const delimiter of candidates) {
     const count = splitDelimitedLine(line, delimiter).length - 1;
@@ -185,7 +216,7 @@ function detectDelimiter(line) {
 // Used only to distinguish a pasted delimiter-separated query list from a
 // headerless multi-column CSV. Server-side classifyQuery remains the
 // authoritative validator when the scan runs.
-function looksLikeLookupToken(value) {
+function looksLikeLookupToken(value: unknown): boolean {
   const token = String(value || '').trim();
   if (!token || /\s/.test(token)) return false;
   if (/^AS\d+$/i.test(token) || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(token) || token.includes(':')) return true;
@@ -197,7 +228,11 @@ function looksLikeLookupToken(value) {
   }
 }
 
-export function parseDomainInput(text) {
+export function parseDomainInput(text: unknown): {
+  entries: string[];
+  duplicates: number;
+  usedHeader: boolean;
+} {
   const normalized = String(text || '').replace(/^\uFEFF/, '');
   const lines = normalized.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length === 0) return { entries: [], duplicates: 0, usedHeader: false };
@@ -208,7 +243,7 @@ export function parseDomainInput(text) {
   const domainColIdx = header.findIndex((cell) => DOMAIN_HEADER_NAMES.includes(cell));
   const usedHeader = domainColIdx !== -1;
 
-  let candidates;
+  let candidates: string[];
   if (usedHeader) {
     candidates = lines.slice(1).map((line) => {
       const rowDelimiter = delimiter || detectDelimiter(line);
@@ -229,8 +264,8 @@ export function parseDomainInput(text) {
       : rows.map((cells) => cells[0] || '');
   }
 
-  const entries = [];
-  const seen = new Set();
+  const entries: string[] = [];
+  const seen = new Set<string>();
   let duplicates = 0;
   for (const candidate of candidates) {
     const value = String(candidate || '').trim();

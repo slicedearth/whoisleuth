@@ -5,7 +5,7 @@
 // boundary.
 
 import { normalizeDomain } from './case-model.js';
-import { groupBySimilarFavicon } from './utils.js';
+import { groupBySimilarFavicon } from './utils.ts';
 
 export const RELATIONSHIP_EVIDENCE_VERSION = 2;
 export const TLS_RELATIONSHIP_PROFILE_VERSION = 1;

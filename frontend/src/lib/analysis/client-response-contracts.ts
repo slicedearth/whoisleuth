@@ -1,5 +1,5 @@
 import { normalizeDomain } from './case-model.js';
-import { PAGE_FINGERPRINT_VERSION, PAGE_IDENTITY_VERSION } from './page-baseline.js';
+import { PAGE_FINGERPRINT_VERSION, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
 
 type JsonRecord = Record<string, unknown>;
 type CaptureAvailabilityState = 'available' | 'expiring' | 'for_sale' | 'registered' | 'unknown';

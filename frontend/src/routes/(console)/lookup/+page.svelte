@@ -52,10 +52,10 @@
     buildLookupReadableReport,
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.js';
-  import { createPageBaseline } from '$lib/analysis/page-baseline.js';
+  import { createPageBaseline } from '$lib/analysis/page-baseline.ts';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.ts';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.ts';
-  import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
+  import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.js';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';

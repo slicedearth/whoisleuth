@@ -9,7 +9,7 @@ before(async () => {
   const exportMod = await import('../frontend/src/lib/analysis/bulk-export.ts');
   ctCsvFields = exportMod.ctCsvFields;
   CT_HOSTNAME_CSV_DELIMITER = exportMod.CT_HOSTNAME_CSV_DELIMITER;
-  const utils = await import('../frontend/src/lib/analysis/utils.js');
+  const utils = await import('../frontend/src/lib/analysis/utils.ts');
   rowsToCsv = utils.rowsToCsv;
   toCsvValue = utils.toCsvValue;
 });

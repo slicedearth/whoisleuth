@@ -18,7 +18,7 @@
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
   import RetainedRelationshipObservations from '$lib/components/RetainedRelationshipObservations.svelte';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.js';
-  import { parseDomainInput } from '$lib/analysis/utils.js';
+  import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {

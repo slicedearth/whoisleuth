@@ -3,8 +3,8 @@
 // bounds, import merging, and exact serialized-byte accounting.
 
 import { normalizeDomain } from './case-model.js';
-import { normalizePageBaseline } from './page-baseline.js';
-import { isInformativeFaviconHash } from './utils.js';
+import { normalizePageBaseline } from './page-baseline.ts';
+import { isInformativeFaviconHash } from './utils.ts';
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
 export const BRAND_PROFILE_SCHEMA_VERSION = 2;

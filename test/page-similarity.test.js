@@ -5,7 +5,7 @@ let comparison;
 let baseline;
 before(async () => {
   comparison = await import('../frontend/src/lib/analysis/page-similarity.ts');
-  baseline = await import('../frontend/src/lib/analysis/page-baseline.js');
+  baseline = await import('../frontend/src/lib/analysis/page-baseline.ts');
 });
 
 const ISO = '2026-07-13T04:05:06.000Z';
