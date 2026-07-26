@@ -14,6 +14,7 @@
   import BrandMark from '$lib/components/BrandMark.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
+  import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
@@ -252,7 +253,7 @@
       <div class="session"><ThemeSelector /><div class="session-row"><span title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if InvestigationGuideView}<InvestigationGuideView revealOnMount={revealInvestigationGuideOnMount} />{/if}{@render children()}<footer class="site-footer"><p>WHOISleuth uses <a href="https://www.iana.org/help/nro-rdap" target="_blank" rel="noopener">IANA's RDAP bootstrap data</a> to query relevant registry services and can also check public DNS, Certificate Transparency, and website endpoints. Missing registrant fields often reflect registry redaction rather than a lookup failure.</p><p class="credit">© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a> · <a href="/privacy">Privacy</a></p></footer></main>
+    <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if InvestigationGuideView}<InvestigationGuideView revealOnMount={revealInvestigationGuideOnMount} />{/if}{@render children()}<SiteFooter console /></main>
     {#if commandOpen}<CommandPalette commands={consoleCommands} onclose={closeCommandPalette} />{/if}
   </div>
 {/if}

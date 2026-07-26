@@ -1184,11 +1184,12 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
           limitations: ['This is a passive fixture interpretation, not an active vulnerability assessment.'],
-          diagnostics: { findings: 2, observed: 1, potentialExposure: 0, observedAbsence: 1, unavailable: 0 },
-          summary: { observed: 1, potentialExposure: 0, observedAbsence: 1, unavailable: 0 },
+          diagnostics: { findings: 3, observed: 1, potentialExposure: 0, observedAbsence: 2, unavailable: 0 },
+          summary: { observed: 1, potentialExposure: 0, observedAbsence: 2, unavailable: 0 },
           findings: [
             { id: 'fixture-https', category: 'transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The selected homepage response was reached over HTTPS.', evidence: ['HTTP response'] },
             { id: 'fixture-csp', category: 'response headers', state: 'observed_absence', tone: 'review', label: 'Content Security Policy not observed', detail: 'The selected response did not include the header.', evidence: ['Selected HTTP response headers'] },
+            { id: 'fixture-cleartext-resources', category: 'forms and resources', state: 'observed_absence', tone: 'configured', label: 'No cleartext resource origin observed', detail: 'No retained resource origin used cleartext HTTP.', evidence: ['Static page evidence'] },
           ],
         },
       },
@@ -1276,6 +1277,8 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(postureCard).toHaveAttribute('open', '');
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Content Security Policy not observed', { exact: true })).toBeVisible();
+  await expect(postureCard.getByText('Not observed', { exact: true }).last()).toBeVisible();
+  await expect(postureCard.getByText('No exposure observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Review', { exact: true }).first()).toBeVisible();
   await expect(postureCard.getByText(/review signals, not confirmed vulnerabilities/i)).toBeVisible();
 
@@ -1288,6 +1291,73 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/does not combine these observations into a page-similarity score or use them to change the Risk score/i)).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('completed technology analysis distinguishes an unmatched catalogue from source success', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'unmatched-technology.test',
+      type: 'domain',
+      registrableDomain: 'unmatched-technology.test',
+      availability: {
+        state: 'registered',
+        confidence: 'high',
+        domain: 'unmatched-technology.test',
+        technologyProfile: {
+          profileVersion: 1,
+          version: 1,
+          status: 'success',
+          observedAt: '2026-07-27T00:00:00.000Z',
+          scanMode: 'deep',
+          source: 'derived',
+          durationMs: null,
+          complete: true,
+          truncated: false,
+          limitations: ['Curated signature matching is selective; an unmatched technology may still be present.'],
+          diagnostics: { findings: 0, htmlEvaluated: true, generatorEvaluated: true, serverEvaluated: true, resourceOriginsEvaluated: 0 },
+          findings: [],
+          browserLibraryProfile: {
+            profileVersion: 1,
+            version: 1,
+            status: 'success',
+            observedAt: '2026-07-27T00:00:00.000Z',
+            scanMode: 'deep',
+            source: 'derived',
+            durationMs: null,
+            complete: true,
+            truncated: false,
+            catalog: { name: 'Retire.js', version: 'fixture-catalogue', sourceRevision: 'fixture-revision' },
+            limitations: ['Static signatures are selective.'],
+            diagnostics: { scriptsExamined: 1, referencesExamined: 1, inlineScriptsExamined: 0, findings: 0, advisoryMatches: 0 },
+            findings: [],
+          },
+        },
+      },
+      rdap: { upstreamStatus: 200, parsed: {} },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        rdap: { status: 'success' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('unmatched-technology.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const technologyCard = page.locator('.technology-card');
+  await expect(technologyCard.locator(':scope > summary .evidence-status')).toHaveText('No recognised matches');
+  await expect(technologyCard.getByText(/Analysis complete; no curated signatures matched/u)).toBeVisible();
+  await technologyCard.locator(':scope > summary').click();
+  await expect(technologyCard.getByText(/does not mean that no framework, service, or delivery platform is present/i)).toBeVisible();
+  await expect(technologyCard.locator('.library-profile .evidence-status')).toHaveText('No catalogue matches');
+  await expect(technologyCard.getByText('success', { exact: true })).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

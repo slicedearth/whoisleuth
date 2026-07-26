@@ -5,7 +5,7 @@ const publicPages = [
     path: '/',
     canonical: 'https://whoisleuth.com/',
     title: 'WHOISleuth | WHOIS, RDAP and domain intelligence',
-    heading: 'Inspect domains.',
+    heading: 'Understand a domain.',
   },
   {
     path: '/demo',

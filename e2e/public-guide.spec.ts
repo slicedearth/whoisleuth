@@ -4,7 +4,7 @@ import { expectNoHorizontalOverflow } from './helpers';
 test('homepage presents plain-language goals, restrained branding, and synthetic product previews', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Inspect domains. Verify sources.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
   await expect(page.locator('.hero-kicker')).toHaveText('Domain intelligence console');
   await expect(page.locator('.public-header .mark')).toHaveCount(1);
   await expect(page.locator('.hero .mark')).toHaveCount(0);
@@ -21,6 +21,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   expect(thirdBox).not.toBeNull();
   expect(featuredBox!.width).toBeGreaterThan(secondBox!.width * 1.8);
   expect(Math.abs(secondBox!.y - thirdBox!.y)).toBeLessThanOrEqual(2);
+  const goalBorders = await goalCards.evaluateAll((cards) => cards.map((card) => getComputedStyle(card).borderColor));
+  expect(new Set(goalBorders).size).toBe(1);
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   const topology = page.getByRole('region', { name: 'Synthetic lookup evidence topology' });
   await expect(topology).toBeVisible();
@@ -29,6 +31,26 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const sourceSummary = page.locator('.mobile-source-summary');
+  await expect(sourceSummary).toBeVisible();
+  const sourceStateColors = await sourceSummary.evaluate((summary) => {
+    const warning = summary.querySelector('.state-warning strong');
+    const success = summary.querySelector('.state-success strong');
+    const reference = document.createElement('span');
+    reference.style.color = 'var(--amber)';
+    document.body.append(reference);
+    const colors = {
+      warning: warning ? getComputedStyle(warning).color : '',
+      success: success ? getComputedStyle(success).color : '',
+      amber: getComputedStyle(reference).color,
+    };
+    reference.remove();
+    return colors;
+  });
+  expect(sourceStateColors.warning).toBe(sourceStateColors.amber);
+  expect(sourceStateColors.warning).not.toBe(sourceStateColors.success);
   await expectNoHorizontalOverflow(page);
 });
 

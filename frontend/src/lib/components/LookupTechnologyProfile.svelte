@@ -39,6 +39,8 @@
   } = $props();
 
   const advisoryMatches = $derived(libraries.filter((library) => library.advisoryCount > 0).length);
+  const noTechnologyMatches = $derived(status === 'success' && complete && findings.length === 0);
+  const noLibraryMatches = $derived(libraryStatus === 'success' && libraryComplete && libraries.length === 0);
 </script>
 
 <details class="technology-card evidence-card card" aria-labelledby="technology-profile-title" open={initiallyExpanded}>
@@ -47,9 +49,9 @@
     <span class="evidence-summary-copy">
       <span class="eyebrow">Derived deep-scan analysis</span>
       <span class="evidence-summary-title" id="technology-profile-title" role="heading" aria-level="4">Technology indicators</span>
-      <span class="evidence-summary-detail">{findings.length ? `${findings.length} matched indicator${findings.length === 1 ? '' : 's'}` : 'No curated match'} · Expand for evidence and limitations</span>
+      <span class="evidence-summary-detail">{findings.length ? `${findings.length} matched indicator${findings.length === 1 ? '' : 's'}` : noTechnologyMatches ? 'Analysis complete; no curated signatures matched' : 'No conclusive match'} · Expand for evidence and limitations</span>
     </span>
-    <span class:partial={!complete} class="evidence-status">{status}</span>
+    <span class:partial={!complete} class:neutral={noTechnologyMatches} class="evidence-status">{noTechnologyMatches ? 'No recognised matches' : status}</span>
     </span>
   </summary>
 
@@ -86,7 +88,7 @@
             <h5 id="browser-library-title">Observed browser libraries</h5>
             <p>{libraries.length ? `${libraries.length} apparent librar${libraries.length === 1 ? 'y' : 'ies'}; ${advisoryMatches} with catalogue advisory matches` : 'No bounded library signature matched'}</p>
           </div>
-          <span class:partial={!libraryComplete} class="evidence-status">{libraryStatus}</span>
+          <span class:partial={!libraryComplete} class:neutral={noLibraryMatches} class="evidence-status">{noLibraryMatches ? 'No catalogue matches' : libraryStatus}</span>
         </div>
 
         {#if libraries.length}
@@ -146,6 +148,7 @@
   .advisory,.catalog-neutral{flex:0 0 auto;border:1px solid rgb(var(--amber-rgb) / .4);border-radius:999px;padding:2px 7px;color:var(--amber);background:rgb(var(--amber-rgb) / .05);font-size:var(--text-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
   .advisory.high,.advisory.critical{border-color:rgb(var(--danger-rgb) / .4);color:var(--danger);background:rgb(var(--danger-rgb) / .05)}
   .catalog-neutral{border-color:var(--border);color:var(--muted);background:var(--surface)}
+  .evidence-status.neutral{border-color:var(--border-strong);color:var(--muted);background:var(--surface)}
   dl{display:grid;gap:6px;margin:10px 0 0}
   dl div{display:grid;grid-template-columns:minmax(86px,.35fr) minmax(0,1fr);gap:8px;font-size:var(--text-xs);line-height:1.45}
   dt{color:var(--muted)}

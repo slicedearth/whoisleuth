@@ -453,12 +453,6 @@ nav a small { margin-top: 2px; }
 .session-row { display: flex; min-width: 0; gap: 12px; align-items: center; }
 .session-row span { min-width: 0; flex: 1 1 auto; margin-right: auto; overflow: visible; text-overflow: clip; white-space: nowrap; }
 
-.site-footer { margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font: var(--text-2xs) var(--mono); }
-.site-footer p { margin: 0; max-width: 78ch; line-height: 1.65; }
-.site-footer .credit { margin-top: 10px; }
-.site-footer a { color: var(--accent); }
-.site-footer a:hover { color: var(--text); }
-
 main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px clamp(24px,4vw,58px) 72px; }
 .public-content { width: min(960px,100%); }
 .shell > header { position: sticky; top: 0; z-index: 18; grid-area: header; display: flex; min-width: 0; height: 54px; align-items: center; justify-content: flex-end; padding: 0 clamp(24px,4vw,58px); border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); backdrop-filter: blur(8px); }

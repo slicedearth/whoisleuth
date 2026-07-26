@@ -420,6 +420,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? 'skipped'
     : whoisResult.status === 'rejected' || !Array.isArray(whoisChain)
       ? 'error'
+      : whoisChain.length === 1
+        ? 'unsupported'
       : whois.parsed && whois.parsed.chainStatus === 'complete' ? 'complete' : 'partial';
   const availabilityStatus = classified.type !== 'domain'
     ? 'not_applicable'

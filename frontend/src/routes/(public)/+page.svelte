@@ -31,8 +31,8 @@
   <SyntheticTopologyBackdrop />
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
-    <h1>Inspect domains.<span>Verify sources.</span></h1>
-    <p class="lede">Review registration, DNS, certificate, website and network evidence without hiding conflicting or unavailable sources.</p>
+    <h1>Understand a domain.<br><span>Before you act.</span></h1>
+    <p class="lede">Check registration, DNS, certificates, website platform clues and network context in one place. WHOISleuth shows where each result came from, explains missing or conflicting evidence, and lets you save useful findings for later review.</p>
     <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
   </div>
   <div class="hero-preview">

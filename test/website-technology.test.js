@@ -101,10 +101,78 @@ describe('website technology profile', () => {
     assert.deepEqual(result.findings.map((item) => item.id), ['astro', 'nextjs', 'sveltekit']);
   });
 
+  test('recognizes an Astro static build from its generated asset path', () => {
+    const result = analyze({
+      html: '<link rel="stylesheet" href="/_astro/layout.fixture.css"><script type="module" src="/_astro/page.fixture.js"></script>',
+    });
+    const item = finding(result, 'astro');
+    assert.equal(item.confidence, 'medium');
+    assert.deepEqual(item.evidence, [{
+      source: 'static HTML',
+      description: 'Static asset paths use Astro build conventions.',
+    }]);
+  });
+
   test('recognizes selected response server indicators without retaining the header', () => {
     const result = analyze({ httpServer: 'nginx/1.27.0 private-build' });
     assert.equal(finding(result, 'nginx').confidence, 'high');
     assert.doesNotMatch(JSON.stringify(result), /1\.27\.0|private-build/);
+  });
+
+  test('recognizes an expanded set of generator-declared platforms', () => {
+    const cases = [
+      ['Craft CMS 5.0', 'craft-cms', 'content management'],
+      ['TYPO3 CMS 13', 'typo3', 'content management'],
+      ['OpenCart 4', 'opencart', 'commerce'],
+      ['PrestaShop 9', 'prestashop', 'commerce'],
+      ['Framer 2026', 'framer', 'site builder'],
+      ['Weebly', 'weebly', 'site builder'],
+      ['Docusaurus v3.8', 'docusaurus', 'static site generator'],
+      ['Eleventy v3', 'eleventy', 'static site generator'],
+      ['11ty 3.1', 'eleventy', 'static site generator'],
+      ['Hexo 7', 'hexo', 'static site generator'],
+    ];
+
+    for (const [generator, id, category] of cases) {
+      const item = finding(analyze({ generator }), id);
+      assert.equal(item.category, category, generator);
+      assert.equal(item.confidence, 'high', generator);
+      assert.equal(item.evidence[0].source, 'generator metadata', generator);
+    }
+  });
+
+  test('recognizes tokenized framework attributes and static build paths', () => {
+    const result = analyze({ html: `
+      <app-root ng-version="20.1.0"></app-root>
+      <input type="hidden" name="__VIEWSTATE" value="discarded">
+      <link rel="modulepreload" href="/_app/immutable/entry/start.fixture.js">
+    ` });
+
+    assert.deepEqual(result.findings.filter((item) => item.category === 'web framework').map((item) => item.id), [
+      'angular',
+      'aspnet-web-forms',
+      'sveltekit',
+    ]);
+    assert.equal(finding(result, 'angular').confidence, 'high');
+    assert.equal(finding(result, 'aspnet-web-forms').confidence, 'high');
+    assert.equal(finding(result, 'sveltekit').confidence, 'medium');
+    assert.doesNotMatch(JSON.stringify(result), /20\.1\.0|discarded|start\.fixture/);
+  });
+
+  test('keeps shared site-builder resource origins at medium confidence', () => {
+    const result = analyze({
+      resourceOrigins: [
+        'https://assets.framerusercontent.com',
+        'https://cdn2.editmysite.com',
+      ],
+    });
+
+    assert.equal(finding(result, 'framer').confidence, 'medium');
+    assert.equal(finding(result, 'weebly').confidence, 'medium');
+    assert.deepEqual(
+      result.findings.filter((item) => item.category === 'site builder').map((item) => item.id),
+      ['framer', 'weebly'],
+    );
   });
 
   test('keeps delivery and application technologies separately attributed', () => {
@@ -199,7 +267,7 @@ describe('website technology profile', () => {
       <p>Documentation mentions /_next/static/ and shopify-section.</p>
       <title><astro-island></astro-island></title>
       <script>const example = '<div data-wf-page="fixture"></div>';</script>
-      <style>.example::after { content: 'data-sveltekit-reload='; }</style>
+      <style>.example::after { content: 'data-sveltekit-reload= ng-version= data-framer-name='; }</style>
     ` });
     assert.deepEqual(result.findings, []);
   });

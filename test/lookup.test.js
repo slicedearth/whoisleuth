@@ -86,6 +86,30 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.whois.status, 'complete');
   });
 
+  test('reports a root-only IANA WHOIS response as unsupported domain WHOIS', async () => {
+    const rootOnlyChain = [{
+      server: 'whois.iana.org',
+      response: 'domain: TEST\norganisation: Example Registry\nwhois:        \nstatus: ACTIVE\nsource: IANA\n',
+    }];
+    const result = await runUnifiedLookup(classifiedDomain, {
+      fetchRdapRecord: async () => ({
+        rdapServer: 'https://rdap.example/domain/example.com',
+        transportSecurity: 'https',
+        upstreamStatus: 200,
+        data: { ldhName: 'EXAMPLE.COM' },
+        parsed: { domain: 'EXAMPLE.COM', statuses: [], nameservers: [], events: [] },
+      }),
+      buildWhoisChain: async () => rootOnlyChain,
+      checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
+    });
+
+    assert.deepEqual(result.whois.chain, rootOnlyChain);
+    assert.equal(result.whois.parsed.registrationStatus, 'inconclusive');
+    assert.equal(result.whois.parsed.authoritativeHop, null);
+    assert.equal(result.diagnostics.whois.status, 'unsupported');
+    assert.equal(result.diagnostics.whois.errorCode, null);
+  });
+
   test('retains bounded RDAP attempt provenance when every endpoint fails', async () => {
     const attempts = [{
       endpoint: 'https://rdap.example/domain/example.com',

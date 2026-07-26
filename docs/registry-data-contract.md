@@ -31,9 +31,12 @@ full successful response contains:
   its IP RDAP network registration.
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
-  curated software and delivery indicators. Profile version 3 uses
-  one standards-compliant bounded HTML tokenization pass and adds a nested version-1
-  browser-library profile derived from a pinned Retire.js catalogue. It
+  curated software and delivery indicators. Profile version 4 uses one
+  standards-compliant bounded HTML tokenization pass and expands the curated
+  generator, element, attribute, static-asset, and resource-origin catalogue
+  for common content, commerce, site-building, framework, and static-site
+  platforms. It also carries a nested version-1 browser-library profile
+  derived from a pinned Retire.js catalogue. It
   retains only apparent component versions, detection classes, and bounded
   advisory context without fetching referenced scripts or making another
   request. The advisory count covers every matching entry in the already
