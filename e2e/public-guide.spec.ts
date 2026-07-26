@@ -4,13 +4,11 @@ import { expectNoHorizontalOverflow } from './helpers';
 test('homepage presents plain-language goals, restrained branding, and synthetic product previews', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Understand a domain. Before you act.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Inspect domains. Verify sources.' })).toBeVisible();
   await expect(page.locator('.hero-kicker')).toHaveText('Domain intelligence console');
   await expect(page.locator('.public-header .mark')).toHaveCount(1);
   await expect(page.locator('.hero .mark')).toHaveCount(0);
-  await expect(page.locator('.terminal-preview').getByText(/Static markup/)).toBeVisible();
-  await expect(page.locator('.terminal-preview').getByText(/IP RDAP/)).toBeVisible();
-  await expect(page.locator('.goal-grid article')).toHaveCount(3);
+  await expect(page.locator('.goal-paths article')).toHaveCount(3);
   await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Track important findings' })).toBeVisible();
@@ -20,7 +18,6 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(topology.getByRole('img', { name: 'Synthetic lookup evidence topology visual overview' })).toBeVisible();
   await expect(topology.getByRole('list', { name: 'Evidence source status' }).getByRole('listitem')).toHaveCount(5);
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Explore the interactive demo' })).toHaveAttribute('href', '/demo');
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
@@ -33,12 +30,14 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();
   const workflowMap = page.getByRole('region', { name: 'Common WHOISleuth workflow map' });
   await expect(workflowMap).toBeVisible();
-  await expect(workflowMap.getByText('Path 01')).toBeVisible();
-  const lookupStep = workflowMap.getByRole('link', { name: /1.*Lookup/ }).first();
+  await expect(workflowMap.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
+  const lookupStep = workflowMap
+    .getByRole('list', { name: 'Inspect one domain workflow' })
+    .getByRole('link', { name: 'Lookup', exact: true });
   await expect(lookupStep).toHaveAttribute('href', '#tool-lookup');
   await lookupStep.click();
   await expect(page.locator('#tool-lookup')).toBeInViewport();
-  await expect(page.locator('.goal-grid article')).toHaveCount(3);
+  await expect(page.locator('.goal-paths article')).toHaveCount(3);
   await expect(page.locator('.tool-guide article')).toHaveCount(5);
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
   await expect(page.locator('.state-grid article')).toHaveCount(9);

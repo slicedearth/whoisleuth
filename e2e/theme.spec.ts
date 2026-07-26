@@ -30,17 +30,14 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#edf2f7');
-  await expect(page.locator('.terminal-preview')).toHaveCSS('background-color', 'rgb(245, 248, 251)');
-  await expect(page.locator('.terminal-note')).toHaveCSS('color', 'rgb(91, 104, 121)');
-  await expect(page.locator('.terminal-window-red')).toHaveCSS('background-color', 'rgb(255, 107, 107)');
-  await expect(page.locator('.terminal-window-yellow')).toHaveCSS('background-color', 'rgb(242, 184, 75)');
-  await expect(page.locator('.terminal-window-green')).toHaveCSS('background-color', 'rgb(126, 224, 168)');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(82, 97, 116)');
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0f1115');
-  await expect(page.locator('.terminal-preview')).toHaveCSS('background-color', 'rgb(17, 20, 26)');
-  await expect(page.locator('.terminal-note')).toHaveCSS('color', 'rgb(139, 147, 167)');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(23, 26, 33)');
+  await expect(page.locator('.hero-preview .preview-note')).toHaveCSS('color', 'rgb(139, 147, 167)');
 
   const navFontSizes = await page.locator('.public-header').evaluate((header) => ({
     navigation: getComputedStyle(header.querySelector('a[href="/demo"]')!).fontSize,
@@ -56,10 +53,7 @@ test('light preference applies before reload and persists across public pages', 
   await chooseTheme(page, 'Light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#edf2f7');
-  await expect(page.locator('.terminal-preview')).toHaveCSS('background-color', 'rgb(245, 248, 251)');
-  await expect(page.locator('.terminal-window-red')).toHaveCSS('background-color', 'rgb(255, 107, 107)');
-  await expect(page.locator('.terminal-window-yellow')).toHaveCSS('background-color', 'rgb(242, 184, 75)');
-  await expect(page.locator('.terminal-window-green')).toHaveCSS('background-color', 'rgb(126, 224, 168)');
+  await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('light');
 
   await page.goto('/demo');

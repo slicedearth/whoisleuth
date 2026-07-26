@@ -22,6 +22,11 @@ async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, s
   expect(results.violations, `${state} produced accessibility violations`).toEqual([]);
 }
 
+async function expectSequentialHeadingOrder(page: Page) {
+  const results = await new AxeBuilder({ page }).withRules(['heading-order']).analyze();
+  expect(results.violations, 'public homepage produced a heading-order violation').toEqual([]);
+}
+
 async function installLookupFixture(page: Page) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
@@ -76,6 +81,7 @@ test('scans representative public initial, error, populated, and expanded states
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
   await expectNoAccessibilityViolations(page, testInfo, 'public-initial-dark-desktop');
+  await expectSequentialHeadingOrder(page);
 
   await page.goto('/demo');
   await page.evaluate(() => sessionStorage.setItem('whoisleuth:synthetic-demo:v1', '{malformed'));

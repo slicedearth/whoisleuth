@@ -14,6 +14,7 @@
     nodes,
     embedded = false,
     compact = false,
+    headingLevel = 4,
   }: {
     id?: string;
     title?: string;
@@ -22,6 +23,7 @@
     nodes: EvidenceTopologyInput[];
     embedded?: boolean;
     compact?: boolean;
+    headingLevel?: 2 | 3 | 4;
   } = $props();
 
   let activeNodeId = $state('');
@@ -89,6 +91,16 @@
   };
 </script>
 
+{#snippet topologyHeading(className = '')}
+  {#if headingLevel === 2}
+    <h2 id={`${id}-title`} class={className}>{title}</h2>
+  {:else if headingLevel === 3}
+    <h3 id={`${id}-title`} class={className}>{title}</h3>
+  {:else}
+    <h4 id={`${id}-title`} class={className}>{title}</h4>
+  {/if}
+{/snippet}
+
 {#snippet sourceIcon(sourceId: string, family: string)}
   <IntelligenceIcon name={sourceIconName(sourceId)} className={`source-icon family-${family}`} />
 {/snippet}
@@ -103,7 +115,7 @@
     <header class="topology-heading">
       <div>
         <p class="eyebrow">Source map</p>
-        <h4 id={`${id}-title`}>{title}</h4>
+        {@render topologyHeading()}
         <p>{description}</p>
       </div>
       <div class="topology-summary" aria-label={`${graph.nodes.length} mapped evidence sources`}>
@@ -112,7 +124,7 @@
       </div>
     </header>
   {:else}
-    <h4 id={`${id}-title`} class="sr-only">{title}</h4>
+    {@render topologyHeading('sr-only')}
   {/if}
 
   {#if !compact}

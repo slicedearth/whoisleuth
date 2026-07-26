@@ -66,7 +66,14 @@
 
   <footer class="public-footer">
     <p>WHOISleuth keeps registration and supporting evidence separate, so missing or inconclusive data is not presented as proof.</p>
-    <p>© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a> · <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a> · <a href="/guide">Guide</a> · <a href="/privacy">Privacy</a></p>
+    <div class="footer-meta">
+      <p>© 2026 Created by <a href="https://github.com/slicedearth" target="_blank" rel="noopener">slicedearth</a></p>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="https://github.com/slicedearth/whoisleuth" target="_blank" rel="noopener">Source and licence</a>
+        <a href="/guide">Guide</a>
+        <a href="/privacy">Privacy</a>
+      </nav>
+    </div>
   </footer>
 </div>
 
@@ -78,21 +85,22 @@
   .public-brand strong,.public-brand small{display:block}
   .public-brand strong{font-size:1rem;letter-spacing:-.02em}
   .public-brand small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
-  nav{--public-nav-control-h:38px;display:flex;align-items:center;gap:5px;margin:0}
-  nav a,nav button{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h);min-height:var(--public-nav-control-h);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
-  nav :global(.theme-selector){height:var(--public-nav-control-h);margin:0 5px;font-size:var(--text-xs)}
-  nav :global(.theme-control),nav :global(.theme-trigger){height:100%}
-  nav :global(.theme-trigger){min-height:100%;font-size:var(--text-xs)}
-  nav a::before{content:none}
-  nav a:hover,nav a.active,nav button:hover{border-color:var(--border);color:var(--text);background:rgb(var(--accent-rgb) / .07)}
-  nav a.console-link{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
+  .public-header nav{--public-nav-control-h:38px;display:flex;align-items:center;gap:5px;margin:0}
+  .public-header nav a,.public-header nav button{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h);min-height:var(--public-nav-control-h);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
+  .public-header nav :global(.theme-selector){height:var(--public-nav-control-h);margin:0 5px;font-size:var(--text-xs)}
+  .public-header nav :global(.theme-control),.public-header nav :global(.theme-trigger){height:100%}
+  .public-header nav :global(.theme-trigger){min-height:100%;font-size:var(--text-xs)}
+  .public-header nav a::before{content:none}
+  .public-header nav a:hover,.public-header nav a.active,.public-header nav button:hover{border-color:var(--border);color:var(--text);background:rgb(var(--accent-rgb) / .07)}
+  .public-header nav a.console-link{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
   .console-label-short{display:none}
-  nav button.sign-out{color:var(--muted)}
-  nav .session-error{color:var(--danger);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
+  .public-header nav button.sign-out{color:var(--muted)}
+  .public-header nav .session-error{color:var(--danger);font:700 var(--text-2xs) var(--mono);white-space:nowrap}
   .public-content{width:100%;margin:0;padding:clamp(44px,7vw,82px) 0 72px}
   .public-footer{display:flex;justify-content:space-between;gap:30px;padding:22px 0 30px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono);line-height:1.6}
   .public-footer p{max-width:72ch;margin:0}
-  .public-footer p:last-child{flex:none;text-align:right}
+  .footer-meta{display:grid;flex:none;gap:8px;text-align:right}
+  .footer-links{display:flex;justify-content:flex-end;gap:14px}
   .public-footer a{color:var(--accent)}
   @media(max-width:720px){
     .public-shell{padding-inline:12px}
@@ -103,15 +111,16 @@
     .public-brand .brand-copy{display:block}
     .public-brand strong{font-size:.78rem}
     .public-brand small{display:none}
-    nav{--public-nav-control-h:32px;width:auto;min-width:0;flex:1 1 auto;flex-wrap:nowrap;justify-content:flex-end;gap:2px;padding:0}
-    nav a,nav button{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;padding:0 6px;font-size:.68rem}
-    nav .overview-link{display:none}
-    nav :global(.theme-selector){margin:0;font-size:.68rem}
+    .public-header nav{--public-nav-control-h:32px;width:auto;min-width:0;flex:1 1 auto;flex-wrap:nowrap;justify-content:flex-end;gap:2px;padding:0}
+    .public-header nav a,.public-header nav button{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;padding:0 6px;font-size:.68rem}
+    .public-header nav .overview-link{display:none}
+    .public-header nav :global(.theme-selector){margin:0;font-size:.68rem}
     .console-label-full{display:none}
     .console-label-short{display:inline}
     .public-content{padding-top:38px}
     .public-footer{align-items:flex-start;flex-direction:column}
-    .public-footer p:last-child{text-align:left}
+    .footer-meta{text-align:left}
+    .footer-links{justify-content:flex-start;flex-wrap:wrap}
   }
   @media(max-width:360px){
     .public-shell{padding-inline:8px}
@@ -119,7 +128,7 @@
     .public-brand{gap:4px}
     .public-brand .mark{width:24px;height:24px}
     .public-brand strong{font-size:.68rem}
-    nav a,nav button{padding-inline:3px;font-size:.6rem}
-    nav :global(.theme-selector){font-size:.6rem}
+    .public-header nav a,.public-header nav button{padding-inline:3px;font-size:.6rem}
+    .public-header nav :global(.theme-selector){font-size:.6rem}
   }
 </style>
