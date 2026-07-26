@@ -31,11 +31,11 @@
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { abuseAction, outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
-  import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.js';
-  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
+  import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
+  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.js';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
-  import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.js';
+  import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
   import {
     normalizeEvidenceTopologyStatus,
     type EvidenceTopologyInput,
@@ -54,7 +54,7 @@
   } from '$lib/analysis/lookup-readable-report.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
-  import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.js';
+  import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.ts';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.js';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.js';

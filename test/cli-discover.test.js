@@ -189,7 +189,7 @@ describe('discover dictionary input', () => {
 describe('shared discovery core', () => {
   test('frontend compatibility exports and CLI core resolve to the same functions', async () => {
     const shared = await import('../lib/typosquat-generator.mts');
-    const frontend = await import('../frontend/src/lib/analysis/typosquat-generator.js');
+    const frontend = await import('../frontend/src/lib/analysis/typosquat-generator.ts');
     assert.equal(frontend.generateTyposquatCandidateSet, shared.generateTyposquatCandidateSet);
     assert.equal(frontend.estimateTyposquatCandidateCount, shared.estimateTyposquatCandidateCount);
     assert.deepEqual(
@@ -200,7 +200,7 @@ describe('shared discovery core', () => {
 
   test('shared IDN compatibility exports retain one mapping implementation', async () => {
     const shared = await import('../lib/idn-confusables.mts');
-    const frontend = await import('../frontend/src/lib/analysis/idn-confusables.js');
+    const frontend = await import('../frontend/src/lib/analysis/idn-confusables.ts');
     assert.equal(frontend.analyzeDomainIdn, shared.analyzeDomainIdn);
     assert.equal(frontend.confusableCharactersForAscii, shared.confusableCharactersForAscii);
   });

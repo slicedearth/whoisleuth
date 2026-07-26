@@ -5,7 +5,7 @@ import {
   EXTERNAL_INTELLIGENCE_CALIBRATION_VERSION,
   EXTERNAL_INTELLIGENCE_RECENT_DAYS,
   calibrateExternalIntelligenceRisk,
-} from '../frontend/src/lib/analysis/external-intelligence-risk.js';
+} from '../frontend/src/lib/analysis/external-intelligence-risk.ts';
 
 const OBSERVED_AT = '2026-07-15T00:00:00.000Z';
 

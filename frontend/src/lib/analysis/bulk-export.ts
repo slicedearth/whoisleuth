@@ -7,6 +7,15 @@
 // by spreadsheets). Documented so importers can split on it deterministically.
 export const CT_HOSTNAME_CSV_DELIMITER = '|';
 
+export type CertificateTransparencyCsvInput = {
+  firstObservedAt?: string | null;
+  lastObservedAt?: string | null;
+  certificateCount?: number | null;
+  hostnames?: string[];
+};
+
+export type CertificateTransparencyCsvFields = [string, string, string, string];
+
 /**
  * The four optional Certificate Transparency columns for one bulk row, in
  * header order: [ct_first_observed, ct_last_observed, ct_certificate_count,
@@ -14,10 +23,10 @@ export const CT_HOSTNAME_CSV_DELIMITER = '|';
  * columns stay stable and aligned across the whole export. Never introduces a
  * spreadsheet-formula trigger of its own; the caller still passes every value
  * through toCsvValue for neutralization and quoting.
- * @param {{ firstObservedAt?: string|null, lastObservedAt?: string|null, certificateCount?: number|null, hostnames?: string[] } | null | undefined} ct
- * @returns {[string, string, string, string]}
  */
-export function ctCsvFields(ct) {
+export function ctCsvFields(
+  ct: CertificateTransparencyCsvInput | null | undefined,
+): CertificateTransparencyCsvFields {
   if (!ct) return ['', '', '', ''];
   return [
     ct.firstObservedAt || '',

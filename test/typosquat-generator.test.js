@@ -4,7 +4,7 @@ const { domainToASCII } = require('node:url');
 
 let generator;
 before(async () => {
-  generator = await import('../frontend/src/lib/analysis/typosquat-generator.js');
+  generator = await import('../frontend/src/lib/analysis/typosquat-generator.ts');
 });
 
 describe('provenance-aware typosquat generation', () => {

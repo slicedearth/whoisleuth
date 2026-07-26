@@ -23,12 +23,12 @@
     MUTATION_FAMILY_IDS,
     MUTATION_LABELS,
     normalizeCustomDictionaryTerms,
-  } from '$lib/analysis/typosquat-generator.js';
+  } from '$lib/analysis/typosquat-generator.ts';
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.js';
-  import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.js';
-  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.js';
+  import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
+  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';

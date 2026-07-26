@@ -6,7 +6,7 @@ let CT_HOSTNAME_CSV_DELIMITER;
 let rowsToCsv;
 let toCsvValue;
 before(async () => {
-  const exportMod = await import('../frontend/src/lib/analysis/bulk-export.js');
+  const exportMod = await import('../frontend/src/lib/analysis/bulk-export.ts');
   ctCsvFields = exportMod.ctCsvFields;
   CT_HOSTNAME_CSV_DELIMITER = exportMod.CT_HOSTNAME_CSV_DELIMITER;
   const utils = await import('../frontend/src/lib/analysis/utils.js');

@@ -293,7 +293,7 @@ describe('comparison input boundary', () => {
 describe('comparison output', () => {
   test('uses the same comparison function through the frontend compatibility module', async () => {
     const shared = await comparisonModule();
-    const frontend = await import('../frontend/src/lib/analysis/registry-comparison.js');
+    const frontend = await import('../frontend/src/lib/analysis/registry-comparison.ts');
     assert.equal(frontend.compareRegistrySources, shared.compareRegistrySources);
   });
 

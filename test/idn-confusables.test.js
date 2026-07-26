@@ -4,7 +4,7 @@ const { domainToASCII } = require('url');
 
 let idn;
 before(async () => {
-  idn = await import('../frontend/src/lib/analysis/idn-confusables.js');
+  idn = await import('../frontend/src/lib/analysis/idn-confusables.ts');
 });
 
 describe('punycode decoding and dual domain representation', () => {

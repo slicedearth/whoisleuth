@@ -186,7 +186,7 @@ describe('evidence export CLI arguments', () => {
 describe('lookup evidence export conversion', () => {
   test('shares the exact evidence builder with the frontend compatibility module', async () => {
     const shared = await evidenceModule();
-    const frontend = await import('../frontend/src/lib/analysis/evidence-export.js');
+    const frontend = await import('../frontend/src/lib/analysis/evidence-export.ts');
     assert.equal(frontend.buildLookupEvidence, shared.buildLookupEvidence);
     assert.equal(frontend.LOOKUP_EVIDENCE_SCHEMA_VERSION, shared.LOOKUP_EVIDENCE_SCHEMA_VERSION);
   });

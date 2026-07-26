@@ -4,7 +4,7 @@
 // latestCaseEvidence). No browser globals, no DOM access — Node-testable with
 // node --test.
 //
-// The Lookup evidence export (evidence-export.js) is a separate format that
+// The Lookup evidence export (evidence-export.ts) is a separate format that
 // contains raw RDAP/WHOIS material. This module deliberately excludes all raw
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.

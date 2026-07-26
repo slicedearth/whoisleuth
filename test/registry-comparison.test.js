@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 
 let comparison;
 before(async () => {
-  comparison = await import('../frontend/src/lib/analysis/registry-comparison.js');
+  comparison = await import('../frontend/src/lib/analysis/registry-comparison.ts');
 });
 function field(result, label) {
   return result.fields.find((item) => item.label === label);
