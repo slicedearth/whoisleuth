@@ -1,20 +1,44 @@
 <script lang="ts">
   type Evidence = { source: string; description: string };
   type Finding = { id: string; name: string; category: string; confidence: string; evidence: Evidence[] };
+  type LibraryFinding = {
+    id: string;
+    name: string;
+    version: string;
+    detection: string;
+    advisoryCount: number;
+    severity: string;
+    identifiers: string;
+    weaknesses: string;
+  };
 
   let {
     status,
     complete,
     findings,
     limitations,
+    libraryAvailable,
+    libraryStatus,
+    libraryComplete,
+    libraryCatalog,
+    libraries,
+    libraryLimitations,
     initiallyExpanded = false,
   }: {
     status: string;
     complete: boolean;
     findings: Finding[];
     limitations: string[];
+    libraryAvailable: boolean;
+    libraryStatus: string;
+    libraryComplete: boolean;
+    libraryCatalog: string;
+    libraries: LibraryFinding[];
+    libraryLimitations: string[];
     initiallyExpanded?: boolean;
   } = $props();
+
+  const advisoryMatches = $derived(libraries.filter((library) => library.advisoryCount > 0).length);
 </script>
 
 <details class="technology-card evidence-card card" aria-labelledby="technology-profile-title" open={initiallyExpanded}>
@@ -53,6 +77,47 @@
 
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
     <p class="card-note">These indicators are derived from the selected HTTP server header, generator metadata, resource origins, and static HTML already collected by this deep lookup. They make no additional request and do not affect availability or Risk scoring.</p>
+
+    {#if libraryAvailable}
+      <section class="library-profile" aria-labelledby="browser-library-title">
+        <div class="library-heading">
+          <div>
+            <p class="eyebrow">Passive component catalogue</p>
+            <h5 id="browser-library-title">Observed browser libraries</h5>
+            <p>{libraries.length ? `${libraries.length} apparent librar${libraries.length === 1 ? 'y' : 'ies'}; ${advisoryMatches} with catalogue advisory matches` : 'No bounded library signature matched'}</p>
+          </div>
+          <span class:partial={!libraryComplete} class="evidence-status">{libraryStatus}</span>
+        </div>
+
+        {#if libraries.length}
+          <div class="library-grid">
+            {#each libraries as library}
+              <article>
+                <div class="finding-head">
+                  <h6>{library.name} <span>{library.version}</span></h6>
+                  {#if library.advisoryCount}
+                    <span class:critical={library.severity === 'critical'} class:high={library.severity === 'high'} class="advisory">{library.advisoryCount} advisory match{library.advisoryCount === 1 ? '' : 'es'}</span>
+                  {:else}
+                    <span class="catalog-neutral">No catalogue advisory match</span>
+                  {/if}
+                </div>
+                <dl>
+                  <div><dt>Detected by</dt><dd>{library.detection || 'Static signature'}</dd></div>
+                  {#if library.severity}<div><dt>Highest severity</dt><dd>{library.severity}</dd></div>{/if}
+                  {#if library.identifiers}<div><dt>Identifiers</dt><dd>{library.identifiers}</dd></div>{/if}
+                  {#if library.weaknesses}<div><dt>Weakness classes</dt><dd>{library.weaknesses}</dd></div>{/if}
+                </dl>
+              </article>
+            {/each}
+          </div>
+        {:else}
+          <p class="callout info">No versioned browser-library signature matched the capped static script evidence. This does not establish that the page uses no JavaScript library.</p>
+        {/if}
+
+        {#if libraryLimitations.length}<p class="callout warn">{libraryLimitations.join(' ')}</p>{/if}
+        <p class="card-note">WHOISleuth uses the pinned {libraryCatalog || 'Retire.js'} catalogue against script references and bounded inline content already present in the captured homepage. It does not download or execute referenced scripts. Advisory matches are review leads, not proof that affected code is reachable or exploitable.</p>
+      </section>
+    {/if}
   </div>
 </details>
 
@@ -69,8 +134,27 @@
   li span{overflow-wrap:anywhere}
   .callout{margin-top:12px}
   .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .library-profile{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+  .library-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .library-heading .eyebrow{margin:0 0 3px}
+  .library-heading h5{margin:0;color:var(--text);font-size:var(--text-sm)}
+  .library-heading p:not(.eyebrow){margin:4px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .library-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:10px;margin-top:12px}
+  .library-grid article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}
+  .library-grid h6{min-width:0;margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}
+  .library-grid h6 span{color:var(--muted);font-family:var(--font-mono);font-size:var(--text-xs);font-weight:500}
+  .advisory,.catalog-neutral{flex:0 0 auto;border:1px solid rgb(var(--amber-rgb) / .4);border-radius:999px;padding:2px 7px;color:var(--amber);background:rgb(var(--amber-rgb) / .05);font-size:var(--text-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .advisory.high,.advisory.critical{border-color:rgb(var(--danger-rgb) / .4);color:var(--danger);background:rgb(var(--danger-rgb) / .05)}
+  .catalog-neutral{border-color:var(--border);color:var(--muted);background:var(--surface)}
+  dl{display:grid;gap:6px;margin:10px 0 0}
+  dl div{display:grid;grid-template-columns:minmax(86px,.35fr) minmax(0,1fr);gap:8px;font-size:var(--text-xs);line-height:1.45}
+  dt{color:var(--muted)}
+  dd{min-width:0;margin:0;overflow-wrap:anywhere;text-transform:none}
   @media(max-width:650px){
     .finding-head{display:grid;gap:4px}
-    .confidence{justify-self:start}
+    .confidence,.advisory,.catalog-neutral{justify-self:start}
+    .library-heading{display:grid;gap:8px}
+    .library-heading .evidence-status{justify-self:start}
+    dl div{grid-template-columns:1fr}
   }
 </style>

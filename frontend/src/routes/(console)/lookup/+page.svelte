@@ -157,6 +157,7 @@
   const pageDownloads=$derived(lookupView.pageDownloads as JsonRecord);
   const pageFingerprints=$derived(lookupView.pageFingerprints as JsonRecord);
   const technologyProfile=$derived(lookupView.technologyProfile as JsonRecord);
+  const browserLibraryProfile=$derived(technologyProfile.browserLibraryProfile as JsonRecord);
   const securityPosture=$derived(lookupView.securityPosture as JsonRecord);
   const securityPostureSummary=$derived(lookupView.securityPostureSummary as JsonRecord);
   const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
@@ -312,6 +313,17 @@
     confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:Array.isArray(finding?.evidence)?finding.evidence.slice(0,4).map((item:any)=>({source:statusLabel(boundedTechnologyText(item?.source||'evidence',80)),description:boundedTechnologyText(item?.description||'Observed signature matched.',300)})):[]
   })):[];}
   function technologyLimitations(){return Array.isArray(technologyProfile.limitations)?technologyProfile.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
+  function browserLibraryRows(){return Array.isArray(browserLibraryProfile.findings)?browserLibraryProfile.findings.slice(0,16).map((finding:any)=>({
+    id:boundedTechnologyText(finding?.id,80),
+    name:statusLabel(boundedTechnologyText(finding?.name||'unknown library',80)),
+    version:boundedTechnologyText(finding?.apparentVersion||'unknown',64),
+    detection:stringList(finding?.detectionMethods).slice(0,4).map(statusLabel).join(', '),
+    advisoryCount:Math.max(0,Math.min(16,Number(finding?.advisoryCount)||0)),
+    severity:boundedTechnologyText(finding?.highestSeverity,16),
+    identifiers:stringList(finding?.advisoryIdentifiers).slice(0,16).join(', '),
+    weaknesses:stringList(finding?.weaknessClasses).slice(0,12).join(', '),
+  })):[];}
+  function browserLibraryLimitations(){return Array.isArray(browserLibraryProfile.limitations)?browserLibraryProfile.limitations.slice(0,10).map((item:any)=>boundedTechnologyText(item,300)).filter(Boolean):[];}
   function observedNetworkSourceLabel(){return({tls_connection:'TLS connection',dns_a:'DNS A fallback',dns_aaaa:'DNS AAAA fallback'} as Record<string,string>)[String(observedNetworkEndpoint.selectedFrom)]||'Unavailable';}
   function observedNetworkRows(){return Object.keys(observedNetwork).length?[
     {label:'Registered network',value:show(observedNetwork.name)},
@@ -439,13 +451,31 @@
     comparisonSummary:`Registry / registrar publication comparison · ${registrarPublicationComparison.counts.conflict} conflicts · ${registrarPublicationComparison.counts.registry_only+registrarPublicationComparison.counts.registrar_only} source-only · ${registrarPublicationComparison.counts.registry_redacted+registrarPublicationComparison.counts.registrar_redacted} redacted · ${registrarPublicationComparison.counts.registry_unavailable+registrarPublicationComparison.counts.registrar_unavailable+registrarPublicationComparison.counts.registry_incomplete+registrarPublicationComparison.counts.registrar_incomplete} unavailable/incomplete · ${registrarPublicationComparison.counts.equivalent} equivalent`,
     comparisonRows:registrarPublicationRows(),
   };}
-  function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:name==='soa'?`${record.nsname} · hostmaster ${record.hostmaster} · serial ${record.serial} · refresh ${record.refresh}s · retry ${record.retry}s · expire ${record.expire}s · minimum TTL ${record.minttl}s`:String(record)).join(' · ');}
+  function httpsServiceBindingValue(record:any){
+    const parameters=rec(record?.parameters);
+    const mode=record?.mode==='alias'?'Alias':'Service';
+    const target=record?.serviceUnavailable===true?'advisory unavailable':record?.targetIsOwner===true?'owner':boundedTechnologyText(record?.target,253)||'target unavailable';
+    const details=[
+      `${mode} priority ${Number.isInteger(Number(record?.priority))?Number(record.priority):'—'} → ${target}`,
+      stringList(parameters.alpn).length?`ALPN ${stringList(parameters.alpn).slice(0,16).map((item)=>boundedTechnologyText(item,132)).join(', ')}`:'',
+      parameters.port!==null&&parameters.port!==undefined&&Number.isInteger(Number(parameters.port))?`port ${Number(parameters.port)}`:'',
+      stringList(parameters.ipv4hint).length?`IPv4 hints ${stringList(parameters.ipv4hint).slice(0,8).map((item)=>boundedTechnologyText(item,64)).join(', ')}`:'',
+      stringList(parameters.ipv6hint).length?`IPv6 hints ${stringList(parameters.ipv6hint).slice(0,8).map((item)=>boundedTechnologyText(item,64)).join(', ')}`:'',
+      Array.isArray(parameters.opaque)&&parameters.opaque.length?`Published ${parameters.opaque.slice(0,24).map((item:any)=>boundedTechnologyText(item?.name||`key ${item?.key}`,63)).filter(Boolean).join(', ')}`:'',
+      Array.isArray(parameters.unsupportedMandatoryKeys)&&parameters.unsupportedMandatoryKeys.length?`unsupported mandatory keys ${parameters.unsupportedMandatoryKeys.slice(0,24).map(Number).join(', ')}`:'',
+      record?.compatible===false?'not compatible with this parser':'',
+      Number.isInteger(Number(record?.ttl))?`TTL ${Number(record.ttl)}s`:'',
+    ].filter(Boolean);
+    return details.join(' · ');
+  }
+  function dnsValues(name:string){const records=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return records.map((record:any)=>typeof record==='string'?record:name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:name==='soa'?`${record.nsname} · hostmaster ${record.hostmaster} · serial ${record.serial} · refresh ${record.refresh}s · retry ${record.retry}s · expire ${record.expire}s · minimum TTL ${record.minttl}s`:name==='https'?httpsServiceBindingValue(record):String(record)).filter(Boolean).join(' | ');}
   function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}
   function dnsQueryFailures(){return Object.entries(rec(dnsEvidence.diagnostics)).filter(([,item])=>rec(item).status==='error').map(([name,item])=>`${name.toUpperCase()}: ${rec(item).error||'query failed'}`).join(' · ');}
   function dnsEvidenceRows(){return[
     {label:'DNSSEC',value:show(availability.dnssec)},
     ...[['A','a'],['AAAA','aaaa'],['CNAME','cname'],['Nameservers','ns'],['MX','mx'],['SPF','spf'],['DMARC','dmarc'],['CAA','caa']].map(([label,name])=>({label,value:dnsDisplay(name)})),
     ...(Array.isArray(dnsRecords.soa)||rec(dnsEvidence.diagnostics).soa?[{label:'SOA',value:dnsDisplay('soa')}]:[]),
+    ...(Array.isArray(dnsRecords.https)||rec(dnsEvidence.diagnostics).https?[{label:'HTTPS service binding',value:dnsDisplay('https')}]:[]),
   ];}
   function reverseDnsRows(){const records=Array.isArray(reverseDnsRecords.ptr)?reverseDnsRecords.ptr.map(String):[];return[{label:'PTR names',value:records.join(' · ')||'Not observed'}];}
   function reverseDnsFailure(){const diagnostic=rec(rec(reverseDns.diagnostics).ptr);return diagnostic.status==='error'?String(diagnostic.error||'query failed'):'';}
@@ -744,7 +774,14 @@
       {/if}
 
       {#if dnsEvidence.source==='dns'}
-        <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence status={show(dnsEvidence.status)} complete={dnsEvidence.complete!==false} rows={dnsEvidenceRows()} failureDetail={dnsQueryFailures()} truncated={Boolean(dnsEvidence.truncated)} /></div>
+        <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence
+          status={show(dnsEvidence.status)}
+          complete={dnsEvidence.complete!==false}
+          rows={dnsEvidenceRows()}
+          failureDetail={dnsQueryFailures()}
+          truncated={Boolean(dnsEvidence.truncated)}
+          note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
+        /></div>
       {/if}
 
       {#if httpEvidence.source==='http'}
@@ -805,6 +842,12 @@
           complete={Boolean(technologyProfile.complete)}
           findings={technologyFindingRows()}
           limitations={technologyLimitations()}
+          libraryAvailable={browserLibraryProfile.profileVersion===1}
+          libraryStatus={statusLabel(show(browserLibraryProfile.status))}
+          libraryComplete={Boolean(browserLibraryProfile.complete)}
+          libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}
+          libraries={browserLibraryRows()}
+          libraryLimitations={browserLibraryLimitations()}
         /></div>
       {/if}
 

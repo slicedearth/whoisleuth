@@ -53,10 +53,12 @@ Deep domain Lookup can combine:
 - separately attributed registrar RDAP when the registry publishes an eligible
   HTTPS link;
 - authority-aware availability analysis;
-- DNS, including deep-only SOA zone context, plus HTTP, favicon,
+- DNS, including deep-only SOA zone context and HTTPS service-binding
+  publication, plus HTTP, favicon,
   page-identity, mail, and one-connection TLS evidence;
-- passive technology and security-posture indicators derived from the captured
-  response, without vulnerability testing;
+- passive technology, browser-library catalogue, and security-posture
+  indicators derived from the captured response, without fetching referenced
+  scripts or performing vulnerability testing;
 - one observed public endpoint mapped to its IP RDAP network registration;
 - bounded reverse-DNS names for a directly entered public IP address;
 - optional security.txt and configured external intelligence sources;

@@ -1,8 +1,12 @@
 // Versioned, bounded technology indicators derived from the HTTP and static
-// HTML evidence already collected by a deep lookup. Signatures emit only
-// curated labels and fixed evidence descriptions; matched markup, header
-// values, URL paths, and arbitrary upstream strings are never retained.
+// HTML evidence already collected by a deep lookup. A standards-compliant
+// parser identifies live elements and attributes without executing scripts.
+// Signatures emit only curated labels and fixed evidence descriptions; matched
+// markup, header values, URL paths, and arbitrary upstream strings are never
+// retained.
 
+import { parse } from 'parse5';
+import { analyzeBrowserLibraries } from './browser-library-profile.mts';
 import { createObservation } from './observation.mts';
 
 type TechnologyCategory =
@@ -48,20 +52,30 @@ type TechnologySignature = {
   evidence: SignatureEvidence[];
 };
 
-const TECHNOLOGY_PROFILE_VERSION = 2;
+type ParsedAttribute = { name?: unknown; value?: unknown };
+type ParsedNode = {
+  tagName?: unknown;
+  attrs?: ParsedAttribute[];
+  childNodes?: ParsedNode[];
+  sourceCodeLocation?: {
+    startOffset?: unknown;
+    endOffset?: unknown;
+  } | null;
+};
+
+const TECHNOLOGY_PROFILE_VERSION = 3;
 const MAX_TECHNOLOGY_HTML_CHARS = 300_000;
 const MAX_TECHNOLOGY_TAGS = 2_048;
 const MAX_TECHNOLOGY_TAG_LENGTH = 4_096;
+const MAX_TECHNOLOGY_ATTRIBUTES_PER_TAG = 128;
+const MAX_TECHNOLOGY_PENDING_NODES = MAX_TECHNOLOGY_TAGS * 4;
 const MAX_TECHNOLOGY_FINDINGS = 24;
 const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 const MAX_RESOURCE_ORIGINS = 30;
 const MAX_GENERATOR_INPUT = 160;
 const MAX_SERVER_INPUT = 240;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
-const HTML_COMMENT_RE = /<!--[\s\S]*?(?:-->|$)/g;
-const RAW_TEXT_BLOCK_RE = /<(script|style|textarea|template)\b([^>]*)>[\s\S]*?<\/\1\s*>/gi;
-const TECHNOLOGY_TAG_RE = /<[a-z][^>]{0,4096}>/gi;
-const OVERSIZED_TECHNOLOGY_TAG_RE = /<[a-z][^>]{4097}/i;
+const RAW_TEXT_TAGS = new Set(['script', 'style', 'textarea', 'template']);
 
 function boundedLowercase(value: unknown, maxLength: number): string {
   if (typeof value !== 'string' || value.length > maxLength || CONTROL_CHARACTER_RE.test(value)) return '';
@@ -86,21 +100,60 @@ function normalizedResourceHosts(value: unknown): Set<string> {
 function searchableTagMarkup(value: unknown): { markup: string; inputLimitReached: boolean; tagLimitReached: boolean } {
   const supplied = typeof value === 'string' ? value : '';
   const inputLimitReached = supplied.length > MAX_TECHNOLOGY_HTML_CHARS;
-  const sanitized = supplied
-    .slice(0, MAX_TECHNOLOGY_HTML_CHARS)
-    .replace(HTML_COMMENT_RE, ' ')
-    .replace(RAW_TEXT_BLOCK_RE, '<$1$2>');
+  const document = parse(supplied.slice(0, MAX_TECHNOLOGY_HTML_CHARS), {
+    sourceCodeLocationInfo: true,
+  }) as ParsedNode;
   const tags: string[] = [];
-  let tagLimitReached = OVERSIZED_TECHNOLOGY_TAG_RE.test(sanitized);
-  let match;
-  TECHNOLOGY_TAG_RE.lastIndex = 0;
-  while ((match = TECHNOLOGY_TAG_RE.exec(sanitized))) {
-    if (tags.length >= MAX_TECHNOLOGY_TAGS) {
-      tagLimitReached = true;
-      break;
+  const pending: ParsedNode[] = [document];
+  let tagLimitReached = false;
+
+  while (pending.length) {
+    const node = pending.pop() as ParsedNode;
+    if (typeof node.tagName === 'string') {
+      if (tags.length >= MAX_TECHNOLOGY_TAGS) {
+        tagLimitReached = true;
+        break;
+      }
+
+      const startOffset = Number(node.sourceCodeLocation?.startOffset);
+      const endOffset = Number(node.sourceCodeLocation?.endOffset);
+      if (
+        Number.isFinite(startOffset)
+        && Number.isFinite(endOffset)
+        && endOffset - startOffset > MAX_TECHNOLOGY_TAG_LENGTH
+      ) {
+        tagLimitReached = true;
+      } else {
+        const attributes = Array.isArray(node.attrs) ? node.attrs : [];
+        if (attributes.length > MAX_TECHNOLOGY_ATTRIBUTES_PER_TAG) tagLimitReached = true;
+        let serialized = `<${node.tagName.toLowerCase()}`;
+        for (const attribute of attributes.slice(0, MAX_TECHNOLOGY_ATTRIBUTES_PER_TAG)) {
+          if (typeof attribute.name !== 'string' || typeof attribute.value !== 'string') continue;
+          const candidate = ` ${attribute.name.toLowerCase()}="${attribute.value.toLowerCase()}"`;
+          if (serialized.length + candidate.length + 1 > MAX_TECHNOLOGY_TAG_LENGTH) {
+            tagLimitReached = true;
+            break;
+          }
+          serialized += candidate;
+        }
+        if (serialized.length + 1 <= MAX_TECHNOLOGY_TAG_LENGTH) tags.push(`${serialized}>`);
+      }
+
+      if (RAW_TEXT_TAGS.has(node.tagName.toLowerCase())) continue;
     }
-    tags.push(match[0].toLowerCase());
+
+    const children = Array.isArray(node.childNodes) ? node.childNodes : [];
+    const remainingCapacity = MAX_TECHNOLOGY_PENDING_NODES - pending.length;
+    if (children.length > remainingCapacity) tagLimitReached = true;
+    const retainedChildren = children.slice(0, Math.max(0, remainingCapacity));
+    for (let index = retainedChildren.length - 1; index >= 0; index -= 1) {
+      pending.push(retainedChildren[index] as ParsedNode);
+    }
+    if (pending.length >= MAX_TECHNOLOGY_PENDING_NODES) {
+      tagLimitReached = true;
+    }
   }
+
   return { markup: tags.join('\n'), inputLimitReached, tagLimitReached };
 }
 
@@ -295,6 +348,11 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
 
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
   const tagMarkup = searchableTagMarkup(input.html);
+  const browserLibraryProfile = analyzeBrowserLibraries({
+    html: input.html,
+    observedAt: input.observedAt,
+    sourceTruncated: input.sourceTruncated,
+  });
   const context: MatchContext = {
     html: tagMarkup.markup,
     generator: boundedLowercase(input.generator, MAX_GENERATOR_INPUT),
@@ -348,6 +406,7 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
       },
     }),
     findings: findings.slice(0, MAX_TECHNOLOGY_FINDINGS),
+    browserLibraryProfile,
   };
 }
 

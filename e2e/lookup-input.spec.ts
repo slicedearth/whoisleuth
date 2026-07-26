@@ -662,7 +662,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(16);
+  expect(exported.schemaVersion).toBe(17);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -1040,11 +1040,23 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
               nsname: 'ns1.example', hostmaster: 'hostmaster.example', serial: 2026072701,
               refresh: 3600, retry: 600, expire: 1209600, minttl: 300,
             }],
+            https: [{
+              type: 'HTTPS', owner: 'dns-evidence.test', ttl: 300, priority: 1, mode: 'service',
+              target: 'dns-evidence.test', targetIsOwner: true, serviceUnavailable: false,
+              compatible: true, parametersIgnored: false,
+              parameters: {
+                mandatory: [1, 3], alpn: ['h2', 'h3'], noDefaultAlpn: false, port: 443,
+                ipv4hint: ['192.0.2.10'], ipv6hint: ['2001:db8::10'],
+                opaque: [{ key: 5, name: 'ech', length: 48 }],
+                unknownKeys: [], unsupportedMandatoryKeys: [],
+              },
+            }],
           },
           diagnostics: {
             a: { status: 'success' }, aaaa: { status: 'success' },
             cname: { status: 'error', error: 'resolver timed out' },
             soa: { status: 'success' },
+            https: { status: 'success' },
           },
         },
       },
@@ -1064,6 +1076,8 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(card.getByText('192.0.2.10', { exact: true })).toBeVisible();
   await expect(card.getByText('0 issue ca.example', { exact: true })).toBeVisible();
   await expect(card.getByText(/ns1\.example.*serial 2026072701/i)).toBeVisible();
+  await expect(card.getByText(/Service priority 1 → owner · ALPN h2, h3 · port 443 · IPv4 hints 192\.0\.2\.10.*Published ech/i)).toBeVisible();
+  await expect(card.getByText(/does not follow or connect to them/i)).toBeVisible();
   await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
   await expect(card.getByText(/does not prove common ownership or maliciousness/i)).toBeVisible();
 
@@ -1153,6 +1167,18 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             { id: 'fixture-cms', name: 'Fixture CMS', category: 'content management', confidence: 'high', evidence: [{ source: 'generator metadata', description: 'Generator metadata identifies the fixture CMS.' }] },
             { id: 'fixture-edge', name: 'Fixture Edge', category: 'delivery platform', confidence: 'medium', evidence: [{ source: 'resource origin', description: 'A retained resource origin uses fixture delivery infrastructure.' }] },
           ],
+          browserLibraryProfile: {
+            profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+            scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
+            catalog: { name: 'Retire.js', version: 'retire.js-5.4.3', sourceRevision: '56ea22d889656f4fbfe47b7df58d410a06ea59b7' },
+            limitations: ['A fixture advisory match does not establish reachability or exploitability.'],
+            diagnostics: { scriptsExamined: 1, referencesExamined: 1, inlineScriptsExamined: 0, findings: 1, advisoryMatches: 1 },
+            findings: [{
+              id: 'fixture-library', name: 'fixture library', apparentVersion: '1.2.3',
+              detectionMethods: ['script filename'], advisoryCount: 1, highestSeverity: 'medium',
+              advisoryIdentifiers: ['CVE-0000-0000'], weaknessClasses: ['CWE-000'],
+            }],
+          },
         },
         securityPosture: {
           postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
@@ -1233,6 +1259,10 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(technologyCard.getByText('high confidence', { exact: true })).toBeVisible();
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Fixture Edge' })).toBeVisible();
+  await expect(technologyCard.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();
+  await expect(technologyCard.getByRole('heading', { name: /Fixture Library 1\.2\.3/i })).toBeVisible();
+  await expect(technologyCard.getByText('1 advisory match', { exact: true })).toBeVisible();
+  await expect(technologyCard.getByText(/does not download or execute referenced scripts/i)).toBeVisible();
   await expect(technologyCard.getByText(/make no additional request and do not affect availability or Risk scoring/i)).toBeVisible();
 
   const postureCard = page.locator('.security-posture-card');

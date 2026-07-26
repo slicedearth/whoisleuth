@@ -113,6 +113,39 @@ function fixtureResponse() {
       domain: 'example.com',
       state: 'registered',
       hasMx: true,
+      dns: {
+        version: 1,
+        status: 'success',
+        source: 'dns',
+        complete: true,
+        truncated: false,
+        records: {
+          https: [{
+            type: 'HTTPS',
+            owner: 'example.com',
+            ttl: 300,
+            priority: 1,
+            mode: 'service',
+            target: 'example.com',
+            targetIsOwner: true,
+            serviceUnavailable: false,
+            compatible: true,
+            parametersIgnored: false,
+            parameters: {
+              mandatory: [1],
+              alpn: ['h2'],
+              noDefaultAlpn: false,
+              port: null,
+              ipv4hint: [],
+              ipv6hint: [],
+              opaque: [{ key: 5, name: 'ech', length: 24 }],
+              unknownKeys: [],
+              unsupportedMandatoryKeys: [],
+            },
+          }],
+        },
+        diagnostics: { https: { status: 'success', error: null, truncated: false, discarded: 0 } },
+      },
       http: {
         version: 1,
         status: 'success',
@@ -186,13 +219,34 @@ function fixtureResponse() {
         },
       },
       technologyProfile: {
-        profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
+        profileVersion: 3, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
         scanMode: 'deep', source: 'derived', complete: true, truncated: false,
         limitations: ['Curated signature matching is selective.'], diagnostics: { findings: 1 },
         findings: [{
           id: 'fixture-framework', name: 'Fixture Framework', category: 'web framework', confidence: 'high',
           evidence: [{ source: 'static HTML', description: 'Static markup contains a fixture framework marker.' }],
         }],
+        browserLibraryProfile: {
+          profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
+          scanMode: 'deep', source: 'derived', complete: true, truncated: false,
+          catalog: {
+            name: 'Retire.js',
+            version: 'retire.js-5.4.3',
+            sourceRevision: '56ea22d889656f4fbfe47b7df58d410a06ea59b7',
+          },
+          limitations: ['An advisory match does not prove exploitability.'],
+          diagnostics: { findings: 1, advisoryMatches: 1 },
+          findings: [{
+            id: 'fixture-library',
+            name: 'fixture-library',
+            apparentVersion: '1.2.3',
+            detectionMethods: ['script filename'],
+            advisoryCount: 1,
+            highestSeverity: 'high',
+            advisoryIdentifiers: ['CVE-0000-0000'],
+            weaknessClasses: ['CWE-000'],
+          }],
+        },
       },
       securityPosture: {
         postureVersion: 1, version: 1, status: 'partial', observedAt: '2026-07-11T01:02:05.000Z',
@@ -228,7 +282,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 16);
+    assert.equal(result.schemaVersion, 17);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -277,8 +331,11 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.visibleText.value, 'c'.repeat(16));
     assert.deepEqual(result.analysis.availability.pageIdentity.fingerprints.resourceHosts.values, ['cdn.example']);
-    assert.equal(result.analysis.availability.technologyProfile.profileVersion, 1);
+    assert.equal(result.analysis.availability.dns.records.https[0].parameters.opaque[0].name, 'ech');
+    assert.equal(result.analysis.availability.technologyProfile.profileVersion, 3);
     assert.equal(result.analysis.availability.technologyProfile.findings[0].name, 'Fixture Framework');
+    assert.equal(result.analysis.availability.technologyProfile.browserLibraryProfile.profileVersion, 1);
+    assert.equal(result.analysis.availability.technologyProfile.browserLibraryProfile.findings[0].advisoryCount, 1);
     assert.equal(result.analysis.availability.securityPosture.postureVersion, 1);
     assert.equal(result.analysis.availability.securityPosture.findings[0].state, 'observed_absence');
     assert.equal(result.analysis.idn, null);
@@ -308,7 +365,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 16);
+    assert.equal(result.schemaVersion, 17);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });

@@ -9,6 +9,7 @@ import * as net from 'node:net';
 import { classifyMxRecords } from './dns-mx.mts';
 import { createObservation } from './observation.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
+import { resolveServiceBindingRecords } from './service-binding-dns.mts';
 
 type MxRecord = { priority: number; exchange: string };
 type CaaRecord = { critical: number; tag: string; value: string };
@@ -38,6 +39,29 @@ type ReverseDnsIntelligenceOptions = {
   now?: () => number;
   observedAt?: () => string;
 };
+type ServiceBindingRecord = {
+  type: 'HTTPS';
+  owner: string;
+  ttl: number;
+  priority: number;
+  mode: 'alias' | 'service';
+  target: string | null;
+  targetIsOwner: boolean;
+  serviceUnavailable: boolean;
+  compatible: boolean;
+  parametersIgnored: boolean;
+  parameters: {
+    mandatory: number[];
+    alpn: string[];
+    noDefaultAlpn: boolean;
+    port: number | null;
+    ipv4hint: string[];
+    ipv6hint: string[];
+    opaque: Array<{ key: number; name: string | null; length: number }>;
+    unknownKeys: number[];
+    unsupportedMandatoryKeys: number[];
+  };
+};
 
 const DNS_TIMEOUT_MS = 5000;
 const MAX_RECORDS_PER_TYPE = 16;
@@ -46,6 +70,10 @@ const MAX_HOSTNAME_LENGTH = 253;
 const MAX_POLICY_LENGTH = 1024;
 const MAX_ERROR_LENGTH = 180;
 const MAX_DNS_UINT32 = 0xffff_ffff;
+const MAX_SERVICE_PARAMETER_KEYS = 24;
+const MAX_SERVICE_ALPN_IDS = 16;
+const MAX_SERVICE_ADDRESS_HINTS = 8;
+const DNS_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/u;
 const MISSING_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
 
 function skippedDnsIntelligence(
@@ -54,7 +82,7 @@ function skippedDnsIntelligence(
 ) {
   const skipped = { status: 'skipped', error: null, truncated: false, discarded: 0 };
   const recordTypes = ['a', 'aaaa', 'cname', 'ns', 'mx', 'spf', 'dmarc', 'caa'];
-  if (includeExtendedContext) recordTypes.push('soa');
+  if (includeExtendedContext) recordTypes.push('soa', 'https');
   const diagnostics = Object.fromEntries(recordTypes
     .map((name) => [name, { ...skipped }]));
   return {
@@ -68,7 +96,7 @@ function skippedDnsIntelligence(
     }),
     records: {
       a: [], aaaa: [], cname: [], ns: [], mx: [], spf: [], dmarc: [], caa: [],
-      ...(includeExtendedContext ? { soa: [] } : {}),
+      ...(includeExtendedContext ? { soa: [], https: [] } : {}),
     },
     hasMx: null,
     hasNullMx: null,
@@ -235,6 +263,158 @@ function normalizeSoa(record: unknown): NormalizedRecords<SoaRecord> {
   };
 }
 
+function boundedUint16List(value: unknown, limit: number): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const values: number[] = [];
+  for (const item of value.slice(0, limit)) {
+    const number = Number(item);
+    if (!Number.isInteger(number) || number < 0 || number > 0xffff) return null;
+    values.push(number);
+  }
+  return values;
+}
+
+function boundedAlpnList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const values: string[] = [];
+  for (const item of value.slice(0, MAX_SERVICE_ALPN_IDS)) {
+    if (
+      typeof item !== 'string'
+      || !item
+      || item.length > 132
+      || DNS_CONTROL_CHARACTER_RE.test(item)
+      || !/^(?:hex:[0-9a-f]+|[\x21-\x7e]+)$/u.test(item)
+    ) return null;
+    values.push(item);
+  }
+  return values;
+}
+
+function boundedAddressHints(value: unknown, family: 4 | 6): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const values: string[] = [];
+  for (const item of value.slice(0, MAX_SERVICE_ADDRESS_HINTS)) {
+    if (typeof item !== 'string' || net.isIP(item) !== family) return null;
+    values.push(item.toLowerCase());
+  }
+  return values;
+}
+
+function normalizeServiceBindings(value: unknown): NormalizedRecords<ServiceBindingRecord> {
+  const envelope = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+  const input = Array.isArray(value)
+    ? value
+    : Array.isArray(envelope?.records)
+      ? envelope.records
+      : [];
+  const records: ServiceBindingRecord[] = [];
+  let discarded = 0;
+  let truncated = envelope?.truncated === true || input.length > MAX_RECORDS_PER_TYPE;
+
+  for (const candidate of input.slice(0, MAX_RECORDS_PER_TYPE)) {
+    const record = candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+      ? candidate as Record<string, unknown>
+      : {};
+    const parameters = record.parameters && typeof record.parameters === 'object' && !Array.isArray(record.parameters)
+      ? record.parameters as Record<string, unknown>
+      : {};
+    const owner = normalizeHostname(record.owner);
+    const target = record.target === null ? null : normalizeHostname(record.target);
+    const ttl = dnsUint32(record.ttl);
+    const priority = Number(record.priority);
+    const mode = record.mode;
+    const mandatory = boundedUint16List(parameters.mandatory, MAX_SERVICE_PARAMETER_KEYS);
+    const alpn = boundedAlpnList(parameters.alpn);
+    const ipv4hint = boundedAddressHints(parameters.ipv4hint, 4);
+    const ipv6hint = boundedAddressHints(parameters.ipv6hint, 6);
+    const unknownKeys = boundedUint16List(parameters.unknownKeys, MAX_SERVICE_PARAMETER_KEYS);
+    const unsupportedMandatoryKeys = boundedUint16List(
+      parameters.unsupportedMandatoryKeys,
+      MAX_SERVICE_PARAMETER_KEYS,
+    );
+    const port = parameters.port === null ? null : Number(parameters.port);
+    const opaqueInput = Array.isArray(parameters.opaque) ? parameters.opaque : [];
+    const opaque: Array<{ key: number; name: string | null; length: number }> = [];
+    let invalidOpaque = opaqueInput.length > MAX_SERVICE_PARAMETER_KEYS;
+    for (const item of opaqueInput.slice(0, MAX_SERVICE_PARAMETER_KEYS)) {
+      const entry = item && typeof item === 'object' && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : {};
+      const key = Number(entry.key);
+      const length = Number(entry.length);
+      const name = entry.name === null ? null : String(entry.name || '');
+      if (
+        !Number.isInteger(key) || key < 0 || key > 0xffff
+        || !Number.isInteger(length) || length < 0 || length > 0xffff
+        || (name !== null && !/^[a-z0-9-]{1,63}$/u.test(name))
+      ) {
+        invalidOpaque = true;
+        break;
+      }
+      opaque.push({ key, name, length });
+    }
+
+    if (
+      record.type !== 'HTTPS'
+      || !owner
+      || (record.serviceUnavailable !== true && !target)
+      || ttl === null
+      || !Number.isInteger(priority) || priority < 0 || priority > 0xffff
+      || (mode !== 'alias' && mode !== 'service')
+      || mode !== (priority === 0 ? 'alias' : 'service')
+      || typeof record.targetIsOwner !== 'boolean'
+      || typeof record.serviceUnavailable !== 'boolean'
+      || typeof record.compatible !== 'boolean'
+      || typeof record.parametersIgnored !== 'boolean'
+      || !mandatory || !alpn || !ipv4hint || !ipv6hint || !unknownKeys || !unsupportedMandatoryKeys
+      || invalidOpaque
+      || typeof parameters.noDefaultAlpn !== 'boolean'
+      || (port !== null && (!Number.isInteger(port) || port < 0 || port > 0xffff))
+    ) {
+      discarded += 1;
+      continue;
+    }
+
+    records.push({
+      type: 'HTTPS',
+      owner,
+      ttl,
+      priority,
+      mode,
+      target,
+      targetIsOwner: record.targetIsOwner,
+      serviceUnavailable: record.serviceUnavailable,
+      compatible: record.compatible,
+      parametersIgnored: record.parametersIgnored,
+      parameters: {
+        mandatory,
+        alpn,
+        noDefaultAlpn: parameters.noDefaultAlpn,
+        port,
+        ipv4hint,
+        ipv6hint,
+        opaque,
+        unknownKeys,
+        unsupportedMandatoryKeys,
+      },
+    });
+  }
+
+  const unique = new Map(records.map((record) => [JSON.stringify(record), record]));
+  return {
+    records: [...unique.values()].sort((left, right) => (
+      left.priority - right.priority
+      || left.owner.localeCompare(right.owner)
+      || String(left.target).localeCompare(String(right.target))
+      || left.ttl - right.ttl
+    )),
+    truncated,
+    discarded,
+  };
+}
+
 function normalizePtr(records: unknown): NormalizedRecords<string> {
   const normalized = normalizeHostnames(records);
   return {
@@ -277,7 +457,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
   const now = options.now || Date.now;
   const started = now();
   const invoke = (name: string, fallback: DnsResolver, value = domain) => () => (resolvers[name] || fallback)(value);
-  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, soa] = await Promise.all([
+  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, soa, https] = await Promise.all([
     query(invoke('resolve4', dns.resolve4), (records) => normalizeAddresses(records, 4), timeoutMs),
     query(invoke('resolve6', dns.resolve6), (records) => normalizeAddresses(records, 6), timeoutMs),
     query(invoke('resolveCname', dns.resolveCname), normalizeHostnames, timeoutMs),
@@ -289,8 +469,22 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     includeExtendedContext
       ? query(invoke('resolveSoa', dns.resolveSoa), normalizeSoa, timeoutMs)
       : Promise.resolve(null),
+    includeExtendedContext
+      ? query(
+          invoke(
+            'resolveHttps',
+            (value) => resolveServiceBindingRecords(value, 'HTTPS', { timeoutMs }),
+          ),
+          normalizeServiceBindings,
+          timeoutMs,
+        )
+      : Promise.resolve(null),
   ]);
-  const queries = { a, aaaa, cname, ns, mx, spf, dmarc, caa, ...(soa ? { soa } : {}) };
+  const queries = {
+    a, aaaa, cname, ns, mx, spf, dmarc, caa,
+    ...(soa ? { soa } : {}),
+    ...(https ? { https } : {}),
+  };
   const values = Object.values(queries);
   const errorCount = values.filter((item) => item.status === 'error').length;
   const truncated = values.some((item) => item.truncated);
@@ -312,6 +506,10 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
       'CNAME targets are not followed recursively, and shared DNS infrastructure does not prove common ownership.',
       'Only SPF and DMARC policy TXT records are retained; unrelated TXT records are discarded.',
       ...(soa ? ['SOA publication is operator context and does not prove hosting control, ownership, intent, or maliciousness.'] : []),
+      ...(https ? [
+        'HTTPS service-binding records are published connection hints. WHOISleuth does not follow their aliases or connect to their targets, ports, or address hints.',
+        'SVCB uses protocol-specific underscored query names. The domain lookup therefore queries the HTTPS-compatible record only; the shared resolver supports SVCB for explicit future service queries.',
+      ] : []),
     ],
     diagnostics: Object.fromEntries(Object.entries(queries).map(([name, item]) => [name, {
       status: item.status,
@@ -330,6 +528,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
       dmarc: dmarc.records,
       caa: caa.records,
       ...(soa ? { soa: soa.records } : {}),
+      ...(https ? { https: https.records } : {}),
     },
     hasMx: classifiedMx ? classifiedMx.hasMx : null,
     hasNullMx: classifiedMx ? classifiedMx.hasNullMx : null,
@@ -419,5 +618,6 @@ export {
   normalizeTxtPolicies,
   normalizeCaa,
   normalizeSoa,
+  normalizeServiceBindings,
   normalizePtr,
 };

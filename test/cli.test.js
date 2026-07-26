@@ -269,6 +269,15 @@ test('terminal deep lookup summarizes current website evidence without exposing 
           },
           { name: `Example Edge\n${'x'.repeat(500)}`, category: 'delivery platform', confidence: 'medium' },
         ],
+        browserLibraryProfile: {
+          profileVersion: 1,
+          source: 'derived',
+          status: 'success',
+          findings: [
+            { name: 'fixture library', apparentVersion: '1.2.3', advisoryCount: 1 },
+            { name: 'fixture helper', apparentVersion: '2.0.0', advisoryCount: 0 },
+          ],
+        },
       },
       securityPosture: {
         source: 'derived',
@@ -296,6 +305,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /TLS protocol\s+TLSv1\.3/);
   assert.match(terminal, /Technology\s+Success · 2 indicators/);
   assert.match(terminal, /Example Commerce \(commerce platform, high\)/);
+  assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
   assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
   assert.doesNotMatch(terminal, /private-marker|private-posture-detail/);

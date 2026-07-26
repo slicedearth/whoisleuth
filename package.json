@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
@@ -10,6 +10,7 @@
     "lib/**/*.mts",
     "docs/cli.md",
     "LICENSE",
+    "LICENSES/Retire.js-Apache-2.0.txt",
     "NOTICE",
     "frontend/static/third-party-notices.txt",
     "TRADEMARKS.md"
@@ -39,7 +40,8 @@
     "release:check": "node tools/release-version-check.mts",
     "licenses:check": "node tools/third-party-notices.mts --check",
     "licenses:update": "node tools/third-party-notices.mts --write",
-    "security:codeql": "node tools/local-codeql.mts"
+    "security:codeql": "node tools/local-codeql.mts",
+    "security:retire": "retire --path frontend/build --severity high --outputformat text"
   },
   "engines": {
     "node": ">=24"
@@ -47,6 +49,7 @@
   "dependencies": {
     "@netlify/blobs": "10.1.0",
     "express": "^5.2.1",
+    "parse5": "^8.0.1",
     "tldts": "^7.4.8",
     "undici": "^7.28.0"
   },
@@ -54,6 +57,8 @@
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.0",
+    "fast-check": "^4.9.0",
+    "retire": "^5.4.3",
     "typescript": "^6.0.3"
   }
 }

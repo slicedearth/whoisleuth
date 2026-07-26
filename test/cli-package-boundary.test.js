@@ -11,6 +11,7 @@ const EXPECTED_PACKAGE_FILES = [
   'lib/**/*.mts',
   'docs/cli.md',
   'LICENSE',
+  'LICENSES/Retire.js-Apache-2.0.txt',
   'NOTICE',
   'frontend/static/third-party-notices.txt',
   'TRADEMARKS.md',

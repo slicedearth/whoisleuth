@@ -135,13 +135,22 @@ default (see the README), so many lookups return no personal data at all.
   discarded. Full Lookup and deliberate exports can contain these point-in-time
   records, while watchlists and analyst cases keep only their existing compact
   mail and nameserver fields. Deep non-compact domain Lookup can add one SOA
-  query and retain its bounded zone-maintenance fields. A deep non-compact
+  query and retain its bounded zone-maintenance fields. It can also send one
+  HTTPS resource-record query through up to three validated literal addresses
+  from the deployment's configured DNS resolvers. The result retains bounded
+  service priority, mode, effective target, TTL, ALPN identifiers, port,
+  address hints, mandatory keys, and the names and lengths of other recognized
+  parameters. Opaque parameter values are discarded. WHOISleuth does not
+  follow service-binding aliases or connect to published targets, ports, or
+  address hints, and it does not disclose the query to a new third-party DNS
+  service. A deep non-compact
   Lookup of a public IP address can add one PTR query and retain up to eight
   normalized reverse-DNS names as a separately attributed source. Fast,
   compact, Bulk, monitoring, private/special-purpose IP, and availability/Risk
   paths do not run the PTR query. These requests use the deployment's DNS
-  resolver. PTR and SOA publications are public point-in-time context and do
-  not prove ownership, hosting control, intent, or safety.
+  resolver. PTR, SOA, and HTTPS service-binding publications are public
+  point-in-time context and do not prove ownership, hosting control, intent,
+  or safety.
 - **HTTP intelligence**: Lookup can display the bounded final URL, redirect
   provenance, selected response/header metadata, and response-body fingerprint
   collected by a requested deep check. Bulk results, watchlists, and analyst
@@ -271,11 +280,20 @@ default (see the README), so many lookups return no personal data at all.
   normalized resource origins, and capped static HTML already collected for
   the page-identity analysis. The profile retains only curated technology
   names, categories, confidence levels, evidence classes, and fixed
-  explanations. It does not retain matched markup, arbitrary header values,
-  URL paths, or signature input. This analysis makes no additional request,
-  changes no availability or Risk result, and is not copied into compact
-  browser-local cases, watchlists, profiles, or Bulk results. An unmatched
-  signature is not evidence that a technology is absent.
+  explanations. A nested browser-library profile can also match up to 64
+  observed script elements and 65,536 cumulative inline-script characters
+  against a pinned local Retire.js catalogue. It retains only the apparent
+  component and version, detection method, bounded advisory identifiers,
+  weakness classes, severity, catalogue version, source health, and fixed
+  limitations. Referenced scripts are not fetched or executed, and script
+  references, paths, queries, matched inline content, and hashes are not
+  retained. An advisory match does not establish reachability or
+  exploitability. The technology profile does not retain matched markup,
+  arbitrary header values, URL paths, or signature input. This analysis makes
+  no additional request, changes no availability or Risk result, and is not
+  copied into compact browser-local cases, watchlists, profiles, or Bulk
+  results. An unmatched signature is not evidence that a technology or
+  browser library is absent.
 - **Passive security posture**: a requested deep Lookup can interpret the
   existing HTTP response, bounded static form and resource summaries, one TLS
   handshake, DNSSEC publication, and CAA query as a separate versioned posture

@@ -76,6 +76,7 @@ function formatTerminalLookup(document: TerminalRecord): string {
     const httpResponse = terminalRecord(http.response);
     const tls = terminalRecord(availability.tls);
     const technology = terminalRecord(availability.technologyProfile);
+    const browserLibraries = terminalRecord(technology.browserLibraryProfile);
     const posture = terminalRecord(availability.securityPosture);
     const postureSummary = terminalRecord(posture.summary);
 
@@ -105,6 +106,14 @@ function formatTerminalLookup(document: TerminalRecord): string {
       if (visible.length) {
         const omitted = findings.length - visible.length;
         lines.push(`Indicators     ${safeTerminalValue(`${visible.join('; ')}${omitted > 0 ? `; +${omitted} more` : ''}`)}`);
+      }
+      if (browserLibraries.profileVersion === 1 || browserLibraries.source === 'derived') {
+        const libraries = Array.isArray(browserLibraries.findings) ? browserLibraries.findings : [];
+        const advisoryMatches = libraries.filter((finding: unknown) => terminalCount(terminalRecord(finding).advisoryCount) > 0).length;
+        lines.push(
+          `JS libraries   ${titleCase(browserLibraries.status)} · ${libraries.length} apparent · `
+          + `${advisoryMatches} with catalogue advisory match${advisoryMatches === 1 ? '' : 'es'}`,
+        );
       }
     }
     if (posture.status || posture.source === 'derived') {

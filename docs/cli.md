@@ -114,13 +114,16 @@ host, hosting control, ownership, intent, or maliciousness. Fast and compact
 commands do not run the enrichment.
 
 The deep terminal summary also reports the website activity state, page title,
-DNS, HTTP, and TLS source states, up to six bounded technology indicators, and
-the four passive security-posture counts. These are concise projections of the
-same evidence already present in the lookup response. They make no extra
-request, omit raw evidence descriptions, and do not turn a technology match or
-missing posture signal into a vulnerability, hosting-control, ownership, or
-maliciousness claim. Use `--json` when the full bounded evidence, limitations,
-and source diagnostics are required.
+DNS, HTTP, and TLS source states, up to six bounded technology indicators, a
+browser-library profile count, and the four passive security-posture counts.
+These are concise projections of the same evidence already present in the
+lookup response. The browser-library line counts apparent components and
+catalogue advisory matches without retaining script references or raw
+signatures. These summaries make no extra request, omit raw evidence
+descriptions, and do not turn a technology or advisory match, or a missing
+posture signal, into proof of exploitability, hosting control, ownership, or
+maliciousness. Use `--json` when the full bounded evidence, limitations, and
+source diagnostics are required.
 
 When diagnostics version 5, 6, 7, or 8 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
@@ -378,12 +381,14 @@ source-status, parsed-data, scalar, list, and event boundaries as `compare`.
 The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
 and the shared registry-source comparison. Registrar RDAP raw data, contacts,
-entities, links, notices, and source-specific handles remain excluded; schema
-version 16 retains that normalized portable-field comparison, explicit
+entities, links, notices, and source-specific handles remain excluded. Schema
+version 17 retains that normalized portable-field comparison, explicit
 source-health states, a strict bounded projection of observed network
-registration, and an optional normalized security.txt disclosure source when
-the saved deep lookup represents them. Raw IP RDAP payloads, security.txt
-response bodies, and contact entities remain excluded.
+registration, an optional normalized security.txt disclosure source, HTTPS
+service-binding publications, and the passive browser-library profile when the
+saved deep lookup represents them. Raw IP RDAP payloads, security.txt response
+bodies, script references, matched script content, and contact entities remain
+excluded.
 
 Markdown output summarizes query context, assessment state, registry sources,
 source reconciliation, network observations, and collection diagnostics. It

@@ -31,8 +31,12 @@ full successful response contains:
   its IP RDAP network registration.
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
-  curated software and delivery indicators. Profile version 2 broadens
-  commerce and content-delivery coverage without making another request.
+  curated software and delivery indicators. Profile version 3 uses
+  standards-compliant bounded HTML parsing and adds a nested version-1
+  browser-library profile derived from a pinned Retire.js catalogue. It
+  retains only apparent component versions, detection classes, and bounded
+  advisory context without fetching referenced scripts or making another
+  request.
 - `securityTxt`: only when explicitly selected for a deep single-domain
   request, a bounded normalized disclosure file for the exact submitted
   hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.
@@ -81,8 +85,10 @@ Deep registered-domain assessments additionally expose a bounded
 SPF, DMARC, and CAA queries in parallel, reusing the existing mail-policy
 queries rather than running a second mail scan. Deep non-compact Lookup adds
 one SOA query to retain the bounded primary nameserver, responsible mailbox,
-serial, refresh, retry, expiry, and minimum-TTL values. Compact Bulk keeps the
-existing eight-query profile. Each record family has an independent
+serial, refresh, retry, expiry, and minimum-TTL values. It also adds one HTTPS
+resource-record query through the deployment's configured recursive DNS
+servers and retains up to sixteen normalized service-binding publications.
+Compact Bulk keeps the existing eight-query profile. Each record family has an independent
 `success`/`not_found`/`error` diagnostic, malformed neighbours are counted and
 discarded, and capped inventories set their truncation flag.
 Resolver failure produces `null` for the compatible `hasMx`, `hasSpf`, or
@@ -97,12 +103,24 @@ and deliberate evidence exports retain the bounded observation. Compact Bulk
 responses may display or export it, but watchlists and analyst cases continue
 to store only their existing compact compatibility fields.
 
-HTTPS and SVCB service-binding records were evaluated for this increment. The
-documented Node.js 24 resolver interface used by the shared runtime does not
-expose those record families. WHOISleuth therefore does not add an undocumented
-runtime call, raw DNS packet implementation, new dependency, or third-party
-resolver disclosure. They remain deferred until the runtime exposes a
-documented bounded resolver path.
+Node.js 24 does not expose HTTPS or SVCB through its documented high-level DNS
+resolver API, so WHOISleuth implements the small required DNS wire boundary
+in-house. It sends a type-65 HTTPS query to at most three validated literal
+addresses from the deployment's system resolver configuration, validates the
+transaction, question, response bounds, record ordering, and parameter
+encoding, and uses TCP only when that same resolver returns a truncated UDP
+answer. No third-party DNS service is introduced. The domain Lookup does not
+send a generic SVCB query because SVCB requires a protocol-specific query name;
+the shared parser supports type 64 for future explicit service queries.
+
+HTTPS service-binding evidence retains priority, alias/service mode, effective
+target, TTL, ALPN identifiers, port, address hints, mandatory keys, and only
+the names and byte lengths of other recognized parameters. Opaque values such
+as ECH configuration are discarded. WHOISleuth does not follow AliasMode
+targets or connect to published targets, ports, or address hints. Unsupported
+mandatory keys make a record explicitly incompatible with this parser, and
+AliasMode `.` remains an advisory service-unavailable publication rather than
+an availability or safety conclusion.
 
 Deep non-compact Lookup of a directly entered public IPv4 or IPv6 address can
 also expose a separately attributed version-1 `reverseDns` observation. It
@@ -516,10 +534,16 @@ inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `16`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `17`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 16 can add the normalized, bounded security.txt
+registry comparison. Version 17 adds the bounded HTTPS service-binding
+publication to eligible deep DNS evidence and the nested passive
+browser-library profile to eligible technology evidence. The service-binding
+projection excludes opaque parameter values and does not follow or connect to
+published targets. The browser-library projection excludes script references,
+matched content, and hashes and does not prove reachability or exploitability.
+Version 16 can add the normalized, bounded security.txt
 disclosure-contact result when that optional deep action was selected and the
 strict reverse-DNS projection when deep public-IP Lookup represented it; raw
 resolver answers and file text are never included. Version 15 added a strict, bounded projection of
@@ -571,7 +595,7 @@ payloads, WHOIS response bodies, expanded contacts, scripts, and remote assets
 before formatting. IP and ASN results do not offer this first readable format.
 Their separate JSON evidence action, and the domain JSON action, retain the
 richer schema contract described above.
-When schema-version 16 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -579,7 +603,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema version 16 can also retain the bounded normalized security.txt source
+Schema version 17 can also retain the bounded normalized security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorization, availability, or Risk signal.
 

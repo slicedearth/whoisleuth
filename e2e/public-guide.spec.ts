@@ -41,7 +41,9 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.tool-guide article')).toHaveCount(5);
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
   await expect(page.locator('.state-grid article')).toHaveCount(9);
-  await expect(page.locator('.glossary-grid > div')).toHaveCount(43);
+  await expect(page.locator('.glossary-grid > div')).toHaveCount(45);
+  await expect(page.locator('.glossary-grid').getByText('Browser-library advisory match', { exact: true })).toBeVisible();
+  await expect(page.locator('.glossary-grid').getByText('HTTPS service binding', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('PTR', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('SOA', { exact: true })).toBeVisible();
   await expect(page.locator('.faq-list details')).toHaveCount(18);

@@ -58,8 +58,9 @@ investigation data.
 Lookup accepts one domain, IPv4 or IPv6 address, or ASN. A domain Lookup keeps
 registry, registrar, WHOIS, DNS, HTTP, TLS, page, network, and optional provider
 evidence separately attributed. Deep domain Lookup can add the zone's bounded
-SOA publication. Deep public-IP Lookup can add separately attributed PTR names.
-Neither source decides domain availability, Risk, ownership, or hosting control.
+SOA publication and HTTPS service-binding records published for the origin.
+Deep public-IP Lookup can add separately attributed PTR names. None of these
+sources decides domain availability, Risk, ownership, or hosting control.
 
 The primary assessment, source health, and material registration conflicts
 remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
@@ -233,7 +234,7 @@ Fast and Deep are collection profiles, not confidence ratings.
 | Profile | Intended use | Collection boundary |
 | --- | --- | --- |
 | **Fast Lookup or Bulk** | Lower-request registration-first triage. | Uses RDAP-led registration analysis and a bounded authoritative DNS-delegation fallback where needed. WHOIS, website, TLS, and Deep enrichments are skipped explicitly. |
-| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context, public-IP PTR context, HTTP, favicon, page identity, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
+| **Deep single Lookup** | Complete review of one important target. | Can add WHOIS, registrar RDAP, DNS with SOA zone context and HTTPS service-binding publications, public-IP PTR context, HTTP, favicon, page identity, TLS, technology, passive posture, observed IP network context, and explicitly selected optional sources. |
 | **Deep Bulk** | Richer comparison across a bounded candidate set. | Uses a compact response with WHOIS, DNS, website, TLS, and mail context needed for triage. Full raw sources and single-Lookup-only enrichments remain omitted. |
 
 Deep single Lookup is the default in the Lookup page. Bulk keeps its own
@@ -282,13 +283,19 @@ Deep single Lookup can derive several views from one bounded homepage response:
 - static page identity, forms, external origins, public tracking identifiers,
   and bounded fingerprints;
 - curated technology indicators for common content, commerce, site-building,
-  framework, server, and delivery products; and
+  framework, server, and delivery products;
+- apparent browser-library versions and bounded advisory references inferred
+  from script names, versions, hashes, or capped inline signatures that were
+  already present in the captured page; and
 - passive security-posture findings from already-collected HTTP, page, TLS,
   DNSSEC, and CAA evidence.
 
 Technology indicators are evidence-backed clues, not a complete software
 inventory. Static collection does not execute JavaScript, and sites can conceal
-or remove distinctive indicators.
+or remove distinctive indicators. WHOISleuth does not fetch referenced scripts.
+A browser-library advisory match is a lead for review, not proof that the
+component is loaded, reachable, vulnerable in context, or exploitable. A
+non-match does not establish that no vulnerable component exists.
 
 Observed network context maps one public endpoint address to its registered IP
 network. A delivery network, proxy, shared host, load balancer, or
