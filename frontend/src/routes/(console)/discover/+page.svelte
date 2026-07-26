@@ -26,7 +26,7 @@
   } from '$lib/analysis/typosquat-generator.ts';
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
-  import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.js';
+  import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.ts';
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';

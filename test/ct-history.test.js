@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 let history;
 before(async () => {
-  history = await import('../frontend/src/lib/analysis/ct-history.js');
+  history = await import('../frontend/src/lib/analysis/ct-history.ts');
 });
 
 const FIRST = '2026-07-01T00:00:00.000Z';

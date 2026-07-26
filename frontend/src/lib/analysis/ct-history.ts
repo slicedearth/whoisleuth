@@ -15,30 +15,60 @@ export const MAX_CT_HISTORY_STORE_BYTES = 1024 * 1024;
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 
-/** @param {unknown} value */
-export function normalizeCtHistoryQuery(value) {
+export type CtHistoryEvent = {
+  checkedAt: string;
+  resultCount: number;
+  certificateCount: number;
+  newCount: number;
+  newDomains: string[];
+  truncated: boolean;
+};
+
+export type CtHistoryEntry = {
+  query: string;
+  baselineAt: string | null;
+  updatedAt: string;
+  domains: string[];
+  history: CtHistoryEvent[];
+};
+
+export type CtHistoryStore = {
+  version: typeof CT_HISTORY_SCHEMA_VERSION;
+  entries: CtHistoryEntry[];
+};
+
+export type RecordCtHistoryOptions = {
+  checkedAt?: unknown;
+  certificateCount?: unknown;
+  truncated?: unknown;
+};
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function normalizeCtHistoryQuery(value: unknown): string {
   if (typeof value !== 'string' || value.length > MAX_CT_HISTORY_QUERY_LENGTH || CONTROL_RE.test(value)) return '';
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-/** @param {unknown} value @returns {string | null} */
-function normalizeTimestamp(value) {
+function normalizeTimestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-/** @param {unknown} value @param {number} maximum @returns {number} */
-function normalizeCount(value, maximum = Number.MAX_SAFE_INTEGER) {
+function normalizeCount(value: unknown, maximum: number = Number.MAX_SAFE_INTEGER): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
     ? Math.min(Math.floor(value), maximum)
     : 0;
 }
 
-/** @param {unknown} values @param {number} limit */
-function normalizeDomains(values, limit) {
+function normalizeDomains(values: unknown, limit: number): string[] {
   if (!Array.isArray(values)) return [];
-  const domains = new Set();
+  const domains = new Set<string>();
   for (const value of values.slice(0, limit * 4)) {
     const domain = normalizeDomain(value);
     if (domain) domains.add(domain);
@@ -47,10 +77,9 @@ function normalizeDomains(values, limit) {
   return [...domains].sort();
 }
 
-/** @param {unknown} raw @returns {{ checkedAt: string, resultCount: number, certificateCount: number, newCount: number, newDomains: string[], truncated: boolean } | null} */
-function normalizeEvent(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const event = /** @type {Record<string, unknown>} */ (raw);
+function normalizeEvent(raw: unknown): CtHistoryEvent | null {
+  const event = plainRecord(raw);
+  if (!event) return null;
   const checkedAt = normalizeTimestamp(event.checkedAt);
   if (!checkedAt) return null;
   const newDomains = normalizeDomains(event.newDomains, MAX_CT_HISTORY_NEW_DOMAINS);
@@ -64,10 +93,9 @@ function normalizeEvent(raw) {
   };
 }
 
-/** @param {unknown} raw */
-function normalizeEntry(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const entry = /** @type {Record<string, unknown>} */ (raw);
+function normalizeEntry(raw: unknown): CtHistoryEntry | null {
+  const entry = plainRecord(raw);
+  if (!entry) return null;
   const query = normalizeCtHistoryQuery(entry.query);
   if (!query) return null;
   const baselineAt = normalizeTimestamp(entry.baselineAt);
@@ -86,10 +114,10 @@ function normalizeEntry(raw) {
  * the most recently updated entry.
  * @param {unknown} raw
  */
-export function normalizeCtHistoryStore(raw) {
-  const value = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+export function normalizeCtHistoryStore(raw: unknown): CtHistoryStore {
+  const value = plainRecord(raw) || {};
   const entries = Array.isArray(value.entries) ? value.entries.slice(0, MAX_CT_HISTORY_SEARCHES * 4) : [];
-  const byQuery = new Map();
+  const byQuery = new Map<string, CtHistoryEntry>();
   for (const candidate of entries) {
     const entry = normalizeEntry(candidate);
     if (!entry) continue;
@@ -104,7 +132,7 @@ export function normalizeCtHistoryStore(raw) {
   };
 }
 
-function serializedBytes(store) {
+function serializedBytes(store: CtHistoryStore): number {
   return new TextEncoder().encode(JSON.stringify(store)).length;
 }
 
@@ -116,7 +144,7 @@ function serializedBytes(store) {
  * searches. Current baselines are the last data discarded.
  * @param {unknown} rawStore
  */
-export function enforceCtHistoryBudget(rawStore) {
+export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
   const store = normalizeCtHistoryStore(rawStore);
   while (serializedBytes(store) > MAX_CT_HISTORY_STORE_BYTES) {
     let changed = false;
@@ -149,15 +177,14 @@ export function enforceCtHistoryBudget(rawStore) {
   return store;
 }
 
-/** @param {unknown} raw @returns {number | null} */
-export function ctHistoryStoreVersion(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const version = /** @type {Record<string, unknown>} */ (raw).version;
+export function ctHistoryStoreVersion(raw: unknown): number | null {
+  const value = plainRecord(raw);
+  if (!value) return null;
+  const version = value.version;
   return typeof version === 'number' && Number.isInteger(version) && version > 0 ? version : null;
 }
 
-/** @param {unknown} store @param {unknown} query */
-export function findCtHistoryEntry(store, query) {
+export function findCtHistoryEntry(store: unknown, query: unknown): CtHistoryEntry | null {
   const key = normalizeCtHistoryQuery(query);
   if (!key) return null;
   return normalizeCtHistoryStore(store).entries.find((entry) => entry.query === key) || null;
@@ -169,12 +196,13 @@ export function findCtHistoryEntry(store, query) {
  * baseline without labelling every result as new. A truncated search is
  * retained in the check history but never replaces the last complete baseline.
  *
- * @param {unknown} rawStore
- * @param {unknown} rawQuery
- * @param {unknown} rawDomains
- * @param {{ checkedAt?: string, certificateCount?: number, truncated?: boolean }} [options]
  */
-export function recordCtHistorySearch(rawStore, rawQuery, rawDomains, options = {}) {
+export function recordCtHistorySearch(
+  rawStore: unknown,
+  rawQuery: unknown,
+  rawDomains: unknown,
+  options: RecordCtHistoryOptions = {},
+) {
   const query = normalizeCtHistoryQuery(rawQuery);
   if (!query) throw new Error('A valid Certificate Transparency search query is required.');
   const checkedAt = normalizeTimestamp(options.checkedAt || new Date().toISOString());
@@ -184,7 +212,7 @@ export function recordCtHistorySearch(rawStore, rawQuery, rawDomains, options = 
   const currentDomains = normalizeDomains(rawDomains, MAX_CT_HISTORY_DOMAINS);
   const existing = store.entries.find((entry) => entry.query === query) || null;
   const hasBaseline = Boolean(existing?.baselineAt);
-  const previousDomains = new Set(hasBaseline ? existing.domains : []);
+  const previousDomains = new Set(existing?.baselineAt ? existing.domains : []);
   const allNewDomains = hasBaseline ? currentDomains.filter((domain) => !previousDomains.has(domain)) : [];
   const truncated = options.truncated === true;
   const event = {
@@ -221,13 +249,12 @@ export function recordCtHistorySearch(rawStore, rawQuery, rawDomains, options = 
   };
 }
 
-/** @param {unknown} rawStore @param {unknown} rawQuery */
-export function deleteCtHistoryEntry(rawStore, rawQuery) {
+export function deleteCtHistoryEntry(rawStore: unknown, rawQuery: unknown): CtHistoryStore {
   const query = normalizeCtHistoryQuery(rawQuery);
   const store = normalizeCtHistoryStore(rawStore);
   return { version: CT_HISTORY_SCHEMA_VERSION, entries: store.entries.filter((entry) => entry.query !== query) };
 }
 
-export function emptyCtHistoryStore() {
+export function emptyCtHistoryStore(): CtHistoryStore {
   return { version: CT_HISTORY_SCHEMA_VERSION, entries: [] };
 }

@@ -3,7 +3,7 @@ import {
   emptyCtHistoryStore,
   enforceCtHistoryBudget,
   recordCtHistorySearch,
-} from './analysis/ct-history.js';
+} from './analysis/ct-history.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.js';
 import { CT_HISTORY_COLLECTION, LEGACY_CT_HISTORY_KEY } from './browser-local-data-definitions.js';
 

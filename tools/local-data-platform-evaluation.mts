@@ -13,7 +13,7 @@ import {
 } from '../frontend/src/lib/analysis/case-model.js';
 import {
   MAX_CT_HISTORY_STORE_BYTES,
-} from '../frontend/src/lib/analysis/ct-history.js';
+} from '../frontend/src/lib/analysis/ct-history.ts';
 import {
   MAX_RULE_STORE_BYTES,
 } from '../frontend/src/lib/analysis/detection-rule-model.js';

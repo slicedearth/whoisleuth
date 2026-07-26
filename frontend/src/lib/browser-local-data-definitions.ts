@@ -46,7 +46,7 @@ import {
   emptyCtHistoryStore,
   enforceCtHistoryBudget,
   normalizeCtHistoryStore,
-} from './analysis/ct-history.js';
+} from './analysis/ct-history.ts';
 import {
   DETECTION_RULE_SCHEMA_VERSION,
   MAX_DETECTION_RULES,

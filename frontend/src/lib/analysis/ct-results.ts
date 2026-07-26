@@ -35,13 +35,37 @@ export const MAX_CT_SOURCE_LENGTH = 253; // same bound the handoff enforces on s
 export const MAX_CT_INPUT_MATCHES = 2000;
 export const MAX_CT_INPUT_HOSTNAMES = 500;
 
+export type CtProvenance = {
+  hostnames: string[];
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+  certificateCount: number;
+};
+
+export type CtCandidate = {
+  domain: string;
+  source: string;
+  mutationTypes: string[];
+  certificateTransparency: CtProvenance | null;
+};
+
+export type CtNormalizationResult = {
+  candidates: CtCandidate[];
+  certCount: number;
+  truncated: boolean;
+};
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
 /**
  * A canonical, bounded certificate-count. Accepts only finite non-negative
  * numbers, floors and clamps them; anything else becomes 0.
- * @param {unknown} value
- * @returns {number}
  */
-function normalizeCount(value) {
+function normalizeCount(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 0;
   return Math.min(Math.floor(value), MAX_CT_CERTIFICATE_COUNT);
 }
@@ -52,10 +76,8 @@ function normalizeCount(value) {
  * canonicalised to an ISO-8601 string so ordering and de-duplication are
  * deterministic. CT observation timestamps are public-log provenance - they do
  * not prove registration, site activation, exact issuance time, or abuse.
- * @param {unknown} value
- * @returns {string | null}
  */
-function normalizeTimestamp(value) {
+function normalizeTimestamp(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   if (value.length === 0 || value.length > MAX_CT_TIMESTAMP_LENGTH) return null;
   if (/[\x00-\x1f\x7f]/.test(value)) return null;
@@ -71,12 +93,10 @@ function normalizeTimestamp(value) {
  * hostnames. Each hostname is validated with the project's canonical domain
  * normalization (rejecting control characters, whitespace, wildcards, and
  * non-LDH labels) and length-bounded before that.
- * @param {unknown} value
- * @returns {string[]}
  */
-function normalizeHostnames(value) {
+function normalizeHostnames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set();
+  const seen = new Set<string>();
   // Slice first so we iterate at most MAX_CT_INPUT_HOSTNAMES elements even if
   // the untrusted array is enormous.
   const input = value.length > MAX_CT_INPUT_HOSTNAMES ? value.slice(0, MAX_CT_INPUT_HOSTNAMES) : value;
@@ -89,22 +109,18 @@ function normalizeHostnames(value) {
 }
 
 /** The earlier of two ISO timestamps, treating null as "unknown". */
-function earlier(a, b) {
+function earlier(a: string | null, b: string | null): string | null {
   if (a === null) return b;
   if (b === null) return a;
   return a < b ? a : b;
 }
 
 /** The later of two ISO timestamps, treating null as "unknown". */
-function later(a, b) {
+function later(a: string | null, b: string | null): string | null {
   if (a === null) return b;
   if (b === null) return a;
   return a > b ? a : b;
 }
-
-/**
- * @typedef {{ hostnames: string[], firstObservedAt: string | null, lastObservedAt: string | null, certificateCount: number }} CtProvenance
- */
 
 /**
  * Validates an arbitrary value into a bounded CT provenance object, or null.
@@ -113,12 +129,10 @@ function later(a, b) {
  * input is not an object, or when nothing usable survives (so a caller can drop
  * the metadata without dropping an otherwise-valid candidate). Does not mutate
  * the input.
- * @param {unknown} raw
- * @returns {CtProvenance | null}
  */
-export function normalizeCtProvenance(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const record = /** @type {Record<string, unknown>} */ (raw);
+export function normalizeCtProvenance(raw: unknown): CtProvenance | null {
+  const record = plainRecord(raw);
+  if (!record) return null;
   const provenance = {
     hostnames: normalizeHostnames(record.hostnames),
     firstObservedAt: normalizeTimestamp(record.firstObservedAt),
@@ -151,11 +165,11 @@ export function normalizeCtProvenance(raw) {
  * domain: hostnames union (re-bounded), earliest valid first observation,
  * latest valid last observation, and the highest certificate count (never a
  * sum of duplicate representations of the same group).
- * @param {CtProvenance | null} a
- * @param {CtProvenance | null} b
- * @returns {CtProvenance | null}
  */
-export function mergeCtProvenance(a, b) {
+export function mergeCtProvenance(
+  a: CtProvenance | null,
+  b: CtProvenance | null,
+): CtProvenance | null {
   if (!a) return b;
   if (!b) return a;
   return {
@@ -167,7 +181,7 @@ export function mergeCtProvenance(a, b) {
 }
 
 /** Bounded source label; matches the handoff's own source bound. */
-function boundedSource(label) {
+function boundedSource(label: unknown): string {
   return typeof label === 'string' ? label.slice(0, MAX_CT_SOURCE_LENGTH) : '';
 }
 
@@ -175,11 +189,11 @@ function boundedSource(label) {
  * Does a candidate match a free-text filter, searching both its canonical
  * domain and any observed CT hostnames? A pure helper so Discover's filter and
  * the tests share one definition. An empty filter matches everything.
- * @param {{ domain: string, certificateTransparency?: CtProvenance | null }} candidate
- * @param {string} filter
- * @returns {boolean}
  */
-export function ctCandidateMatchesFilter(candidate, filter) {
+export function ctCandidateMatchesFilter(
+  candidate: Pick<CtCandidate, 'domain'> & { certificateTransparency?: CtProvenance | null },
+  filter: unknown,
+): boolean {
   const needle = String(filter == null ? '' : filter).trim().toLowerCase();
   if (!needle) return true;
   if (candidate.domain.includes(needle)) return true;
@@ -193,17 +207,20 @@ export function ctCandidateMatchesFilter(candidate, filter) {
  * malformed optional metadata degrades gracefully. Duplicate domains merge
  * deterministically. Sorted newest-observation first, nulls last, then domain.
  */
-function buildStructuredCandidates(matches, source) {
+function buildStructuredCandidates(
+  matches: unknown[],
+  source: string,
+): { candidates: CtCandidate[]; truncated: boolean } {
   // Slice first so processing is bounded regardless of the untrusted length.
   let truncated = matches.length > MAX_CT_INPUT_MATCHES;
   const input = truncated ? matches.slice(0, MAX_CT_INPUT_MATCHES) : matches;
-  /** @type {Map<string, { domain: string, source: string, mutationTypes: string[], certificateTransparency: CtProvenance | null }>} */
-  const byDomain = new Map();
+  const byDomain = new Map<string, CtCandidate>();
   for (const match of input) {
-    if (!match || typeof match !== 'object') continue;
-    const domain = normalizeDomain(/** @type {Record<string, unknown>} */ (match).domain);
+    const record = plainRecord(match);
+    if (!record) continue;
+    const domain = normalizeDomain(record.domain);
     if (!domain) continue;
-    const rawHostnames = /** @type {Record<string, unknown>} */ (match).hostnames;
+    const rawHostnames = record.hostnames;
     if (Array.isArray(rawHostnames) && rawHostnames.length > MAX_CT_INPUT_HOSTNAMES) truncated = true;
     const provenance = normalizeCtProvenance(match);
     const existing = byDomain.get(domain);
@@ -236,23 +253,16 @@ function buildStructuredCandidates(matches, source) {
 }
 
 /**
- * @typedef {{ candidates: Array<{ domain: string, source: string, mutationTypes: string[], certificateTransparency?: CtProvenance | null }>, certCount: number, truncated: boolean }} CtNormalizationResult
- */
-
-/**
  * Normalizes the entire untrusted CT search response into a bounded, ordered
  * candidate set plus display metadata.
  *
  * `matches` is required and authoritative even when empty. A missing or
  * non-array value is a malformed current response and fails explicitly.
  *
- * @param {unknown} response - the entire CT API response
- * @param {string} sourceLabel - bounded provenance label for each candidate
- * @returns {CtNormalizationResult}
  */
-export function normalizeCtResponse(response, sourceLabel) {
+export function normalizeCtResponse(response: unknown, sourceLabel: unknown): CtNormalizationResult {
   const source = boundedSource(sourceLabel);
-  const res = response && typeof response === 'object' ? /** @type {Record<string, unknown>} */ (response) : {};
+  const res = plainRecord(response) || {};
   const certCount = normalizeCount(res.certCount);
   const truncated = res.truncated === true;
 

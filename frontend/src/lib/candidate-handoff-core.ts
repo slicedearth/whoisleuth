@@ -5,7 +5,8 @@
 // parseHandoff.
 
 import { normalizeDomain } from './analysis/case-model.js';
-import { normalizeCtProvenance } from './analysis/ct-results.js';
+import { normalizeCtProvenance } from './analysis/ct-results.ts';
+import type { CtProvenance } from './analysis/ct-results.ts';
 
 export const HANDOFF_KEY = 'whoisleuth:candidate-handoff:v1';
 export const HANDOFF_VERSION = 1;
@@ -25,12 +26,7 @@ export const HANDOFF_SOURCES = [
 
 export type HandoffSource = typeof HANDOFF_SOURCES[number];
 
-export type CertificateTransparencyProvenance = {
-  hostnames: string[];
-  firstObservedAt: string | null;
-  lastObservedAt: string | null;
-  certificateCount: number;
-};
+export type CertificateTransparencyProvenance = CtProvenance;
 
 export type Candidate = {
   domain: string;
@@ -78,7 +74,7 @@ export function normalizeCandidate(value: unknown): Candidate | null {
     source: String(record?.source || '').slice(0, MAX_SOURCE_LENGTH),
     mutationTypes: [...new Set(rawTypes)],
   };
-  const ct = normalizeCtProvenance(record?.certificateTransparency) as CertificateTransparencyProvenance | null;
+  const ct = normalizeCtProvenance(record?.certificateTransparency);
   if (ct) candidate.certificateTransparency = ct;
   return candidate;
 }

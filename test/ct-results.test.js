@@ -7,7 +7,7 @@ let mergeCtProvenance;
 let ctCandidateMatchesFilter;
 let bounds;
 before(async () => {
-  const mod = await import('../frontend/src/lib/analysis/ct-results.js');
+  const mod = await import('../frontend/src/lib/analysis/ct-results.ts');
   normalizeCtResponse = mod.normalizeCtResponse;
   normalizeCtProvenance = mod.normalizeCtProvenance;
   mergeCtProvenance = mod.mergeCtProvenance;
