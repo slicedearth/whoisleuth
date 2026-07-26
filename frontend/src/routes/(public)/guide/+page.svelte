@@ -61,9 +61,9 @@
         <h3>{tool.name}</h3>
         <dl>
           <div><dt>Use it when</dt><dd>{tool.useWhen}</dd></div>
-          <div><dt>What you provide</dt><dd>{tool.input}</dd></div>
-          <div><dt>What you receive</dt><dd>{tool.result}</dd></div>
-          <div><dt>What to do next</dt><dd>{tool.next}</dd></div>
+          <div id={`tool-${tool.id}-input`}><dt>What you provide</dt><dd>{tool.input}</dd></div>
+          <div id={`tool-${tool.id}-result`}><dt>What you receive</dt><dd>{tool.result}</dd></div>
+          <div id={`tool-${tool.id}-next`}><dt>What to do next</dt><dd>{tool.next}</dd></div>
         </dl>
       </article>
     {/each}

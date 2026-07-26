@@ -31,7 +31,9 @@ function profileFixture() {
 
 function availabilityFixture() {
   return {
+    applicable: true,
     state: 'registered',
+    confidence: 'high',
     domain: 'example.com',
     pageTitle: 'Official account centre',
     faviconHash: 'd'.repeat(64),
@@ -141,7 +143,13 @@ test('an inconclusive recapture preserves the existing form baseline', async ({ 
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(captureCount === 1 ? availabilityFixture() : { state: 'registered', pageIdentity: null }),
+      body: JSON.stringify(captureCount === 1 ? availabilityFixture() : {
+        applicable: true,
+        domain: 'example.com',
+        state: 'registered',
+        confidence: 'high',
+        pageIdentity: null,
+      }),
     });
   });
   await cleanBrandStorage(page);
@@ -150,6 +158,40 @@ test('an inconclusive recapture preserves the existing form baseline', async ({ 
   await page.getByRole('button', { name: 'Update official-site baseline' }).click();
   await expect(page.getByRole('status')).toHaveText(/existing baseline is unchanged/i);
   await expect(page.getByText('Official account centre', { exact: true })).toBeVisible();
+});
+
+test('a malformed successful capture cannot populate or persist identity evidence', async ({ page }) => {
+  await page.route('**/api/availability?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ faviconHash: 'a'.repeat(64) }),
+  }));
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+
+  await page.getByRole('button', { name: 'Capture official-site baseline' }).click();
+  await expect(page.getByRole('status')).toHaveText('Official-site capture returned an invalid response.');
+  await expect(page.getByLabel('Official favicon hash')).toHaveValue('');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+
+  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0].value;
+  expect(persisted.officialFaviconHash).toBe('');
+  expect(persisted.pageBaseline).toBeNull();
+});
+
+test('a malformed successful posture report renders as an explicit audit error', async ({ page }) => {
+  await page.route('**/api/domain-posture?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ summary: 'complete', checks: [] }),
+  }));
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+  await page.getByRole('button', { name: 'Save profile' }).click();
+
+  await page.getByRole('button', { name: 'Audit official domains' }).click();
+  await expect(page.getByRole('status')).toHaveText('Audited 0/1 official domain.');
+  await expect(page.getByText('Official-domain audit returned an invalid response.', { exact: true })).toBeVisible();
 });
 
 test('official-site baseline controls fit a narrow mobile viewport without horizontal overflow', async ({ page }) => {

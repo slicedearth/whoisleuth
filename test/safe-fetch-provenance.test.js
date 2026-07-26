@@ -94,10 +94,26 @@ describe('safe fetch redirect provenance', () => {
       /credentials/
     );
     await assert.rejects(
+      () => safeFetchDetailed('https://example.com:8443/', {}, fixture.dependencies),
+      /non-default port/
+    );
+    await assert.rejects(
       () => safeFetchDetailed(`https://example.com/${'a'.repeat(MAX_SAFE_FETCH_URL_LENGTH)}`, {}, fixture.dependencies),
       /oversized URL/
     );
     assert.equal(fixture.requests.length, 0);
+  });
+
+  test('normalizes explicit default ports before applying the port restriction', async () => {
+    const httpsFixture = fixtureDependencies([new Response('ok', { status: 200 })]);
+    const httpsResult = await safeFetchDetailed('https://example.com:443/', {}, httpsFixture.dependencies);
+    assert.equal(httpsResult.requestedUrl, 'https://example.com/');
+    assert.equal(httpsFixture.requests[0].url, 'https://example.com/');
+
+    const httpFixture = fixtureDependencies([new Response('ok', { status: 200 })]);
+    const httpResult = await safeFetchDetailed('http://example.com:80/', {}, httpFixture.dependencies);
+    assert.equal(httpResult.requestedUrl, 'http://example.com/');
+    assert.equal(httpFixture.requests[0].url, 'http://example.com/');
   });
 
   test('rejects an unsafe redirect target and does not request it', async () => {
@@ -109,6 +125,19 @@ describe('safe fetch redirect provenance', () => {
       /non-HTTP URL/
     );
     assert.equal(fixture.requests.length, 1);
+    assert.equal(fixture.closedDispatchers.length, 1);
+  });
+
+  test('rejects a redirect to a non-default port before resolving or requesting it', async () => {
+    const fixture = fixtureDependencies([
+      new Response('', { status: 302, headers: { location: 'https://cdn.example.net:9443/final' } }),
+    ]);
+    await assert.rejects(
+      () => safeFetchDetailed('https://example.com/', {}, fixture.dependencies),
+      /non-default port/
+    );
+    assert.equal(fixture.requests.length, 1);
+    assert.deepEqual(fixture.resolved, ['example.com']);
     assert.equal(fixture.closedDispatchers.length, 1);
   });
 

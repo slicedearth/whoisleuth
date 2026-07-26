@@ -53,8 +53,7 @@
     background:rgb(var(--panel-rgb) / .72);
   }
   article.featured{
-    grid-row:span 2;
-    justify-content:center;
+    grid-column:1 / -1;
     padding:clamp(24px,4vw,38px);
     border-color:color-mix(in srgb,var(--accent2) 44%,var(--border));
     background:
@@ -72,6 +71,6 @@
   .path-link:hover,.path-link:focus-visible{color:var(--text)}
   @media(max-width:680px){
     .goal-paths{grid-template-columns:1fr}
-    article.featured{grid-row:auto}
+    article.featured{grid-column:auto}
   }
 </style>

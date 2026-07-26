@@ -2,8 +2,11 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  INVALID_COMPACT_LOOKUP_RESPONSE,
+  INVALID_COMPACT_LOOKUP_RESPONSE_MESSAGE,
   INVALID_LOOKUP_RESPONSE,
   INVALID_LOOKUP_RESPONSE_MESSAGE,
+  MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS,
   MAX_LOOKUP_RESPONSE_ERROR_LENGTH,
   MAX_LOOKUP_RESPONSE_HOST_LENGTH,
   MAX_LOOKUP_RESPONSE_QUERY_LENGTH,
@@ -15,6 +18,7 @@ import {
   createLookupViewModel,
   lookupHttpErrorMessage,
   normalizeLookupTiming,
+  parseCompactLookupHttpResponse,
   parseLookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
 
@@ -31,6 +35,24 @@ function response(overrides = {}) {
     diagnostics: {
       rdap: { status: 'success' },
       whois: { status: 'complete' },
+      availability: { status: 'complete' },
+    },
+    ...overrides,
+  };
+}
+
+function compactResponse(overrides = {}) {
+  return {
+    availability: {
+      applicable: true,
+      domain: 'example.test',
+      state: 'registered',
+      confidence: 'high',
+    },
+    diagnostics: {
+      version: 7,
+      rdap: { status: 'success' },
+      whois: { status: 'skipped' },
       availability: { status: 'complete' },
     },
     ...overrides,
@@ -256,5 +278,115 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(message.includes('\n'), false);
     assert.equal(message.length, MAX_LOOKUP_RESPONSE_ERROR_LENGTH);
     assert.equal(lookupHttpErrorMessage({}, 503), 'Lookup failed (503)');
+  });
+});
+
+describe('compact Bulk Lookup HTTP response contract', () => {
+  test('accepts current bounded compact evidence without copying or mutation', () => {
+    const raw = compactResponse({
+      availability: {
+        applicable: true,
+        domain: 'example.test',
+        state: 'unknown',
+        confidence: 'low',
+        deepScanComplete: false,
+        additiveEvidence: { source: 'bounded' },
+      },
+    });
+    const before = structuredClone(raw);
+    const parsed = parseCompactLookupHttpResponse(raw, 'example.test');
+
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.value, raw);
+    assert.deepEqual(raw, before);
+  });
+
+  test('rejects absent, scalar, array, oversized, and future-shaped availability', () => {
+    const oversizedAvailability = compactResponse().availability;
+    for (let index = 0; Object.keys(oversizedAvailability).length <= MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS; index += 1) {
+      oversizedAvailability[`extra${index}`] = index;
+    }
+    const invalid = [
+      null,
+      [],
+      {},
+      compactResponse({ availability: null }),
+      compactResponse({ availability: 'registered' }),
+      compactResponse({ availability: [] }),
+      compactResponse({ availability: {} }),
+      compactResponse({ availability: { applicable: true, domain: 'example.test', state: 'registered' } }),
+      compactResponse({
+        availability: {
+          applicable: false,
+          domain: 'example.test',
+          state: 'registered',
+          confidence: 'high',
+        },
+      }),
+      compactResponse({
+        availability: {
+          applicable: true,
+          domain: 'bad\ndomain',
+          state: 'registered',
+          confidence: 'high',
+        },
+      }),
+      compactResponse({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'future_state',
+          confidence: 'high',
+        },
+      }),
+      compactResponse({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          confidence: 'future_confidence',
+        },
+      }),
+      compactResponse({
+        availability: {
+          applicable: true,
+          domain: 'other.test',
+          state: 'registered',
+          confidence: 'high',
+        },
+      }),
+      compactResponse({
+        availability: {
+          applicable: true,
+          domain: 'not a domain',
+          state: 'registered',
+          confidence: 'high',
+        },
+      }),
+      compactResponse({ availability: oversizedAvailability }),
+      compactResponse({ diagnostics: { ...compactResponse().diagnostics, version: 8 } }),
+      compactResponse({
+        diagnostics: {
+          ...compactResponse().diagnostics,
+          availability: { status: 'future_status' },
+        },
+      }),
+    ];
+
+    for (const value of invalid) {
+      assert.deepEqual(parseCompactLookupHttpResponse(value, 'example.test'), {
+        ok: false,
+        errorCode: INVALID_COMPACT_LOOKUP_RESPONSE,
+        error: INVALID_COMPACT_LOOKUP_RESPONSE_MESSAGE,
+      });
+    }
+  });
+
+  test('accepts a registrable response for a requested subdomain', () => {
+    const parsed = parseCompactLookupHttpResponse(
+      compactResponse(),
+      'portal.example.test',
+    );
+    assert.equal(parsed.ok, true);
   });
 });

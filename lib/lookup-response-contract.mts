@@ -57,6 +57,28 @@ type LookupHttpResponse = JsonObject & {
   readonly threatIntelligence?: JsonObject;
 };
 
+type CompactLookupAvailabilityState =
+  | 'available'
+  | 'expiring'
+  | 'for_sale'
+  | 'registered'
+  | 'unknown';
+type CompactLookupConfidence = 'high' | 'low' | 'medium';
+type CompactLookupHttpResponse = JsonObject & {
+  readonly availability: JsonObject & {
+    readonly applicable: true;
+    readonly domain: string;
+    readonly state: CompactLookupAvailabilityState;
+    readonly confidence: CompactLookupConfidence;
+  };
+  readonly diagnostics: JsonObject & {
+    readonly version: 7;
+    readonly rdap: JsonObject;
+    readonly whois: JsonObject;
+    readonly availability: JsonObject;
+  };
+};
+
 type LookupViewModel = {
   readonly availability: JsonObject;
   readonly rdap: JsonObject;
@@ -111,18 +133,39 @@ type LookupViewModel = {
 type LookupResponseParseResult =
   | { readonly ok: true; readonly value: LookupHttpResponse }
   | { readonly ok: false; readonly errorCode: typeof INVALID_LOOKUP_RESPONSE; readonly error: string };
+type CompactLookupResponseParseResult =
+  | { readonly ok: true; readonly value: CompactLookupHttpResponse }
+  | {
+      readonly ok: false;
+      readonly errorCode: typeof INVALID_COMPACT_LOOKUP_RESPONSE;
+      readonly error: string;
+    };
 
 const INVALID_LOOKUP_RESPONSE = 'INVALID_LOOKUP_RESPONSE';
 const INVALID_LOOKUP_RESPONSE_MESSAGE = 'Lookup returned an invalid response.';
+const INVALID_COMPACT_LOOKUP_RESPONSE = 'INVALID_COMPACT_LOOKUP_RESPONSE';
+const INVALID_COMPACT_LOOKUP_RESPONSE_MESSAGE = 'Bulk lookup returned an invalid response.';
 const MAX_LOOKUP_RESPONSE_QUERY_LENGTH = 4096;
 const MAX_LOOKUP_RESPONSE_HOST_LENGTH = 253;
 const MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 32;
 const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
+const MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 4;
+const MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS = 128;
+const MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS = 16;
 const MAX_THREAT_INTELLIGENCE_PROVIDERS = 10;
 const MAX_LOOKUP_TIMING_MS = 120_000;
 const MAX_LOOKUP_TIMING_SOURCES = 10;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
 const QUERY_TYPES = new Set<LookupQueryType>(['domain', 'ipv4', 'ipv6', 'asn']);
+const COMPACT_AVAILABILITY_STATES = new Set<CompactLookupAvailabilityState>([
+  'available',
+  'expiring',
+  'for_sale',
+  'registered',
+  'unknown',
+]);
+const COMPACT_CONFIDENCE_LEVELS = new Set<CompactLookupConfidence>(['high', 'low', 'medium']);
+const COMPACT_AVAILABILITY_DIAGNOSTIC_STATES = new Set(['complete', 'disabled', 'error']);
 const LOOKUP_TIMING_SOURCES = new Set<LookupTimingSource>([
   'rdap',
   'whois',
@@ -154,11 +197,52 @@ function optionalBoundedText(value: unknown, maxLength: number): boolean {
   );
 }
 
+function normalizedDomain(value: unknown): string | null {
+  if (
+    typeof value !== 'string'
+    || !value.trim()
+    || value.length > MAX_LOOKUP_RESPONSE_HOST_LENGTH
+    || CONTROL_CHAR_RE.test(value)
+    || /[\s/?#@\\:]/u.test(value)
+  ) {
+    return null;
+  }
+  try {
+    const parsed = new URL(`https://${value.trim().replace(/\.$/u, '')}/`);
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
+    const labels = hostname.split('.');
+    return labels.length >= 2
+      && hostname.length <= MAX_LOOKUP_RESPONSE_HOST_LENGTH
+      && labels.every((label) => (
+        label.length <= 63
+        && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label)
+      ))
+      ? hostname
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function compactDomainMatches(value: unknown, expectedDomain: unknown): boolean {
+  const domain = normalizedDomain(value);
+  const expected = normalizedDomain(expectedDomain);
+  return Boolean(domain && expected && (domain === expected || expected.endsWith(`.${domain}`)));
+}
+
 function invalidLookupResponse(): LookupResponseParseResult {
   return {
     ok: false,
     errorCode: INVALID_LOOKUP_RESPONSE,
     error: INVALID_LOOKUP_RESPONSE_MESSAGE,
+  };
+}
+
+function invalidCompactLookupResponse(): CompactLookupResponseParseResult {
+  return {
+    ok: false,
+    errorCode: INVALID_COMPACT_LOOKUP_RESPONSE,
+    error: INVALID_COMPACT_LOOKUP_RESPONSE_MESSAGE,
   };
 }
 
@@ -191,6 +275,41 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
   }
 
   return { ok: true, value: value as LookupHttpResponse };
+}
+
+function parseCompactLookupHttpResponse(
+  value: unknown,
+  expectedDomain: string,
+): CompactLookupResponseParseResult {
+  if (!isJsonObject(value) || Object.keys(value).length > MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS) {
+    return invalidCompactLookupResponse();
+  }
+
+  const availability = value.availability;
+  const diagnostics = value.diagnostics;
+  if (
+    !isJsonObject(availability)
+    || Object.keys(availability).length > MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS
+    || availability.applicable !== true
+    || !compactDomainMatches(availability.domain, expectedDomain)
+    || typeof availability.state !== 'string'
+    || !COMPACT_AVAILABILITY_STATES.has(availability.state as CompactLookupAvailabilityState)
+    || typeof availability.confidence !== 'string'
+    || !COMPACT_CONFIDENCE_LEVELS.has(availability.confidence as CompactLookupConfidence)
+    || (availability.deepScanComplete !== undefined && typeof availability.deepScanComplete !== 'boolean')
+    || !isJsonObject(diagnostics)
+    || Object.keys(diagnostics).length > MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS
+    || diagnostics.version !== 7
+    || !isJsonObject(diagnostics.rdap)
+    || !isJsonObject(diagnostics.whois)
+    || !isJsonObject(diagnostics.availability)
+    || typeof diagnostics.availability.status !== 'string'
+    || !COMPACT_AVAILABILITY_DIAGNOSTIC_STATES.has(diagnostics.availability.status)
+  ) {
+    return invalidCompactLookupResponse();
+  }
+
+  return { ok: true, value: value as CompactLookupHttpResponse };
 }
 
 function lookupHttpErrorMessage(value: unknown, status: number): string {
@@ -348,8 +467,13 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
 }
 
 export {
+  INVALID_COMPACT_LOOKUP_RESPONSE,
+  INVALID_COMPACT_LOOKUP_RESPONSE_MESSAGE,
   INVALID_LOOKUP_RESPONSE,
   INVALID_LOOKUP_RESPONSE_MESSAGE,
+  MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS,
+  MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS,
+  MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS,
   MAX_LOOKUP_RESPONSE_ERROR_LENGTH,
   MAX_LOOKUP_RESPONSE_HOST_LENGTH,
   MAX_LOOKUP_RESPONSE_QUERY_LENGTH,
@@ -362,10 +486,15 @@ export {
   isJsonObject,
   lookupHttpErrorMessage,
   normalizeLookupTiming,
+  parseCompactLookupHttpResponse,
   parseLookupHttpResponse,
   record as lookupRecord,
 };
 export type {
+  CompactLookupAvailabilityState,
+  CompactLookupConfidence,
+  CompactLookupHttpResponse,
+  CompactLookupResponseParseResult,
   JsonObject,
   JsonPrimitive,
   JsonValue,

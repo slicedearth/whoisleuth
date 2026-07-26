@@ -57,9 +57,9 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
     title: 'Track important findings',
     summary: 'Keep a case or watchlist and compare later observations without treating a failed check as absence.',
     steps: Object.freeze([
-      Object.freeze({ id: 'save', label: 'Save', href: '#tool-monitor' }),
-      Object.freeze({ id: 'monitor', label: 'Monitor', href: '#tool-monitor' }),
-      Object.freeze({ id: 'review-changes', label: 'Review changes', href: '#tool-monitor' }),
+      Object.freeze({ id: 'save', label: 'Save', href: '#tool-monitor-input' }),
+      Object.freeze({ id: 'monitor', label: 'Monitor', href: '#tool-monitor-result' }),
+      Object.freeze({ id: 'review-changes', label: 'Review changes', href: '#tool-monitor-next' }),
     ]),
   }),
 ]);

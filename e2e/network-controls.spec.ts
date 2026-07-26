@@ -113,6 +113,7 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
     contentType: 'application/json',
     body: JSON.stringify({
       availability: {
+        applicable: true,
         domain: 'example.invalid',
         state: 'registered',
         confidence: 'high',
@@ -123,7 +124,7 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
         tls: { status: 'skipped', source: 'tls', complete: false, certificate: null },
       },
       diagnostics: {
-        version: 3,
+        version: 7,
         rdap: { status: 'success' },
         whois: { status: 'complete' },
         availability: { status: 'complete', resultState: 'registered' },
