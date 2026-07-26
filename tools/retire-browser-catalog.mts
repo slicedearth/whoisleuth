@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import * as retire from 'retire';
 
@@ -8,7 +9,10 @@ const SOURCE_VERSION = '5.4.3';
 const SOURCE_REVISION = '56ea22d889656f4fbfe47b7df58d410a06ea59b7';
 const SOURCE_SHA256 = 'afc0e9596a7ace01e81eab25aa26b622817461610199b03a173097a69f7526cc';
 const SOURCE_URL = `https://github.com/RetireJS/retire.js/blob/${SOURCE_REVISION}/repository/jsrepository.json`;
-const OUTPUT_PATH = resolve('lib/generated/retire-browser-catalog.mts');
+const OUTPUT_PATH = 'lib/generated/retire-browser-catalog.mts';
+const OUTPUT_DIGEST_PATH = 'lib/generated/retire-browser-catalog.sha256';
+const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
+const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const EXTRACTOR_NAMES = Object.freeze(['uri', 'filename', 'filecontent', 'filecontentreplace', 'hashes']);
 const SEVERITIES = new Set(['none', 'low', 'medium', 'high', 'critical']);
 const VERSION_RE = /^[0-9][0-9.a-z_-]{0,63}$/i;
@@ -17,6 +21,13 @@ const GHSA_RE = /^GHSA-[A-Z0-9-]+$/i;
 const CWE_RE = /^CWE-[0-9]+$/;
 
 type UnknownRecord = Record<string, unknown>;
+type WritableLike = { write(value: string): unknown };
+type CatalogMode = 'check' | 'write';
+type MainOptions = Readonly<{
+  repositoryRoot?: string;
+  stdout?: WritableLike;
+  stderr?: WritableLike;
+}>;
 
 function record(value: unknown): UnknownRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -134,26 +145,105 @@ function renderModule(components: UnknownRecord): string {
     + `export { RETIRE_BROWSER_CATALOG };\n`;
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+function parseArguments(args: readonly string[]): { mode: CatalogMode; source: string } {
   const sourceIndex = args.indexOf('--source');
-  if (!args.includes('--write') || sourceIndex === -1 || !args[sourceIndex + 1]) {
-    throw new TypeError('Usage: node tools/retire-browser-catalog.mts --source <pinned-jsrepository.json> --write');
+  const modes = (['--check', '--write'] as const).filter((mode) => args.includes(mode));
+  if (
+    modes.length !== 1
+    || sourceIndex === -1
+    || !args[sourceIndex + 1]
+    || args.length !== 3
+  ) {
+    throw new TypeError('Usage: npm run catalog:retire -- --source <pinned-jsrepository.json> <--check|--write>');
   }
+  return {
+    mode: modes[0].slice(2) as CatalogMode,
+    source: args[sourceIndex + 1],
+  };
+}
 
-  const sourcePath = resolve(args[sourceIndex + 1]);
-  const sourceText = await readFile(sourcePath, 'utf8');
+async function readBoundedText(filename: string, maxBytes: number): Promise<string> {
+  const metadata = await stat(filename);
+  if (!metadata.isFile() || metadata.size > maxBytes) {
+    throw new TypeError(`${filename} is missing or exceeds its byte limit.`);
+  }
+  return readFile(filename, 'utf8');
+}
+
+function projectSource(sourceText: string): UnknownRecord {
   const sourceHash = createHash('sha256').update(sourceText).digest('hex');
   if (sourceHash !== SOURCE_SHA256) {
     throw new Error(`Retire.js catalogue digest mismatch: expected ${SOURCE_SHA256}, received ${sourceHash}.`);
   }
 
   const parsed = JSON.parse(retire.replaceVersion(sourceText));
-  const components = projectRepository(parsed);
-  await writeFile(OUTPUT_PATH, renderModule(components), 'utf8');
-  process.stdout.write(
-    `Wrote ${Object.keys(components).length} bounded Retire.js components to ${OUTPUT_PATH}.\n`,
-  );
+  return projectRepository(parsed);
 }
 
-await main();
+function buildModule(sourceText: string): string {
+  return renderModule(projectSource(sourceText));
+}
+
+function moduleDigest(moduleText: string): string {
+  return createHash('sha256').update(moduleText).digest('hex');
+}
+
+async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {
+  const stdout = options.stdout || process.stdout;
+  const stderr = options.stderr || process.stderr;
+  try {
+    const parsed = parseArguments(args);
+    const repositoryRoot = resolve(options.repositoryRoot || process.cwd());
+    const sourcePath = resolve(repositoryRoot, parsed.source);
+    const outputPath = resolve(repositoryRoot, OUTPUT_PATH);
+    const outputDigestPath = resolve(repositoryRoot, OUTPUT_DIGEST_PATH);
+    const sourceText = await readBoundedText(sourcePath, MAX_SOURCE_BYTES);
+    const components = projectSource(sourceText);
+    const expected = renderModule(components);
+    if (Buffer.byteLength(expected, 'utf8') > MAX_OUTPUT_BYTES) {
+      throw new RangeError('Projected Retire.js catalogue exceeds its output byte limit.');
+    }
+
+    if (parsed.mode === 'check') {
+      const current = await readBoundedText(outputPath, MAX_OUTPUT_BYTES);
+      const currentDigest = (await readBoundedText(outputDigestPath, 80)).trim();
+      if (current !== expected) {
+        throw new Error('Generated Retire.js catalogue is stale. Re-run the catalogue command with --write.');
+      }
+      if (currentDigest !== moduleDigest(current)) {
+        throw new Error('Generated Retire.js catalogue digest is stale. Re-run the catalogue command with --write.');
+      }
+      stdout.write(`Retire.js browser catalogue: pass (${Object.keys(components).length} components)\n`);
+      return 0;
+    }
+
+    await writeFile(outputPath, expected, 'utf8');
+    await writeFile(outputDigestPath, `${moduleDigest(expected)}\n`, 'utf8');
+    stdout.write(`Wrote Retire.js browser catalogue to ${OUTPUT_PATH}.\n`);
+    return 0;
+  } catch (error) {
+    stderr.write(`${error instanceof Error ? error.message : 'Retire.js catalogue maintenance failed.'}\n`);
+    return 2;
+  }
+}
+
+const invokedAsScript = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (invokedAsScript) process.exitCode = await main();
+
+export {
+  MAX_OUTPUT_BYTES,
+  MAX_SOURCE_BYTES,
+  OUTPUT_DIGEST_PATH,
+  OUTPUT_PATH,
+  SOURCE_REVISION,
+  SOURCE_SHA256,
+  SOURCE_URL,
+  SOURCE_VERSION,
+  buildModule,
+  main,
+  moduleDigest,
+  parseArguments,
+  projectRepository,
+  projectSource,
+  renderModule,
+};

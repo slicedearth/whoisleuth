@@ -49,7 +49,9 @@ describe('CLI argument parsing', () => {
 
   test('help and version actions never require a command', () => {
     assert.deepEqual(parseCliArguments([]), { action: 'help' });
-    assert.deepEqual(parseCliArguments(['lookup', '--help']), { action: 'help' });
+    assert.deepEqual(parseCliArguments(['lookup', '--help']), { action: 'help', command: 'lookup' });
+    assert.deepEqual(parseCliArguments(['registry-support', '-h']), { action: 'help', command: 'registry-support' });
+    assert.throws(() => parseCliArguments(['lookup', 'example.com', '--help']), /Help accepts/);
     assert.deepEqual(parseCliArguments(['--version']), { action: 'version' });
   });
 });

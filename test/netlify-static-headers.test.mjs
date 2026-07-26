@@ -27,7 +27,7 @@ test('prerendered responses resist edge script injection without weakening immut
     'Permissions-Policy = "camera=(), microphone=(), geolocation=()"',
     'Strict-Transport-Security = "max-age=31536000"',
   ]) {
-    assert.match(rules[immutableIndex], new RegExp(header.replace(/[()[\]]/g, '\\$&')));
+    assert.ok(rules[immutableIndex].includes(header), `expected immutable response header: ${header}`);
   }
   assert.match(
     rules[fallbackIndex],

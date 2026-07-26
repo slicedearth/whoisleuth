@@ -70,6 +70,20 @@ describe('bounded browser-library profile', () => {
     assert.match(profile.limitations.join(' '), /unmatched scripts are not evidence/i);
   });
 
+  test('counts every advisory match while retaining bounded advisory details', () => {
+    const profile = analyzeBrowserLibraries({
+      html: '<script>version="15.0.0";document.getElementById("__NEXT_DATA__").textContent</script>',
+      observedAt: OBSERVED_AT,
+    });
+    const finding = profile.findings.find(({ id }) => id === 'nextjs');
+
+    assert.ok(finding);
+    assert.equal(finding.advisoryCount, 25);
+    assert.ok(finding.advisoryIdentifiers.length <= 16);
+    assert.ok(finding.weaknessClasses.length <= 12);
+    assert.equal(profile.status, 'success');
+  });
+
   test('marks truncated source and every evaluation boundary as partial', () => {
     const tooManyScripts = Array.from(
       { length: MAX_SCRIPT_ELEMENTS + 2 },

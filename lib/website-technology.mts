@@ -5,9 +5,14 @@
 // markup, header values, URL paths, and arbitrary upstream strings are never
 // retained.
 
-import { parse } from 'parse5';
 import { analyzeBrowserLibraries } from './browser-library-profile.mts';
 import { createObservation } from './observation.mts';
+import {
+  MAX_STATIC_HTML_CHARS,
+  MAX_TAG_LENGTH,
+  MAX_TECHNOLOGY_TAGS,
+  analyzeStaticHtml,
+} from './static-html-analysis.mts';
 
 type TechnologyCategory =
   | 'content management'
@@ -52,30 +57,15 @@ type TechnologySignature = {
   evidence: SignatureEvidence[];
 };
 
-type ParsedAttribute = { name?: unknown; value?: unknown };
-type ParsedNode = {
-  tagName?: unknown;
-  attrs?: ParsedAttribute[];
-  childNodes?: ParsedNode[];
-  sourceCodeLocation?: {
-    startOffset?: unknown;
-    endOffset?: unknown;
-  } | null;
-};
-
 const TECHNOLOGY_PROFILE_VERSION = 3;
-const MAX_TECHNOLOGY_HTML_CHARS = 300_000;
-const MAX_TECHNOLOGY_TAGS = 2_048;
-const MAX_TECHNOLOGY_TAG_LENGTH = 4_096;
-const MAX_TECHNOLOGY_ATTRIBUTES_PER_TAG = 128;
-const MAX_TECHNOLOGY_PENDING_NODES = MAX_TECHNOLOGY_TAGS * 4;
+const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
+const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
 const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 const MAX_RESOURCE_ORIGINS = 30;
 const MAX_GENERATOR_INPUT = 160;
 const MAX_SERVER_INPUT = 240;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
-const RAW_TEXT_TAGS = new Set(['script', 'style', 'textarea', 'template']);
 
 function boundedLowercase(value: unknown, maxLength: number): string {
   if (typeof value !== 'string' || value.length > maxLength || CONTROL_CHARACTER_RE.test(value)) return '';
@@ -95,66 +85,6 @@ function normalizedResourceHosts(value: unknown): Set<string> {
     }
   }
   return hosts;
-}
-
-function searchableTagMarkup(value: unknown): { markup: string; inputLimitReached: boolean; tagLimitReached: boolean } {
-  const supplied = typeof value === 'string' ? value : '';
-  const inputLimitReached = supplied.length > MAX_TECHNOLOGY_HTML_CHARS;
-  const document = parse(supplied.slice(0, MAX_TECHNOLOGY_HTML_CHARS), {
-    sourceCodeLocationInfo: true,
-  }) as ParsedNode;
-  const tags: string[] = [];
-  const pending: ParsedNode[] = [document];
-  let tagLimitReached = false;
-
-  while (pending.length) {
-    const node = pending.pop() as ParsedNode;
-    if (typeof node.tagName === 'string') {
-      if (tags.length >= MAX_TECHNOLOGY_TAGS) {
-        tagLimitReached = true;
-        break;
-      }
-
-      const startOffset = Number(node.sourceCodeLocation?.startOffset);
-      const endOffset = Number(node.sourceCodeLocation?.endOffset);
-      if (
-        Number.isFinite(startOffset)
-        && Number.isFinite(endOffset)
-        && endOffset - startOffset > MAX_TECHNOLOGY_TAG_LENGTH
-      ) {
-        tagLimitReached = true;
-      } else {
-        const attributes = Array.isArray(node.attrs) ? node.attrs : [];
-        if (attributes.length > MAX_TECHNOLOGY_ATTRIBUTES_PER_TAG) tagLimitReached = true;
-        let serialized = `<${node.tagName.toLowerCase()}`;
-        for (const attribute of attributes.slice(0, MAX_TECHNOLOGY_ATTRIBUTES_PER_TAG)) {
-          if (typeof attribute.name !== 'string' || typeof attribute.value !== 'string') continue;
-          const candidate = ` ${attribute.name.toLowerCase()}="${attribute.value.toLowerCase()}"`;
-          if (serialized.length + candidate.length + 1 > MAX_TECHNOLOGY_TAG_LENGTH) {
-            tagLimitReached = true;
-            break;
-          }
-          serialized += candidate;
-        }
-        if (serialized.length + 1 <= MAX_TECHNOLOGY_TAG_LENGTH) tags.push(`${serialized}>`);
-      }
-
-      if (RAW_TEXT_TAGS.has(node.tagName.toLowerCase())) continue;
-    }
-
-    const children = Array.isArray(node.childNodes) ? node.childNodes : [];
-    const remainingCapacity = MAX_TECHNOLOGY_PENDING_NODES - pending.length;
-    if (children.length > remainingCapacity) tagLimitReached = true;
-    const retainedChildren = children.slice(0, Math.max(0, remainingCapacity));
-    for (let index = retainedChildren.length - 1; index >= 0; index -= 1) {
-      pending.push(retainedChildren[index] as ParsedNode);
-    }
-    if (pending.length >= MAX_TECHNOLOGY_PENDING_NODES) {
-      tagLimitReached = true;
-    }
-  }
-
-  return { markup: tags.join('\n'), inputLimitReached, tagLimitReached };
 }
 
 function generatorEvidence(pattern: RegExp, description: string): SignatureEvidence {
@@ -347,14 +277,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
 ];
 
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
-  const tagMarkup = searchableTagMarkup(input.html);
+  const htmlAnalysis = analyzeStaticHtml(input.html);
   const browserLibraryProfile = analyzeBrowserLibraries({
-    html: input.html,
+    htmlAnalysis,
     observedAt: input.observedAt,
     sourceTruncated: input.sourceTruncated,
   });
   const context: MatchContext = {
-    html: tagMarkup.markup,
+    html: htmlAnalysis.markup,
     generator: boundedLowercase(input.generator, MAX_GENERATOR_INPUT),
     httpServer: boundedLowercase(input.httpServer, MAX_SERVER_INPUT),
     resourceHosts: normalizedResourceHosts(input.resourceOrigins),
@@ -375,15 +305,18 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
 
   findings.sort((left, right) => left.category.localeCompare(right.category) || left.name.localeCompare(right.name));
   const findingLimitReached = findings.length > MAX_TECHNOLOGY_FINDINGS;
-  const truncated = input.sourceTruncated === true || tagMarkup.inputLimitReached || tagMarkup.tagLimitReached || findingLimitReached;
+  const truncated = input.sourceTruncated === true
+    || htmlAnalysis.inputLimitReached
+    || htmlAnalysis.tagLimitReached
+    || findingLimitReached;
   const limitations = [
     'Curated signature matching is selective; an unmatched technology may still be present.',
     'Static response evidence cannot identify JavaScript-rendered or deliberately concealed technologies.',
     'Technology indicators describe observed implementation clues, not ownership, safety, or maliciousness.',
   ];
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so technology indicators may be incomplete.');
-  if (tagMarkup.inputLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_HTML_CHARS} HTML characters were evaluated.`);
-  if (tagMarkup.tagLimitReached) limitations.push(`Technology matching reached the ${MAX_TECHNOLOGY_TAGS}-tag or ${MAX_TECHNOLOGY_TAG_LENGTH}-character tag boundary.`);
+  if (htmlAnalysis.inputLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_HTML_CHARS} HTML characters were evaluated.`);
+  if (htmlAnalysis.tagLimitReached) limitations.push(`Technology matching reached the ${MAX_TECHNOLOGY_TAGS}-tag or ${MAX_TECHNOLOGY_TAG_LENGTH}-character tag boundary.`);
   if (findingLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_FINDINGS} technology findings were retained.`);
 
   return {
@@ -402,7 +335,7 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
         generatorEvaluated: Boolean(context.generator),
         serverEvaluated: Boolean(context.httpServer),
         resourceOriginsEvaluated: context.resourceHosts.size,
-        tagLimitReached: tagMarkup.tagLimitReached,
+        tagLimitReached: htmlAnalysis.tagLimitReached,
       },
     }),
     findings: findings.slice(0, MAX_TECHNOLOGY_FINDINGS),

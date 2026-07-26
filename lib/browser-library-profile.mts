@@ -6,10 +6,16 @@
 
 import { createHash } from 'node:crypto';
 
-import { parse } from 'parse5';
-
 import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
 import { createObservation } from './observation.mts';
+import {
+  MAX_INLINE_SCRIPT_CHARS,
+  MAX_INLINE_SCRIPT_TOTAL_CHARS,
+  MAX_SCRIPT_ELEMENTS,
+  MAX_STATIC_HTML_CHARS,
+  analyzeStaticHtml,
+  type StaticHtmlAnalysis,
+} from './static-html-analysis.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type DetectionMethod = 'script URL' | 'script filename' | 'inline signature' | 'inline hash';
@@ -26,16 +32,9 @@ type BrowserLibraryFinding = {
 };
 type BrowserLibraryProfileInput = {
   html?: unknown;
+  htmlAnalysis?: StaticHtmlAnalysis;
   observedAt?: unknown;
   sourceTruncated?: unknown;
-};
-type ParsedAttribute = { name?: unknown; value?: unknown };
-type ParsedNode = {
-  nodeName?: unknown;
-  tagName?: unknown;
-  value?: unknown;
-  attrs?: ParsedAttribute[];
-  childNodes?: ParsedNode[];
 };
 type CatalogVulnerability = {
   below?: unknown;
@@ -56,19 +55,12 @@ type DetectedComponent = {
 };
 
 const BROWSER_LIBRARY_PROFILE_VERSION = 1;
-const MAX_LIBRARY_HTML_CHARS = 300_000;
-const MAX_LIBRARY_NODES = 8_192;
-const MAX_SCRIPT_ELEMENTS = 64;
-const MAX_SCRIPT_REFERENCE_LENGTH = 2_048;
-const MAX_INLINE_SCRIPT_CHARS = 32_768;
-const MAX_INLINE_SCRIPT_TOTAL_CHARS = 65_536;
+const MAX_LIBRARY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_LIBRARY_FINDINGS = 16;
-const MAX_ADVISORIES_PER_FINDING = 16;
 const MAX_ADVISORY_IDENTIFIERS = 16;
 const MAX_WEAKNESS_CLASSES = 12;
 const MAX_MATCHES_PER_PATTERN = 4;
 const MAX_VERSION_LENGTH = 64;
-const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
 const COMPONENT_RE = /^[a-z0-9._-]{1,80}$/i;
 const VERSION_RE = /^[0-9][0-9.a-z_-]{0,63}$/i;
 const CVE_RE = /^CVE-[0-9X-]+$/;
@@ -123,7 +115,7 @@ function isAtOrAbove(left: string, right: string): boolean {
 function matchingVulnerabilities(component: CatalogComponent, version: string): CatalogVulnerability[] {
   const vulnerabilities = Array.isArray(component.vulnerabilities) ? component.vulnerabilities : [];
   const matched: CatalogVulnerability[] = [];
-  for (const rawVulnerability of vulnerabilities.slice(0, MAX_ADVISORIES_PER_FINDING * 4)) {
+  for (const rawVulnerability of vulnerabilities) {
     const vulnerability = record(rawVulnerability) as CatalogVulnerability;
     if (typeof vulnerability.below !== 'string' || !VERSION_RE.test(vulnerability.below)) continue;
     if (isAtOrAbove(version, vulnerability.below)) continue;
@@ -134,7 +126,6 @@ function matchingVulnerabilities(component: CatalogComponent, version: string): 
     ) continue;
     if (Array.isArray(vulnerability.excludes) && vulnerability.excludes.includes(version)) continue;
     matched.push(vulnerability);
-    if (matched.length >= MAX_ADVISORIES_PER_FINDING) break;
   }
   return matched;
 }
@@ -234,6 +225,7 @@ function scanInlineContent(
   content: string,
 ): void {
   const normalized = content.replace(/\r\n?|\n/g, '\n');
+  const digest = createHash('sha1').update(normalized).digest('hex');
   scanExtractor(detected, 'filecontent', normalized, 'inline signature');
 
   for (const [componentName, rawComponent] of Object.entries(CATALOG_COMPONENTS)) {
@@ -247,39 +239,9 @@ function scanInlineContent(
     }
 
     const hashes = record(extractors.hashes);
-    const version = hashes[createHash('sha1').update(normalized).digest('hex')];
+    const version = hashes[digest];
     if (typeof version === 'string') addDetected(detected, componentName, version, 'inline hash');
   }
-}
-
-function scriptReference(node: ParsedNode): string | null {
-  for (const attribute of (Array.isArray(node.attrs) ? node.attrs : []).slice(0, 128)) {
-    if (typeof attribute.name !== 'string' || attribute.name.toLowerCase() !== 'src') continue;
-    if (
-      typeof attribute.value !== 'string'
-      || attribute.value.length === 0
-      || attribute.value.length > MAX_SCRIPT_REFERENCE_LENGTH
-      || CONTROL_CHARACTER_RE.test(attribute.value)
-    ) return null;
-    return attribute.value;
-  }
-  return null;
-}
-
-function inlineScript(node: ParsedNode): { content: string; truncated: boolean } {
-  let content = '';
-  let truncated = false;
-  for (const child of (Array.isArray(node.childNodes) ? node.childNodes : []).slice(0, 64)) {
-    if (child.nodeName !== '#text' || typeof child.value !== 'string') continue;
-    const remaining = MAX_INLINE_SCRIPT_CHARS - content.length;
-    if (remaining <= 0) {
-      truncated = true;
-      break;
-    }
-    content += child.value.slice(0, remaining);
-    if (child.value.length > remaining) truncated = true;
-  }
-  return { content, truncated };
 }
 
 function severity(value: unknown): Severity | null {
@@ -329,62 +291,19 @@ function findingFromDetection(detected: DetectedComponent): BrowserLibraryFindin
 }
 
 function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
-  const supplied = typeof input.html === 'string' ? input.html : '';
-  const htmlLimitReached = supplied.length > MAX_LIBRARY_HTML_CHARS;
-  const document = parse(supplied.slice(0, MAX_LIBRARY_HTML_CHARS)) as ParsedNode;
-  const pending: ParsedNode[] = [document];
+  const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
   const detected = new Map<string, DetectedComponent>();
-  let nodesExamined = 0;
-  let scriptsExamined = 0;
   let referencesExamined = 0;
   let inlineScriptsExamined = 0;
-  let inlineCharactersExamined = 0;
-  let traversalLimitReached = false;
-  let scriptLimitReached = false;
-  let inlineLimitReached = false;
 
-  while (pending.length) {
-    const node = pending.pop() as ParsedNode;
-    nodesExamined += 1;
-    if (nodesExamined > MAX_LIBRARY_NODES) {
-      traversalLimitReached = true;
-      break;
-    }
-
-    if (typeof node.tagName === 'string' && node.tagName.toLowerCase() === 'script') {
-      if (scriptsExamined >= MAX_SCRIPT_ELEMENTS) {
-        scriptLimitReached = true;
-        continue;
-      }
-      scriptsExamined += 1;
-      const reference = scriptReference(node);
-      if (reference) {
-        referencesExamined += 1;
-        scanExtractor(detected, 'uri', reference, 'script URL');
-        scanFilename(detected, reference);
-      } else {
-        const inline = inlineScript(node);
-        if (inline.truncated) inlineLimitReached = true;
-        const remaining = MAX_INLINE_SCRIPT_TOTAL_CHARS - inlineCharactersExamined;
-        if (remaining <= 0) {
-          inlineLimitReached = true;
-        } else if (inline.content) {
-          const retained = inline.content.slice(0, remaining);
-          if (retained.length < inline.content.length) inlineLimitReached = true;
-          inlineCharactersExamined += retained.length;
-          inlineScriptsExamined += 1;
-          scanInlineContent(detected, retained);
-        }
-      }
-    }
-
-    const children = Array.isArray(node.childNodes) ? node.childNodes : [];
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      if (pending.length + nodesExamined >= MAX_LIBRARY_NODES) {
-        traversalLimitReached = true;
-        break;
-      }
-      pending.push(children[index] as ParsedNode);
+  for (const script of htmlAnalysis.scripts) {
+    if (script.reference) {
+      referencesExamined += 1;
+      scanExtractor(detected, 'uri', script.reference, 'script URL');
+      scanFilename(detected, script.reference);
+    } else if (script.inlineContent) {
+      inlineScriptsExamined += 1;
+      scanInlineContent(detected, script.inlineContent);
     }
   }
 
@@ -399,10 +318,10 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
     ));
   const findingLimitReached = allFindings.length > MAX_LIBRARY_FINDINGS;
   const truncated = input.sourceTruncated === true
-    || htmlLimitReached
-    || traversalLimitReached
-    || scriptLimitReached
-    || inlineLimitReached
+    || htmlAnalysis.inputLimitReached
+    || htmlAnalysis.tagLimitReached
+    || htmlAnalysis.scriptLimitReached
+    || htmlAnalysis.inlineLimitReached
     || findingLimitReached;
   const limitations = [
     'Library versions are inferred from passive static signatures and may be absent, transformed, or misleading.',
@@ -410,10 +329,10 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
     'Referenced scripts are not fetched, executed, or retained, and unmatched scripts are not evidence that no library is present.',
   ];
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so script evidence may be incomplete.');
-  if (htmlLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_HTML_CHARS} HTML characters were evaluated.`);
-  if (traversalLimitReached) limitations.push(`HTML traversal reached the ${MAX_LIBRARY_NODES}-node boundary.`);
-  if (scriptLimitReached) limitations.push(`Only the first ${MAX_SCRIPT_ELEMENTS} script elements were evaluated.`);
-  if (inlineLimitReached) limitations.push(`Inline script evaluation reached its ${MAX_INLINE_SCRIPT_TOTAL_CHARS}-character cumulative boundary.`);
+  if (htmlAnalysis.inputLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_HTML_CHARS} HTML characters were evaluated.`);
+  if (htmlAnalysis.tagLimitReached) limitations.push('Static HTML tokenization reached its tag or attribute boundary.');
+  if (htmlAnalysis.scriptLimitReached) limitations.push(`Only the first ${MAX_SCRIPT_ELEMENTS} script elements were evaluated.`);
+  if (htmlAnalysis.inlineLimitReached) limitations.push(`Inline script evaluation reached its ${MAX_INLINE_SCRIPT_TOTAL_CHARS}-character cumulative boundary.`);
   if (findingLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_FINDINGS} library findings were retained.`);
 
   return {
@@ -432,10 +351,10 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
       truncated,
       limitations,
       diagnostics: {
-        scriptsExamined,
+        scriptsExamined: htmlAnalysis.scripts.length,
         referencesExamined,
         inlineScriptsExamined,
-        inlineCharactersExamined,
+        inlineCharactersExamined: htmlAnalysis.inlineCharactersExamined,
         catalogComponents: Object.keys(CATALOG_COMPONENTS).length,
         findings: allFindings.length,
         advisoryMatches: allFindings.reduce((sum, finding) => sum + finding.advisoryCount, 0),

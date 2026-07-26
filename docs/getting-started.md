@@ -222,6 +222,21 @@ the captured homepage. It does not download a catalogue at request time, fetch
 or execute a referenced script, or establish that an apparent component is
 reachable or exploitable.
 
+The checked-in projection can be reproduced from the exact pinned source file:
+
+```bash
+npm run catalog:retire -- --source /path/to/pinned-jsrepository.json --check
+```
+
+The command verifies the source SHA-256 digest before parsing it, applies the
+same component, extractor, vulnerability, string, and output-byte limits as the
+generator, and compares the resulting module byte-for-byte. The ordinary unit
+suite also verifies the checked-in generated-module digest, so an unintended
+catalogue edit fails offline verification without requiring the source file.
+Replace `--check` with `--write` only when deliberately updating the generated
+projection and its digest together. The command reads only the supplied local
+file and does not download a catalogue.
+
 ### Registry drift
 
 ```bash

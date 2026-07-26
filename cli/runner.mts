@@ -11,6 +11,7 @@ import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/reg
 import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
 import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { CliUsageError, parseCliArguments } from './arguments.mts';
+import type { CliCommand } from './arguments.mts';
 import {
   MAX_BULK_INPUT_BYTES,
   parseBulkQueries,
@@ -105,6 +106,23 @@ Risk calibration is an offline fixture replay and never changes the scoring mode
 Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
 Source and licence: https://github.com/slicedearth/whoisleuth
 `;
+const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
+  lookup: 'whoisleuth lookup <domain|IP|ASN> [--json] [--fast|--deep] [--quiet] [--no-color]',
+  bulk: 'whoisleuth bulk [file] [--json|--jsonl] [--fast|--deep] [--concurrency <1-8>]',
+  'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
+  discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--json|--jsonl]',
+  posture: 'whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]',
+  http: 'whoisleuth http <domain> [--json] [--quiet] [--no-color]',
+  tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
+  'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
+  'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
+  compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
+  export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
+});
+
+function commandHelp(command: CliCommand): string {
+  return `WHOISleuth ${command}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nRun "whoisleuth --help" for workflow notes and all commands.\n`;
+}
 
 type WritableLike = { write(value: string): unknown };
 type CliDependencies = {
@@ -146,7 +164,10 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
   let failureLabel = 'Lookup';
   try {
     const args = parseCliArguments(argv);
-    if (args.action === 'help') { write(stdout, HELP); return EXIT_CODES.SUCCESS; }
+    if (args.action === 'help') {
+      write(stdout, args.command ? commandHelp(args.command) : HELP);
+      return EXIT_CODES.SUCCESS;
+    }
     if (args.action === 'version') { write(stdout, `${VERSION}\n`); return EXIT_CODES.SUCCESS; }
 
     if (args.action === 'registry-support') {

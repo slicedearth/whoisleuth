@@ -8,6 +8,7 @@ import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
+import { CANONICAL_TRAILING_SLASH_REDIRECTS } from './lib/prerendered-routes.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from './lib/domain-posture.mts';
@@ -110,17 +111,7 @@ app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'imm
   maxAge: '1y',
 }));
 app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
-const canonicalRouteRedirects = [
-  ['/lookup/', '/lookup'],
-  ['/discover/', '/discover'],
-  ['/bulk/', '/bulk'],
-  ['/monitor/', '/monitor'],
-  ['/brands/', '/brands'],
-  ['/privacy/', '/privacy'],
-  ['/demo/', '/demo'],
-  ['/login/', '/login'],
-] as const;
-for (const [sourcePath, canonicalPath] of canonicalRouteRedirects) {
+for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
   app.get(sourcePath, (_req: RequestLike, res: ResponseLike) => {
     res.redirect(308, canonicalPath);
   });

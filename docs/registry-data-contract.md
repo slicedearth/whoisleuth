@@ -32,11 +32,13 @@ full successful response contains:
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
   curated software and delivery indicators. Profile version 3 uses
-  standards-compliant bounded HTML parsing and adds a nested version-1
+  one standards-compliant bounded HTML tokenization pass and adds a nested version-1
   browser-library profile derived from a pinned Retire.js catalogue. It
   retains only apparent component versions, detection classes, and bounded
   advisory context without fetching referenced scripts or making another
-  request.
+  request. The advisory count covers every matching entry in the already
+  bounded projected catalogue; retained advisory identifiers and weakness
+  classes remain capped independently.
 - `securityTxt`: only when explicitly selected for a deep single-domain
   request, a bounded normalized disclosure file for the exact submitted
   hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.

@@ -82,6 +82,13 @@ describe('installed CLI process boundary', () => {
     assert.match(help.stdout, /^WHOISleuth CLI/);
     assert.equal(help.stderr, '');
 
+    const commandHelp = runBinary(['registry-support', '--help']);
+    assert.equal(commandHelp.status, 0);
+    assert.match(commandHelp.stdout, /^WHOISleuth registry-support/);
+    assert.match(commandHelp.stdout, /registry-support <domain\|suffix>/);
+    assert.doesNotMatch(commandHelp.stdout, /whoisleuth bulk/);
+    assert.equal(commandHelp.stderr, '');
+
     const version = runBinary(['--version']);
     assert.equal(version.status, 0);
     assert.match(version.stdout, /^\d+\.\d+\.\d+\n$/);

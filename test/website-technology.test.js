@@ -197,9 +197,22 @@ describe('website technology profile', () => {
     const result = analyze({ html: `
       <!-- <astro-island></astro-island> -->
       <p>Documentation mentions /_next/static/ and shopify-section.</p>
+      <title><astro-island></astro-island></title>
       <script>const example = '<div data-wf-page="fixture"></div>';</script>
       <style>.example::after { content: 'data-sveltekit-reload='; }</style>
     ` });
     assert.deepEqual(result.findings, []);
+  });
+
+  test('bounds deeply nested hostile markup without constructing a DOM tree', () => {
+    const html = '<div>'.repeat(MAX_TECHNOLOGY_HTML_CHARS / 5);
+    const startedAt = performance.now();
+    const result = analyze({ html });
+    const elapsedMs = performance.now() - startedAt;
+
+    assert.equal(result.status, 'partial');
+    assert.equal(result.diagnostics.tagLimitReached, true);
+    assert.equal(result.browserLibraryProfile.status, 'partial');
+    assert.ok(elapsedMs < 2_000, `Expected bounded tokenization under 2 seconds; received ${Math.round(elapsedMs)}ms.`);
   });
 });

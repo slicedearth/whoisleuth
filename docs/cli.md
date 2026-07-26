@@ -5,8 +5,9 @@ lookup modules as the Express and serverless adapters. It does not call the
 hosted WHOISleuth deployment.
 
 `whoisleuth --help` displays the copyright, AGPL-3.0-only licence, and official
-source location. Packaged copies include `LICENSE`, `NOTICE`, and
-`TRADEMARKS.md` alongside the CLI documentation.
+source location. `whoisleuth <command> --help` displays the focused invocation
+for one command without printing the full command list. Packaged copies include
+`LICENSE`, `NOTICE`, and `TRADEMARKS.md` alongside the CLI documentation.
 
 ## Commands
 
