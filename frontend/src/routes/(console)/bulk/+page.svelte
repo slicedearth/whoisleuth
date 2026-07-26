@@ -18,7 +18,7 @@
   import { saveWatchlist } from '$lib/watchlists';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
   import { buildCoverageReport } from '$lib/analysis/coverage.js';
-  import { computeOpportunityScore, explainRiskScore, formatActivityCell } from '$lib/analysis/scoring.js';
+  import { computeOpportunityScore, explainRiskScore, formatActivityCell } from '$lib/analysis/scoring.ts';
   import { entityDisplayName, parseDomainInput, rowsToCsv } from '$lib/analysis/utils.js';
   import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.js';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
@@ -28,7 +28,7 @@
   import { buildStixIndicatorExport } from '$lib/analysis/stix-indicator-export.js';
   import { buildMispIndicatorExport } from '$lib/analysis/misp-indicator-export.js';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
-  import { compactHttpObservation, normalizeHttpSummary } from '$lib/analysis/http-summary.js';
+  import { compactHttpObservation, normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
   import {
     lookupHttpErrorMessage,
     parseCompactLookupHttpResponse,

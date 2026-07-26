@@ -7,25 +7,61 @@ export {
   normalizeRiskModelVersion,
   riskTone,
 } from '../../../../lib/risk-scoring.mts';
+export type {
+  RiskExplanation,
+  RiskFactor,
+  RiskInput,
+} from '../../../../lib/risk-scoring.mts';
 
 // Acquisition/sourcing signals (domain age, expiry proximity, WHOIS privacy,
 // site activity) and the opportunity score that combines them into one
 // sortable number. Shared by the single-lookup availability card, the bulk
 // results table, and the shortlist panel.
 
-export function fmtAge(days) {
-  if (days === null || days === undefined) return null;
+export type ActivityStatus = 'active' | 'parked' | 'unreachable' | 'no_site';
+
+export type OpportunityScoreInput = {
+  availability?: string | null;
+  state?: string | null;
+  activityStatus?: string | null;
+  privacyProtected?: boolean | null;
+  domainAgeDays?: number | null;
+  expiresInDays?: number | null;
+};
+
+export type OpportunityFactor = {
+  label: string;
+  delta: number;
+};
+
+export type OpportunityExplanation = {
+  score: number;
+  factors: OpportunityFactor[];
+};
+
+export type ScoreTone = 'neutral' | 'good' | 'warn';
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function fmtAge(value: unknown): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const days = value;
   if (days < 60) return `${days}d old`;
   const years = days / 365.25;
   return years < 1 ? `${Math.round(days / 30)}mo old` : `${years.toFixed(1)}y old`;
 }
 
-export function fmtExpiresIn(days) {
-  if (days === null || days === undefined) return null;
+export function fmtExpiresIn(value: unknown): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const days = value;
   return days < 0 ? `expired ${Math.abs(days)}d ago` : `expires in ${days}d`;
 }
 
-export const ACTIVITY_LABELS = {
+export const ACTIVITY_LABELS: Readonly<Record<ActivityStatus, string>> = {
   active: 'Active site',
   parked: 'Parked / for-sale page',
   unreachable: 'Website check inconclusive',
@@ -34,15 +70,22 @@ export const ACTIVITY_LABELS = {
   no_site: 'No site reported (legacy)',
 };
 
-export function formatPrivacyCell(v) {
+export function formatPrivacyCell(v: unknown): string {
   if (v === true) return 'Privacy protected';
   if (v === false) return 'Public registrant data';
   return '—';
 }
 
-export function formatActivityCell(v, hasMx, hasSpf, hasDmarc) {
-  const label = ACTIVITY_LABELS[v] || '—';
-  const mailParts = [];
+export function formatActivityCell(
+  v: unknown,
+  hasMx: unknown,
+  hasSpf: unknown,
+  hasDmarc: unknown,
+): string {
+  const label = typeof v === 'string' && v in ACTIVITY_LABELS
+    ? ACTIVITY_LABELS[v as ActivityStatus]
+    : '—';
+  const mailParts: string[] = [];
   if (hasMx) mailParts.push('MX');
   if (hasSpf) mailParts.push('SPF');
   if (hasDmarc) mailParts.push('DMARC');
@@ -58,7 +101,7 @@ export function formatActivityCell(v, hasMx, hasSpf, hasDmarc) {
 // the owner is unlikely to be interested regardless of the domain's worth.
 // ---------------------------------------------------------------------------
 
-const STATE_BASE_SCORE = {
+const STATE_BASE_SCORE: Readonly<Record<string, number | null>> = {
   for_sale: 95,
   expiring: 85,
   available: 90,
@@ -67,7 +110,7 @@ const STATE_BASE_SCORE = {
   error: null,
 };
 
-const STATE_LABELS = {
+const STATE_LABELS: Readonly<Record<string, string>> = {
   for_sale: 'for sale',
   expiring: 'expiring/pending delete',
   available: 'available',
@@ -79,8 +122,12 @@ const STATE_LABELS = {
 // truth computeOpportunityScore() below reads its final number from, and
 // what the score chips' tooltips and the CSV export both render from, so
 // the displayed reasoning can never drift from the actual number.
-export function explainOpportunityScore(r) {
-  const state = r.availability ?? r.state;
+export function explainOpportunityScore(value: unknown): OpportunityExplanation | null {
+  const r = plainRecord(value);
+  if (!r) return null;
+  const rawState = r.availability ?? r.state;
+  if (typeof rawState !== 'string') return null;
+  const state = rawState;
   const base = STATE_BASE_SCORE[state];
   if (base === null || base === undefined) return null;
 
@@ -122,12 +169,12 @@ export function explainOpportunityScore(r) {
   return { score: Math.max(0, Math.min(100, Math.round(score))), factors };
 }
 
-export function computeOpportunityScore(r) {
-  const explained = explainOpportunityScore(r);
+export function computeOpportunityScore(value: unknown): number | null {
+  const explained = explainOpportunityScore(value);
   return explained ? explained.score : null;
 }
 
-export function scoreTone(score) {
+export function scoreTone(score: number | null): ScoreTone {
   if (score === null) return 'neutral';
   if (score >= 70) return 'good';
   if (score >= 40) return 'neutral';

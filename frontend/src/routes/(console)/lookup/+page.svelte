@@ -33,7 +33,7 @@
   import { abuseAction, outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
-  import { compactHttpObservation } from '$lib/analysis/http-summary.js';
+  import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
   import {
@@ -66,7 +66,7 @@
     fmtExpiresIn,
     formatActivityCell,
     formatPrivacyCell,
-  } from '$lib/analysis/scoring.js';
+  } from '$lib/analysis/scoring.ts';
 
   type JsonRecord = JsonObject;
   type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; transportSecurity?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null; attempts?:Array<{outcome?:string}> };

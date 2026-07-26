@@ -3,8 +3,8 @@
 // against a last-known baseline so browser-local storage does not grow by one complete
 // result set on every check.
 
-import { explainRiskScore, normalizeRiskModelVersion } from './scoring.js';
-import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from './http-summary.js';
+import { explainRiskScore, normalizeRiskModelVersion } from './scoring.ts';
+import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from './http-summary.ts';
 import { normalizeDomain } from './case-model.js';
 
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;

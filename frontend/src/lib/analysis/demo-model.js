@@ -7,7 +7,7 @@
 import { normalizeBrandProfile } from './brand-profile-model.js';
 import { normalizeCase } from './case-model.js';
 import { deriveTimeline } from './evidence-display.js';
-import { RISK_MODEL_VERSION } from './scoring.js';
+import { RISK_MODEL_VERSION } from './scoring.ts';
 
 export const SYNTHETIC_DEMO_VERSION = 1;
 export const SYNTHETIC_DEMO_EXPORT_VERSION = 5;

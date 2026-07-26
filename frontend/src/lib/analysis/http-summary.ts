@@ -16,41 +16,63 @@ export const HTTP_SECURITY_HEADER_TOKENS = Object.freeze([
   'frame-protection',
   'hsts',
   'referrer-policy',
-]);
+] as const);
 
 const EVIDENCE_STATUSES = new Set(['success', 'partial']);
-const SECURITY_HEADER_TOKEN_SET = new Set(HTTP_SECURITY_HEADER_TOKENS);
+const SECURITY_HEADER_TOKEN_SET = new Set<string>(HTTP_SECURITY_HEADER_TOKENS);
 const MIME_TOKEN_RE = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
 
-/**
- * @typedef {{ httpSummaryVersion: number, httpEvidenceStatus: string, httpFinalOrigin: string | null, httpResponseStatus: number, httpTransportSecurity: string | null, httpRedirectCount: number | null, httpCrossOriginRedirect: boolean | null, httpHttpsDowngrade: boolean | null, httpContentType: string | null, httpSecurityHeaders: string[] | null }} CompactHttpSummary
- */
+export type HttpEvidenceStatus = 'success' | 'partial';
+export type HttpTransportSecurity = 'https' | 'http';
+export type HttpSecurityHeaderToken = typeof HTTP_SECURITY_HEADER_TOKENS[number];
 
-function plainRecord(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+export type CompactHttpSummary = {
+  httpSummaryVersion: number;
+  httpEvidenceStatus: HttpEvidenceStatus;
+  httpFinalOrigin: string | null;
+  httpResponseStatus: number;
+  httpTransportSecurity: HttpTransportSecurity | null;
+  httpRedirectCount: number | null;
+  httpCrossOriginRedirect: boolean | null;
+  httpHttpsDowngrade: boolean | null;
+  httpContentType: string | null;
+  httpSecurityHeaders: HttpSecurityHeaderToken[] | null;
+};
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
-function status(value) {
-  return typeof value === 'string' && EVIDENCE_STATUSES.has(value) ? value : null;
+function status(value: unknown): HttpEvidenceStatus | null {
+  return typeof value === 'string' && EVIDENCE_STATUSES.has(value)
+    ? value as HttpEvidenceStatus
+    : null;
 }
 
-function httpStatus(value) {
-  return Number.isInteger(value) && value >= 100 && value <= 599 ? value : null;
+function httpStatus(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599 ? value : null;
 }
 
-function redirectCount(value) {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_HTTP_SUMMARY_REDIRECTS ? value : null;
+function redirectCount(value: unknown): number | null {
+  return typeof value === 'number'
+    && Number.isInteger(value)
+    && value >= 0
+    && value <= MAX_HTTP_SUMMARY_REDIRECTS
+    ? value
+    : null;
 }
 
-function boolOrNull(value) {
+function boolOrNull(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
-function transport(value) {
+function transport(value: unknown): HttpTransportSecurity | null {
   return value === 'https' || value === 'http' ? value : null;
 }
 
-function finalOrigin(value) {
+function finalOrigin(value: unknown): string | null {
   if (typeof value !== 'string' || value.length === 0 || value.length > 4096 || /[\u0000-\u001f\u007f]/.test(value)) return null;
   try {
     const parsed = new URL(value);
@@ -61,30 +83,32 @@ function finalOrigin(value) {
   }
 }
 
-function contentType(value) {
+function contentType(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 300 || /[\u0000-\u001f\u007f]/.test(value)) return null;
   const mime = value.split(';', 1)[0].trim().toLowerCase();
   return mime.length <= MAX_HTTP_SUMMARY_CONTENT_TYPE_LENGTH && MIME_TOKEN_RE.test(mime) ? mime : null;
 }
 
-function securityHeaderTokens(value) {
+function securityHeaderTokens(value: unknown): HttpSecurityHeaderToken[] | null {
   if (!Array.isArray(value)) return null;
   return [...new Set(value.slice(0, MAX_HTTP_SECURITY_HEADER_INPUTS)
-    .filter((token) => typeof token === 'string' && SECURITY_HEADER_TOKEN_SET.has(token)))]
+    .filter((token): token is HttpSecurityHeaderToken => (
+      typeof token === 'string' && SECURITY_HEADER_TOKEN_SET.has(token)
+    )))]
     .sort();
 }
 
-function presentHeaderValue(value) {
+function presentHeaderValue(value: unknown): boolean {
   return typeof value === 'string'
     && value.length <= 300
     && !/[\u0000-\u001f\u007f]/.test(value)
     && value.trim().length > 0;
 }
 
-function tokensFromRichHeaders(value) {
+function tokensFromRichHeaders(value: unknown): HttpSecurityHeaderToken[] | null {
   const headers = plainRecord(value);
   if (!headers) return null;
-  const tokens = [];
+  const tokens: HttpSecurityHeaderToken[] = [];
   if (presentHeaderValue(headers.strictTransportSecurity)) tokens.push('hsts');
   if (presentHeaderValue(headers.contentSecurityPolicy)) tokens.push('content-security-policy');
   if (presentHeaderValue(headers.xFrameOptions)) tokens.push('frame-protection');
@@ -97,10 +121,8 @@ function tokensFromRichHeaders(value) {
  * Derives the compact browser-local form from a rich HTTP observation.
  * Failed/skipped observations and observations without a terminal response do
  * not produce a summary: they cannot prove the domain's HTTP state.
- * @param {unknown} value
- * @returns {CompactHttpSummary | null}
  */
-export function compactHttpObservation(value) {
+export function compactHttpObservation(value: unknown): CompactHttpSummary | null {
   const observation = plainRecord(value);
   const response = plainRecord(observation?.response);
   const evidenceStatus = status(observation?.status);
@@ -131,10 +153,8 @@ export function compactHttpObservation(value) {
 /**
  * Revalidates an already-compact summary (or a record containing its fields)
  * at every local-storage/import boundary. Unknown keys are discarded.
- * @param {unknown} value
- * @returns {CompactHttpSummary | null}
  */
-export function normalizeHttpSummary(value) {
+export function normalizeHttpSummary(value: unknown): CompactHttpSummary | null {
   const record = plainRecord(value);
   if (record?.httpSummaryVersion !== HTTP_SUMMARY_VERSION) return null;
   const evidenceStatus = status(record?.httpEvidenceStatus);
@@ -157,12 +177,13 @@ export function normalizeHttpSummary(value) {
   };
 }
 
-export function httpSecurityHeaderLabel(token) {
-  return ({
+export function httpSecurityHeaderLabel(token: string): string {
+  const labels: Readonly<Record<string, string>> = {
     'content-security-policy': 'Content Security Policy',
     'content-type-protection': 'Content-type protection',
     'frame-protection': 'Frame protection',
     hsts: 'HSTS',
     'referrer-policy': 'Referrer policy',
-  })[token] || token;
+  };
+  return labels[token] || token;
 }

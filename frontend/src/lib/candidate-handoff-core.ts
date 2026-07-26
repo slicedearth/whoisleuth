@@ -15,11 +15,46 @@ export const MAX_MUTATION_TYPES = 30;
 export const MAX_MUTATION_TYPE_LENGTH = 80;
 export const MAX_SOURCE_LENGTH = 253;
 
-export const HANDOFF_SOURCES = ['typosquat', 'keyword', 'certificate-transparency', 'watchlist', 'manual'];
+export const HANDOFF_SOURCES = [
+  'typosquat',
+  'keyword',
+  'certificate-transparency',
+  'watchlist',
+  'manual',
+] as const;
 
-/** @param {unknown} value */
-export function isHandoffSource(value) {
-  return HANDOFF_SOURCES.includes(/** @type {string} */ (value));
+export type HandoffSource = typeof HANDOFF_SOURCES[number];
+
+export type CertificateTransparencyProvenance = {
+  hostnames: string[];
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+  certificateCount: number;
+};
+
+export type Candidate = {
+  domain: string;
+  source: string;
+  mutationTypes: string[];
+  certificateTransparency?: CertificateTransparencyProvenance | null;
+};
+
+export type CandidateHandoff = {
+  version: typeof HANDOFF_VERSION;
+  createdAt: string;
+  source: HandoffSource;
+  candidates: Candidate[];
+  generatedCandidates?: Candidate[];
+};
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function isHandoffSource(value: unknown): value is HandoffSource {
+  return typeof value === 'string' && (HANDOFF_SOURCES as readonly string[]).includes(value);
 }
 
 /**
@@ -30,21 +65,20 @@ export function isHandoffSource(value) {
  * domain cannot be normalized is dropped (returns null). Optional CT provenance
  * is revalidated and bounded; malformed provenance is discarded without losing
  * the candidate.
- * @param {any} value
- * @returns {{ domain: string, source: string, mutationTypes: string[], certificateTransparency?: object } | null}
  */
-export function normalizeCandidate(value) {
-  const domain = normalizeDomain(value == null ? '' : value.domain);
+export function normalizeCandidate(value: unknown): Candidate | null {
+  const record = plainRecord(value);
+  const domain = normalizeDomain(record?.domain ?? '');
   if (!domain) return null;
-  const rawTypes = Array.isArray(value?.mutationTypes)
-    ? value.mutationTypes.slice(0, MAX_MUTATION_TYPES).map((item) => String(item).slice(0, MAX_MUTATION_TYPE_LENGTH))
+  const rawTypes = Array.isArray(record?.mutationTypes)
+    ? record.mutationTypes.slice(0, MAX_MUTATION_TYPES).map((item) => String(item).slice(0, MAX_MUTATION_TYPE_LENGTH))
     : [];
-  const candidate = {
+  const candidate: Candidate = {
     domain,
-    source: String(value?.source || '').slice(0, MAX_SOURCE_LENGTH),
+    source: String(record?.source || '').slice(0, MAX_SOURCE_LENGTH),
     mutationTypes: [...new Set(rawTypes)],
   };
-  const ct = normalizeCtProvenance(value?.certificateTransparency);
+  const ct = normalizeCtProvenance(record?.certificateTransparency) as CertificateTransparencyProvenance | null;
   if (ct) candidate.certificateTransparency = ct;
   return candidate;
 }
@@ -52,12 +86,10 @@ export function normalizeCandidate(value) {
 /**
  * Bounds the input array (slice caps processing, not just output) then
  * normalizes and drops malformed entries.
- * @param {unknown} values
- * @param {number} limit
  */
-export function normalizeCandidates(values, limit) {
+export function normalizeCandidates(values: unknown, limit: number): Candidate[] {
   if (!Array.isArray(values)) return [];
-  const out = [];
+  const out: Candidate[] = [];
   for (const value of values.slice(0, limit)) {
     const candidate = normalizeCandidate(value);
     if (candidate) out.push(candidate);
@@ -69,12 +101,13 @@ export function normalizeCandidates(values, limit) {
  * Builds the serializable handoff envelope from live candidates. Pure - the
  * caller persists the returned object. `createdAt` is injected so this stays
  * deterministic and testable.
- * @param {string} source
- * @param {Array<object>} candidates
- * @param {Array<object>} [generatedCandidates]
- * @param {string} [createdAt]
  */
-export function buildHandoff(source, candidates, generatedCandidates, createdAt) {
+export function buildHandoff(
+  source: HandoffSource,
+  candidates: readonly unknown[],
+  generatedCandidates?: readonly unknown[],
+  createdAt?: string,
+): CandidateHandoff {
   return {
     version: HANDOFF_VERSION,
     createdAt: createdAt || new Date().toISOString(),
@@ -91,10 +124,9 @@ export function buildHandoff(source, candidates, generatedCandidates, createdAt)
  * sessionStorage). Returns null for anything that is not a version-1 handoff
  * with a known source and a candidate array, so a malicious or corrupt store is
  * ignored rather than trusted.
- * @param {unknown} parsed
  */
-export function parseHandoff(parsed) {
-  const value = /** @type {any} */ (parsed);
+export function parseHandoff(parsed: unknown): CandidateHandoff | null {
+  const value = plainRecord(parsed);
   if (!value || value.version !== HANDOFF_VERSION || !Array.isArray(value.candidates) || !isHandoffSource(value.source)) {
     return null;
   }

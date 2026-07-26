@@ -4,7 +4,7 @@ import {
   projectWatchlistDomainHistory as projectDomainHistory,
   watchlistHistoryDomains as historyDomains,
 } from './analysis/watchlist-history.js';
-import { httpSecurityHeaderLabel } from './analysis/http-summary.js';
+import { httpSecurityHeaderLabel } from './analysis/http-summary.ts';
 import {
   buildWatchlistExport,
   mergeWatchlistStores,

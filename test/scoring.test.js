@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 
 let scoring;
 before(async () => {
-  scoring = await import('../frontend/src/lib/analysis/scoring.js');
+  scoring = await import('../frontend/src/lib/analysis/scoring.ts');
 });
 
 describe('fmtAge', () => {

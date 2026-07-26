@@ -10,7 +10,7 @@
 // data. Reports contain only the normalized case record.
 
 import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.js';
-import { httpSecurityHeaderLabel } from './http-summary.js';
+import { httpSecurityHeaderLabel } from './http-summary.ts';
 
 // ---------------------------------------------------------------------------
 // Constants

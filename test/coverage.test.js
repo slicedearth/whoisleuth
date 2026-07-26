@@ -5,7 +5,7 @@ let coverage;
 let provenance;
 before(async () => {
   coverage = await import('../frontend/src/lib/analysis/coverage.js');
-  provenance = await import('../frontend/src/lib/analysis/candidate-provenance.js');
+  provenance = await import('../frontend/src/lib/analysis/candidate-provenance.ts');
 });
 
 describe('defensive-registration coverage', () => {

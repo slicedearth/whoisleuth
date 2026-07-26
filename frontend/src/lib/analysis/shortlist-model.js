@@ -3,7 +3,7 @@
 // import merging, and exact serialized-byte accounting.
 
 import { compactWatchlistResults } from './watchlist-history.js';
-import { normalizeRiskModelVersion } from './scoring.js';
+import { normalizeRiskModelVersion } from './scoring.ts';
 
 export const SHORTLIST_SCHEMA = 'whoisleuth.shortlist';
 export const SHORTLIST_SCHEMA_VERSION = 2;

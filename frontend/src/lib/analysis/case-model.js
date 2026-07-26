@@ -5,8 +5,8 @@
 // DOM access lives outside this module so it stays node --test-able and free of
 // browser globals.
 
-import { normalizeHttpSummary } from './http-summary.js';
-import { normalizeRiskModelVersion } from './scoring.js';
+import { normalizeHttpSummary } from './http-summary.ts';
+import { normalizeRiskModelVersion } from './scoring.ts';
 
 // Forward-version policy (two distinct guarantees):
 //   - A locally-stored envelope that declares a version greater than this is

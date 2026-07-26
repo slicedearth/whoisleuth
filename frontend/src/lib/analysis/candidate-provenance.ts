@@ -1,18 +1,32 @@
 // Request-local provenance for the candidate list currently loaded into the
 // query box. Bulk/watchlist records carry their own copy once scanned.
 
-/** @type {Map<string, { domain: string, source: string | null, tld: string | null, mutationTypes: string[] }>} */
-let byDomain = new Map();
+export type CandidateProvenance = {
+  domain: string;
+  source: string | null;
+  tld: string | null;
+  mutationTypes: string[];
+};
 
-/** @param {Array<{ domain: string, source?: string | null, sourceDomain?: string | null, tld?: string | null, candidateTld?: string | null, mutationTypes?: string[] }>} [candidates] */
-export function setCandidateProvenance(candidates = []) {
+export type CandidateProvenanceInput = {
+  domain: string;
+  source?: string | null;
+  sourceDomain?: string | null;
+  tld?: string | null;
+  candidateTld?: string | null;
+  mutationTypes?: unknown[];
+};
+
+let byDomain = new Map<string, CandidateProvenance>();
+
+export function setCandidateProvenance(candidates: readonly CandidateProvenanceInput[] = []): void {
   byDomain = new Map();
   for (const candidate of candidates) {
     if (!candidate || typeof candidate.domain !== 'string') continue;
     const domain = candidate.domain.trim().toLowerCase();
     if (!domain) continue;
     const mutationTypes = Array.isArray(candidate.mutationTypes)
-      ? candidate.mutationTypes.filter((type) => typeof type === 'string' && type)
+      ? candidate.mutationTypes.filter((type): type is string => typeof type === 'string' && type.length > 0)
       : [];
     const existing = byDomain.get(domain);
     if (existing) {
@@ -30,11 +44,11 @@ export function setCandidateProvenance(candidates = []) {
   }
 }
 
-export function getCandidateProvenance(domain) {
+export function getCandidateProvenance(domain: unknown): CandidateProvenance | null {
   if (!domain) return null;
   return byDomain.get(String(domain).trim().toLowerCase()) || null;
 }
 
-export function listCandidateProvenance() {
+export function listCandidateProvenance(): CandidateProvenance[] {
   return [...byDomain.values()];
 }

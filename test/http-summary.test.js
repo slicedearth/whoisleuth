@@ -2,7 +2,7 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
 async function moduleUnderTest() {
-  return import('../frontend/src/lib/analysis/http-summary.js');
+  return import('../frontend/src/lib/analysis/http-summary.ts');
 }
 
 describe('compact HTTP summary', () => {

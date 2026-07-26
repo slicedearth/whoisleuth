@@ -4,7 +4,7 @@
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
 import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.js';
-import { httpSecurityHeaderLabel } from './http-summary.js';
+import { httpSecurityHeaderLabel } from './http-summary.ts';
 
 // ---------------------------------------------------------------------------
 // Constants

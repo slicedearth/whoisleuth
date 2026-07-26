@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 // written straight into sessionStorage.
 let core;
 before(async () => {
-  core = await import('../frontend/src/lib/candidate-handoff-core.js');
+  core = await import('../frontend/src/lib/candidate-handoff-core.ts');
 });
 
 // Models the full save -> sessionStorage -> load path.
