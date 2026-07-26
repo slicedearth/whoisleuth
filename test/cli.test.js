@@ -259,6 +259,17 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         response: { status: 200 },
       },
       tls: { source: 'tls', status: 'success', protocol: 'TLSv1.3' },
+      structuredDataIdentity: {
+        source: 'html',
+        status: 'success',
+        entities: [{
+          types: ['Organization', 'WebSite'],
+          name: 'Example publisher',
+          declaredOrigin: 'https://example.com',
+          sameAsHosts: ['social.example'],
+          privateField: 'must-not-render',
+        }],
+      },
       technologyProfile: {
         source: 'derived',
         status: 'success',
@@ -305,12 +316,14 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /HTTP response\s+HTTP 200 · HTTPS/);
   assert.match(terminal, /TLS evidence\s+Success/);
   assert.match(terminal, /TLS protocol\s+TLSv1\.3/);
+  assert.match(terminal, /Structured ID\s+Success · 1 declared entity/);
+  assert.match(terminal, /Declarations\s+Example publisher \(Organization\/WebSite\)/);
   assert.match(terminal, /Technology\s+Success · 2 indicators/);
   assert.match(terminal, /Example Commerce \(commerce platform, high\)/);
   assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
   assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
-  assert.doesNotMatch(terminal, /private-marker|private-posture-detail/);
+  assert.doesNotMatch(terminal, /private-marker|private-posture-detail|must-not-render/);
   assert.doesNotMatch(terminal, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
 });
 

@@ -301,7 +301,7 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
       referencesExamined += 1;
       scanExtractor(detected, 'uri', script.reference, 'script URL');
       scanFilename(detected, script.reference);
-    } else if (script.inlineContent) {
+    } else if (script.inlineContent && script.mediaType !== 'application/ld+json') {
       inlineScriptsExamined += 1;
       scanInlineContent(detected, script.inlineContent);
     }

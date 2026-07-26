@@ -12,6 +12,7 @@ import {
   MAX_TAG_LENGTH,
   MAX_TECHNOLOGY_TAGS,
   analyzeStaticHtml,
+  type StaticHtmlAnalysis,
 } from './static-html-analysis.mts';
 
 type TechnologyCategory =
@@ -37,6 +38,7 @@ type TechnologyInput = {
   generator?: unknown;
   httpServer?: unknown;
   resourceOrigins?: unknown;
+  htmlAnalysis?: StaticHtmlAnalysis;
   observedAt?: unknown;
   sourceTruncated?: unknown;
 };
@@ -334,7 +336,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
 ];
 
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
-  const htmlAnalysis = analyzeStaticHtml(input.html);
+  const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
   const browserLibraryProfile = analyzeBrowserLibraries({
     htmlAnalysis,
     observedAt: input.observedAt,

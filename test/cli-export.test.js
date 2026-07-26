@@ -184,7 +184,7 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 17);
+    assert.equal(result.schemaVersion, 18);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     assert.equal(result.query.submitted, 'login.example.test');
     assert.equal(result.query.registrableDomain, 'example.test');

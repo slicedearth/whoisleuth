@@ -196,6 +196,7 @@ describe('Lookup HTTP response contract', () => {
         http: { response: { securityHeaders: { contentSecurityPolicy: 'default-src none' } } },
         tls: { certificate: { subject: { commonNames: ['example.test'] } } },
         pageIdentity: { openGraph: { url: { url: 'https://example.test/' } } },
+        structuredDataIdentity: { source: 'html', entities: [{ name: 'Example publisher' }] },
         technologyProfile: { source: 'derived' },
         securityPosture: { summary: { observed: 1 } },
       },
@@ -219,6 +220,7 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(view.httpSecurityHeaders.contentSecurityPolicy, 'default-src none');
     assert.deepEqual(view.tlsSubject.commonNames, ['example.test']);
     assert.equal(view.pageOpenGraphUrl.url, 'https://example.test/');
+    assert.equal(view.structuredDataIdentity.entities[0].name, 'Example publisher');
     assert.equal(view.securityPostureSummary.observed, 1);
     assert.equal(view.registryAccess.suffix, 'test');
     assert.equal(view.observedNetworkEndpoint.address, '192.0.2.1');

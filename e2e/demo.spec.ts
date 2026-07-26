@@ -51,6 +51,9 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();
   await expect(page.getByText('security.txt', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Passive security posture' })).toBeVisible();
+  const structuredIdentity = page.locator('.structured-card');
+  await expect(structuredIdentity.getByRole('heading', { name: 'Structured identity metadata' })).toBeVisible();
+  await expect(structuredIdentity).not.toHaveAttribute('open', '');
   for (const selector of ['.dns-card', '.http-card', '.security-posture-card', '.tls-card']) {
     const card = page.locator(selector);
     await expect(card).not.toHaveAttribute('open', '');
@@ -107,10 +110,11 @@ test('completes the public synthetic workflow without investigation requests or 
   const body = await (await download.createReadStream()).toArray();
   const payload = JSON.parse(Buffer.concat(body).toString('utf-8'));
   expect(download.suggestedFilename()).toBe('whoisleuth-synthetic-demo-case.json');
-  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 3, synthetic: true, case: { domain: 'northstar-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
+  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 4, synthetic: true, case: { domain: 'northstar-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
   expect(payload.timeline).toHaveLength(2);
   expect(payload.evidence.registry.source).toBe('Registry RDAP fixture');
   expect(payload.evidence.securityTxt.state).toBe('present');
+  expect(payload.evidence.structuredIdentity.entities[0].name).toBe('Northstar account service');
   expect(payload.evidence.observedNetwork.address).toBe('203.0.113.44');
 
   await page.reload();

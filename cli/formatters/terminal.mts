@@ -75,6 +75,7 @@ function formatTerminalLookup(document: TerminalRecord): string {
     const http = terminalRecord(availability.http);
     const httpResponse = terminalRecord(http.response);
     const tls = terminalRecord(availability.tls);
+    const structuredIdentity = terminalRecord(availability.structuredDataIdentity);
     const technology = terminalRecord(availability.technologyProfile);
     const browserLibraries = terminalRecord(technology.browserLibraryProfile);
     const posture = terminalRecord(availability.securityPosture);
@@ -94,6 +95,16 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (tls.status) {
       lines.push(`TLS evidence   ${titleCase(tls.status)}`);
       if (tls.protocol) lines.push(`TLS protocol   ${safeTerminalValue(tls.protocol)}`);
+    }
+    if (structuredIdentity.status || structuredIdentity.source === 'html') {
+      const entities = Array.isArray(structuredIdentity.entities) ? structuredIdentity.entities : [];
+      lines.push(`Structured ID  ${titleCase(structuredIdentity.status)} · ${entities.length} declared entit${entities.length === 1 ? 'y' : 'ies'}`);
+      const visible = entities.slice(0, 4).map((entity: unknown) => {
+        const item = terminalRecord(entity);
+        const types = Array.isArray(item.types) ? item.types.slice(0, 3).map((value: unknown) => safeTerminalValue(value)).join('/') : '';
+        return `${safeTerminalValue(item.name, 'Unnamed declaration')}${types ? ` (${types})` : ''}`;
+      });
+      if (visible.length) lines.push(`Declarations   ${safeTerminalValue(visible.join('; '))}`);
     }
     if (technology.status || technology.source === 'derived') {
       const findings = Array.isArray(technology.findings) ? technology.findings : [];

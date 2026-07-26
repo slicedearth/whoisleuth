@@ -8,6 +8,7 @@ import { Tokenizer, TokenizerMode, type TokenHandler } from 'parse5';
 type StaticScript = {
   reference: string | null;
   inlineContent: string;
+  mediaType: string | null;
 };
 
 type StaticHtmlAnalysis = {
@@ -28,6 +29,7 @@ const MAX_TAG_LENGTH = 4_096;
 const MAX_ATTRIBUTES_PER_TAG = 128;
 const MAX_SCRIPT_ELEMENTS = 64;
 const MAX_SCRIPT_REFERENCE_LENGTH = 2_048;
+const MAX_SCRIPT_MEDIA_TYPE_LENGTH = 120;
 const MAX_INLINE_SCRIPT_CHARS = 32_768;
 const MAX_INLINE_SCRIPT_TOTAL_CHARS = 65_536;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
@@ -52,6 +54,19 @@ function scriptReference(attributes: Array<{ name: string; value: string }>): st
       || CONTROL_CHARACTER_RE.test(attribute.value)
     ) return null;
     return attribute.value;
+  }
+  return null;
+}
+
+function scriptMediaType(attributes: Array<{ name: string; value: string }>): string | null {
+  for (const attribute of attributes.slice(0, MAX_ATTRIBUTES_PER_TAG)) {
+    if (attribute.name.toLowerCase() !== 'type') continue;
+    if (
+      attribute.value.length === 0
+      || attribute.value.length > MAX_SCRIPT_MEDIA_TYPE_LENGTH
+      || CONTROL_CHARACTER_RE.test(attribute.value)
+    ) return null;
+    return attribute.value.trim().toLowerCase().split(';', 1)[0] || null;
   }
   return null;
 }
@@ -133,7 +148,11 @@ function analyzeStaticHtml(value: unknown): StaticHtmlAnalysis {
         return;
       }
       const reference = scriptReference(token.attrs);
-      const script = { reference, inlineContent: '' };
+      const script = {
+        reference,
+        inlineContent: '',
+        mediaType: scriptMediaType(token.attrs),
+      };
       scripts.push(script);
       activeInlineScript = reference ? null : script;
     },
@@ -174,6 +193,7 @@ export {
   MAX_INLINE_SCRIPT_CHARS,
   MAX_INLINE_SCRIPT_TOTAL_CHARS,
   MAX_SCRIPT_ELEMENTS,
+  MAX_SCRIPT_MEDIA_TYPE_LENGTH,
   MAX_STATIC_HTML_CHARS,
   MAX_STATIC_HTML_TAGS,
   MAX_TAG_LENGTH,

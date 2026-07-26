@@ -1,7 +1,7 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 17;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 18;
 
 type LooseRecord = Record<string, any>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };

@@ -282,6 +282,8 @@ Deep single Lookup can derive several views from one bounded homepage response:
   presence, and a captured-body digest;
 - static page identity, forms, external origins, public tracking identifiers,
   and bounded fingerprints;
+- curated publisher-declared JSON-LD identity fields, reduced to schema types,
+  labels, declared origins, and `sameAs` hostnames;
 - curated technology indicators for common content, commerce, site-building,
   framework, server, and delivery products;
 - apparent browser-library versions and bounded advisory references inferred
@@ -298,6 +300,12 @@ or remove distinctive indicators. WHOISleuth does not fetch referenced scripts.
 A browser-library advisory match is a lead for review, not proof that the
 component is loaded, reachable, vulnerable in context, or exploitable. A
 non-match does not establish that no vulnerable component exists.
+
+Structured identity metadata is also a clue, not verification. WHOISleuth
+examines only bounded JSON-LD already present in the captured response, does
+not fetch referenced metadata, and discards raw JSON, contact fields, URL
+paths, queries, and arbitrary properties. A declaration does not prove
+identity, ownership, control, safety, or maliciousness.
 
 Observed network context maps one public endpoint address to its registered IP
 network. A delivery network, proxy, shared host, load balancer, or

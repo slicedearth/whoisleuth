@@ -275,6 +275,18 @@ default (see the README), so many lookups return no personal data at all.
   combined similarity score and the comparison does not affect Risk scoring.
   The derived comparison itself is transient and is not added to cases,
   watchlists, profiles, or evidence exports.
+- **Structured identity metadata**: a requested deep Lookup can examine
+  JSON-LD already present in the captured homepage response. It retains only
+  curated schema types, bounded labels, declared HTTP(S) origins, and
+  normalized `sameAs` hostnames. It discards the raw JSON-LD immediately after
+  analysis and never retains contact fields, arbitrary properties, complete
+  URLs, paths, queries, or fragments. Referenced JSON-LD is not fetched.
+  Publisher-declared metadata does not prove identity, ownership, control,
+  safety, or maliciousness. This analysis makes no additional request, does
+  not affect availability or Risk scoring, and is excluded from compact Bulk
+  results and browser-local cases, watchlists, and profiles. It appears in the
+  transient deep Lookup result and can be included in a deliberate full Lookup
+  evidence export.
 - **Technology indicators**: a requested deep Lookup can derive a versioned
   technology profile from the selected HTTP server header, generator metadata,
   normalized resource origins, and capped static HTML already collected for

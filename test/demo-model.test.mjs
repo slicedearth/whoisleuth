@@ -122,6 +122,7 @@ describe('synthetic demo export', () => {
     assert.equal(payload.timeline.length, 2);
     assert.equal(payload.provenance.source, 'Certificate Transparency');
     assert.equal(payload.evidence.securityTxt.state, 'present');
+    assert.equal(payload.evidence.structuredIdentity.entities[0].name, 'Northstar account service');
     assert.deepEqual(payload.evidence.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(payload.evidence.observedNetwork.address, '203.0.113.44');
     assert.match(payload.warning, /Synthetic demonstration data only/);

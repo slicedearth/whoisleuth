@@ -662,7 +662,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(17);
+  expect(exported.schemaVersion).toBe(18);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -1158,6 +1158,18 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             complete: true, truncated: false, limitations: [],
           },
         },
+        structuredDataIdentity: {
+          structuredDataVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'html', durationMs: null, complete: true, truncated: false,
+          limitations: ['Publisher-declared metadata does not prove identity, ownership, control, safety, or maliciousness.'],
+          diagnostics: { scriptsObserved: 1, scriptsExamined: 1, entities: 1 },
+          entities: [{
+            types: ['Organization', 'WebSite'],
+            name: 'Example publisher',
+            declaredOrigin: 'https://login.example.test',
+            sameAsHosts: ['social.example.test'],
+          }],
+        },
         technologyProfile: {
           profileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
@@ -1248,6 +1260,17 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
   await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
+
+  const structuredCard = page.locator('.structured-card');
+  await expect(structuredCard).not.toHaveAttribute('open', '');
+  await expect(structuredCard.getByRole('heading', { name: 'Structured identity metadata' })).toBeVisible();
+  await expect(structuredCard.getByRole('heading', { name: 'Example publisher' })).toBeHidden();
+  await structuredCard.locator(':scope > summary').click();
+  await expect(structuredCard.getByRole('heading', { name: 'Example publisher' })).toBeVisible();
+  await expect(structuredCard.getByText('Organization, WebSite', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText('https://login.example.test', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText('social.example.test', { exact: true })).toBeVisible();
+  await expect(structuredCard.getByText(/does not use this evidence for availability or Risk scoring/i)).toBeVisible();
 
   const technologyCard = page.locator('.technology-card');
   await expect(technologyCard).not.toHaveAttribute('open', '');

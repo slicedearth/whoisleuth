@@ -74,6 +74,7 @@ type DnsDelegation = {
 type AvailabilityOptions = {
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
+  includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
   includeSecurityPosture?: boolean;
   collectDnsIntelligence?: typeof collectDnsIntelligence;
@@ -625,7 +626,15 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   const faviconHash = favicon ? favicon.hash : null;
   const faviconPHash = favicon ? favicon.phash : null;
 
-  let htmlSignals: HtmlSignals = { pageTitle: null, hasPasswordField: false, phishingLanguageMatch: null, externalAssetHosts: [], pageIdentity: null, technologyProfile: null };
+  let htmlSignals: HtmlSignals = {
+    pageTitle: null,
+    hasPasswordField: false,
+    phishingLanguageMatch: null,
+    externalAssetHosts: [],
+    pageIdentity: null,
+    structuredDataIdentity: null,
+    technologyProfile: null,
+  };
 
   if (homepage.status === 'fetched') {
     if (page) {
@@ -645,6 +654,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         exactBodyHash: homepage.http?.response?.bodyHash,
         httpServer: homepage.http?.response?.server,
         includePageIdentity: pageIdentityEligible,
+        includeStructuredDataIdentity: options.includeStructuredDataIdentity,
         includeTechnologyProfile: options.includeTechnologyProfile,
       });
     }

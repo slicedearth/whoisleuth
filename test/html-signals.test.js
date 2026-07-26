@@ -281,6 +281,7 @@ describe('pageIdentity', () => {
       includePageIdentity: false,
     });
     assert.equal(result.pageIdentity, null);
+    assert.equal(result.structuredDataIdentity, null);
     assert.equal(result.technologyProfile, null);
     assert.equal(result.pageTitle, 'Example');
     assert.equal(result.hasPasswordField, true);
@@ -295,12 +296,42 @@ describe('pageIdentity', () => {
     assert.equal(result.technologyProfile.observedAt, observedAt);
   });
 
+  test('derives structured identity from the same captured HTML', () => {
+    const result = extractHtmlSignals(`
+      <script type="application/ld+json">
+        {"@type":"Organization","name":"Example publisher","url":"/about"}
+      </script>
+    `, 'example.com', {
+      baseUrl: 'https://www.example.com/start',
+      observedAt,
+    });
+
+    assert.equal(result.structuredDataIdentity.source, 'html');
+    assert.equal(result.structuredDataIdentity.observedAt, observedAt);
+    assert.deepEqual(result.structuredDataIdentity.entities, [{
+      types: ['Organization'],
+      name: 'Example publisher',
+      declaredOrigin: 'https://www.example.com',
+      sameAsHosts: [],
+    }]);
+  });
+
   test('can omit technology analysis while preserving page identity', () => {
     const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1">', 'example.com', {
       includeTechnologyProfile: false,
     });
     assert.equal(result.pageIdentity.source, 'html');
     assert.equal(result.technologyProfile, null);
+  });
+
+  test('can omit structured identity analysis while preserving page identity', () => {
+    const result = extractHtmlSignals(
+      '<script type="application/ld+json">{"@type":"Organization","name":"Example"}</script>',
+      'example.com',
+      { includeStructuredDataIdentity: false },
+    );
+    assert.equal(result.pageIdentity.source, 'html');
+    assert.equal(result.structuredDataIdentity, null);
   });
 
   test('summarizes normalized resource types and external origins without retaining paths', () => {

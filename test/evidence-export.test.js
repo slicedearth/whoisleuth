@@ -218,6 +218,18 @@ function fixtureResponse() {
           complete: true, truncated: false, limitations: [],
         },
       },
+      structuredDataIdentity: {
+        structuredDataVersion: 1, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
+        scanMode: 'deep', source: 'html', complete: true, truncated: false,
+        limitations: ['Publisher-declared metadata does not prove identity.'],
+        diagnostics: { scriptsObserved: 1, entities: 1 },
+        entities: [{
+          types: ['Organization'],
+          name: 'Example publisher',
+          declaredOrigin: 'https://example.com',
+          sameAsHosts: ['social.example'],
+        }],
+      },
       technologyProfile: {
         profileVersion: 3, version: 1, status: 'success', observedAt: '2026-07-11T01:02:05.000Z',
         scanMode: 'deep', source: 'derived', complete: true, truncated: false,
@@ -282,7 +294,7 @@ describe('lookup evidence export', () => {
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 17);
+    assert.equal(result.schemaVersion, 18);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(result.diagnostics.rdap.status, 'success');
@@ -331,6 +343,8 @@ describe('lookup evidence export', () => {
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
     assert.equal(result.analysis.availability.pageIdentity.fingerprints.visibleText.value, 'c'.repeat(16));
     assert.deepEqual(result.analysis.availability.pageIdentity.fingerprints.resourceHosts.values, ['cdn.example']);
+    assert.equal(result.analysis.availability.structuredDataIdentity.structuredDataVersion, 1);
+    assert.equal(result.analysis.availability.structuredDataIdentity.entities[0].name, 'Example publisher');
     assert.equal(result.analysis.availability.dns.records.https[0].parameters.opaque[0].name, 'ech');
     assert.equal(result.analysis.availability.technologyProfile.profileVersion, 3);
     assert.equal(result.analysis.availability.technologyProfile.findings[0].name, 'Fixture Framework');
@@ -365,7 +379,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 17);
+    assert.equal(result.schemaVersion, 18);
     assert.equal(result.analysis.idn.version, 1);
     assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
   });

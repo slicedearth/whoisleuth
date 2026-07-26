@@ -225,6 +225,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? timing.measure('domain_evidence', () => checkAvailability(classified.value, {
         fast,
         includeExtendedDnsContext: !compact,
+        includeStructuredDataIdentity: !fast && !compact,
         includeTechnologyProfile: !compact,
         includeSecurityPosture: !compact,
         featurePolicy,
@@ -544,6 +545,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   // same registry payloads the backend already used to build `availability`.
   if (compact) {
     const {
+      structuredDataIdentity: _structuredDataIdentity,
       technologyProfile: _technologyProfile,
       securityPosture: _securityPosture,
       ...compactAvailability
