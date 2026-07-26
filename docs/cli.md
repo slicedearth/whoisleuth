@@ -116,7 +116,7 @@ missing posture signal into a vulnerability, hosting-control, ownership, or
 maliciousness claim. Use `--json` when the full bounded evidence, limitations,
 and source diagnostics are required.
 
-When diagnostics version 5, 6, or 7 reports a documented registry collection
+When diagnostics version 5, 6, 7, or 8 reports a documented registry collection
 constraint, terminal output also shows the suffix, WHOIS and RDAP access
 profiles, and the bounded limitation. This is static access-policy context: it
 does not make another request, and restricted, unpublished, or unavailable

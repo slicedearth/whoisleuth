@@ -11,6 +11,28 @@ type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 type JsonObject = { readonly [key: string]: JsonValue };
 type LookupQueryType = 'domain' | 'ipv4' | 'ipv6' | 'asn';
+type LookupTimingSource =
+  | 'rdap'
+  | 'whois'
+  | 'domain_evidence'
+  | 'registrar_rdap'
+  | 'network_context'
+  | 'security_txt'
+  | 'external_intelligence'
+  | 'malware_host_intelligence'
+  | 'malware_ioc_intelligence';
+type LookupTimingOutcome = 'fulfilled' | 'rejected';
+type LookupTimingEntry = {
+  readonly source: LookupTimingSource;
+  readonly outcome: LookupTimingOutcome;
+  readonly durationMs: number;
+  readonly completedAfterMs: number;
+};
+type LookupTiming = {
+  readonly version: 1;
+  readonly totalMs: number;
+  readonly sources: readonly LookupTimingEntry[];
+};
 type LookupClassifiedQuery = {
   readonly type: LookupQueryType;
   readonly inputHostname?: string;
@@ -42,6 +64,7 @@ type LookupViewModel = {
   readonly rdapParsed: JsonObject;
   readonly whoisParsed: JsonObject;
   readonly diagnostics: JsonObject;
+  readonly timing: LookupTiming | null;
   readonly registryAccess: JsonObject;
   readonly observedNetworkContext: JsonObject;
   readonly observedNetworkEndpoint: JsonObject;
@@ -92,8 +115,22 @@ const MAX_LOOKUP_RESPONSE_HOST_LENGTH = 253;
 const MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 32;
 const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
 const MAX_THREAT_INTELLIGENCE_PROVIDERS = 10;
+const MAX_LOOKUP_TIMING_MS = 120_000;
+const MAX_LOOKUP_TIMING_SOURCES = 9;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/u;
 const QUERY_TYPES = new Set<LookupQueryType>(['domain', 'ipv4', 'ipv6', 'asn']);
+const LOOKUP_TIMING_SOURCES = new Set<LookupTimingSource>([
+  'rdap',
+  'whois',
+  'domain_evidence',
+  'registrar_rdap',
+  'network_context',
+  'security_txt',
+  'external_intelligence',
+  'malware_host_intelligence',
+  'malware_ioc_intelligence',
+]);
+const LOOKUP_TIMING_OUTCOMES = new Set<LookupTimingOutcome>(['fulfilled', 'rejected']);
 const EMPTY_RECORD: JsonObject = Object.freeze({});
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -163,6 +200,56 @@ function lookupHttpErrorMessage(value: unknown, status: number): string {
   return message || `Lookup failed (${status})`;
 }
 
+function isBoundedTimingMs(value: unknown, totalMs: number): value is number {
+  return Number.isInteger(value)
+    && Number(value) >= 0
+    && Number(value) <= totalMs
+    && Number(value) <= MAX_LOOKUP_TIMING_MS;
+}
+
+function normalizeLookupTiming(value: unknown): LookupTiming | null {
+  if (!isJsonObject(value)
+    || value.version !== 1
+    || !Number.isInteger(value.totalMs)
+    || Number(value.totalMs) < 0
+    || Number(value.totalMs) > MAX_LOOKUP_TIMING_MS
+    || !Array.isArray(value.sources)
+    || value.sources.length > MAX_LOOKUP_TIMING_SOURCES) {
+    return null;
+  }
+
+  const totalMs = Number(value.totalMs);
+  const seen = new Set<LookupTimingSource>();
+  const sources: LookupTimingEntry[] = [];
+  for (const candidate of value.sources) {
+    if (!isJsonObject(candidate)
+      || typeof candidate.source !== 'string'
+      || !LOOKUP_TIMING_SOURCES.has(candidate.source as LookupTimingSource)
+      || seen.has(candidate.source as LookupTimingSource)
+      || typeof candidate.outcome !== 'string'
+      || !LOOKUP_TIMING_OUTCOMES.has(candidate.outcome as LookupTimingOutcome)
+      || !isBoundedTimingMs(candidate.durationMs, totalMs)
+      || !isBoundedTimingMs(candidate.completedAfterMs, totalMs)
+      || Number(candidate.durationMs) > Number(candidate.completedAfterMs)) {
+      return null;
+    }
+    const source = candidate.source as LookupTimingSource;
+    seen.add(source);
+    sources.push({
+      source,
+      outcome: candidate.outcome as LookupTimingOutcome,
+      durationMs: Number(candidate.durationMs),
+      completedAfterMs: Number(candidate.completedAfterMs),
+    });
+  }
+
+  return {
+    version: 1,
+    totalMs,
+    sources,
+  };
+}
+
 function createLookupHttpResponse(
   query: string,
   classified: LookupClassifiedQuery,
@@ -211,6 +298,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     rdapParsed: record(rdap.parsed),
     whoisParsed: record(whois.parsed),
     diagnostics,
+    timing: normalizeLookupTiming(diagnostics.timing),
     registryAccess: record(diagnostics.registryAccess),
     observedNetworkContext,
     observedNetworkEndpoint: record(observedNetworkContext.endpoint),
@@ -258,11 +346,14 @@ export {
   MAX_LOOKUP_RESPONSE_HOST_LENGTH,
   MAX_LOOKUP_RESPONSE_QUERY_LENGTH,
   MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS,
+  MAX_LOOKUP_TIMING_MS,
+  MAX_LOOKUP_TIMING_SOURCES,
   MAX_THREAT_INTELLIGENCE_PROVIDERS,
   createLookupHttpResponse,
   createLookupViewModel,
   isJsonObject,
   lookupHttpErrorMessage,
+  normalizeLookupTiming,
   parseLookupHttpResponse,
   record as lookupRecord,
 };
@@ -273,5 +364,9 @@ export type {
   LookupHttpResponse,
   LookupQueryType,
   LookupResponseParseResult,
+  LookupTiming,
+  LookupTimingEntry,
+  LookupTimingOutcome,
+  LookupTimingSource,
   LookupViewModel,
 };

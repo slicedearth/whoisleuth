@@ -67,10 +67,22 @@ evidence, collection time, or limitations.
 
 During collection, Lookup identifies the requested source families without
 pretending that any one source has completed before the bounded unified
-response arrives. Once a result is available, the sticky section rail tracks
-the current evidence group. The topology uses separate visual families for
-registry, network, web, derived, and analyst evidence, with an adjacent key;
-source status remains an independent label and colour.
+response arrives. It shows elapsed time and a 40-second browser deadline.
+**Cancel lookup** stops the browser from waiting and discards any incomplete
+response; already-admitted server work can still finish within its existing
+bounds. Leaving Lookup applies the same browser cancellation.
+
+After a successful deep full response, **Collection timing** reports total
+request time plus the duration and settle offset of each source branch that
+actually ran. Branches overlap, so their durations are not additive. A settled
+branch can still have a partial, unavailable, not-found, or error state; use
+the source card for that evidence status. Fast and compact responses retain
+their existing diagnostics and omit this timing object.
+
+Once a result is available, the sticky section rail tracks the current
+evidence group. The topology uses separate visual families for registry,
+network, web, derived, and analyst evidence, with an adjacent key; source
+status remains an independent label and colour.
 
 After a successful single Lookup, the deliberate JSON evidence export can
 include normalized and raw registration sources, supporting observations,

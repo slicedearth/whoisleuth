@@ -37,6 +37,7 @@ function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN
 // signal and must still fail.
 const CHROME_HTTP_400_NOISE_RE = /^Failed to load resource: the server responded with a status of 400\b/;
 const CHROME_HTTP_429_NOISE_RE = /^Failed to load resource: the server responded with a status of 429\b/;
+const CHROME_HTTP_504_NOISE_RE = /^Failed to load resource: the server responded with a status of 504\b/;
 
 // Installs an active request interceptor on a BrowserContext: every request
 // is either passed through (allowed origin) or aborted client-side before it
@@ -75,6 +76,9 @@ type Options = {
   // exact local /api/lookup request with 429. Other 429s and endpoints remain
   // console failures.
   allowExpectedLookup429Noise: boolean;
+  // Opt-in for the one timeout-presentation test that deliberately fulfills
+  // an exact local /api/lookup request with 504.
+  allowExpectedLookup504Noise: boolean;
 };
 
 type Fixtures = {
@@ -91,9 +95,16 @@ type Fixtures = {
 export const test = base.extend<Options & Fixtures>({
   allowExpectedBulkLookup400Noise: [false, { option: true }],
   allowExpectedLookup429Noise: [false, { option: true }],
+  allowExpectedLookup504Noise: [false, { option: true }],
 
   networkAndConsoleGuard: [
-    async ({ page, context, allowExpectedBulkLookup400Noise, allowExpectedLookup429Noise }, use) => {
+    async ({
+      page,
+      context,
+      allowExpectedBulkLookup400Noise,
+      allowExpectedLookup429Noise,
+      allowExpectedLookup504Noise,
+    }, use) => {
       const guard = await installNetworkGuard(context);
       const consoleIssues: string[] = [];
 
@@ -105,7 +116,8 @@ export const test = base.extend<Options & Fixtures>({
           type === 'error' &&
           isLookupEndpointUrl(message.location().url) &&
           ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
-            || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text)))
+            || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text))
+            || (allowExpectedLookup504Noise && CHROME_HTTP_504_NOISE_RE.test(text)))
         ) {
           return;
         }

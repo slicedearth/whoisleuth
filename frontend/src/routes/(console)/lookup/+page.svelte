@@ -23,6 +23,7 @@
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
+  import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
@@ -39,10 +40,12 @@
   } from '$lib/analysis/evidence-topology.ts';
   import {
     createLookupViewModel,
-    lookupHttpErrorMessage,
-    parseLookupHttpResponse,
     type LookupHttpResponse,
   } from '$lib/analysis/lookup-response.js';
+  import {
+    LOOKUP_CLIENT_TIMEOUT_MS,
+    requestLookup,
+  } from '$lib/analysis/lookup-request.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.js';
@@ -68,6 +71,7 @@
   let query=$state('');
   let lookupMode=$state<LookupMode>('deep');
   let loading=$state(false);
+  let loadingElapsedMs=$state(0);
   let includeExternalIntelligence=$state(false);
   let includeMalwareHostIntelligence=$state(false);
   let includeMalwareIocIntelligence=$state(false);
@@ -77,6 +81,10 @@
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let activeLookupController:AbortController|null=null;
+  let activeLookupSequence=0;
+  let progressTimer:ReturnType<typeof setInterval>|null=null;
+  let pageActive=false;
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const lookupLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
@@ -107,6 +115,7 @@
   const rdapParsed=$derived(lookupView.rdapParsed as JsonRecord);
   const whoisParsed=$derived(lookupView.whoisParsed as JsonRecord);
   const diagnostics=$derived(lookupView.diagnostics as JsonRecord);
+  const lookupTiming=$derived(lookupView.timing);
   const registryAccess=$derived(lookupView.registryAccess as JsonRecord);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext as JsonRecord);
   const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint as JsonRecord);
@@ -217,7 +226,12 @@
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=await openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:lookupEvidenceDepth}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{const{record,pruned}=await addCaseNote(caseRecord.id,body);caseRecord=record;caseNote='';caseStatus=`Added a note to the case.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
+  function clearProgressTimer(){
+    if(progressTimer!==null){clearInterval(progressTimer);progressTimer=null;}
+  }
+  function cancelLookup(){activeLookupController?.abort('user_cancelled');}
   onMount(()=>{
+    pageActive=true;
     const restored=readLookupWorkflowState();
     if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
     const q=page.url.searchParams.get('q');
@@ -228,7 +242,14 @@
     else if(q)query=q;
     if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
     void (async()=>{profile=await activeProfile();if(result)await refreshCase();})();
-    return()=>writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+    return()=>{
+      pageActive=false;
+      activeLookupSequence+=1;
+      activeLookupController?.abort('navigation');
+      activeLookupController=null;
+      clearProgressTimer();
+      writeLookupWorkflowState({query,lookupMode,includeExternalIntelligence,includeMalwareHostIntelligence,includeMalwareIocIntelligence,includeSecurityTxt,error,result});
+    };
   });
 
   function eventDate(action:string){return rdapParsed.events?.find((item:JsonRecord)=>item.action===action)?.date||null;}
@@ -574,7 +595,50 @@
     }
     return nodes;
   }
-  async function submit(event:SubmitEvent){event.preventDefault();if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(!entries.length||loading)return;if(entries.length>1){result=null;error='';saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));await goto('/bulk?source=lookup');return;}loading=true;error='';result=null;caseRecord=null;caseNote='';caseStatus='';profile=await activeProfile();try{const params=new URLSearchParams({q:entries[0]});if(lookupMode==='fast')params.set('fast','1');if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');if(lookupMode==='deep'&&includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');if(lookupMode==='deep'&&includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');const response=await fetch(`/api/lookup?${params}`);const body:unknown=await response.json().catch(()=>({}));if(!response.ok)throw new Error(lookupHttpErrorMessage(body,response.status));const parsed=parseLookupHttpResponse(body);if(!parsed.ok)throw new Error(parsed.error);result=parsed.value;await refreshCase();requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));}catch(cause){error=cause instanceof Error?cause.message:'Lookup failed';}finally{loading=false;}}
+  async function submit(event:SubmitEvent){
+    event.preventDefault();
+    if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
+    if(!entries.length||loading)return;
+    if(entries.length>1){
+      result=null;error='';
+      saveCandidateHandoff('manual',entries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
+      await goto('/bulk?source=lookup');
+      return;
+    }
+
+    const sequence=++activeLookupSequence;
+    const controller=new AbortController();
+    activeLookupController=controller;
+    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';
+    const startedAt=performance.now();
+    clearProgressTimer();
+    progressTimer=setInterval(()=>{if(sequence===activeLookupSequence)loadingElapsedMs=Math.max(0,performance.now()-startedAt);},250);
+    const params=new URLSearchParams({q:entries[0]});
+    if(lookupMode==='fast')params.set('fast','1');
+    if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');
+    if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');
+    if(lookupMode==='deep'&&includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');
+    if(lookupMode==='deep'&&includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');
+
+    try{
+      profile=await activeProfile();
+      const outcome=await requestLookup(`/api/lookup?${params}`,{signal:controller.signal});
+      if(sequence!==activeLookupSequence||!pageActive)return;
+      if(!outcome.ok){error=outcome.message;return;}
+      result=outcome.value;
+      await refreshCase();
+      requestAnimationFrame(()=>document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}));
+    }catch{
+      if(sequence===activeLookupSequence&&pageActive)error='Lookup request could not be prepared.';
+    }finally{
+      if(sequence===activeLookupSequence){
+        clearProgressTimer();
+        loadingElapsedMs=Math.max(0,performance.now()-startedAt);
+        activeLookupController=null;
+        if(pageActive)loading=false;
+      }
+    }
+  }
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
@@ -583,6 +647,8 @@
   bind:query
   bind:lookupMode
   {loading}
+  {loadingElapsedMs}
+  loadingDeadlineMs={LOOKUP_CLIENT_TIMEOUT_MS}
   entryCount={entries.length}
   duplicateCount={parsedInput.duplicates}
   {lookupDisabled}
@@ -598,6 +664,7 @@
   bind:includeSecurityTxt
   {error}
   onsubmit={submit}
+  oncancel={cancelLookup}
 />
 
 {#if result}
@@ -611,6 +678,10 @@
 
       {#if availability.applicable!==false}
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={signals()} trusted={String(profileSignals.trusted||'')} />
+      {/if}
+
+      {#if lookupTiming}
+        <LookupCollectionTiming timing={lookupTiming} />
       {/if}
 
       <EvidenceTopology

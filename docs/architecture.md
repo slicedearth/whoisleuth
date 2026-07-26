@@ -95,6 +95,30 @@ sources and excludes raw RDAP JSON and multi-hop WHOIS bodies from its response.
 This keeps each serverless invocation bounded and avoids work and payloads that
 Bulk does not display or retain.
 
+Deep full Lookup keeps one authoritative HTTP response rather than splitting
+registration and enrichment into separate requests or depending on
+deployment-specific response streaming. The browser displays elapsed time and
+eligible branches as pending until that response arrives. It can stop waiting
+after an analyst cancellation, navigation away, or its 40-second deadline, but
+already-admitted server work remains bounded by the existing operation lease
+and source deadlines.
+
+Polling was not selected because it would require durable job state or risk
+repeating upstream work. Split registration and enrichment responses would
+change cache and request-budget semantics and could expose an assessment before
+all authority inputs settle. Response streaming is not the shared contract of
+the current Express, static-frontend, and serverless adapters. The selected
+single-response design therefore improves progress and cancellation feedback
+without introducing a second orchestration path.
+
+Diagnostics version 8 adds bounded settle timing only to deep non-compact
+responses. Each recorded branch has a fulfilled or rejected promise outcome,
+duration, and completion offset relative to the unified request. These are
+orchestration measurements, not evidence-health claims: a fulfilled branch can
+still return partial, unavailable, not-found, or error evidence. Branches
+overlap and their durations must not be summed. Fast and compact responses
+retain diagnostics version 7 and their existing payload shape.
+
 ## Outbound evidence boundaries
 
 - **RDAP** starts from validated IANA bootstrap data, prefers HTTPS, validates

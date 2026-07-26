@@ -8,10 +8,13 @@ import {
   MAX_LOOKUP_RESPONSE_HOST_LENGTH,
   MAX_LOOKUP_RESPONSE_QUERY_LENGTH,
   MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS,
+  MAX_LOOKUP_TIMING_MS,
+  MAX_LOOKUP_TIMING_SOURCES,
   MAX_THREAT_INTELLIGENCE_PROVIDERS,
   createLookupHttpResponse,
   createLookupViewModel,
   lookupHttpErrorMessage,
+  normalizeLookupTiming,
   parseLookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
 
@@ -66,6 +69,57 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(view.observedNetworkContext, {});
     assert.deepEqual(view.securityTxt, {});
     assert.deepEqual(view.threatIntelligenceProviders, []);
+    assert.equal(view.timing, null);
+  });
+
+  test('normalizes bounded deep timing without mutating raw diagnostics', () => {
+    const timing = {
+      version: 1,
+      totalMs: 2_500,
+      sources: [
+        { source: 'rdap', outcome: 'fulfilled', durationMs: 400, completedAfterMs: 400 },
+        { source: 'whois', outcome: 'rejected', durationMs: 2_000, completedAfterMs: 2_100 },
+      ],
+    };
+    const raw = response({ diagnostics: { version: 8, timing } });
+    const before = structuredClone(raw);
+    const parsed = parseLookupHttpResponse(raw);
+    assert.equal(parsed.ok, true);
+
+    const view = createLookupViewModel(parsed.value);
+    assert.deepEqual(view.timing, timing);
+    assert.notEqual(view.timing, timing);
+    assert.notEqual(view.timing.sources, timing.sources);
+    assert.deepEqual(raw, before);
+  });
+
+  test('drops malformed timing without rejecting otherwise valid evidence', () => {
+    const validEntry = {
+      source: 'rdap',
+      outcome: 'fulfilled',
+      durationMs: 10,
+      completedAfterMs: 20,
+    };
+    const invalid = [
+      null,
+      [],
+      { version: 2, totalMs: 20, sources: [validEntry] },
+      { version: 1, totalMs: -1, sources: [] },
+      { version: 1, totalMs: MAX_LOOKUP_TIMING_MS + 1, sources: [] },
+      { version: 1, totalMs: 20, sources: Array(MAX_LOOKUP_TIMING_SOURCES + 1).fill(validEntry) },
+      { version: 1, totalMs: 20, sources: [{ ...validEntry, source: 'unknown' }] },
+      { version: 1, totalMs: 20, sources: [{ ...validEntry, outcome: 'complete' }] },
+      { version: 1, totalMs: 20, sources: [{ ...validEntry, durationMs: 21 }] },
+      { version: 1, totalMs: 20, sources: [{ ...validEntry, completedAfterMs: 9 }] },
+      { version: 1, totalMs: 20, sources: [validEntry, validEntry] },
+    ];
+
+    for (const timing of invalid) {
+      assert.equal(normalizeLookupTiming(timing), null);
+      const parsed = parseLookupHttpResponse(response({ diagnostics: { version: 8, timing } }));
+      assert.equal(parsed.ok, true);
+      assert.equal(createLookupViewModel(parsed.value).timing, null);
+    }
   });
 
   test('rejects malformed envelope values with a stable error', () => {

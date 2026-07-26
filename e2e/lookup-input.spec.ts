@@ -57,6 +57,157 @@ test('fast lookup mode is explicit and sends the fast contract parameter', async
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
 });
 
+test('deep lookup reports pending elapsed time and final source settle timing', async ({ page }) => {
+  let releaseLookup: (() => void) | undefined;
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    await lookupGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'timing.example.test',
+        type: 'domain',
+        registrableDomain: 'example.test',
+        availability: {
+          applicable: true,
+          state: 'registered',
+          confidence: 'medium',
+          domain: 'example.test',
+          deepScanComplete: true,
+        },
+        rdap: { error: 'Fixture source unavailable' },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: {
+          version: 8,
+          timing: {
+            version: 1,
+            totalMs: 2_400,
+            sources: [
+              { source: 'rdap', outcome: 'rejected', durationMs: 700, completedAfterMs: 700 },
+              { source: 'whois', outcome: 'fulfilled', durationMs: 2_000, completedAfterMs: 2_100 },
+              { source: 'domain_evidence', outcome: 'fulfilled', durationMs: 2_200, completedAfterMs: 2_300 },
+            ],
+          },
+          rdap: { status: 'error' },
+          whois: { status: 'partial' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await page.locator('#query').fill('timing.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const pending = page.locator('.loading-note');
+  await expect(page.getByRole('status')).toContainText('Deep lookup is waiting for one final response');
+  await expect(pending.locator('.loading-meta')).toContainText(/elapsed/u);
+  await expect(pending.locator('.collection-trace')).toContainText('Registry RDAP');
+  await expect(pending.locator('.collection-trace')).toContainText('Domain evidence');
+  await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
+  releaseLookup?.();
+
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  const timing = page.getByRole('region', { name: 'Collection timing' });
+  await expect(timing).toBeVisible();
+  await expect(timing.getByText('2.4 s total')).toBeVisible();
+  await expect(timing.getByText('request error')).toBeVisible();
+  await expect(timing.getByText('WHOIS chain')).toBeVisible();
+  await expect(timing.getByText('at +2.1 s')).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('an analyst can cancel a pending lookup without retaining a partial result', async ({ page }) => {
+  let releaseLookup: (() => void) | undefined;
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    await lookupGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'cancel.example.test',
+        type: 'domain',
+        registrableDomain: 'example.test',
+        rdap: {},
+        whois: {},
+        availability: { applicable: true, state: 'unknown' },
+        diagnostics: { version: 8 },
+      }),
+    }).catch(() => {});
+  });
+
+  await page.locator('#query').fill('cancel.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await page.getByRole('button', { name: 'Cancel lookup' }).click();
+
+  await expect(page.getByRole('alert')).toHaveText('Lookup cancelled. No partial response was retained.');
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
+  releaseLookup?.();
+});
+
+test('navigation away aborts the browser wait without restoring a late result', async ({ page }) => {
+  let releaseLookup: (() => void) | undefined;
+  const lookupGate = new Promise<void>((resolve) => {
+    releaseLookup = resolve;
+  });
+  await page.route('**/api/lookup?*', async (route) => {
+    await lookupGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'navigation.example.test',
+        type: 'domain',
+        registrableDomain: 'example.test',
+        rdap: {},
+        whois: {},
+        availability: { applicable: true, state: 'registered' },
+        diagnostics: { version: 8 },
+      }),
+    }).catch(() => {});
+  });
+
+  await page.locator('#query').fill('navigation.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/ }).click();
+  await expect(page).toHaveURL('/dashboard');
+  releaseLookup?.();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
+
+  await expect(page.locator('#query')).toHaveValue('navigation.example.test');
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test.describe('lookup timeout presentation', () => {
+  test.use({ allowExpectedLookup504Noise: true });
+
+  test('a bounded server timeout remains an explicit neutral request failure', async ({ page }) => {
+    await page.route('**/api/lookup?*', async (route) => route.fulfill({
+      status: 504,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: 'Lookup timed out before a final response was available.',
+        errorCode: 'LOOKUP_TIMEOUT',
+      }),
+    }));
+
+    await page.locator('#query').fill('timeout.example.test');
+    await page.getByRole('button', { name: 'Run lookup' }).click();
+
+    await expect(page.getByRole('alert')).toHaveText('Lookup timed out before a final response was available.');
+    await expect(page.locator('#result')).toHaveCount(0);
+  });
+});
+
 test('keeps the current Lookup form and result during console navigation only', async ({ page }) => {
   let requestCount = 0;
   await page.route('**/api/lookup?*', async (route) => {

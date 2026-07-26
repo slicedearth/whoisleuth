@@ -169,7 +169,7 @@ describe('comparison input boundary', () => {
   });
 
   test('projects only bounded supported context-only registry access diagnostics', () => {
-    for (const version of [5, 6, 7]) {
+    for (const version of [5, 6, 7, 8]) {
       const source = withRegistryAccess(lookupDocument(), {}, version);
       source.diagnostics.registryAccess.privateDetail = 'must not enter comparison output';
       const before = structuredClone(source);

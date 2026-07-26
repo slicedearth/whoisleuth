@@ -55,7 +55,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.whois.parsed.registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.equal(result.diagnostics.rdap.status, 'success');
     assert.equal(result.diagnostics.rdap.transportSecurity, 'https');
     assert.deepEqual(result.diagnostics.rdap.attempts, rdapRecord.attempts);
@@ -161,6 +161,54 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
   });
 
+  test('records bounded settle timing only for deep non-compact source branches', async () => {
+    let clock = 0;
+    const now = () => {
+      clock += 5;
+      return clock;
+    };
+    const result = await runUnifiedLookup(classifiedDomain, {
+      now,
+      fetchRdapRecord: async () => { throw new Error('RDAP timed out'); },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async (_domain, options) => {
+        await assert.rejects(options.rdapRecordPromise, /timed out/);
+        await options.whoisChainPromise;
+        return { state: 'unknown', confidence: 'low' };
+      },
+      collectObservedNetworkContext: async () => ({
+        contextVersion: 1,
+        status: 'unsupported',
+        detail: 'No eligible public endpoint address was observed.',
+      }),
+    });
+
+    assert.equal(result.diagnostics.version, 8);
+    assert.deepEqual(result.diagnostics.timing, {
+      version: 1,
+      totalMs: 45,
+      sources: [
+        { source: 'rdap', outcome: 'rejected', durationMs: 15, completedAfterMs: 20 },
+        { source: 'whois', outcome: 'fulfilled', durationMs: 15, completedAfterMs: 25 },
+        { source: 'domain_evidence', outcome: 'fulfilled', durationMs: 15, completedAfterMs: 30 },
+        { source: 'network_context', outcome: 'fulfilled', durationMs: 5, completedAfterMs: 40 },
+      ],
+    });
+
+    const ordinaryOptions = {
+      now,
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
+    };
+    const fast = await runUnifiedLookup(classifiedDomain, { ...ordinaryOptions, fast: true });
+    const compact = await runUnifiedLookup(classifiedDomain, { ...ordinaryOptions, compact: true });
+    for (const compatible of [fast, compact]) {
+      assert.equal(compatible.diagnostics.version, 7);
+      assert.equal(Object.hasOwn(compatible.diagnostics, 'timing'), false);
+    }
+  });
+
   test('adds non-authoritative registry-access context without changing source work or availability', async () => {
     const classifiedEs = {
       type: 'domain', value: 'example.es', inputHostname: 'example.es',
@@ -179,7 +227,7 @@ describe('runUnifiedLookup', () => {
       applicable: true, domain: 'example.es', inputHostname: 'example.es',
       registrableDomain: 'example.es', isSubdomain: false, ...availability,
     });
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.registryAccess, {
       suffix: 'es', coverageState: 'access_documented',
       whoisAccessProfile: 'source-ip-authorization-required',
@@ -262,7 +310,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(registrarCalls, 1);
     assert.equal(result.rdap.registrarRdap.status, 'success');
     assert.equal(result.rdap.parsed, rdapRecord.parsed);
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.rdap.registrar, {
       status: 'success',
       endpoint: 'https://registrar.example/domain/example.com',
@@ -335,7 +383,7 @@ describe('runUnifiedLookup', () => {
     });
     assert.equal(result.networkContext.network.holder, 'Example network holder');
     assert.equal(result.networkContext.network.cidrs[0], '93.184.216.0/24');
-    assert.equal(result.diagnostics.version, 7);
+    assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.network, {
       status: 'success',
       address: '93.184.216.34',

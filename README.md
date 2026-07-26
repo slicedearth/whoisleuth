@@ -61,6 +61,14 @@ Deep domain Lookup can combine:
 - a collapsed set of analyst-controlled links to relevant public registration,
   certificate, routing, interconnection, history, and site-status tools.
 
+While a deep Lookup is pending, the Console shows elapsed time, the eligible
+source branches still awaiting the final response, a 40-second browser
+deadline, and a cancel action. It does not invent per-source completion.
+Successful deep full responses add bounded backend-reported settle timing for
+the branches that actually ran. Cancelling or leaving the page stops the
+browser from waiting but cannot recall work already admitted by the server;
+no incomplete response is retained or rendered.
+
 The external evidence pivots are ordinary links, not integrations. WHOISleuth
 does not prefetch them, call their APIs, cache or store their results, or use
 them for availability or scoring. Each link identifies the destination and

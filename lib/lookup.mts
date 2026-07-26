@@ -38,6 +38,7 @@ type LookupOptions = {
   malwareIocIntelligence?: boolean;
   securityTxt?: boolean;
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
+  now?: () => number;
 };
 type RegistrarRdap = {
   status: string;
@@ -63,7 +64,29 @@ type AvailabilityEnvelope = {
   [key: string]: unknown;
 };
 
-const LOOKUP_DIAGNOSTICS_VERSION = 7;
+const LOOKUP_DIAGNOSTICS_VERSION = 8;
+const LOOKUP_LEGACY_DIAGNOSTICS_VERSION = 7;
+const LOOKUP_TIMING_VERSION = 1;
+const MAX_LOOKUP_TIMING_MS = 120_000;
+const LOOKUP_TIMING_SOURCE_ORDER = Object.freeze([
+  'rdap',
+  'whois',
+  'domain_evidence',
+  'registrar_rdap',
+  'network_context',
+  'security_txt',
+  'external_intelligence',
+  'malware_host_intelligence',
+  'malware_ioc_intelligence',
+] as const);
+type LookupTimingSource = typeof LOOKUP_TIMING_SOURCE_ORDER[number];
+type LookupTimingOutcome = 'fulfilled' | 'rejected';
+type LookupTimingEntry = {
+  source: LookupTimingSource;
+  outcome: LookupTimingOutcome;
+  durationMs: number;
+  completedAfterMs: number;
+};
 const LOOKUP_ERROR_CODES = Object.freeze({
   AUTH_REQUIRED: 'AUTH_REQUIRED',
   RATE_LIMITED: 'RATE_LIMITED',
@@ -93,6 +116,64 @@ function boundedSourceDetail(err: unknown, fallback: string): string {
     .slice(0, 240) || fallback;
 }
 
+function boundedTimingMs(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(MAX_LOOKUP_TIMING_MS, Math.max(0, Math.round(value)));
+}
+
+function createLookupTimingTracker(
+  enabled: boolean,
+  now: () => number,
+) {
+  const lookupStartedAt = now();
+  const entries = new Map<LookupTimingSource, LookupTimingEntry>();
+
+  function measure<T>(source: LookupTimingSource, operation: () => Promise<T> | T): Promise<T> {
+    const sourceStartedAt = now();
+    return Promise.resolve()
+      .then(operation)
+      .then(
+        (value) => {
+          const finishedAt = now();
+          entries.set(source, {
+            source,
+            outcome: 'fulfilled',
+            durationMs: boundedTimingMs(finishedAt - sourceStartedAt),
+            completedAfterMs: boundedTimingMs(finishedAt - lookupStartedAt),
+          });
+          return value;
+        },
+        (error) => {
+          const finishedAt = now();
+          entries.set(source, {
+            source,
+            outcome: 'rejected',
+            durationMs: boundedTimingMs(finishedAt - sourceStartedAt),
+            completedAfterMs: boundedTimingMs(finishedAt - lookupStartedAt),
+          });
+          throw error;
+        },
+      );
+  }
+
+  return {
+    measure<T>(source: LookupTimingSource, operation: () => Promise<T> | T): Promise<T> {
+      return enabled ? measure(source, operation) : Promise.resolve().then(operation);
+    },
+    snapshot() {
+      if (!enabled) return null;
+      const totalMs = boundedTimingMs(now() - lookupStartedAt);
+      return {
+        version: LOOKUP_TIMING_VERSION,
+        totalMs,
+        sources: LOOKUP_TIMING_SOURCE_ORDER
+          .map((source) => entries.get(source))
+          .filter((entry): entry is LookupTimingEntry => Boolean(entry)),
+      };
+    },
+  };
+}
+
 async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOptions = {}) {
   const fetchRdap = options.fetchRdapRecord || fetchRdapRecord;
   const fetchRegistrarRdap = options.fetchRegistrarRdapRecord || fetchRegistrarRdapRecord;
@@ -110,31 +191,36 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const malwareIocIntelligence = options.malwareIocIntelligence === true;
   const securityTxtRequested = options.securityTxt === true;
   const featurePolicy = options.featurePolicy || networkFeaturePolicy();
+  const timing = createLookupTimingTracker(!fast && !compact, options.now || Date.now);
   const rdapEnabled = featureDecision('rdap', featurePolicy).enabled;
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
   const availabilityEnabled = featureDecision('availability', featurePolicy).enabled;
   const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
   const skipWhois = fast || !whoisEnabled;
 
-  const rdapPromise = rdapEnabled ? fetchRdap(classified.type, classified.value) : Promise.resolve(null);
-  const whoisPromise = skipWhois ? Promise.resolve(null) : fetchWhois(classified.value);
+  const rdapPromise = rdapEnabled
+    ? timing.measure('rdap', () => fetchRdap(classified.type, classified.value))
+    : Promise.resolve(null);
+  const whoisPromise = skipWhois
+    ? Promise.resolve(null)
+    : timing.measure('whois', () => fetchWhois(classified.value));
   // Registrar RDAP is a separately attributed deep-lookup enrichment. It may
   // overlap the WHOIS chain, but it never joins the promises used to decide
   // availability and can add up to its own bounded timeout to a deep lookup.
   const registrarRdapPromise: Promise<RegistrarRdap | null> | null = classified.type === 'domain' && rdapEnabled && !fast && !compact
     ? rdapPromise.then((record) => record && record.upstreamStatus === 200 && record.parsed
-        ? fetchRegistrarRdap(classified.value, record)
+        ? timing.measure('registrar_rdap', () => fetchRegistrarRdap(classified.value, record))
         : null)
     : null;
   const availabilityPromise = classified.type === 'domain' && availabilityEnabled
-    ? checkAvailability(classified.value, {
+    ? timing.measure('domain_evidence', () => checkAvailability(classified.value, {
         fast,
         includeTechnologyProfile: !compact,
         includeSecurityPosture: !compact,
         featurePolicy,
         rdapRecordPromise: rdapPromise,
         whoisChainPromise: whoisPromise,
-      })
+      }))
     : null;
   // Network registration is an additive deep-only source. It starts only
   // after availability has produced the existing TLS/DNS observations and
@@ -147,8 +233,14 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     && !compact
     && availabilityPromise
     ? availabilityPromise.then(
-        (availability) => collectNetworkContext(availability, { fetchRdapRecord: fetchRdap }),
-        () => collectNetworkContext({}, { fetchRdapRecord: fetchRdap }),
+        (availability) => timing.measure(
+          'network_context',
+          () => collectNetworkContext(availability, { fetchRdapRecord: fetchRdap }),
+        ),
+        () => timing.measure(
+          'network_context',
+          () => collectNetworkContext({}, { fetchRdapRecord: fetchRdap }),
+        ),
       )
     : null;
   // security.txt is an explicit, additive deep-lookup action. It uses the
@@ -159,25 +251,34 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     && websiteProbeEnabled
     && !fast
     && !compact
-    ? collectDisclosureContacts(classified.inputHostname)
+    ? timing.measure('security_txt', () => collectDisclosureContacts(classified.inputHostname))
     : null;
   const urlscanIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = externalIntelligence
     && classified.type === 'domain'
     && !fast
     && !compact
-    ? fetchUrlscanIntelligence(classified.registrableDomain || classified.value)
+    ? timing.measure(
+        'external_intelligence',
+        () => fetchUrlscanIntelligence(classified.registrableDomain || classified.value),
+      )
     : null;
   const urlhausIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = malwareHostIntelligence
     && classified.type === 'domain'
     && !fast
     && !compact
-    ? fetchUrlhausIntelligence(classified.registrableDomain || classified.value)
+    ? timing.measure(
+        'malware_host_intelligence',
+        () => fetchUrlhausIntelligence(classified.registrableDomain || classified.value),
+      )
     : null;
   const threatfoxIntelligencePromise: Promise<ThreatIntelligenceResult | null> | null = malwareIocIntelligence
     && classified.type === 'domain'
     && !fast
     && !compact
-    ? fetchThreatfoxIntelligence(classified.registrableDomain || classified.value)
+    ? timing.measure(
+        'malware_ioc_intelligence',
+        () => fetchThreatfoxIntelligence(classified.registrableDomain || classified.value),
+      )
     : null;
 
   const [rdapResult, whoisResult, availabilityResult, registrarRdapResult, networkContextResult, securityTxtResult, urlscanIntelligenceResult, urlhausIntelligenceResult, threatfoxIntelligenceResult] = await Promise.allSettled([
@@ -325,8 +426,10 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ? networkContext.endpoint as Record<string, unknown>
     : null;
 
+  const lookupTiming = timing.snapshot();
   const diagnostics = {
-    version: LOOKUP_DIAGNOSTICS_VERSION,
+    version: lookupTiming ? LOOKUP_DIAGNOSTICS_VERSION : LOOKUP_LEGACY_DIAGNOSTICS_VERSION,
+    ...(lookupTiming ? { timing: lookupTiming } : {}),
     ...(registryAccess ? { registryAccess } : {}),
     rdap: {
       status: rdapStatus,
@@ -452,5 +555,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
 export {
   runUnifiedLookup,
   LOOKUP_DIAGNOSTICS_VERSION,
+  LOOKUP_LEGACY_DIAGNOSTICS_VERSION,
+  LOOKUP_TIMING_VERSION,
+  MAX_LOOKUP_TIMING_MS,
   LOOKUP_ERROR_CODES,
 };

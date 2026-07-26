@@ -24,7 +24,8 @@ full successful response contains:
 - `whois`: the raw referral chain and normalized WHOIS data or a source error.
 - `availability`: the derived domain-registration assessment, or a
   non-applicable result for IP/ASN input.
-- `diagnostics`: independent source status and provenance.
+- `diagnostics`: independent source status and provenance. Deep non-compact
+  responses also include bounded orchestration timing described below.
 - `networkContext`: for an eligible deep non-compact domain result, a
   separately attributed summary of one observed public endpoint address and
   its IP RDAP network registration.
@@ -56,6 +57,13 @@ The browser validates the required top-level response envelope before deriving
 or rendering evidence. Nested source records remain separately attributed and
 additive; an HTTP 200 response with a malformed envelope is reported as an
 invalid response rather than being interpreted as partial evidence.
+
+The browser waits for this single final response. It shows elapsed time and
+eligible branches as pending, without polling, streaming, or claiming that a
+source has completed early. Analyst cancellation, navigation away, or the
+40-second browser deadline stops the local wait and retains no incomplete
+response. Work already admitted by the server may still finish within its
+existing source and operation bounds.
 
 For a deep, non-compact domain Lookup only, a successful registry RDAP object
 may publish a complete `rel="related"` HTTPS domain-object link at the
@@ -208,21 +216,49 @@ traces, filesystem paths, upstream internals, or secrets. Expected validation,
 authentication, policy, rate-limit, operation-budget, unsupported, partial,
 and not-found responses retain their existing specific messages and codes.
 
-## Diagnostics version 7
+## Diagnostics versions 7 and 8
 
-`diagnostics.version` is `7`. Version 7 retains the version-5 source fields,
-including the optional separately attributed registrar RDAP child and static
-`diagnostics.registryAccess` context, and adds optional
-`diagnostics.network` provenance introduced in version 6. When the optional
-security.txt action runs, it adds `diagnostics.securityTxt` with source state,
-endpoint, HTTP status, observation time, completeness, and truncation.
+Fast and compact responses retain `diagnostics.version: 7` and their existing
+shape. Deep non-compact responses use `diagnostics.version: 8`. Version 8
+retains the version-7 source fields and adds `diagnostics.timing`:
+
+```json
+{
+  "version": 1,
+  "totalMs": 2400,
+  "sources": [
+    {
+      "source": "rdap",
+      "outcome": "fulfilled",
+      "durationMs": 700,
+      "completedAfterMs": 700
+    }
+  ]
+}
+```
+
+Timing retains at most nine fixed source identifiers. Millisecond values are
+non-negative integers capped at 120,000 and every source is recorded only
+after its promise settles. `durationMs` measures that branch;
+`completedAfterMs` is its settle offset from the unified request start.
+Branches overlap, so their durations are not additive. `fulfilled` and
+`rejected` describe promise settlement only. They do not replace the
+source-specific `success`, `partial`, `not_found`, `unavailable`, `skipped`,
+or error state and are never inputs to availability or Risk.
+
+Version 7 retains the version-5 source fields, including the optional
+separately attributed registrar RDAP child and static
+`diagnostics.registryAccess` context, and adds optional `diagnostics.network`
+provenance introduced in version 6. When the optional security.txt action
+runs, it adds `diagnostics.securityTxt` with source state, endpoint, HTTP
+status, observation time, completeness, and truncation.
 The registry-access object records a documented machine-access constraint or
 the absence of an IANA-published service for the suffix. It is static context
 only, performs no network work, is omitted from compact Bulk responses, and is
 never consulted by availability or scoring. Consumers that do not recognize
-version 7 must fail conservatively rather than reinterpret a disabled, skipped,
-unsupported, or failed source as upstream absence. The source objects use
-explicit status values:
+the represented diagnostics version must fail conservatively rather than
+reinterpret a disabled, skipped, unsupported, or failed source as upstream
+absence. The source objects use explicit status values:
 
 - RDAP: `success`, `not_found`, `unsupported`, `disabled`, or `error`.
 - WHOIS: `complete`, `partial`, `skipped`, `disabled`, or `error`.
