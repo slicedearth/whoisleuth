@@ -19,7 +19,7 @@ import {
   removeCampaignDomain,
   serializeCampaignStore,
   updateCampaign,
-} from '../frontend/src/lib/analysis/campaign-model.js';
+} from '../frontend/src/lib/analysis/campaign-model.ts';
 
 const NOW = '2026-07-14T00:00:00.000Z';
 

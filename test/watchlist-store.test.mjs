@@ -13,7 +13,7 @@ import {
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
   watchlistStoreVersion,
-} from '../frontend/src/lib/analysis/watchlist-store.js';
+} from '../frontend/src/lib/analysis/watchlist-store.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 

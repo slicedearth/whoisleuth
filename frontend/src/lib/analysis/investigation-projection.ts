@@ -17,7 +17,7 @@ import {
   CAMPAIGN_SCHEMA_VERSION,
   MAX_CAMPAIGNS,
   normalizeCampaignStore,
-} from './campaign-model.js';
+} from './campaign-model.ts';
 import {
   MAX_NAMESERVERS_PER_ROW,
   MAX_RELATIONSHIP_ROWS,

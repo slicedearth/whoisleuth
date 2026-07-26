@@ -17,7 +17,7 @@ import {
 } from '../frontend/src/lib/analysis/investigation-projection.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.js';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/brand-profile-model.js';
-import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.js';
+import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.ts';
 import { RELATIONSHIP_EVIDENCE_VERSION } from '../frontend/src/lib/analysis/relationship-evidence.js';
 import {
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,

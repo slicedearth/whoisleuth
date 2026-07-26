@@ -10,7 +10,7 @@ import {
   mergeWatchlistStores,
   normalizeWatchlistName,
   serializeWatchlistStore,
-} from './analysis/watchlist-store.js';
+} from './analysis/watchlist-store.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.js';
 import { LEGACY_WATCHLIST_KEY, WATCHLISTS_COLLECTION } from './browser-local-data-definitions.js';
 

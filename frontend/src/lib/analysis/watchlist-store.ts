@@ -17,40 +17,54 @@ export const MAX_WATCHLIST_STORE_BYTES = 2 * 1024 * 1024;
 const BLOCKED_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 
-function plainRecord(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+type WatchlistEntry = ReturnType<typeof normalizeWatchlistEntry>;
+export type WatchlistCollection = Record<string, WatchlistEntry>;
+export type WatchlistStore = {
+  schema: typeof WATCHLIST_SCHEMA;
+  version: typeof WATCHLIST_SCHEMA_VERSION;
+  watchlists: WatchlistCollection;
+};
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
-function isEnvelope(value) {
+function isEnvelope(value: Record<string, unknown>): boolean {
   return Boolean(value && value.schema === WATCHLIST_SCHEMA && plainRecord(value.watchlists));
 }
 
-export function normalizeWatchlistName(value) {
+export function normalizeWatchlistName(value: unknown): string {
   if (typeof value !== 'string' || CONTROL_RE.test(value)) return '';
   const name = value.trim();
   if (name.length > MAX_WATCHLIST_NAME_LENGTH) return '';
   return name && !BLOCKED_NAMES.has(name.toLowerCase()) ? name : '';
 }
 
-function watchlistMap(raw) {
+function watchlistMap(raw: unknown): Record<string, unknown> | null {
   const value = plainRecord(raw);
   if (!value) return null;
   return isEnvelope(value) ? plainRecord(value.watchlists) : value;
 }
 
-export function watchlistStoreVersion(raw) {
+export function watchlistStoreVersion(raw: unknown): number | null {
   const value = plainRecord(raw);
   if (!value || !isEnvelope(value)) return value ? 1 : null;
   return typeof value.version === 'number' && Number.isFinite(value.version) && value.version > 0 ? value.version : null;
 }
 
-function defineEntry(target, name, entry) {
+function defineEntry(
+  target: WatchlistCollection,
+  name: string,
+  entry: WatchlistEntry,
+): void {
   Object.defineProperty(target, name, { value: entry, writable: true, enumerable: true, configurable: true });
 }
 
-export function normalizeWatchlistStore(raw) {
+export function normalizeWatchlistStore(raw: unknown): WatchlistStore {
   const source = watchlistMap(raw);
-  const watchlists = {};
+  const watchlists: WatchlistCollection = {};
   if (!source) return { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION, watchlists };
   for (const [rawName, rawEntry] of Object.entries(source).slice(0, MAX_WATCHLIST_INPUTS)) {
     const name = normalizeWatchlistName(rawName);
@@ -62,11 +76,11 @@ export function normalizeWatchlistStore(raw) {
   return { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION, watchlists };
 }
 
-function byteLength(value) {
+function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-export function assertWatchlistStoreBudget(watchlists) {
+export function assertWatchlistStoreBudget(watchlists: unknown): WatchlistStore {
   const store = normalizeWatchlistStore(watchlists);
   if (byteLength(JSON.stringify(store)) > MAX_WATCHLIST_STORE_BYTES) {
     throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
@@ -74,11 +88,11 @@ export function assertWatchlistStoreBudget(watchlists) {
   return store;
 }
 
-export function serializeWatchlistStore(watchlists) {
+export function serializeWatchlistStore(watchlists: unknown): string {
   return JSON.stringify(assertWatchlistStoreBudget(watchlists));
 }
 
-function validateImportShape(raw) {
+function validateImportShape(raw: unknown): void {
   const value = plainRecord(raw);
   if (!value || value.schema !== WATCHLIST_SCHEMA) {
     throw new Error('This JSON file is not a WHOISleuth watchlist export.');
@@ -88,7 +102,7 @@ function validateImportShape(raw) {
   }
 }
 
-export function mergeWatchlistStores(localRaw, importedRaw) {
+export function mergeWatchlistStores(localRaw: unknown, importedRaw: unknown) {
   validateImportShape(importedRaw);
   const importedVersion = watchlistStoreVersion(importedRaw);
   if (importedVersion !== null && importedVersion > WATCHLIST_SCHEMA_VERSION) {
@@ -118,7 +132,10 @@ export function mergeWatchlistStores(localRaw, importedRaw) {
   return { watchlists: local, added, updated, skipped };
 }
 
-export function buildWatchlistExport(watchlists, nowIso = new Date().toISOString()) {
+export function buildWatchlistExport(
+  watchlists: unknown,
+  nowIso: unknown = new Date().toISOString(),
+) {
   const parsed = typeof nowIso === 'string' ? Date.parse(nowIso) : Number.NaN;
   return {
     schema: WATCHLIST_SCHEMA,

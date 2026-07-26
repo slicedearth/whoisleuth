@@ -7,7 +7,7 @@ import {
 } from '../frontend/src/lib/analysis/brand-profile-model.js';
 import {
   MAX_CAMPAIGN_STORE_BYTES,
-} from '../frontend/src/lib/analysis/campaign-model.js';
+} from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   MAX_CASE_STORE_BYTES,
 } from '../frontend/src/lib/analysis/case-model.js';
@@ -25,7 +25,7 @@ import {
 } from '../frontend/src/lib/analysis/shortlist-model.js';
 import {
   MAX_WATCHLIST_STORE_BYTES,
-} from '../frontend/src/lib/analysis/watchlist-store.js';
+} from '../frontend/src/lib/analysis/watchlist-store.ts';
 
 type WritableLike = { write(value: string): unknown };
 type MainOptions = Readonly<{

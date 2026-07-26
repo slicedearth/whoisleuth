@@ -9,11 +9,11 @@ import {
   removeCampaignDomain as removeDomain,
   updateCampaign as updateCampaignRecord,
   addCampaignDomain as addDomain,
-} from './analysis/campaign-model.js';
+} from './analysis/campaign-model.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.js';
 import { CAMPAIGNS_COLLECTION, LEGACY_CAMPAIGNS_KEY } from './browser-local-data-definitions.js';
 
-export { MAX_CAMPAIGN_IMPORT_BYTES } from './analysis/campaign-model.js';
+export { MAX_CAMPAIGN_IMPORT_BYTES } from './analysis/campaign-model.ts';
 
 export const CAMPAIGNS_KEY = LEGACY_CAMPAIGNS_KEY;
 

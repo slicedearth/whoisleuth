@@ -19,7 +19,7 @@ import {
   buildCampaignExport,
   CAMPAIGN_SCHEMA,
   CAMPAIGN_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/campaign-model.js';
+} from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   buildCaseReport,
   CASE_REPORT_SCHEMA,
@@ -62,7 +62,7 @@ import {
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
   watchlistStoreVersion,
-} from '../frontend/src/lib/analysis/watchlist-store.js';
+} from '../frontend/src/lib/analysis/watchlist-store.ts';
 import {
   buildCliBulkDocument,
   buildCliCompareDocument,

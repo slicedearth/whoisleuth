@@ -21,14 +21,14 @@ import {
   CAMPAIGN_SCHEMA,
   CAMPAIGN_SCHEMA_VERSION,
   mergeCampaigns,
-} from './campaign-model.js';
+} from './campaign-model.ts';
 import {
   assertWatchlistStoreBudget,
   buildWatchlistExport,
   mergeWatchlistStores,
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
-} from './watchlist-store.js';
+} from './watchlist-store.ts';
 import {
   assertShortlistStoreBudget,
   buildShortlistExport,

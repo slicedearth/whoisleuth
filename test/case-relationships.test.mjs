@@ -16,7 +16,7 @@ import {
   INVESTIGATION_PROJECTION_VERSION,
 } from '../frontend/src/lib/analysis/investigation-projection.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.js';
-import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.js';
+import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.ts';
 
 const CAPTURED = '2026-07-01T00:00:00.000Z';
 

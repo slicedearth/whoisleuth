@@ -5,9 +5,9 @@ import {
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from './analysis/workspace-archive.js';
 import { enforceStoreBudget, mergeCases } from './analysis/case-model.js';
-import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.js';
+import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.ts';
 import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/brand-profile-model.js';
-import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.js';
+import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.ts';
 import { assertShortlistStoreBudget, mergeShortlistStores } from './analysis/shortlist-model.js';
 import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.js';
 import { mergeRelationshipObservations } from './analysis/relationship-observation-model.ts';

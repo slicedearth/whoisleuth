@@ -20,7 +20,7 @@ import {
 } from '../frontend/src/lib/analysis/brand-profile-model.js';
 import {
   CAMPAIGN_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/campaign-model.js';
+} from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   evaluateRuleSet,
 } from '../frontend/src/lib/analysis/detection-rule-model.js';

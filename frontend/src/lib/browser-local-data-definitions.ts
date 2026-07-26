@@ -13,7 +13,7 @@ import {
   campaignStoreVersion,
   normalizeCampaignStore,
   serializeCampaignStore,
-} from './analysis/campaign-model.js';
+} from './analysis/campaign-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
@@ -29,7 +29,7 @@ import {
   normalizeWatchlistStore,
   serializeWatchlistStore,
   watchlistStoreVersion,
-} from './analysis/watchlist-store.js';
+} from './analysis/watchlist-store.ts';
 import {
   MAX_SHORTLIST_ENTRIES,
   MAX_SHORTLIST_STORE_BYTES,
