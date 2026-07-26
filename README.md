@@ -69,6 +69,15 @@ the branches that actually ran. Cancelling or leaving the page stops the
 browser from waiting but cannot recall work already admitted by the server;
 no incomplete response is retained or rendered.
 
+After a domain result arrives, **Download report** creates a bounded readable
+Markdown summary entirely in the browser. It records registry, registrar, and
+WHOIS source health and collection time alongside normalized findings, the
+explainable Risk assessment, and interpretation limits. It does not include raw
+RDAP or WHOIS responses, expanded contacts, provider payloads, scripts, or
+remote assets. The separate JSON evidence export remains the full-fidelity
+option and can contain public registration contacts. IP and ASN reports remain
+outside this first readable-report contract.
+
 The external evidence pivots are ordinary links, not integrations. WHOISleuth
 does not prefetch them, call their APIs, cache or store their results, or use
 them for availability or scoring. Each link identifies the destination and

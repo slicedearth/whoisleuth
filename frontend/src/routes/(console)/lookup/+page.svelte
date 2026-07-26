@@ -46,6 +46,10 @@
     LOOKUP_CLIENT_TIMEOUT_MS,
     requestLookup,
   } from '$lib/analysis/lookup-request.js';
+  import {
+    buildLookupReadableReport,
+    lookupReadableReportFilename,
+  } from '$lib/analysis/lookup-readable-report.js';
   import { createPageBaseline } from '$lib/analysis/page-baseline.js';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.js';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.js';
@@ -496,6 +500,7 @@
   ];}
   function sourceDiagnostics(){return['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return[
     {href:'#overview',label:'Overview'},
@@ -669,7 +674,7 @@
 
 {#if result}
   <section class="result-root" id="result">
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} />
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={result.type==='domain'?downloadReadableReport:null} />
 
     <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 

@@ -346,11 +346,17 @@ default (see the README), so many lookups return no personal data at all.
   stated interpretation limits; they do not include case evidence or notes.
   Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
-  registry-published contact data. A deliberate unified workspace archive can
-  contain cases and their analyst notes, campaigns, Brand Profiles, watchlists,
-  shortlist entries, custom detection rules, retained relationship
-  observations, active-profile selection, and theme preference. It uses a
-  versioned manifest with per-section SHA-256
+  registry-published contact data. The separate single-domain Markdown report
+  is generated from a bounded known-field projection in the browser. It
+  includes registry, registrar, and WHOIS source states, collection time,
+  normalized findings, Risk
+  explanation, and limitations while excluding raw RDAP and WHOIS responses,
+  expanded contacts, provider payloads, scripts, and remote assets. A
+  deliberate unified workspace archive can contain cases and their analyst
+  notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
+  detection rules, retained relationship observations, active-profile
+  selection, and theme preference. It uses a versioned manifest with
+  per-section SHA-256
   checksums, previews conflicts before a non-destructive merge, and excludes
   sessions, passwords, API credentials, hosted-monitor encryption keys, raw
   upstream payloads, tab state, Certificate Transparency history, and unrelated

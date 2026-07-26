@@ -671,6 +671,25 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(JSON.stringify(exported)).not.toContain('abuse@registrar.example');
   expect(JSON.stringify(exported)).not.toContain('stat.ripe.net');
 
+  const reportDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download report' }).click();
+  const reportDownload = await reportDownloadPromise;
+  expect(reportDownload.suggestedFilename()).toMatch(
+    /^whoisleuth-lookup-report-registrar-source\.example-.+\.md$/,
+  );
+  const reportPath = await reportDownload.path();
+  expect(reportPath).not.toBeNull();
+  const report = await readFile(reportPath!, 'utf8');
+  expect(report).toContain('# Lookup evidence report');
+  expect(report).toContain('### Registrar RDAP');
+  expect(report).toContain('## Registry / registrar RDAP comparison');
+  expect(report).toContain('Example network holder');
+  expect(report).toContain('Risk score:');
+  expect(report).toContain('heuristic review priority');
+  expect(report).not.toContain('registrar-object-handle');
+  expect(report).not.toContain('abuse@registrar.example');
+  expect(report).not.toContain('stat.ripe.net');
+
   await page.setViewportSize({ width: 360, height: 780 });
   await expectNoHorizontalOverflow(page);
 });
@@ -1333,6 +1352,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2001-02-03T04:05:06.000Z"]')).toBeVisible();
   await expect(rdapSection.getByText('Domain', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download report' })).toHaveCount(0);
 });
 
 test('ASN results retain allocation status and lifecycle metadata at narrow widths', async ({ page }) => {
@@ -1363,6 +1383,7 @@ test('ASN results retain allocation status and lifecycle metadata at narrow widt
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2003-04-05T06:07:08.000Z"]')).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2024-05-06T07:08:09.000Z"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download report' })).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

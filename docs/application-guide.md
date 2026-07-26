@@ -84,7 +84,15 @@ evidence group. The topology uses separate visual families for registry,
 network, web, derived, and analyst evidence, with an adjacent key; source
 status remains an independent label and colour.
 
-After a successful single Lookup, the deliberate JSON evidence export can
+After a successful single-domain Lookup, **Download report** creates a readable
+Markdown summary locally in the browser. It includes registry, registrar, and
+WHOIS source health and collection time, normalized findings, the explainable
+Risk assessment, and limitations. It deliberately excludes raw RDAP and WHOIS
+responses, expanded contacts, provider payloads, scripts, and remote assets.
+IP and ASN results retain the JSON evidence action but do not offer this first
+domain-focused readable report.
+
+**Export evidence JSON** remains the separate full-fidelity option. It can
 include normalized and raw registration sources, supporting observations,
 diagnostics, comparisons, and provenance. It can contain public contact data,
 so review and store it accordingly.
@@ -354,6 +362,11 @@ Exports are created locally and only after an explicit action. Depending on the
 workflow they can contain public registration contacts, analyst notes, source
 observations, or compact case history.
 
+- Use a domain Lookup Markdown report for a bounded readable registry,
+  registrar, and WHOIS source summary. It omits raw registration payloads and
+  expanded contacts.
+- Use the Lookup JSON evidence package when complete captured source material
+  is required, and treat it as potentially containing public contact data.
 - Review each file before sharing it.
 - Keep sensitive analyst notes out of reports unless needed.
 - Treat source timestamps and fingerprints as provenance and deduplication

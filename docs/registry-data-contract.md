@@ -540,6 +540,14 @@ and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
 forms, active links, or external resources and includes a restrictive embedded
 Content Security Policy. The versioned JSON package remains the authoritative
 machine-readable export when complete captured source material is required.
+The Console's domain-focused readable Markdown download uses the same shared
+renderer after a strict known-field projection of the typed Lookup response.
+That projection is created entirely in the browser, makes no network request,
+writes no browser-local record, and excludes raw registry and provider
+payloads, WHOIS response bodies, expanded contacts, scripts, and remote assets
+before formatting. IP and ASN results do not offer this first readable format.
+Their separate JSON evidence action, and the domain JSON action, retain the
+richer schema contract described above.
 When schema-version 16 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection

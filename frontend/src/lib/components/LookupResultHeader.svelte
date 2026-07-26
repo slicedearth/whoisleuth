@@ -6,6 +6,7 @@
     registrableDomain,
     inputHostname,
     onExport,
+    onReportExport = null,
   }: {
     title: string;
     state: string;
@@ -13,6 +14,7 @@
     registrableDomain: string;
     inputHostname: string;
     onExport: () => void;
+    onReportExport?: (() => void) | null;
   } = $props();
 </script>
 
@@ -26,6 +28,9 @@
   </div>
   <div class="result-actions">
     <span class="chip info">{state}</span>
+    {#if onReportExport}
+      <button class="btn" onclick={onReportExport}>Download report</button>
+    {/if}
     <button class="btn" onclick={onExport}>Export evidence JSON</button>
   </div>
 </div>
