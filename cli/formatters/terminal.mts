@@ -11,7 +11,7 @@ const MAX_RISK_CALIBRATION_TERMINAL_RECORDS = 100;
 
 // Terminal documents have different versioned shapes. Every scalar crosses
 // safeTerminalValue before display, while the runner supplies bounded arrays.
-type TerminalRecord = Record<string, any>;
+type TerminalRecord = Record<string, unknown>;
 type MutationLabels = Record<string, string>;
 type TerminalBulkItem = {
   ok: boolean;
@@ -48,6 +48,10 @@ function terminalCount(value: unknown): number {
 }
 
 function formatTerminalLookup(document: TerminalRecord): string {
+  const availability = terminalRecord(document.availability);
+  const diagnostics = terminalRecord(document.diagnostics);
+  const rdapDiagnostics = terminalRecord(diagnostics.rdap);
+  const whoisDiagnostics = terminalRecord(diagnostics.whois);
   const lines = [
     `Query          ${safeTerminalValue(document.query)}`,
     `Type           ${safeTerminalValue(document.type)}`,
@@ -57,19 +61,18 @@ function formatTerminalLookup(document: TerminalRecord): string {
     lines.push(`Input host     ${safeTerminalValue(document.inputHostname)}`);
     lines.push(`Registry query ${safeTerminalValue(document.registrableDomain)}`);
   }
-  if (document.availability?.applicable) {
-    lines.push(`Availability   ${titleCase(document.availability.state)}`);
-    lines.push(`Confidence     ${titleCase(document.availability.confidence)}`);
+  if (availability.applicable) {
+    lines.push(`Availability   ${titleCase(availability.state)}`);
+    lines.push(`Confidence     ${titleCase(availability.confidence)}`);
   }
-  lines.push(`RDAP           ${titleCase(document.diagnostics?.rdap?.status)}`);
-  if (document.diagnostics?.rdap?.endpoint) lines.push(`RDAP source    ${safeTerminalValue(document.diagnostics.rdap.endpoint)}`);
-  const registrarRdap = document.diagnostics?.rdap?.registrar;
-  if (registrarRdap) {
+  lines.push(`RDAP           ${titleCase(rdapDiagnostics.status)}`);
+  if (rdapDiagnostics.endpoint) lines.push(`RDAP source    ${safeTerminalValue(rdapDiagnostics.endpoint)}`);
+  const registrarRdap = terminalRecord(rdapDiagnostics.registrar);
+  if (Object.keys(registrarRdap).length) {
     lines.push(`Registrar RDAP ${titleCase(registrarRdap.status)}`);
     if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
   }
-  lines.push(`WHOIS          ${titleCase(document.diagnostics?.whois?.status)}`);
-  const availability = terminalRecord(document.availability);
+  lines.push(`WHOIS          ${titleCase(whoisDiagnostics.status)}`);
   if (document.mode === 'deep' && document.type === 'domain') {
     const dns = terminalRecord(availability.dns);
     const http = terminalRecord(availability.http);
@@ -166,16 +169,18 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (reverseDns.status) lines.push(`Reverse DNS    ${titleCase(reverseDns.status)}`);
     if (ptrNames.length) lines.push(`PTR names      ${safeTerminalValue(ptrNames.join(', '))}`);
   }
-  const network = document.networkContext;
-  if (network?.contextVersion === 1) {
+  const network = terminalRecord(document.networkContext);
+  if (network.contextVersion === 1) {
+    const endpoint = terminalRecord(network.endpoint);
+    const networkRecord = terminalRecord(network.network);
     lines.push(`Network RDAP   ${titleCase(network.status)}`);
-    if (network.endpoint?.address) lines.push(`Selected IP    ${safeTerminalValue(network.endpoint.address)}`);
-    if (network.network?.name || network.network?.holder) {
-      lines.push(`Network        ${safeTerminalValue(network.network.name || network.network.holder)}`);
+    if (endpoint.address) lines.push(`Selected IP    ${safeTerminalValue(endpoint.address)}`);
+    if (networkRecord.name || networkRecord.holder) {
+      lines.push(`Network        ${safeTerminalValue(networkRecord.name || networkRecord.holder)}`);
     }
   }
-  const registryAccess = document.diagnostics?.registryAccess;
-  if (registryAccess) {
+  const registryAccess = terminalRecord(diagnostics.registryAccess);
+  if (Object.keys(registryAccess).length) {
     lines.push(`Registry access .${safeTerminalValue(registryAccess.suffix)}`);
     lines.push(`WHOIS access   ${registryAccessProfileLabel(registryAccess.whoisAccessProfile)}`);
     lines.push(`RDAP access    ${registryAccessProfileLabel(registryAccess.rdapAccessProfile)}`);
@@ -185,21 +190,15 @@ function formatTerminalLookup(document: TerminalRecord): string {
 }
 
 function formatTerminalRegistrySupport(document: TerminalRecord): string {
-  const profile = document.profile && typeof document.profile === 'object' ? document.profile : {};
-  const rdap = profile.rdap && typeof profile.rdap === 'object' ? profile.rdap : {};
-  const whois = profile.whois && typeof profile.whois === 'object' ? profile.whois : {};
-  const verification = document.verification && typeof document.verification === 'object'
-    ? document.verification
-    : {};
+  const profile = terminalRecord(document.profile);
+  const rdap = terminalRecord(profile.rdap);
+  const whois = terminalRecord(profile.whois);
+  const verification = terminalRecord(document.verification);
   const fixtures = Array.isArray(verification.fixtureScenarios) ? verification.fixtureScenarios : [];
   const files = Array.isArray(verification.files) ? verification.files : [];
   const documentation = Array.isArray(verification.documentationUrls) ? verification.documentationUrls : [];
-  const standards = document.standardsCoverage && typeof document.standardsCoverage === 'object'
-    ? document.standardsCoverage
-    : {};
-  const genericCoverage = standards.genericAndRestricted && typeof standards.genericAndRestricted === 'object'
-    ? standards.genericAndRestricted
-    : {};
+  const standards = terminalRecord(document.standardsCoverage);
+  const genericCoverage = terminalRecord(standards.genericAndRestricted);
   const supportLabel = (value: unknown) => titleCase(safeTerminalValue(value, 'unknown').replaceAll('-', '_'));
   const lines = [
     `Input          ${safeTerminalValue(document.requestedInput)}`,
@@ -227,7 +226,7 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
   lines.push(
     `Limitation     ${safeTerminalValue(document.limitation)}`,
     '',
-    safeTerminalValue(document.interpretation?.statement),
+    safeTerminalValue(terminalRecord(document.interpretation).statement),
   );
   return `${lines.join('\n')}\n`;
 }
@@ -235,9 +234,10 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
 function formatTerminalBulk(items: TerminalBulkItem[], metadata: TerminalBulkMetadata): string {
   const lines = items.map((item) => {
     if (!item.ok) return `! ${safeTerminalValue(item.query)} — ${safeTerminalValue(item.error, 'Lookup failed')}`;
-    const result = item.result as TerminalRecord | undefined;
-    const state = titleCase(result?.availability?.state);
-    const confidence = titleCase(result?.availability?.confidence);
+    const result = terminalRecord(item.result);
+    const availability = terminalRecord(result.availability);
+    const state = titleCase(availability.state);
+    const confidence = titleCase(availability.confidence);
     return `✓ ${safeTerminalValue(item.query)} — ${state} (${confidence} confidence)`;
   });
   const succeeded = items.filter((item) => item.ok).length;
@@ -249,9 +249,10 @@ function formatTerminalBulk(items: TerminalBulkItem[], metadata: TerminalBulkMet
 function formatTerminalCtSearch(document: TerminalRecord): string {
   const matches = Array.isArray(document.matches) ? document.matches : [];
   const visible = matches.slice(0, MAX_CT_TERMINAL_MATCHES);
+  const observation = terminalRecord(document.observation);
   const lines = [
     `Keyword        ${safeTerminalValue(document.keyword)}`,
-    `CT status      ${titleCase(document.observation?.status || (document.truncated ? 'partial' : 'success'))}`,
+    `CT status      ${titleCase(observation.status || (document.truncated ? 'partial' : 'success'))}`,
     `Certificates   ${safeTerminalValue(document.certCount, '0')}`,
     `Observed hosts ${safeTerminalValue(Array.isArray(document.domains) ? document.domains.length : 0, '0')}`,
     `Matches        ${safeTerminalValue(matches.length, '0')}`,
@@ -261,7 +262,8 @@ function formatTerminalCtSearch(document: TerminalRecord): string {
   if (!visible.length) {
     lines.push('No structured registrable-domain matches.');
   } else {
-    for (const match of visible) {
+    for (const value of visible) {
+      const match = terminalRecord(value);
       const hostnames = Array.isArray(match.hostnames) ? match.hostnames : [];
       const shownHosts = hostnames.slice(0, MAX_CT_TERMINAL_HOSTNAMES).map((value: unknown) => safeTerminalValue(value));
       const omitted = hostnames.length - shownHosts.length;
@@ -280,9 +282,7 @@ function formatTerminalCtSearch(document: TerminalRecord): string {
 function formatTerminalDiscover(document: TerminalRecord, mutationLabels: MutationLabels = {}): string {
   const candidates = Array.isArray(document.candidates) ? document.candidates : [];
   const visible = candidates.slice(0, MAX_DISCOVER_TERMINAL_CANDIDATES);
-  const advanced = document.advancedConfusable && typeof document.advancedConfusable === 'object'
-    ? document.advancedConfusable as TerminalRecord
-    : null;
+  const advanced = terminalRecord(document.advancedConfusable);
   const lines = [
     `Seed           ${safeTerminalValue(document.seed)}`,
     `Preset         ${safeTerminalValue(document.preset)}`,
@@ -293,18 +293,23 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
     `Candidates     ${safeTerminalValue(candidates.length, '0')}`,
     `Truncated      ${document.truncated ? 'Yes' : 'No'}`,
   ];
-  if (advanced) {
+  if (Object.keys(advanced).length) {
     lines.push(`Advanced IDN   ${safeTerminalValue(advanced.generated, '0')} generated, ${safeTerminalValue(advanced.omittedByPolicy, '0')} policy-omitted, ${safeTerminalValue(advanced.omittedByBudget, '0')} budget-omitted`);
   }
   lines.push('');
-  for (const candidate of visible) {
+  for (const value of visible) {
+    const candidate = terminalRecord(value);
     const labels = (Array.isArray(candidate.mutationTypes) ? candidate.mutationTypes : [])
-      .map((value: string) => safeTerminalValue(mutationLabels[value] || value));
-    const unicodeDomain = unicodeDomainFromAscii(candidate.domain);
-    const unicodeDetail = unicodeDomain && unicodeDomain !== candidate.domain
+      .map((mutationType: unknown) => {
+        const value = safeTerminalValue(mutationType);
+        return safeTerminalValue(mutationLabels[value] || value);
+      });
+    const candidateDomain = safeTerminalValue(candidate.domain, '');
+    const unicodeDomain = unicodeDomainFromAscii(candidateDomain);
+    const unicodeDetail = unicodeDomain && unicodeDomain !== candidateDomain
       ? ` [Unicode: ${safeTerminalValue(unicodeDomain)}]`
       : '';
-    lines.push(`${safeTerminalValue(candidate.domain)}${unicodeDetail} — ${labels.join(', ') || 'Generated variant'}`);
+    lines.push(`${safeTerminalValue(candidateDomain)}${unicodeDetail} — ${labels.join(', ') || 'Generated variant'}`);
   }
   if (!visible.length) lines.push('No candidates were generated.');
   if (candidates.length > visible.length) {
@@ -314,7 +319,7 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
 }
 
 function formatTerminalPosture(document: TerminalRecord): string {
-  const summary = document.summary && typeof document.summary === 'object' ? document.summary : {};
+  const summary = terminalRecord(document.summary);
   const selectors = Array.isArray(document.dkimSelectors) ? document.dkimSelectors : [];
   const checks = Array.isArray(document.checks) ? document.checks : [];
   const lines = [
@@ -324,7 +329,8 @@ function formatTerminalPosture(document: TerminalRecord): string {
     `Summary        ${safeTerminalValue(summary.danger, '0')} action · ${safeTerminalValue(summary.warning, '0')} review · ${safeTerminalValue(summary.pass, '0')} pass · ${safeTerminalValue(summary.info, '0')} info`,
     '',
   ];
-  for (const item of checks) {
+  for (const value of checks) {
+    const item = terminalRecord(value);
     lines.push(`[${safeTerminalValue(item.status, 'info').toUpperCase()}] ${safeTerminalValue(item.label)} — ${safeTerminalValue(item.summary)}`);
     if (item.detail) lines.push(`  Detail  ${safeTerminalValue(item.detail)}`);
     if (item.remediation) lines.push(`  Next    ${safeTerminalValue(item.remediation)}`);
@@ -341,12 +347,13 @@ function formatTerminalPosture(document: TerminalRecord): string {
 }
 
 function formatTerminalHttp(document: TerminalRecord): string {
-  const http = document.http && typeof document.http === 'object' ? document.http : {};
-  const response = http.response && typeof http.response === 'object' ? http.response : {};
+  const http = terminalRecord(document.http);
+  const response = terminalRecord(http.response);
   const attempts = Array.isArray(http.attempts) ? http.attempts : [];
   const limitations = Array.isArray(http.limitations) ? http.limitations : [];
-  const securityHeaders = response.securityHeaders && typeof response.securityHeaders === 'object'
-    ? Object.entries(response.securityHeaders).filter(([, value]) => Boolean(value)).map(([name]) => name)
+  const securityHeadersRecord = terminalRecord(response.securityHeaders);
+  const securityHeaders = Object.keys(securityHeadersRecord).length
+    ? Object.entries(securityHeadersRecord).filter(([, value]) => Boolean(value)).map(([name]) => name)
     : [];
   const lines = [
     `Domain         ${safeTerminalValue(document.domain)}`,
@@ -362,10 +369,12 @@ function formatTerminalHttp(document: TerminalRecord): string {
     `Security       ${securityHeaders.length ? securityHeaders.join(', ') : 'No selected headers observed'}`,
   ];
   if (document.detail) lines.push(`Detail         ${safeTerminalValue(document.detail)}`);
-  if (response.bodyHash?.value) {
-    lines.push(`Body hash      ${safeTerminalValue(`${response.bodyHash.algorithm}:${response.bodyHash.value} (${response.bodyHash.scope})`)}`);
+  const bodyHash = terminalRecord(response.bodyHash);
+  if (bodyHash.value) {
+    lines.push(`Body hash      ${safeTerminalValue(`${bodyHash.algorithm}:${bodyHash.value} (${bodyHash.scope})`)}`);
   }
-  for (const attempt of attempts) {
+  for (const value of attempts) {
+    const attempt = terminalRecord(value);
     const outcome = attempt.httpStatus ? `HTTP ${attempt.httpStatus}` : attempt.error || attempt.outcome;
     lines.push(`Attempt        ${safeTerminalValue(attempt.url)} — ${safeTerminalValue(outcome)}`);
   }
@@ -374,16 +383,20 @@ function formatTerminalHttp(document: TerminalRecord): string {
 }
 
 function formatTerminalTls(document: TerminalRecord): string {
-  const certificate = document.certificate && typeof document.certificate === 'object' ? document.certificate : {};
-  const subject = certificate.subject && typeof certificate.subject === 'object' ? certificate.subject : {};
-  const issuer = certificate.issuer && typeof certificate.issuer === 'object' ? certificate.issuer : {};
-  const altNames = certificate.subjectAltNames && typeof certificate.subjectAltNames === 'object' ? certificate.subjectAltNames : {};
+  const certificate = terminalRecord(document.certificate);
+  const subject = terminalRecord(certificate.subject);
+  const issuer = terminalRecord(certificate.issuer);
+  const altNames = terminalRecord(certificate.subjectAltNames);
   const dnsNames = Array.isArray(altNames.dnsNames) ? altNames.dnsNames : [];
   const ipAddresses = Array.isArray(altNames.ipAddresses) ? altNames.ipAddresses : [];
   const visibleAltNames = [...dnsNames, ...ipAddresses].slice(0, MAX_TLS_TERMINAL_ALT_NAMES);
   const omittedAltNames = dnsNames.length + ipAddresses.length - visibleAltNames.length;
-  const cipher = document.cipher && typeof document.cipher === 'object' ? document.cipher : {};
-  const publicKey = certificate.publicKey && typeof certificate.publicKey === 'object' ? certificate.publicKey : {};
+  const cipher = terminalRecord(document.cipher);
+  const publicKey = terminalRecord(certificate.publicKey);
+  const authorization = terminalRecord(document.authorization);
+  const hostname = terminalRecord(document.hostname);
+  const validity = terminalRecord(document.validity);
+  const diagnostics = terminalRecord(document.diagnostics);
   const findings = Array.isArray(document.findings) ? document.findings : [];
   const limitations = Array.isArray(document.limitations) ? document.limitations : [];
   const lines = [
@@ -394,9 +407,9 @@ function formatTerminalTls(document: TerminalRecord): string {
     `Protocol       ${safeTerminalValue(document.protocol)}`,
     `ALPN           ${safeTerminalValue(document.alpnProtocol)}`,
     `Cipher         ${safeTerminalValue(cipher.standardName || cipher.name)}`,
-    `Authorized     ${document.authorization?.authorized === true ? 'Yes' : document.authorization?.authorized === false ? 'No' : 'Unknown'}`,
-    `Hostname match ${document.hostname?.matches === true ? 'Yes' : document.hostname?.matches === false ? 'No' : 'Unknown'}`,
-    `Validity       ${titleCase(document.validity?.status)}`,
+    `Authorized     ${authorization.authorized === true ? 'Yes' : authorization.authorized === false ? 'No' : 'Unknown'}`,
+    `Hostname match ${hostname.matches === true ? 'Yes' : hostname.matches === false ? 'No' : 'Unknown'}`,
+    `Validity       ${titleCase(validity.status)}`,
     `Subject        ${safeTerminalValue(Array.isArray(subject.commonNames) ? subject.commonNames.join(', ') : null)}`,
     `Issuer         ${safeTerminalValue(Array.isArray(issuer.commonNames) ? issuer.commonNames.join(', ') : null)}`,
     `Valid from     ${safeTerminalValue(certificate.validFrom)}`,
@@ -406,10 +419,13 @@ function formatTerminalTls(document: TerminalRecord): string {
     `Alt names      ${visibleAltNames.length ? visibleAltNames.map((value) => safeTerminalValue(value)).join(', ') : '—'}${omittedAltNames > 0 ? ` (+${omittedAltNames} more)` : ''}`,
     `Chain          ${safeTerminalValue(Array.isArray(document.chain) ? document.chain.length : 0, '0')} certificate${Array.isArray(document.chain) && document.chain.length === 1 ? '' : 's'}${document.chainTruncated ? ' (truncated)' : ''}`,
   ];
-  if (document.authorization?.error) lines.push(`Trust detail   ${safeTerminalValue(document.authorization.error)}`);
-  if (document.hostname?.error) lines.push(`Name detail    ${safeTerminalValue(document.hostname.error)}`);
-  if (document.diagnostics?.error) lines.push(`Error          ${safeTerminalValue(document.diagnostics.error)}`);
-  for (const finding of findings) lines.push(`Finding        ${safeTerminalValue(finding.label)} — ${safeTerminalValue(finding.detail)}`);
+  if (authorization.error) lines.push(`Trust detail   ${safeTerminalValue(authorization.error)}`);
+  if (hostname.error) lines.push(`Name detail    ${safeTerminalValue(hostname.error)}`);
+  if (diagnostics.error) lines.push(`Error          ${safeTerminalValue(diagnostics.error)}`);
+  for (const value of findings) {
+    const finding = terminalRecord(value);
+    lines.push(`Finding        ${safeTerminalValue(finding.label)} — ${safeTerminalValue(finding.detail)}`);
+  }
   for (const limitation of limitations) lines.push(`Limitation     ${safeTerminalValue(limitation)}`);
   return `${lines.join('\n')}\n`;
 }
@@ -440,23 +456,23 @@ function comparisonStatusLabel(status: unknown): string {
 
 function formatTerminalCompare(document: TerminalRecord): string {
   const fields = Array.isArray(document.fields) ? document.fields : [];
-  const counts = document.counts && typeof document.counts === 'object' ? document.counts : {};
-  const sourceHealth = document.sourceHealth && typeof document.sourceHealth === 'object' ? document.sourceHealth : {};
-  const registryAccess = document.registryAccess && typeof document.registryAccess === 'object'
-    ? document.registryAccess
-    : null;
+  const counts = terminalRecord(document.counts);
+  const sourceHealth = terminalRecord(document.sourceHealth);
+  const rdapHealth = terminalRecord(sourceHealth.rdap);
+  const whoisHealth = terminalRecord(sourceHealth.whois);
+  const registryAccess = terminalRecord(document.registryAccess);
   const differenceCount = fields.length - (Number(counts.equivalent) || 0);
   const lines = [
     `Query          ${safeTerminalValue(document.query || document.registrableDomain)}`,
     `Lookup mode    ${titleCase(document.lookupMode)}`,
     `Lookup saved   ${safeTerminalValue(document.lookupGeneratedAt)}`,
-    `RDAP source    ${comparisonStatusLabel(sourceHealth.rdap?.status)}`,
-    `WHOIS source   ${comparisonStatusLabel(sourceHealth.whois?.status)}`,
+    `RDAP source    ${comparisonStatusLabel(rdapHealth.status)}`,
+    `WHOIS source   ${comparisonStatusLabel(whoisHealth.status)}`,
     `Compared       ${safeTerminalValue(fields.length, '0')} field${fields.length === 1 ? '' : 's'}`,
     `Equivalent     ${safeTerminalValue(counts.equivalent, '0')}`,
     `Differences    ${safeTerminalValue(differenceCount, '0')}`,
   ];
-  if (registryAccess) {
+  if (Object.keys(registryAccess).length) {
     lines.push(
       `Registry access .${safeTerminalValue(registryAccess.suffix)}`,
       `WHOIS access   ${registryAccessProfileLabel(registryAccess.whoisAccessProfile)}`,
@@ -468,30 +484,26 @@ function formatTerminalCompare(document: TerminalRecord): string {
   if (!fields.length) {
     lines.push('Neither source published a comparable normalized field.');
   } else {
-    for (const field of fields) {
+    for (const value of fields) {
+      const field = terminalRecord(value);
       lines.push(`[${comparisonStatusLabel(field.status).toUpperCase()}] ${safeTerminalValue(field.label)}`);
       lines.push(`  RDAP   ${safeTerminalValue(field.rdapDisplay)}`);
       lines.push(`  WHOIS  ${safeTerminalValue(field.whoisDisplay)}`);
     }
   }
-  const registrarComparison = document.registrarPublicationComparison
-    && typeof document.registrarPublicationComparison === 'object'
-    ? document.registrarPublicationComparison
-    : null;
-  if (registrarComparison) {
+  const registrarComparison = terminalRecord(document.registrarPublicationComparison);
+  if (Object.keys(registrarComparison).length) {
     const publicationFields = Array.isArray(registrarComparison.fields) ? registrarComparison.fields : [];
-    const publicationCounts = registrarComparison.counts && typeof registrarComparison.counts === 'object'
-      ? registrarComparison.counts
-      : {};
-    const publicationHealth = registrarComparison.sourceHealth && typeof registrarComparison.sourceHealth === 'object'
-      ? registrarComparison.sourceHealth
-      : {};
+    const publicationCounts = terminalRecord(registrarComparison.counts);
+    const publicationHealth = terminalRecord(registrarComparison.sourceHealth);
+    const registryHealth = terminalRecord(publicationHealth.registry);
+    const registrarHealth = terminalRecord(publicationHealth.registrar);
     const publicationDifferences = publicationFields.length - (Number(publicationCounts.equivalent) || 0);
     lines.push(
       '',
       'Registry / registrar RDAP publication',
-      `Registry RDAP  ${comparisonStatusLabel(publicationHealth.registry?.status)}`,
-      `Registrar RDAP ${comparisonStatusLabel(publicationHealth.registrar?.status)}`,
+      `Registry RDAP  ${comparisonStatusLabel(registryHealth.status)}`,
+      `Registrar RDAP ${comparisonStatusLabel(registrarHealth.status)}`,
       `Compared       ${safeTerminalValue(publicationFields.length, '0')} field${publicationFields.length === 1 ? '' : 's'}`,
       `Equivalent     ${safeTerminalValue(publicationCounts.equivalent, '0')}`,
       `Differences    ${safeTerminalValue(publicationDifferences, '0')}`,
@@ -500,7 +512,8 @@ function formatTerminalCompare(document: TerminalRecord): string {
     if (!publicationFields.length) {
       lines.push('Neither RDAP publication exposed a comparable normalized field.');
     } else {
-      for (const field of publicationFields) {
+      for (const value of publicationFields) {
+        const field = terminalRecord(value);
         lines.push(`[${comparisonStatusLabel(field.status).toUpperCase()}] ${safeTerminalValue(field.label)}`);
         lines.push(`  Registry   ${safeTerminalValue(field.registryDisplay)}`);
         lines.push(`  Registrar  ${safeTerminalValue(field.registrarDisplay)}`);
@@ -508,15 +521,15 @@ function formatTerminalCompare(document: TerminalRecord): string {
     }
   }
   lines.push('', 'Comparison is source reconciliation, not an availability or ownership decision.');
-  if (registryAccess) {
+  if (Object.keys(registryAccess).length) {
     lines.push('Registry access describes collection reachability only; it does not decide registration, availability, ownership, safety, or maliciousness.');
   }
   return `${lines.join('\n')}\n`;
 }
 
 function formatTerminalRiskCalibration(document: TerminalRecord): string {
-  const summary = document.summary && typeof document.summary === 'object' ? document.summary : {};
-  const bands = summary.scoreBands && typeof summary.scoreBands === 'object' ? summary.scoreBands : {};
+  const summary = terminalRecord(document.summary);
+  const bands = terminalRecord(summary.scoreBands);
   const thresholds = Array.isArray(document.thresholds) ? document.thresholds : [];
   const records = Array.isArray(document.records) ? document.records : [];
   const visible = records.slice(0, MAX_RISK_CALIBRATION_TERMINAL_RECORDS);
@@ -530,18 +543,20 @@ function formatTerminalRiskCalibration(document: TerminalRecord): string {
     '',
     'Threshold replay',
   ];
-  for (const threshold of thresholds) {
+  for (const value of thresholds) {
+    const threshold = terminalRecord(value);
     lines.push(
       `${String(safeTerminalValue(threshold.threshold)).padStart(3)}+  TP ${safeTerminalValue(threshold.truePositive, '0')}  FP ${safeTerminalValue(threshold.falsePositive, '0')}  TN ${safeTerminalValue(threshold.trueNegative, '0')}  FN ${safeTerminalValue(threshold.falseNegative, '0')}  precision ${safeTerminalValue(threshold.precision)}  recall ${safeTerminalValue(threshold.recall)}`,
     );
   }
   lines.push('', 'Records');
-  for (const record of visible) {
+  for (const value of visible) {
+    const record = terminalRecord(value);
     const score = record.score === null ? 'not scored' : String(record.score);
     lines.push(`${safeTerminalValue(record.id)}  ${safeTerminalValue(record.domain)}  ${titleCase(record.analystDisposition)}  ${score}`);
   }
   if (records.length > visible.length) lines.push(`… ${records.length - visible.length} additional records omitted from terminal output; use --json for the complete bounded report.`);
-  lines.push('', safeTerminalValue(document.interpretation?.statement));
+  lines.push('', safeTerminalValue(terminalRecord(document.interpretation).statement));
   return `${lines.join('\n')}\n`;
 }
 
