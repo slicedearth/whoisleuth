@@ -309,7 +309,10 @@ default (see the README), so many lookups return no personal data at all.
 - **Technology indicators**: a requested deep Lookup can derive a versioned
   technology profile from the selected HTTP server header, generator metadata,
   normalized resource origins, and capped static HTML already collected for
-  the page-identity analysis. The profile retains only curated technology
+  the page-identity analysis. A site-builder or commerce platform is not
+  identified from a retained third-party resource origin alone; that origin
+  must be corroborated by page, generator, or additional storefront evidence.
+  Delivery origins remain separately attributed. The profile retains only curated technology
   names, categories, confidence levels, evidence classes, and fixed
   explanations. A nested browser-library profile can also match up to 64
   observed script elements and 65,536 cumulative inline-script characters

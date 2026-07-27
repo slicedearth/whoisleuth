@@ -160,6 +160,22 @@ fixtures, candidate generation, partial-source handling, relationships,
 detection rules, graph limits, and workspace archive round trips. It is not a
 live coverage or production-performance benchmark.
 
+### Technology-signature benchmark
+
+```bash
+npm run benchmark:technology
+npm run benchmark:technology -- --json
+```
+
+Runs the versioned synthetic technology corpus through the same bounded
+signature analyser used by Deep Lookup. It lints catalogue identifiers,
+categories, confidence levels, evidence classes, fixed explanations, evidence
+bounds, and positive and negative fixture coverage. The report includes
+per-category expected, observed, missed, unexpected, overlap, collision, and
+false-positive metrics without copying fixture HTML, headers, generators, or
+resource origins into its output. It makes no network request and is a
+regression/calibration result rather than a live coverage claim.
+
 ### Unicode confusable audit
 
 ```bash

@@ -215,6 +215,7 @@ Additional offline or bounded maintainer checks include:
 
 ```bash
 npm run schema:inventory
+npm run benchmark:technology
 npm run benchmark:workflow
 npm run platform:local-data
 npm run release:check

@@ -87,6 +87,16 @@ or rendering evidence. Nested source records remain separately attributed and
 additive; an HTTP 200 response with a malformed envelope is reported as an
 invalid response rather than being interpreted as partial evidence.
 
+The version-5 technology profile retains only curated finding identifiers,
+names, categories, confidence levels, evidence classes, and fixed
+explanations. Platform-specific resource origins can corroborate retained page
+or generator evidence but cannot identify a site-builder or commerce platform
+on their own; delivery-origin findings remain separately attributed. The
+offline version-1 technology benchmark requires positive and negative fixture
+coverage for every signature and reports overlap, collision, missed-match, and
+false-positive metrics by category. Neither the profile nor its benchmark
+changes availability, Risk, or compact evidence.
+
 The browser waits for this single final response. It shows elapsed time and
 eligible branches as pending, without polling, streaming, or claiming that a
 source has completed early. Analyst cancellation, navigation away, or the

@@ -57,9 +57,19 @@ type TechnologySignature = {
   name: string;
   category: TechnologyCategory;
   evidence: SignatureEvidence[];
+  minimumEvidenceMatches?: 2;
+  requiresNonResourceEvidence?: boolean;
 };
+type TechnologySignatureDescriptor = Readonly<{
+  id: string;
+  name: string;
+  category: TechnologyCategory;
+  minimumEvidenceMatches: 1 | 2;
+  requiresNonResourceEvidence: boolean;
+  evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
+}>;
 
-const TECHNOLOGY_PROFILE_VERSION = 4;
+const TECHNOLOGY_PROFILE_VERSION = 5;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -67,6 +77,7 @@ const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 const MAX_RESOURCE_ORIGINS = 30;
 const MAX_GENERATOR_INPUT = 160;
 const MAX_SERVER_INPUT = 240;
+const MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH = 180;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
 
 function boundedLowercase(value: unknown, maxLength: number): string {
@@ -170,8 +181,9 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'shopify', name: 'Shopify', category: 'commerce',
+    requiresNonResourceEvidence: true,
     evidence: [
-      htmlEvidence(['shopify-section', 'shopify.theme', 'cdn.shopify.com'], 'Static markup contains Shopify-specific storefront markers.'),
+      htmlEvidence(['shopify-section', 'shopify.theme'], 'Static markup contains Shopify-specific storefront markers.'),
       resourceEvidence(['cdn.shopify.com'], 'A retained resource origin uses the Shopify content network.'),
     ],
   },
@@ -183,6 +195,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'bigcommerce', name: 'BigCommerce', category: 'commerce',
+    minimumEvidenceMatches: 2,
     evidence: [
       htmlEvidence(['cdn11.bigcommerce.com/s-', 'stencil-utils'], 'Static markup contains BigCommerce storefront asset markers.', 'medium'),
       resourcePatternEvidence(/^cdn\d+\.bigcommerce\.com$/i, 'A retained resource origin uses BigCommerce storefront delivery infrastructure.'),
@@ -204,17 +217,19 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'wix', name: 'Wix', category: 'site builder',
+    requiresNonResourceEvidence: true,
     evidence: [
       generatorEvidence(/^wix(?:\s|$)/i, 'Generator metadata identifies Wix.'),
-      htmlEvidence(['static.parastorage.com', 'wixstatic.com', 'data-mesh-id='], 'Static markup contains Wix-specific delivery markers.', 'medium'),
+      htmlEvidence(['data-mesh-id='], 'Static markup contains a Wix-specific document attribute.', 'medium'),
       resourceEvidence(['static.parastorage.com', 'wixstatic.com'], 'A retained resource origin uses Wix delivery infrastructure.'),
     ],
   },
   {
     id: 'squarespace', name: 'Squarespace', category: 'site builder',
+    requiresNonResourceEvidence: true,
     evidence: [
       generatorEvidence(/^squarespace(?:\s|$)/i, 'Generator metadata identifies Squarespace.'),
-      htmlEvidence(['static.squarespace.com', 'static1.squarespace.com', 'squarespace-context'], 'Static markup contains Squarespace-specific delivery markers.', 'medium'),
+      htmlEvidence(['squarespace-context'], 'Static markup contains a Squarespace-specific document marker.', 'medium'),
       resourceEvidence(['static.squarespace.com', 'static1.squarespace.com'], 'A retained resource origin uses Squarespace delivery infrastructure.'),
     ],
   },
@@ -227,6 +242,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'framer', name: 'Framer', category: 'site builder',
+    requiresNonResourceEvidence: true,
     evidence: [
       generatorEvidence(/^framer(?:\s|$)/i, 'Generator metadata identifies Framer.'),
       htmlEvidence(['data-framer-name='], 'Static markup contains Framer-specific component attributes.'),
@@ -235,6 +251,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'weebly', name: 'Weebly', category: 'site builder',
+    requiresNonResourceEvidence: true,
     evidence: [
       generatorEvidence(/^weebly(?:\s|$)/i, 'Generator metadata identifies Weebly.'),
       resourceEvidence(['editmysite.com'], 'A retained resource origin uses Weebly delivery infrastructure.'),
@@ -335,6 +352,21 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
 ];
 
+const TECHNOLOGY_SIGNATURE_CATALOGUE: ReadonlyArray<TechnologySignatureDescriptor> = Object.freeze(
+  TECHNOLOGY_SIGNATURES.map((signature) => Object.freeze({
+    id: signature.id,
+    name: signature.name,
+    category: signature.category,
+    minimumEvidenceMatches: signature.minimumEvidenceMatches || 1,
+    requiresNonResourceEvidence: signature.requiresNonResourceEvidence === true,
+    evidence: Object.freeze(signature.evidence.map(({ source, description, confidence }) => Object.freeze({
+      source,
+      description,
+      confidence,
+    }))),
+  })),
+);
+
 function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
   const browserLibraryProfile = analyzeBrowserLibraries({
@@ -352,7 +384,8 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
 
   for (const signature of TECHNOLOGY_SIGNATURES) {
     const matched = signature.evidence.filter((evidence) => evidence.matches(context));
-    if (!matched.length) continue;
+    if (matched.length < (signature.minimumEvidenceMatches || 1)) continue;
+    if (signature.requiresNonResourceEvidence && matched.every((evidence) => evidence.source === 'resource origin')) continue;
     findings.push({
       id: signature.id,
       name: signature.name,
@@ -404,10 +437,12 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
 
 export {
   MAX_EVIDENCE_PER_TECHNOLOGY,
+  MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH,
   MAX_TECHNOLOGY_FINDINGS,
   MAX_TECHNOLOGY_HTML_CHARS,
   MAX_TECHNOLOGY_TAGS,
   TECHNOLOGY_PROFILE_VERSION,
+  TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
 };
 
@@ -417,4 +452,5 @@ export type {
   TechnologyEvidence,
   TechnologyFinding,
   TechnologyInput,
+  TechnologySignatureDescriptor,
 };

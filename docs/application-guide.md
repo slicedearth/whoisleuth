@@ -299,7 +299,11 @@ Technology indicators are evidence-backed clues, not a complete software
 inventory. The bounded catalogue uses generator metadata and tokenized live
 elements, attributes, static-asset paths, resource origins, and selected server
 headers. Static collection does not execute JavaScript, and sites can conceal
-or remove distinctive indicators. WHOISleuth does not fetch referenced scripts.
+or remove distinctive indicators. Site-builder and commerce signatures do not
+identify the host platform from a retained third-party resource origin alone;
+they require a page, generator, or additional storefront marker. Delivery
+origins can still appear as separately attributed delivery evidence. WHOISleuth
+does not fetch referenced scripts.
 A browser-library advisory match is a lead for review, not proof that the
 component is loaded, reachable, vulnerable in context, or exploitable. A
 non-match does not establish that no vulnerable component exists.

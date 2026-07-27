@@ -35,6 +35,7 @@
     "deployment:self-check": "node tools/deployment-self-check.mts",
     "registry:drift": "node tools/registry-drift-audit.mts",
     "unicode:confusables": "node tools/unicode-confusable-audit.mts",
+    "benchmark:technology": "node tools/technology-signature-benchmark.mts",
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",
     "catalog:retire": "node tools/retire-browser-catalog.mts",
