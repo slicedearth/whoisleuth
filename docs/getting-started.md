@@ -268,6 +268,15 @@ exception for fast and compact callers: its runtime profile gates remain the
 authority for choosing collectors. The check reads local source and the locked
 dependency graph only; it makes no network request and has no production effect.
 
+### Dependency maintenance and SPDX export
+
+Monthly grouped dependency update pull requests and the read-only GitHub
+dependency-graph export are documented in
+[Dependency maintenance and SBOM export](dependency-maintenance.md). Updates
+remain subject to human review, branch protection, the complete verification
+sequence, and the existing pinned-action, lockfile, licence, audit, CodeQL, and
+architecture controls.
+
 ### Registry drift
 
 ```bash
