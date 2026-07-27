@@ -14,6 +14,11 @@ import { createRelationshipObservation } from '../frontend/src/lib/analysis/rela
 
 const NOW = '2026-07-19T02:00:00.000Z';
 
+function recordValue(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
 function caseRecord(domain = 'archive-one.invalid', id = 'case-one') {
   return {
     id,
@@ -78,7 +83,18 @@ function relationshipObservation() {
   });
 }
 
-function input() {
+type WorkspaceFixture = {
+  cases: ReturnType<typeof caseRecord>[];
+  campaigns: ReturnType<typeof campaign>[];
+  brandProfiles: ReturnType<typeof profile>[];
+  watchlists: Record<string, unknown>;
+  shortlist: Record<string, unknown>[];
+  detectionRules: Record<string, unknown>[];
+  relationshipObservations: ReturnType<typeof relationshipObservation>[];
+  settings: { activeProfileId: string; theme: string };
+};
+
+function input(): WorkspaceFixture {
   return {
     cases: [caseRecord()],
     campaigns: [campaign()],
@@ -101,7 +117,7 @@ function input() {
   };
 }
 
-function emptyInput() {
+function emptyInput(): WorkspaceFixture {
   return {
     cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [], relationshipObservations: [],
     settings: { activeProfileId: '', theme: 'dark' },
@@ -123,8 +139,9 @@ describe('portable workspace archive', () => {
     assert.equal(left.manifest.sectionCount, 8);
     assert.equal(left.manifest.totalRecords, 8);
     assert.ok(left.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum)));
-    assert.equal(left.sections.settings.activeProfileId, 'profile-one');
-    assert.equal(left.sections.settings.theme, 'light');
+    const settings = recordValue(left.sections.settings);
+    assert.equal(settings.activeProfileId, 'profile-one');
+    assert.equal(settings.theme, 'light');
   });
 
   test('reads and verifies every manifest byte count and checksum', async () => {
@@ -134,14 +151,21 @@ describe('portable workspace archive', () => {
     assert.equal(parsed.generatedAt, NOW);
     assert.equal(parsed.sections.length, 8);
     assert.equal(parsed.sections.every((section) => section.status === 'ready'), true);
-    assert.equal(parsed.sections.find((section) => section.id === 'cases').recordCount, 1);
-    assert.equal(parsed.sections.find((section) => section.id === 'relationshipObservations').recordCount, 1);
+    const cases = parsed.sections.find((section) => section.id === 'cases');
+    const relationships = parsed.sections.find((section) => section.id === 'relationshipObservations');
+    assert.ok(cases);
+    assert.ok(relationships);
+    assert.equal(cases.recordCount, 1);
+    assert.equal(relationships.recordCount, 1);
     assert.ok(parsed.bytes > 0 && parsed.bytes < MAX_WORKSPACE_ARCHIVE_BYTES);
   });
 
   test('rejects a changed section even when its manifest still looks valid', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    archive.sections.cases.cases[0].domain = 'tampered.invalid';
+    const casesSection = recordValue(archive.sections.cases);
+    assert.ok(Array.isArray(casesSection.cases));
+    const firstCase = recordValue(casesSection.cases[0]);
+    firstCase.domain = 'tampered.invalid';
     await assert.rejects(readWorkspaceArchive(archive), /byte-count check|checksum check/);
   });
 
@@ -165,10 +189,13 @@ describe('portable workspace archive', () => {
 
   test('reports a future section as unsupported without reinterpreting it', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    archive.manifest.sections.find((section) => section.id === 'watchlists').version = 999;
+    const watchlists = archive.manifest.sections.find((section) => section.id === 'watchlists');
+    assert.ok(watchlists);
+    watchlists.version = 999;
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     const section = preview.sections.find((item) => item.id === 'watchlists');
 
+    assert.ok(section);
     assert.equal(section.status, 'unsupported');
     assert.match(section.reason, /newer schema 999/);
     assert.equal(section.selected, false);
@@ -179,18 +206,19 @@ describe('portable workspace archive', () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const index = archive.manifest.sections.findIndex((section) => section.id === 'settings');
     archive.manifest.sections[index] = { ...archive.manifest.sections[index], id: 'futureSection' };
-    archive.sections.futureSection = archive.sections.settings;
+    Reflect.set(archive.sections, 'futureSection', archive.sections.settings);
     delete archive.sections.settings;
     const parsed = await readWorkspaceArchive(archive);
     const section = parsed.sections.find((item) => item.id === 'futureSection');
 
+    assert.ok(section);
     assert.equal(section.status, 'unsupported');
     assert.match(section.reason, /does not recognize/);
   });
 
   test('rejects undeclared section data', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    archive.sections.extra = {};
+    Reflect.set(archive.sections, 'extra', {});
     await assert.rejects(readWorkspaceArchive(archive), /not declared/);
   });
 
@@ -217,7 +245,7 @@ describe('portable workspace archive', () => {
   });
 
   test('rejects a cyclic imported archive instead of traversing it indefinitely', async () => {
-    const archive = { schema: WORKSPACE_ARCHIVE_SCHEMA, version: WORKSPACE_ARCHIVE_VERSION };
+    const archive: Record<string, unknown> = { schema: WORKSPACE_ARCHIVE_SCHEMA, version: WORKSPACE_ARCHIVE_VERSION };
     archive.self = archive;
     await assert.rejects(readWorkspaceArchive(archive), /cannot be serialized/);
   });
@@ -234,6 +262,9 @@ describe('portable workspace archive', () => {
     const cases = preview.sections.find((section) => section.id === 'cases');
     const campaigns = preview.sections.find((section) => section.id === 'campaigns');
     const settings = preview.sections.find((section) => section.id === 'settings');
+    assert.ok(cases);
+    assert.ok(campaigns);
+    assert.ok(settings);
     assert.deepEqual({ added: cases.added, updated: cases.updated, skipped: cases.skipped }, { added: 0, updated: 1, skipped: 0 });
     assert.deepEqual({ added: campaigns.added, updated: campaigns.updated }, { added: 1, updated: 0 });
     assert.equal(settings.updated, 1);
@@ -244,17 +275,21 @@ describe('portable workspace archive', () => {
 
   test('keeps the active profile setting only when the merged profile exists', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const settingsEntry = archive.manifest.sections.find((section) => section.id === 'settings');
+    assert.ok(settingsEntry);
     archive.manifest.sections = [
-      archive.manifest.sections.find((section) => section.id === 'settings'),
+      settingsEntry,
       ...archive.manifest.sections.filter((section) => section.id !== 'settings'),
     ];
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     const settings = preview.sections.find((section) => section.id === 'settings');
 
+    assert.ok(settings);
+    const normalizedSettings = recordValue(settings.normalizedSettings);
     assert.deepEqual(preview.sections.map((section) => section.id), [...WORKSPACE_ARCHIVE_SECTION_IDS]);
     assert.equal(settings.skipped, 0);
-    assert.equal(settings.normalizedSettings.activeProfileId, 'profile-one');
-    assert.equal(settings.normalizedSettings.theme, 'light');
+    assert.equal(normalizedSettings.activeProfileId, 'profile-one');
+    assert.equal(normalizedSettings.theme, 'light');
   });
 
   test('sanitizes unsupported theme and dangling active-profile settings at export', async () => {
