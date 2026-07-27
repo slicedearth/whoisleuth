@@ -1,8 +1,15 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { checkDomainAvailability } from '../lib/availability.mts';
+import { networkFeaturePolicy } from '../lib/feature-policy.mts';
+import { recordValue, stringValue } from './value-assertions.mts';
 
-const { checkDomainAvailability } = require('../lib/availability.mts');
-const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
+async function availability(domain: string, options: unknown): Promise<Record<string, unknown>> {
+  return recordValue(await checkDomainAvailability(
+    domain,
+    options as Parameters<typeof checkDomainAvailability>[1],
+  ));
+}
 
 test('disabled DNS and website probes produce skipped unknown evidence without network calls', async () => {
   let dnsCalls = 0;
@@ -10,7 +17,7 @@ test('disabled DNS and website probes produce skipped unknown evidence without n
   let homepageCalls = 0;
   let faviconCalls = 0;
   let tlsCalls = 0;
-  const result = await checkDomainAvailability('example.com', {
+  const result = await availability('example.com', {
     featurePolicy: networkFeaturePolicy({
       WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1',
       WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1',
@@ -46,20 +53,20 @@ test('disabled DNS and website probes produce skipped unknown evidence without n
   assert.equal(result.state, 'registered');
   assert.equal(result.activityStatus, 'unknown');
   assert.equal(result.websiteProbeStatus, 'skipped');
-  assert.equal(result.http.status, 'skipped');
+  assert.equal(recordValue(result.http).status, 'skipped');
   assert.equal(result.deepScanComplete, false);
-  assert.match(result.websiteProbeDetail, /disabled by deployment policy/i);
-  assert.equal(result.dns.status, 'skipped');
-  assert.equal(result.dns.complete, false);
-  assert.equal(result.tls.status, 'skipped');
-  assert.equal(result.tls.complete, false);
+  assert.match(stringValue(result.websiteProbeDetail), /disabled by deployment policy/i);
+  assert.equal(recordValue(result.dns).status, 'skipped');
+  assert.equal(recordValue(result.dns).complete, false);
+  assert.equal(recordValue(result.tls).status, 'skipped');
+  assert.equal(recordValue(result.tls).complete, false);
   assert.equal(result.hasMx, null);
   assert.equal(result.hasSpf, null);
   assert.equal(result.hasDmarc, null);
 });
 
 test('a disabled registry source prevents otherwise successful deep evidence being marked complete', async () => {
-  const result = await checkDomainAvailability('example.com', {
+  const result = await availability('example.com', {
     featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_WHOIS: '1' }),
     rdapRecord: {
       rdapServer: 'https://rdap.example/domain/example.com',
@@ -100,12 +107,12 @@ test('a disabled registry source prevents otherwise successful deep evidence bei
   assert.equal(result.state, 'registered');
   assert.equal(result.websiteProbeStatus, 'active');
   assert.equal(result.deepScanComplete, false);
-  assert.equal(result.tls.status, 'success');
+  assert.equal(recordValue(result.tls).status, 'success');
 });
 
 test('enabled TLS intelligence runs once in parallel and remains explicit in deep evidence', async () => {
   let tlsCalls = 0;
-  const result = await checkDomainAvailability('example.com', {
+  const result = await availability('example.com', {
     featurePolicy: networkFeaturePolicy({
       WHOISLEUTH_DISABLE_WHOIS: '1',
       WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1',
@@ -115,7 +122,7 @@ test('enabled TLS intelligence runs once in parallel and remains explicit in dee
       upstreamStatus: 200,
       parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
     },
-    collectTlsIntelligence: async (domain) => {
+    collectTlsIntelligence: async (domain: string) => {
       tlsCalls += 1;
       assert.equal(domain, 'example.com');
       return {
@@ -129,6 +136,7 @@ test('enabled TLS intelligence runs once in parallel and remains explicit in dee
   });
 
   assert.equal(tlsCalls, 1);
-  assert.equal(result.tls.status, 'success');
-  assert.equal(result.tls.certificate.fingerprintSha256, 'b'.repeat(64));
+  const tls = recordValue(result.tls);
+  assert.equal(tls.status, 'success');
+  assert.equal(recordValue(tls.certificate).fingerprintSha256, 'b'.repeat(64));
 });

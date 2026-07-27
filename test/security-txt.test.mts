@@ -1,13 +1,14 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import {
   MAX_SECURITY_TXT_BYTES,
   MAX_SECURITY_TXT_REDIRECTS,
   SECURITY_TXT_PATH,
   collectSecurityTxt,
   parseSecurityTxt,
-} = require('../lib/security-txt.mts');
+} from '../lib/security-txt.mts';
+import type { SecurityTxtDependencies } from '../lib/security-txt.mts';
+import { recordValue, requiredValue } from './value-assertions.mts';
 
 const now = Date.parse('2026-07-22T01:00:00.000Z');
 const validBody = [
@@ -20,7 +21,15 @@ const validBody = [
   'Canonical: https://example.test/.well-known/security.txt',
 ].join('\n');
 
-function responseResult(url, status, body = '', headers = { 'content-type': 'text/plain; charset=utf-8' }, location = null) {
+type FetchDetailed = NonNullable<SecurityTxtDependencies['fetchDetailed']>;
+
+function responseResult(
+  url: string,
+  status: number,
+  body = '',
+  headers: HeadersInit = { 'content-type': 'text/plain; charset=utf-8' },
+  location: string | null = null,
+): Awaited<ReturnType<FetchDetailed>> {
   return {
     response: new Response(body, { status, headers: { ...headers, ...(location ? { location } : {}) } }),
     requestedUrl: url,
@@ -121,7 +130,11 @@ describe('parseSecurityTxt', () => {
 
 describe('collectSecurityTxt', () => {
   test('requests the exact hostname over HTTPS with bounded safe-fetch settings', async () => {
-    const calls = [];
+    const calls: Array<{
+      url: string;
+      options: Parameters<FetchDetailed>[1];
+      dependencies: Parameters<FetchDetailed>[2];
+    }> = [];
     let requestedCap = 0;
     const hostBody = validBody.replace(
       'Canonical: https://example.test/.well-known/security.txt',
@@ -140,16 +153,17 @@ describe('collectSecurityTxt', () => {
     });
 
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, `https://portal.example.test${SECURITY_TXT_PATH}`);
-    assert.equal(calls[0].options.headers.accept, 'text/plain; charset=utf-8');
-    assert.equal(calls[0].dependencies.maxRedirects, 0);
+    const call = requiredValue(calls[0]);
+    assert.equal(call.url, `https://portal.example.test${SECURITY_TXT_PATH}`);
+    assert.equal(new Headers(call.options?.headers).get('accept'), 'text/plain; charset=utf-8');
+    assert.equal(requiredValue(call.dependencies).maxRedirects, 0);
     assert.equal(requestedCap, MAX_SECURITY_TXT_BYTES);
     assert.equal(result.state, 'present');
   });
 
   test('follows a bounded HTTPS redirect but rejects a downgrade', async () => {
     let calls = 0;
-    const redirected = await collectSecurityTxt('example.test', {
+    const redirected = recordValue(await collectSecurityTxt('example.test', {
       now: () => now,
       fetchDetailed: async (url) => {
         calls += 1;
@@ -157,7 +171,7 @@ describe('collectSecurityTxt', () => {
           ? responseResult(url, 302, '', {}, 'https://contact.example.test/.well-known/security.txt')
           : responseResult(url, 200, validBody);
       },
-    });
+    }));
     assert.equal(calls, 2);
     assert.equal(redirected.redirectCount, 1);
     assert.equal(redirected.finalUrl, 'https://contact.example.test/.well-known/security.txt');
@@ -185,7 +199,7 @@ describe('collectSecurityTxt', () => {
   });
 
   test('maps missing, unsupported, upstream, and transport outcomes explicitly', async () => {
-    const collect = (factory) => collectSecurityTxt('example.test', { now: () => now, fetchDetailed: factory });
+    const collect = (factory: FetchDetailed) => collectSecurityTxt('example.test', { now: () => now, fetchDetailed: factory });
     assert.equal((await collect(async (url) => responseResult(url, 404))).state, 'absent');
     assert.equal((await collect(async (url) => responseResult(url, 200, validBody, { 'content-type': 'text/html' }))).state, 'unsupported');
     assert.equal((await collect(async (url) => responseResult(url, 200, validBody, { 'content-type': 'text/plain; charset=iso-8859-1' }))).state, 'unsupported');

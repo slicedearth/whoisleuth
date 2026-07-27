@@ -1,13 +1,13 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import {
   CT_QUERY_ERROR_CODE,
   CT_QUERY_ERROR_MESSAGE,
   isCtQueryError,
   MAX_CT_QUERY_LENGTH,
   normalizeCtQuery,
-} = require('../lib/ct-query.mts');
+} from '../lib/ct-query.mts';
+import { recordValue } from './value-assertions.mts';
 
 describe('Certificate Transparency query normalization', () => {
   test('trims a bounded printable keyword without changing its content', () => {
@@ -29,8 +29,9 @@ describe('Certificate Transparency query normalization', () => {
     for (const value of ['a'.repeat(MAX_CT_QUERY_LENGTH + 1), 'brand\nname', 'brand\u007fname', ['brand']]) {
       assert.throws(() => normalizeCtQuery(value), (error) => {
         assert.equal(isCtQueryError(error), true);
-        assert.equal(error.code, CT_QUERY_ERROR_CODE);
-        assert.equal(error.message, CT_QUERY_ERROR_MESSAGE);
+        const queryError = recordValue(error);
+        assert.equal(queryError.code, CT_QUERY_ERROR_CODE);
+        assert.equal(queryError.message, CT_QUERY_ERROR_MESSAGE);
         return true;
       });
     }

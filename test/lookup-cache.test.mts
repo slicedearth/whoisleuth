@@ -4,9 +4,9 @@
 // size response each (RDAP: 2MB, WHOIS: 200KB/hop) - that could otherwise
 // retain gigabytes well before entry count ever reaches MAX_ENTRIES.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { cached, MAX_ENTRIES, MAX_TOTAL_BYTES, _storeSize, _storeBytes } = require('../lib/lookup-cache.mts');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { _storeBytes, _storeSize, cached, MAX_ENTRIES, MAX_TOTAL_BYTES } from '../lib/lookup-cache.mts';
 
 test('the cache never grows past MAX_ENTRIES, even when every key is unique', async () => {
   const extra = 50;

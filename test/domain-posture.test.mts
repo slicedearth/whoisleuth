@@ -1,12 +1,13 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { normalizeAuditDomain, normalizeDkimSelectors, matchesMtaPattern, buildPostureReport } = require('../lib/domain-posture.mts');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { buildPostureReport, matchesMtaPattern, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
+import { requiredValue } from './value-assertions.mts';
 
-function query(records = [], error = null) {
+function query<T>(records: T[] = [], error: string | null = null): { records: T[]; error: string | null } {
   return { records, error };
 }
 
-function strongInput() {
+function strongInput(): Parameters<typeof buildPostureReport>[1] {
   return {
     spf: query(['v=spf1 include:_spf.example.net -all']),
     dmarc: query(['v=DMARC1; p=reject; sp=reject; np=reject; rua=mailto:dmarc@example.com']),
@@ -25,8 +26,8 @@ function strongInput() {
   };
 }
 
-function byId(report, id) {
-  return report.checks.find((item) => item.id === id);
+function byId(report: ReturnType<typeof buildPostureReport>, id: string) {
+  return requiredValue(report.checks.find((item) => item.id === id));
 }
 
 describe('selector and MTA-STS hostname normalization', () => {

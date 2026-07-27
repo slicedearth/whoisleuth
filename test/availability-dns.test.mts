@@ -1,7 +1,14 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { checkDnsDelegation, checkDomainAvailability } from '../lib/availability.mts';
+import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 
-const { checkDnsDelegation, checkDomainAvailability } = require('../lib/availability.mts');
+async function availability(domain: string, options: unknown): Promise<Record<string, unknown>> {
+  return recordValue(await checkDomainAvailability(
+    domain,
+    options as Parameters<typeof checkDomainAvailability>[1],
+  ));
+}
 
 test('DNS delegation fallback normalizes, deduplicates, and sorts nameservers', async () => {
   const result = await checkDnsDelegation('example.test', {
@@ -38,7 +45,7 @@ test('DNS delegation fallback preserves resolver failures as inconclusive diagno
 
   assert.equal(result.delegated, false);
   assert.deepEqual(result.nameservers, []);
-  assert.match(result.error, /temporary resolver failure/);
+  assert.match(requiredValue(result.error), /temporary resolver failure/);
 });
 
 test('DNS delegation fallback caps only the normalized unique nameserver inventory', async () => {
@@ -54,7 +61,7 @@ test('DNS delegation fallback caps only the normalized unique nameserver invento
 });
 
 test('fast availability positively confirms a DNS-delegated domain when RDAP is unsupported', async () => {
-  const result = await checkDomainAvailability('example.test', {
+  const result = await availability('example.test', {
     fast: true,
     rdapRecord: null,
     dnsDelegation: {
@@ -70,11 +77,11 @@ test('fast availability positively confirms a DNS-delegated domain when RDAP is 
   assert.equal(result.source, 'dns');
   assert.equal(result.privacyProtected, null);
   assert.deepEqual(result.nameservers, ['ns1.example', 'ns2.example']);
-  assert.match(result.detail, /DNS delegation confirms/i);
+  assert.match(stringValue(result.detail), /DNS delegation confirms/i);
 });
 
 test('fast availability never treats a missing DNS delegation as available', async () => {
-  const result = await checkDomainAvailability('missing.test', {
+  const result = await availability('missing.test', {
     fast: true,
     rdapRecord: null,
     dnsDelegation: {
@@ -92,7 +99,7 @@ test('fast availability never treats a missing DNS delegation as available', asy
 
 test('RDAP registration remains authoritative and does not invoke the DNS fallback', async () => {
   let dnsCalls = 0;
-  const result = await checkDomainAvailability('example.test', {
+  const result = await availability('example.test', {
     fast: true,
     rdapRecord: {
       upstreamStatus: 200,

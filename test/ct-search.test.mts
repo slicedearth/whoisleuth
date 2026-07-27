@@ -1,23 +1,14 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let searchCertificateTransparency;
-let summarizeCtResults;
-let MAX_CT_QUERY_LENGTH;
-before(async () => {
-  const mod = await import('../lib/ct-search.mts');
-  const query = await import('../lib/ct-query.mts');
-  searchCertificateTransparency = mod.searchCertificateTransparency;
-  summarizeCtResults = mod.summarizeCtResults;
-  MAX_CT_QUERY_LENGTH = query.MAX_CT_QUERY_LENGTH;
-});
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { MAX_CT_QUERY_LENGTH } from '../lib/ct-query.mts';
+import { searchCertificateTransparency, summarizeCtResults } from '../lib/ct-search.mts';
+import { requiredValue } from './value-assertions.mts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** @param {object} overrides */
-function row(overrides = {}) {
+function row(overrides: Record<string, unknown> = {}) {
   return {
     id: 12345,
     name_value: 'example.com',
@@ -186,7 +177,12 @@ describe('searchCertificateTransparency', () => {
   test('rejects an invalid query before invoking the safe request boundary', async () => {
     let calls = 0;
     await assert.rejects(
-      searchCertificateTransparency('x'.repeat(MAX_CT_QUERY_LENGTH + 1), { fetcher: async () => { calls += 1; } }),
+      searchCertificateTransparency('x'.repeat(MAX_CT_QUERY_LENGTH + 1), {
+        fetcher: async () => {
+          calls += 1;
+          throw new Error('fetch should not run');
+        },
+      }),
       /must be at most 200 characters/,
     );
     assert.equal(calls, 0);
@@ -205,8 +201,8 @@ describe('searchCertificateTransparency', () => {
   });
 
   test('uses the injected safe request boundary and propagates its redirect rejection', async () => {
-    const calls = [];
-    const fetcher = async (url, options) => {
+    const calls: Array<{ url: string; options: RequestInit | undefined }> = [];
+    const fetcher = async (url: string, options?: RequestInit) => {
       calls.push({ url, options });
       throw new Error('Refusing to fetch redirect target: resolves to a private/reserved address');
     };
@@ -216,9 +212,10 @@ describe('searchCertificateTransparency', () => {
       /private\/reserved address/,
     );
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, 'https://crt.sh/?q=example&output=json');
-    assert.equal(calls[0].options.headers.Accept, 'application/json');
-    assert.ok(calls[0].options.signal instanceof AbortSignal);
+    const call = requiredValue(calls[0]);
+    assert.equal(call.url, 'https://crt.sh/?q=example&output=json');
+    assert.equal(new Headers(call.options?.headers).get('accept'), 'application/json');
+    assert.ok(call.options?.signal instanceof AbortSignal);
   });
 
   test('preserves bounded status retry behavior through the safe request boundary', async () => {
@@ -226,10 +223,13 @@ describe('searchCertificateTransparency', () => {
       new Response('', { status: 503 }),
       new Response(JSON.stringify([row()]), { status: 200 }),
     ];
-    const waits = [];
+    const waits: number[] = [];
     let calls = 0;
     const result = await searchCertificateTransparency('example', {
-      fetcher: async () => { calls += 1; return responses.shift(); },
+      fetcher: async () => {
+        calls += 1;
+        return requiredValue(responses.shift());
+      },
       delay: async (ms) => { waits.push(ms); },
     });
 
@@ -476,8 +476,8 @@ describe('timestamps', () => {
       row({ id: 2, name_value: 'a.example.com', entry_timestamp: '2026-01-01T00:00:00.000Z' }),
       row({ id: 3, name_value: 'a.example.com', entry_timestamp: '2026-06-01T00:00:00.000Z' }),
     ]);
-    assert.ok(result.matches[0].firstObservedAt.includes('2026-01-01'));
-    assert.ok(result.matches[0].lastObservedAt.includes('2026-06-01'));
+    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-01-01'));
+    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-06-01'));
   });
 
   test('invalid timestamps ignored', () => {
@@ -489,8 +489,8 @@ describe('timestamps', () => {
       row({ id: 5, name_value: 'a.example.com', entry_timestamp: true }),
     ]);
     // Only the one valid timestamp.
-    assert.ok(result.matches[0].firstObservedAt.includes('2026-06-01'));
-    assert.ok(result.matches[0].lastObservedAt.includes('2026-06-01'));
+    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-06-01'));
+    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-06-01'));
   });
 
   test('no valid timestamps → null', () => {
@@ -509,8 +509,8 @@ describe('timestamps', () => {
     ]);
     // certificateCount is 1 (deduplicated), but both timestamps are used.
     assert.equal(result.matches[0].certificateCount, 1);
-    assert.ok(result.matches[0].firstObservedAt.includes('2026-01-01'));
-    assert.ok(result.matches[0].lastObservedAt.includes('2026-12-01'));
+    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-01-01'));
+    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-12-01'));
   });
 
   test('timestamp at length boundary accepted', () => {
@@ -655,8 +655,8 @@ describe('bounds', () => {
       row({ id: 1, name_value: names.join('\n'), entry_timestamp: '2026-01-01T00:00:00.000Z' }),
       row({ id: 2, name_value: 'host0.example.com', entry_timestamp: '2026-12-01T00:00:00.000Z' }),
     ]);
-    assert.ok(result.matches[0].firstObservedAt.includes('2026-01-01'));
-    assert.ok(result.matches[0].lastObservedAt.includes('2026-12-01'));
+    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-01-01'));
+    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-12-01'));
   });
 
   test('no-registrable-domain exclusions do not set truncated', () => {

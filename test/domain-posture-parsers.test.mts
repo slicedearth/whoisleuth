@@ -1,6 +1,6 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import {
   joinTxtRecords,
   parseTagList,
   parseSpfRecords,
@@ -10,7 +10,7 @@ const {
   parseTlsRptRecords,
   parseBimiRecords,
   parseDkimRecords,
-} = require('../lib/domain-posture-parsers.mts');
+} from '../lib/domain-posture-parsers.mts';
 
 describe('TXT/tag parsing', () => {
   test('joins DNS TXT chunks without inserting spaces', () => {

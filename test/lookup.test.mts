@@ -1,10 +1,42 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { networkFeaturePolicy } from '../lib/feature-policy.mts';
+import { runUnifiedLookup } from '../lib/lookup.mts';
+import type { ClassifiedQuery, IpQuery } from '../lib/classify.mts';
+import { recordValue, requiredValue } from './value-assertions.mts';
 
-const { runUnifiedLookup } = require('../lib/lookup.mts');
-const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
+type LookupResult = Awaited<ReturnType<typeof runUnifiedLookup>>;
+type FullLookupResult = Extract<LookupResult, { rdap: unknown }>;
+type AvailabilityFixtureOptions = {
+  featurePolicy?: unknown;
+  includeCredentialSurfaceProfile?: boolean;
+  includeExtendedDnsContext?: boolean;
+  includeSecurityPosture?: boolean;
+  includeStructuredDataIdentity?: boolean;
+  includeTechnologyProfile?: boolean;
+  rdapRecordPromise: Promise<unknown>;
+  whoisChainPromise: Promise<unknown>;
+};
 
-const classifiedDomain = {
+async function runFullLookup(query: ClassifiedQuery, options: unknown): Promise<FullLookupResult> {
+  const result = await runUnifiedLookup(
+    query,
+    options as Parameters<typeof runUnifiedLookup>[1],
+  );
+  assert.ok('rdap' in result, 'expected the non-compact lookup contract');
+  return result as FullLookupResult;
+}
+
+async function runCompactLookup(query: ClassifiedQuery, options: unknown): Promise<LookupResult> {
+  const result = await runUnifiedLookup(
+    query,
+    options as Parameters<typeof runUnifiedLookup>[1],
+  );
+  assert.equal('rdap' in result, false, 'expected the compact lookup contract');
+  return result;
+}
+
+const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
   type: 'domain',
   value: 'example.com',
   inputHostname: 'login.example.com',
@@ -36,10 +68,10 @@ describe('runUnifiedLookup', () => {
     let whoisCalls = 0;
     let availabilityCalls = 0;
 
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => { rdapCalls += 1; return rdapRecord; },
       buildWhoisChain: async () => { whoisCalls += 1; return whoisChain; },
-      checkDomainAvailability: async (domain, options) => {
+      checkDomainAvailability: async (domain: string, options: AvailabilityFixtureOptions) => {
         availabilityCalls += 1;
         assert.equal(domain, 'example.com');
         assert.equal(options.includeExtendedDnsContext, true);
@@ -54,7 +86,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(whoisCalls, 1);
     assert.equal(availabilityCalls, 1);
     assert.equal(result.rdap.parsed.domain, 'EXAMPLE.COM');
-    assert.equal(result.whois.parsed.registrationStatus, 'registered');
+    assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
     assert.equal(result.diagnostics.version, 8);
@@ -66,13 +98,13 @@ describe('runUnifiedLookup', () => {
   });
 
   test('keeps a usable WHOIS result when RDAP fails', async () => {
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => { throw new Error('RDAP timed out'); },
       buildWhoisChain: async () => [
         { server: 'whois.iana.org', response: 'refer: whois.example\n' },
         { server: 'whois.example', response: 'No match for EXAMPLE.COM' },
       ],
-      checkDomainAvailability: async (_domain, options) => {
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         await assert.rejects(options.rdapRecordPromise, /timed out/);
         assert.ok(Array.isArray(await options.whoisChainPromise));
         return { state: 'available', confidence: 'medium' };
@@ -80,7 +112,7 @@ describe('runUnifiedLookup', () => {
     });
 
     assert.match(result.rdap.error, /timed out/);
-    assert.equal(result.whois.parsed.registrationStatus, 'not_found');
+    assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'not_found');
     assert.equal(result.availability.state, 'available');
     assert.equal(result.diagnostics.rdap.status, 'error');
     assert.equal(result.diagnostics.rdap.errorCode, 'RDAP_UPSTREAM_FAILED');
@@ -92,7 +124,7 @@ describe('runUnifiedLookup', () => {
       server: 'whois.iana.org',
       response: 'domain: TEST\norganisation: Example Registry\nwhois:        \nstatus: ACTIVE\nsource: IANA\n',
     }];
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => ({
         rdapServer: 'https://rdap.example/domain/example.com',
         transportSecurity: 'https',
@@ -105,8 +137,8 @@ describe('runUnifiedLookup', () => {
     });
 
     assert.deepEqual(result.whois.chain, rootOnlyChain);
-    assert.equal(result.whois.parsed.registrationStatus, 'inconclusive');
-    assert.equal(result.whois.parsed.authoritativeHop, null);
+    assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'inconclusive');
+    assert.equal(requiredValue(result.whois.parsed).authoritativeHop, null);
     assert.equal(result.diagnostics.whois.status, 'unsupported');
     assert.equal(result.diagnostics.whois.errorCode, null);
   });
@@ -116,12 +148,12 @@ describe('runUnifiedLookup', () => {
       endpoint: 'https://rdap.example/domain/example.com',
       transportSecurity: 'https', status: null, outcome: 'timeout', detail: 'request timed out', selected: false,
     }];
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => {
         throw Object.assign(new Error('RDAP endpoints failed'), { attempts });
       },
       buildWhoisChain: async () => [],
-      checkDomainAvailability: async (_domain, options) => {
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         await assert.rejects(options.rdapRecordPromise, /endpoints failed/);
         return { state: 'unknown', confidence: 'low' };
       },
@@ -133,7 +165,7 @@ describe('runUnifiedLookup', () => {
 
   test('does not run domain availability for IP lookups', async () => {
     let availabilityCalls = 0;
-    const result = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, {
+    const result = await runFullLookup({ type: 'ipv4', value: '192.0.2.1' }, {
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => { availabilityCalls += 1; },
@@ -147,7 +179,7 @@ describe('runUnifiedLookup', () => {
   });
 
   test('reports availability execution failures separately from an unknown result', async () => {
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => { throw new Error('enrichment failed'); },
@@ -159,7 +191,7 @@ describe('runUnifiedLookup', () => {
   });
 
   test('returns an availability-only payload for compact bulk lookups', async () => {
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runCompactLookup(classifiedDomain, {
       compact: true,
       fetchRdapRecord: async () => ({
         rdapServer: 'https://rdap.example/domain/example.com',
@@ -168,7 +200,7 @@ describe('runUnifiedLookup', () => {
         parsed: { domain: 'EXAMPLE.COM' },
       }),
       buildWhoisChain: async () => [{ server: 'whois.example', response: 'large raw WHOIS body' }],
-      checkDomainAvailability: async (_domain, options) => {
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(options.includeCredentialSurfaceProfile, false);
         assert.equal(options.includeStructuredDataIdentity, false);
         assert.equal(options.includeTechnologyProfile, false);
@@ -200,11 +232,11 @@ describe('runUnifiedLookup', () => {
       clock += 5;
       return clock;
     };
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       now,
       fetchRdapRecord: async () => { throw new Error('RDAP timed out'); },
       buildWhoisChain: async () => [],
-      checkDomainAvailability: async (_domain, options) => {
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         await assert.rejects(options.rdapRecordPromise, /timed out/);
         await options.whoisChainPromise;
         return { state: 'unknown', confidence: 'low' };
@@ -234,8 +266,8 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
     };
-    const fast = await runUnifiedLookup(classifiedDomain, { ...ordinaryOptions, fast: true });
-    const compact = await runUnifiedLookup(classifiedDomain, { ...ordinaryOptions, compact: true });
+    const fast = await runFullLookup(classifiedDomain, { ...ordinaryOptions, fast: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...ordinaryOptions, compact: true });
     for (const compatible of [fast, compact]) {
       assert.equal(compatible.diagnostics.version, 7);
       assert.equal(Object.hasOwn(compatible.diagnostics, 'timing'), false);
@@ -247,7 +279,7 @@ describe('runUnifiedLookup', () => {
     const common = {
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
-      collectReverseDnsIntelligence: async (address) => {
+      collectReverseDnsIntelligence: async (address: string) => {
         reverseDnsCalls += 1;
         assert.equal(address, '192.0.2.10');
         return {
@@ -267,12 +299,14 @@ describe('runUnifiedLookup', () => {
         };
       },
     };
-    const classifiedIp = { type: 'ipv4', value: '192.0.2.10' };
-    const deep = await runUnifiedLookup(classifiedIp, common);
+    const classifiedIp: IpQuery = { type: 'ipv4', value: '192.0.2.10' };
+    const deep = await runFullLookup(classifiedIp, common);
+    const reverseDns = requiredValue(deep.reverseDns);
+    const timing = requiredValue(deep.diagnostics.timing);
 
     assert.equal(reverseDnsCalls, 1);
-    assert.equal(deep.reverseDns.status, 'success');
-    assert.deepEqual(deep.reverseDns.records.ptr, ['ptr.example.test']);
+    assert.equal(reverseDns.status, 'success');
+    assert.deepEqual(reverseDns.records.ptr, ['ptr.example.test']);
     assert.deepEqual(deep.availability, { applicable: false, type: 'ipv4' });
     assert.deepEqual(deep.diagnostics.reverseDns, {
       status: 'success',
@@ -281,13 +315,13 @@ describe('runUnifiedLookup', () => {
       truncated: false,
     });
     assert.equal(
-      deep.diagnostics.timing.sources.some((source) => source.source === 'reverse_dns'),
+      timing.sources.some((source) => source.source === 'reverse_dns'),
       true,
     );
 
-    const fast = await runUnifiedLookup(classifiedIp, { ...common, fast: true });
-    const compact = await runUnifiedLookup(classifiedIp, { ...common, compact: true });
-    const asn = await runUnifiedLookup({ type: 'asn', value: '64496' }, common);
+    const fast = await runFullLookup(classifiedIp, { ...common, fast: true });
+    const compact = await runCompactLookup(classifiedIp, { ...common, compact: true });
+    const asn = await runFullLookup({ type: 'asn', value: '64496' }, common);
     assert.equal(reverseDnsCalls, 1);
     for (const result of [fast, compact, asn]) {
       assert.equal(Object.hasOwn(result, 'reverseDns'), false);
@@ -297,7 +331,7 @@ describe('runUnifiedLookup', () => {
 
   test('keeps disabled reverse DNS explicit without calling the collector', async () => {
     let reverseDnsCalls = 0;
-    const result = await runUnifiedLookup({ type: 'ipv6', value: '2001:db8::10' }, {
+    const result = await runFullLookup({ type: 'ipv6', value: '2001:db8::10' }, {
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       collectReverseDnsIntelligence: async () => {
@@ -308,19 +342,19 @@ describe('runUnifiedLookup', () => {
     });
 
     assert.equal(reverseDnsCalls, 0);
-    assert.equal(result.reverseDns.status, 'skipped');
-    assert.equal(result.reverseDns.complete, false);
-    assert.equal(result.diagnostics.reverseDns.status, 'skipped');
+    assert.equal(requiredValue(result.reverseDns).status, 'skipped');
+    assert.equal(requiredValue(result.reverseDns).complete, false);
+    assert.equal(requiredValue(result.diagnostics.reverseDns).status, 'skipped');
   });
 
   test('adds non-authoritative registry-access context without changing source work or availability', async () => {
-    const classifiedEs = {
+    const classifiedEs: Extract<ClassifiedQuery, { type: 'domain' }> = {
       type: 'domain', value: 'example.es', inputHostname: 'example.es',
       registrableDomain: 'example.es', isSubdomain: false,
     };
     const calls = { rdap: 0, whois: 0, availability: 0 };
     const availability = { state: 'unknown', confidence: 'low', detail: 'Registry sources were inconclusive.' };
-    const result = await runUnifiedLookup(classifiedEs, {
+    const result = await runFullLookup(classifiedEs, {
       fetchRdapRecord: async () => { calls.rdap += 1; return null; },
       buildWhoisChain: async () => { calls.whois += 1; return []; },
       checkDomainAvailability: async () => { calls.availability += 1; return availability; },
@@ -347,12 +381,12 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
     };
-    const classifiedVn = {
+    const classifiedVn: Extract<ClassifiedQuery, { type: 'domain' }> = {
       type: 'domain', value: 'example.vn', inputHostname: 'example.vn',
       registrableDomain: 'example.vn', isSubdomain: false,
     };
-    const compact = await runUnifiedLookup(classifiedVn, { ...common, compact: true });
-    const ordinary = await runUnifiedLookup(classifiedDomain, common);
+    const compact = await runCompactLookup(classifiedVn, { ...common, compact: true });
+    const ordinary = await runFullLookup(classifiedDomain, common);
     assert.equal(Object.hasOwn(compact.diagnostics, 'registryAccess'), false);
     assert.equal(Object.hasOwn(ordinary.diagnostics, 'registryAccess'), false);
   });
@@ -364,11 +398,11 @@ describe('runUnifiedLookup', () => {
       parsed: { domain: 'EXAMPLE.COM' },
     };
     let whoisCalls = 0;
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fast: true,
       fetchRdapRecord: async () => rdapRecord,
       buildWhoisChain: async () => { whoisCalls += 1; return []; },
-      checkDomainAvailability: async (_domain, options) => {
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(await options.rdapRecordPromise, rdapRecord);
         assert.equal(await options.whoisChainPromise, null);
         assert.equal(options.includeCredentialSurfaceProfile, false);
@@ -378,7 +412,7 @@ describe('runUnifiedLookup', () => {
     });
     assert.equal(whoisCalls, 0);
     assert.equal(result.rdap.registrarRdap.status, 'skipped');
-    assert.equal(result.diagnostics.rdap.registrar.status, 'skipped');
+    assert.equal(requiredValue(result.diagnostics.rdap.registrar).status, 'skipped');
     assert.equal(result.diagnostics.whois.status, 'skipped');
     assert.equal(result.diagnostics.whois.errorCode, null);
     assert.deepEqual(result.whois, { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' });
@@ -391,9 +425,9 @@ describe('runUnifiedLookup', () => {
       parsed: { domain: 'EXAMPLE.COM', links: [] },
     };
     let registrarCalls = 0;
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => rdapRecord,
-      fetchRegistrarRdapRecord: async (domain, record) => {
+      fetchRegistrarRdapRecord: async (domain: string, record: unknown) => {
         registrarCalls += 1;
         assert.equal(domain, 'example.com');
         assert.equal(record, rdapRecord);
@@ -428,7 +462,7 @@ describe('runUnifiedLookup', () => {
   });
 
   test('adds one separately attributed IP RDAP enrichment without changing availability', async () => {
-    const calls = [];
+    const calls: Array<[string, string]> = [];
     const availability = {
       state: 'registered',
       confidence: 'high',
@@ -445,8 +479,8 @@ describe('runUnifiedLookup', () => {
       },
     };
     const availabilityBefore = structuredClone(availability);
-    const result = await runUnifiedLookup(classifiedDomain, {
-      fetchRdapRecord: async (type, value) => {
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async (type: string, value: string) => {
         calls.push([type, value]);
         if (type === 'domain') return {
           rdapServer: 'https://registry.example/domain/example.com',
@@ -483,12 +517,14 @@ describe('runUnifiedLookup', () => {
     ]);
     assert.deepEqual(availability, availabilityBefore);
     assert.equal(result.availability.state, 'registered');
-    assert.equal(result.networkContext.status, 'success');
-    assert.deepEqual(result.networkContext.endpoint, {
+    const networkContext = requiredValue(result.networkContext);
+    const network = recordValue(networkContext.network);
+    assert.equal(networkContext.status, 'success');
+    assert.deepEqual(networkContext.endpoint, {
       address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection',
     });
-    assert.equal(result.networkContext.network.holder, 'Example network holder');
-    assert.equal(result.networkContext.network.cidrs[0], '93.184.216.0/24');
+    assert.equal(network.holder, 'Example network holder');
+    assert.equal(requiredValue(Array.isArray(network.cidrs) ? network.cidrs[0] : undefined), '93.184.216.0/24');
     assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.network, {
       status: 'success',
@@ -520,17 +556,17 @@ describe('runUnifiedLookup', () => {
         throw new Error('must not run');
       },
     };
-    const fast = await runUnifiedLookup(classifiedDomain, { ...common, fast: true });
-    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true });
-    const rdapDisabled = await runUnifiedLookup(classifiedDomain, {
+    const fast = await runFullLookup(classifiedDomain, { ...common, fast: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...common, compact: true });
+    const rdapDisabled = await runFullLookup(classifiedDomain, {
       ...common,
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_RDAP: '1' }),
     });
-    const availabilityDisabled = await runUnifiedLookup(classifiedDomain, {
+    const availabilityDisabled = await runFullLookup(classifiedDomain, {
       ...common,
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_AVAILABILITY: '1' }),
     });
-    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, common);
+    const ip = await runFullLookup({ type: 'ipv4', value: '192.0.2.1' }, common);
 
     assert.equal(networkCalls, 0);
     for (const result of [fast, compact, rdapDisabled, availabilityDisabled, ip]) {
@@ -543,12 +579,12 @@ describe('runUnifiedLookup', () => {
     const availability = { state: 'registered', confidence: 'high' };
     const before = structuredClone(availability);
     let securityCalls = 0;
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       securityTxt: true,
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => availability,
-      collectSecurityTxt: async (hostname) => {
+      collectSecurityTxt: async (hostname: string) => {
         securityCalls += 1;
         assert.equal(hostname, 'login.example.com');
         return {
@@ -568,8 +604,8 @@ describe('runUnifiedLookup', () => {
     assert.equal(securityCalls, 1);
     assert.deepEqual(availability, before);
     assert.equal(result.availability.state, 'registered');
-    assert.equal(result.securityTxt.state, 'present');
-    assert.deepEqual(result.diagnostics.securityTxt, {
+    assert.equal(requiredValue(result.securityTxt).state, 'present');
+    assert.deepEqual(requiredValue(result.diagnostics.securityTxt), {
       status: 'success', state: 'present',
       endpoint: 'https://login.example.com/.well-known/security.txt',
       httpStatus: 200, observedAt: '2026-07-22T01:00:00.000Z', complete: true, truncated: false,
@@ -587,15 +623,15 @@ describe('runUnifiedLookup', () => {
         throw new Error('must not run');
       },
     };
-    const ordinary = await runUnifiedLookup(classifiedDomain, common);
-    const fast = await runUnifiedLookup(classifiedDomain, { ...common, securityTxt: true, fast: true });
-    const compact = await runUnifiedLookup(classifiedDomain, { ...common, securityTxt: true, compact: true });
-    const disabled = await runUnifiedLookup(classifiedDomain, {
+    const ordinary = await runFullLookup(classifiedDomain, common);
+    const fast = await runFullLookup(classifiedDomain, { ...common, securityTxt: true, fast: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...common, securityTxt: true, compact: true });
+    const disabled = await runFullLookup(classifiedDomain, {
       ...common,
       securityTxt: true,
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1' }),
     });
-    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, { ...common, securityTxt: true });
+    const ip = await runFullLookup({ type: 'ipv4', value: '192.0.2.1' }, { ...common, securityTxt: true });
 
     assert.equal(securityCalls, 0);
     for (const result of [ordinary, fast, compact, disabled, ip]) {
@@ -605,7 +641,7 @@ describe('runUnifiedLookup', () => {
   });
 
   test('keeps an unexpected security.txt failure as explicit neutral source health', async () => {
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       securityTxt: true,
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
@@ -614,10 +650,11 @@ describe('runUnifiedLookup', () => {
     });
 
     assert.equal(result.availability.state, 'registered');
-    assert.equal(result.securityTxt.state, 'unavailable');
-    assert.equal(result.securityTxt.status, 'error');
-    assert.match(result.securityTxt.detail, /fixture collector failure/u);
-    assert.equal(result.diagnostics.securityTxt.state, 'unavailable');
+    const securityTxt = requiredValue(result.securityTxt);
+    assert.equal(securityTxt.state, 'unavailable');
+    assert.equal(securityTxt.status, 'error');
+    assert.match(securityTxt.detail, /fixture collector failure/u);
+    assert.equal(requiredValue(result.diagnostics.securityTxt).state, 'unavailable');
   });
 
   test('registrar not_found remains diagnostic and cannot alter availability', async () => {
@@ -627,7 +664,7 @@ describe('runUnifiedLookup', () => {
       upstreamStatus: 200,
       parsed: { domain: 'EXAMPLE.COM', links: [] },
     };
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => rdapRecord,
       fetchRegistrarRdapRecord: async () => ({
         status: 'not_found', detail: 'No object', endpoint: 'https://registrar.example/domain/example.com',
@@ -658,12 +695,12 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
     };
-    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true });
-    const disabled = await runUnifiedLookup(classifiedDomain, {
+    const compact = await runCompactLookup(classifiedDomain, { ...common, compact: true });
+    const disabled = await runFullLookup(classifiedDomain, {
       ...common,
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_RDAP: '1' }),
     });
-    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, common);
+    const ip = await runFullLookup({ type: 'ipv4', value: '192.0.2.1' }, common);
     assert.equal(registrarCalls, 0);
     assert.equal(Object.hasOwn(compact.diagnostics.rdap, 'registrar'), false);
     assert.equal(Object.hasOwn(disabled.rdap, 'registrarRdap'), false);
@@ -684,12 +721,12 @@ describe('runUnifiedLookup', () => {
       findings: [],
       observation: { status: 'not_found', limitations: ['No match is neutral.'] },
     };
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       externalIntelligence: true,
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
-      lookupUrlscanDomain: async (domain) => {
+      lookupUrlscanDomain: async (domain: string) => {
         intelligenceCalls += 1;
         assert.equal(domain, 'example.com');
         return providerResult;
@@ -712,10 +749,10 @@ describe('runUnifiedLookup', () => {
         throw new Error('must not run');
       },
     };
-    const implicit = await runUnifiedLookup(classifiedDomain, common);
-    const fast = await runUnifiedLookup(classifiedDomain, { ...common, fast: true, externalIntelligence: true });
-    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true, externalIntelligence: true });
-    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, {
+    const implicit = await runFullLookup(classifiedDomain, common);
+    const fast = await runFullLookup(classifiedDomain, { ...common, fast: true, externalIntelligence: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...common, compact: true, externalIntelligence: true });
+    const ip = await runFullLookup({ type: 'ipv4', value: '192.0.2.1' }, {
       ...common,
       externalIntelligence: true,
     });
@@ -727,14 +764,14 @@ describe('runUnifiedLookup', () => {
   });
 
   test('keeps unexpected archived-provider failures as an explicit neutral source state', async () => {
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       externalIntelligence: true,
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
       lookupUrlscanDomain: async () => { throw new Error('secret provider failure'); },
     });
-    const provider = result.threatIntelligence.providers[0];
+    const provider = requiredValue(requiredValue(result.threatIntelligence).providers[0]);
     assert.equal(provider.state, 'error');
     assert.deepEqual(provider.findings, []);
     assert.equal(JSON.stringify(provider).includes('secret provider failure'), false);
@@ -755,12 +792,12 @@ describe('runUnifiedLookup', () => {
       findings: [],
       observation: { status: 'not_found', limitations: ['No match is neutral.'] },
     };
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       malwareHostIntelligence: true,
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
-      lookupUrlhausDomain: async (domain) => {
+      lookupUrlhausDomain: async (domain: string) => {
         malwareCalls += 1;
         assert.equal(domain, 'example.com');
         return providerResult;
@@ -779,7 +816,7 @@ describe('runUnifiedLookup', () => {
       state: 'not_found', detail: 'No match.', upstreamStatus: 200, retryAfterSeconds: null,
       findings: [], observation: { status: 'not_found', limitations: [] },
     };
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       externalIntelligence: true,
       malwareHostIntelligence: true,
       fetchRdapRecord: async () => null,
@@ -788,11 +825,12 @@ describe('runUnifiedLookup', () => {
       lookupUrlscanDomain: async () => archivedResult,
       lookupUrlhausDomain: async () => { throw new Error('private upstream detail'); },
     });
-    assert.deepEqual(result.threatIntelligence.providers.map((provider) => provider.provider.id), [
+    const threatIntelligence = requiredValue(result.threatIntelligence);
+    assert.deepEqual(threatIntelligence.providers.map((provider) => provider.provider.id), [
       'fixture_archive',
       'urlhaus_host',
     ]);
-    assert.equal(result.threatIntelligence.providers[1].state, 'error');
+    assert.equal(requiredValue(threatIntelligence.providers[1]).state, 'error');
     assert.equal(JSON.stringify(result).includes('private upstream detail'), false);
     assert.equal(result.availability.state, 'registered');
   });
@@ -808,10 +846,10 @@ describe('runUnifiedLookup', () => {
         throw new Error('must not run');
       },
     };
-    const implicit = await runUnifiedLookup(classifiedDomain, common);
-    const fast = await runUnifiedLookup(classifiedDomain, { ...common, fast: true, malwareHostIntelligence: true });
-    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true, malwareHostIntelligence: true });
-    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, {
+    const implicit = await runFullLookup(classifiedDomain, common);
+    const fast = await runFullLookup(classifiedDomain, { ...common, fast: true, malwareHostIntelligence: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...common, compact: true, malwareHostIntelligence: true });
+    const ip = await runFullLookup({ type: 'ipv4', value: '192.0.2.1' }, {
       ...common,
       malwareHostIntelligence: true,
     });
@@ -831,12 +869,12 @@ describe('runUnifiedLookup', () => {
       state: 'not_found', detail: 'No fixture record.', upstreamStatus: 200, retryAfterSeconds: null,
       findings: [], observation: { status: 'not_found', limitations: ['No match is neutral.'] },
     };
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       malwareIocIntelligence: true,
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
-      lookupThreatfoxDomain: async (domain) => {
+      lookupThreatfoxDomain: async (domain: string) => {
         iocCalls += 1;
         assert.equal(domain, 'example.com');
         return providerResult;
@@ -858,10 +896,10 @@ describe('runUnifiedLookup', () => {
         throw new Error('must not run');
       },
     };
-    const implicit = await runUnifiedLookup(classifiedDomain, common);
-    const fast = await runUnifiedLookup(classifiedDomain, { ...common, fast: true, malwareIocIntelligence: true });
-    const compact = await runUnifiedLookup(classifiedDomain, { ...common, compact: true, malwareIocIntelligence: true });
-    const ip = await runUnifiedLookup({ type: 'ipv4', value: '192.0.2.1' }, {
+    const implicit = await runFullLookup(classifiedDomain, common);
+    const fast = await runFullLookup(classifiedDomain, { ...common, fast: true, malwareIocIntelligence: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...common, compact: true, malwareIocIntelligence: true });
+    const ip = await runFullLookup({ type: 'ipv4', value: '192.0.2.1' }, {
       ...common, malwareIocIntelligence: true,
     });
     assert.equal(iocCalls, 0);
@@ -876,7 +914,7 @@ describe('runUnifiedLookup', () => {
       endpoint: 'https://registrar.example/domain/example.com', transportSecurity: 'https',
       status: 429, outcome: 'rate_limited', detail: 'HTTP 429', selected: false,
     };
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => ({
         rdapServer: 'https://registry.example/domain/example.com',
         upstreamStatus: 200,
@@ -894,13 +932,14 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
     });
     assert.equal(result.rdap.registrarRdap.status, 'error');
-    assert.equal(result.diagnostics.rdap.registrar.status, 'error');
-    assert.equal(result.diagnostics.rdap.registrar.attempt.outcome, 'rate_limited');
+    const registrarDiagnostic = requiredValue(result.diagnostics.rdap.registrar);
+    assert.equal(registrarDiagnostic.status, 'error');
+    assert.equal(recordValue(requiredValue(registrarDiagnostic.attempt)).outcome, 'rate_limited');
     assert.equal(result.availability.state, 'registered');
   });
 
   test('bounds unexpected registrar error detail before returning it', async () => {
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => ({
         rdapServer: 'https://registry.example/domain/example.com',
         upstreamStatus: 200,
@@ -922,11 +961,11 @@ describe('runUnifiedLookup', () => {
       WHOISLEUTH_DISABLE_RDAP: '1',
       WHOISLEUTH_DISABLE_WHOIS: 'true',
     });
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       featurePolicy: policy,
       fetchRdapRecord: async () => { rdapCalls += 1; throw new Error('must not run'); },
       buildWhoisChain: async () => { whoisCalls += 1; throw new Error('must not run'); },
-      checkDomainAvailability: async (_domain, options) => {
+      checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(options.featurePolicy, policy);
         assert.equal(await options.rdapRecordPromise, null);
         assert.equal(await options.whoisChainPromise, null);
@@ -939,12 +978,12 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.whois.status, 'disabled');
     assert.equal(result.diagnostics.rdap.errorCode, 'FEATURE_DISABLED');
     assert.match(result.rdap.detail, /disabled by deployment policy/i);
-    assert.match(result.whois.detail, /disabled by deployment policy/i);
+    assert.match(requiredValue(result.whois.detail), /disabled by deployment policy/i);
   });
 
   test('disabled availability analysis is not invoked or presented as an observed result', async () => {
     let availabilityCalls = 0;
-    const result = await runUnifiedLookup(classifiedDomain, {
+    const result = await runFullLookup(classifiedDomain, {
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_AVAILABILITY: 'on' }),
       fetchRdapRecord: async () => null,
       buildWhoisChain: async () => [],

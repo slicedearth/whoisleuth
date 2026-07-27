@@ -1,8 +1,15 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { checkDomainAvailability } from '../lib/availability.mts';
+import { networkFeaturePolicy } from '../lib/feature-policy.mts';
+import { recordValue } from './value-assertions.mts';
 
-const { checkDomainAvailability } = require('../lib/availability.mts');
-const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
+async function availability(domain: string, options: unknown): Promise<Record<string, unknown>> {
+  return recordValue(await checkDomainAvailability(
+    domain,
+    options as Parameters<typeof checkDomainAvailability>[1],
+  ));
+}
 
 test('availability keeps the compact contact shape when RDAP exposes richer arrays', async () => {
   const richContact = {
@@ -20,7 +27,7 @@ test('availability keeps the compact contact shape when RDAP exposes richer arra
     links: [{ href: 'https://example.com/contact' }],
     publicIds: [{ type: 'Example', identifier: '123' }],
   };
-  const result = await checkDomainAvailability('example.com', {
+  const result = await availability('example.com', {
     fast: true,
     rdapRecord: {
       upstreamStatus: 200,
@@ -39,9 +46,10 @@ test('availability keeps the compact contact shape when RDAP exposes richer arra
   });
 
   for (const contact of [result.registrar, result.registrant, result.abuse]) {
-    assert.deepEqual(Object.keys(contact).sort(), ['address', 'email', 'handle', 'name', 'org', 'phone']);
-    assert.equal(Object.hasOwn(contact, 'emails'), false);
-    assert.equal(Object.hasOwn(contact, 'links'), false);
+    const compactContact = recordValue(contact);
+    assert.deepEqual(Object.keys(compactContact).sort(), ['address', 'email', 'handle', 'name', 'org', 'phone']);
+    assert.equal(Object.hasOwn(compactContact, 'emails'), false);
+    assert.equal(Object.hasOwn(compactContact, 'links'), false);
   }
   assert.equal(result.createdDate, '2020-01-02T03:04:05Z');
   assert.equal(result.createdDateIso, '2020-01-02T03:04:05.000Z');
@@ -50,7 +58,7 @@ test('availability keeps the compact contact shape when RDAP exposes richer arra
 });
 
 test('does not promote an administrative organization to registrar', async () => {
-  const result = await checkDomainAvailability('example.gt', {
+  const result = await availability('example.gt', {
     featurePolicy: networkFeaturePolicy({
       WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1',
       WHOISLEUTH_DISABLE_WEBSITE_PROBE: '1',
@@ -59,9 +67,11 @@ test('does not promote an administrative organization to registrar', async () =>
     rdapRecord: null,
     whoisChain: [{
       server: 'whois.iana.org',
+      queriedAt: '2026-07-01T00:00:00.000Z',
       response: 'domain: GT\norganisation: Registry',
     }, {
       server: 'registry website',
+      queriedAt: '2026-07-01T00:00:01.000Z',
       response: [
         'Domain Name: EXAMPLE.GT',
         'Domain Status: Active',
@@ -76,7 +86,7 @@ test('does not promote an administrative organization to registrar', async () =>
 
   assert.equal(result.state, 'registered');
   assert.equal(result.registrar, null);
-  assert.equal(result.registrant.org, 'Example Holder');
+  assert.equal(recordValue(result.registrant).org, 'Example Holder');
   assert.equal(result.createdDate, '03.04.2024');
   assert.equal(result.createdDateIso, '2024-04-03T00:00:00.000Z');
   assert.equal(result.expiryDate, '05.11.2030');
