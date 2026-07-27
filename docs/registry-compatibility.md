@@ -27,8 +27,8 @@ and response encoding without duplicating the query value in the response.
 
 Generic TLDs use live IANA RDAP bootstrap discovery and shared bounded RDAP
 parsing. WHOISleuth does not create a duplicate parser profile for each suffix.
-The version 26 catalogue includes an official-source snapshot verified on 19
-July 2026: all 1,113 current generic and generic-restricted TLDs were present in
+The version 26 catalogue includes an official-source snapshot verified on 28
+July 2026: all 1,114 current generic and generic-restricted TLDs were present in
 the IANA RDAP bootstrap, as were 12 of 14 sponsored TLDs. `.edu` and `.mil` are
 the sponsored exceptions, while the infrastructure suffix `.arpa` has no RDAP
 bootstrap service. The dated snapshot describes published coverage only. It is

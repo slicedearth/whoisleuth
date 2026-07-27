@@ -31,15 +31,15 @@ test('builds the bounded registry-support catalogue from the shared capability m
     fallbacks: 1,
   });
   assert.deepEqual(catalogue.standardsCoverage.counts, {
-    activeTlds: 1437,
+    activeTlds: 1438,
     countryCode: 309,
-    nonCountryCode: 1128,
-    generic: 1110,
+    nonCountryCode: 1129,
+    generic: 1111,
     genericRestricted: 3,
     sponsored: 14,
     infrastructure: 1,
-    rdapBootstrapServiceGroups: 589,
-    genericAndRestrictedRdapCovered: 1113,
+    rdapBootstrapServiceGroups: 590,
+    genericAndRestrictedRdapCovered: 1114,
     sponsoredRdapCovered: 12,
     infrastructureRdapCovered: 0,
   });
@@ -58,7 +58,7 @@ test('returns independent catalogue rows rather than exposing shared mutable arr
   const second = registrySupportCatalogue();
   assert.equal(requiredValue(second.rows[0]).suffixes[0], 'ac');
   assert.equal(requiredValue(second.rows[0]).fixtureScenarios.includes('changed'), false);
-  assert.equal(second.standardsCoverage.counts.generic, 1110);
+  assert.equal(second.standardsCoverage.counts.generic, 1111);
 });
 
 test('inspects explicit and generic suffix support through the shared catalogue', () => {
