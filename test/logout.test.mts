@@ -21,16 +21,17 @@
 //   other way, replayed from a page that isn't this site at all) - the
 //   origin check still blocks that.
 
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
+import { before, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { requiredValue } from './value-assertions.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { createSessionToken, buildSessionCookie } = require('../lib/auth.mts');
-const { handler } = require('../netlify/functions/logout.mts');
+const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
+const { handler } = await import('../netlify/functions/logout.mts');
 
-let cookie;
+let cookie = '';
 before(() => {
   cookie = buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0];
 });
@@ -47,7 +48,7 @@ describe('logout handler', () => {
   test('clears the session cookie on an authenticated, same-origin POST', async () => {
     const res = await handler({ httpMethod: 'POST', headers: SAME_ORIGIN_HEADERS() });
     assert.equal(res.statusCode, 200);
-    assert.match(res.headers['Set-Cookie'], /wrt_session=;/);
+    assert.match(requiredValue(res.headers['Set-Cookie']), /wrt_session=;/);
   });
 
   test('rejects a POST with no session cookie, even from a same-origin request', async () => {
@@ -61,7 +62,7 @@ describe('logout handler', () => {
 
   test('rejects a POST with an expired session cookie', async () => {
     const actualNow = Date.now;
-    let expiredToken;
+    let expiredToken = '';
     try {
       Date.now = () => actualNow() - (31 * 24 * 60 * 60 * 1000);
       expiredToken = createSessionToken();

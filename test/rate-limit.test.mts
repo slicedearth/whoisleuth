@@ -1,11 +1,10 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   getClientIp,
   getForwardedProtocol,
   trustsForwardedHeaders,
-} = require('../lib/rate-limit.mts');
+} from '../lib/rate-limit.mts';
 
 describe('forwarded-header trust', () => {
   test('is opt-in for self-hosting and enabled by the Netlify runtime', () => {
@@ -30,6 +29,18 @@ describe('forwarded-header trust', () => {
     const env = { TRUST_PROXY: '1' };
     assert.equal(getClientIp(headers, '203.0.113.9', env), '198.51.100.2');
     assert.equal(getForwardedProtocol(headers, env), 'https');
+  });
+
+  test('ignores repeated forwarded identity headers instead of coercing them', () => {
+    const headers = {
+      'x-forwarded-for': ['198.51.100.2', '198.51.100.3'],
+      'x-forwarded-proto': ['http', 'https'],
+      'x-nf-client-connection-ip': ['198.51.100.4'],
+    };
+
+    assert.equal(getClientIp(headers, '203.0.113.9', { TRUST_PROXY: '1' }), '203.0.113.9');
+    assert.equal(getClientIp(headers, '203.0.113.9', { NETLIFY: 'true' }), '203.0.113.9');
+    assert.equal(getForwardedProtocol(headers, { TRUST_PROXY: '1' }), null);
   });
 
   test('ignores Netlify-specific and non-standard client IP headers behind a generic proxy', () => {

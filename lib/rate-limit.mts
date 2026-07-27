@@ -15,7 +15,7 @@
 // distributed abuse.
 
 type EnvironmentInput = Record<string, unknown>;
-type HeaderInput = Readonly<Record<string, string | undefined>>;
+type HeaderInput = Readonly<Record<string, string | readonly string[] | undefined>>;
 type RateLimitBucket = { count: number; resetAt: number };
 type RateLimitConfig = { limit: number; windowMs: number };
 type RateLimitDecision = {
@@ -99,7 +99,7 @@ function getClientIp(
   // unfamiliar client-supplied headers through unchanged.
   if (isNetlifyRuntime(env)) {
     const nfIp = h['x-nf-client-connection-ip'];
-    if (nfIp) return nfIp;
+    if (typeof nfIp === 'string' && nfIp) return nfIp;
   }
 
   // Each hop *appends* to the end of X-Forwarded-For, so with exactly one
@@ -107,7 +107,7 @@ function getClientIp(
   // proxy added - the first is whatever the original client claimed, which
   // is exactly what a spoofing client would set.
   const forwardedFor = h['x-forwarded-for'] || h['X-Forwarded-For'];
-  if (forwardedFor) {
+  if (typeof forwardedFor === 'string' && forwardedFor) {
     const parts = forwardedFor.split(',').map((p) => p.trim());
     return parts[parts.length - 1];
   }

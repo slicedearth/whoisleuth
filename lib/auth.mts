@@ -6,7 +6,7 @@
 
 import * as crypto from 'node:crypto';
 
-type HeaderInput = Readonly<Record<string, string | undefined>>;
+type HeaderInput = Readonly<Record<string, string | readonly string[] | undefined>>;
 type CookieOptions = { secure?: boolean };
 type SigningSecret = string | Buffer;
 
@@ -135,7 +135,7 @@ function isTrustedOrigin(headers: HeaderInput | null | undefined): boolean {
   if (!headers) return false;
   const origin = headers.origin || headers.Origin;
   const host = headers.host || headers.Host;
-  if (!origin || !host) return false;
+  if (typeof origin !== 'string' || typeof host !== 'string') return false;
   try {
     return new URL(origin).host.toLowerCase() === String(host).toLowerCase();
   } catch {

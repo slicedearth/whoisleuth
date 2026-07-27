@@ -57,6 +57,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
+    "@types/express": "^5.0.6",
     "@types/node": "^26.1.0",
     "fast-check": "^4.9.0",
     "retire": "^5.4.3",

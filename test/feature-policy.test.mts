@@ -1,14 +1,14 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   FEATURE_DISABLED_ERROR_CODE,
   NETWORK_FEATURE_DEFINITIONS,
   disabledValue,
   networkFeaturePolicy,
   featureDecision,
   featureDisabledError,
-} = require('../lib/feature-policy.mts');
+} from '../lib/feature-policy.mts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('network feature policy', () => {
   test('defaults every implemented network feature to enabled', () => {
@@ -44,7 +44,7 @@ describe('network feature policy', () => {
 
   test('returns a stable bounded disabled response without exposing environment names', () => {
     const policy = networkFeaturePolicy({ WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY: 'on' });
-    const payload = featureDisabledError('certificate_transparency', policy);
+    const payload = requiredValue(featureDisabledError('certificate_transparency', policy));
     assert.equal(payload.errorCode, FEATURE_DISABLED_ERROR_CODE);
     assert.equal(payload.feature, 'certificate_transparency');
     assert.equal(payload.disabledBy, 'certificate_transparency');

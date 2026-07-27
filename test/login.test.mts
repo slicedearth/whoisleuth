@@ -1,23 +1,26 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { recordValue, requiredValue } from './value-assertions.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const loginModule = require('../netlify/functions/login.mts');
+const loginModule = await import('../netlify/functions/login.mts');
 const {
   config,
   default: loginHandler,
   runLoginFunction,
 } = loginModule;
+const testDirectory = dirname(fileURLToPath(import.meta.url));
 
-function request(headers, password = process.env.SITE_PASSWORD) {
+function request(headers: Record<string, string>, password = process.env.SITE_PASSWORD) {
   return runLoginFunction({ httpMethod: 'POST', headers, body: JSON.stringify({ password }) });
 }
 
-function rawRequest(body) {
+function rawRequest(body: string) {
   return runLoginFunction({
     httpMethod: 'POST',
     headers: { origin: 'https://example.com', host: 'example.com' },
@@ -38,14 +41,14 @@ describe('login handler origin enforcement', () => {
       },
     });
 
-    const netlifyConfig = readFileSync(join(__dirname, '..', 'netlify.toml'), 'utf8');
+    const netlifyConfig = readFileSync(join(testDirectory, '..', 'netlify.toml'), 'utf8');
     assert.doesNotMatch(netlifyConfig, /from = "\/api\/login"/u);
   });
 
   test('accepts a same-origin login and returns transport security headers', async () => {
     const response = await request({ origin: 'https://example.com', host: 'example.com' });
     assert.equal(response.statusCode, 200);
-    assert.match(response.headers['Set-Cookie'], /wrt_session=/);
+    assert.match(requiredValue(response.headers['Set-Cookie']), /wrt_session=/);
     assert.equal(response.headers['X-Content-Type-Options'], 'nosniff');
     assert.equal(response.headers['X-Frame-Options'], 'DENY');
     assert.equal(response.headers['Referrer-Policy'], 'strict-origin-when-cross-origin');
@@ -62,13 +65,13 @@ describe('login handler origin enforcement', () => {
   test('allows non-browser login clients without an Origin header', async () => {
     const response = await request({ host: 'example.com' });
     assert.equal(response.statusCode, 200);
-    assert.match(response.headers['Set-Cookie'], /wrt_session=/);
+    assert.match(requiredValue(response.headers['Set-Cookie']), /wrt_session=/);
   });
 
   test('returns a stable JSON error for malformed request bodies', async () => {
     const response = await rawRequest('{bad');
     assert.equal(response.statusCode, 400);
-    assert.deepEqual(JSON.parse(response.body), {
+    assert.deepEqual(JSON.parse(requiredValue(response.body)), {
       error: 'Invalid request body',
       errorCode: 'INVALID_REQUEST_BODY',
     });
@@ -78,14 +81,14 @@ describe('login handler origin enforcement', () => {
     for (const body of ['null', '[]', '"password"']) {
       const response = await rawRequest(body);
       assert.equal(response.statusCode, 400);
-      assert.equal(JSON.parse(response.body).errorCode, 'INVALID_REQUEST_BODY');
+      assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'INVALID_REQUEST_BODY');
     }
   });
 
   test('rejects request bodies over one MiB before parsing them', async () => {
     const response = await rawRequest(JSON.stringify({ password: 'x'.repeat(1024 * 1024) }));
     assert.equal(response.statusCode, 413);
-    assert.deepEqual(JSON.parse(response.body), {
+    assert.deepEqual(JSON.parse(requiredValue(response.body)), {
       error: 'Request bodies are limited to 1 MiB.',
       errorCode: 'REQUEST_TOO_LARGE',
     });
@@ -103,7 +106,7 @@ describe('login handler origin enforcement', () => {
     }));
 
     assert.equal(response.status, 200);
-    assert.match(response.headers.get('Set-Cookie'), /wrt_session=/);
+    assert.match(requiredValue(response.headers.get('Set-Cookie')), /wrt_session=/);
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
   });
 
@@ -115,6 +118,6 @@ describe('login handler origin enforcement', () => {
     }));
 
     assert.equal(response.status, 400);
-    assert.equal((await response.json()).errorCode, 'INVALID_REQUEST_BODY');
+    assert.equal(recordValue(await response.json()).errorCode, 'INVALID_REQUEST_BODY');
   });
 });

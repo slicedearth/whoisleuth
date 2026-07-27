@@ -16,4 +16,9 @@ function requiredValue<T>(value: T | null | undefined): T {
   return value as T;
 }
 
-export { arrayValue, recordValue, requiredValue };
+function stringValue(value: unknown): string {
+  assert.equal(typeof value, 'string');
+  return value as string;
+}
+
+export { arrayValue, recordValue, requiredValue, stringValue };

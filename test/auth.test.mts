@@ -1,17 +1,18 @@
 // Covers the shared authentication boundary's isTrustedOrigin - the same-origin check that closes
 // the logout CSRF gap a plain POST-method restriction leaves open (see
-// test/logout.test.js for the end-to-end handler behavior).
+// test/logout.test.mts for the end-to-end handler behavior).
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   createSessionToken,
   isTrustedLoginOrigin,
   isTrustedOrigin,
   isValidSessionToken,
   parseCookies,
   sessionFingerprintFromCookieHeader,
-} = require('../lib/auth.mts');
+} from '../lib/auth.mts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('isTrustedOrigin', () => {
   test('accepts a matching Origin/Host pair', () => {
@@ -48,6 +49,11 @@ describe('isTrustedOrigin', () => {
     assert.equal(isTrustedOrigin({ origin: 'not-a-url', host: 'example.com' }), false);
   });
 
+  test('fails closed on repeated Origin or Host headers', () => {
+    assert.equal(isTrustedOrigin({ origin: ['https://example.com'], host: 'example.com' }), false);
+    assert.equal(isTrustedOrigin({ origin: 'https://example.com', host: ['example.com'] }), false);
+  });
+
   test('fails closed when headers is null/undefined', () => {
     assert.equal(isTrustedOrigin(null), false);
     assert.equal(isTrustedOrigin(undefined), false);
@@ -75,7 +81,7 @@ describe('parseCookies', () => {
 describe('session signing', () => {
   test('derives an opaque stable concurrency key without retaining the bearer token', () => {
     const cookie = 'theme=dark; wrt_session=12345.signature';
-    const fingerprint = sessionFingerprintFromCookieHeader(cookie);
+    const fingerprint = requiredValue(sessionFingerprintFromCookieHeader(cookie));
     assert.equal(fingerprint, sessionFingerprintFromCookieHeader(cookie));
     assert.match(fingerprint, /^[a-f0-9]{64}$/);
     assert.equal(fingerprint.includes('12345'), false);

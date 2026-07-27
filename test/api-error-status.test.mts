@@ -7,21 +7,37 @@
 // classifyQuery() rejects synchronously (before any network call), so these
 // tests need no network access and can't be flaky.
 
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
+import { before, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { requiredValue } from './value-assertions.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 
-const { createSessionToken, buildSessionCookie } = require('../lib/auth.mts');
+const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
+const [
+  { handler: lookupHandler },
+  { handler: rdapHandler },
+  { handler: whoisHandler },
+  { handler: availabilityHandler },
+  { handler: domainPostureHandler },
+  { handler: ctSearchHandler },
+] = await Promise.all([
+  import('../netlify/functions/lookup.mts'),
+  import('../netlify/functions/rdap.mts'),
+  import('../netlify/functions/whois.mts'),
+  import('../netlify/functions/availability.mts'),
+  import('../netlify/functions/domain-posture.mts'),
+  import('../netlify/functions/ct-search.mts'),
+]);
 
 const INVALID_QUERY = 'not a valid domain'; // embedded spaces - fails classifyQuery's URL-hostname check
 
-let cookieHeader;
+let cookieHeader = '';
 before(() => {
   cookieHeader = buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0];
 });
 
-function authedEvent(query) {
+function authedEvent(query: string) {
   return {
     headers: { cookie: cookieHeader },
     queryStringParameters: { q: query },
@@ -30,73 +46,64 @@ function authedEvent(query) {
 
 describe('invalid query returns 400, not 500', () => {
   test('unified lookup', async () => {
-    const { handler } = require('../netlify/functions/lookup.mts');
-    const res = await handler(authedEvent(INVALID_QUERY));
+    const res = await lookupHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    const body = JSON.parse(res.body);
+    const body = JSON.parse(requiredValue(res.body));
     assert.match(body.error, /not a valid domain, IP, or ASN/);
     assert.equal(body.errorCode, 'INVALID_QUERY');
   });
 
   test('rdap', async () => {
-    const { handler } = require('../netlify/functions/rdap.mts');
-    const res = await handler(authedEvent(INVALID_QUERY));
+    const res = await rdapHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
+    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
   });
 
   test('whois', async () => {
-    const { handler } = require('../netlify/functions/whois.mts');
-    const res = await handler(authedEvent(INVALID_QUERY));
+    const res = await whoisHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
+    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
   });
 
   test('availability', async () => {
-    const { handler } = require('../netlify/functions/availability.mts');
-    const res = await handler(authedEvent(INVALID_QUERY));
+    const res = await availabilityHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
+    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
   });
 
   test('domain-posture', async () => {
-    const { handler } = require('../netlify/functions/domain-posture.mts');
-    const res = await handler(authedEvent(INVALID_QUERY));
+    const res = await domainPostureHandler(authedEvent(INVALID_QUERY));
     assert.equal(res.statusCode, 400);
-    assert.match(JSON.parse(res.body).error, /not a valid domain, IP, or ASN/);
+    assert.match(JSON.parse(requiredValue(res.body)).error, /not a valid domain, IP, or ASN/);
   });
 });
 
 describe('unified lookup error codes', () => {
   test('reports missing authentication with a stable code', async () => {
-    const { handler } = require('../netlify/functions/lookup.mts');
-    const res = await handler({ headers: {}, queryStringParameters: { q: 'example.com' } });
+    const res = await lookupHandler({ headers: {}, queryStringParameters: { q: 'example.com' } });
     assert.equal(res.statusCode, 401);
-    assert.equal(JSON.parse(res.body).errorCode, 'AUTH_REQUIRED');
+    assert.equal(JSON.parse(requiredValue(res.body)).errorCode, 'AUTH_REQUIRED');
   });
 
   test('reports a missing query with a stable code', async () => {
-    const { handler } = require('../netlify/functions/lookup.mts');
-    const res = await handler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
+    const res = await lookupHandler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
     assert.equal(res.statusCode, 400);
-    assert.equal(JSON.parse(res.body).errorCode, 'MISSING_QUERY');
+    assert.equal(JSON.parse(requiredValue(res.body)).errorCode, 'MISSING_QUERY');
   });
 });
 
 describe('Certificate Transparency query errors', () => {
   test('reports a missing query with a stable code', async () => {
-    const { handler } = require('../netlify/functions/ct-search.mts');
-    const res = await handler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
+    const res = await ctSearchHandler({ headers: { cookie: cookieHeader }, queryStringParameters: {} });
     assert.equal(res.statusCode, 400);
-    assert.equal(JSON.parse(res.body).errorCode, 'MISSING_QUERY');
+    assert.equal(JSON.parse(requiredValue(res.body)).errorCode, 'MISSING_QUERY');
   });
 
   test('rejects control characters and overlong input before network work', async () => {
-    const { handler } = require('../netlify/functions/ct-search.mts');
     for (const q of ['brand\nname', 'x'.repeat(201)]) {
-      const res = await handler(authedEvent(q));
+      const res = await ctSearchHandler(authedEvent(q));
       assert.equal(res.statusCode, 400);
-      const body = JSON.parse(res.body);
+      const body = JSON.parse(requiredValue(res.body));
       assert.equal(body.errorCode, 'INVALID_CT_QUERY');
       assert.match(body.error, /at most 200 characters/);
     }

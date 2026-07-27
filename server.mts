@@ -1,4 +1,5 @@
 import express from 'express';
+import type { IncomingHttpHeaders } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,7 +40,7 @@ import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorRespons
 
 type RequestLike = {
   protocol: string;
-  headers: Record<string, string | undefined>;
+  headers: IncomingHttpHeaders;
   socket?: { remoteAddress?: string | null };
   body?: unknown;
   query: Record<string, unknown>;

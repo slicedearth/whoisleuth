@@ -1,19 +1,20 @@
-const { after, before, describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { readdirSync } = require('node:fs');
-const { join, relative, sep } = require('node:path');
+import { readdirSync } from 'node:fs';
+import type { Server } from 'node:http';
+import { join, relative, sep } from 'node:path';
+import { after, before, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { app } = require('../server.mts');
+const { app } = await import('../server.mts');
 const {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   PRERENDERED_ROUTES,
-} = require('../lib/prerendered-routes.mts');
+} = await import('../lib/prerendered-routes.mts');
 
-function routeSourcePages(directory) {
-  const files = [];
+function routeSourcePages(directory: string): string[] {
+  const files: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const filename = join(directory, entry.name);
     if (entry.isDirectory()) files.push(...routeSourcePages(filename));
@@ -22,7 +23,7 @@ function routeSourcePages(directory) {
   return files;
 }
 
-function publicRouteForPage(filename) {
+function publicRouteForPage(filename: string): string {
   const routeDirectory = relative(join(process.cwd(), 'frontend', 'src', 'routes'), join(filename, '..'));
   const segments = routeDirectory
     .split(sep)
@@ -30,20 +31,24 @@ function publicRouteForPage(filename) {
   return segments.length ? `/${segments.join('/')}` : '/';
 }
 
-let server;
-let origin;
+let server: Server | null = null;
+let origin = '';
 
 before(async () => {
-  server = await new Promise((resolve, reject) => {
+  server = await new Promise<Server>((resolve, reject) => {
     const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
     listener.once('error', reject);
   });
-  origin = `http://127.0.0.1:${server.address().port}`;
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  origin = `http://127.0.0.1:${address.port}`;
 });
 
 after(async () => {
   if (!server) return;
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  await new Promise<void>((resolve, reject) => {
+    server?.close((error) => error ? reject(error) : resolve());
+  });
 });
 
 describe('canonical route redirects', () => {

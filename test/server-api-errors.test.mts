@@ -1,29 +1,35 @@
-const { after, before, describe, test } = require('node:test');
-const assert = require('node:assert/strict');
+import type { Server } from 'node:http';
+import { after, before, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { recordValue, stringValue } from './value-assertions.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { app, apiErrorHandler } = require('../server.mts');
-const { buildSessionCookie, createSessionToken } = require('../lib/auth.mts');
+const { app, apiErrorHandler } = await import('../server.mts');
+const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
 
-let server;
-let origin;
+let server: Server | null = null;
+let origin = '';
 
 before(async () => {
-  server = await new Promise((resolve, reject) => {
+  server = await new Promise<Server>((resolve, reject) => {
     const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
     listener.once('error', reject);
   });
-  origin = `http://127.0.0.1:${server.address().port}`;
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  origin = `http://127.0.0.1:${address.port}`;
 });
 
 after(async () => {
   if (!server) return;
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  await new Promise<void>((resolve, reject) => {
+    server?.close((error) => error ? reject(error) : resolve());
+  });
 });
 
-async function postLogin(body, requestOrigin = origin) {
+async function postLogin(body: string, requestOrigin = origin): Promise<Response> {
   return fetch(`${origin}/api/login`, {
     method: 'POST',
     headers: {
@@ -34,7 +40,7 @@ async function postLogin(body, requestOrigin = origin) {
   });
 }
 
-async function expectSanitizedJson(response, statusCode, expectedBody) {
+async function expectSanitizedJson(response: Response, statusCode: number, expectedBody: unknown) {
   assert.equal(response.status, statusCode);
   assert.match(response.headers.get('content-type') || '', /^application\/json\b/i);
   assert.equal(response.headers.get('cache-control'), 'no-store');
@@ -80,28 +86,34 @@ describe('Express API response parity', () => {
       headers: { Cookie: session },
     });
     assert.equal(expectedError.status, 400);
-    const expectedBody = await expectedError.json();
+    const expectedBody = recordValue(await expectedError.json());
     assert.equal(expectedBody.errorCode, 'INVALID_QUERY');
-    assert.match(expectedBody.error, /not a valid domain, IP, or ASN/i);
+    assert.match(stringValue(expectedBody.error), /not a valid domain, IP, or ASN/i);
   });
 
   test('sanitizes unexpected errors without exposing internal details', () => {
-    let statusCode = null;
-    let body = null;
+    let statusCode: number | null = null;
+    let body: unknown = null;
     const response = {
       headersSent: false,
-      status(value) {
-        statusCode = value;
-        return this;
+      setHeader() {
+        return response;
       },
-      json(value) {
+      status(value: number) {
+        statusCode = value;
+        return response;
+      },
+      json(value: unknown) {
         body = value;
         return value;
+      },
+      redirect() {
+        return response;
       },
     };
     apiErrorHandler(
       new Error('/private/path secret upstream detail'),
-      {},
+      { protocol: 'https', headers: {}, query: {}, path: '/api/test' },
       response,
       () => assert.fail('unexpected errors should be handled before next()'),
     );
