@@ -59,9 +59,10 @@ Deep domain Lookup can combine:
   one-connection TLS evidence with bounded certificate signature, purpose,
   subject-alternative-name class, and authority-information-access presence
   metadata;
-- passive technology, browser-library catalogue, and security-posture
-  indicators derived from the captured response, without fetching referenced
-  scripts or performing vulnerability testing;
+- passive technology, browser-library catalogue, and response-scoped
+  security-posture indicators, including bounded policy-quality checks,
+  derived from the captured response without fetching referenced scripts or
+  performing vulnerability testing;
 - a privacy-minimized credential collection surface with fixed semantic input,
   form-method, and action-relationship counts from the captured static HTML;
 - one observed public endpoint mapped to its IP RDAP network registration;

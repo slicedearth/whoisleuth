@@ -52,7 +52,7 @@ profiles, notes, raw registry payloads, or deep website evidence.
 | `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
 | Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, custom rules, and analyst-selected relationship observations. | General server persistence, cross-device synchronization, accounts, or a general background-job system. |
 | `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, response shaping, and the optional Netlify scheduled-watchlist boundary. | Separate copies of lookup and parsing rules. |
-| `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security.txt collection, optional external intelligence adapters, bounded structured identity, derived technology and passive-posture analysis, observed network context, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
+| `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security.txt collection, optional external intelligence adapters, bounded structured identity, derived technology and response-policy/passive-posture analysis, observed network context, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
 | Optional distributed budget provider | Opaque expiring leases and bounded operation counters when explicitly configured. | Query targets, responses, evidence, notes, profiles, or session tokens. |
 | Optional Netlify Blob store | One application-encrypted, bounded compact scheduled-watchlist envelope when explicitly configured. | Raw RDAP/WHOIS, expanded contacts, analyst notes, sessions, Brand Profiles, cases, or deep website evidence. |
 
@@ -135,7 +135,11 @@ version 7 and their existing payload shape.
   every redirect, caps redirects and retained body bytes, and closes its
   per-request dispatcher. The homepage, favicon, optional security.txt file,
   and owned-domain policy requests reuse these trust controls with their own
-  bounded contracts.
+  bounded contracts. Deep full Lookup can transiently reduce selected CSP,
+  HSTS, referrer-policy, and response-cookie attributes from the chosen
+  homepage response to fixed posture signals and bounded counts. Complete
+  values and cookie identifiers are discarded, and the signals do not affect
+  availability or Risk.
 - **TLS** resolves through the public-address guard and opens one pinned
   connection while retaining the hostname for SNI and hostname validation. It
   stores bounded public certificate metadata rather than certificate bytes or

@@ -54,6 +54,42 @@ describe('website activity classification', () => {
     assert.equal(JSON.stringify(result.http).includes('secret'), false);
   });
 
+  test('reduces response-policy values to presence markers and fixed transient signals', async () => {
+    const secret = 'private-policy-value';
+    const result = await fetchHomepage('example.com', {
+      fetcher: async () => new Response('<title>Policy</title>', {
+        status: 200,
+        headers: {
+          'content-security-policy': `script-src * 'unsafe-eval'; report-uri https://reports.invalid/${secret}`,
+          'strict-transport-security': 'max-age=86400',
+          'referrer-policy': 'unsafe-url',
+          'set-cookie': `session=${secret}; SameSite=None`,
+        },
+      }),
+    });
+    const response = recordValue(result.http.response);
+    const securityHeaders = recordValue(response.securityHeaders);
+    const policy = recordValue(result.responsePolicy);
+    const signals = arrayValue(policy.signals).map(recordValue);
+    assert.equal(securityHeaders.contentSecurityPolicy, 'observed');
+    assert.equal(securityHeaders.strictTransportSecurity, 'observed');
+    assert.equal(securityHeaders.referrerPolicy, 'observed');
+    assert.deepEqual(signals.map((signal) => signal.id), [
+      'csp_default_source_missing',
+      'csp_base_uri_missing',
+      'csp_object_source_unbounded',
+      'csp_permissive_script_source',
+      'csp_unsafe_eval',
+      'hsts_short_max_age',
+      'referrer_policy_permissive',
+      'cookies_missing_secure',
+      'cookies_missing_http_only',
+      'cookies_same_site_none_without_secure',
+    ]);
+    assert.doesNotMatch(JSON.stringify(result), new RegExp(secret));
+    assert.doesNotMatch(JSON.stringify(result), /reports\.invalid|report-uri|session=/);
+  });
+
   test('records HTTPS failure before a successful HTTP fallback', async () => {
     let calls = 0;
     const result = await fetchHomepage('example.com', {
@@ -208,7 +244,7 @@ describe('website activity classification', () => {
     assert.equal(technologyProfile.status, 'partial');
     assert.deepEqual(technologyFindings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
     assert.doesNotMatch(JSON.stringify(technologyProfile), /token=|key=|secret|submit|0\.1/);
-    assert.equal(securityPosture.postureVersion, 1);
+    assert.equal(securityPosture.postureVersion, 2);
     assert.equal(securityPosture.source, 'derived');
     assert.equal(securityPosture.status, 'partial');
     assert.equal(securityFindings.some((item) => item.id === 'external_form_destinations'), true);

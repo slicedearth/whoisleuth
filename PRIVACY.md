@@ -152,7 +152,8 @@ default (see the README), so many lookups return no personal data at all.
   point-in-time context and do not prove ownership, hosting control, intent,
   or safety.
 - **HTTP intelligence**: Lookup can display the bounded final URL, redirect
-  provenance, selected response/header metadata, and response-body fingerprint
+  provenance, selected response metadata, presence-only security-header
+  markers, and response-body fingerprint
   collected by a requested deep check. Bulk results, watchlists, and analyst
   cases retain only the final origin (never its path or query), response status,
   transport, redirect count/flags, MIME type, and presence-only security-header
@@ -166,8 +167,10 @@ default (see the README), so many lookups return no personal data at all.
   limitations, and up to 8 bounded source observations per relationship as
   versioned JSON, GraphML, or GEXF. It excludes case notes, status, disposition,
   raw registry or page responses, contacts, credentials, and transient graph
-  view state. Raw header values, attempt errors, and redirect inventories are
-  not copied into browser-local investigation stores or graph exports.
+  view state. Selected security-policy values are discarded after the
+  transient analysis described below. Other raw header values, attempt errors,
+  and redirect inventories are not copied into browser-local investigation
+  stores or graph exports.
 - **Analyst-selected relationship observations**: Bulk can compare bounded
   nameserver, IP-address, native certificate, public tracking-identifier,
   favicon, and configured official-asset-host observations inside the current
@@ -333,8 +336,12 @@ default (see the README), so many lookups return no personal data at all.
   handshake, DNSSEC publication, and CAA query as a separate versioned posture
   profile. It retains fixed finding identifiers, categories, state and tone
   labels, fixed explanations, fixed evidence classes, and bounded counts. It
-  does not copy response-header values, TLS error strings, URLs, certificate
-  contents, DNS record contents, or page markup into the derived profile.
+  can review bounded Content-Security-Policy, Strict-Transport-Security,
+  Referrer-Policy, and response-cookie attributes from the selected response
+  without another request. It does not copy response-header values, cookie
+  names or values, paths, domains, nonces, hashes, reporting endpoints, TLS
+  error strings, URLs, certificate contents, DNS record contents, or page
+  markup into the derived profile.
   Observed absence is explicitly limited to the selected response or retained
   static evidence. The analysis makes no extra request, performs no active
   vulnerability testing, and does not affect availability or Risk scoring.

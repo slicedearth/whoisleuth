@@ -533,6 +533,7 @@
     ['Content-type protection',httpSecurityHeaders.xContentTypeOptions],
     ['Referrer policy',httpSecurityHeaders.referrerPolicy]
   ];}
+  function httpSecurityValue(value:unknown){return value==='observed'?'Observed':show(value);}
   function httpEvidenceRows(){return[
     {label:'Final URL',value:show(httpEvidence.finalUrl||httpEvidence.requestUrl)},
     {label:'Response',value:httpResponse.status?`HTTP ${httpResponse.status}`:'Not observed'},
@@ -543,7 +544,7 @@
   ];}
   function httpRedirectRows(){return records(httpEvidence.redirects).map((redirect)=>({status:show(redirect.status),from:show(redirect.from),to:show(redirect.to),queryOmitted:Boolean(redirect.queryOmitted)}));}
   function httpAttemptRows(){const attempts=records(httpEvidence.attempts);return attempts.some((attempt)=>attempt.error)?attempts.map((attempt)=>({url:show(attempt.url),detail:attempt.error?String(attempt.error):`HTTP ${show(attempt.httpStatus)}`})):[];}
-  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:show(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});const bodyHash=rec(httpResponse.bodyHash);if(bodyHash.value){rows.push({label:'Body SHA-256',value:show(bodyHash.value),hash:true},{label:'Hash scope',value:bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(bodyHash.bytes)})`:`Complete captured body (${formatBytes(bodyHash.bytes)})`});}return rows;}
+  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:httpSecurityValue(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});const bodyHash=rec(httpResponse.bodyHash);if(bodyHash.value){rows.push({label:'Body SHA-256',value:show(bodyHash.value),hash:true},{label:'Hash scope',value:bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(bodyHash.bytes)})`:`Complete captured body (${formatBytes(bodyHash.bytes)})`});}return rows;}
   function tlsEvidenceRows(){return[
     {label:'Connected address',value:show(tlsEvidence.connectedAddress)},
     {label:'SNI hostname',value:show(tlsEvidence.sniHost)},

@@ -566,25 +566,34 @@ request. Its version-1 observation envelope distinguishes successful, partial,
 error, and policy-skipped collection.
 
 The type-specific payload includes the sanitized request and final URLs, up to
-five redirects, response status, HTTPS or cleartext transport, selected bounded
-headers, declared content length, captured body bytes, and whether the retained
-body prefix was capped. It also records cross-origin redirects and HTTPS-to-HTTP
+five redirects, response status, HTTPS or cleartext transport, presence-only
+tokens for selected security headers, other selected bounded metadata,
+declared content length, captured body bytes, and whether the retained body
+prefix was capped. It also records cross-origin redirects and HTTPS-to-HTTP
 downgrades as context. Query strings and fragments are not retained, response
-bodies are never included, and overlong paths fall back to bounded origin-only
-provenance. Failed HTTPS/HTTP attempts remain distinct from proof that no site
-exists.
+bodies and selected security-policy values are never included, and overlong
+paths fall back to bounded origin-only provenance. Failed HTTPS/HTTP attempts
+remain distinct from proof that no site exists.
 
-Selected security headers are observations only. Their absence is not a
-maliciousness verdict and does not contribute to Risk scoring. A response can
-still establish web-service activity when its body is unavailable for HTML
-inspection.
+Selected security headers are observations only. Deep full Lookup transiently
+interprets bounded Content-Security-Policy, Strict-Transport-Security,
+Referrer-Policy, and Set-Cookie attributes from that same selected response.
+It retains only fixed policy finding identifiers, bounded cookie counts,
+component health, and limitations. Complete policies, cookie names and values,
+paths, domains, nonces, hashes, and reporting endpoints are discarded. Header
+absence and policy findings are not maliciousness or vulnerability verdicts
+and do not contribute to Risk scoring. A response can still establish
+web-service activity when its body is unavailable for HTML inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `19`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `20`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 19 adds the bounded credential-surface projection
+registry comparison. Version 20 replaces selected security-policy values in
+HTTP evidence with presence-only markers and can add fixed, bounded
+response-policy findings to the version-2 passive posture profile. Version 19
+adds the bounded credential-surface projection
 when eligible deep availability evidence represents it. Version 18 adds bounded publisher-declared structured
 identity metadata to eligible deep availability evidence. Version 17 adds the bounded HTTPS service-binding
 publication to eligible deep DNS evidence and the nested passive
@@ -644,7 +653,7 @@ payloads, WHOIS response bodies, expanded contacts, scripts, and remote assets
 before formatting. IP and ASN results do not offer this first readable format.
 Their separate JSON evidence action, and the domain JSON action, retain the
 richer schema contract described above.
-When schema-version 17, 18, or 19 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17, 18, 19, or 20 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -652,7 +661,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17, 18, and 19 can also retain the bounded normalized security.txt source
+Schema versions 17, 18, 19, and 20 can also retain the bounded normalized security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorization, availability, or Risk signal.
 

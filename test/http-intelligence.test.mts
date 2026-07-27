@@ -82,7 +82,9 @@ describe('buildHttpObservation', () => {
       scope: 'complete-body',
       bytes: 22,
     });
-    assert.equal(result.response.securityHeaders.xFrameOptions, 'DENY');
+    assert.equal(result.response.securityHeaders.xFrameOptions, 'observed');
+    assert.equal(result.response.securityHeaders.contentSecurityPolicy, 'observed');
+    assert.doesNotMatch(JSON.stringify(result), /default-src|DENY|nosniff|no-referrer|max-age/);
     assert.match(result.limitations.join(' '), /query strings were omitted/i);
     assert.equal(JSON.stringify(result).includes('secret'), false);
   });
@@ -132,7 +134,7 @@ describe('buildHttpObservation', () => {
 
     assert.equal(result.response.declaredContentLength, null);
     assert.ok(requiredValue(result.response.server).length <= 200);
-    assert.ok(requiredValue(result.response.securityHeaders.contentSecurityPolicy).length <= 1024);
+    assert.equal(result.response.securityHeaders.contentSecurityPolicy, 'observed');
     assert.equal(result.response.capturedBodyBytes, 5 * 1024 * 1024);
     assert.equal(result.response.bodyHash, null);
   });

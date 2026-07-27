@@ -293,7 +293,8 @@ Deep single Lookup can derive several views from one bounded homepage response:
   from script names, versions, hashes, or capped inline signatures that were
   already present in the captured page; and
 - passive security-posture findings from already-collected HTTP, page, TLS,
-  DNSSEC, and CAA evidence.
+  DNSSEC, and CAA evidence, including bounded checks of selected CSP, HSTS,
+  referrer-policy, and response-cookie attributes.
 
 Technology indicators are evidence-backed clues, not a complete software
 inventory. The bounded catalogue uses generator metadata and tokenized live
@@ -307,6 +308,12 @@ does not fetch referenced scripts.
 A browser-library advisory match is a lead for review, not proof that the
 component is loaded, reachable, vulnerable in context, or exploitable. A
 non-match does not establish that no vulnerable component exists.
+
+Response-policy checks use the same selected homepage response and make no
+extra request. They retain fixed finding identifiers and bounded counts rather
+than complete policies or cookies. A finding is a response-scoped review lead,
+not proof that a vulnerability is reachable or exploitable, and it does not
+change availability or Risk.
 
 Structured identity metadata is also a clue, not verification. WHOISleuth
 examines only bounded JSON-LD already present in the captured response, does
