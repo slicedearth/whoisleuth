@@ -56,7 +56,9 @@ Deep domain Lookup can combine:
 - DNS, including deep-only SOA zone context and HTTPS service-binding
   publication, plus HTTP, favicon,
   page-identity, bounded publisher-declared structured identity, mail, and
-  one-connection TLS evidence;
+  one-connection TLS evidence with bounded certificate signature, purpose,
+  subject-alternative-name class, and authority-information-access presence
+  metadata;
 - passive technology, browser-library catalogue, and security-posture
   indicators derived from the captured response, without fetching referenced
   scripts or performing vulnerability testing;

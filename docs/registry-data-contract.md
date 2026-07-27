@@ -157,6 +157,18 @@ availability or Risk and is omitted from Fast, compact, Bulk, monitoring, and
 browser-local stores. A published PTR name is routing context, not proof of
 hosting control, ownership, intent, or maliciousness.
 
+The version-2 deep TLS profile extends the retained leaf-certificate projection
+with the signature algorithm and OID, a capped extended-key-usage purpose list,
+fixed subject-alternative-name class counts, and classified Authority
+Information Access presence counts. It retains at most 100 SAN entries, 16
+purpose OIDs, and 32 AIA locations. DNS and IP SAN values remain separately
+bounded as before; email, URI, directory-name, registered-ID, other-name, and
+unclassified SAN values are counted but never retained. AIA locations are
+classified as HTTP, HTTPS, or other and immediately discarded without being
+followed. Missing metadata stays neutral and does not by itself make the TLS
+observation partial. Version-1 TLS observations remain valid inputs for
+scan-local certificate relationships.
+
 After deep availability collection completes, Lookup prefers the public address
 used by the successful TLS connection. If no eligible TLS address was retained,
 it falls back deterministically to a successful public A result and then a

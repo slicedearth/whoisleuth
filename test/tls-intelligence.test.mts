@@ -3,9 +3,12 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   TLS_PROFILE_VERSION,
+  MAX_AIA_LOCATIONS,
   MAX_ALT_NAMES,
   MAX_CHAIN_CERTIFICATES,
+  MAX_EXTENDED_KEY_USAGES,
   MAX_RESOLVED_ADDRESSES,
+  MAX_SAN_ENTRIES,
   buildTlsObservation,
   collectTlsIntelligence,
   failedTlsObservation,
@@ -29,9 +32,33 @@ type TestCertificate = {
   fingerprint256: string;
   bits: number;
   ca: boolean;
+  raw?: Buffer;
+  ext_key_usage?: string[];
+  infoAccess?: Record<string, string[]>;
   issuerCertificate?: TestCertificate;
 };
 type TestHandshake = Parameters<typeof buildTlsObservation>[0];
+
+const X509_FIXTURE_BASE64 = [
+  'MIIETTCCAzWgAwIBAgIUUjf2vcj1u3aTkQma3003KAP6I9AwDQYJKoZIhvcNAQELBQAwSTEbMBkGA1UEAwwS',
+  'bG9naW4uZXhhbXBsZS50ZXN0MR0wGwYDVQQKDBRFeGFtcGxlIG9yZ2FuaXNhdGlvbjELMAkGA1UEBhMCQVUw',
+  'HhcNMjYwNzI3MTczODI0WhcNMjYwODI2MTczODI0WjBJMRswGQYDVQQDDBJsb2dpbi5leGFtcGxlLnRlc3Qx',
+  'HTAbBgNVBAoMFEV4YW1wbGUgb3JnYW5pc2F0aW9uMQswCQYDVQQGEwJBVTCCASIwDQYJKoZIhvcNAQEBBQAD',
+  'ggEPADCCAQoCggEBAMZ61OhoNgyLigpvDTp2TRJLlgpl928mOeXHhdcEiH+jB9ku16PHWGspQRTTMt6WU1Kq',
+  'UZ1W/zQEHVkh9UfBburFsiZhk9P/8iY0NQnPNgvbC6VHVwnGKuNrXHFmxAwpCBDxjBo2Zu9bjrknue47rtsz',
+  'DvJkHhBhjpXZJXsaCZA7/NmV6HwuvBew8oa325wX1cOR0h8OZHcR9nY3lWcJRbOETG/7maA/qZCaK3Mr/Fk',
+  'FJmOQyQ0sooGgfL9FvpGZvBbUYrD2iNRQlrnUMjKk++tcMtHhC3QtCxzynycFRuvkOznVrI5PIYaSEpmRfAu',
+  'qXfx2VUDnEFLNphTpKiH5m9kCAwEAAaOCASswggEnMHEGA1UdEQRqMGiCEmxvZ2luLmV4YW1wbGUudGVzdIIO',
+  'Ki5leGFtcGxlLnRlc3SHBF242CKBFXNlY3VyaXR5QGV4YW1wbGUudGVzdIYlaHR0cHM6Ly9pZGVudGl0eS5l',
+  'eGFtcGxlLnRlc3QvcHJvZmlsZTAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwdAYIKwYBBQUHAQEE',
+  'aDBmMCwGCCsGAQUFBzABhiBodHRwczovL29jc3AuZXhhbXBsZS50ZXN0L3N0YXR1czA2BggrBgEFBQcwAoYq',
+  'aHR0cDovL2lzc3Vlci5leGFtcGxlLnRlc3QvY2VydGlmaWNhdGUuZGVyMB0GA1UdDgQWBBS7gjHsrFn/EIDd',
+  'mJEyW4eNb1Tz0DANBgkqhkiG9w0BAQsFAAOCAQEAptDi0upi//E1M/IgiVaEnIIWKEhpLNl62goNT9Z7f9TH',
+  'M0dP9adFSjVXtOPP9n0V2zmcEVUG5CCZvpZiizZZKWOl/OuCegRj6At1URyd27C3NlavvINfCoclgLL3em0u',
+  '/rgq6vIa5bQApTbbAu8S7hvLgtpuIdy51HcKBm/33Cqrt1UsIt95r6J6ec5/ggzCJ85apk1Ir10dnARoYJNn',
+  'yYZpATsi1sMmkCreAUZ/ISSo8YewsfXnKBw3tpQGJetj+GyfnSd9ao9+UNwUkq+OoSLRHpVfMZBYPg5pl7dE',
+  'XDw8pnoK8d81+6jT5UnYYpF39ZO4ONP31gMQ1cOXB0Klyg==',
+].join('');
 
 function certificate(overrides: Partial<TestCertificate> = {}): TestCertificate {
   return {
@@ -161,6 +188,48 @@ describe('certificate profile normalization', () => {
     assert.match(result.limitations.join(' '), /one validated public address/i);
   });
 
+  test('derives bounded signature, purpose, SAN-class, and AIA metadata without retaining locations', () => {
+    const result = buildTlsObservation(handshake({
+      peerCertificate: certificate({ raw: Buffer.from(X509_FIXTURE_BASE64, 'base64') }),
+    }), {
+      observedAt: OBSERVED_AT,
+      durationMs: 42,
+      resolvedAddressCount: 1,
+      now: NOW,
+    });
+    const normalizedCertificate = requiredValue(result.certificate);
+    assert.deepEqual(normalizedCertificate.signature, {
+      algorithm: 'sha256WithRSAEncryption',
+      oid: '1.2.840.113549.1.1.11',
+    });
+    assert.deepEqual(normalizedCertificate.extendedKeyUsage, {
+      values: [
+        { oid: '1.3.6.1.5.5.7.3.1', name: 'TLS web server authentication' },
+        { oid: '1.3.6.1.5.5.7.3.2', name: 'TLS web client authentication' },
+      ],
+      truncated: false,
+    });
+    assert.deepEqual(requiredValue(normalizedCertificate.subjectAltNames).classes, {
+      dns: 2,
+      ip: 1,
+      email: 1,
+      uri: 1,
+      directoryName: 0,
+      registeredId: 0,
+      otherName: 0,
+      unclassified: 0,
+    });
+    assert.deepEqual(normalizedCertificate.authorityInformationAccess, {
+      ocsp: { total: 1, http: 0, https: 1, other: 0 },
+      caIssuers: { total: 1, http: 1, https: 0, other: 0 },
+      unknownMethods: 0,
+      truncated: false,
+    });
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /ocsp\.example|issuer\.example|identity\.example/);
+    assert.doesNotMatch(serialized, /certificate\.der|\/profile|\/status/);
+  });
+
   test('keeps validity, trust, hostname, and wildcard findings separate and explainable', () => {
     const result = buildTlsObservation(handshake({
       authorized: false,
@@ -223,6 +292,39 @@ describe('certificate profile normalization', () => {
     assert.equal(result.truncated, true);
     assert.equal(state.truncated, true);
     assert.ok(state.discarded >= 1);
+  });
+
+  test('caps SAN classes, extended purposes, and AIA locations', () => {
+    const state = { truncated: false, discarded: 0 };
+    const altNames = normalizeAltNames(
+      Array.from({ length: MAX_SAN_ENTRIES + 2 }, (_, index) => `email:user-${index}@example.test`).join(', '),
+      state,
+    );
+    assert.equal(altNames.classes.email, MAX_SAN_ENTRIES);
+    assert.equal(altNames.truncated, true);
+    assert.equal(state.truncated, true);
+
+    const profile = buildTlsObservation(handshake({
+      peerCertificate: certificate({
+        ext_key_usage: Array.from(
+          { length: MAX_EXTENDED_KEY_USAGES + 2 },
+          (_, index) => `1.3.6.1.5.5.7.3.${index + 1}`,
+        ),
+        infoAccess: {
+          'OCSP - URI': Array.from(
+            { length: MAX_AIA_LOCATIONS + 2 },
+            (_, index) => `https://responder-${index}.example.test/status`,
+          ),
+        },
+      }),
+    }), { now: NOW });
+    const normalizedCertificate = requiredValue(profile.certificate);
+    assert.equal(requiredValue(normalizedCertificate.extendedKeyUsage).values.length, MAX_EXTENDED_KEY_USAGES);
+    assert.equal(requiredValue(normalizedCertificate.extendedKeyUsage).truncated, true);
+    assert.equal(requiredValue(normalizedCertificate.authorityInformationAccess).ocsp.total, MAX_AIA_LOCATIONS);
+    assert.equal(requiredValue(normalizedCertificate.authorityInformationAccess).truncated, true);
+    assert.equal(profile.truncated, true);
+    assert.doesNotMatch(JSON.stringify(profile), /responder-/);
   });
 
   test('bounds a recursive certificate chain without retaining raw certificate bytes', () => {

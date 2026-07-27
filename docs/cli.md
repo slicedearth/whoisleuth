@@ -325,9 +325,13 @@ and handshake work share a five-second deadline.
 
 The report retains the negotiated protocol, ALPN and cipher, runtime trust and
 hostname checks, certificate validity, bounded subject and issuer names, SANs,
-SHA-256 certificate and public-key fingerprints, a bounded certificate chain,
-and neutral findings. It stores no certificate bytes, session material, or
-application data and does not enumerate supported protocol or cipher suites.
+SAN class counts, signature algorithm and OID, extended-key-usage purposes,
+classified Authority Information Access presence counts, SHA-256 certificate
+and public-key fingerprints, a bounded certificate chain, and neutral
+findings. AIA responder and issuer locations are classified as HTTP, HTTPS, or
+other and then discarded; they are not retained or followed. The collector
+stores no certificate bytes, session material, or application data and does
+not enumerate supported protocol or cipher suites.
 A failed collection is inconclusive rather than proof that no TLS service
 exists.
 

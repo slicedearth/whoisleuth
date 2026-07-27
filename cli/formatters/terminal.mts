@@ -7,6 +7,7 @@ const MAX_CT_TERMINAL_HOSTNAMES = 5;
 const MAX_DISCOVER_TERMINAL_CANDIDATES = 200;
 const MAX_POSTURE_TERMINAL_RECORDS = 5;
 const MAX_TLS_TERMINAL_ALT_NAMES = 10;
+const MAX_TLS_TERMINAL_PURPOSES = 8;
 const MAX_RISK_CALIBRATION_TERMINAL_RECORDS = 100;
 
 // Terminal documents have different versioned shapes. Every scalar crosses
@@ -45,6 +46,18 @@ function terminalRecord(value: unknown): TerminalRecord {
 function terminalCount(value: unknown): number {
   const count = Number(value);
   return Number.isSafeInteger(count) && count >= 0 ? Math.min(count, 999) : 0;
+}
+
+function terminalCountSummary(
+  value: unknown,
+  labels: ReadonlyArray<readonly [string, string]>,
+): string {
+  const source = terminalRecord(value);
+  return labels
+    .map(([key, label]) => [label, terminalCount(source[key])] as const)
+    .filter(([, count]) => count > 0)
+    .map(([label, count]) => `${label} ${count}`)
+    .join(', ');
 }
 
 function formatTerminalLookup(document: TerminalRecord): string {
@@ -393,6 +406,24 @@ function formatTerminalTls(document: TerminalRecord): string {
   const omittedAltNames = dnsNames.length + ipAddresses.length - visibleAltNames.length;
   const cipher = terminalRecord(document.cipher);
   const publicKey = terminalRecord(certificate.publicKey);
+  const signature = terminalRecord(certificate.signature);
+  const purposes = terminalRecord(certificate.extendedKeyUsage);
+  const purposeValues = Array.isArray(purposes.values)
+    ? purposes.values.slice(0, MAX_TLS_TERMINAL_PURPOSES).map(terminalRecord)
+    : [];
+  const sanClasses = terminalCountSummary(altNames.classes, [
+    ['dns', 'DNS'],
+    ['ip', 'IP'],
+    ['email', 'email'],
+    ['uri', 'URI'],
+    ['directoryName', 'directory name'],
+    ['registeredId', 'registered ID'],
+    ['otherName', 'other name'],
+    ['unclassified', 'other'],
+  ]);
+  const aia = terminalRecord(certificate.authorityInformationAccess);
+  const ocsp = terminalRecord(aia.ocsp);
+  const caIssuers = terminalRecord(aia.caIssuers);
   const authorization = terminalRecord(document.authorization);
   const hostname = terminalRecord(document.hostname);
   const validity = terminalRecord(document.validity);
@@ -416,7 +447,29 @@ function formatTerminalTls(document: TerminalRecord): string {
     `Valid to       ${safeTerminalValue(certificate.validTo)}`,
     `Fingerprint    ${safeTerminalValue(certificate.fingerprintSha256)}`,
     `Public key     ${safeTerminalValue([publicKey.type, publicKey.bits ? `${publicKey.bits} bits` : null, publicKey.curve].filter(Boolean).join(' '))}`,
+    ...(signature.algorithm || signature.oid
+      ? [`Signature      ${safeTerminalValue([signature.algorithm, signature.oid ? `(${signature.oid})` : null].filter(Boolean).join(' '))}`]
+      : []),
+    ...(Object.keys(purposes).length
+      ? [`Purposes       ${purposeValues.length
+        ? purposeValues.map((purpose) => safeTerminalValue(`${purpose.name || 'Unrecognized purpose'} (${purpose.oid || 'unknown OID'})`)).join(', ')
+        : 'None declared'}${Array.isArray(purposes.values) && purposes.values.length > purposeValues.length ? ` (+${purposes.values.length - purposeValues.length} more)` : ''}${purposes.truncated ? ' (source truncated)' : ''}`]
+      : []),
     `Alt names      ${visibleAltNames.length ? visibleAltNames.map((value) => safeTerminalValue(value)).join(', ') : '—'}${omittedAltNames > 0 ? ` (+${omittedAltNames} more)` : ''}`,
+    ...(Object.keys(terminalRecord(altNames.classes)).length
+      ? [`SAN classes    ${sanClasses || 'None observed'}${altNames.truncated ? ' (truncated)' : ''}`]
+      : []),
+    ...(Object.keys(aia).length
+      ? [`AIA presence   ${[
+        terminalCount(ocsp.total) > 0
+          ? `OCSP ${terminalCount(ocsp.total)} (${terminalCount(ocsp.https)} HTTPS, ${terminalCount(ocsp.http)} HTTP, ${terminalCount(ocsp.other)} other)`
+          : null,
+        terminalCount(caIssuers.total) > 0
+          ? `CA issuers ${terminalCount(caIssuers.total)} (${terminalCount(caIssuers.https)} HTTPS, ${terminalCount(caIssuers.http)} HTTP, ${terminalCount(caIssuers.other)} other)`
+          : null,
+        terminalCount(aia.unknownMethods) > 0 ? `unknown methods ${terminalCount(aia.unknownMethods)}` : null,
+      ].filter(Boolean).join(' · ') || 'None declared'}${aia.truncated ? ' (truncated)' : ''}`]
+      : []),
     `Chain          ${safeTerminalValue(Array.isArray(document.chain) ? document.chain.length : 0, '0')} certificate${Array.isArray(document.chain) && document.chain.length === 1 ? '' : 's'}${document.chainTruncated ? ' (truncated)' : ''}`,
   ];
   if (authorization.error) lines.push(`Trust detail   ${safeTerminalValue(authorization.error)}`);
@@ -566,6 +619,7 @@ export {
   MAX_DISCOVER_TERMINAL_CANDIDATES,
   MAX_POSTURE_TERMINAL_RECORDS,
   MAX_TLS_TERMINAL_ALT_NAMES,
+  MAX_TLS_TERMINAL_PURPOSES,
   MAX_RISK_CALIBRATION_TERMINAL_RECORDS,
   MAX_TERMINAL_VALUE_LENGTH,
   formatTerminalBulk,

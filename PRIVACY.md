@@ -233,9 +233,14 @@ default (see the README), so many lookups return no personal data at all.
   connection to one validated address while retaining the domain as SNI.
   Lookup and its deliberate evidence export can include the connected public
   address, negotiated protocol/cipher/ALPN, runtime trust and hostname outcome,
-  bounded public certificate identity/validity/SAN/public-key metadata, and a
-  capped certificate-chain summary. Certificate bytes and TLS session material
-  are not retained. Deep Bulk may compare the exact leaf-certificate SHA-256
+  bounded public certificate identity/validity/SAN/public-key metadata,
+  signature algorithm and OID, extended-key-usage purposes, fixed SAN class
+  counts, classified AIA presence counts, and a capped certificate-chain
+  summary. Email, URI, directory-name, registered-ID, other-name, and
+  unclassified SAN values are counted but not retained. AIA responder and
+  issuer locations are classified as HTTP, HTTPS, or other, then discarded
+  without being followed. Certificate bytes and TLS session material are not
+  retained. Deep Bulk may compare the exact leaf-certificate SHA-256
   transiently within the current result set; the derived relationship is not
   persisted or treated as ownership evidence. The richer profile is not copied
   into browser-local cases, watchlists, profiles, or Certificate Transparency

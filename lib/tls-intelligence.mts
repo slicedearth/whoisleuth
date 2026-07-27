@@ -18,7 +18,31 @@ import { isPrivateAddress, resolvePublicAddresses } from './safe-fetch.mts';
 type Tracker = { truncated: boolean; discarded: number };
 type UnknownRecord = Record<string, unknown>;
 type PublicAddressRecord = { address: string; family: number };
-type AltNames = { dnsNames: string[]; ipAddresses: string[]; truncated: boolean };
+type SanClassCounts = {
+  dns: number;
+  ip: number;
+  email: number;
+  uri: number;
+  directoryName: number;
+  registeredId: number;
+  otherName: number;
+  unclassified: number;
+};
+type AltNames = {
+  dnsNames: string[];
+  ipAddresses: string[];
+  classes: SanClassCounts;
+  truncated: boolean;
+};
+type CertificatePurpose = { oid: string; name: string };
+type CertificatePurposes = { values: CertificatePurpose[]; truncated: boolean };
+type AiaLocationSummary = { total: number; http: number; https: number; other: number };
+type AuthorityInformationAccess = {
+  ocsp: AiaLocationSummary;
+  caIssuers: AiaLocationSummary;
+  unknownMethods: number;
+  truncated: boolean;
+};
 type NormalizedCertificate = {
   subject: Record<string, string[]>;
   issuer: Record<string, string[]>;
@@ -29,6 +53,9 @@ type NormalizedCertificate = {
   isCertificateAuthority: boolean | null;
   subjectAltNames?: AltNames;
   publicKey?: { type: string | null; bits: number | null; curve: string | null; fingerprintSha256: string | null };
+  signature?: { algorithm: string | null; oid: string | null };
+  extendedKeyUsage?: CertificatePurposes;
+  authorityInformationAccess?: AuthorityInformationAccess;
 };
 type TlsFinding = { id: string; tone: string; label: string; detail: string };
 type TlsProfile = {
@@ -85,18 +112,32 @@ type TlsCollectOptions = {
   clearTimer?: ClearTimer;
 };
 
-const TLS_PROFILE_VERSION = 1;
+const TLS_PROFILE_VERSION = 2;
 const TLS_PORT = 443;
 const TLS_TIMEOUT_MS = 5000;
 const MAX_RESOLVED_ADDRESSES = 64;
 const MAX_CHAIN_CERTIFICATES = 8;
 const MAX_ALT_NAMES = 50;
+const MAX_SAN_ENTRIES = 100;
+const MAX_EXTENDED_KEY_USAGES = 16;
+const MAX_AIA_LOCATIONS = 32;
 const MAX_NAME_VALUES = 4;
 const MAX_TEXT_LENGTH = 256;
 const MAX_ERROR_LENGTH = 240;
 const MAX_SERIAL_LENGTH = 128;
 const MAX_SAN_SOURCE_LENGTH = 32 * 1024;
+const MAX_AIA_SOURCE_LENGTH = 16 * 1024;
 const MAX_CERTIFICATE_BYTES = 256 * 1024;
+
+const EXTENDED_KEY_USAGE_NAMES = Object.freeze<Record<string, string>>({
+  '2.5.29.37.0': 'Any purpose',
+  '1.3.6.1.5.5.7.3.1': 'TLS web server authentication',
+  '1.3.6.1.5.5.7.3.2': 'TLS web client authentication',
+  '1.3.6.1.5.5.7.3.3': 'Code signing',
+  '1.3.6.1.5.5.7.3.4': 'Email protection',
+  '1.3.6.1.5.5.7.3.8': 'Timestamping',
+  '1.3.6.1.5.5.7.3.9': 'OCSP signing',
+});
 
 function defaultTlsConnect(options: tls.ConnectionOptions, callback: () => void): TlsSocket {
   return tls.connect(options, callback);
@@ -227,7 +268,7 @@ function parseQuotedAltName(value: string): string | null {
   }
 }
 
-function splitAltNames(source: string): string[] {
+function splitAltNames(source: string, limit = MAX_SAN_ENTRIES + 1): string[] {
   const output: string[] = [];
   let start = 0;
   let quoted = false;
@@ -239,10 +280,11 @@ function splitAltNames(source: string): string[] {
     if (char === '"') { quoted = !quoted; continue; }
     if (!quoted && char === ',') {
       output.push(source.slice(start, index).trim());
+      if (output.length >= limit) return output;
       start = index + 1;
     }
   }
-  output.push(source.slice(start).trim());
+  if (output.length < limit) output.push(source.slice(start).trim());
   return output;
 }
 
@@ -256,7 +298,21 @@ function normalizeSanDns(value: unknown): string | null {
 }
 
 function normalizeAltNames(value: unknown, state: Tracker): AltNames {
-  const result: AltNames = { dnsNames: [], ipAddresses: [], truncated: false };
+  const result: AltNames = {
+    dnsNames: [],
+    ipAddresses: [],
+    classes: {
+      dns: 0,
+      ip: 0,
+      email: 0,
+      uri: 0,
+      directoryName: 0,
+      registeredId: 0,
+      otherName: 0,
+      unclassified: 0,
+    },
+    truncated: false,
+  };
   if (typeof value !== 'string' || !value) return result;
   let source = value;
   if (source.length > MAX_SAN_SOURCE_LENGTH) {
@@ -264,13 +320,29 @@ function normalizeAltNames(value: unknown, state: Tracker): AltNames {
     state.truncated = true;
     result.truncated = true;
   }
-  for (const entry of splitAltNames(source)) {
+  const entries = splitAltNames(source);
+  if (entries.length > MAX_SAN_ENTRIES) {
+    state.truncated = true;
+    result.truncated = true;
+  }
+  for (const entry of entries.slice(0, MAX_SAN_ENTRIES)) {
     const separator = entry.indexOf(':');
-    if (separator <= 0) continue;
+    if (separator <= 0) {
+      result.classes.unclassified += 1;
+      continue;
+    }
     const type = entry.slice(0, separator).trim().toLowerCase();
     const raw = entry.slice(separator + 1).trim();
     const decoded = raw.startsWith('"') ? parseQuotedAltName(raw) : raw;
     if (decoded === null) { state.discarded += 1; continue; }
+    if (type === 'dns') result.classes.dns += 1;
+    else if (type === 'ip address') result.classes.ip += 1;
+    else if (type === 'email') result.classes.email += 1;
+    else if (type === 'uri') result.classes.uri += 1;
+    else if (type === 'dirname' || type === 'directory name') result.classes.directoryName += 1;
+    else if (type === 'registered id' || type === 'registeredid') result.classes.registeredId += 1;
+    else if (type === 'othername' || type === 'other name') result.classes.otherName += 1;
+    else result.classes.unclassified += 1;
     const list = type === 'dns' ? result.dnsNames : type === 'ip address' ? result.ipAddresses : null;
     const normalized = type === 'dns' ? normalizeSanDns(decoded) : type === 'ip address' ? normalizeIp(decoded) : null;
     if (!list || !normalized) {
@@ -288,6 +360,99 @@ function normalizeAltNames(value: unknown, state: Tracker): AltNames {
   return result;
 }
 
+function normalizeOid(value: unknown, state: Tracker): string | null {
+  if (typeof value !== 'string') return null;
+  const oid = value.trim();
+  if (!/^\d{1,10}(?:\.\d{1,10}){1,31}$/.test(oid) || oid.length > 128) {
+    if (oid) state.discarded += 1;
+    if (oid.length > 128) state.truncated = true;
+    return null;
+  }
+  return oid;
+}
+
+function certificatePurposes(value: unknown, state: Tracker): CertificatePurposes {
+  const source = Array.isArray(value) ? value : [];
+  const values: CertificatePurpose[] = [];
+  const truncated = source.length > MAX_EXTENDED_KEY_USAGES;
+  for (const entry of source.slice(0, MAX_EXTENDED_KEY_USAGES)) {
+    const oid = normalizeOid(entry, state);
+    if (!oid || values.some((purpose) => purpose.oid === oid)) continue;
+    values.push({ oid, name: EXTENDED_KEY_USAGE_NAMES[oid] || 'Unrecognized purpose' });
+  }
+  values.sort((left, right) => left.oid.localeCompare(right.oid));
+  if (truncated) state.truncated = true;
+  return { values, truncated };
+}
+
+function emptyAiaLocationSummary(): AiaLocationSummary {
+  return { total: 0, http: 0, https: 0, other: 0 };
+}
+
+function classifyAiaLocation(summary: AiaLocationSummary, value: unknown): void {
+  if (typeof value !== 'string') return;
+  const location = value.trim();
+  if (!location || location.length > 4096 || /[\u0000-\u001f\u007f]/.test(location)) return;
+  const scheme = /^([a-z][a-z0-9+.-]{0,31}):/i.exec(location)?.[1]?.toLowerCase();
+  summary.total += 1;
+  if (scheme === 'https') summary.https += 1;
+  else if (scheme === 'http') summary.http += 1;
+  else summary.other += 1;
+}
+
+function authorityInformationAccess(value: unknown, state: Tracker): AuthorityInformationAccess {
+  const result: AuthorityInformationAccess = {
+    ocsp: emptyAiaLocationSummary(),
+    caIssuers: emptyAiaLocationSummary(),
+    unknownMethods: 0,
+    truncated: false,
+  };
+  const entries: Array<{ method: string; location: unknown }> = [];
+  if (typeof value === 'string') {
+    let source = value;
+    if (source.length > MAX_AIA_SOURCE_LENGTH) {
+      source = source.slice(0, MAX_AIA_SOURCE_LENGTH);
+      result.truncated = true;
+    }
+    for (const line of source.split(/\r?\n/, MAX_AIA_LOCATIONS + 1)) {
+      const match = /^\s*(.+?)\s+-\s+[A-Z][A-Z0-9 ]{0,31}:(.+)\s*$/i.exec(line);
+      if (match?.[1] && match[2]) entries.push({ method: match[1], location: match[2] });
+      else if (line.trim()) result.unknownMethods += 1;
+    }
+  } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const sourceRecord = value as UnknownRecord;
+    outer: for (const key in sourceRecord) {
+      if (!Object.hasOwn(sourceRecord, key)) continue;
+      const method = key.replace(/\s+-\s+.*$/, '').trim();
+      const locations = sourceRecord[key];
+      const source = Array.isArray(locations) ? locations : [locations];
+      for (const location of source) {
+        entries.push({ method, location });
+        if (entries.length >= MAX_AIA_LOCATIONS + 1) break outer;
+      }
+    }
+  }
+  if (entries.length > MAX_AIA_LOCATIONS) result.truncated = true;
+  for (const entry of entries.slice(0, MAX_AIA_LOCATIONS)) {
+    const normalizedMethod = entry.method.trim().toLowerCase();
+    if (normalizedMethod === 'ocsp') classifyAiaLocation(result.ocsp, entry.location);
+    else if (normalizedMethod === 'ca issuers') classifyAiaLocation(result.caIssuers, entry.location);
+    else result.unknownMethods += 1;
+  }
+  if (result.truncated) state.truncated = true;
+  return result;
+}
+
+function x509Certificate(raw: unknown, state: Tracker): crypto.X509Certificate | null {
+  if (!Buffer.isBuffer(raw) || raw.length === 0 || raw.length > MAX_CERTIFICATE_BYTES) return null;
+  try {
+    return new crypto.X509Certificate(raw);
+  } catch {
+    state.discarded += 1;
+    return null;
+  }
+}
+
 function hashRawCertificate(raw: unknown, state: Tracker): string | null {
   if (!Buffer.isBuffer(raw)) return null;
   if (raw.length === 0 || raw.length > MAX_CERTIFICATE_BYTES) {
@@ -298,10 +463,10 @@ function hashRawCertificate(raw: unknown, state: Tracker): string | null {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
-function publicKeyMetadata(raw: unknown, fallback: UnknownRecord, state: Tracker) {
-  if (Buffer.isBuffer(raw) && raw.length > 0 && raw.length <= MAX_CERTIFICATE_BYTES) {
+function publicKeyMetadata(certificate: crypto.X509Certificate | null, fallback: UnknownRecord, state: Tracker) {
+  if (certificate) {
     try {
-      const key = new crypto.X509Certificate(raw).publicKey;
+      const key = certificate.publicKey;
       const exported = key.export({ format: 'der', type: 'spki' });
       const details = key.asymmetricKeyDetails || {};
       const modulusLength = details.modulusLength;
@@ -327,6 +492,7 @@ function publicKeyMetadata(raw: unknown, fallback: UnknownRecord, state: Tracker
 function normalizeCertificate(value: unknown, state: Tracker, options: { includeAltNames?: boolean; includePublicKey?: boolean } = {}): NormalizedCertificate | null {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length === 0) return null;
   const record = value as UnknownRecord;
+  const parsedCertificate = options.includePublicKey === true ? x509Certificate(record.raw, state) : null;
   const fingerprintSha256 = hashRawCertificate(record.raw, state) || normalizeFingerprint(record.fingerprint256, state);
   const certificate: NormalizedCertificate = {
     subject: normalizeDistinguishedName(record.subject, state),
@@ -337,8 +503,21 @@ function normalizeCertificate(value: unknown, state: Tracker, options: { include
     fingerprintSha256,
     isCertificateAuthority: typeof record.ca === 'boolean' ? record.ca : null,
   };
-  if (options.includeAltNames === true) certificate.subjectAltNames = normalizeAltNames(record.subjectaltname, state);
-  if (options.includePublicKey === true) certificate.publicKey = publicKeyMetadata(record.raw, record, state);
+  if (options.includeAltNames === true) {
+    certificate.subjectAltNames = normalizeAltNames(parsedCertificate?.subjectAltName || record.subjectaltname, state);
+  }
+  if (options.includePublicKey === true) {
+    certificate.publicKey = publicKeyMetadata(parsedCertificate, record, state);
+    certificate.signature = {
+      algorithm: boundedString(parsedCertificate?.signatureAlgorithm, 128, state),
+      oid: normalizeOid(parsedCertificate?.signatureAlgorithmOid, state),
+    };
+    certificate.extendedKeyUsage = certificatePurposes(parsedCertificate?.keyUsage || record.ext_key_usage, state);
+    certificate.authorityInformationAccess = authorityInformationAccess(
+      parsedCertificate?.infoAccess || record.infoAccess,
+      state,
+    );
+  }
   return certificate;
 }
 
@@ -659,6 +838,9 @@ export {
   MAX_RESOLVED_ADDRESSES,
   MAX_CHAIN_CERTIFICATES,
   MAX_ALT_NAMES,
+  MAX_SAN_ENTRIES,
+  MAX_EXTENDED_KEY_USAGES,
+  MAX_AIA_LOCATIONS,
   normalizeTlsHostname,
   normalizePublicAddressRecords,
   normalizeAltNames,
