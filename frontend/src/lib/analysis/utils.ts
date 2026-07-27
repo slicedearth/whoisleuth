@@ -53,7 +53,7 @@ export function hammingDistanceHex(a: unknown, b: unknown): number | null {
   if (!HEX_HASH_RE.test(a) || !HEX_HASH_RE.test(b)) return null;
   let distance = 0;
   for (let i = 0; i < 16; i += 1) {
-    let diff = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+    let diff = parseInt(a.charAt(i), 16) ^ parseInt(b.charAt(i), 16);
     while (diff) { distance += diff & 1; diff >>= 1; }
   }
   return distance;
@@ -72,7 +72,7 @@ export function isInformativeFaviconHash(hex: unknown): hex is string {
   if (typeof hex !== 'string' || !HEX_HASH_RE.test(hex)) return false;
   let bits = 0;
   for (let i = 0; i < 16; i += 1) {
-    let n = parseInt(hex[i], 16);
+    let n = parseInt(hex.charAt(i), 16);
     while (n) { bits += n & 1; n >>= 1; }
   }
   return bits >= MIN_INFORMATIVE_HASH_BITS && bits <= 64 - MIN_INFORMATIVE_HASH_BITS;
@@ -115,8 +115,12 @@ export function groupBySimilarFavicon(records: unknown, maxDistance: number): st
   const parent = items.map((_, i) => i);
   const find = (x: number): number => {
     let root = x;
-    while (parent[root] !== root) root = parent[root];
-    while (parent[x] !== root) { const next = parent[x]; parent[x] = root; x = next; }
+    while ((parent[root] ?? root) !== root) root = parent[root] ?? root;
+    while ((parent[x] ?? x) !== root) {
+      const next = parent[x] ?? x;
+      parent[x] = root;
+      x = next;
+    }
     return root;
   };
   const union = (a: number, b: number): void => { const ra = find(a); const rb = find(b); if (ra !== rb) parent[ra] = rb; };
@@ -139,8 +143,11 @@ export function groupBySimilarFavicon(records: unknown, maxDistance: number): st
   });
   for (let a = 0; a < withPhash.length; a += 1) {
     for (let b = a + 1; b < withPhash.length; b += 1) {
-      const distance = hammingDistanceHex(withPhash[a].phash, withPhash[b].phash);
-      if (distance !== null && distance <= maxDistance) union(withPhash[a].i, withPhash[b].i);
+      const left = withPhash[a];
+      const right = withPhash[b];
+      if (!left || !right) continue;
+      const distance = hammingDistanceHex(left.phash, right.phash);
+      if (distance !== null && distance <= maxDistance) union(left.i, right.i);
     }
   }
 
@@ -237,8 +244,9 @@ export function parseDomainInput(text: unknown): {
   const lines = normalized.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length === 0) return { entries: [], duplicates: 0, usedHeader: false };
 
-  const delimiter = detectDelimiter(lines[0]);
-  const firstCells = delimiter ? splitDelimitedLine(lines[0], delimiter) : [lines[0]];
+  const firstLine = lines[0] ?? '';
+  const delimiter = detectDelimiter(firstLine);
+  const firstCells = delimiter ? splitDelimitedLine(firstLine, delimiter) : [firstLine];
   const header = firstCells.map((cell) => cell.toLowerCase());
   const domainColIdx = header.findIndex((cell) => DOMAIN_HEADER_NAMES.includes(cell));
   const usedHeader = domainColIdx !== -1;

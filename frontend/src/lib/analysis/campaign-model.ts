@@ -190,6 +190,7 @@ export function updateCampaign(
   const index = campaigns.findIndex((campaign) => campaign.id === id);
   if (index < 0) throw new Error('That campaign no longer exists.');
   const current = campaigns[index];
+  if (!current) throw new Error('That campaign no longer exists.');
   const name = patch.name === undefined ? current.name : normalizeName(patch.name);
   if (!name) throw new Error('A campaign name is required.');
   const record = {

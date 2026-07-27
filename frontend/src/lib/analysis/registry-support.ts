@@ -44,13 +44,13 @@ export function registrySupportLabel(value: unknown): string {
 
 export function registryAccessLabel(value: unknown): string {
   return typeof value === 'string' && Object.hasOwn(ACCESS_LABELS, value)
-    ? ACCESS_LABELS[value]
+    ? ACCESS_LABELS[value] ?? 'Unknown'
     : 'Unknown';
 }
 
 export function registryCoverageLabel(value: unknown): string {
   return typeof value === 'string' && Object.hasOwn(COVERAGE_LABELS, value)
-    ? COVERAGE_LABELS[value]
+    ? COVERAGE_LABELS[value] ?? 'Unknown'
     : 'Unknown';
 }
 
@@ -139,7 +139,7 @@ export function sortRegistrySupportRows(
     if (normalizedKey === 'registry_class') return row.registryClass;
     if (normalizedKey === 'whois_access') return row.whoisAccessProfile;
     if (normalizedKey === 'whois_query') return row.whoisQueryProfile;
-    return row.suffixes[0];
+    return row.suffixes[0] ?? null;
   };
   return boundedRows.sort((left, right) => {
     const comparison = String(valueFor(left) || '').localeCompare(String(valueFor(right) || ''), 'en', {

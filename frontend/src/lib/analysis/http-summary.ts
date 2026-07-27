@@ -85,7 +85,7 @@ function finalOrigin(value: unknown): string | null {
 
 function contentType(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 300 || /[\u0000-\u001f\u007f]/.test(value)) return null;
-  const mime = value.split(';', 1)[0].trim().toLowerCase();
+  const mime = (value.split(';', 1)[0] ?? '').trim().toLowerCase();
   return mime.length <= MAX_HTTP_SUMMARY_CONTENT_TYPE_LENGTH && MIME_TOKEN_RE.test(mime) ? mime : null;
 }
 

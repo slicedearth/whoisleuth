@@ -256,6 +256,7 @@ export function deriveTimeline(evidenceHistory: CaseEvidenceSnapshot[] | null | 
 
   for (let i = 0; i < chronological.length; i++) {
     const snapshot = chronological[i];
+    if (!snapshot) continue;
     const isBaseline = i === 0;
     const hasRepeatedObservation = snapshot.firstCapturedAt !== snapshot.capturedAt;
 
@@ -265,6 +266,7 @@ export function deriveTimeline(evidenceHistory: CaseEvidenceSnapshot[] | null | 
 
     if (!isBaseline) {
       const previous = chronological[i - 1];
+      if (!previous) continue;
       const rawChanges = compareCaseEvidence(previous, snapshot);
       incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot);
       if (rawChanges.length > 0) {
@@ -289,7 +291,8 @@ export function deriveTimeline(evidenceHistory: CaseEvidenceSnapshot[] | null | 
   // Reverse for newest-first display, then assign display indices.
   entries.reverse();
   for (let i = 0; i < entries.length; i++) {
-    entries[i].displayIndex = i + 1;
+    const entry = entries[i];
+    if (entry) entry.displayIndex = i + 1;
   }
 
   return entries;
@@ -329,7 +332,7 @@ export function evidenceSourceLabel(source: unknown): string {
  * @returns {{ availability: string | null, riskModelVersion: number | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
  */
 export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] | null | undefined) {
-  const latest = latestCaseEvidence({ evidenceHistory: evidenceHistory ?? undefined });
+  const latest = latestCaseEvidence(evidenceHistory ? { evidenceHistory } : {});
   if (!latest) return null;
   return {
     availability: latest.availability,

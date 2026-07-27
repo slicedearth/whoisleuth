@@ -150,6 +150,7 @@ export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
     let changed = false;
     for (let entryIndex = store.entries.length - 1; entryIndex >= 0 && !changed; entryIndex--) {
       const entry = store.entries[entryIndex];
+      if (!entry) continue;
       for (const event of entry.history) {
         if (event.newDomains.length) {
           event.newDomains = [];
@@ -160,8 +161,9 @@ export function enforceCtHistoryBudget(rawStore: unknown): CtHistoryStore {
     }
     if (changed) continue;
     for (let entryIndex = store.entries.length - 1; entryIndex >= 0 && !changed; entryIndex--) {
-      if (store.entries[entryIndex].history.length > 1) {
-        store.entries[entryIndex].history.shift();
+      const entry = store.entries[entryIndex];
+      if (entry && entry.history.length > 1) {
+        entry.history.shift();
         changed = true;
       }
     }

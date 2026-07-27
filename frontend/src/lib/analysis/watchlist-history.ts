@@ -627,7 +627,7 @@ export function formatWatchlistValue(field: string, value: unknown): string {
 
 export function watchlistHistoryCategory(field: string): string | null {
   for (const category of WATCHLIST_HISTORY_CATEGORIES) {
-    if (HISTORY_CATEGORY_FIELDS[category.key].has(field)) return category.key;
+    if (HISTORY_CATEGORY_FIELDS[category.key]?.has(field)) return category.key;
   }
   return null;
 }

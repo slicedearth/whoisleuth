@@ -64,7 +64,8 @@ function canonicalIpv4(value: unknown): string | null {
 
 function isPublicIpv4(value: string): boolean {
   const octets = value.split('.').map(Number);
-  const [first, second, third] = octets;
+  if (octets.length !== 4) return false;
+  const [first = 0, second = 0, third = 0] = octets;
   if (
     first === 0
     || first === 10
@@ -125,9 +126,10 @@ function canonicalPublicIp(value: unknown): string | null {
 function canonicalPublicCidr(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 96) return null;
   const parts = value.trim().split('/');
-  if (parts.length !== 2 || !/^\d{1,3}$/u.test(parts[1])) return null;
-  const address = canonicalPublicIp(parts[0]);
-  const prefix = Number(parts[1]);
+  const [addressText, prefixText] = parts;
+  if (!addressText || !prefixText || parts.length !== 2 || !/^\d{1,3}$/u.test(prefixText)) return null;
+  const address = canonicalPublicIp(addressText);
+  const prefix = Number(prefixText);
   if (!address || !Number.isInteger(prefix)) return null;
   if (address.includes(':') ? prefix < 0 || prefix > 128 : prefix < 0 || prefix > 32) return null;
   return `${address}/${prefix}`;

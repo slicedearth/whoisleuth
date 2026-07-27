@@ -269,7 +269,7 @@ export function normalizeDomain(value: unknown): string {
     if (!label || label.length > 63 || !labelPattern.test(label)) return '';
   }
   // An all-numeric final label is an IPv4 address, never a hostname TLD.
-  if (/^[0-9]+$/.test(labels[labels.length - 1])) return '';
+  if (/^[0-9]+$/.test(labels.at(-1) ?? '')) return '';
   return hostname;
 }
 
@@ -757,7 +757,7 @@ export function latestCaseEvidence(
   record: { evidenceHistory?: CaseEvidenceSnapshot[] } | null | undefined,
 ): CaseEvidenceSnapshot | null {
   const history = record && Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
-  return history.length ? history[history.length - 1] : null;
+  return history.at(-1) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1214,6 +1214,7 @@ export function updateCase(
   const index = cases.findIndex((item) => item.id === id);
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];
+  if (!current) throw new Error('That case no longer exists.');
   let notes = current.notes;
   if (patch.note !== undefined) {
     const body = normalizeNoteBody(patch.note);
@@ -1442,11 +1443,14 @@ function collectPrunableSnapshots(
 ): Array<{ index: number; snapshot: CaseEvidenceSnapshot; key: string }> {
   const items: Array<{ index: number; snapshot: CaseEvidenceSnapshot; key: string }> = [];
   for (let index = 0; index < cases.length; index++) {
-    const history = cases[index].evidenceHistory;
+    const record = cases[index];
+    if (!record) continue;
+    const history = record.evidenceHistory;
     const limit = history.length - (allowLast ? 0 : 1);
     for (let position = 0; position < limit; position++) {
       const snapshot = history[position];
-      items.push({ index, snapshot, key: `${snapshot.capturedAt}|${cases[index].domain}|${snapshot.fingerprint}` });
+      if (!snapshot) continue;
+      items.push({ index, snapshot, key: `${snapshot.capturedAt}|${record.domain}|${snapshot.fingerprint}` });
     }
   }
   items.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
@@ -1465,7 +1469,9 @@ function pruneOldestSnapshots(cases: CaseRecord[], allowLast: boolean): number {
   let removed = 0;
   for (const item of collectPrunableSnapshots(cases, allowLast)) {
     if (total <= MAX_CASE_STORE_BYTES) break;
-    cases[item.index] = { ...cases[item.index], evidenceHistory: cases[item.index].evidenceHistory.filter((s) => s !== item.snapshot) };
+    const record = cases[item.index];
+    if (!record) continue;
+    cases[item.index] = { ...record, evidenceHistory: record.evidenceHistory.filter((snapshot) => snapshot !== item.snapshot) };
     total -= byteLength(JSON.stringify(item.snapshot)) + 1; // element + its separating comma
     removed += 1;
   }
@@ -1473,7 +1479,10 @@ function pruneOldestSnapshots(cases: CaseRecord[], allowLast: boolean): number {
     const remaining = collectPrunableSnapshots(cases, allowLast);
     if (!remaining.length) break;
     const item = remaining[0];
-    cases[item.index] = { ...cases[item.index], evidenceHistory: cases[item.index].evidenceHistory.filter((s) => s !== item.snapshot) };
+    if (!item) break;
+    const record = cases[item.index];
+    if (!record) continue;
+    cases[item.index] = { ...record, evidenceHistory: record.evidenceHistory.filter((snapshot) => snapshot !== item.snapshot) };
     removed += 1;
   }
   return removed;

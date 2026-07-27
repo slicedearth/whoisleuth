@@ -285,7 +285,9 @@ function normalizeActiveRun(
   }));
   if (results.length !== cursor) return null;
   for (let index = 0; index < cursor; index += 1) {
-    if (results[index].domain !== sources[index].domain) return null;
+    const result = results[index];
+    const source = sources[index];
+    if (!result || !source || result.domain !== source.domain) return null;
   }
 
   return {

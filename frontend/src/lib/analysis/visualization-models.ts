@@ -137,8 +137,12 @@ export function projectRedirectPath(rawRedirects: RedirectInput[]) {
   if (!redirects.length) {
     return { width: 900, height: 150, nodes: [], edges: [], truncated: rawCount > 0 };
   }
+  const firstRedirect = redirects[0];
+  if (!firstRedirect) {
+    return { width: 900, height: 150, nodes: [], edges: [], truncated: rawCount > 0 };
+  }
   const nodes = [
-    { id: 'redirect-start', label: redirects[0].from, status: 'start', queryOmitted: false },
+    { id: 'redirect-start', label: firstRedirect.from, status: 'start', queryOmitted: false },
     ...redirects.map((redirect, index) => ({
       id: `redirect-${index + 1}`,
       label: redirect.to,
@@ -148,13 +152,17 @@ export function projectRedirectPath(rawRedirects: RedirectInput[]) {
   ];
   const x = scalePoint<string>().domain(nodes.map((node) => node.id)).range([62, 838]).padding(0.35);
   const projected = nodes.map((node) => ({ ...node, x: x(node.id) ?? 450, y: 70 }));
-  const edges = redirects.map((redirect, index) => ({
-    id: `redirect-edge-${index}`,
-    fromX: projected[index].x,
-    toX: projected[index + 1].x,
-    y: 70,
-    status: redirect.status,
-  }));
+  const edges = redirects.flatMap((redirect, index) => {
+    const from = projected[index];
+    const to = projected[index + 1];
+    return from && to ? [{
+      id: `redirect-edge-${index}`,
+      fromX: from.x,
+      toX: to.x,
+      y: 70,
+      status: redirect.status,
+    }] : [];
+  });
   return {
     width: 900,
     height: 150,
@@ -164,15 +172,15 @@ export function projectRedirectPath(rawRedirects: RedirectInput[]) {
   };
 }
 
-function deterministicSample<T>(items: T[], limit: number) {
+function deterministicSample<T>(items: T[], limit: number): T[] {
   const boundedLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
   if (boundedLimit === 0) return [];
   if (items.length <= boundedLimit) return items;
-  if (boundedLimit === 1) return [items[0]];
+  if (boundedLimit === 1) return items.slice(0, 1);
   return Array.from({ length: boundedLimit }, (_, index) => {
     const sourceIndex = Math.round(index * (items.length - 1) / (boundedLimit - 1));
     return items[sourceIndex];
-  });
+  }).filter((item): item is T => item !== undefined);
 }
 
 export function projectTriagePoints(rawPoints: TriagePointInput[]) {

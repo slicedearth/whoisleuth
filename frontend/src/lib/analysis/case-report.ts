@@ -216,6 +216,7 @@ export function buildCaseReport(
     const chronological = [...caseRecord.evidenceHistory];
     for (let i = 0; i < chronological.length; i++) {
       const snapshot = chronological[i];
+      if (!snapshot) continue;
       const isBaseline = i === 0;
       const hasRepeatedObservation = snapshot.firstCapturedAt !== snapshot.capturedAt;
 
@@ -225,6 +226,7 @@ export function buildCaseReport(
 
       if (!isBaseline) {
         const previous = chronological[i - 1];
+        if (!previous) continue;
         const rawChanges = compareCaseEvidence(previous, snapshot);
         incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot);
         if (rawChanges.length > 0) {
@@ -355,6 +357,7 @@ function buildMarkdown(report: CaseReportJson): string {
 
     for (let i = 0; i < timeline.length; i++) {
       const entry = timeline[i];
+      if (!entry) continue;
       const snap = entry.snapshot;
       const index = i + 1;
 

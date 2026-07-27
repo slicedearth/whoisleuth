@@ -315,8 +315,10 @@ export function projectCaseRelationshipGraph(
   const caseIds = new Set(caseItems.map((item) => item.id));
   const candidateEdges: CaseRelationshipGraphEdge[] = [];
   for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const relationshipId = relationshipNodeId(groups[groupIndex]);
-    for (const member of groups[groupIndex].cases) {
+    const group = groups[groupIndex];
+    if (!group) continue;
+    const relationshipId = relationshipNodeId(group);
+    for (const member of group.cases) {
       if (caseIds.has(member.id)) candidateEdges.push({
         id: `edge:${relationshipId}:${member.id}`,
         caseId: `case:${member.id}`,
