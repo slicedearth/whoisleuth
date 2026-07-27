@@ -1,4 +1,4 @@
-// Pure, bounded workspace archive composition. Existing store models remain the
+// Pure, bounded workspace archive composition. Existing typed store models remain the
 // authority for normalization and merge semantics; this module only packages
 // their portable contracts, verifies integrity, and previews conflicts.
 
@@ -8,6 +8,7 @@ import {
   enforceStoreBudget,
   mergeCases,
 } from './case-model.ts';
+import type { CaseRecord } from './case-model.ts';
 import {
   assertBrandProfileStoreBudget,
   BRAND_PROFILE_SCHEMA,
@@ -15,6 +16,7 @@ import {
   buildBrandProfileExport,
   mergeBrandProfiles,
 } from './brand-profile-model.ts';
+import type { BrandProfile } from './brand-profile-model.ts';
 import {
   assertCampaignStoreBudget,
   buildCampaignExport,
@@ -58,7 +60,7 @@ export const MAX_WORKSPACE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_WORKSPACE_ARCHIVE_SECTION_BYTES = 5 * 1024 * 1024;
 export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 8;
 
-export const WORKSPACE_ARCHIVE_SECTION_IDS = Object.freeze([
+export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'cases',
   'campaigns',
   'brandProfiles',
@@ -67,21 +69,97 @@ export const WORKSPACE_ARCHIVE_SECTION_IDS = Object.freeze([
   'detectionRules',
   'relationshipObservations',
   'settings',
-]);
+] as const;
+
+export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
+export type WorkspaceArchiveSectionStatus = 'ready' | 'unsupported';
+export type WorkspaceArchivePreviewStatus = WorkspaceArchiveSectionStatus | 'blocked';
+export type WorkspaceTheme = 'dark' | 'light' | 'system';
+type UnknownRecord = Record<string, unknown>;
+
+export interface WorkspaceArchiveOptions {
+  generatedAt?: unknown;
+  cryptoProvider?: {
+    subtle?: {
+      digest?: (algorithm: AlgorithmIdentifier, data: BufferSource) => Promise<ArrayBuffer>;
+    };
+  };
+}
+
+export interface WorkspaceArchiveManifestEntry {
+  id: string;
+  schema: string | null;
+  version: number;
+  recordCount: number;
+  bytes: number;
+  checksum: string;
+}
+
+export interface WorkspaceArchiveSection extends WorkspaceArchiveManifestEntry {
+  label: string;
+  status: WorkspaceArchiveSectionStatus;
+  reason: string;
+  data: unknown;
+}
+
+export interface WorkspaceArchivePreviewSection extends Omit<WorkspaceArchiveSection, 'status'> {
+  status: WorkspaceArchivePreviewStatus;
+  added: number;
+  updated: number;
+  skipped: number;
+  pruned?: number;
+  selected: boolean;
+  normalizedSettings?: WorkspaceSettings | null;
+}
+
+export interface WorkspaceSettings {
+  activeProfileId: string;
+  theme: WorkspaceTheme;
+}
+
+interface NormalizedWorkspaceInput {
+  cases: CaseRecord[];
+  campaigns: unknown[];
+  brandProfiles: BrandProfile[];
+  watchlists: UnknownRecord;
+  shortlist: unknown[];
+  detectionRules: unknown[];
+  relationshipObservations: unknown[];
+  settings: UnknownRecord;
+}
+
+interface WorkspaceMergeResult {
+  added: number;
+  updated: number;
+  skipped: number;
+  pruned?: number;
+  profiles?: BrandProfile[];
+  settings?: WorkspaceSettings;
+}
+
+interface WorkspaceSectionDefinition {
+  id: WorkspaceArchiveSectionId;
+  label: string;
+  schema: string | null;
+  version: number;
+  build: (input: NormalizedWorkspaceInput, now: string) => unknown;
+  count: (data: unknown) => number;
+  merge: ((local: NormalizedWorkspaceInput, data: unknown, now: string | null) => WorkspaceMergeResult) | null;
+}
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const CHECKSUM_RE = /^sha256:[a-f0-9]{64}$/;
 
-function record(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+function record(value: unknown): UnknownRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
 }
 
-function byteLength(value) {
+function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function serialize(value, message = 'The workspace archive contains data that cannot be serialized.') {
+function serialize(value: unknown, message = 'The workspace archive contains data that cannot be serialized.'): string {
   try {
     const serialized = JSON.stringify(value);
     if (typeof serialized !== 'string') throw new Error(message);
@@ -91,33 +169,33 @@ function serialize(value, message = 'The workspace archive contains data that ca
   }
 }
 
-function clone(value) {
-  return JSON.parse(serialize(value));
+function clone<T>(value: T): T {
+  return JSON.parse(serialize(value)) as T;
 }
 
-function timestamp(value, fallback = null) {
+function timestamp(value: unknown, fallback: string | null = null): string | null {
   if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return fallback;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
 }
 
-function boundedText(value, maximum = 300) {
+function boundedText(value: unknown, maximum = 300): string {
   if (typeof value !== 'string' || value.length > maximum * 4 || CONTROL_RE.test(value)) return '';
   return value.replace(/\s+/g, ' ').trim().slice(0, maximum).trim();
 }
 
-function normalizeTheme(value) {
+function normalizeTheme(value: unknown): WorkspaceTheme {
   return value === 'dark' || value === 'light' ? value : 'system';
 }
 
-function canonicalize(value) {
+function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   const item = record(value);
   if (!item) return value;
   return Object.fromEntries(Object.keys(item).sort().map((key) => [key, canonicalize(item[key])]));
 }
 
-function canonicalString(value) {
+function canonicalString(value: unknown): string {
   try {
     return JSON.stringify(canonicalize(value));
   } catch {
@@ -125,7 +203,7 @@ function canonicalString(value) {
   }
 }
 
-async function checksum(value, cryptoProvider = globalThis.crypto) {
+async function checksum(value: unknown, cryptoProvider: WorkspaceArchiveOptions['cryptoProvider'] = globalThis.crypto): Promise<string> {
   if (!cryptoProvider?.subtle?.digest) {
     throw new Error('Workspace archive checksums are unavailable in this browser.');
   }
@@ -133,7 +211,7 @@ async function checksum(value, cryptoProvider = globalThis.crypto) {
   return `sha256:${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-function settingsDocument(input) {
+function settingsDocument(input: NormalizedWorkspaceInput) {
   const profiles = Array.isArray(input.brandProfiles) ? input.brandProfiles : [];
   const requestedProfileId = typeof input.settings?.activeProfileId === 'string' && SAFE_ID_RE.test(input.settings.activeProfileId)
     ? input.settings.activeProfileId
@@ -149,11 +227,22 @@ function settingsDocument(input) {
   };
 }
 
-const SECTION_DEFINITIONS = Object.freeze([
+function arrayCount(data: unknown, key: string): number {
+  const value = record(data);
+  return value && Array.isArray(value[key]) ? value[key].length : 0;
+}
+
+function objectCount(data: unknown, key: string): number {
+  const value = record(data);
+  const nested = value ? record(value[key]) : null;
+  return nested ? Object.keys(nested).length : 0;
+}
+
+const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   {
     id: 'cases', label: 'Cases', schema: null, version: CASE_SCHEMA_VERSION,
     build: (input, now) => buildCaseExport(input.cases, now),
-    count: (data) => Array.isArray(data?.cases) ? data.cases.length : 0,
+    count: (data) => arrayCount(data, 'cases'),
     merge: (local, data) => {
       const result = mergeCases(local.cases, data);
       const bounded = enforceStoreBudget(result.cases);
@@ -163,7 +252,7 @@ const SECTION_DEFINITIONS = Object.freeze([
   {
     id: 'campaigns', label: 'Campaigns', schema: CAMPAIGN_SCHEMA, version: CAMPAIGN_SCHEMA_VERSION,
     build: (input, now) => buildCampaignExport(input.campaigns, now),
-    count: (data) => Array.isArray(data?.campaigns) ? data.campaigns.length : 0,
+    count: (data) => arrayCount(data, 'campaigns'),
     merge: (local, data) => {
       const result = mergeCampaigns(local.campaigns, data);
       return { ...result, campaigns: assertCampaignStoreBudget(result.campaigns).campaigns };
@@ -172,7 +261,7 @@ const SECTION_DEFINITIONS = Object.freeze([
   {
     id: 'brandProfiles', label: 'Brand profiles', schema: BRAND_PROFILE_SCHEMA, version: BRAND_PROFILE_SCHEMA_VERSION,
     build: (input, now) => buildBrandProfileExport(input.brandProfiles, now),
-    count: (data) => Array.isArray(data?.profiles) ? data.profiles.length : 0,
+    count: (data) => arrayCount(data, 'profiles'),
     merge: (local, data, now) => {
       const result = mergeBrandProfiles(local.brandProfiles, data, { nowIso: now });
       return { ...result, profiles: assertBrandProfileStoreBudget(result.profiles).profiles };
@@ -181,7 +270,7 @@ const SECTION_DEFINITIONS = Object.freeze([
   {
     id: 'watchlists', label: 'Watchlists', schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION,
     build: (input, now) => buildWatchlistExport(input.watchlists, now),
-    count: (data) => record(data?.watchlists) ? Object.keys(data.watchlists).length : 0,
+    count: (data) => objectCount(data, 'watchlists'),
     merge: (local, data) => {
       const result = mergeWatchlistStores(local.watchlists, data);
       return { ...result, watchlists: assertWatchlistStoreBudget(result.watchlists).watchlists };
@@ -190,7 +279,7 @@ const SECTION_DEFINITIONS = Object.freeze([
   {
     id: 'shortlist', label: 'Shortlist', schema: SHORTLIST_SCHEMA, version: SHORTLIST_SCHEMA_VERSION,
     build: (input, now) => buildShortlistExport(input.shortlist, now),
-    count: (data) => Array.isArray(data?.entries) ? data.entries.length : 0,
+    count: (data) => arrayCount(data, 'entries'),
     merge: (local, data) => {
       const result = mergeShortlistStores(local.shortlist, data);
       return { ...result, entries: assertShortlistStoreBudget(result.entries).entries };
@@ -199,7 +288,7 @@ const SECTION_DEFINITIONS = Object.freeze([
   {
     id: 'detectionRules', label: 'Detection rules', schema: DETECTION_RULE_SCHEMA, version: DETECTION_RULE_SCHEMA_VERSION,
     build: (input, now) => buildDetectionRuleExport(input.detectionRules, now),
-    count: (data) => Array.isArray(data?.rules) ? data.rules.length : 0,
+    count: (data) => arrayCount(data, 'rules'),
     merge: (local, data) => {
       const result = mergeDetectionRules(local.detectionRules, data);
       return { ...result, rules: assertDetectionRuleStoreBudget(result.rules).rules };
@@ -211,7 +300,7 @@ const SECTION_DEFINITIONS = Object.freeze([
     schema: RELATIONSHIP_OBSERVATION_SCHEMA,
     version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
     build: (input, now) => buildRelationshipObservationExport(input.relationshipObservations, now),
-    count: (data) => Array.isArray(data?.observations) ? data.observations.length : 0,
+    count: (data) => arrayCount(data, 'observations'),
     merge: (local, data) => mergeRelationshipObservations(local.relationshipObservations, data),
   },
   {
@@ -220,23 +309,25 @@ const SECTION_DEFINITIONS = Object.freeze([
     count: () => 1,
     merge: null,
   },
-]);
+] as const;
 
-const DEFINITION_BY_ID = new Map(SECTION_DEFINITIONS.map((definition) => [definition.id, definition]));
-const SECTION_ORDER = new Map(WORKSPACE_ARCHIVE_SECTION_IDS.map((id, index) => [id, index]));
+const DEFINITION_BY_ID = new Map<string, WorkspaceSectionDefinition>(
+  SECTION_DEFINITIONS.map((definition) => [definition.id, definition]),
+);
+const SECTION_ORDER = new Map<string, number>(WORKSPACE_ARCHIVE_SECTION_IDS.map((id, index) => [id, index]));
 
-function canonicalSectionOrder(left, right) {
+function canonicalSectionOrder(left: { id: string }, right: { id: string }): number {
   const leftIndex = SECTION_ORDER.get(left.id) ?? Number.MAX_SAFE_INTEGER;
   const rightIndex = SECTION_ORDER.get(right.id) ?? Number.MAX_SAFE_INTEGER;
   return leftIndex - rightIndex;
 }
 
-function normalizedInput(input) {
+function normalizedInput(input: unknown): NormalizedWorkspaceInput {
   const value = record(input) || {};
   return {
-    cases: Array.isArray(value.cases) ? value.cases : [],
+    cases: Array.isArray(value.cases) ? value.cases as CaseRecord[] : [],
     campaigns: Array.isArray(value.campaigns) ? value.campaigns : [],
-    brandProfiles: Array.isArray(value.brandProfiles) ? value.brandProfiles : [],
+    brandProfiles: Array.isArray(value.brandProfiles) ? value.brandProfiles as BrandProfile[] : [],
     watchlists: record(value.watchlists) || {},
     shortlist: Array.isArray(value.shortlist) ? value.shortlist : [],
     detectionRules: Array.isArray(value.detectionRules) ? value.detectionRules : [],
@@ -245,7 +336,7 @@ function normalizedInput(input) {
   };
 }
 
-function ensureArchiveBudget(value) {
+function ensureArchiveBudget(value: unknown): { serialized: string; bytes: number } {
   const serialized = serialize(value);
   const bytes = byteLength(serialized);
   if (bytes > MAX_WORKSPACE_ARCHIVE_BYTES) {
@@ -255,11 +346,11 @@ function ensureArchiveBudget(value) {
 }
 
 /** Build one deterministic, unencrypted archive from normalized local stores. */
-export async function buildWorkspaceArchive(input, options = {}) {
+export async function buildWorkspaceArchive(input: unknown, options: WorkspaceArchiveOptions = {}) {
   const now = timestamp(options.generatedAt) || new Date().toISOString();
   const source = normalizedInput(input);
-  const sections = {};
-  const manifestSections = [];
+  const sections: Partial<Record<WorkspaceArchiveSectionId, unknown>> = {};
+  const manifestSections: WorkspaceArchiveManifestEntry[] = [];
   let totalRecords = 0;
 
   for (const definition of SECTION_DEFINITIONS) {
@@ -301,14 +392,14 @@ export async function buildWorkspaceArchive(input, options = {}) {
   return archive;
 }
 
-function manifestEntry(raw) {
+function manifestEntry(raw: unknown): WorkspaceArchiveManifestEntry | null {
   const value = record(raw);
   if (!value) return null;
   const id = boundedText(value.id, 40);
   const schema = value.schema === null ? null : boundedText(value.schema, 100);
-  const version = Number.isSafeInteger(value.version) && value.version > 0 && value.version <= 1000 ? value.version : null;
-  const recordCount = Number.isSafeInteger(value.recordCount) && value.recordCount >= 0 && value.recordCount <= 10000 ? value.recordCount : null;
-  const bytes = Number.isSafeInteger(value.bytes) && value.bytes >= 0 && value.bytes <= MAX_WORKSPACE_ARCHIVE_SECTION_BYTES ? value.bytes : null;
+  const version = typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > 0 && value.version <= 1000 ? value.version : null;
+  const recordCount = typeof value.recordCount === 'number' && Number.isSafeInteger(value.recordCount) && value.recordCount >= 0 && value.recordCount <= 10000 ? value.recordCount : null;
+  const bytes = typeof value.bytes === 'number' && Number.isSafeInteger(value.bytes) && value.bytes >= 0 && value.bytes <= MAX_WORKSPACE_ARCHIVE_SECTION_BYTES ? value.bytes : null;
   const checksumValue = typeof value.checksum === 'string' && CHECKSUM_RE.test(value.checksum) ? value.checksum : null;
   return id && version !== null && recordCount !== null && bytes !== null && checksumValue
     ? { id, schema, version, recordCount, bytes, checksum: checksumValue }
@@ -316,13 +407,13 @@ function manifestEntry(raw) {
 }
 
 /** Validate structure, section byte counts, and checksums without applying data. */
-export async function readWorkspaceArchive(raw, options = {}) {
+export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchiveOptions = {}) {
   const value = record(raw);
   if (!value || value.schema !== WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not a WHOISleuth workspace archive.');
   }
-  if (!Number.isSafeInteger(value.version) || value.version !== WORKSPACE_ARCHIVE_VERSION) {
-    if (Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
+  if (typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version !== WORKSPACE_ARCHIVE_VERSION) {
+    if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
       throw new Error(`This workspace archive uses newer schema ${value.version}. Update the app before importing it.`);
     }
     throw new Error(`Expected workspace archive schema ${WORKSPACE_ARCHIVE_VERSION}.`);
@@ -337,8 +428,8 @@ export async function readWorkspaceArchive(raw, options = {}) {
     throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_SECTIONS} sections.`);
   }
 
-  const seen = new Set();
-  const sections = [];
+  const seen = new Set<string>();
+  const sections: WorkspaceArchiveSection[] = [];
   let totalRecords = 0;
   for (const rawEntry of manifest.sections) {
     const entry = manifestEntry(rawEntry);
@@ -353,7 +444,7 @@ export async function readWorkspaceArchive(raw, options = {}) {
       throw new Error(`${entry.id} failed its archive checksum check.`);
     }
     const definition = DEFINITION_BY_ID.get(entry.id);
-    let status = 'ready';
+    let status: WorkspaceArchiveSectionStatus = 'ready';
     let reason = '';
     if (!definition) {
       status = 'unsupported';
@@ -388,9 +479,14 @@ export async function readWorkspaceArchive(raw, options = {}) {
   };
 }
 
-function settingsPreview(data, local, mergedProfiles) {
+function settingsPreview(
+  data: unknown,
+  local: NormalizedWorkspaceInput,
+  mergedProfiles: BrandProfile[],
+): WorkspaceMergeResult {
   const value = record(data) || {};
-  const activeProfileId = SAFE_ID_RE.test(value.activeProfileId || '') ? value.activeProfileId : '';
+  const requestedProfileId = typeof value.activeProfileId === 'string' ? value.activeProfileId : '';
+  const activeProfileId = SAFE_ID_RE.test(requestedProfileId) ? requestedProfileId : '';
   const theme = normalizeTheme(value.theme);
   let skipped = 0;
   if (activeProfileId && !mergedProfiles.some((profile) => profile?.id === activeProfileId)) skipped++;
@@ -402,10 +498,10 @@ function settingsPreview(data, local, mergedProfiles) {
 }
 
 /** Preview section-specific non-destructive merge outcomes without writing. */
-export async function previewWorkspaceArchive(raw, localInput, options = {}) {
+export async function previewWorkspaceArchive(raw: unknown, localInput: unknown, options: WorkspaceArchiveOptions = {}) {
   const archive = await readWorkspaceArchive(raw, options);
   const local = normalizedInput(localInput);
-  const results = [];
+  const results: WorkspaceArchivePreviewSection[] = [];
   let mergedProfiles = local.brandProfiles;
 
   for (const section of archive.sections) {
@@ -413,13 +509,15 @@ export async function previewWorkspaceArchive(raw, localInput, options = {}) {
       results.push({ ...section, added: 0, updated: 0, skipped: section.recordCount, selected: false });
       continue;
     }
-    const definition = /** @type {any} */ (DEFINITION_BY_ID.get(section.id));
+    const definition = DEFINITION_BY_ID.get(section.id);
     if (!definition) continue;
     try {
-      const result = /** @type {any} */ (definition.id === 'settings'
+      const result = definition.id === 'settings'
         ? settingsPreview(section.data, local, mergedProfiles)
-        : definition.merge(local, section.data, archive.generatedAt));
-      if (definition.id === 'brandProfiles') mergedProfiles = result.profiles;
+        : definition.merge
+          ? definition.merge(local, section.data, archive.generatedAt)
+          : { added: 0, updated: 0, skipped: section.recordCount };
+      if (definition.id === 'brandProfiles' && result.profiles) mergedProfiles = result.profiles;
       results.push({
         ...section,
         status: 'ready',
@@ -427,7 +525,7 @@ export async function previewWorkspaceArchive(raw, localInput, options = {}) {
         added: result.added || 0,
         updated: result.updated || 0,
         skipped: result.skipped || 0,
-        pruned: result.pruned || 0,
+        pruned: result.pruned ?? 0,
         selected: true,
         normalizedSettings: result.settings || null,
       });

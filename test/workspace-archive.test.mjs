@@ -9,7 +9,7 @@ import {
   buildWorkspaceArchive,
   previewWorkspaceArchive,
   readWorkspaceArchive,
-} from '../frontend/src/lib/analysis/workspace-archive.js';
+} from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 
 const NOW = '2026-07-19T02:00:00.000Z';

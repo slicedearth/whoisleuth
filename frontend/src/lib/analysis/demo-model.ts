@@ -1,4 +1,4 @@
-// Pure, bounded state, view adapters, and export contract for the public
+// Pure, bounded typed state, view adapters, and export contract for the public
 // synthetic demo. Fixtures use reserved domains and never flow into live
 // lookup or production browser-store contracts. The adapters deliberately
 // target the same read-only component contracts as the authenticated console so
@@ -6,6 +6,7 @@
 
 import { normalizeBrandProfile } from './brand-profile-model.ts';
 import { normalizeCase } from './case-model.ts';
+import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { deriveTimeline } from './evidence-display.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 
@@ -15,16 +16,120 @@ export const SYNTHETIC_DEMO_STORAGE_KEY = 'whoisleuth:synthetic-demo:v1';
 export const SYNTHETIC_DEMO_EXPORT_SCHEMA = 'whoisleuth.synthetic-demo-case';
 export const MAX_SYNTHETIC_DEMO_NOTE_LENGTH = 800;
 
-export const SYNTHETIC_DEMO_STAGES = Object.freeze([
+export const SYNTHETIC_DEMO_STAGES = [
   Object.freeze({ id: 'dashboard', label: '1. Dashboard' }),
   Object.freeze({ id: 'brands', label: '2. Brands' }),
   Object.freeze({ id: 'discover', label: '3. Discover' }),
   Object.freeze({ id: 'bulk', label: '4. Bulk' }),
   Object.freeze({ id: 'lookup', label: '5. Lookup' }),
   Object.freeze({ id: 'monitor', label: '6. Monitor' }),
-]);
+] as const;
 
-function deepFreeze(value) {
+export type SyntheticDemoStageId = typeof SYNTHETIC_DEMO_STAGES[number]['id'];
+export type SyntheticDemoCaseStatus = 'new' | 'reviewing' | 'monitoring';
+
+export interface SyntheticDemoState {
+  version: typeof SYNTHETIC_DEMO_VERSION;
+  started: boolean;
+  profileReady: boolean;
+  candidatesReady: boolean;
+  selectedCandidateId: string;
+  caseReady: boolean;
+  caseStatus: SyntheticDemoCaseStatus;
+  note: string;
+  followUpReady: boolean;
+}
+
+interface SyntheticRiskFactor {
+  label: string;
+  points: number;
+}
+
+interface SyntheticProvenance {
+  source: string;
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+  certificateCount: number;
+  hostnames: string[];
+}
+
+interface SyntheticRelationship {
+  label: string;
+  value: string;
+  relatedCandidates: number;
+}
+
+interface SyntheticRegistryEvidence {
+  status: string;
+  registrar: string;
+  registeredAt: string;
+  source: string;
+}
+
+interface SyntheticDnsEvidence {
+  status: string;
+  nameservers: string[];
+  mail: string;
+  soa: string;
+  source: string;
+}
+
+interface SyntheticSourceEvidence {
+  status: string;
+  detail: string;
+  source: string;
+}
+
+interface SyntheticCandidateInput {
+  id: string;
+  domain: string;
+  mutation: string;
+  availability: string;
+  risk: number;
+  signals: string[];
+  riskFactors: SyntheticRiskFactor[];
+  provenance: SyntheticProvenance;
+  relationship: SyntheticRelationship | null;
+  evidence: {
+    registry: SyntheticRegistryEvidence;
+    dns: SyntheticDnsEvidence;
+    website: SyntheticSourceEvidence;
+    certificate: SyntheticSourceEvidence;
+  };
+  changeEvidence: Partial<CaseEvidenceSnapshot>;
+}
+
+type SyntheticObservation = Omit<CaseEvidenceSnapshot, 'id' | 'fingerprint' | 'firstCapturedAt'>
+  & Partial<Pick<CaseEvidenceSnapshot, 'id' | 'fingerprint' | 'firstCapturedAt'>>;
+
+export interface SyntheticDemoCandidate extends Omit<
+  SyntheticCandidateInput,
+  'changeEvidence' | 'signals' | 'riskFactors' | 'provenance' | 'relationship' | 'evidence'
+> {
+  signals: readonly string[];
+  riskFactors: readonly Readonly<SyntheticRiskFactor>[];
+  provenance: Readonly<Omit<SyntheticProvenance, 'hostnames'> & { hostnames: readonly string[] }>;
+  relationship: Readonly<SyntheticRelationship> | null;
+  evidence: Readonly<{
+    registry: Readonly<SyntheticRegistryEvidence>;
+    dns: Readonly<Omit<SyntheticDnsEvidence, 'nameservers'> & { nameservers: readonly string[] }>;
+    website: Readonly<SyntheticSourceEvidence>;
+    certificate: Readonly<SyntheticSourceEvidence>;
+  }>;
+  observations: SyntheticObservation[];
+}
+
+export interface SyntheticRelationshipGroup {
+  type: 'nameserver_set';
+  label: string;
+  method: string;
+  value: string;
+  normalizedValue: string;
+  domains: string[];
+  description: string;
+}
+
+function deepFreeze<T>(value: T): T {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
   for (const item of Object.values(value)) deepFreeze(item);
   return Object.freeze(value);
@@ -69,12 +174,12 @@ const normalizedProfile = normalizeBrandProfile({
 if (!normalizedProfile) throw new Error('The synthetic demo profile fixture is invalid.');
 export const SYNTHETIC_DEMO_PROFILE = deepFreeze(normalizedProfile);
 
-function frozenCandidate(value) {
+function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate {
   const { changeEvidence, ...candidate } = value;
   const availability = value.availability.toLowerCase();
   const hasMx = /\bMX\b/i.test(value.evidence.dns.mail);
   const hasSpf = /\bSPF\b/i.test(value.evidence.dns.mail);
-  const baseline = {
+  const baseline: SyntheticObservation = {
     capturedAt: '2026-06-26T11:15:00.000Z',
     source: 'lookup',
     scanDepth: 'deep',
@@ -112,7 +217,7 @@ function frozenCandidate(value) {
     phishingLanguageMatch: value.id === 'credential-lure' ? 'Sign in to continue' : null,
     mutationTypes: [value.mutation],
   };
-  const observations = [
+  const observations: SyntheticObservation[] = [
     baseline,
     { ...baseline, capturedAt: '2026-06-27T11:15:00.000Z', source: 'monitor' },
     { ...baseline, ...changeEvidence, capturedAt: '2026-07-01T11:15:00.000Z', source: 'monitor' },
@@ -214,24 +319,22 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
   }),
 ]);
 
-/** @type {Set<string>} */
 const CANDIDATE_IDS = new Set(SYNTHETIC_DEMO_CANDIDATES.map((item) => item.id));
-const CASE_STATUSES = new Set(['new', 'reviewing', 'monitoring']);
+const CASE_STATUSES = new Set<SyntheticDemoCaseStatus>(['new', 'reviewing', 'monitoring']);
 
-function boundedNote(value) {
+function boundedNote(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\r\n?/g, '\n').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, ' ').trim().slice(0, MAX_SYNTHETIC_DEMO_NOTE_LENGTH);
 }
 
-export function createSyntheticDemoState() {
+export function createSyntheticDemoState(): SyntheticDemoState {
   return { version: SYNTHETIC_DEMO_VERSION, started: false, profileReady: false, candidatesReady: false, selectedCandidateId: '', caseReady: false, caseStatus: 'new', note: '', followUpReady: false };
 }
 
-/** @param {unknown} value */
-export function normalizeSyntheticDemoState(value) {
+export function normalizeSyntheticDemoState(value: unknown): SyntheticDemoState {
   const fallback = createSyntheticDemoState();
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
-  const record = /** @type {Record<string, unknown>} */ (value);
+  const record = value as Record<string, unknown>;
   if (record.version !== SYNTHETIC_DEMO_VERSION) return fallback;
   // `started` was added additively: infer it from older valid progress so a
   // tab opened on the earlier five-stage demo is not needlessly reset.
@@ -247,17 +350,19 @@ export function normalizeSyntheticDemoState(value) {
     candidatesReady,
     selectedCandidateId,
     caseReady,
-    caseStatus: caseReady && typeof record.caseStatus === 'string' && CASE_STATUSES.has(record.caseStatus) ? record.caseStatus : 'new',
+    caseStatus: caseReady && typeof record.caseStatus === 'string' && CASE_STATUSES.has(record.caseStatus as SyntheticDemoCaseStatus)
+      ? record.caseStatus as SyntheticDemoCaseStatus
+      : 'new',
     note: caseReady ? boundedNote(record.note) : '',
     followUpReady: caseReady && record.followUpReady === true,
   };
 }
 
-export function syntheticDemoCandidate(id) {
+export function syntheticDemoCandidate(id: string): SyntheticDemoCandidate | null {
   return SYNTHETIC_DEMO_CANDIDATES.find((item) => item.id === id) || null;
 }
 
-export function syntheticDemoStage(state) {
+export function syntheticDemoStage(state: unknown): SyntheticDemoStageId {
   const normalized = normalizeSyntheticDemoState(state);
   if (normalized.caseReady) return 'monitor';
   if (normalized.selectedCandidateId) return 'lookup';
@@ -267,7 +372,7 @@ export function syntheticDemoStage(state) {
   return 'dashboard';
 }
 
-export function syntheticDemoCaseRecord(state) {
+export function syntheticDemoCaseRecord(state: unknown) {
   const normalized = normalizeSyntheticDemoState(state);
   const candidate = syntheticDemoCandidate(normalized.selectedCandidateId);
   if (!normalized.caseReady || !candidate) return null;
@@ -286,7 +391,7 @@ export function syntheticDemoCaseRecord(state) {
   }, undefined, '2026-07-01T11:20:00.000Z');
 }
 
-export function syntheticDemoTimeline(id, includeFollowUp = false) {
+export function syntheticDemoTimeline(id: string, includeFollowUp = false) {
   const candidate = syntheticDemoCandidate(id);
   if (!candidate) return [];
   const record = syntheticDemoCaseRecord({
@@ -315,8 +420,8 @@ export function syntheticDemoTimeline(id, includeFollowUp = false) {
   }));
 }
 
-export function syntheticDemoRelationshipGroups() {
-  const groups = new Map();
+export function syntheticDemoRelationshipGroups(): SyntheticRelationshipGroup[] {
+  const groups = new Map<string, SyntheticRelationshipGroup>();
   for (const candidate of SYNTHETIC_DEMO_CANDIDATES) {
     if (!candidate.relationship) continue;
     const key = `${candidate.relationship.label}\u0000${candidate.relationship.value}`;
@@ -335,7 +440,7 @@ export function syntheticDemoRelationshipGroups() {
   return [...groups.values()].map((group) => ({ ...group, domains: [...group.domains].sort() }));
 }
 
-export function syntheticDemoLookupView(id) {
+export function syntheticDemoLookupView(id: string) {
   const candidate = syntheticDemoCandidate(id);
   if (!candidate) return null;
   const registry = candidate.evidence.registry;
@@ -538,8 +643,7 @@ export function syntheticDemoLookupView(id) {
   };
 }
 
-/** @param {unknown} state @param {string} generatedAt */
-export function buildSyntheticDemoExport(state, generatedAt) {
+export function buildSyntheticDemoExport(state: unknown, generatedAt: string) {
   const normalized = normalizeSyntheticDemoState(state);
   const candidate = syntheticDemoCandidate(normalized.selectedCandidateId);
   if (!normalized.caseReady || !normalized.followUpReady || !candidate) throw new Error('Complete the monitored synthetic case before exporting it.');

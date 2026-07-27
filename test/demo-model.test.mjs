@@ -7,7 +7,7 @@ import {
   SYNTHETIC_DEMO_EXPORT_VERSION, SYNTHETIC_DEMO_PROFILE, SYNTHETIC_DEMO_STAGES,
   syntheticDemoCandidate, syntheticDemoCaseRecord, syntheticDemoLookupView,
   syntheticDemoRelationshipGroups, syntheticDemoStage, syntheticDemoTimeline,
-} from '../frontend/src/lib/analysis/demo-model.js';
+} from '../frontend/src/lib/analysis/demo-model.ts';
 
 function completeState(overrides = {}) {
   return { version: 1, started: true, profileReady: true, candidatesReady: true, selectedCandidateId: 'credential-lure', caseReady: true, caseStatus: 'reviewing', note: 'Synthetic analyst note', followUpReady: true, ...overrides };

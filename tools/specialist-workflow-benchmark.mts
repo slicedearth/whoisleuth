@@ -41,7 +41,7 @@ import {
   buildWorkspaceArchive,
   readWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
-} from '../frontend/src/lib/analysis/workspace-archive.js';
+} from '../frontend/src/lib/analysis/workspace-archive.ts';
 
 type WritableLike = { write(value: string): unknown };
 type BenchmarkStatus = 'pass' | 'fail';

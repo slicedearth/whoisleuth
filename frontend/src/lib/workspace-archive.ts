@@ -3,7 +3,7 @@ import {
   buildWorkspaceArchive,
   previewWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
-} from './analysis/workspace-archive.js';
+} from './analysis/workspace-archive.ts';
 import { enforceStoreBudget, mergeCases } from './analysis/case-model.ts';
 import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.ts';
 import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/brand-profile-model.ts';
@@ -31,7 +31,7 @@ import {
 } from './browser-local-data-definitions.js';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.js';
 
-export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.js';
+export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 
 export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
 

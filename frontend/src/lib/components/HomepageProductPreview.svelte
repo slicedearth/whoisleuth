@@ -3,7 +3,7 @@
   import {
     SYNTHETIC_DEMO_CANDIDATES,
     syntheticDemoTimeline,
-  } from '$lib/analysis/demo-model.js';
+  } from '$lib/analysis/demo-model.ts';
 
   const selected = SYNTHETIC_DEMO_CANDIDATES[0];
   const timeline = syntheticDemoTimeline(selected.id, true);

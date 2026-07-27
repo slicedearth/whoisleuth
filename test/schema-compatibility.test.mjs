@@ -41,7 +41,7 @@ import {
   WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_SETTINGS_SCHEMA,
   WORKSPACE_SETTINGS_VERSION,
-} from '../frontend/src/lib/analysis/workspace-archive.js';
+} from '../frontend/src/lib/analysis/workspace-archive.ts';
 import {
   buildCaseExport,
   CASE_SCHEMA_VERSION,
