@@ -44,6 +44,14 @@ export interface RelationshipObservationStore {
   observations: RelationshipObservation[];
 }
 
+export interface RelationshipObservationExport {
+  schema: typeof RELATIONSHIP_OBSERVATION_SCHEMA;
+  version: typeof RELATIONSHIP_OBSERVATION_SCHEMA_VERSION;
+  generatedAt: string;
+  observations: RelationshipObservation[];
+  limitations: string[];
+}
+
 export interface RelationshipObservationInput {
   type?: unknown;
   label?: unknown;
@@ -466,7 +474,7 @@ export function mergeRelationshipObservations(
 export function buildRelationshipObservationExport(
   raw: unknown,
   generatedAt = new Date().toISOString(),
-): UnknownRecord {
+): RelationshipObservationExport {
   const normalized = normalizeRelationshipObservationStore(raw);
   return {
     schema: RELATIONSHIP_OBSERVATION_SCHEMA,

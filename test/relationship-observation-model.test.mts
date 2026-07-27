@@ -75,6 +75,7 @@ describe('retained relationship observation model', () => {
       limitations: [],
     });
 
+    assert.ok(normalized);
     assert.equal(normalized.id, source.id);
     assert.equal(normalized.classification, 'derived');
     assert.equal(normalized.source, 'bulk_relationship_analysis');
@@ -111,8 +112,10 @@ describe('retained relationship observation model', () => {
       domains: [`candidate-${index}.invalid`],
     }, { retainedAt: new Date(Date.parse(LATE) + index * 1000).toISOString() }));
     const bounded = normalizeRelationshipObservationStore(many).observations;
+    const newest = many.at(-1);
+    assert.ok(newest);
     assert.equal(bounded.length, MAX_RELATIONSHIP_OBSERVATIONS);
-    assert.equal(bounded[0].retainedAt, many.at(-1).retainedAt);
+    assert.equal(bounded[0].retainedAt, newest.retainedAt);
     assert.equal(bounded.some((item) => item.id === many[0].id), false);
   });
 
@@ -136,7 +139,9 @@ describe('retained relationship observation model', () => {
     assert.equal(merged.added, 1);
     assert.equal(merged.updated, 0);
     assert.equal(merged.skipped, 2);
-    assert.equal(merged.observations.find((item) => item.id === local.id).description, local.description);
+    const retained = merged.observations.find((item) => item.id === local.id);
+    assert.ok(retained);
+    assert.equal(retained.description, local.description);
     assert.throws(() => mergeRelationshipObservations([], {
       schema: RELATIONSHIP_OBSERVATION_SCHEMA,
       version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION + 1,
