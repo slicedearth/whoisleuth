@@ -20,7 +20,7 @@ import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-m
 
 const CAPTURED = '2026-07-01T00:00:00.000Z';
 
-function snapshot(overrides = {}) {
+function snapshot(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     capturedAt: CAPTURED,
     scanDepth: 'deep',
@@ -30,7 +30,7 @@ function snapshot(overrides = {}) {
   };
 }
 
-function caseRecord(id, domain, evidenceHistory = [snapshot()]) {
+function caseRecord(id: string, domain: string, evidenceHistory: Record<string, unknown>[] = [snapshot()]) {
   return {
     id,
     domain,
@@ -44,7 +44,7 @@ function caseRecord(id, domain, evidenceHistory = [snapshot()]) {
 }
 
 function investigationFixture() {
-  const historical = (source, capturedAt, riskScore) => snapshot({
+  const historical = (source: string, capturedAt: string, riskScore: number) => snapshot({
     capturedAt,
     firstCapturedAt: capturedAt,
     source,
@@ -52,7 +52,7 @@ function investigationFixture() {
     riskModelVersion: 5,
     riskScore,
   });
-  const current = (domain) => snapshot({
+  const current = (domain: string) => snapshot({
     capturedAt: '2026-07-18T00:00:00.000Z',
     source: 'lookup',
     nameservers: ['ns.shared.invalid'],
@@ -253,6 +253,10 @@ describe('projection-backed cross-case relationships', () => {
     assert.equal(result.projectionVersion, INVESTIGATION_PROJECTION_VERSION);
     assert.equal(result.groups.length, 2);
     const nameservers = result.groups.find((group) => group.type === 'nameserver_set');
+    assert.ok(nameservers);
+    assert.ok(nameservers.campaigns);
+    assert.ok(nameservers.observations);
+    assert.ok(result.scopeOptions);
     assert.deepEqual(nameservers.cases.map((item) => item.domain), ['a.invalid', 'b.invalid']);
     assert.deepEqual(nameservers.campaigns.map((item) => item.label), ['Shared infrastructure review']);
     assert.deepEqual(nameservers.sources, ['import', 'lookup', 'monitor']);
@@ -315,9 +319,11 @@ describe('projection-backed cross-case relationships', () => {
   test('marks a group and summary partial when referenced provenance is unavailable', () => {
     const projection = investigationFixture();
     const relationship = projection.relationships.find((item) => item.type === 'domain_uses_nameserver_set');
+    assert.ok(relationship);
     relationship.sourceObservationIds.push('observation:missing');
     const summary = buildInvestigationCaseRelationships(projection);
     const nameservers = summary.groups.find((group) => group.type === 'nameserver_set');
+    assert.ok(nameservers);
     assert.equal(nameservers.truncated, true);
     assert.equal(summary.truncated, true);
     assert.equal(filterInvestigationCaseRelationships(summary, { completeness: 'partial' }).groups.length, 1);
