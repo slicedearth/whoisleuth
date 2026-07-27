@@ -14,13 +14,14 @@ import {
 } from '../tools/specialist-workflow-benchmark.mts';
 
 const NOW = new Date('2026-07-20T02:00:00.000Z');
+type BenchmarkReport = Awaited<ReturnType<typeof buildSpecialistWorkflowBenchmark>>;
 
 function capture() {
   let value = '';
-  return { stream: { write(chunk) { value += String(chunk); } }, value: () => value };
+  return { stream: { write(chunk: string) { value += chunk; } }, value: () => value };
 }
 
-function byId(report, id) {
+function byId(report: BenchmarkReport, id: string) {
   const scenario = report.scenarios.find((item) => item.id === id);
   assert.ok(scenario, `Missing benchmark scenario ${id}`);
   return scenario;
@@ -52,7 +53,9 @@ describe('offline specialist workflow benchmark', () => {
     assert.equal(report.metrics.registry.passRate, 1);
     assert.equal(report.metrics.lookalikeGeneration.duplicateOutputs, 0);
     assert.equal(report.metrics.lookalikeGeneration.uniqueCandidates, report.metrics.lookalikeGeneration.candidates);
-    assert.ok(report.metrics.lookalikeGeneration.combinedProvenanceCandidates > 0);
+    const combinedProvenanceCandidates = report.metrics.lookalikeGeneration.combinedProvenanceCandidates;
+    assert.ok(typeof combinedProvenanceCandidates === 'number');
+    assert.ok(combinedProvenanceCandidates > 0);
     assert.equal(report.metrics.collectionCompleteness.incompleteCollectionRate, 1);
     assert.equal(report.metrics.collectionCompleteness.undisclosedIncomplete, 0);
     assert.equal(report.metrics.collectionCompleteness.unsupportedSources, 1);
