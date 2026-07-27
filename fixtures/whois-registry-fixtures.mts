@@ -1,17 +1,28 @@
-'use strict';
-
-// Anonymized synthetic responses model the layouts used by representative
+// Bounded anonymized synthetic responses model the layouts used by representative
 // WHOIS registries without retaining third-party registration data. Keeping
 // them as referral chains exercises both field parsing and existence authority.
 
-const rootHop = (tld, referral) => ({
+export interface WhoisFixtureHop {
+  server: string;
+  response: string;
+}
+
+export interface WhoisRegistryFixture {
+  name: string;
+  capabilityProfile: string;
+  scenario: string;
+  chain: WhoisFixtureHop[];
+  expected: Record<string, unknown>;
+}
+
+const rootHop = (tld: string, referral: string): WhoisFixtureHop => ({
   server: 'whois.iana.org',
   response: `domain: ${tld}\norganisation: Example registry\nrefer: ${referral}\n`,
 });
 
-const registryHop = (server, lines) => ({ server, response: lines.join('\n') });
+const registryHop = (server: string, lines: string[]): WhoisFixtureHop => ({ server, response: lines.join('\n') });
 
-const standardIcannFixture = (name, capabilityProfile, tld) => ({
+const standardIcannFixture = (name: string, capabilityProfile: string, tld: string): WhoisRegistryFixture => ({
   name,
   capabilityProfile,
   scenario: 'registered',
@@ -48,7 +59,7 @@ const standardIcannFixture = (name, capabilityProfile, tld) => ({
   },
 });
 
-const contactIndirectionFixture = (name, capabilityProfile, tld) => ({
+const contactIndirectionFixture = (name: string, capabilityProfile: string, tld: string): WhoisRegistryFixture => ({
   name,
   capabilityProfile,
   scenario: 'registered',
@@ -94,7 +105,12 @@ const contactIndirectionFixture = (name, capabilityProfile, tld) => ({
   },
 });
 
-const authoritativeNotFoundFixture = (name, capabilityProfile, tld, lines) => ({
+const authoritativeNotFoundFixture = (
+  name: string,
+  capabilityProfile: string,
+  tld: string,
+  lines: string[],
+): WhoisRegistryFixture => ({
   name,
   capabilityProfile,
   scenario: 'not_found',
@@ -110,7 +126,7 @@ const authoritativeNotFoundFixture = (name, capabilityProfile, tld, lines) => ({
   },
 });
 
-module.exports = [
+const fixtures: WhoisRegistryFixture[] = [
   {
     name: 'generic thin gTLD referral chain',
     capabilityProfile: 'iana-generic',
@@ -2933,7 +2949,7 @@ module.exports = [
     'VG',
     ['The queried object does not exist: DOMAIN NOT FOUND'],
   ),
-  ...[
+  ...([
     ['AG', ['Domain not found.']],
     ['AW', ['available-example.aw is free']],
     ['AX', ['Domain not found']],
@@ -2961,16 +2977,16 @@ module.exports = [
     ['XN--J1AMH', ['No match for domain available-example.xn--j1amh.']],
     ['XN--MGBAH1A3HJKRD', ['Domain Name: available-example.xn--mgbah1a3hjkrd', 'The queried object does not exist: No Object Found']],
     ['XN--OGBPF8FL', ['Domain Name: available-example.xn--ogbpf8fl', 'Domain Status: No Object Found']],
-  ].map(([tld, lines]) => authoritativeNotFoundFixture(
+  ] satisfies Array<[string, string[]]>).map(([tld, lines]) => authoritativeNotFoundFixture(
     `Version twenty-two .${tld.toLowerCase()} authoritative not-found response`,
     `iana-cc-negative-${tld.toLowerCase()}`,
     tld,
     lines,
   )),
-  ...[
+  ...([
     ['BJ', ['Domain Name: available-example.bj', 'Domain Status: No Object Found']],
     ['DO', ['Domain Name: available-example.do', 'Domain Status: No Object Found']],
-  ].map(([tld, lines]) => authoritativeNotFoundFixture(
+  ] satisfies Array<[string, string[]]>).map(([tld, lines]) => authoritativeNotFoundFixture(
     `Version twenty-three .${tld.toLowerCase()} authoritative not-found response`,
     `iana-cc-negative-${tld.toLowerCase()}`,
     tld,
@@ -3102,3 +3118,5 @@ module.exports = [
     },
   },
 ];
+
+export default fixtures;

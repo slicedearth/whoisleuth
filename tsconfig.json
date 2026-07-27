@@ -33,6 +33,9 @@
     "bin/**/*.cts",
     "tools/**/*.ts",
     "tools/**/*.mts",
-    "tools/**/*.cts"
+    "tools/**/*.cts",
+    "fixtures/**/*.ts",
+    "fixtures/**/*.mts",
+    "fixtures/**/*.cts"
   ]
 }

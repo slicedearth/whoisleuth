@@ -24,7 +24,7 @@
   "scripts": {
     "start": "npm run build && node server.mts",
     "test": "node --test",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "dev": "npm run dev --workspace=frontend",
     "build": "npm run build --workspace=frontend",
     "check": "npm run check --workspace=frontend",

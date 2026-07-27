@@ -1,20 +1,25 @@
-'use strict';
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { describe, test } from 'node:test';
+import { domainToUnicode, fileURLToPath } from 'node:url';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { existsSync, readFileSync } = require('node:fs');
-const { resolve } = require('node:path');
-const { domainToUnicode } = require('node:url');
-
-const {
+import whoisFixtures from '../fixtures/whois-registry-fixtures.mts';
+import {
   REGISTRY_CAPABILITIES_VERSION,
   VERSION_26_NO_RDAP_SUFFIXES,
   registryAccessDiagnosticFor,
   registryCapabilityFor,
   registryCompatibilityMatrix,
   listRegistryCapabilities,
-} = require('../lib/registry-capabilities.mts');
-const whoisFixtures = require('../fixtures/whois-registry-fixtures');
+} from '../lib/registry-capabilities.mts';
+
+const TEST_DIRECTORY = dirname(fileURLToPath(import.meta.url));
+
+function required<T>(value: T | null | undefined, message = 'Expected a fixture-backed registry value.'): T {
+  assert.ok(value, message);
+  return value;
+}
 
 const SHARED_ENDPOINT_SUFFIXES = [
   { id: 'aeda-idn-colon', suffixes: ['xn--mgbaam7a8h'] },
@@ -179,7 +184,7 @@ describe('registry capability metadata', () => {
   });
 
   test('keeps the published compatibility table synchronized with the catalogue', () => {
-    const markdown = readFileSync(resolve(__dirname, '..', 'docs', 'registry-compatibility.md'), 'utf8');
+    const markdown = readFileSync(resolve(TEST_DIRECTORY, '..', 'docs', 'registry-compatibility.md'), 'utf8');
     const documentedSuffixes = Array.from(markdown.matchAll(/^\| `\.([^`]+)`/gm), (match) => match[1]);
     const catalogueSuffixes = registryCompatibilityMatrix().map((row) => row.suffixes[0]);
 
@@ -189,7 +194,7 @@ describe('registry capability metadata', () => {
   test('resolves a domain, a suffix, case, and one terminal root dot', () => {
     const inputs = ['example.com.au', '.AU', 'EXAMPLE.COM.AU.'];
     for (const input of inputs) {
-      const capability = registryCapabilityFor(input);
+      const capability = required(registryCapabilityFor(input));
       assert.equal(capability.id, 'eligibility-contact');
       assert.deepEqual(capability.suffixes, ['au']);
       assert.equal(capability.coverageState, 'fixture_verified');
@@ -198,7 +203,7 @@ describe('registry capability metadata', () => {
   });
 
   test('returns a conservative discovery-only profile for an unknown suffix', () => {
-    const capability = registryCapabilityFor('example.unknown');
+    const capability = required(registryCapabilityFor('example.unknown'));
     assert.equal(capability.id, 'iana-generic');
     assert.deepEqual(capability.suffixes, ['unknown']);
     assert.equal(capability.coverageState, 'discovery_only');
@@ -208,7 +213,7 @@ describe('registry capability metadata', () => {
   });
 
   test('canonicalizes an internationalized suffix to its A-label', () => {
-    const capability = registryCapabilityFor('example.测试');
+    const capability = required(registryCapabilityFor('example.测试'));
     assert.deepEqual(capability.suffixes, ['xn--0zwm56d']);
     assert.equal(capability.explicitSuffixProfile, false);
   });
@@ -218,7 +223,7 @@ describe('registry capability metadata', () => {
     let covered = 0;
 
     for (const family of SHARED_ENDPOINT_SUFFIXES) {
-      const profile = profiles.get(family.id);
+      const profile = required(profiles.get(family.id));
       assert.ok(profile, family.id);
       for (const suffix of family.suffixes) {
         const inputs = [suffix];
@@ -228,7 +233,7 @@ describe('registry capability metadata', () => {
           inputs.push(unicodeSuffix);
         }
         for (const input of inputs) {
-          const capability = registryCapabilityFor(`example.${input}`);
+          const capability = required(registryCapabilityFor(`example.${input}`));
           assert.equal(capability.id, family.id, input);
           assert.deepEqual(capability.suffixes, [suffix], input);
           assert.equal(capability.registryClass, 'country-code', input);
@@ -251,7 +256,7 @@ describe('registry capability metadata', () => {
     let covered = 0;
 
     for (const family of VERSION_14_SUFFIXES) {
-      const profile = profiles.get(family.id);
+      const profile = required(profiles.get(family.id));
       assert.ok(profile, family.id);
       for (const suffix of family.suffixes) {
         const inputs = [suffix];
@@ -261,7 +266,7 @@ describe('registry capability metadata', () => {
           inputs.push(unicodeSuffix);
         }
         for (const input of inputs) {
-          const capability = registryCapabilityFor(`example.${input}`);
+          const capability = required(registryCapabilityFor(`example.${input}`));
           assert.equal(capability.id, family.id, input);
           assert.deepEqual(capability.suffixes, [suffix], input);
           assert.equal(capability.registryClass, 'country-code', input);
@@ -283,7 +288,7 @@ describe('registry capability metadata', () => {
     const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
 
     for (const suffix of VERSION_15_ACCESS_SUFFIXES) {
-      const profile = profiles.get(`no-iana-machine-service-${suffix}`);
+      const profile = required(profiles.get(`no-iana-machine-service-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.suffixes, [suffix], suffix);
       assert.equal(profile.coverageState, 'access_documented', suffix);
@@ -297,14 +302,14 @@ describe('registry capability metadata', () => {
         suffix,
       );
 
-      const capability = registryCapabilityFor(`example.${suffix}`);
+      const capability = required(registryCapabilityFor(`example.${suffix}`));
       assert.equal(capability.id, profile.id, suffix);
       assert.deepEqual(capability.suffixes, [suffix], suffix);
       assert.equal(capability.registryClass, 'country-code', suffix);
       assert.equal(capability.coverageState, 'access_documented', suffix);
       assert.equal(capability.explicitSuffixProfile, true, suffix);
       assert.match(capability.limitation, /no domain WHOIS or RDAP service/i, suffix);
-      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      const diagnostic = required(registryAccessDiagnosticFor(`example.${suffix}`));
       assert.equal(diagnostic.authority, 'context_only', suffix);
       assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic.rdapAccessProfile, 'no-iana-service', suffix);
@@ -315,7 +320,7 @@ describe('registry capability metadata', () => {
     const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
 
     for (const suffix of VERSION_16_ACCESS_SUFFIXES) {
-      const profile = profiles.get(`no-iana-machine-service-${suffix}`);
+      const profile = required(profiles.get(`no-iana-machine-service-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.suffixes, [suffix], suffix);
       assert.equal(profile.coverageState, 'access_documented', suffix);
@@ -336,7 +341,7 @@ describe('registry capability metadata', () => {
         inputs.push(unicodeSuffix);
       }
       for (const input of inputs) {
-        const capability = registryCapabilityFor(`example.${input}`);
+        const capability = required(registryCapabilityFor(`example.${input}`));
         assert.equal(capability.id, profile.id, input);
         assert.deepEqual(capability.suffixes, [suffix], input);
         assert.equal(capability.registryClass, 'country-code', input);
@@ -344,7 +349,7 @@ describe('registry capability metadata', () => {
         assert.equal(capability.explicitSuffixProfile, true, input);
         assert.match(capability.limitation, /no domain WHOIS or RDAP service/i, input);
       }
-      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      const diagnostic = required(registryAccessDiagnosticFor(`example.${suffix}`));
       assert.equal(diagnostic.authority, 'context_only', suffix);
       assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic.rdapAccessProfile, 'no-iana-service', suffix);
@@ -356,7 +361,7 @@ describe('registry capability metadata', () => {
     let covered = 0;
 
     for (const family of VERSION_18_FIXTURE_SUFFIXES) {
-      const profile = profiles.get(family.id);
+      const profile = required(profiles.get(family.id));
       assert.ok(profile, family.id);
       assert.equal(
         family.suffixes.every((suffix) => profile.suffixes.includes(suffix)),
@@ -369,7 +374,7 @@ describe('registry capability metadata', () => {
       assert.deepEqual(profile.fixtureScenarios, ['registered', 'not_found'], family.id);
 
       for (const suffix of family.suffixes) {
-        const capability = registryCapabilityFor(`example.${suffix}`);
+        const capability = required(registryCapabilityFor(`example.${suffix}`));
         assert.equal(capability.id, family.id, suffix);
         assert.deepEqual(capability.suffixes, [suffix], suffix);
         assert.equal(capability.registryClass, 'country-code', suffix);
@@ -391,19 +396,19 @@ describe('registry capability metadata', () => {
     const profiles = new Map(allProfiles.map((entry) => [entry.id, entry]));
 
     for (const suffix of VERSION_19_SHARED_FIXTURE_SUFFIXES) {
-      const capability = registryCapabilityFor(`example.${suffix}`);
+      const capability = required(registryCapabilityFor(`example.${suffix}`));
       assert.equal(capability.coverageState, 'fixture_verified', suffix);
       assert.equal(capability.whoisAccessProfile, 'iana-referral', suffix);
       assert.equal(capability.rdapAccessProfile, 'no-iana-service', suffix);
       assert.match(capability.limitation, /exact shared IANA WHOIS service/i, suffix);
-      const profile = profiles.get(capability.id);
+      const profile = required(profiles.get(capability.id));
       assert.ok(profile.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`), suffix);
       const unicodeSuffix = domainToUnicode(suffix);
       assert.notEqual(unicodeSuffix, suffix, suffix);
-      assert.equal(registryCapabilityFor(`example.${unicodeSuffix}`).id, capability.id, suffix);
+      assert.equal(required(registryCapabilityFor(`example.${unicodeSuffix}`)).id, capability.id, suffix);
     }
 
-    const omProfile = profiles.get('om-registry-colon');
+    const omProfile = required(profiles.get('om-registry-colon'));
     assert.deepEqual(omProfile.suffixes, ['om', 'xn--mgb9awbf']);
     assert.deepEqual(omProfile.fixtureScenarios, ['registered', 'not_found']);
     assert.equal(omProfile.coverageState, 'fixture_verified');
@@ -411,7 +416,7 @@ describe('registry capability metadata', () => {
     assert.equal(omProfile.rdapAccessProfile, 'no-iana-service');
 
     for (const suffix of VERSION_19_NO_MACHINE_SUFFIXES) {
-      const profile = profiles.get(`no-iana-machine-service-${suffix}`);
+      const profile = required(profiles.get(`no-iana-machine-service-${suffix}`));
       assert.ok(profile, suffix);
       assert.equal(profile.coverageState, 'access_documented', suffix);
       assert.equal(profile.whoisAccessProfile, 'no-iana-service', suffix);
@@ -419,11 +424,11 @@ describe('registry capability metadata', () => {
       assert.deepEqual(profile.fixtureScenarios, [], suffix);
       assert.deepEqual(profile.verificationFiles, [], suffix);
       assert.match(profile.limitation, /no domain WHOIS or RDAP service/i, suffix);
-      assert.equal(registryAccessDiagnosticFor(`example.${suffix}`).authority, 'context_only', suffix);
+      assert.equal(required(registryAccessDiagnosticFor(`example.${suffix}`)).authority, 'context_only', suffix);
     }
 
     for (const suffix of VERSION_19_RDAP_ONLY_SUFFIXES) {
-      const profile = profiles.get(`iana-rdap-only-${suffix}`);
+      const profile = required(profiles.get(`iana-rdap-only-${suffix}`));
       assert.ok(profile, suffix);
       assert.equal(profile.coverageState, 'access_documented', suffix);
       assert.equal(profile.whoisAccessProfile, 'no-iana-service', suffix);
@@ -431,7 +436,7 @@ describe('registry capability metadata', () => {
       assert.deepEqual(profile.fixtureScenarios, [], suffix);
       assert.deepEqual(profile.verificationFiles, [], suffix);
       assert.match(profile.limitation, /RDAP bootstrap service but no domain WHOIS referral/i, suffix);
-      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      const diagnostic = required(registryAccessDiagnosticFor(`example.${suffix}`));
       assert.equal(diagnostic.authority, 'context_only', suffix);
       assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic.rdapAccessProfile, 'iana-bootstrap', suffix);
@@ -450,7 +455,7 @@ describe('registry capability metadata', () => {
     const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
 
     for (const suffix of VERSION_20_FIXTURE_SUFFIXES) {
-      const profile = profiles.get(`iana-cc-colon-${suffix}`);
+      const profile = required(profiles.get(`iana-cc-colon-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.suffixes, [suffix], suffix);
       assert.equal(profile.registryClass, 'country-code', suffix);
@@ -474,7 +479,7 @@ describe('registry capability metadata', () => {
     const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
 
     for (const suffix of VERSION_21_STANDARD_SUFFIXES) {
-      const profile = profiles.get(`iana-cc-colon-${suffix}`);
+      const profile = required(profiles.get(`iana-cc-colon-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.suffixes, [suffix], suffix);
       assert.equal(profile.whoisParserProfile, 'icann-style-colon', suffix);
@@ -487,19 +492,21 @@ describe('registry capability metadata', () => {
     }
 
     for (const suffix of VERSION_21_CONTACT_SUFFIXES) {
-      const profile = profiles.get(`iana-cc-contact-${suffix}`);
+      const profile = required(profiles.get(`iana-cc-contact-${suffix}`));
       assert.ok(profile, suffix);
       assert.equal(profile.whoisParserProfile, 'contact-indirection', suffix);
       assert.deepEqual(profile.fixtureScenarios, ['registered'], suffix);
     }
 
-    assert.equal(profiles.get('internetstiftelsen-nu-colon').rdapAccessProfile, 'no-iana-service');
-    assert.deepEqual(profiles.get('internetstiftelsen-nu-colon').fixtureScenarios, ['registered']);
-    assert.equal(profiles.get('nic-kg-sectioned').rdapAccessProfile, 'iana-bootstrap');
-    assert.deepEqual(profiles.get('nic-kg-sectioned').fixtureScenarios, ['registered']);
+    const nuProfile = required(profiles.get('internetstiftelsen-nu-colon'));
+    const kgProfile = required(profiles.get('nic-kg-sectioned'));
+    assert.equal(nuProfile.rdapAccessProfile, 'no-iana-service');
+    assert.deepEqual(nuProfile.fixtureScenarios, ['registered']);
+    assert.equal(kgProfile.rdapAccessProfile, 'iana-bootstrap');
+    assert.deepEqual(kgProfile.fixtureScenarios, ['registered']);
 
     for (const suffix of VERSION_21_NEGATIVE_SUFFIXES) {
-      const profile = profiles.get(`iana-cc-negative-${suffix}`);
+      const profile = required(profiles.get(`iana-cc-negative-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.fixtureScenarios, ['not_found'], suffix);
       assert.equal(
@@ -535,7 +542,7 @@ describe('registry capability metadata', () => {
     assert.equal(VERSION_22_NEGATIVE_SUFFIXES.length, 27);
     assert.equal(new Set(VERSION_22_NEGATIVE_SUFFIXES).size, 27);
     for (const suffix of VERSION_22_NEGATIVE_SUFFIXES) {
-      const profile = profiles.get(`iana-cc-negative-${suffix}`);
+      const profile = required(profiles.get(`iana-cc-negative-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.suffixes, [suffix], suffix);
       assert.equal(profile.whoisParserProfile, 'generic-colon', suffix);
@@ -563,7 +570,7 @@ describe('registry capability metadata', () => {
     assert.equal(allSuffixes.length, 22);
     assert.equal(new Set(allSuffixes).size, 22);
     for (const suffix of VERSION_23_NEGATIVE_SUFFIXES) {
-      const profile = profiles.get(`iana-cc-negative-${suffix}`);
+      const profile = required(profiles.get(`iana-cc-negative-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.fixtureScenarios, ['not_found'], suffix);
       assert.equal(profile.coverageState, 'fixture_verified', suffix);
@@ -573,7 +580,7 @@ describe('registry capability metadata', () => {
     for (const suffix of VERSION_23_UNVERIFIED_SUFFIXES.filter(
       (candidate) => !VERSION_24_PROMOTED_SUFFIXES.has(candidate),
     )) {
-      const profile = profiles.get(`iana-referral-unverified-${suffix}`);
+      const profile = required(profiles.get(`iana-referral-unverified-${suffix}`));
       assert.ok(profile, suffix);
       assert.deepEqual(profile.suffixes, [suffix], suffix);
       assert.deepEqual(profile.fixtureScenarios, [], suffix);
@@ -603,7 +610,7 @@ describe('registry capability metadata', () => {
   });
 
   test('records the version twenty-four alternate-script depth promotions', () => {
-    const bulgarian = registryCapabilityFor('примерен-домейн.бг');
+    const bulgarian = required(registryCapabilityFor('примерен-домейн.бг'));
     assert.equal(bulgarian.id, 'imena-bg-idn-sectioned');
     assert.deepEqual(bulgarian.suffixes, ['xn--90ae']);
     assert.equal(bulgarian.whoisQueryProfile, 'registry-domain-unicode');
@@ -611,28 +618,28 @@ describe('registry capability metadata', () => {
     assert.deepEqual(bulgarian.fixtureScenarios, ['registered', 'not_found']);
     assert.equal(bulgarian.rdapAccessProfile, 'no-iana-service');
 
-    const mongolian = registryCapabilityFor('example.мон');
+    const mongolian = required(registryCapabilityFor('example.мон'));
     assert.equal(mongolian.id, 'identity-digital-colon-mn');
     assert.deepEqual(mongolian.suffixes, ['xn--l1acc']);
     assert.deepEqual(mongolian.fixtureScenarios, ['registered']);
     assert.equal(mongolian.rdapAccessProfile, 'no-iana-service');
     assert.match(mongolian.limitation, /exact shared IANA WHOIS service/i);
 
-    const qatari = registryCapabilityFor('example.قطر');
+    const qatari = required(registryCapabilityFor('example.قطر'));
     assert.equal(qatari.id, 'qatar-idn-colon');
     assert.deepEqual(qatari.suffixes, ['xn--wgbl6a']);
     assert.deepEqual(qatari.fixtureScenarios, ['registered', 'not_found']);
     assert.equal(qatari.rdapAccessProfile, 'no-iana-service');
 
     for (const suffix of VERSION_24_PROMOTED_SUFFIXES) {
-      const capability = registryCapabilityFor(`example.${suffix}`);
+      const capability = required(registryCapabilityFor(`example.${suffix}`));
       assert.equal(capability.coverageState, 'fixture_verified', suffix);
       assert.equal(capability.explicitSuffixProfile, true, suffix);
       assert.ok(
         capability.documentationUrls.includes(`https://www.iana.org/domains/root/db/${suffix}.html`),
         `${suffix}: IANA provenance`,
       );
-      const diagnostic = registryAccessDiagnosticFor(`example.${suffix}`);
+      const diagnostic = required(registryAccessDiagnosticFor(`example.${suffix}`));
       assert.equal(diagnostic?.rdapAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic?.authority, 'context_only', suffix);
     }
@@ -659,19 +666,19 @@ describe('registry capability metadata', () => {
     assert.equal(expectedNoRdapSuffixes.length, 81);
     assert.equal(new Set(expectedNoRdapSuffixes).size, 81);
     for (const suffix of expectedNoRdapSuffixes) {
-      const capability = registryCapabilityFor(`example.${suffix}`);
+      const capability = required(registryCapabilityFor(`example.${suffix}`));
       assert.equal(capability.rdapAccessProfile, 'no-iana-service', suffix);
       assert.equal(registryAccessDiagnosticFor(`example.${suffix}`)?.authority, 'context_only', suffix);
       assert.match(capability.limitation, /no RDAP bootstrap service|no RDAP service/i, suffix);
     }
 
-    assert.equal(registryCapabilityFor('example.in').id, 'nixi-colon');
-    assert.equal(registryCapabilityFor('example.in').rdapAccessProfile, 'iana-bootstrap');
-    assert.equal(registryCapabilityFor('example.xn--2scrj9c').id, 'nixi-idn-colon');
-    assert.equal(registryCapabilityFor('example.tw').id, 'twnic-colon');
-    assert.equal(registryCapabilityFor('example.tw').rdapAccessProfile, 'iana-bootstrap');
-    assert.equal(registryCapabilityFor('example.xn--kpry57d').rdapAccessProfile, 'iana-bootstrap');
-    assert.equal(registryCapabilityFor('example.xn--kprw13d').id, 'twnic-no-rdap-colon');
+    assert.equal(required(registryCapabilityFor('example.in')).id, 'nixi-colon');
+    assert.equal(required(registryCapabilityFor('example.in')).rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(required(registryCapabilityFor('example.xn--2scrj9c')).id, 'nixi-idn-colon');
+    assert.equal(required(registryCapabilityFor('example.tw')).id, 'twnic-colon');
+    assert.equal(required(registryCapabilityFor('example.tw')).rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(required(registryCapabilityFor('example.xn--kpry57d')).rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(required(registryCapabilityFor('example.xn--kprw13d')).id, 'twnic-no-rdap-colon');
   });
 
   test('rejects malformed, numeric, overlong, and control-bearing inputs', () => {
@@ -700,7 +707,7 @@ describe('registry capability metadata', () => {
     for (const capability of listRegistryCapabilities()) {
       assert.ok(capability.verificationFiles.length > 0 || capability.documentationUrls.length > 0, `${capability.id}: verification sources`);
       for (const file of capability.verificationFiles) {
-        assert.equal(existsSync(resolve(__dirname, '..', file)), true, `${capability.id}: ${file}`);
+        assert.equal(existsSync(resolve(TEST_DIRECTORY, '..', file)), true, `${capability.id}: ${file}`);
       }
       for (const url of capability.documentationUrls) {
         const parsed = new URL(url);
@@ -721,26 +728,26 @@ describe('registry capability metadata', () => {
       limitation: 'The registry WHOIS service requires advance source-IP authorization. A failed or unavailable query is not evidence that the domain is unregistered.',
       authority: 'context_only',
     });
-    const vn = registryAccessDiagnosticFor('example.vn');
+    const vn = required(registryAccessDiagnosticFor('example.vn'));
     assert.equal(vn.whoisAccessProfile, 'no-iana-service');
     assert.equal(vn.rdapAccessProfile, 'no-iana-service');
     assert.match(vn.limitation, /official browser lookup is not integrated/i);
-    const ch = registryAccessDiagnosticFor('example.ch');
+    const ch = required(registryAccessDiagnosticFor('example.ch'));
     assert.equal(ch.whoisAccessProfile, 'registry-policy-restricted');
     assert.equal(ch.rdapAccessProfile, 'no-iana-service');
     assert.match(ch.limitation, /non-standard-port.*not integrated.*no RDAP service/i);
-    const gr = registryAccessDiagnosticFor('example.gr');
+    const gr = required(registryAccessDiagnosticFor('example.gr'));
     assert.equal(gr.whoisAccessProfile, 'no-iana-service');
     assert.equal(gr.rdapAccessProfile, 'no-iana-service');
     assert.match(gr.limitation, /no domain WHOIS or RDAP service.*not evidence/i);
-    const li = registryAccessDiagnosticFor('example.li');
+    const li = required(registryAccessDiagnosticFor('example.li'));
     assert.equal(li.whoisAccessProfile, 'registry-policy-restricted');
     assert.match(li.limitation, /official lookup.*not integrated.*no RDAP service/i);
-    const bv = registryAccessDiagnosticFor('example.bv');
+    const bv = required(registryAccessDiagnosticFor('example.bv'));
     assert.equal(bv.whoisAccessProfile, 'no-iana-service');
     assert.equal(bv.rdapAccessProfile, 'no-iana-service');
     assert.match(bv.limitation, /not opened.*no domain WHOIS or RDAP service.*live availability/i);
-    const greekIdn = registryAccessDiagnosticFor('example.ελ');
+    const greekIdn = required(registryAccessDiagnosticFor('example.ελ'));
     assert.equal(greekIdn.suffix, 'xn--qxam');
     assert.match(greekIdn.limitation, /no domain WHOIS or RDAP service.*not evidence/i);
     assert.equal(registryAccessDiagnosticFor('example.com'), null);
@@ -756,7 +763,7 @@ describe('registry capability metadata', () => {
 
   test('links every shared WHOIS fixture to a declared parser profile and scenario', () => {
     const capabilities = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
-    capabilities.set('iana-generic', registryCapabilityFor('example.unknown'));
+    capabilities.set('iana-generic', required(registryCapabilityFor('example.unknown')));
 
     for (const fixture of whoisFixtures) {
       const capability = capabilities.get(fixture.capabilityProfile);

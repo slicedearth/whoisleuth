@@ -1,13 +1,16 @@
-'use strict';
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import rdapFixtures from '../fixtures/rdap-registry-fixtures.mts';
+import {
   registryCapabilityFor,
   registryStandardsCoverageSnapshot,
-} = require('../lib/registry-capabilities.mts');
-const rdapFixtures = require('../fixtures/rdap-registry-fixtures');
+} from '../lib/registry-capabilities.mts';
+
+function required<T>(value: T | null | undefined): T {
+  assert.ok(value, 'Expected a registry capability for the reviewed exception.');
+  return value;
+}
 
 describe('registry standards coverage snapshot', () => {
   test('keeps the official-source population and RDAP totals internally consistent', () => {
@@ -49,7 +52,7 @@ describe('registry standards coverage snapshot', () => {
     const snapshot = registryStandardsCoverageSnapshot();
 
     for (const exception of snapshot.exceptions) {
-      const capability = registryCapabilityFor(`example.${exception.suffix}`);
+      const capability = required(registryCapabilityFor(`example.${exception.suffix}`));
       assert.equal(capability.explicitSuffixProfile, true);
       assert.equal(capability.registryClass, exception.registryClass);
       assert.equal(capability.rdapAccessProfile, exception.rdapAccessProfile);

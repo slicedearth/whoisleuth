@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createRequire } from 'node:module';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -26,6 +25,7 @@ import {
   generateConfusableProjection,
   renderConfusableProjectionModule,
 } from '../lib/unicode-confusable-projection.mts';
+import CALIBRATION_CASES from '../fixtures/idn-confusable-calibration.mts';
 
 type WritableLike = { write(value: string): unknown };
 type CalibrationCase = Readonly<{
@@ -58,8 +58,6 @@ export const MAX_TOTAL_CANDIDATE_GROWTH_RATIO = 0.5;
 export const MAX_SEED_CANDIDATE_GROWTH_RATIO = 0.75;
 export const MAX_CALIBRATION_SEEDS = 20;
 
-const require = createRequire(import.meta.url);
-const CALIBRATION_CASES = require('../fixtures/idn-confusable-calibration.js') as unknown;
 const CALIBRATION_SEEDS = Object.freeze([
   'scope',
   'figure',

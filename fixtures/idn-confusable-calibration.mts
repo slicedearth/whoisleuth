@@ -1,9 +1,15 @@
-'use strict';
-
-// Reserved, synthetic label pairs for comparing a proposed mapping with the
+// Bounded reserved, synthetic label pairs for comparing a proposed mapping with the
 // checked-in baseline. Expected matches describe visual skeleton equivalence,
 // not maliciousness, ownership, or activity.
-module.exports = Object.freeze([
+export interface IdnConfusableCalibrationCase {
+  id: string;
+  category: string;
+  reference: string;
+  observed: string;
+  expectedMatch: boolean;
+}
+
+const calibrationCases: readonly Readonly<IdnConfusableCalibrationCase>[] = Object.freeze([
   Object.freeze({
     id: 'whole-label-cyrillic',
     category: 'whole-label',
@@ -96,3 +102,5 @@ module.exports = Object.freeze([
     expectedMatch: false,
   }),
 ]);
+
+export default calibrationCases;

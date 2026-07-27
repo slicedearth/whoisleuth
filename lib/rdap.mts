@@ -527,8 +527,11 @@ async function fetchRegistrarRdapRecord(
         REGISTRAR_RDAP_TIMEOUT_MS
       );
     } catch (err) {
-      const detail = String(err && err.message ? err.message : 'request failed');
-      const outcome = err && err.name === 'AbortError' || /timed? out|time limit/i.test(detail)
+      const error = err && typeof err === 'object' && !Array.isArray(err)
+        ? err as UnknownRecord
+        : {};
+      const detail = typeof error.message === 'string' ? error.message : 'request failed';
+      const outcome = error.name === 'AbortError' || /timed? out|time limit/i.test(detail)
         ? 'timeout'
         : /exceeded \d+ bytes/i.test(detail) ? 'invalid_response' : 'network_error';
       throw registrarRdapError(endpoint, outcome, { detail });
@@ -1218,29 +1221,37 @@ function parseRdapObject(type: string, data: UnknownRecord): NormalizedRdapRecor
     const nameserverDetails = Array.isArray(data.nameservers)
       ? data.nameservers.slice(0, 200).map((ns) => {
           if (!ns || typeof ns !== 'object' || Array.isArray(ns)) return null;
-          const v4 = Array.isArray(ns.ipAddresses && ns.ipAddresses.v4) ? ns.ipAddresses.v4 : [];
-          const v6 = Array.isArray(ns.ipAddresses && ns.ipAddresses.v6) ? ns.ipAddresses.v6 : [];
+          const nameserver = ns as UnknownRecord;
+          const ipAddresses = nameserver.ipAddresses && typeof nameserver.ipAddresses === 'object' && !Array.isArray(nameserver.ipAddresses)
+            ? nameserver.ipAddresses as UnknownRecord
+            : {};
+          const v4: unknown[] = Array.isArray(ipAddresses.v4) ? ipAddresses.v4 : [];
+          const v6: unknown[] = Array.isArray(ipAddresses.v6) ? ipAddresses.v6 : [];
           if (v4.length + v6.length > 20) nameserverAddressesTruncated = true;
           const addresses = [
             ...v4.map((address) => boundedString(address, 80)).filter((address) => address && net.isIP(address) === 4),
             ...v6.map((address) => boundedString(address, 80)).filter((address) => address && net.isIP(address) === 6),
           ].slice(0, 20);
           return {
-            name: boundedString(ns.ldhName || ns.unicodeName, 253),
+            name: boundedString(nameserver.ldhName || nameserver.unicodeName, 253),
             addresses,
           };
         }).filter((ns): ns is NonNullable<typeof ns> => Boolean(ns && ns.name))
       : [];
-    const secureDns = data.secureDNS && typeof data.secureDNS === 'object' && !Array.isArray(data.secureDNS)
-      ? data.secureDNS : null;
+    const secureDns: UnknownRecord | null = data.secureDNS
+      && typeof data.secureDNS === 'object'
+      && !Array.isArray(data.secureDNS)
+      ? data.secureDNS as UnknownRecord
+      : null;
     const variantInfo = normalizeDomainVariants(data.variants);
     const dsData = secureDns && Array.isArray(secureDns.dsData)
       ? secureDns.dsData.slice(0, 50).map((ds) => {
           if (!ds || typeof ds !== 'object' || Array.isArray(ds)) return null;
-          const digest = boundedString(ds.digest, 512);
+          const record = ds as UnknownRecord;
+          const digest = boundedString(record.digest, 512);
           const normalized = {
-            keyTag: boundedInteger(ds.keyTag, 0, 65535), algorithm: boundedInteger(ds.algorithm, 0, 255),
-            digestType: boundedInteger(ds.digestType, 0, 255),
+            keyTag: boundedInteger(record.keyTag, 0, 65535), algorithm: boundedInteger(record.algorithm, 0, 255),
+            digestType: boundedInteger(record.digestType, 0, 255),
             digest: digest && digest.length % 2 === 0 && /^[0-9a-f]+$/i.test(digest) ? digest : null,
           };
           return Object.values(normalized).every((value) => value !== null) ? normalized : null;

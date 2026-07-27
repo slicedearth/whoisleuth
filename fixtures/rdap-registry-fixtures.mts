@@ -1,11 +1,17 @@
-'use strict';
-
-// Anonymized synthetic objects model representative domain-registry and RIR
+// Bounded anonymized synthetic objects model representative domain-registry and RIR
 // response shapes without retaining third-party registration data. Expected
 // values intentionally cover the shared normalized contract rather than every
 // upstream property, so fixtures remain readable as additive fields evolve.
 
-const entity = (handle, roles, name, email) => ({
+export interface RdapRegistryFixture {
+  name: string;
+  type: string;
+  serviceFamily?: string;
+  input: Record<string, unknown>;
+  expected: Record<string, unknown>;
+}
+
+const entity = (handle: string, roles: string[], name: string, email: string | null): Record<string, unknown> => ({
   handle,
   roles,
   vcardArray: ['vcard', [
@@ -14,7 +20,7 @@ const entity = (handle, roles, name, email) => ({
   ]],
 });
 
-module.exports = [
+const fixtures: RdapRegistryFixture[] = [
   {
     name: 'thick domain registry object',
     type: 'domain',
@@ -188,3 +194,5 @@ module.exports = [
     },
   },
 ];
+
+export default fixtures;

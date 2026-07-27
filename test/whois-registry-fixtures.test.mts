@@ -1,9 +1,8 @@
-'use strict';
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const { parseWhoisChain } = require('../lib/whois.mts');
-const fixtures = require('../fixtures/whois-registry-fixtures');
+import fixtures from '../fixtures/whois-registry-fixtures.mts';
+import { parseWhoisChain } from '../lib/whois.mts';
 
 const PARSER_FAMILY_ALIASES = [
   { profile: 'aeda-colon', baseSuffix: 'ae', aliases: ['xn--mgbaam7a8h'] },
@@ -62,7 +61,7 @@ const PARSER_FAMILY_ALIASES = [
   { profile: 'twnic-colon', baseSuffix: 'tw', aliases: ['xn--kprw13d', 'xn--kpry57d'] },
 ];
 
-function escaped(value) {
+function escaped(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -128,10 +127,13 @@ describe('WHOIS registry compatibility fixtures', () => {
         && candidate.scenario === 'registered');
       assert.ok(fixture, `${family.profile}: registered fixture`);
       const baseDomain = fixture.expected.domainName;
+      if (typeof baseDomain !== 'string') {
+        throw new TypeError(`${family.profile}: expected domain fixture`);
+      }
       assert.match(baseDomain, new RegExp(`\\.${escaped(family.baseSuffix)}$`, 'i'));
 
       for (const alias of family.aliases) {
-        const aliasDomain = baseDomain.replace(
+        const aliasDomain: string = baseDomain.replace(
           new RegExp(`${escaped(family.baseSuffix)}$`, 'i'),
           alias,
         );
