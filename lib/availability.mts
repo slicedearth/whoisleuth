@@ -79,6 +79,11 @@ function errorRecord(value: unknown): UnknownRecord {
     : {};
 }
 
+function rdapEventDate(events: UnknownRecord[], action: string): string | null {
+  const date = events.find((event) => event.action === action)?.date;
+  return typeof date === 'string' ? date : null;
+}
+
 type AvailabilityOptions = {
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
@@ -91,9 +96,9 @@ type AvailabilityOptions = {
   fetchHomepage?: (domain: string) => Promise<HomepageResult>;
   fetchFaviconHash?: typeof fetchFaviconHash;
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
-  rdapRecord?: Awaited<ReturnType<typeof fetchRdapRecord>> | null;
+  rdapRecord?: unknown;
   whoisChain?: Awaited<ReturnType<typeof buildWhoisChain>> | null;
-  rdapRecordPromise?: Promise<Awaited<ReturnType<typeof fetchRdapRecord>> | null>;
+  rdapRecordPromise?: Promise<unknown>;
   whoisChainPromise?: Promise<Awaited<ReturnType<typeof buildWhoisChain>> | null>;
   dnsDelegation?: DnsDelegation | null;
   resolveNs?: (domain: string) => Promise<string[]>;
@@ -406,39 +411,53 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       // separate fetch+parse here - same registry data either way, and this
       // also picks up that function's short-TTL cache (lib/lookup-cache.mts)
       // and upstream timeout for free.
-      const record = hasPreloadedRdapPromise
+      const recordValue = hasPreloadedRdapPromise
         ? await options.rdapRecordPromise
         : hasPreloadedRdap
           ? options.rdapRecord
           : await fetchRdapRecord('domain', domain);
-      if (record) {
-        rdapServer = record.rdapServer;
-        if (record.upstreamStatus === 404) {
+      const record = errorRecord(recordValue);
+      const recordRdapServer = typeof record.rdapServer === 'string' ? record.rdapServer : null;
+      const upstreamStatus = typeof record.upstreamStatus === 'number' ? record.upstreamStatus : null;
+      if (Object.keys(record).length) {
+        rdapServer = recordRdapServer;
+        if (upstreamStatus === 404) {
           return {
             state: 'available',
             confidence: 'high',
             detail: 'The registry\'s RDAP service has no record for this domain.',
             source: 'rdap',
-            rdapServer: record.rdapServer,
+            rdapServer: recordRdapServer,
           };
         }
-        if (record.parsed) {
-          const parsed = record.parsed;
+        const parsed = errorRecord(record.parsed);
+        if (Object.keys(parsed).length) {
           statuses = Array.isArray(parsed.statuses)
             ? parsed.statuses.filter((status: unknown): status is string => typeof status === 'string').map((status: string) => status.toLowerCase())
             : [];
-          nameservers = Array.isArray(parsed.nameservers) ? parsed.nameservers : [];
+          nameservers = Array.isArray(parsed.nameservers)
+            ? parsed.nameservers.filter((nameserver: unknown): nameserver is string => typeof nameserver === 'string')
+            : [];
           registrar = compactContact(parsed.registrar);
           registrant = compactContact(parsed.registrant);
           abuse = compactContact(parsed.abuse);
-          const events = Array.isArray(parsed.events) ? parsed.events : [];
-          createdDate = parsed.lifecycle?.createdDate
-            || (events.find((event: UnknownRecord) => event.action === 'registration') || {}).date || null;
-          expiryDate = parsed.lifecycle?.expiryDate
-            || (events.find((event: UnknownRecord) => event.action === 'expiration') || {}).date || null;
-          createdDateIso = parsed.lifecycle?.createdDateIso || registryDateIso(createdDate);
-          expiryDateIso = parsed.lifecycle?.expiryDateIso || registryDateIso(expiryDate);
-          dnssec = parsed.dnssec || null;
+          const events = Array.isArray(parsed.events)
+            ? parsed.events.map(errorRecord)
+            : [];
+          const lifecycle = errorRecord(parsed.lifecycle);
+          createdDate = typeof lifecycle.createdDate === 'string'
+            ? lifecycle.createdDate
+            : rdapEventDate(events, 'registration');
+          expiryDate = typeof lifecycle.expiryDate === 'string'
+            ? lifecycle.expiryDate
+            : rdapEventDate(events, 'expiration');
+          createdDateIso = typeof lifecycle.createdDateIso === 'string'
+            ? lifecycle.createdDateIso
+            : registryDateIso(createdDate);
+          expiryDateIso = typeof lifecycle.expiryDateIso === 'string'
+            ? lifecycle.expiryDateIso
+            : registryDateIso(expiryDate);
+          dnssec = typeof parsed.dnssec === 'string' ? parsed.dnssec : null;
           rdapFound = true;
           registrationSource = 'rdap';
         }

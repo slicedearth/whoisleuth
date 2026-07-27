@@ -109,7 +109,9 @@ describe('runUnifiedLookup', () => {
     assert.equal(rdapCalls, 1);
     assert.equal(whoisCalls, 1);
     assert.equal(availabilityCalls, 1);
-    assert.equal(requiredValue(successfulRdap(result).parsed).domain, 'EXAMPLE.COM');
+    const parsedRdap = requiredValue(successfulRdap(result).parsed);
+    assert.ok('domain' in parsedRdap);
+    assert.equal(parsedRdap.domain, 'EXAMPLE.COM');
     assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');

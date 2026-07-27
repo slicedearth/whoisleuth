@@ -1,11 +1,20 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { parseRdap } from '../lib/rdap.mts';
+import type { NormalizedRdapRecordFor } from '../lib/rdap.mts';
+import { requiredValue } from './value-assertions.mts';
 
-function parseFixture(...args: Parameters<typeof parseRdap>): NonNullable<ReturnType<typeof parseRdap>> {
-  const parsed = parseRdap(...args);
+function parseFixture<const T extends string>(
+  type: T,
+  data: unknown,
+): NormalizedRdapRecordFor<T> {
+  const parsed = parseRdap(type, data);
   assert.ok(parsed);
   return parsed;
+}
+
+function arrayValue<T>(values: readonly T[], index: number): T {
+  return requiredValue(values[index]);
 }
 
 describe('structured RDAP metadata', () => {
@@ -47,12 +56,12 @@ describe('structured RDAP metadata', () => {
     assert.equal(parsed.unicodeDomain, 'bücher.example');
     assert.equal(parsed.port43, 'whois.example');
     assert.equal(parsed.registrarIanaId, '9999');
-    assert.equal(parsed.registrar.address, '1 Registry Way, Melbourne, VIC, 3000, AU');
-    assert.deepEqual(parsed.nameserverDetails[0].addresses, ['192.0.2.10', '2001:db8::10']);
+    assert.equal(requiredValue(parsed.registrar).address, '1 Registry Way, Melbourne, VIC, 3000, AU');
+    assert.deepEqual(arrayValue(parsed.nameserverDetails, 0).addresses, ['192.0.2.10', '2001:db8::10']);
     assert.equal(parsed.dsData.length, 1);
-    assert.deepEqual(parsed.dsData[0], { keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' });
-    assert.equal(parsed.notices[0].title, 'Terms');
-    assert.equal(parsed.remarks[0].descriptions[0], 'Data redacted by policy.');
+    assert.deepEqual(arrayValue(parsed.dsData, 0), { keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' });
+    assert.equal(arrayValue(parsed.notices, 0).title, 'Terms');
+    assert.equal(arrayValue(arrayValue(parsed.remarks, 0).descriptions, 0), 'Data redacted by policy.');
   });
 
   test('bounds notice text copied into the structured response', () => {
@@ -68,7 +77,7 @@ describe('structured RDAP metadata', () => {
     });
 
     assert.equal(parsed.notices.length, 12);
-    assert.equal(parsed.notices[0].descriptions[0].length, 800);
+    assert.equal(arrayValue(arrayValue(parsed.notices, 0).descriptions, 0).length, 800);
     assert.equal(parsed.noticesTruncated, true);
     assert.equal(parsed.parentHandle, 'PARENT-AS-BLOCK');
     assert.equal(parsed.port43, 'whois.rir.example');
@@ -103,12 +112,12 @@ describe('structured RDAP metadata', () => {
     assert.equal(parsed.linksTruncated, true);
     assert.equal(parsed.notices.length, 12);
     assert.equal(parsed.noticesTruncated, true);
-    assert.equal(parsed.remarks[0].title.length, 160);
-    assert.equal(parsed.remarks[0].descriptions[0].length, 800);
+    assert.equal(arrayValue(parsed.remarks, 0).title.length, 160);
+    assert.equal(arrayValue(arrayValue(parsed.remarks, 0).descriptions, 0).length, 800);
     assert.equal(parsed.remarksTruncated, true);
     assert.equal(parsed.nameservers.length, 200);
     assert.equal(parsed.nameserversTruncated, true);
-    assert.equal(parsed.nameserverDetails[0].addresses.length, 20);
+    assert.equal(arrayValue(parsed.nameserverDetails, 0).addresses.length, 20);
     assert.equal(parsed.nameserverAddressesTruncated, true);
     assert.equal(parsed.dsData.length, 50);
     assert.equal(parsed.dsDataTruncated, true);
@@ -128,8 +137,8 @@ describe('structured RDAP metadata', () => {
       ],
     });
 
-    assert.equal(parsed.events[2].action, 'registration');
-    assert.equal(parsed.events[2].actor, 'Registry');
+    assert.equal(arrayValue(parsed.events, 2).action, 'registration');
+    assert.equal(arrayValue(parsed.events, 2).actor, 'Registry');
     assert.deepEqual(parsed.lifecycle, {
       createdDate: '2020-01-01T00:00:00Z',
       reregistrationDate: null,
@@ -169,7 +178,7 @@ describe('structured RDAP metadata', () => {
       ldhName: 'EXAMPLE.COM',
       events: [{ eventAction: 'last changed', eventDate: 'not-a-date' }],
     });
-    assert.equal(parsed.events[0].date, 'not-a-date');
+    assert.equal(arrayValue(parsed.events, 0).date, 'not-a-date');
     assert.equal(parsed.lifecycle.updatedDate, null);
     assert.equal(parsed.lifecycle.updatedDateIso, null);
   });
@@ -214,7 +223,7 @@ describe('structured RDAP metadata', () => {
       'object truncated due to unexplainable reason',
       'result set truncated due to authorization',
     ]);
-    assert.equal(parsed.notices[0].type, 'result set truncated due to authorization');
+    assert.equal(arrayValue(parsed.notices, 0).type, 'result set truncated due to authorization');
     assert.equal(parsed.noticesTruncated, false);
     assert.equal(parsed.remarksTruncated, false);
   });
@@ -278,17 +287,18 @@ describe('structured RDAP metadata', () => {
       }],
     });
 
-    assert.equal(parsed.registrar.name, 'Primary Registrar');
-    assert.equal(parsed.registrar.email, 'first@example.com');
-    assert.deepEqual(parsed.registrar.emails, ['first@example.com', 'second@example.com']);
-    assert.deepEqual(parsed.registrar.phones, ['+61 1', '+61 2']);
-    assert.equal(parsed.registrar.address, '1 Main St, Melbourne, VIC, 3000, AU');
-    assert.equal(parsed.registrar.addresses.length, 2);
+    const registrar = requiredValue(parsed.registrar);
+    assert.equal(registrar.name, 'Primary Registrar');
+    assert.equal(registrar.email, 'first@example.com');
+    assert.deepEqual(registrar.emails, ['first@example.com', 'second@example.com']);
+    assert.deepEqual(registrar.phones, ['+61 1', '+61 2']);
+    assert.equal(registrar.address, '1 Main St, Melbourne, VIC, 3000, AU');
+    assert.equal(registrar.addresses.length, 2);
     assert.deepEqual(
-      parsed.entitiesByRole.abuse.map((entity: { handle: unknown }) => entity.handle),
+      requiredValue(parsed.entitiesByRole.abuse).map((entity: { handle: unknown }) => entity.handle),
       ['ABUSE-1', 'ABUSE-2'],
     );
-    assert.equal(parsed.abuse.handle, 'ABUSE-1');
+    assert.equal(requiredValue(parsed.abuse).handle, 'ABUSE-1');
   });
 
   test('bounds contacts per role, repeated vCard values, public IDs, and links', () => {
@@ -301,11 +311,12 @@ describe('structured RDAP metadata', () => {
     }));
     const parsed = parseFixture('domain', { ldhName: 'EXAMPLE.COM', entities });
 
-    assert.equal(parsed.entitiesByRole.technical.length, 5);
-    assert.equal(parsed.technical.emails.length, 8);
-    assert.equal(parsed.technical.publicIds.length, 20);
-    assert.equal(parsed.technical.links.length, 10);
-    assert.equal(parsed.technical.truncated, true);
+    const technical = requiredValue(parsed.technical);
+    assert.equal(requiredValue(parsed.entitiesByRole.technical).length, 5);
+    assert.equal(technical.emails.length, 8);
+    assert.equal(technical.publicIds.length, 20);
+    assert.equal(technical.links.length, 10);
+    assert.equal(technical.truncated, true);
     assert.equal(parsed.entitiesTruncated, true);
     assert.deepEqual(parsed.truncatedEntityRoles, ['technical']);
   });
@@ -331,10 +342,11 @@ describe('structured RDAP metadata', () => {
     });
 
     assert.equal(parsed.links.length, 1);
-    assert.equal(parsed.links[0].href, 'https://rdap.example/domain/example.com');
-    assert.equal(parsed.registrant.handle, null);
-    assert.deepEqual(parsed.registrant.emails, ['valid@example.com']);
-    assert.equal(parsed.registrant.links.length, 1);
+    const registrant = requiredValue(parsed.registrant);
+    assert.equal(arrayValue(parsed.links, 0).href, 'https://rdap.example/domain/example.com');
+    assert.equal(registrant.handle, null);
+    assert.deepEqual(registrant.emails, ['valid@example.com']);
+    assert.equal(registrant.links.length, 1);
     assert.equal(parsed.entitiesByRole['unrecognized-role'], undefined);
   });
 
@@ -355,10 +367,10 @@ describe('structured RDAP metadata', () => {
     cursor.entities.push(root);
 
     const parsed = parseFixture('domain', { ldhName: 'EXAMPLE.COM', entities: [root] });
-    assert.equal(parsed.entitiesByRole.registrar[0].handle, 'LEVEL-0');
-    assert.equal(parsed.entitiesByRole.noc[0].handle, 'LEVEL-6');
+    assert.equal(arrayValue(requiredValue(parsed.entitiesByRole.registrar), 0).handle, 'LEVEL-0');
+    assert.equal(arrayValue(requiredValue(parsed.entitiesByRole.noc), 0).handle, 'LEVEL-6');
     assert.deepEqual(
-      parsed.entitiesByRole.registrant.map((entity: { handle: unknown }) => entity.handle),
+      requiredValue(parsed.entitiesByRole.registrant).map((entity: { handle: unknown }) => entity.handle),
       ['LEVEL-1'],
     );
   });
@@ -453,7 +465,7 @@ describe('structured RDAP metadata', () => {
       name: 'Registry Domain ID', reason: 'Server Policy', method: 'removal',
       pathLanguage: 'jsonpath', prePath: '$.handle', postPath: null, replacementPath: null,
     });
-    assert.equal(parsed.redactions[1].name, 'Registrant Email');
+    assert.equal(arrayValue(parsed.redactions, 1).name, 'Registrant Email');
     assert.equal(parsed.redactionsTruncated, false);
   });
 
@@ -487,8 +499,9 @@ describe('structured RDAP metadata', () => {
     });
 
     assert.equal(parsed.variants.length, 20);
-    assert.deepEqual(parsed.variants[0].relation, ['registered', 'conjoined']);
-    assert.equal(parsed.variants[0].variantNames[0].unicodeName, 'bücher.example');
+    const firstVariant = arrayValue(parsed.variants, 0);
+    assert.deepEqual(firstVariant.relation, ['registered', 'conjoined']);
+    assert.equal(arrayValue(firstVariant.variantNames, 0).unicodeName, 'bücher.example');
     assert.equal(parsed.variantsTruncated, true);
   });
 });

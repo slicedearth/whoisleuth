@@ -140,7 +140,7 @@ describe('registrar RDAP fetching', () => {
     assert.equal(result.endpoint, `https://registrar.test/domain/${domain}`);
     assert.ok(result.parsed);
     assert.equal(result.parsed.domain, domain.toUpperCase());
-    assert.equal(result.parsed.abuse.emails[0], 'abuse@registrar.test');
+    assert.equal(requiredValue(requiredValue(result.parsed.abuse).emails[0]), 'abuse@registrar.test');
     assert.equal(result.attempt.outcome, 'success');
     assert.equal(result.attempt.selected, true);
     assert.deepEqual(record, before);

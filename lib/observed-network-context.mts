@@ -26,7 +26,7 @@ type RdapAttempt = {
   selected: boolean;
 };
 type ObservedNetworkContextOptions = {
-  fetchRdapRecord?: typeof fetchRdapRecord;
+  fetchRdapRecord?: (type: string, value: string) => Promise<unknown>;
   now?: () => number;
   observedAt?: () => string;
 };

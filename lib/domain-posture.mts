@@ -504,7 +504,10 @@ async function checkDomainPosture(domain: string, { dkimSelectors = [] }: { dkim
     ? { value: null, error: 'RDAP did not return a domain record.' }
     : 'error' in rdap
       ? { value: null, error: rdap.error }
-    : { value: rdap.parsed?.dnssec || null, error: null };
+    : {
+        value: rdap.parsed && 'dnssec' in rdap.parsed ? rdap.parsed.dnssec : null,
+        error: null,
+      };
   const report = buildPostureReport(domain, { spf, dmarc, mx, caa, mtaStsDns, mtaStsPolicy, tlsRpt, bimi, dkim, dnssec });
   return { ...report, checkedAt: new Date().toISOString(), dkimSelectors: selectors };
 }

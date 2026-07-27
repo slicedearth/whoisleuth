@@ -8,7 +8,7 @@ import { cached } from './lookup-cache.mts';
 import { safeFetch, safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
 import { registryDateIso } from './registry-dates.mts';
 
-type LooseRecord = Record<string, any>;
+type LooseRecord = Record<string, unknown>;
 type BootstrapData = { services: Array<[string[], string[]]> };
 type BootstrapOptions = {
   now?: () => number;
@@ -29,13 +29,185 @@ type RdapAttempt = {
   detail: string | null;
   selected: boolean;
 };
-type NormalizedRdapRecord = LooseRecord;
-type EntitySummary = LooseRecord & { roles: string[]; truncated: boolean };
+type NormalizedRdapLink = {
+  rel: string | null;
+  href: string;
+  type: string | null;
+  title: string | null;
+};
+type NormalizedRdapPublicId = { type: string; identifier: string };
+type NormalizedRdapTextBlock = {
+  title: string;
+  type: string | null;
+  descriptions: string[];
+};
+type NormalizedRdapRedaction = {
+  name: string | null;
+  reason: string | null;
+  method: string | null;
+  pathLanguage: string | null;
+  prePath: string | null;
+  postPath: string | null;
+  replacementPath: string | null;
+};
+type NormalizedRdapVariant = {
+  relation: string[];
+  idnTable: string | null;
+  variantNames: Array<{ ldhName: string | null; unicodeName: string | null }>;
+};
+type NormalizedRdapNameserver = { name: string; addresses: string[] };
+type NormalizedRdapDsData = {
+  keyTag: number;
+  algorithm: number;
+  digestType: number;
+  digest: string;
+};
+type NormalizedRdapLifecycle = {
+  createdDate: string | null;
+  reregistrationDate: string | null;
+  expiryDate: string | null;
+  updatedDate: string | null;
+  transferDate: string | null;
+  deletionDate: string | null;
+  reinstantiationDate: string | null;
+  databaseUpdatedDate: string | null;
+  createdDateIso: string | null;
+  reregistrationDateIso: string | null;
+  expiryDateIso: string | null;
+  updatedDateIso: string | null;
+  transferDateIso: string | null;
+  deletionDateIso: string | null;
+  reinstantiationDateIso: string | null;
+  databaseUpdatedDateIso: string | null;
+};
+type EntitySummary = {
+  handle: string | null;
+  roles: string[];
+  name: string | null;
+  names: string[];
+  org: string | null;
+  organizations: string[];
+  email: string | null;
+  emails: string[];
+  phone: string | null;
+  phones: string[];
+  address: string | null;
+  addresses: string[];
+  publicIds: NormalizedRdapPublicId[];
+  links: NormalizedRdapLink[];
+  truncated: boolean;
+};
 type NormalizedRdapEvent = { action: string | null; date: string | null; actor: string | null };
+type NormalizedRdapCommonRecord = {
+  objectClassName: string | null;
+  language: string | null;
+  conformance: string[];
+  conformanceTruncated: boolean;
+  redactions: NormalizedRdapRedaction[];
+  redactionsTruncated: boolean;
+  port43: string | null;
+  parentHandle: string | null;
+  statuses: string[];
+  statusesTruncated: boolean;
+  events: NormalizedRdapEvent[];
+  eventsTruncated: boolean;
+  lifecycle: NormalizedRdapLifecycle;
+  links: NormalizedRdapLink[];
+  linksTruncated: boolean;
+  notices: NormalizedRdapTextBlock[];
+  noticesTruncated: boolean;
+  remarks: NormalizedRdapTextBlock[];
+  remarksTruncated: boolean;
+  serverTruncated: boolean;
+  serverTruncationReasons: string[];
+};
+export type NormalizedRdapDomainRecord = NormalizedRdapCommonRecord & {
+  domain: string | null;
+  unicodeDomain: string | null;
+  handle: string | null;
+  nameservers: string[];
+  nameserverDetails: NormalizedRdapNameserver[];
+  nameserversTruncated: boolean;
+  nameserverAddressesTruncated: boolean;
+  dnssec: 'Signed' | 'Unsigned' | 'Unknown';
+  zoneSigned: boolean | null;
+  delegationSigned: boolean | null;
+  dsData: NormalizedRdapDsData[];
+  dsDataTruncated: boolean;
+  variants: NormalizedRdapVariant[];
+  variantsTruncated: boolean;
+  registrarIanaId: string | null;
+  entitiesByRole: Record<string, EntitySummary[]>;
+  entitiesTruncated: boolean;
+  truncatedEntityRoles: string[];
+  registrar: EntitySummary | null;
+  registrant: EntitySummary | null;
+  administrative: EntitySummary | null;
+  technical: EntitySummary | null;
+  billing: EntitySummary | null;
+  abuse: EntitySummary | null;
+};
+export type NormalizedRdapNetworkRecord = NormalizedRdapCommonRecord & {
+  handle: string | null;
+  name: string | null;
+  startAddress: string | null;
+  endAddress: string | null;
+  cidrs: string[];
+  cidrsTruncated: boolean;
+  country: string | null;
+  networkType: string | null;
+  entitiesByRole: Record<string, EntitySummary[]>;
+  entitiesTruncated: boolean;
+  truncatedEntityRoles: string[];
+  org: EntitySummary | null;
+  abuse: EntitySummary | null;
+};
+export type NormalizedRdapAutnumRecord = NormalizedRdapCommonRecord & {
+  handle: string | null;
+  name: string | null;
+  startAutnum: number | null;
+  endAutnum: number | null;
+  country: string | null;
+  autnumType: string | null;
+  entitiesByRole: Record<string, EntitySummary[]>;
+  entitiesTruncated: boolean;
+  truncatedEntityRoles: string[];
+  org: EntitySummary | null;
+  abuse: EntitySummary | null;
+};
+export type NormalizedRdapRecord =
+  | NormalizedRdapDomainRecord
+  | NormalizedRdapNetworkRecord
+  | NormalizedRdapAutnumRecord;
+export type RdapType = 'domain' | 'ipv4' | 'ipv6' | 'asn';
+export type NormalizedRdapRecordFor<T extends string> =
+  T extends 'domain' ? NormalizedRdapDomainRecord
+    : T extends 'ipv4' | 'ipv6' ? NormalizedRdapNetworkRecord
+      : T extends 'asn' ? NormalizedRdapAutnumRecord
+        : NormalizedRdapRecord;
+export type RdapLookupRecord<TRecord extends NormalizedRdapRecord = NormalizedRdapRecord> = {
+  rdapServer: string;
+  transportSecurity: 'https' | 'http';
+  upstreamStatus: number;
+  fetchedAt: string;
+  data: unknown;
+  parsed: TRecord | null;
+  attempts: RdapAttempt[];
+};
+type RegistryRdapLinkSource = {
+  rdapServer?: unknown;
+  parsed?: unknown;
+};
 
 function errorProperty(value: unknown, key: string): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return (value as LooseRecord)[key];
+}
+
+function recordOrNull(value: unknown): LooseRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as LooseRecord
+    : null;
 }
 
 const BOOTSTRAP_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -331,6 +503,9 @@ function validateRdapResponse(type: string, requestedValue: string, parsed: Norm
   }
 
   if (type === 'domain') {
+    if (!('domain' in parsed)) {
+      return { valid: false, detail: 'The response did not contain a domain RDAP object.' };
+    }
     const requested = canonicalDomain(requestedValue);
     const returned = canonicalDomain(parsed.domain);
     if (!requested || !returned || requested !== returned) {
@@ -340,28 +515,42 @@ function validateRdapResponse(type: string, requestedValue: string, parsed: Norm
   }
 
   if (type === 'asn') {
+    if (!('startAutnum' in parsed)) {
+      return { valid: false, detail: 'The response did not contain an autnum RDAP object.' };
+    }
     const requested = Number(String(requestedValue).replace(/^AS/i, ''));
+    const startAutnum = parsed.startAutnum;
+    const endAutnum = parsed.endAutnum;
     if (!Number.isSafeInteger(requested)
-      || !Number.isSafeInteger(parsed.startAutnum)
-      || !Number.isSafeInteger(parsed.endAutnum)
-      || parsed.startAutnum > parsed.endAutnum
-      || requested < parsed.startAutnum
-      || requested > parsed.endAutnum) {
+      || typeof startAutnum !== 'number'
+      || !Number.isSafeInteger(startAutnum)
+      || typeof endAutnum !== 'number'
+      || !Number.isSafeInteger(endAutnum)
+      || startAutnum > endAutnum
+      || requested < startAutnum
+      || requested > endAutnum) {
       return { valid: false, detail: 'The response AS range did not cover the requested ASN.' };
     }
     return { valid: true, detail: null };
   }
 
+  if (!('startAddress' in parsed)) {
+    return { valid: false, detail: 'The response did not contain an IP network RDAP object.' };
+  }
   const version = type === 'ipv4' ? 4 : 6;
+  const startAddress = parsed.startAddress;
+  const endAddress = parsed.endAddress;
   if (net.isIP(requestedValue) !== version
-    || net.isIP(parsed.startAddress) !== version
-    || net.isIP(parsed.endAddress) !== version) {
+    || typeof startAddress !== 'string'
+    || net.isIP(startAddress) !== version
+    || typeof endAddress !== 'string'
+    || net.isIP(endAddress) !== version) {
     return { valid: false, detail: 'The response did not contain a compatible IP range.' };
   }
   const convert = version === 4 ? ipv4ToLong : ipv6ToComparableBigInt;
   const requested = convert(requestedValue);
-  const start = convert(parsed.startAddress);
-  const end = convert(parsed.endAddress);
+  const start = convert(startAddress);
+  const end = convert(endAddress);
   if (requested === null || start === null || end === null
     || start > end || requested < start || requested > end) {
     return { valid: false, detail: 'The response IP range did not cover the requested address.' };
@@ -494,12 +683,11 @@ function selectRegistrarRdapLink(domain: string, links: unknown, registryEndpoin
  * transient errors reject so the cache never retains them.
  *
  * @param {string} domain
- * @param {any} registryRecord
  * @param {{fetchUpstream?: Function}} [options]
  */
 async function fetchRegistrarRdapRecord(
   domain: string,
-  registryRecord: LooseRecord | null | undefined,
+  registryRecord: RegistryRdapLinkSource | null | undefined,
   options: { fetchUpstream?: RdapFetch } = {},
 ) {
   const canonical = canonicalDomain(domain);
@@ -507,10 +695,14 @@ async function fetchRegistrarRdapRecord(
   const fetchUpstream = options.fetchUpstream || fetchWithTimeout;
 
   return cached(`rdap-registrar:domain:${canonical}`, async () => {
+    const registryParsed = recordOrNull(registryRecord?.parsed);
+    const registryEndpoint = typeof registryRecord?.rdapServer === 'string'
+      ? registryRecord.rdapServer
+      : null;
     const endpoint = selectRegistrarRdapLink(
       canonical,
-      registryRecord?.parsed?.links,
-      registryRecord?.rdapServer || null
+      registryParsed?.links,
+      registryEndpoint
     );
     if (!endpoint) {
       return {
@@ -546,7 +738,7 @@ async function fetchRegistrarRdapRecord(
     if (selectRegistrarRdapLink(
       canonical,
       [{ rel: 'related', href: selectedEndpoint }],
-      registryRecord?.rdapServer || null
+      registryEndpoint
     ) !== selectedEndpoint) {
       throw registrarRdapError(selectedEndpoint, 'invalid_response', {
         status: upstream.status,
@@ -628,12 +820,12 @@ async function fetchRegistrarRdapRecord(
 // how to report that as a 404). Cached briefly (lib/lookup-cache.mts) since
 // checkDomainAvailability() also calls this for the same domain a fast
 // scan and a follow-up deep-check both look up in quick succession.
-async function fetchRdapFromBases(
-  type: string,
+async function fetchRdapFromBases<const T extends string>(
+  type: T,
   value: string,
   bases: unknown,
   fetchUpstream: RdapFetch = fetchWithTimeout,
-) {
+): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
   const candidates = uniqueBases(bases).slice(0, MAX_RDAP_ENDPOINTS);
   if (candidates.length === 0) return null;
 
@@ -730,7 +922,10 @@ async function fetchRdapFromBases(
   );
 }
 
-async function fetchRdapRecord(type: string, value: string) {
+async function fetchRdapRecord<const T extends string>(
+  type: T,
+  value: string,
+): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
   return cached(`rdap:${type}:${value}`, async () => {
     const bases = await findRdapBases(type, value);
     return fetchRdapFromBases(type, value, bases);
@@ -906,7 +1101,7 @@ function redactionLabel(value: unknown): string | null {
 
 function normalizeRedactions(redacted: unknown) {
   if (!Array.isArray(redacted)) return { redactions: [], redactionsTruncated: false };
-  const redactions: LooseRecord[] = [];
+  const redactions: NormalizedRdapRedaction[] = [];
   const candidates = redacted.slice(0, MAX_RDAP_REDACTIONS * 2);
   let stoppedAt = candidates.length;
   for (let index = 0; index < candidates.length; index += 1) {
@@ -937,7 +1132,7 @@ function normalizeRedactions(redacted: unknown) {
 
 function normalizeDomainVariants(value: unknown) {
   if (!Array.isArray(value)) return { variants: [], variantsTruncated: false };
-  const variants: LooseRecord[] = [];
+  const variants: NormalizedRdapVariant[] = [];
   let truncated = value.length > MAX_RDAP_VARIANT_GROUPS;
   for (const groupValue of value.slice(0, MAX_RDAP_VARIANT_GROUPS)) {
     if (!groupValue || typeof groupValue !== 'object' || Array.isArray(groupValue)) continue;
@@ -976,7 +1171,7 @@ function textWouldTruncate(value: unknown, maxLength: number): boolean {
 
 function summarizeTextBlocks(blocks: unknown) {
   if (!Array.isArray(blocks)) return { items: [], truncated: false };
-  const output: LooseRecord[] = [];
+  const output: NormalizedRdapTextBlock[] = [];
   let truncated = blocks.length > 50;
   for (const blockValue of blocks.slice(0, 50)) {
     if (!blockValue || typeof blockValue !== 'object' || Array.isArray(blockValue)) continue;
@@ -1101,6 +1296,9 @@ function summarizeEntity(entity: unknown): EntitySummary | null {
   const emails = normalizeContactValues(record.vcardArray, 'email', 320, { lower: true });
   const phones = normalizeContactValues(record.vcardArray, 'tel', 100);
   const addresses = normalizeAddresses(record.vcardArray);
+  const vcardEntries = Array.isArray(record.vcardArray) && Array.isArray(record.vcardArray[1])
+    ? record.vcardArray[1]
+    : [];
   const summary = {
     handle: boundedString(record.handle, 200),
     roles,
@@ -1118,7 +1316,7 @@ function summarizeEntity(entity: unknown): EntitySummary | null {
     links: normalizeLinks(record.links, MAX_ENTITY_LINKS),
     truncated: Boolean(
       (Array.isArray(record.roles) && record.roles.length > MAX_ENTITY_ROLES)
-      || (Array.isArray(record.vcardArray?.[1]) && record.vcardArray[1].length > MAX_VCARD_ENTRIES)
+      || vcardEntries.length > MAX_VCARD_ENTRIES
       || contactValuesTruncated(record.vcardArray)
       || (Array.isArray(record.publicIds) && record.publicIds.length > 20)
       || (Array.isArray(record.links) && record.links.length > MAX_ENTITY_LINKS)
@@ -1194,7 +1392,9 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
   // to every RDAP object type. Unlike set-like fields, status order and
   // repetition remain as published for backwards compatibility.
   const statuses = Array.isArray(data.status)
-    ? data.status.slice(0, 100).map((status) => boundedString(status, 160)).filter(Boolean)
+    ? data.status.slice(0, 100)
+        .map((status) => boundedString(status, 160))
+        .filter((status): status is string => status !== null)
     : [];
   const common = {
     objectClassName: boundedString(data.objectClassName, 80, { lower: true }),
@@ -1241,7 +1441,7 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
             name: boundedString(nameserver.ldhName || nameserver.unicodeName, 253),
             addresses,
           };
-        }).filter((ns): ns is NonNullable<typeof ns> => Boolean(ns && ns.name))
+        }).filter((ns): ns is { name: string; addresses: string[] } => Boolean(ns?.name))
       : [];
     const secureDns: LooseRecord | null = data.secureDNS
       && typeof data.secureDNS === 'object'
@@ -1249,7 +1449,7 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
       ? data.secureDNS as LooseRecord
       : null;
     const variantInfo = normalizeDomainVariants(data.variants);
-    const dsData = secureDns && Array.isArray(secureDns.dsData)
+    const dsData: NormalizedRdapDsData[] = secureDns && Array.isArray(secureDns.dsData)
       ? secureDns.dsData.slice(0, 50).map((ds) => {
           if (!ds || typeof ds !== 'object' || Array.isArray(ds)) return null;
           const record = ds as LooseRecord;
@@ -1259,8 +1459,10 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
             digestType: boundedInteger(record.digestType, 0, 255),
             digest: digest && digest.length % 2 === 0 && /^[0-9a-f]+$/i.test(digest) ? digest : null,
           };
-          return Object.values(normalized).every((value) => value !== null) ? normalized : null;
-        }).filter(Boolean)
+          return Object.values(normalized).every((value) => value !== null)
+            ? normalized as NormalizedRdapDsData
+            : null;
+        }).filter((value): value is NormalizedRdapDsData => value !== null)
       : [];
     return {
       ...common,
@@ -1295,7 +1497,7 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
 
   if (type === 'ipv4' || type === 'ipv6') {
     const { entitiesByRole, entitiesTruncated, truncatedEntityRoles } = entityInventory(data.entities);
-    const cidrs = Array.isArray(data.cidr0_cidrs)
+    const cidrs: string[] = Array.isArray(data.cidr0_cidrs)
       ? data.cidr0_cidrs.slice(0, 200)
           .map((c) => {
             if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
@@ -1305,7 +1507,7 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
             const length = boundedInteger(c.length, 0, expectedFamily === 4 ? 32 : 128);
             return prefix && length !== null ? `${prefix}/${length}` : null;
           })
-          .filter(Boolean)
+          .filter((value): value is string => value !== null)
       : [];
     return {
       ...common,
@@ -1346,9 +1548,12 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
   return null;
 }
 
-function parseRdap(type: string, data: unknown): NormalizedRdapRecord | null {
+function parseRdap<const T extends string>(type: T, data: unknown): NormalizedRdapRecordFor<T> | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  return parseRdapObject(type, data as LooseRecord);
+  // parseRdapObject performs the matching runtime branch before returning.
+  // This cast preserves that relationship for literal callers without
+  // weakening the untrusted JSON boundary to any.
+  return parseRdapObject(type, data as LooseRecord) as NormalizedRdapRecordFor<T> | null;
 }
 
 export {

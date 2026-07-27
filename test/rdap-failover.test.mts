@@ -2,11 +2,15 @@ import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { fetchRdapFromBases, uniqueBases } from '../lib/rdap.mts';
+import type { NormalizedRdapRecordFor, RdapLookupRecord } from '../lib/rdap.mts';
 
-type RdapRecord = NonNullable<Awaited<ReturnType<typeof fetchRdapFromBases>>>;
-
-async function fetchFixture(...args: Parameters<typeof fetchRdapFromBases>): Promise<RdapRecord> {
-  const record = await fetchRdapFromBases(...args);
+async function fetchFixture<const T extends string>(
+  type: T,
+  value: string,
+  bases: unknown,
+  fetchUpstream?: Parameters<typeof fetchRdapFromBases>[3],
+): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>>> {
+  const record = await fetchRdapFromBases(type, value, bases, fetchUpstream);
   assert.ok(record);
   return record;
 }
@@ -63,6 +67,7 @@ describe('RDAP endpoint failover', () => {
     assert.equal(calls.length, 2);
     assert.match(record.rdapServer, /second\.example/);
     assert.ok(record.parsed);
+    assert.ok('domain' in record.parsed);
     assert.equal(record.parsed.domain, 'EXAMPLE.COM');
     assert.deepEqual(record.attempts.map(({ outcome, selected }) => ({ outcome, selected })), [
       { outcome: 'rate_limited', selected: false },
@@ -209,6 +214,7 @@ describe('RDAP endpoint failover', () => {
     }));
 
     assert.ok(record.parsed);
+    assert.ok('domain' in record.parsed);
     assert.equal(record.parsed.domain, 'bücher.example');
     assert.equal(requiredValue(record.attempts[0]).outcome, 'success');
   });
