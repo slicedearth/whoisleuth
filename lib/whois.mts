@@ -51,6 +51,18 @@ type GtRegistryResult = { registered: false } | {
   nameservers: string[];
 };
 type ParsedWhoisRecord = UnknownRecord;
+type WhoisSocket = {
+  write(value: string): unknown;
+  destroy(): unknown;
+  setTimeout(timeoutMs: number): unknown;
+  on(event: 'data', listener: (chunk: Buffer | string) => void): unknown;
+  on(event: 'end' | 'close' | 'timeout', listener: () => void): unknown;
+  on(event: 'error', listener: (error: Error) => void): unknown;
+};
+type CreateWhoisConnection = (
+  options: { host: string; port: number },
+  connected: () => void,
+) => WhoisSocket;
 
 const IANA_WHOIS = 'whois.iana.org';
 const MAX_WHOIS_BYTES = 200000; // far more than even a large multi-section response needs
@@ -112,7 +124,7 @@ function queryWhoisAddress(address: string, server: string, query: string, {
   port?: number;
   timeoutMs?: number;
   totalDeadlineMs?: number;
-  createConnection?: typeof net.createConnection;
+  createConnection?: CreateWhoisConnection;
 } = {}): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const socket = createConnection({ host: address, port }, () => {

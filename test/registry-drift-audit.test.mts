@@ -1,9 +1,11 @@
-'use strict';
-
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import {
+  registryCompatibilityMatrix,
+  type RegistryCompatibilityRow,
+  type RegistryStandardsCoverageSnapshot,
+} from '../lib/registry-capabilities.mts';
+import {
   MAX_CAPABILITY_ROWS,
   MAX_RDAP_BOOTSTRAP_BYTES,
   MAX_ROOT_ZONE_BYTES,
@@ -17,7 +19,8 @@ const {
   parseRdapBootstrap,
   parseRootZoneTldList,
   runRegistryDriftAudit,
-} = require('../tools/registry-drift-audit.mts');
+  type RegistryDriftAuditOptions,
+} from '../tools/registry-drift-audit.mts';
 
 const ROOT_ZONE = `# Version 2026010100, Last Updated Thu Jan 1 00:00:00 2026 UTC
 CC
@@ -59,19 +62,31 @@ const SNAPSHOT = Object.freeze({
   },
   exceptions: [],
   interpretation: 'Fixture snapshot.',
-});
-const CAPABILITIES = Object.freeze([
-  Object.freeze({ suffixes: ['aa'], rdapAccessProfile: 'iana-bootstrap' }),
-  Object.freeze({ suffixes: ['bb'], rdapAccessProfile: 'no-iana-service' }),
+}) satisfies RegistryStandardsCoverageSnapshot;
+const CAPABILITY_TEMPLATE = registryCompatibilityMatrix()[0];
+assert.ok(CAPABILITY_TEMPLATE);
+const CAPABILITIES: readonly RegistryCompatibilityRow[] = Object.freeze([
+  Object.freeze({
+    ...CAPABILITY_TEMPLATE,
+    id: 'fixture-aa',
+    suffixes: ['aa'],
+    rdapAccessProfile: 'iana-bootstrap',
+  }),
+  Object.freeze({
+    ...CAPABILITY_TEMPLATE,
+    id: 'fixture-bb',
+    suffixes: ['bb'],
+    rdapAccessProfile: 'no-iana-service',
+  }),
 ]);
 
-function responseFor(url) {
+function responseFor(url: string): Response {
   if (url === ROOT_ZONE_URL) return new Response(ROOT_ZONE, { status: 200 });
   if (url === RDAP_BOOTSTRAP_URL) return new Response(RDAP_BOOTSTRAP, { status: 200 });
   throw new Error(`Unexpected URL: ${url}`);
 }
 
-function options(overrides = {}) {
+function options(overrides: RegistryDriftAuditOptions = {}): RegistryDriftAuditOptions {
   return {
     fetchSource: async (url, init) => {
       assert.equal(init.redirect, 'manual');
@@ -85,9 +100,9 @@ function options(overrides = {}) {
   };
 }
 
-function capture() {
+function capture(): { stream: { write(value: string): void }; value(): string } {
   let output = '';
-  return { stream: { write(value) { output += value; } }, value: () => output };
+  return { stream: { write(value: string) { output += value; } }, value: () => output };
 }
 
 describe('official registry source parsers', () => {
@@ -179,6 +194,9 @@ describe('official registry drift report', () => {
     const rdapAssignments = report.checks.find((check) => check.id === 'rdap_suffix_assignments');
     const assignments = report.checks.find((check) => check.id === 'explicit_suffix_assignments');
     const profiles = report.checks.find((check) => check.id === 'explicit_rdap_profiles');
+    assert.ok(rdapAssignments);
+    assert.ok(assignments);
+    assert.ok(profiles);
     assert.deepEqual(rdapAssignments.suffixes, ['bb']);
     assert.deepEqual(assignments.suffixes, ['bb']);
     assert.deepEqual(profiles.suffixes, ['bb']);
@@ -195,6 +213,8 @@ describe('official registry drift report', () => {
     assert.equal(report.observed.rootZone, null);
     assert.equal(report.observed.rdapBootstrap, null);
     assert.equal(report.sources[0].status, 503);
+    assert.ok(report.sources[0].error);
+    assert.ok(report.sources[1].error);
     assert.match(report.sources[0].error, /HTTP 503/);
     assert.match(report.sources[1].error, /valid JSON/i);
   });
@@ -210,6 +230,7 @@ describe('official registry drift report', () => {
     assert.equal(report.bounds.requestTimeoutMs, 7000);
     assert.equal(report.bounds.totalTimeoutMs, 15_000);
     assert.equal(report.summary.inconclusive, 5);
+    assert.ok(report.sources[0].error);
     assert.match(report.sources[0].error, /exceeded/);
   });
 

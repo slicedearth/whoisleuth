@@ -1,16 +1,31 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import test from 'node:test';
+import { queryWhoisAddress } from '../lib/whois.mts';
 
-const { queryWhoisAddress } = require('../lib/whois.mts');
+class FixtureSocket extends EventEmitter {
+  written = '';
 
-function fixtureConnection(chunks) {
-  let written = '';
-  const socket = new EventEmitter();
-  socket.setTimeout = () => {};
-  socket.write = (value) => { written += value; };
-  socket.destroy = () => {};
-  const createConnection = (_options, connected) => {
+  setTimeout(_timeoutMs: number): this {
+    return this;
+  }
+
+  write(value: string): boolean {
+    this.written += value;
+    return true;
+  }
+
+  destroy(): this {
+    return this;
+  }
+}
+
+function fixtureConnection(chunks: readonly Buffer[]) {
+  const socket = new FixtureSocket();
+  const createConnection = (
+    _options: { host: string; port: number },
+    connected: () => void,
+  ): FixtureSocket => {
     queueMicrotask(() => {
       connected();
       for (const chunk of chunks) socket.emit('data', chunk);
@@ -18,7 +33,7 @@ function fixtureConnection(chunks) {
     });
     return socket;
   };
-  return { createConnection, written: () => written };
+  return { createConnection, written: () => socket.written };
 }
 
 test('WHOIS decoding preserves a UTF-8 character split across TCP chunks', async () => {

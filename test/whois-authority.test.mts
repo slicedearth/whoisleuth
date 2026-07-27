@@ -6,9 +6,9 @@
 // clearly showed the domain registered. Fixtures model the IANA -> registry
 // -> registrar referral shape.
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const { analyzeWhoisChainAuthority, parseWhoisChain } = require('../lib/whois.mts');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { analyzeWhoisChainAuthority, parseWhoisChain } from '../lib/whois.mts';
 
 const IANA = 'whois.iana.org';
 const REGISTRY = 'whois.verisign-grs.com';

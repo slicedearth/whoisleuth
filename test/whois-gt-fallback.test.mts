@@ -1,10 +1,9 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { buildWhoisChainUncached, fetchGtRegistryWhois } = require('../lib/whois.mts');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { buildWhoisChainUncached, fetchGtRegistryWhois } from '../lib/whois.mts';
 
 test('registry HTML fallback uses the injected safe request boundary', async () => {
-  const calls = [];
+  const calls: Array<{ url: string; options: RequestInit }> = [];
   const result = await fetchGtRegistryWhois('example.gt', {
     fetcher: async (url, options) => {
       calls.push({ url, options });
@@ -47,7 +46,9 @@ test('registry HTML fallback retains bounded structured fields', async () => {
     fetcher: async () => new Response(html, { status: 200 }),
   });
 
+  assert.ok(result);
   assert.equal(result.registered, true);
+  if (!result.registered) assert.fail('Expected a registered fixture result.');
   assert.equal(result.status, 'Active');
   assert.equal(result.expiryDate, '2030-Jan-02');
   assert.equal(result.registrantOrg, 'Example Holder');
@@ -79,8 +80,11 @@ test('the WHOIS chain retains the best-effort registry website result', async ()
   });
 
   assert.equal(chain.length, 2);
-  assert.match(chain[1].server, /registry website/);
-  assert.match(chain[1].response, /Domain Name: EXAMPLE\.GT/);
-  assert.match(chain[1].response, /Domain Status: Active/);
-  assert.match(chain[1].response, /Name Server: ns1\.example\.net/);
+  const registryHop = chain[1];
+  assert.ok(registryHop);
+  assert.match(registryHop.server, /registry website/);
+  assert.ok(registryHop.response);
+  assert.match(registryHop.response, /Domain Name: EXAMPLE\.GT/);
+  assert.match(registryHop.response, /Domain Status: Active/);
+  assert.match(registryHop.response, /Name Server: ns1\.example\.net/);
 });

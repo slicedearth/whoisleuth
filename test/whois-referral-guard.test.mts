@@ -6,10 +6,9 @@
 // validates the target through the same isPrivateAddress() guard
 // safe-fetch.js uses for HTTP before ever opening a socket.
 
-const test = require('node:test');
-const { describe } = require('node:test');
-const assert = require('node:assert/strict');
-const { whoisQuery } = require('../lib/whois.mts');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { whoisQuery } from '../lib/whois.mts';
 
 describe('referral target validation', () => {
   test('refuses to connect to a loopback address', async () => {

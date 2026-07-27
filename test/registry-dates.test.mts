@@ -1,8 +1,7 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { parseRegistryDate, registryDateIso } = require('../lib/registry-dates.mts');
-const { parseWhoisDate } = require('../lib/availability.mts');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { parseWhoisDate } from '../lib/availability.mts';
+import { parseRegistryDate, registryDateIso } from '../lib/registry-dates.mts';
 
 test('normalizes supported registry date shapes to canonical ISO timestamps', () => {
   assert.equal(registryDateIso('03.04.2024'), '2024-04-03T00:00:00.000Z');
@@ -33,5 +32,7 @@ test('returns null for missing, invalid, and unsupported registry date values', 
 });
 
 test('retains the historical parseWhoisDate export as the shared parser', () => {
-  assert.equal(parseWhoisDate('2024-03-14 10:46:48').toISOString(), '2024-03-14T10:46:48.000Z');
+  const parsed = parseWhoisDate('2024-03-14 10:46:48');
+  assert.ok(parsed);
+  assert.equal(parsed.toISOString(), '2024-03-14T10:46:48.000Z');
 });

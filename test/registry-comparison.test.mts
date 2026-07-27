@@ -1,15 +1,11 @@
-// The comparison module is a browser ES module, loaded dynamically for the
-// Loaded dynamically because the frontend analysis workspace is ESM.
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import * as comparison from '../frontend/src/lib/analysis/registry-comparison.ts';
 
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let comparison;
-before(async () => {
-  comparison = await import('../frontend/src/lib/analysis/registry-comparison.ts');
-});
-function field(result, label) {
-  return result.fields.find((item) => item.label === label);
+function field<T extends { label: string }>(result: { fields: T[] }, label: string): T {
+  const match = result.fields.find((item) => item.label === label);
+  assert.ok(match);
+  return match;
 }
 
 describe('compareRegistrySources', () => {

@@ -1,11 +1,16 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { parseRdap } from '../lib/rdap.mts';
 
-const { parseRdap } = require('../lib/rdap.mts');
+function parseFixture(...args: Parameters<typeof parseRdap>): NonNullable<ReturnType<typeof parseRdap>> {
+  const parsed = parseRdap(...args);
+  assert.ok(parsed);
+  return parsed;
+}
 
 describe('structured RDAP metadata', () => {
   test('preserves registrar IDs, addresses, glue, DNSSEC, and protocol notes', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'XN--BCHER-KVA.EXAMPLE',
       unicodeName: 'bücher.example',
       port43: 'whois.example',
@@ -51,7 +56,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('bounds notice text copied into the structured response', () => {
-    const parsed = parseRdap('asn', {
+    const parsed = parseFixture('asn', {
       startAutnum: 64496,
       endAutnum: 64496,
       parentHandle: 'PARENT-AS-BLOCK',
@@ -70,7 +75,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('discloses caps for common metadata and domain DNS inventories', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       rdapConformance: Array.from({ length: 51 }, (_, index) => `extension_${index}`),
       links: Array.from({ length: 21 }, (_, index) => ({
@@ -110,7 +115,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('normalizes and deterministically summarizes shuffled lifecycle events', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       events: [
         { eventAction: ' Expiration ', eventDate: '2027-01-01T00:00:00Z' },
@@ -146,7 +151,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('surfaces the latest valid RDAP database-update event', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       events: [
         { eventAction: 'last update of RDAP database', eventDate: '2025-01-01T00:00:00Z' },
@@ -160,7 +165,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('does not fabricate an ISO lifecycle companion for an invalid event date', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       events: [{ eventAction: 'last changed', eventDate: 'not-a-date' }],
     });
@@ -170,7 +175,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('distinguishes server-declared truncation from local display caps', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       notices: [
         {
@@ -215,7 +220,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('does not infer server truncation from untyped prose or local caps', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       notices: Array.from({ length: 13 }, (_, index) => ({
         title: `Notice ${index}`,
@@ -235,7 +240,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('bounds malformed event data without losing valid neighbours', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       events: [
         null,
@@ -252,7 +257,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('retains multiple nested contacts per recognized role and preserves primary compatibility fields', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       entities: [{
         handle: 'REGISTRY-PARENT',
@@ -279,7 +284,10 @@ describe('structured RDAP metadata', () => {
     assert.deepEqual(parsed.registrar.phones, ['+61 1', '+61 2']);
     assert.equal(parsed.registrar.address, '1 Main St, Melbourne, VIC, 3000, AU');
     assert.equal(parsed.registrar.addresses.length, 2);
-    assert.deepEqual(parsed.entitiesByRole.abuse.map((entity) => entity.handle), ['ABUSE-1', 'ABUSE-2']);
+    assert.deepEqual(
+      parsed.entitiesByRole.abuse.map((entity: { handle: unknown }) => entity.handle),
+      ['ABUSE-1', 'ABUSE-2'],
+    );
     assert.equal(parsed.abuse.handle, 'ABUSE-1');
   });
 
@@ -291,7 +299,7 @@ describe('structured RDAP metadata', () => {
       links: Array.from({ length: 15 }, (__, link) => ({ href: `https://example.com/${link}`, rel: 'related' })),
       vcardArray: ['vcard', Array.from({ length: 12 }, (__, email) => ['email', {}, 'text', `user${email}@example.com`])],
     }));
-    const parsed = parseRdap('domain', { ldhName: 'EXAMPLE.COM', entities });
+    const parsed = parseFixture('domain', { ldhName: 'EXAMPLE.COM', entities });
 
     assert.equal(parsed.entitiesByRole.technical.length, 5);
     assert.equal(parsed.technical.emails.length, 8);
@@ -303,7 +311,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('rejects malformed contact values and unsafe links without discarding valid neighbours', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'EXAMPLE.COM',
       links: [
         { href: 'javascript:alert(1)', rel: 'self' },
@@ -332,7 +340,12 @@ describe('structured RDAP metadata', () => {
 
   test('caps recursive entity traversal by depth and tolerates cyclic fixture objects', () => {
     const roles = ['registrar', 'registrant', 'administrative', 'technical', 'billing', 'abuse', 'noc', 'registrant'];
-    const root = { handle: 'LEVEL-0', roles: [roles[0]], entities: [] };
+    type RecursiveEntityFixture = {
+      handle: string;
+      roles: Array<string | undefined>;
+      entities: RecursiveEntityFixture[];
+    };
+    const root: RecursiveEntityFixture = { handle: 'LEVEL-0', roles: [roles[0]], entities: [] };
     let cursor = root;
     for (let depth = 1; depth < roles.length; depth += 1) {
       const child = { handle: `LEVEL-${depth}`, roles: [roles[depth]], entities: [] };
@@ -341,18 +354,21 @@ describe('structured RDAP metadata', () => {
     }
     cursor.entities.push(root);
 
-    const parsed = parseRdap('domain', { ldhName: 'EXAMPLE.COM', entities: [root] });
+    const parsed = parseFixture('domain', { ldhName: 'EXAMPLE.COM', entities: [root] });
     assert.equal(parsed.entitiesByRole.registrar[0].handle, 'LEVEL-0');
     assert.equal(parsed.entitiesByRole.noc[0].handle, 'LEVEL-6');
-    assert.deepEqual(parsed.entitiesByRole.registrant.map((entity) => entity.handle), ['LEVEL-1']);
+    assert.deepEqual(
+      parsed.entitiesByRole.registrant.map((entity: { handle: unknown }) => entity.handle),
+      ['LEVEL-1'],
+    );
   });
 
   test('renders type-appropriate bounded network and ASN metadata', () => {
-    const network = parseRdap('ipv4', {
+    const network = parseFixture('ipv4', {
       handle: 'NET-1', name: 'Example Network', startAddress: '192.0.2.0', endAddress: '192.0.2.255',
       cidr0_cidrs: [{ v4prefix: '192.0.2.0', length: 24 }, null, { v4prefix: 'bad', length: 99 }],
     });
-    const asn = parseRdap('asn', { handle: 'AS64496', startAutnum: 64496, endAutnum: 64497 });
+    const asn = parseFixture('asn', { handle: 'AS64496', startAutnum: 64496, endAutnum: 64497 });
     assert.deepEqual(network.cidrs, ['192.0.2.0/24']);
     assert.equal(asn.startAutnum, 64496);
     assert.equal(asn.endAutnum, 64497);
@@ -360,7 +376,7 @@ describe('structured RDAP metadata', () => {
 
   test('retains shared status and lifecycle metadata for domain, network, and ASN objects', () => {
     for (const type of ['domain', 'ipv4', 'ipv6', 'asn']) {
-      const parsed = parseRdap(type, {
+      const parsed = parseFixture(type, {
         status: ['active'],
         events: [
           { eventAction: 'registration', eventDate: '2020-01-02T03:04:05Z' },
@@ -381,7 +397,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('discloses common status/event and network CIDR caps', () => {
-    const parsed = parseRdap('ipv4', {
+    const parsed = parseFixture('ipv4', {
       status: Array.from({ length: 101 }, (_, index) => `status-${index}`),
       events: Array.from({ length: 101 }, (_, index) => ({
         eventAction: 'last changed', eventDate: `2026-01-${String((index % 28) + 1).padStart(2, '0')}`,
@@ -397,14 +413,14 @@ describe('structured RDAP metadata', () => {
   });
 
   test('rejects malformed and cross-family CIDR extension entries without losing valid neighbours', () => {
-    const ipv4 = parseRdap('ipv4', {
+    const ipv4 = parseFixture('ipv4', {
       cidr0_cidrs: [
         { v4prefix: '192.0.2.0', length: 24 },
         { v4prefix: 'not-an-address', length: 24 },
         { v6prefix: '2001:db8::', length: 32 },
       ],
     });
-    const ipv6 = parseRdap('ipv6', {
+    const ipv6 = parseFixture('ipv6', {
       cidr0_cidrs: [
         { v6prefix: '2001:db8::', length: 32 },
         { v6prefix: 'not-an-address', length: 32 },
@@ -416,7 +432,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('normalizes conformance, language, and explicit redaction provenance', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       objectClassName: 'DOMAIN',
       ldhName: 'EXAMPLE.COM',
       lang: 'EN-AU',
@@ -442,10 +458,10 @@ describe('structured RDAP metadata', () => {
   });
 
   test('bounds redaction entries and reports truncation accurately', () => {
-    const exact = parseRdap('asn', {
+    const exact = parseFixture('asn', {
       redacted: Array.from({ length: 100 }, (_, index) => ({ name: `Field ${index}` })),
     });
-    const oversized = parseRdap('asn', {
+    const oversized = parseFixture('asn', {
       redacted: Array.from({ length: 101 }, (_, index) => ({ name: `Field ${index}` })),
     });
     assert.equal(exact.redactions.length, 100);
@@ -455,7 +471,7 @@ describe('structured RDAP metadata', () => {
   });
 
   test('normalizes and bounds IDN variant groups', () => {
-    const parsed = parseRdap('domain', {
+    const parsed = parseFixture('domain', {
       ldhName: 'XN--BCHER-KVA.EXAMPLE',
       variants: [{
         relation: ['REGISTERED', 'conjoined'],

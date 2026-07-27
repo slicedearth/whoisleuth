@@ -1,12 +1,8 @@
-'use strict';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { describe, test } from 'node:test';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-
-const WORKFLOW_PATH = path.join(__dirname, '..', '.github', 'workflows', 'registry-drift.yml');
-const WORKFLOW = fs.readFileSync(WORKFLOW_PATH, 'utf8');
+const WORKFLOW = readFileSync(new URL('../.github/workflows/registry-drift.yml', import.meta.url), 'utf8');
 
 describe('official registry drift workflow', () => {
   test('runs only on a fixed weekly schedule or explicit dispatch', () => {

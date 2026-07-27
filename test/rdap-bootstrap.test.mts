@@ -1,12 +1,11 @@
-const { beforeEach, describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import assert from 'node:assert/strict';
+import { beforeEach, describe, test } from 'node:test';
+import {
   BOOTSTRAP_TTL_MS,
   BOOTSTRAP_STALE_TTL_MS,
   clearRdapBootstrapCache,
   fetchBootstrap,
-} = require('../lib/rdap.mts');
+} from '../lib/rdap.mts';
 
 const FIXTURE = {
   version: '1.0',
@@ -18,8 +17,8 @@ beforeEach(clearRdapBootstrapCache);
 describe('IANA RDAP bootstrap cache', () => {
   test('deduplicates concurrent cold-cache requests', async () => {
     let calls = 0;
-    let release;
-    const gate = new Promise((resolve) => { release = resolve; });
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
     const fetchUpstream = async () => {
       calls += 1;
       await gate;

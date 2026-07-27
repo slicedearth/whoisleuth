@@ -731,7 +731,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     id: 'gt-registry-web', suffixes: ['gt'], registryClass: 'country-code',
     whoisParserProfile: 'generic-colon', fallbackProfile: 'gt-registry-web',
     fixtureScenarios: ['registered', 'not_found', 'unavailable'],
-    verificationFiles: ['test/whois-gt-fallback.test.js'],
+    verificationFiles: ['test/whois-gt-fallback.test.mts'],
   },
   {
     id: 'carnet-icann-colon', suffixes: ['hr'], registryClass: 'country-code',

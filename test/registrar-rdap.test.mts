@@ -1,20 +1,39 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import {
   fetchRegistrarRdapRecord,
   selectRegistrarRdapLink,
-} = require('../lib/rdap.mts');
+} from '../lib/rdap.mts';
 
-function link(href, extra = {}) {
+type RegistrarFetch = NonNullable<
+  NonNullable<Parameters<typeof fetchRegistrarRdapRecord>[2]>['fetchUpstream']
+>;
+
+function link(href: string, extra: Record<string, unknown> = {}) {
   return { rel: 'related', href, type: 'application/rdap+json', ...extra };
 }
 
-function registryRecord(domain, links) {
+function registryRecord(domain: string, links: readonly unknown[]) {
   return {
     rdapServer: `https://registry.test/rdap/domain/${domain}`,
     parsed: { domain: domain.toUpperCase(), links },
   };
+}
+
+function registrarDiagnostic(error: unknown): Record<string, unknown> {
+  assert.ok(error instanceof Error);
+  assert.ok('registrarRdap' in error);
+  const diagnostic = error.registrarRdap;
+  assert.ok(typeof diagnostic === 'object' && diagnostic !== null && !Array.isArray(diagnostic));
+  return diagnostic as Record<string, unknown>;
+}
+
+function registrarAttemptOutcome(error: unknown): unknown {
+  const diagnostic = registrarDiagnostic(error);
+  const attempt = diagnostic.attempt;
+  assert.ok(typeof attempt === 'object' && attempt !== null && !Array.isArray(attempt));
+  assert.ok('outcome' in attempt);
+  return attempt.outcome;
 }
 
 describe('registrar RDAP link selection', () => {
@@ -101,7 +120,7 @@ describe('registrar RDAP fetching', () => {
     const result = await fetchRegistrarRdapRecord(domain, record, {
       fetchUpstream: async (url, options, timeout) => {
         assert.equal(url, `https://registrar.test/domain/${domain}`);
-        assert.equal(options.headers.Accept, 'application/rdap+json');
+        assert.equal(new Headers(options.headers).get('Accept'), 'application/rdap+json');
         assert.equal(timeout, 7000);
         return {
           status: 200,
@@ -128,7 +147,12 @@ describe('registrar RDAP fetching', () => {
   test('returns and caches a neutral unsupported result without fetching', async () => {
     const domain = 'unsupported-registrar.example';
     let calls = 0;
-    const options = { fetchUpstream: async () => { calls += 1; } };
+    const options = {
+      fetchUpstream: async () => {
+        calls += 1;
+        return { status: 500, ok: false, text: '{}' };
+      },
+    };
     const first = await fetchRegistrarRdapRecord(domain, registryRecord(domain, []), options);
     const second = await fetchRegistrarRdapRecord(domain, registryRecord(domain, []), options);
     assert.equal(first.status, 'unsupported');
@@ -167,9 +191,10 @@ describe('registrar RDAP fetching', () => {
         }),
       }),
       (error) => {
-        assert.equal(error.registrarRdap.status, 'error');
-        assert.equal(error.registrarRdap.attempt.outcome, 'invalid_response');
-        assert.match(error.registrarRdap.detail, /did not match/i);
+        const diagnostic = registrarDiagnostic(error);
+        assert.equal(diagnostic.status, 'error');
+        assert.equal(registrarAttemptOutcome(error), 'invalid_response');
+        assert.match(String(diagnostic.detail), /did not match/i);
         return true;
       }
     );
@@ -199,14 +224,14 @@ describe('registrar RDAP fetching', () => {
           status: 200, ok: true, finalUrl,
           text: JSON.stringify({ objectClassName: 'domain', ldhName: domain.toUpperCase() }),
         }) }),
-        (error) => error.registrarRdap?.attempt?.outcome === 'invalid_response',
+        (error) => registrarAttemptOutcome(error) === 'invalid_response',
         domain
       );
     }
   });
 
   test('classifies HTTP, JSON, timeout, and oversized-body failures', async () => {
-    const scenarios = [
+    const scenarios: Array<readonly [string, RegistrarFetch, string]> = [
       ['rate-registrar.example', async () => ({ status: 429, ok: false, text: '{}' }), 'rate_limited'],
       ['server-registrar.example', async () => ({ status: 503, ok: false, text: '<html>' }), 'server_error'],
       ['json-registrar.example', async () => ({ status: 200, ok: true, text: '<html>' }), 'invalid_json'],
@@ -217,7 +242,7 @@ describe('registrar RDAP fetching', () => {
       const record = registryRecord(domain, [link(`https://registrar.test/domain/${domain}`)]);
       await assert.rejects(
         fetchRegistrarRdapRecord(domain, record, { fetchUpstream }),
-        (error) => error.registrarRdap?.attempt?.outcome === expected,
+        (error) => registrarAttemptOutcome(error) === expected,
         domain
       );
     }

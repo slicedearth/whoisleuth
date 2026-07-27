@@ -1,13 +1,10 @@
-'use strict';
-
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const { buildWhoisChainUncached } = require('../lib/whois.mts');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { buildWhoisChainUncached } from '../lib/whois.mts';
 
 describe('WHOIS referral query profiles', () => {
   test('applies the domain-and-ACE profile only to the first .de referral', async () => {
-    const calls = [];
+    const calls: Array<{ server: string; query: string }> = [];
     const responses = new Map([
       ['whois.iana.org', 'domain: DE\nrefer: whois.de.invalid\n'],
       ['whois.de.invalid', 'Domain: example.de\nStatus: connect\nwhois: whois.registrar.invalid\n'],
@@ -32,7 +29,7 @@ describe('WHOIS referral query profiles', () => {
   });
 
   test('requests English output only from the first .jp registry referral', async () => {
-    const calls = [];
+    const calls: Array<{ server: string; query: string }> = [];
     const chain = await buildWhoisChainUncached('example.jp', {
       whoisQuery: async (server, query) => {
         calls.push({ server, query });
@@ -51,7 +48,7 @@ describe('WHOIS referral query profiles', () => {
   });
 
   test('sends a Unicode domain only to the Bulgarian IDN registry referral', async () => {
-    const calls = [];
+    const calls: Array<{ server: string; query: string }> = [];
     const domain = 'xn----htbbacnmsehfifod.xn--90ae';
     const responses = new Map([
       ['whois.iana.org', 'domain: XN--90AE\nrefer: whois.registry.invalid\n'],
@@ -83,7 +80,7 @@ describe('WHOIS referral query profiles', () => {
   });
 
   test('leaves parser-only capability profiles on the plain-domain query', async () => {
-    const calls = [];
+    const calls: Array<{ server: string; query: string }> = [];
     await buildWhoisChainUncached('example.kr', {
       whoisQuery: async (server, query) => {
         calls.push({ server, query });

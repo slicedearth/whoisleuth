@@ -1,11 +1,13 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const { buildWhoisChainUncached } = require('../lib/whois.mts');
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { buildWhoisChainUncached } from '../lib/whois.mts';
 
 test('the WHOIS referral chain shares one total deadline across hops', async () => {
   const times = [0, 0, 9000, 13000];
-  const optionsSeen = [];
+  const optionsSeen: Array<{
+    server: string;
+    totalDeadlineMs?: number;
+  }> = [];
   const chain = await buildWhoisChainUncached('example.com', {
     chainDeadlineMs: 12000,
     now: () => times.shift() ?? 13000,
@@ -19,6 +21,9 @@ test('the WHOIS referral chain shares one total deadline across hops', async () 
   assert.equal(optionsSeen.length, 2);
   assert.equal(optionsSeen[0].totalDeadlineMs, 12000);
   assert.equal(optionsSeen[1].totalDeadlineMs, 3000);
-  assert.equal(chain[2].server, 'whois.registrar.example');
-  assert.match(chain[2].error, /total time limit/);
+  const finalHop = chain[2];
+  assert.ok(finalHop);
+  assert.equal(finalHop.server, 'whois.registrar.example');
+  assert.ok(finalHop.error);
+  assert.match(finalHop.error, /total time limit/);
 });

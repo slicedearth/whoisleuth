@@ -1,15 +1,13 @@
-'use strict';
-
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const { parseWhoisChain } = require('../lib/whois.mts');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { parseWhoisChain } from '../lib/whois.mts';
 
 const rootHop = {
   server: 'whois.iana.org',
   response: 'domain: COM\nrefer: whois.registry.example\n',
 };
 
-function parseRegistry(response) {
+function parseRegistry(response: string) {
   return parseWhoisChain([
     rootHop,
     { server: 'whois.registry.example', response },

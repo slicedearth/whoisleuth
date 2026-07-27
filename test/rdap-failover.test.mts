@@ -1,7 +1,14 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { fetchRdapFromBases, uniqueBases } from '../lib/rdap.mts';
 
-const { fetchRdapFromBases, uniqueBases } = require('../lib/rdap.mts');
+type RdapRecord = NonNullable<Awaited<ReturnType<typeof fetchRdapFromBases>>>;
+
+async function fetchFixture(...args: Parameters<typeof fetchRdapFromBases>): Promise<RdapRecord> {
+  const record = await fetchRdapFromBases(...args);
+  assert.ok(record);
+  return record;
+}
 
 describe('RDAP endpoint failover', () => {
   test('prefers HTTPS and removes duplicate bootstrap endpoints', () => {
@@ -16,7 +23,7 @@ describe('RDAP endpoint failover', () => {
   });
 
   test('retains an HTTP-only service and reports its transport', async () => {
-    const record = await fetchRdapFromBases('domain', 'example.kg', [
+    const record = await fetchFixture('domain', 'example.kg', [
       'http://rdap.example/rdap',
     ], async () => ({
       status: 200,
@@ -29,7 +36,7 @@ describe('RDAP endpoint failover', () => {
   });
 
   test('classifies the URL scheme case-insensitively', async () => {
-    const record = await fetchRdapFromBases('domain', 'example.com', [
+    const record = await fetchFixture('domain', 'example.com', [
       'HTTPS://rdap.example/rdap',
     ], async () => ({ status: 404, ok: false, text: '{}' }));
     assert.equal(record.transportSecurity, 'https');
@@ -37,7 +44,7 @@ describe('RDAP endpoint failover', () => {
 
   test('falls through a rate-limited endpoint to the next service', async () => {
     const calls = [];
-    const record = await fetchRdapFromBases('domain', 'example.com', [
+    const record = await fetchFixture('domain', 'example.com', [
       'https://first.example/rdap',
       'https://second.example/rdap',
     ], async (url) => {
@@ -54,6 +61,7 @@ describe('RDAP endpoint failover', () => {
 
     assert.equal(calls.length, 2);
     assert.match(record.rdapServer, /second\.example/);
+    assert.ok(record.parsed);
     assert.equal(record.parsed.domain, 'EXAMPLE.COM');
     assert.deepEqual(record.attempts.map(({ outcome, selected }) => ({ outcome, selected })), [
       { outcome: 'rate_limited', selected: false },
@@ -63,7 +71,7 @@ describe('RDAP endpoint failover', () => {
 
   test('treats an authoritative 404 as final instead of failing over', async () => {
     let calls = 0;
-    const record = await fetchRdapFromBases('domain', 'free.example', [
+    const record = await fetchFixture('domain', 'free.example', [
       'https://first.example/rdap',
       'https://second.example/rdap',
     ], async () => {
@@ -86,7 +94,7 @@ describe('RDAP endpoint failover', () => {
       ['asn', 'AS64496'],
     ]) {
       let calls = 0;
-      const record = await fetchRdapFromBases(type, value, [
+      const record = await fetchFixture(type, value, [
         'https://first.example/rdap', 'https://second.example/rdap',
       ], async () => {
         calls += 1;
@@ -112,7 +120,7 @@ describe('RDAP endpoint failover', () => {
 
   test('classifies non-JSON service errors before attempting body parsing', async () => {
     let calls = 0;
-    const record = await fetchRdapFromBases('domain', 'example.com', [
+    const record = await fetchFixture('domain', 'example.com', [
       'https://unavailable.example/rdap',
       'https://good.example/rdap',
     ], async () => {
@@ -124,12 +132,13 @@ describe('RDAP endpoint failover', () => {
 
     assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['server_error', 'success']);
     assert.equal(record.attempts[0].status, 503);
+    assert.ok(record.attempts[0].detail);
     assert.match(record.attempts[0].detail, /HTTP 503/);
   });
 
   test('fails over when a successful response is not valid RDAP JSON', async () => {
     let calls = 0;
-    const record = await fetchRdapFromBases('domain', 'example.com', [
+    const record = await fetchFixture('domain', 'example.com', [
       'https://bad.example/rdap',
       'https://good.example/rdap',
     ], async () => {
@@ -146,7 +155,7 @@ describe('RDAP endpoint failover', () => {
 
   test('fails over when a successful response has no usable RDAP object', async () => {
     let calls = 0;
-    const record = await fetchRdapFromBases('domain', 'example.com', [
+    const record = await fetchFixture('domain', 'example.com', [
       'https://empty.example/rdap',
       'https://good.example/rdap',
     ], async () => {
@@ -160,6 +169,7 @@ describe('RDAP endpoint failover', () => {
 
     assert.equal(calls, 2);
     assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['invalid_response', 'success']);
+    assert.ok(record.attempts[0].detail);
     assert.match(record.attempts[0].detail, /usable RDAP object|did not match/i);
   });
 
@@ -169,7 +179,7 @@ describe('RDAP endpoint failover', () => {
       { objectClassName: 'autnum', ldhName: 'EXAMPLE.COM' },
       { objectClassName: 'domain', ldhName: 'EXAMPLE.COM' },
     ];
-    const record = await fetchRdapFromBases('domain', 'example.com', [
+    const record = await fetchFixture('domain', 'example.com', [
       'https://wrong-name.example/rdap',
       'https://wrong-class.example/rdap',
       'https://good.example/rdap',
@@ -182,12 +192,14 @@ describe('RDAP endpoint failover', () => {
     assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), [
       'invalid_response', 'invalid_response', 'success',
     ]);
+    assert.ok(record.attempts[0].detail);
+    assert.ok(record.attempts[1].detail);
     assert.match(record.attempts[0].detail, /domain did not match/i);
     assert.match(record.attempts[1].detail, /object class/i);
   });
 
   test('accepts an equivalent Unicode domain identity', async () => {
-    const record = await fetchRdapFromBases('domain', 'xn--bcher-kva.example', [
+    const record = await fetchFixture('domain', 'xn--bcher-kva.example', [
       'https://idn.example/rdap',
     ], async () => ({
       status: 200,
@@ -195,12 +207,13 @@ describe('RDAP endpoint failover', () => {
       text: JSON.stringify({ objectClassName: 'domain', unicodeName: 'bücher.example' }),
     }));
 
+    assert.ok(record.parsed);
     assert.equal(record.parsed.domain, 'bücher.example');
     assert.equal(record.attempts[0].outcome, 'success');
   });
 
   test('requires IPv4 and IPv6 ranges to cover the requested address', async () => {
-    const ipv4 = await fetchRdapFromBases('ipv4', '192.0.2.10', [
+    const ipv4 = await fetchFixture('ipv4', '192.0.2.10', [
       'https://wrong-v4.example/rdap',
       'https://good-v4.example/rdap',
     ], async (url) => ({
@@ -210,7 +223,7 @@ describe('RDAP endpoint failover', () => {
         ? { objectClassName: 'ip network', startAddress: '198.51.100.0', endAddress: '198.51.100.255' }
         : { objectClassName: 'ip network', startAddress: '192.0.2.0', endAddress: '192.0.2.255' }),
     }));
-    const ipv6 = await fetchRdapFromBases('ipv6', '2001:db8::10', [
+    const ipv6 = await fetchFixture('ipv6', '2001:db8::10', [
       'https://v6.example/rdap',
     ], async () => ({
       status: 200,
@@ -225,7 +238,7 @@ describe('RDAP endpoint failover', () => {
   });
 
   test('requires an autnum range to cover the requested ASN', async () => {
-    const record = await fetchRdapFromBases('asn', 'AS64496', [
+    const record = await fetchFixture('asn', 'AS64496', [
       'https://wrong-asn.example/rdap',
       'https://good-asn.example/rdap',
     ], async (url) => ({
@@ -248,10 +261,25 @@ describe('RDAP endpoint failover', () => {
         'https://four.example/rdap',
       ], async () => { throw new Error(`network\n${'x'.repeat(500)}`); }),
       (error) => {
-        assert.equal(error.attempts.length, 3);
-        assert.ok(error.attempts.every((attempt) => attempt.outcome === 'network_error'));
-        assert.ok(error.attempts.every((attempt) => attempt.detail.length <= 240));
-        assert.ok(error.attempts.every((attempt) => !/[\u0000-\u001f\u007f]/.test(attempt.detail)));
+        assert.ok(error instanceof Error);
+        assert.ok('attempts' in error);
+        const attempts = error.attempts;
+        assert.ok(Array.isArray(attempts));
+        assert.equal(attempts.length, 3);
+        assert.ok(attempts.every((attempt: unknown) => (
+          typeof attempt === 'object'
+          && attempt !== null
+          && 'outcome' in attempt
+          && attempt.outcome === 'network_error'
+        )));
+        assert.ok(attempts.every((attempt: unknown) => {
+          assert.ok(typeof attempt === 'object' && attempt !== null && 'detail' in attempt);
+          return typeof attempt.detail === 'string' && attempt.detail.length <= 240;
+        }));
+        assert.ok(attempts.every((attempt: unknown) => {
+          assert.ok(typeof attempt === 'object' && attempt !== null && 'detail' in attempt);
+          return typeof attempt.detail === 'string' && !/[\u0000-\u001f\u007f]/.test(attempt.detail);
+        }));
         return true;
       }
     );

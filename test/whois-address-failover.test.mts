@@ -1,11 +1,15 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const { whoisQuery, buildWhoisChainUncached } = require('../lib/whois.mts');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import { buildWhoisChainUncached, whoisQuery } from '../lib/whois.mts';
 
 describe('WHOIS address failover', () => {
   test('tries validated addresses sequentially within one hop deadline', async () => {
-    const calls = [];
+    const calls: Array<{
+      address: string;
+      server: string;
+      query: string;
+      options: { port?: number; timeoutMs?: number; totalDeadlineMs?: number };
+    }> = [];
     let clock = 1000;
     let selected = null;
     const response = await whoisQuery('whois.example', 'example.com', {
@@ -32,14 +36,14 @@ describe('WHOIS address failover', () => {
   });
 
   test('caps connection attempts at three validated addresses', async () => {
-    const calls = [];
+    const calls: string[] = [];
     await assert.rejects(
       whoisQuery('whois.example', 'example.com', {
         resolveAddresses: async () => [
-          { address: '192.0.2.1' },
-          { address: '192.0.2.2' },
-          { address: '192.0.2.3' },
-          { address: '192.0.2.4' },
+          { address: '192.0.2.1', family: 4 },
+          { address: '192.0.2.2', family: 4 },
+          { address: '192.0.2.3', family: 4 },
+          { address: '192.0.2.4', family: 4 },
         ],
         queryAddress: async (address) => {
           calls.push(address);
@@ -52,13 +56,16 @@ describe('WHOIS address failover', () => {
   });
 
   test('does not begin another attempt after the shared deadline expires', async () => {
-    const calls = [];
+    const calls: string[] = [];
     let clock = 0;
     await assert.rejects(
       whoisQuery('whois.example', 'example.com', {
         totalDeadlineMs: 500,
         now: () => clock,
-        resolveAddresses: async () => [{ address: '192.0.2.1' }, { address: '192.0.2.2' }],
+        resolveAddresses: async () => [
+          { address: '192.0.2.1', family: 4 },
+          { address: '192.0.2.2', family: 4 },
+        ],
         queryAddress: async (address) => {
           calls.push(address);
           clock = 500;
@@ -73,7 +80,7 @@ describe('WHOIS address failover', () => {
   test('records the address that served each successful referral hop', async () => {
     const chain = await buildWhoisChainUncached('example.com', {
       whoisQuery: async (server, query, options) => {
-        options.onAddressSelected('192.0.2.10');
+        options.onAddressSelected?.('192.0.2.10');
         return 'No match for domain';
       },
     });
