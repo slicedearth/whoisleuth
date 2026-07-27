@@ -1,8 +1,7 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { randomBytes } = require('node:crypto');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import {
   ALGORITHM,
   decryptScheduledMonitorState,
   encryptScheduledMonitorState,
@@ -11,7 +10,7 @@ const {
   MAX_ENVELOPE_BYTES,
   MAX_PLAINTEXT_BYTES,
   parseScheduledMonitorKey,
-} = require('../lib/scheduled-monitor-crypto.mts');
+} from '../lib/scheduled-monitor-crypto.mts';
 
 const CONTEXT = 'deployment:scheduled-watchlists';
 const key = randomBytes(32).toString('base64');

@@ -1,7 +1,6 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   DEFAULT_OPERATION_LIMITS,
   OPERATION_CLASSES,
   OPERATION_BUDGET_UNAVAILABLE_ERROR_CODE,
@@ -14,8 +13,8 @@ const {
   operationBudgetHttpStatus,
   operationBudgetReport,
   runWithOperationBudget,
-} = require('../lib/operation-budget.mts');
-const {
+} from '../lib/operation-budget.mts';
+import {
   ACQUIRE_SCRIPT,
   ACQUIRE_WITH_USAGE_SCRIPT,
   DAY_WINDOW_MS,
@@ -30,7 +29,20 @@ const {
   normalizedRestUrl,
   normalizedToken,
   normalizedUsageLimits,
-} = require('../lib/distributed-operation-budget.mts');
+} from '../lib/distributed-operation-budget.mts';
+import {
+  recordValue,
+  requiredValue,
+  stringValue,
+} from './value-assertions.mts';
+
+type RestClientDependencies = NonNullable<Parameters<typeof createRestCommandClient>[1]>;
+type RestRequest = NonNullable<RestClientDependencies['safeFetch']>;
+type CapturedRequest = {
+  url: Parameters<RestRequest>[0];
+  options: Parameters<RestRequest>[1];
+  redirects: Parameters<RestRequest>[2];
+};
 
 const TEST_LIMITS = {
   [OPERATION_CLASSES.REGISTRY_LIGHT]: { session: 2, runtime: 3 },
@@ -121,8 +133,9 @@ describe('distributed budget configuration', () => {
       createLeaseId: () => 'a'.repeat(32),
     });
     assert.equal(configured.mode, 'redis_rest');
-    assert.equal(configured.usageLimits.daily, 100);
-    assert.equal(configured.usageLimits.monthly, 1000);
+    const usageLimits = requiredValue(configured.usageLimits);
+    assert.equal(usageLimits.daily, 100);
+    assert.equal(usageLimits.monthly, 1000);
   });
 
   test('reports distributed and unavailable provider scopes honestly', () => {
@@ -154,7 +167,7 @@ describe('distributed budget configuration', () => {
 
 describe('bounded REST command client', () => {
   test('posts one JSON command without following redirects or exposing the token in the URL', async () => {
-    let captured;
+    let captured: CapturedRequest | undefined;
     const command = createRestCommandClient({
       url: 'https://test-budget.upstash.io',
       token: 'server-secret',
@@ -168,13 +181,14 @@ describe('bounded REST command client', () => {
       },
     });
     assert.deepEqual(await command(['PING']), [1, 2, 3]);
-    assert.equal(captured.url, 'https://test-budget.upstash.io');
-    assert.equal(captured.redirects, 0);
-    assert.equal(captured.options.method, 'POST');
-    assert.equal(captured.options.redirect, 'manual');
-    assert.equal(captured.options.headers.Authorization, 'Bearer server-secret');
-    assert.equal(captured.options.body, '["PING"]');
-    assert.doesNotMatch(captured.url + captured.options.body, /server-secret/);
+    const request = requiredValue(captured);
+    assert.equal(request.url, 'https://test-budget.upstash.io');
+    assert.equal(request.redirects, 0);
+    assert.equal(request.options.method, 'POST');
+    assert.equal(request.options.redirect, 'manual');
+    assert.equal(new Headers(request.options.headers).get('authorization'), 'Bearer server-secret');
+    assert.equal(request.options.body, '["PING"]');
+    assert.doesNotMatch(request.url + stringValue(request.options.body), /server-secret/);
   });
 
   test('rejects malformed, failed, and provider-error responses without echoing details', async () => {
@@ -189,6 +203,7 @@ describe('bounded REST command client', () => {
         safeFetch: async () => response,
       });
       await assert.rejects(command(['PING']), (error) => {
+        assert.ok(error instanceof Error);
         assert.doesNotMatch(error.message, /sensitive provider detail|token/);
         return true;
       });
@@ -198,7 +213,7 @@ describe('bounded REST command client', () => {
 
 describe('distributed sorted-set leases', () => {
   test('acquires and idempotently releases an opaque expiring lease', async () => {
-    const commands = [];
+    const commands: unknown[][] = [];
     const provider = createDistributedOperationBudget({
       limits: TEST_LIMITS,
       namespace: 'test:budget',
@@ -214,20 +229,22 @@ describe('distributed sorted-set leases', () => {
     });
     const lease = await provider.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'opaque-session-key');
     assert.equal(lease.allowed, true);
-    assert.equal(commands[0][0], 'EVAL');
-    assert.equal(commands[0][2], 2);
-    assert.equal(commands[0][7], 60_000);
-    assert.equal(commands[0][8], 'a'.repeat(32));
-    assert.ok(commands[0][3].endsWith(':runtime:registry_light'));
-    assert.match(commands[0][4], /:session:registry_light:[a-f0-9]{64}$/);
-    assert.doesNotMatch(commands[0][4], /opaque-session-key/);
+    const acquireCommand = requiredValue(commands[0]);
+    assert.equal(acquireCommand[0], 'EVAL');
+    assert.equal(acquireCommand[2], 2);
+    assert.equal(acquireCommand[7], 60_000);
+    assert.equal(acquireCommand[8], 'a'.repeat(32));
+    assert.ok(stringValue(acquireCommand[3]).endsWith(':runtime:registry_light'));
+    assert.match(stringValue(acquireCommand[4]), /:session:registry_light:[a-f0-9]{64}$/);
+    assert.doesNotMatch(stringValue(acquireCommand[4]), /opaque-session-key/);
+    if (!('release' in lease)) assert.fail('expected an allowed distributed lease');
     assert.equal(await lease.release(), true);
     assert.equal(await lease.release(), true);
     assert.equal(commands.filter((command) => command[1] === RELEASE_SCRIPT).length, 1);
   });
 
   test('checks and increments fixed-window usage in the same atomic admission command', async () => {
-    const commands = [];
+    const commands: unknown[][] = [];
     const provider = createDistributedOperationBudget({
       limits: TEST_LIMITS,
       namespace: 'test:budget',
@@ -251,25 +268,26 @@ describe('distributed sorted-set leases', () => {
       { operationFeature: OPERATION_FEATURES.BULK_DEEP },
     );
     assert.equal(lease.allowed, true);
-    const acquire = commands[0];
+    const acquire = requiredValue(commands[0]);
     assert.equal(acquire[0], 'EVAL');
     assert.equal(acquire[1], ACQUIRE_WITH_USAGE_SCRIPT);
     assert.equal(acquire[2], 6);
-    assert.ok(acquire[5].endsWith(':usage:global:day'));
-    assert.ok(acquire[6].endsWith(':usage:global:thirty_day'));
-    assert.ok(acquire[7].endsWith(':usage:feature:bulk_deep:day'));
-    assert.ok(acquire[8].endsWith(':usage:feature:bulk_deep:thirty_day'));
+    assert.ok(stringValue(acquire[5]).endsWith(':usage:global:day'));
+    assert.ok(stringValue(acquire[6]).endsWith(':usage:global:thirty_day'));
+    assert.ok(stringValue(acquire[7]).endsWith(':usage:feature:bulk_deep:day'));
+    assert.ok(stringValue(acquire[8]).endsWith(':usage:feature:bulk_deep:thirty_day'));
     assert.deepEqual(acquire.slice(-4), [100, 1000, 20, 200]);
     assert.ok(ACQUIRE_WITH_USAGE_SCRIPT.indexOf('local function read_counter(key)')
       < ACQUIRE_WITH_USAGE_SCRIPT.indexOf('local expires_at ='));
     assert.ok(ACQUIRE_WITH_USAGE_SCRIPT.indexOf("redis.call('INCR', global_day_key)")
       > ACQUIRE_WITH_USAGE_SCRIPT.indexOf('feature_thirty_day_count >= tonumber(ARGV[8])'));
+    if (!('release' in lease)) assert.fail('expected an allowed usage-accounted lease');
     assert.equal(await lease.release(), true);
     assert.equal(commands.filter((command) => command[1] === ACQUIRE_WITH_USAGE_SCRIPT).length, 1);
   });
 
   test('shares global counters across features while retaining separate feature counters', async () => {
-    const commands = [];
+    const commands: unknown[][] = [];
     const provider = createDistributedOperationBudget({
       limits: TEST_LIMITS,
       namespace: 'test:budget',
@@ -292,14 +310,16 @@ describe('distributed sorted-set leases', () => {
       { operationFeature: OPERATION_FEATURES.BULK_DEEP },
     );
 
-    assert.equal(commands[0][5], commands[1][5]);
-    assert.equal(commands[0][6], commands[1][6]);
-    assert.notEqual(commands[0][7], commands[1][7]);
-    assert.notEqual(commands[0][8], commands[1][8]);
+    const firstCommand = requiredValue(commands[0]);
+    const secondCommand = requiredValue(commands[1]);
+    assert.equal(firstCommand[5], secondCommand[5]);
+    assert.equal(firstCommand[6], secondCommand[6]);
+    assert.notEqual(firstCommand[7], secondCommand[7]);
+    assert.notEqual(firstCommand[8], secondCommand[8]);
   });
 
   test('tracks unattributed legacy operations under the global policy without a feature ceiling', async () => {
-    let captured;
+    let captured: unknown[] | undefined;
     const provider = createDistributedOperationBudget({
       limits: TEST_LIMITS,
       usageLimits: { daily: 10, monthly: 100 },
@@ -312,8 +332,9 @@ describe('distributed sorted-set leases', () => {
     });
     const lease = await provider.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
     assert.equal(lease.allowed, true);
-    assert.ok(captured[7].includes(':usage:feature:unattributed:day'));
-    assert.deepEqual(captured.slice(-2), [0, 0]);
+    const command = requiredValue(captured);
+    assert.ok(stringValue(command[7]).includes(':usage:feature:unattributed:day'));
+    assert.deepEqual(command.slice(-2), [0, 0]);
   });
 
   test('maps atomic global and feature usage denials to stable retry windows', async () => {
@@ -342,13 +363,14 @@ describe('distributed sorted-set leases', () => {
         async () => 'not reached',
       );
       assert.equal(outcome.allowed, false);
+      if (outcome.allowed) assert.fail('expected an atomic usage denial');
       assert.equal(outcome.denial.scope, scope);
       assert.equal(outcome.denial.retryAfterSeconds, retryAfterSeconds);
       assert.equal(operationBudgetHttpStatus(outcome.denial), 429);
       const error = operationBudgetError(outcome.denial);
       assert.equal(error.errorCode, OPERATION_USAGE_ERROR_CODE);
       assert.equal(error.operationFeature, OPERATION_FEATURES.LOOKUP_FAST);
-      assert.equal(error.usageModelVersion, 1);
+      assert.equal(recordValue(error).usageModelVersion, 1);
     }
   });
 
@@ -367,6 +389,7 @@ describe('distributed sorted-set leases', () => {
       });
       const denial = await provider.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
       assert.equal(denial.allowed, false);
+      if (!('scope' in denial)) assert.fail('expected a distributed provider denial');
       assert.equal(denial.scope, 'provider');
     }
   });
@@ -402,6 +425,7 @@ describe('distributed sorted-set leases', () => {
       );
       assert.equal(callbackCalls, 0);
       assert.equal(outcome.allowed, false);
+      if (outcome.allowed) assert.fail('expected a provider failure denial');
       assert.equal(outcome.denial.scope, 'provider');
       assert.equal(operationBudgetHttpStatus(outcome.denial), 503);
       const payload = operationBudgetError(outcome.denial);
@@ -430,7 +454,7 @@ describe('distributed sorted-set leases', () => {
   });
 
   test('returns bounded deployment-wide status without session identifiers', async () => {
-    let captured;
+    let captured: unknown[] | undefined;
     const provider = createDistributedOperationBudget({ limits: TEST_LIMITS, namespace: 'test:budget' }, {
       command: async (command) => {
         captured = command;
@@ -442,10 +466,11 @@ describe('distributed sorted-set leases', () => {
       { id: OPERATION_CLASSES.REGISTRY_LIGHT, sessionLimit: 2, runtimeLimit: 3, active: 2 },
       { id: OPERATION_CLASSES.REGISTRY_DEEP, sessionLimit: 1, runtimeLimit: 2, active: 1 },
     ]);
-    assert.equal(captured[0], 'EVAL');
-    assert.equal(captured[1], STATUS_SCRIPT);
-    assert.equal(captured[2], 2);
-    assert.ok(captured.slice(3).every((key) => key.includes(':runtime:')));
+    const command = requiredValue(captured);
+    assert.equal(command[0], 'EVAL');
+    assert.equal(command[1], STATUS_SCRIPT);
+    assert.equal(command[2], 2);
+    assert.ok(command.slice(3).every((key) => stringValue(key).includes(':runtime:')));
   });
 });
 

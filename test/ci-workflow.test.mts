@@ -1,10 +1,10 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKFLOW_PATH = path.join(__dirname, '..', '.github', 'workflows', 'ci.yml');
 const WORKFLOW = fs.readFileSync(WORKFLOW_PATH, 'utf8');
 

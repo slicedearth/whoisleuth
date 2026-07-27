@@ -2,10 +2,9 @@
 // a typed, validated value before it reaches a WHOIS TCP socket write, a
 // DNS query, or an RDAP/MTA-STS fetch URL.
 
-const test = require('node:test');
-const { describe } = require('node:test');
-const assert = require('node:assert/strict');
-const { classifyQuery } = require('../lib/classify.mts');
+import test, { describe } from 'node:test';
+import assert from 'node:assert/strict';
+import { classifyQuery } from '../lib/classify.mts';
 
 describe('control characters', () => {
   test('rejects an embedded CRLF (WHOIS protocol injection)', () => {

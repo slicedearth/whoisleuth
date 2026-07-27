@@ -1,12 +1,8 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let coverage;
-let provenance;
-before(async () => {
-  coverage = await import('../frontend/src/lib/analysis/coverage.ts');
-  provenance = await import('../frontend/src/lib/analysis/candidate-provenance.ts');
-});
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import * as coverage from '../frontend/src/lib/analysis/coverage.ts';
+import * as provenance from '../frontend/src/lib/analysis/candidate-provenance.ts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('defensive-registration coverage', () => {
   test('counts unique domains while retaining overlapping mutation groups', () => {
@@ -34,14 +30,14 @@ describe('defensive-registration coverage', () => {
       unknown: 1,
       coveragePercent: 25,
     });
-    const omission = report.mutationGroups.find((group) => group.key === 'character_omission');
+    const omission = requiredValue(report.mutationGroups.find((group) => group.key === 'character_omission'));
     assert.equal(omission.total, 2);
     assert.equal(omission.available, 1);
     assert.equal(omission.registered, 1);
-    const dictionary = report.mutationGroups.find((group) => group.key === 'dictionary');
+    const dictionary = requiredValue(report.mutationGroups.find((group) => group.key === 'dictionary'));
     assert.equal(dictionary.protected, 1);
     assert.equal(dictionary.unknown, 1);
-    assert.equal(report.tldGroups.find((group) => group.key === 'net').total, 2);
+    assert.equal(requiredValue(report.tldGroups.find((group) => group.key === 'net')).total, 2);
   });
 
   test('does not add unscanned, unprotected generated domains to a report', () => {
@@ -52,7 +48,7 @@ describe('defensive-registration coverage', () => {
       { dictionary: 'Dictionary' }
     );
     assert.equal(report.summary.total, 1);
-    assert.equal(report.candidates[0].domain, 'scanned.com');
+    assert.equal(requiredValue(report.candidates[0]).domain, 'scanned.com');
   });
 });
 
@@ -62,7 +58,10 @@ describe('candidate provenance context', () => {
       { domain: 'EXAMPLE.com', source: 'brand.com', tld: 'com', mutationTypes: ['dictionary'] },
       { domain: 'example.com', source: 'brand.com', tld: 'com', mutationTypes: ['bitsquatting'] },
     ]);
-    assert.deepEqual(provenance.getCandidateProvenance('example.com').mutationTypes, ['dictionary', 'bitsquatting']);
+    assert.deepEqual(
+      requiredValue(provenance.getCandidateProvenance('example.com')).mutationTypes,
+      ['dictionary', 'bitsquatting'],
+    );
     assert.equal(provenance.listCandidateProvenance().length, 1);
   });
 

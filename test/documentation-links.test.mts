@@ -1,8 +1,10 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { existsSync, readFileSync, readdirSync } = require('node:fs');
-const { dirname, extname, join, relative, resolve } = require('node:path');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, extname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const DOCS_DIRECTORY = join(ROOT, 'docs');
 const DOCUMENTATION_FILES = [
@@ -18,10 +20,10 @@ const REQUIRED_GUIDES = [
   'docs/operations.md',
 ];
 
-function sourceLinesOutsideFences(markdown) {
+function sourceLinesOutsideFences(markdown: string): Array<{ line: string; lineNumber: number }> {
   const lines = markdown.split(/\r?\n/);
-  const visible = [];
-  let fence = null;
+  const visible: Array<{ line: string; lineNumber: number }> = [];
+  let fence: string | null = null;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -38,7 +40,7 @@ function sourceLinesOutsideFences(markdown) {
   return visible;
 }
 
-function githubHeadingSlug(value) {
+function githubHeadingSlug(value: string): string {
   return value
     .replace(/`([^`]*)`/g, '$1')
     .trim()
@@ -47,9 +49,9 @@ function githubHeadingSlug(value) {
     .replace(/\s+/g, '-');
 }
 
-function markdownHeadingAnchors(file) {
-  const counts = new Map();
-  const anchors = new Set();
+function markdownHeadingAnchors(file: string): Set<string> {
+  const counts = new Map<string, number>();
+  const anchors = new Set<string>();
 
   for (const { line } of sourceLinesOutsideFences(readFileSync(file, 'utf8'))) {
     const match = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
@@ -64,8 +66,8 @@ function markdownHeadingAnchors(file) {
   return anchors;
 }
 
-function localMarkdownLinks(file) {
-  const links = [];
+function localMarkdownLinks(file: string): Array<{ lineNumber: number; target: string }> {
+  const links: Array<{ lineNumber: number; target: string }> = [];
   const linkPattern = /!?\[[^\]]*]\(\s*<?([^)\s>]+)>?(?:\s+["'][^)]*["'])?\s*\)/g;
 
   for (const { line, lineNumber } of sourceLinesOutsideFences(readFileSync(file, 'utf8'))) {

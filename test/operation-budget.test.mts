@@ -1,7 +1,6 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   OPERATION_BUDGET_ERROR_CODE,
   OPERATION_CLASSES,
   OPERATION_FEATURE_MODEL_VERSION,
@@ -15,7 +14,8 @@ const {
   operationClassFor,
   operationFeatureFor,
   runWithOperationBudget,
-} = require('../lib/operation-budget.mts');
+} from '../lib/operation-budget.mts';
+import { requiredValue } from './value-assertions.mts';
 
 const TEST_LIMITS = {
   [OPERATION_CLASSES.REGISTRY_LIGHT]: { session: 2, runtime: 3 },
@@ -83,11 +83,11 @@ describe('network operation classification', () => {
 });
 
 describe('in-memory operation leases', () => {
-  test('enforces a per-session ceiling and releases idempotently', () => {
+  test('enforces a per-session ceiling and releases idempotently', async () => {
     const budget = createOperationBudget(TEST_LIMITS);
-    const first = budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
-    const second = budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
-    const denied = budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
+    const first = await budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
+    const second = await budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
+    const denied = await budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
     assert.equal(first.allowed, true);
     assert.equal(second.allowed, true);
     assert.deepEqual(denied, {
@@ -96,37 +96,49 @@ describe('in-memory operation leases', () => {
       scope: 'session',
       retryAfterSeconds: 1,
     });
-    first.release();
-    first.release();
-    const replacement = budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
+    if (!first.allowed || !second.allowed) assert.fail('expected the first two leases to be allowed');
+    await first.release();
+    await first.release();
+    const replacement = await budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
     assert.equal(replacement.allowed, true);
-    second.release();
-    replacement.release();
-    assert.equal(budget.status().find((entry) => entry.id === OPERATION_CLASSES.REGISTRY_LIGHT).active, 0);
+    if (!replacement.allowed) assert.fail('expected the released capacity to be reusable');
+    await second.release();
+    await replacement.release();
+    assert.equal(
+      requiredValue((await budget.status()).find((entry) => entry.id === OPERATION_CLASSES.REGISTRY_LIGHT)).active,
+      0,
+    );
   });
 
-  test('enforces a runtime ceiling across independent sessions', () => {
+  test('enforces a runtime ceiling across independent sessions', async () => {
     const budget = createOperationBudget(TEST_LIMITS);
-    const leases = [
+    const leases = await Promise.all([
       budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a'),
       budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a'),
       budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-b'),
-    ];
-    const denied = budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-c');
+    ]);
+    const denied = await budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-c');
     assert.equal(denied.allowed, false);
+    if (denied.allowed) assert.fail('expected the runtime ceiling to deny the fourth lease');
     assert.equal(denied.scope, 'runtime');
-    for (const lease of leases) lease.release();
+    for (const lease of leases) {
+      if (!lease.allowed) assert.fail('expected the first three leases to be allowed');
+      await lease.release();
+    }
   });
 
-  test('keeps unrelated cost classes independent', () => {
+  test('keeps unrelated cost classes independent', async () => {
     const budget = createOperationBudget(TEST_LIMITS);
-    const light = budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
-    const deep = budget.acquire(OPERATION_CLASSES.REGISTRY_DEEP, 'session-a');
+    const light = await budget.acquire(OPERATION_CLASSES.REGISTRY_LIGHT, 'session-a');
+    const deep = await budget.acquire(OPERATION_CLASSES.REGISTRY_DEEP, 'session-a');
     assert.equal(light.allowed, true);
     assert.equal(deep.allowed, true);
-    assert.equal(budget.acquire(OPERATION_CLASSES.REGISTRY_DEEP, 'session-a').scope, 'session');
-    light.release();
-    deep.release();
+    const denied = await budget.acquire(OPERATION_CLASSES.REGISTRY_DEEP, 'session-a');
+    if (denied.allowed) assert.fail('expected the deep session ceiling to deny another lease');
+    assert.equal(denied.scope, 'session');
+    if (!light.allowed || !deep.allowed) assert.fail('expected unrelated cost classes to acquire independently');
+    await light.release();
+    await deep.release();
   });
 
   test('rejects unknown classes and missing session identifiers', () => {
@@ -162,9 +174,13 @@ describe('provider-neutral operation runner', () => {
   });
 
   test('supports asynchronous providers and releases after downstream work', async () => {
-    const events = [];
+    const events: string[] = [];
     const provider = {
-      async acquire(operationClass, sessionKey, context) {
+      async acquire(
+        operationClass: string,
+        sessionKey: unknown,
+        context: { operationFeature?: string | null } = {},
+      ) {
         events.push(`acquire:${operationClass}:${sessionKey}:${context.operationFeature}`);
         return {
           allowed: true,
@@ -210,6 +226,7 @@ describe('provider-neutral operation runner', () => {
       async () => 'not reached',
     );
     assert.equal(outcome.allowed, false);
+    if (outcome.allowed) assert.fail('expected a provider denial');
     assert.equal(outcome.denial.operationFeature, OPERATION_FEATURES.BULK_FAST);
     assert.equal(operationBudgetError(outcome.denial).operationFeature, OPERATION_FEATURES.BULK_FAST);
     assert.equal(operationBudgetError(outcome.denial).operationFeatureModelVersion, 1);
@@ -231,6 +248,7 @@ describe('provider-neutral operation runner', () => {
       'session-a',
       async () => 'not reached',
     );
+    if (outcome.allowed) assert.fail('expected a provider denial');
     assert.equal(outcome.denial.operationClass, OPERATION_CLASSES.REGISTRY_LIGHT);
     assert.equal(outcome.denial.operationFeature, OPERATION_FEATURES.LOOKUP_FAST);
   });

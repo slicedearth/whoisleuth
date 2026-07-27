@@ -1,27 +1,40 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   createNetlifyBlobVersionedTextStore,
   MAX_BLOB_KEY_BYTES,
-} = require('../lib/scheduled-monitor-netlify-store.mts');
-const { MAX_ENVELOPE_BYTES } = require('../lib/scheduled-monitor-crypto.mts');
+} from '../lib/scheduled-monitor-netlify-store.mts';
+import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mts';
+import { MAX_ENVELOPE_BYTES } from '../lib/scheduled-monitor-crypto.mts';
 
-class FakeBlobStore {
-  constructor() {
-    this.entry = null;
-    this.reads = [];
-    this.writes = [];
-  }
+type BlobRead = Awaited<ReturnType<NetlifyBlobStore['getWithMetadata']>>;
+type BlobReadCall = { key: string; options: { consistency: 'strong'; type: 'text' } };
+type BlobWriteCall = {
+  key: string;
+  value: string;
+  options: { onlyIfNew: true } | { onlyIfMatch: string };
+};
 
-  async getWithMetadata(key, options) {
+class FakeBlobStore implements NetlifyBlobStore {
+  entry: BlobRead = null;
+  reads: BlobReadCall[] = [];
+  writes: BlobWriteCall[] = [];
+
+  async getWithMetadata(
+    key: string,
+    options: BlobReadCall['options'],
+  ): Promise<BlobRead> {
     this.reads.push({ key, options });
     return this.entry;
   }
 
-  async set(key, value, options) {
+  async set(
+    key: string,
+    value: string,
+    options: BlobWriteCall['options'],
+  ): Promise<{ modified: unknown }> {
     this.writes.push({ key, value, options });
-    return { modified: true, etag: '"next"' };
+    return { modified: true };
   }
 }
 
@@ -41,7 +54,7 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
 
   test('preserves bounded ciphertext and the opaque ETag returned by Netlify', async () => {
     const blobs = new FakeBlobStore();
-    blobs.entry = { data: '{"ciphertext":"opaque"}', etag: 'W/"opaque-version"', metadata: {} };
+    blobs.entry = { data: '{"ciphertext":"opaque"}', etag: 'W/"opaque-version"' };
     const store = createNetlifyBlobVersionedTextStore(blobs);
     assert.deepEqual(await store.read('state'), {
       value: '{"ciphertext":"opaque"}',
@@ -72,7 +85,10 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
   });
 
   test('rejects malformed stores, Blob keys, entries, versions, values, and write responses', async () => {
-    assert.throws(() => createNetlifyBlobVersionedTextStore({}), /Blob store is required/i);
+    assert.throws(
+      () => createNetlifyBlobVersionedTextStore({} as NetlifyBlobStore),
+      /Blob store is required/i,
+    );
 
     const blobs = new FakeBlobStore();
     const store = createNetlifyBlobVersionedTextStore(blobs);
@@ -87,7 +103,7 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
       { data: 'ciphertext', etag: 'bad\netag' },
       { data: 'x'.repeat(MAX_ENVELOPE_BYTES + 1), etag: '"v1"' },
     ]) {
-      blobs.entry = entry;
+      blobs.entry = entry as NonNullable<BlobRead>;
       await assert.rejects(store.read('state'), /invalid scheduled monitoring entry/i);
     }
 
