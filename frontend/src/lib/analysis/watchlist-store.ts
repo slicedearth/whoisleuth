@@ -1,4 +1,4 @@
-// Pure browser-local watchlist collection model. Watchlist-history.js owns the
+// Pure browser-local watchlist collection model. Watchlist history owns the
 // evidence shape and diff semantics; this module owns collection names, schema
 // migration, import merging, and exact serialized-byte accounting.
 
@@ -17,7 +17,7 @@ export const MAX_WATCHLIST_STORE_BYTES = 2 * 1024 * 1024;
 const BLOCKED_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 
-type WatchlistEntry = ReturnType<typeof normalizeWatchlistEntry>;
+export type WatchlistEntry = ReturnType<typeof normalizeWatchlistEntry>;
 export type WatchlistCollection = Record<string, WatchlistEntry>;
 export type WatchlistStore = {
   schema: typeof WATCHLIST_SCHEMA;

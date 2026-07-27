@@ -5,6 +5,7 @@
 import { promises as dns } from 'node:dns';
 
 import { fetchRdapRecord } from './rdap.mts';
+import { nonEmptyErrorMessage } from './error-detail.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { classifyMxRecords } from './dns-mx.mts';
 import type { MxRecord } from './dns-mx.mts';
@@ -71,11 +72,6 @@ function errorRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function errorMessage(value: unknown, fallback: string): string {
-  const record = errorRecord(value);
-  return typeof record.message === 'string' ? record.message : fallback;
-}
-
 function asMxRecords(records: unknown[]): MxRecord[] {
   return records as MxRecord[];
 }
@@ -130,7 +126,7 @@ async function resolveDns(label: string, factory: () => Promise<unknown[]>): Pro
   } catch (err) {
     const error = errorRecord(err);
     if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return { records: [], error: null };
-    return { records: [], error: errorMessage(err, String(err)) };
+    return { records: [], error: nonEmptyErrorMessage(err, String(err)) };
   }
 }
 
@@ -473,7 +469,7 @@ async function fetchMtaStsPolicy(domain: string): Promise<MtaStsPolicyFetch> {
       contentType: null,
       error: errorRecord(err).name === 'AbortError'
         ? 'Policy fetch timed out.'
-        : errorMessage(err, String(err)),
+        : nonEmptyErrorMessage(err, String(err)),
     };
   } finally {
     clearTimeout(timeout);
@@ -497,14 +493,18 @@ async function checkDomainPosture(domain: string, { dkimSelectors = [] }: { dkim
       selector,
       ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dns.resolveTxt(`${selector}._domainkey.${domain}`)),
     }))),
-    fetchRdapRecord('domain', domain).catch((err) => ({ error: err.message || String(err) })),
+    fetchRdapRecord('domain', domain).catch((err: unknown) => ({
+      error: nonEmptyErrorMessage(err, String(err)),
+    })),
   ]);
 
   const parsedMtaDns = mtaStsDns.error ? null : parseMtaStsDnsRecords(mtaStsDns.records);
   const mtaStsPolicy = parsedMtaDns?.valid ? await fetchMtaStsPolicy(domain) : null;
-  const dnssec = rdap?.error
-    ? { value: null, error: rdap.error }
-    : { value: rdap?.parsed?.dnssec || null, error: null };
+  const dnssec = !rdap
+    ? { value: null, error: 'RDAP did not return a domain record.' }
+    : 'error' in rdap
+      ? { value: null, error: rdap.error }
+    : { value: rdap.parsed?.dnssec || null, error: null };
   const report = buildPostureReport(domain, { spf, dmarc, mx, caa, mtaStsDns, mtaStsPolicy, tlsRpt, bimi, dkim, dnssec });
   return { ...report, checkedAt: new Date().toISOString(), dkimSelectors: selectors };
 }

@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
   import { projectCaseRelationshipTable } from '$lib/analysis/case-relationship-table.ts';
+  import type { CaseRelationshipTableRow } from '$lib/analysis/case-relationship-table.ts';
+  import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import Pagination from '$lib/components/Pagination.svelte';
 
-  let { records, summary, onselect }:{records:CaseRecord[];summary:any;onselect?:(record:CaseRecord)=>void}=$props();
+  let { records, summary, onselect }:{records:CaseRecord[];summary:CaseRelationshipSummary;onselect?:(record:CaseRecord)=>void}=$props();
   let type=$state('all');
   let query=$state('');
   let sort=$state('type');
@@ -18,7 +20,7 @@
   function openCase(id:string){const target=records.find((record)=>record.id===id);if(target)onselect?.(target);}
   function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
   function sourceLabel(value:string){return value.split('_').filter(Boolean).map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')||'Unknown';}
-  function completenessLabel(row:any){if(row.truncated)return 'Partial or truncated';if(row.complete===true)return 'Complete';if(row.complete===false)return 'Partial';return 'Unknown';}
+  function completenessLabel(row:CaseRelationshipTableRow){if(row.truncated)return 'Partial or truncated';if(row.complete===true)return 'Complete';if(row.complete===false)return 'Partial';return 'Unknown';}
   function setQuery(value:string){query=value;page=1;}
   function setType(value:string){type=value;page=1;}
   function setSort(value:string){sort=value;page=1;}
@@ -65,7 +67,7 @@
               <td data-label="Relationship"><strong>{row.label}</strong><small>{row.method}</small></td>
               <td data-label="Observed value"><code>{row.value}</code></td>
               <td data-label="Cases"><span class="case-count">{row.caseCount} case{row.caseCount===1?'':'s'}</span><div class="case-pivots">{#each row.cases as item}<button type="button" class="btn small" onclick={()=>openCase(item.id)}>Open {item.domain}</button>{/each}</div>{#if row.omittedCases}<small>{row.omittedCases} additional case{row.omittedCases===1?'':'s'} omitted from this table row.</small>{/if}</td>
-              <td data-label="Interpretation"><p>{row.description}</p><dl class="row-provenance"><div><dt>Sources</dt><dd>{row.sources?.map(sourceLabel).join(', ')||'Unavailable'}</dd></div><div><dt>Observed</dt><dd>{row.firstObservedAt?date(row.firstObservedAt):'Unavailable'}{#if row.lastObservedAt&&row.lastObservedAt!==row.firstObservedAt} to {date(row.lastObservedAt)}{/if}</dd></div><div><dt>Completeness</dt><dd>{completenessLabel(row)}</dd></div>{#if row.campaigns?.length}<div><dt>Campaigns</dt><dd>{row.campaigns.map((item:any)=>item.label).join(', ')}</dd></div>{/if}</dl>{#if row.observations?.length}<details class="row-observations"><summary>Inspect {row.observations.length + row.omittedObservations} source observation{row.observations.length + row.omittedObservations===1?'':'s'}</summary><ul>{#each row.observations.slice(0,5) as item}<li><strong>{sourceLabel(item.source)}</strong> · {sourceLabel(item.scanDepth)} · {date(item.observedAt)}</li>{/each}</ul>{#if row.observations.length>5||row.omittedObservations}<small>{Math.max(0,row.observations.length-5)+row.omittedObservations} additional observation{Math.max(0,row.observations.length-5)+row.omittedObservations===1?'':'s'} omitted from this row.</small>{/if}</details>{/if}</td>
+              <td data-label="Interpretation"><p>{row.description}</p><dl class="row-provenance"><div><dt>Sources</dt><dd>{row.sources?.map(sourceLabel).join(', ')||'Unavailable'}</dd></div><div><dt>Observed</dt><dd>{row.firstObservedAt?date(row.firstObservedAt):'Unavailable'}{#if row.lastObservedAt&&row.lastObservedAt!==row.firstObservedAt} to {date(row.lastObservedAt)}{/if}</dd></div><div><dt>Completeness</dt><dd>{completenessLabel(row)}</dd></div>{#if row.campaigns?.length}<div><dt>Campaigns</dt><dd>{row.campaigns.map((item)=>item.label).join(', ')}</dd></div>{/if}</dl>{#if row.observations?.length}<details class="row-observations"><summary>Inspect {row.observations.length + row.omittedObservations} source observation{row.observations.length + row.omittedObservations===1?'':'s'}</summary><ul>{#each row.observations.slice(0,5) as item}<li><strong>{sourceLabel(item.source)}</strong> · {sourceLabel(item.scanDepth)} · {date(item.observedAt)}</li>{/each}</ul>{#if row.observations.length>5||row.omittedObservations}<small>{Math.max(0,row.observations.length-5)+row.omittedObservations} additional observation{Math.max(0,row.observations.length-5)+row.omittedObservations===1?'':'s'} omitted from this row.</small>{/if}</details>{/if}</td>
             </tr>
           {/each}
         </tbody>

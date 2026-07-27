@@ -6,8 +6,8 @@ import {
   type RelationshipObservation,
   type RelationshipObservationInput,
 } from './analysis/relationship-observation-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { RELATIONSHIP_OBSERVATIONS_COLLECTION } from './browser-local-data-definitions.js';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { RELATIONSHIP_OBSERVATIONS_COLLECTION } from './browser-local-data-definitions.ts';
 
 export type { RelationshipObservation, RelationshipObservationInput } from './analysis/relationship-observation-model.ts';
 

@@ -150,7 +150,10 @@ describe('risk calibration dataset projection', () => {
       },
     })])));
     assert.doesNotMatch(JSON.stringify(parsed), /secret|raw|discard/);
-    assert.equal(parsed.records[0].evidence.threatIntelligence.providers[0].provider.id, 'urlscan_search');
+    const projectedRecord = parsed.records[0];
+    const projectedProvider = projectedRecord?.evidence.threatIntelligence?.providers[0];
+    assert.ok(projectedProvider);
+    assert.equal(projectedProvider.provider.id, 'urlscan_search');
   });
 });
 

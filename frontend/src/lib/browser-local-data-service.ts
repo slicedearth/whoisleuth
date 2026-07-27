@@ -2,8 +2,8 @@ import {
   BrowserLocalDataError,
   BrowserLocalDataProvider,
   type BrowserLocalDataInitialization,
-} from './browser-local-data.js';
-import { BROWSER_LOCAL_COLLECTIONS } from './browser-local-data-definitions.js';
+} from './browser-local-data.ts';
+import { BROWSER_LOCAL_COLLECTIONS } from './browser-local-data-definitions.ts';
 
 export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'idle' | 'initializing' }>

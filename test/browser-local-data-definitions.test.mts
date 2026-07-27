@@ -6,6 +6,10 @@ import {
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
 } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import {
+  BrowserLocalDataError,
+  isExpectedBrowserLocalDataFailure,
+} from '../frontend/src/lib/browser-local-data.ts';
 import type { AnyLocalDataCollectionDefinition } from '../frontend/src/lib/browser-local-data.ts';
 
 const NOW = '2026-07-22T01:00:00.000Z';
@@ -18,6 +22,16 @@ function roundTrip(definition: AnyLocalDataCollectionDefinition, document: unkno
 }
 
 describe('browser-local collection definitions', () => {
+  test('degraded local-data views suppress only expected storage failures', () => {
+    assert.equal(
+      isExpectedBrowserLocalDataFailure(new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'Unavailable.')),
+      true,
+    );
+    assert.equal(isExpectedBrowserLocalDataFailure(new DOMException('Unavailable.', 'InvalidStateError')), true);
+    assert.equal(isExpectedBrowserLocalDataFailure(new TypeError('Programming error.')), false);
+    assert.equal(isExpectedBrowserLocalDataFailure({ name: 'BrowserLocalDataError' }), false);
+  });
+
   test('every empty collection survives record splitting without changing its canonical document', () => {
     for (const definition of BROWSER_LOCAL_COLLECTIONS) {
       const result = roundTrip(definition, definition.empty());

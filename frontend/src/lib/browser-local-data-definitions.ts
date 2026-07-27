@@ -6,6 +6,7 @@ import {
   parseStoreVersion,
   serializeCaseStore,
 } from './analysis/case-model.ts';
+import type { CaseRecord } from './analysis/case-model.ts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
   MAX_CAMPAIGNS,
@@ -14,6 +15,7 @@ import {
   normalizeCampaignStore,
   serializeCampaignStore,
 } from './analysis/campaign-model.ts';
+import type { CampaignRecord } from './analysis/campaign-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
@@ -22,6 +24,7 @@ import {
   normalizeBrandProfileStore,
   serializeBrandProfileStore,
 } from './analysis/brand-profile-model.ts';
+import type { BrandProfile } from './analysis/brand-profile-model.ts';
 import {
   MAX_WATCHLISTS,
   MAX_WATCHLIST_STORE_BYTES,
@@ -30,6 +33,7 @@ import {
   serializeWatchlistStore,
   watchlistStoreVersion,
 } from './analysis/watchlist-store.ts';
+import type { WatchlistCollection } from './analysis/watchlist-store.ts';
 import {
   MAX_SHORTLIST_ENTRIES,
   MAX_SHORTLIST_STORE_BYTES,
@@ -38,6 +42,7 @@ import {
   serializeShortlistStore,
   shortlistStoreVersion,
 } from './analysis/shortlist-model.ts';
+import type { ShortlistRecord } from './analysis/shortlist-model.ts';
 import {
   CT_HISTORY_SCHEMA_VERSION,
   MAX_CT_HISTORY_SEARCHES,
@@ -47,6 +52,7 @@ import {
   enforceCtHistoryBudget,
   normalizeCtHistoryStore,
 } from './analysis/ct-history.ts';
+import type { CtHistoryStore } from './analysis/ct-history.ts';
 import {
   DETECTION_RULE_SCHEMA_VERSION,
   MAX_DETECTION_RULES,
@@ -55,6 +61,7 @@ import {
   normalizeDetectionRuleStore,
   serializeDetectionRuleStore,
 } from './analysis/detection-rule-model.ts';
+import type { DetectionRule } from './analysis/detection-rule-model.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
   MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
@@ -64,7 +71,8 @@ import {
   relationshipObservationStoreVersion,
   serializeRelationshipObservationStore,
 } from './analysis/relationship-observation-model.ts';
-import type { LocalDataCollectionDefinition, LocalDataRecord } from './browser-local-data.js';
+import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
+import type { LocalDataCollectionDefinition, LocalDataRecord } from './browser-local-data.ts';
 
 export const LEGACY_CASES_KEY = 'whois-rdap-cases-v1';
 export const LEGACY_CAMPAIGNS_KEY = 'whoisleuth-campaigns-v1';
@@ -75,7 +83,7 @@ export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
 export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
 export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
 
-function recordsFromArray(values: readonly unknown[], key: (value: any) => unknown): LocalDataRecord[] {
+function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
 }
 
@@ -83,7 +91,7 @@ function arrayFromRecords(records: readonly LocalDataRecord[]): unknown[] {
   return records.map((record) => record.value);
 }
 
-export const CASES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Object.freeze({
   id: 'cases',
   label: 'Cases',
   legacyKey: LEGACY_CASES_KEY,
@@ -98,7 +106,7 @@ export const CASES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.fre
   join: (records, schemaVersion) => ({ version: schemaVersion, cases: arrayFromRecords(records) }),
 });
 
-export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<CampaignRecord[]> = Object.freeze({
   id: 'campaigns',
   label: 'Campaigns',
   legacyKey: LEGACY_CAMPAIGNS_KEY,
@@ -113,7 +121,7 @@ export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<any[]> = Object
   join: (records, schemaVersion) => ({ version: schemaVersion, campaigns: arrayFromRecords(records) }),
 });
 
-export const PROFILES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const PROFILES_COLLECTION: LocalDataCollectionDefinition<BrandProfile[]> = Object.freeze({
   id: 'brand_profiles',
   label: 'Brand Profiles',
   legacyKey: LEGACY_PROFILES_KEY,
@@ -128,7 +136,7 @@ export const PROFILES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.
   join: (records, schemaVersion) => ({ version: schemaVersion, profiles: arrayFromRecords(records) }),
 });
 
-export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<Record<string, any>> = Object.freeze({
+export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistCollection> = Object.freeze({
   id: 'watchlists',
   label: 'Watchlists',
   legacyKey: LEGACY_WATCHLIST_KEY,
@@ -147,7 +155,7 @@ export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<Record<string,
   }),
 });
 
-export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord[]> = Object.freeze({
   id: 'shortlist',
   label: 'Shortlist',
   legacyKey: LEGACY_SHORTLIST_KEY,
@@ -162,7 +170,7 @@ export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<any[]> = Object
   join: (records, schemaVersion) => ({ schema: 'whoisleuth.shortlist', version: schemaVersion, entries: arrayFromRecords(records) }),
 });
 
-export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<any> = Object.freeze({
+export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<CtHistoryStore> = Object.freeze({
   id: 'ct_history',
   label: 'Certificate Transparency history',
   legacyKey: LEGACY_CT_HISTORY_KEY,
@@ -177,7 +185,7 @@ export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<any> = Object.
   join: (records, schemaVersion) => ({ version: schemaVersion, entries: arrayFromRecords(records) }),
 });
 
-export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<DetectionRule[]> = Object.freeze({
   id: 'detection_rules',
   label: 'Custom rules',
   legacyKey: LEGACY_DETECTION_RULES_KEY,
@@ -192,7 +200,7 @@ export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<any[]> = 
   join: (records, schemaVersion) => ({ version: schemaVersion, rules: arrayFromRecords(records) }),
 });
 
-export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition<RelationshipObservation[]> = Object.freeze({
   id: 'relationship_observations',
   label: 'Retained relationship observations',
   legacyKey: LEGACY_RELATIONSHIP_OBSERVATIONS_KEY,

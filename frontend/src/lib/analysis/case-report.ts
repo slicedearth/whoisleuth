@@ -196,7 +196,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): CaseEvidenceSn
  * CaseRecord. The returned object is a plain JSON-safe value; the Markdown is
  * a single string. Does not mutate the source record.
  *
- * @param {import('../cases.js').CaseRecord} caseRecord
+ * @param {CaseRecord} caseRecord
  * @param {ReportOptions} [options]
  * @returns {{ json: object, markdown: string }}
  */

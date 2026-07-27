@@ -6,8 +6,8 @@ import {
   serializeShortlistStore,
   type ShortlistRecord,
 } from './analysis/shortlist-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { LEGACY_SHORTLIST_KEY, SHORTLIST_COLLECTION } from './browser-local-data-definitions.js';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { LEGACY_SHORTLIST_KEY, SHORTLIST_COLLECTION } from './browser-local-data-definitions.ts';
 
 export const SHORTLIST_KEY = LEGACY_SHORTLIST_KEY;
 export const MAX_SHORTLIST_IMPORT_BYTES = 2 * 1024 * 1024;

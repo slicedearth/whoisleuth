@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData, pseudoContent, readBrowserLocalCollection, runBulkScan } from './helpers';
 
 // Default fixtures use dotless values so classifyQuery rejects them before
 // any upstream work. Tests that need completed result data install an explicit
@@ -25,6 +25,17 @@ test('the scan button only takes the high-contrast primary treatment once ready'
   await page.locator('#domains').fill(invalidDomains(1).join('\n'));
   await expect(scanButton).toBeEnabled();
   expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('gradient');
+});
+
+test('keeps the Bulk queue available when browser-local context cannot be loaded', async ({ page }) => {
+  await expect(page.locator('#domains')).toBeEditable();
+  await failBrowserLocalReads(page);
+  const navigation = page.locator('#console-navigation');
+  await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await navigation.getByRole('link', { name: /^Bulk/u }).click();
+
+  await expect(page.locator('.local-context-status')).toContainText('browser-local profile, shortlist, case, or relationship context could not be loaded');
+  await expect(page.locator('#domains')).toBeEditable();
 });
 
 test('a small scan completes and reports the correct error count', async ({ page }) => {

@@ -84,6 +84,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expectSequentialHeadingOrder(page);
 
   await page.goto('/demo');
+  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await page.evaluate(() => sessionStorage.setItem('whoisleuth:synthetic-demo:v1', '{malformed'));
   await page.reload();
   await expect(page.getByRole('status')).toContainText('Stored demo progress was invalid');

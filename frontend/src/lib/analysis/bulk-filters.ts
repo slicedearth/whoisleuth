@@ -1,5 +1,5 @@
 // Pure bulk-result triage helpers. Keeping matching and count logic outside
-// bulk.js makes the UI inexpensive to update per incoming scan result and
+// the Bulk route makes the UI inexpensive to update per incoming scan result and
 // gives the filter semantics direct unit-test coverage.
 
 import { computeRiskScore } from './scoring.ts';

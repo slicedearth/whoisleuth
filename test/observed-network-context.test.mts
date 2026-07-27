@@ -31,12 +31,12 @@ function availability(overrides = {}) {
 function ipRdap(overrides = {}) {
   return {
     rdapServer: `https://rdap.registry.test/ip/${IPV4}`,
-    transportSecurity: 'https',
+    transportSecurity: 'https' as const,
     upstreamStatus: 200,
     fetchedAt: OBSERVED_AT,
     attempts: [{
       endpoint: `https://rdap.registry.test/ip/${IPV4}`,
-      transportSecurity: 'https', status: 200, outcome: 'success',
+      transportSecurity: 'https' as const, status: 200, outcome: 'success',
       detail: 'The endpoint returned the requested RDAP object.', selected: true,
     }],
     parsed: {

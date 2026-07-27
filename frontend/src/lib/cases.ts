@@ -11,8 +11,8 @@ import {
   openOrCreateCase,
   updateCase,
 } from './analysis/case-model.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.js';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.ts';
 
 export {
   CASE_DISPOSITIONS,

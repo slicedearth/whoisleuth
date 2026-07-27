@@ -8,8 +8,8 @@ import {
   MAX_PROFILE_VALUES,
 } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { LEGACY_PROFILES_KEY, PROFILES_COLLECTION } from './browser-local-data-definitions.js';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { LEGACY_PROFILES_KEY, PROFILES_COLLECTION } from './browser-local-data-definitions.ts';
 
 export const PROFILES_KEY = LEGACY_PROFILES_KEY;
 export const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -37,7 +37,7 @@ export interface BrandProfile {
 
 const id = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export function normalizeProfile(raw: any, existing?: BrandProfile, touch = false): BrandProfile {
+export function normalizeProfile(raw: unknown, existing?: BrandProfile, touch = false): BrandProfile {
   const profile = normalizeBrandProfile(raw, { existing, touch, makeId: id });
   if (!profile) throw new Error('Enter a brand name.');
   return profile as BrandProfile;
@@ -86,7 +86,7 @@ export function isDomainAllowlisted(domain: string, profile: BrandProfile | null
   return profileDomainKind(domain, profile) !== null;
 }
 
-export function profileSignals(domain: string, evidence: Record<string, any>, profile: BrandProfile | null = null) {
+export function profileSignals(domain: string, evidence: Record<string, unknown>, profile: BrandProfile | null = null) {
   const trusted = profileDomainKind(domain, profile);
   if (!profile || trusted) return { trusted, faviconMatch: false, faviconNearMatch: false, reusesOfficialAssets: false };
   const exact = Boolean(evidence.faviconHash && profile.officialFaviconHash && evidence.faviconHash === profile.officialFaviconHash);
@@ -95,11 +95,11 @@ export function profileSignals(domain: string, evidence: Record<string, any>, pr
   const distance = isInformativeFaviconHash(left) && isInformativeFaviconHash(right) ? hammingDistanceHex(left, right) : null;
   const official = new Set(profile.officialDomains.map((value) => value.toLowerCase().replace(/\.$/, '')));
   const reused = Array.isArray(evidence.externalAssetHosts)
-    && evidence.externalAssetHosts.some((host: string) => official.has(String(host).toLowerCase().replace(/\.$/, '')));
+    && evidence.externalAssetHosts.some((host: unknown) => official.has(String(host).toLowerCase().replace(/\.$/, '')));
   return { trusted: null, faviconMatch: exact, faviconNearMatch: !exact && distance !== null && distance <= 8, reusesOfficialAssets: reused };
 }
 
-export async function upsertProfile(raw: any, editingId = ''): Promise<BrandProfile> {
+export async function upsertProfile(raw: unknown, editingId = ''): Promise<BrandProfile> {
   const profile = await (await browserLocalDataProvider()).update(PROFILES_COLLECTION, (current) => {
     const profiles = [...current] as BrandProfile[];
     const index = editingId ? profiles.findIndex((item) => item.id === editingId) : -1;

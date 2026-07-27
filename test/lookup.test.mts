@@ -36,6 +36,30 @@ async function runCompactLookup(query: ClassifiedQuery, options: unknown): Promi
   return result;
 }
 
+function successfulRdap(result: FullLookupResult) {
+  const rdap = result.rdap;
+  assert.ok('parsed' in rdap && rdap.parsed, 'expected a successful RDAP result');
+  return rdap;
+}
+
+function failedRdap(result: FullLookupResult) {
+  const rdap = result.rdap;
+  assert.ok('error' in rdap && typeof rdap.error === 'string', 'expected a failed RDAP result');
+  return rdap;
+}
+
+function skippedRdap(result: FullLookupResult) {
+  const rdap = result.rdap;
+  assert.ok('skipped' in rdap && rdap.skipped === true, 'expected an explicitly skipped RDAP result');
+  return rdap;
+}
+
+function registrarRdapResult(result: FullLookupResult) {
+  const rdap = successfulRdap(result);
+  assert.ok('registrarRdap' in rdap && rdap.registrarRdap, 'expected a registrar RDAP result');
+  return rdap.registrarRdap;
+}
+
 const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
   type: 'domain',
   value: 'example.com',
@@ -85,7 +109,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(rdapCalls, 1);
     assert.equal(whoisCalls, 1);
     assert.equal(availabilityCalls, 1);
-    assert.equal(result.rdap.parsed.domain, 'EXAMPLE.COM');
+    assert.equal(requiredValue(successfulRdap(result).parsed).domain, 'EXAMPLE.COM');
     assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'registered');
     assert.equal(result.availability.domain, 'example.com');
     assert.equal(result.availability.inputHostname, 'login.example.com');
@@ -111,7 +135,7 @@ describe('runUnifiedLookup', () => {
       },
     });
 
-    assert.match(result.rdap.error, /timed out/);
+    assert.match(failedRdap(result).error, /timed out/);
     assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'not_found');
     assert.equal(result.availability.state, 'available');
     assert.equal(result.diagnostics.rdap.status, 'error');
@@ -411,7 +435,7 @@ describe('runUnifiedLookup', () => {
       },
     });
     assert.equal(whoisCalls, 0);
-    assert.equal(result.rdap.registrarRdap.status, 'skipped');
+    assert.equal(registrarRdapResult(result).status, 'skipped');
     assert.equal(requiredValue(result.diagnostics.rdap.registrar).status, 'skipped');
     assert.equal(result.diagnostics.whois.status, 'skipped');
     assert.equal(result.diagnostics.whois.errorCode, null);
@@ -448,8 +472,8 @@ describe('runUnifiedLookup', () => {
     });
 
     assert.equal(registrarCalls, 1);
-    assert.equal(result.rdap.registrarRdap.status, 'success');
-    assert.equal(result.rdap.parsed, rdapRecord.parsed);
+    assert.equal(registrarRdapResult(result).status, 'success');
+    assert.equal(successfulRdap(result).parsed, rdapRecord.parsed);
     assert.equal(result.diagnostics.version, 8);
     assert.deepEqual(result.diagnostics.rdap.registrar, {
       status: 'success',
@@ -678,7 +702,7 @@ describe('runUnifiedLookup', () => {
       result.availability,
       { applicable: true, domain: 'example.com', inputHostname: 'login.example.com', registrableDomain: 'example.com', isSubdomain: true, ...availability }
     );
-    assert.equal(result.rdap.registrarRdap.status, 'not_found');
+    assert.equal(registrarRdapResult(result).status, 'not_found');
     assert.equal(result.diagnostics.rdap.status, 'success');
   });
 
@@ -931,7 +955,7 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
     });
-    assert.equal(result.rdap.registrarRdap.status, 'error');
+    assert.equal(registrarRdapResult(result).status, 'error');
     const registrarDiagnostic = requiredValue(result.diagnostics.rdap.registrar);
     assert.equal(registrarDiagnostic.status, 'error');
     assert.equal(recordValue(requiredValue(registrarDiagnostic.attempt)).outcome, 'rate_limited');
@@ -949,9 +973,10 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [],
       checkDomainAvailability: async () => ({ state: 'registered', confidence: 'high' }),
     });
-    assert.equal(result.rdap.registrarRdap.status, 'error');
-    assert.ok(result.rdap.registrarRdap.detail.length <= 240);
-    assert.equal(/[\u0000-\u001f\u007f]/.test(result.rdap.registrarRdap.detail), false);
+    const registrar = registrarRdapResult(result);
+    assert.equal(registrar.status, 'error');
+    assert.ok((registrar.detail?.length ?? 0) <= 240);
+    assert.equal(/[\u0000-\u001f\u007f]/.test(registrar.detail ?? ''), false);
   });
 
   test('disabled RDAP and WHOIS sources are never called and remain explicit in diagnostics', async () => {
@@ -977,7 +1002,7 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.rdap.status, 'disabled');
     assert.equal(result.diagnostics.whois.status, 'disabled');
     assert.equal(result.diagnostics.rdap.errorCode, 'FEATURE_DISABLED');
-    assert.match(result.rdap.detail, /disabled by deployment policy/i);
+    assert.match(skippedRdap(result).detail, /disabled by deployment policy/i);
     assert.match(requiredValue(result.whois.detail), /disabled by deployment policy/i);
   });
 

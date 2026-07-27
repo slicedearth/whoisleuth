@@ -8,7 +8,7 @@ import { cached } from './lookup-cache.mts';
 import { safeFetch, safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
 import { registryDateIso } from './registry-dates.mts';
 
-type UnknownRecord = Record<string, any>;
+type LooseRecord = Record<string, any>;
 type BootstrapData = { services: Array<[string[], string[]]> };
 type BootstrapOptions = {
   now?: () => number;
@@ -29,13 +29,13 @@ type RdapAttempt = {
   detail: string | null;
   selected: boolean;
 };
-type NormalizedRdapRecord = UnknownRecord;
-type EntitySummary = UnknownRecord & { roles: string[]; truncated: boolean };
+type NormalizedRdapRecord = LooseRecord;
+type EntitySummary = LooseRecord & { roles: string[]; truncated: boolean };
 type NormalizedRdapEvent = { action: string | null; date: string | null; actor: string | null };
 
 function errorProperty(value: unknown, key: string): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  return (value as UnknownRecord)[key];
+  return (value as LooseRecord)[key];
 }
 
 const BOOTSTRAP_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -177,7 +177,7 @@ function ipInCidrV6(ip: string, cidr: string): boolean {
 
 function validBootstrap(data: unknown): data is BootstrapData {
   const record = data && typeof data === 'object' && !Array.isArray(data)
-    ? data as UnknownRecord
+    ? data as LooseRecord
     : null;
   return Boolean(record
     && Array.isArray(record.services) && record.services.length > 0
@@ -442,7 +442,7 @@ function domainEndpointIdentity(raw: string, domain: string): string | null {
  * upstream-provided service base.
  *
  * @param {string} domain
- * @param {Array<any>} links
+ * @param {unknown[]} links
  * @param {string|null} [registryEndpoint]
  */
 function selectRegistrarRdapLink(domain: string, links: unknown, registryEndpoint: string | null = null): string | null {
@@ -453,7 +453,7 @@ function selectRegistrarRdapLink(domain: string, links: unknown, registryEndpoin
     : null;
 
   for (const linkValue of links) {
-    const link = linkValue as UnknownRecord;
+    const link = linkValue as LooseRecord;
     if (!link || typeof link !== 'object' || Array.isArray(link)) continue;
     if (link.rel !== 'related' || typeof link.href !== 'string') continue;
     if (link.href.length > MAX_RDAP_ENDPOINT_LENGTH || /[\u0000-\u001f\u007f]/.test(link.href)) continue;
@@ -494,7 +494,7 @@ function selectRegistrarRdapLink(domain: string, links: unknown, registryEndpoin
  */
 async function fetchRegistrarRdapRecord(
   domain: string,
-  registryRecord: UnknownRecord | null | undefined,
+  registryRecord: LooseRecord | null | undefined,
   options: { fetchUpstream?: RdapFetch } = {},
 ) {
   const canonical = canonicalDomain(domain);
@@ -528,7 +528,7 @@ async function fetchRegistrarRdapRecord(
       );
     } catch (err) {
       const error = err && typeof err === 'object' && !Array.isArray(err)
-        ? err as UnknownRecord
+        ? err as LooseRecord
         : {};
       const detail = typeof error.message === 'string' ? error.message : 'request failed';
       const outcome = error.name === 'AbortError' || /timed? out|time limit/i.test(detail)
@@ -838,7 +838,7 @@ function normalizeLinks(links: unknown, maxLinks = MAX_RDAP_LINKS) {
   const normalized: Array<{ rel: string | null; href: string; type: string | null; title: string | null }> = [];
   for (const linkValue of links.slice(0, 100)) {
     if (!linkValue || typeof linkValue !== 'object' || Array.isArray(linkValue)) continue;
-    const link = linkValue as UnknownRecord;
+    const link = linkValue as LooseRecord;
     const href = boundedString(link.href, 2048);
     if (!href) continue;
     try {
@@ -863,7 +863,7 @@ function normalizePublicIds(publicIds: unknown) {
   const normalized: Array<{ type: string; identifier: string }> = [];
   for (const itemValue of publicIds.slice(0, 100)) {
     if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) continue;
-    const item = itemValue as UnknownRecord;
+    const item = itemValue as LooseRecord;
     const type = boundedString(item.type, 160);
     const identifier = boundedString(item.identifier, 300);
     if (!type || !identifier) continue;
@@ -895,19 +895,19 @@ function normalizeStringList(
 function redactionLabel(value: unknown): string | null {
   if (typeof value === 'string') return boundedString(value, 300);
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as UnknownRecord;
+  const record = value as LooseRecord;
   return boundedString(record.type, 160) || boundedString(record.description, 300);
 }
 
 function normalizeRedactions(redacted: unknown) {
   if (!Array.isArray(redacted)) return { redactions: [], redactionsTruncated: false };
-  const redactions: UnknownRecord[] = [];
+  const redactions: LooseRecord[] = [];
   const candidates = redacted.slice(0, MAX_RDAP_REDACTIONS * 2);
   let stoppedAt = candidates.length;
   for (let index = 0; index < candidates.length; index += 1) {
     const itemValue = candidates[index];
     if (!itemValue || typeof itemValue !== 'object' || Array.isArray(itemValue)) continue;
-    const item = itemValue as UnknownRecord;
+    const item = itemValue as LooseRecord;
     const entry = {
       name: redactionLabel(item.name),
       reason: redactionLabel(item.reason),
@@ -932,16 +932,16 @@ function normalizeRedactions(redacted: unknown) {
 
 function normalizeDomainVariants(value: unknown) {
   if (!Array.isArray(value)) return { variants: [], variantsTruncated: false };
-  const variants: UnknownRecord[] = [];
+  const variants: LooseRecord[] = [];
   let truncated = value.length > MAX_RDAP_VARIANT_GROUPS;
   for (const groupValue of value.slice(0, MAX_RDAP_VARIANT_GROUPS)) {
     if (!groupValue || typeof groupValue !== 'object' || Array.isArray(groupValue)) continue;
-    const group = groupValue as UnknownRecord;
+    const group = groupValue as LooseRecord;
     const sourceNames = Array.isArray(group.variantNames) ? group.variantNames : [];
     const variantNames: Array<{ ldhName: string | null; unicodeName: string | null }> = [];
     for (const nameValue of sourceNames.slice(0, MAX_RDAP_VARIANT_NAMES * 2)) {
       if (!nameValue || typeof nameValue !== 'object' || Array.isArray(nameValue)) continue;
-      const name = nameValue as UnknownRecord;
+      const name = nameValue as LooseRecord;
       const ldhName = boundedString(name.ldhName, 253);
       const unicodeName = boundedString(name.unicodeName, 253);
       if (!ldhName && !unicodeName) continue;
@@ -957,7 +957,7 @@ function normalizeDomainVariants(value: unknown) {
   return { variants, variantsTruncated: truncated };
 }
 
-function publicId(entity: UnknownRecord | null | undefined, typePattern: RegExp): string | null {
+function publicId(entity: LooseRecord | null | undefined, typePattern: RegExp): string | null {
   const match = entity && Array.isArray(entity.publicIds)
     ? entity.publicIds.find((item) => typePattern.test(String(item.type || '')))
     : null;
@@ -971,11 +971,11 @@ function textWouldTruncate(value: unknown, maxLength: number): boolean {
 
 function summarizeTextBlocks(blocks: unknown) {
   if (!Array.isArray(blocks)) return { items: [], truncated: false };
-  const output: UnknownRecord[] = [];
+  const output: LooseRecord[] = [];
   let truncated = blocks.length > 50;
   for (const blockValue of blocks.slice(0, 50)) {
     if (!blockValue || typeof blockValue !== 'object' || Array.isArray(blockValue)) continue;
-    const block = blockValue as UnknownRecord;
+    const block = blockValue as LooseRecord;
     const descriptions: string[] = [];
     const sourceDescriptions = Array.isArray(block.description) ? block.description : [];
     if (sourceDescriptions.length > 20) truncated = true;
@@ -1013,7 +1013,7 @@ function summarizeServerTruncation(...groups: unknown[]): string[] {
     // separately disclose that the local inspection window was exceeded.
     for (const blockValue of blocks.slice(0, 50)) {
       if (!blockValue || typeof blockValue !== 'object' || Array.isArray(blockValue)) continue;
-      const type = normalizeServerTruncationType((blockValue as UnknownRecord).type);
+      const type = normalizeServerTruncationType((blockValue as LooseRecord).type);
       if (!type) continue;
       reasons.add(type);
       if (reasons.size >= MAX_RDAP_SERVER_TRUNCATION_REASONS) break;
@@ -1032,7 +1032,7 @@ function normalizeRdapEvents(value: unknown): NormalizedRdapEvent[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 100).map((event) => {
     if (!event || typeof event !== 'object' || Array.isArray(event)) return null;
-    const record = event as UnknownRecord;
+    const record = event as LooseRecord;
     const action = boundedEventString(record.eventAction, 100)?.toLowerCase().replace(/\s+/g, ' ') || null;
     const date = boundedEventString(record.eventDate, 64);
     const actor = boundedEventString(record.eventActor, 160);
@@ -1081,7 +1081,7 @@ function summarizeLifecycle(events: NormalizedRdapEvent[]) {
 
 function summarizeEntity(entity: unknown): EntitySummary | null {
   if (!entity || typeof entity !== 'object' || Array.isArray(entity)) return null;
-  const record = entity as UnknownRecord;
+  const record = entity as LooseRecord;
   const roles: string[] = [];
   if (Array.isArray(record.roles)) {
     for (const rawRole of record.roles.slice(0, 100)) {
@@ -1143,7 +1143,7 @@ function summarizeEntities(entities: unknown) {
     visited += 1;
     const summary = summarizeEntity(entity);
     if (summary) summaries.push(summary);
-    const record = entity as UnknownRecord;
+    const record = entity as LooseRecord;
     if (depth >= MAX_RDAP_ENTITY_DEPTH || !Array.isArray(record.entities)) continue;
     const remaining = Math.max(0, MAX_RDAP_ENTITIES - visited - stack.length);
     const nested = record.entities.slice(0, remaining);
@@ -1178,7 +1178,7 @@ function entityInventory(entities: unknown) {
   };
 }
 
-function parseRdapObject(type: string, data: UnknownRecord): NormalizedRdapRecord | null {
+function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
   const events = normalizeRdapEvents(data.events);
   const redactionInfo = normalizeRedactions(data.redacted);
@@ -1221,9 +1221,9 @@ function parseRdapObject(type: string, data: UnknownRecord): NormalizedRdapRecor
     const nameserverDetails = Array.isArray(data.nameservers)
       ? data.nameservers.slice(0, 200).map((ns) => {
           if (!ns || typeof ns !== 'object' || Array.isArray(ns)) return null;
-          const nameserver = ns as UnknownRecord;
+          const nameserver = ns as LooseRecord;
           const ipAddresses = nameserver.ipAddresses && typeof nameserver.ipAddresses === 'object' && !Array.isArray(nameserver.ipAddresses)
-            ? nameserver.ipAddresses as UnknownRecord
+            ? nameserver.ipAddresses as LooseRecord
             : {};
           const v4: unknown[] = Array.isArray(ipAddresses.v4) ? ipAddresses.v4 : [];
           const v6: unknown[] = Array.isArray(ipAddresses.v6) ? ipAddresses.v6 : [];
@@ -1238,16 +1238,16 @@ function parseRdapObject(type: string, data: UnknownRecord): NormalizedRdapRecor
           };
         }).filter((ns): ns is NonNullable<typeof ns> => Boolean(ns && ns.name))
       : [];
-    const secureDns: UnknownRecord | null = data.secureDNS
+    const secureDns: LooseRecord | null = data.secureDNS
       && typeof data.secureDNS === 'object'
       && !Array.isArray(data.secureDNS)
-      ? data.secureDNS as UnknownRecord
+      ? data.secureDNS as LooseRecord
       : null;
     const variantInfo = normalizeDomainVariants(data.variants);
     const dsData = secureDns && Array.isArray(secureDns.dsData)
       ? secureDns.dsData.slice(0, 50).map((ds) => {
           if (!ds || typeof ds !== 'object' || Array.isArray(ds)) return null;
-          const record = ds as UnknownRecord;
+          const record = ds as LooseRecord;
           const digest = boundedString(record.digest, 512);
           const normalized = {
             keyTag: boundedInteger(record.keyTag, 0, 65535), algorithm: boundedInteger(record.algorithm, 0, 255),
@@ -1343,7 +1343,7 @@ function parseRdapObject(type: string, data: UnknownRecord): NormalizedRdapRecor
 
 function parseRdap(type: string, data: unknown): NormalizedRdapRecord | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  return parseRdapObject(type, data as UnknownRecord);
+  return parseRdapObject(type, data as LooseRecord);
 }
 
 export {

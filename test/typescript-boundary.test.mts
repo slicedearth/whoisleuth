@@ -1,21 +1,15 @@
 import assert from 'node:assert/strict';
-import { readdir, readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, test } from 'node:test';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MAX_REPOSITORY_ENTRIES = 20_000;
-const IGNORED_DIRECTORIES = new Set([
-  '.git',
-  '.netlify',
-  '.svelte-kit',
-  'build',
-  'coverage',
-  'node_modules',
-  'playwright-report',
-  'test-results',
-]);
+const execFileAsync = promisify(execFile);
+const MAX_TRACKED_FILE_LIST_BYTES = 2 * 1024 * 1024;
+const JAVASCRIPT_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs']);
 const TYPESCRIPT_CONFIGS = [
   'tsconfig.json',
   'e2e/tsconfig.json',
@@ -25,6 +19,7 @@ const TYPESCRIPT_CONFIGS = [
 ] as const;
 
 type TypeScriptConfig = Readonly<{
+  include?: readonly unknown[];
   compilerOptions?: Readonly<{
     allowJs?: unknown;
     checkJs?: unknown;
@@ -33,29 +28,15 @@ type TypeScriptConfig = Readonly<{
 }>;
 
 async function authoredJavaScriptFiles(): Promise<string[]> {
-  const pending = [REPOSITORY_ROOT];
-  const matches: string[] = [];
-  let visited = 0;
-
-  while (pending.length > 0) {
-    const directory = pending.pop();
-    assert.ok(directory);
-    const entries = await readdir(directory, { withFileTypes: true });
-    visited += entries.length;
-    assert.ok(visited <= MAX_REPOSITORY_ENTRIES, 'repository source inventory exceeded its entry bound');
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        if (!IGNORED_DIRECTORIES.has(entry.name)) pending.push(path.join(directory, entry.name));
-        continue;
-      }
-      if (entry.isFile() && entry.name.endsWith('.js')) {
-        matches.push(path.relative(REPOSITORY_ROOT, path.join(directory, entry.name)));
-      }
-    }
-  }
-
-  return matches.sort();
+  const { stdout } = await execFileAsync('git', ['ls-files', '-z'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8',
+    maxBuffer: MAX_TRACKED_FILE_LIST_BYTES,
+  });
+  return stdout
+    .split('\0')
+    .filter((entry) => entry && JAVASCRIPT_EXTENSIONS.has(path.extname(entry)))
+    .sort();
 }
 
 async function readTypeScriptConfig(relativePath: string): Promise<TypeScriptConfig> {
@@ -64,7 +45,7 @@ async function readTypeScriptConfig(relativePath: string): Promise<TypeScriptCon
 }
 
 describe('repository TypeScript boundary', () => {
-  test('keeps hand-authored JavaScript out of the source tree', async () => {
+  test('keeps tracked hand-authored JavaScript out of the source tree', async () => {
     assert.deepEqual(await authoredJavaScriptFiles(), []);
   });
 
@@ -74,12 +55,16 @@ describe('repository TypeScript boundary', () => {
       assert.equal(config.compilerOptions?.strict, true, `${configPath} must keep strict mode enabled`);
     }
 
+    const rootConfig = await readTypeScriptConfig('tsconfig.json');
+    assert.ok(rootConfig.include?.includes('server.mts'), 'the Express runtime entry point must be checked directly');
+    assert.ok(rootConfig.include?.includes('frontend/svelte.config.ts'), 'the Svelte configuration must be checked directly');
+
     const frontendConfig = await readTypeScriptConfig('frontend/tsconfig.json');
     assert.equal(frontendConfig.compilerOptions?.allowJs, true);
     assert.equal(
       frontendConfig.compilerOptions?.checkJs,
       true,
-      'Svelte-generated JavaScript declarations must remain checked while the authored tree stays TypeScript-only',
+      'Svelte component virtual modules must remain checked while the tracked authored tree stays TypeScript-only',
     );
   });
 });

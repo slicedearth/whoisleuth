@@ -454,7 +454,7 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       const probe = dependencies.fetchHomepage || fetchHomepage;
       const result = buildHttpProbeResult(domain, await probe(domain));
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
-      const document = buildCliHttpDocument(requestedDomain, result as unknown as UnknownRecord, now);
+      const document = buildCliHttpDocument(requestedDomain, result, now);
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalHttp(document));
       return EXIT_CODES.SUCCESS;
     }

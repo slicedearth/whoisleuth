@@ -109,15 +109,15 @@ function collectionContentMatches(prepared: PreparedCollection<any>, manifest: C
 export type BrowserLocalDataInitialization = Readonly<{
   state: 'ready';
   databaseName: string;
-  migratedCollections: string[];
-  retainedLegacyKeys: string[];
+  migratedCollections: readonly string[];
+  retainedLegacyKeys: readonly string[];
   codec: string;
 }>;
 
 export type LegacyRollbackCopyResult = Readonly<{
   collectionCount: number;
   serializedBytes: number;
-  keys: string[];
+  keys: readonly string[];
 }>;
 
 export class BrowserLocalDataError extends Error {
@@ -128,6 +128,10 @@ export class BrowserLocalDataError extends Error {
     this.name = 'BrowserLocalDataError';
     this.code = code;
   }
+}
+
+export function isExpectedBrowserLocalDataFailure(cause: unknown): boolean {
+  return cause instanceof BrowserLocalDataError || cause instanceof DOMException;
 }
 
 function boundedIdentifier(value: unknown, label: string, maximumLength: number): string {
@@ -394,7 +398,7 @@ export class BrowserLocalDataProvider {
     return Object.freeze({
       collectionCount: copies.length,
       serializedBytes: copies.reduce((sum, copy) => sum + copy.bytes, 0),
-      keys: Object.freeze(copies.map((copy) => copy.key)) as unknown as string[],
+      keys: Object.freeze(copies.map((copy) => copy.key)),
     });
   }
 
@@ -460,8 +464,8 @@ export class BrowserLocalDataProvider {
     return Object.freeze({
       state: 'ready',
       databaseName: this.databaseName,
-      migratedCollections: Object.freeze(migratedCollections.slice()) as unknown as string[],
-      retainedLegacyKeys: Object.freeze(retainedLegacyKeys.slice()) as unknown as string[],
+      migratedCollections: Object.freeze(migratedCollections.slice()),
+      retainedLegacyKeys: Object.freeze(retainedLegacyKeys.slice()),
       codec: this.codec.id,
     });
   }

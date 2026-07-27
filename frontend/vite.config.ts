@@ -43,6 +43,7 @@ function themeInitializerPlugin(): Plugin {
       });
     },
     async generateBundle() {
+      if (this.environment.name !== 'client') return;
       this.emitFile({
         type: 'asset',
         fileName: THEME_INIT_ASSET,

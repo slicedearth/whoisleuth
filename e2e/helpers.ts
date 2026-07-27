@@ -159,6 +159,18 @@ export async function failBrowserLocalManifestWrites(page: Page, collection: str
   }, collection);
 }
 
+export async function failBrowserLocalReads(page: Page) {
+  await page.evaluate(() => {
+    const originalGet = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (this.name === 'manifests') {
+        throw new DOMException('Browser-local reads are unavailable', 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  });
+}
+
 // Computed content of a pseudo-element - used to check the CSS-only
 // data-label treatment that only applies to Bulk's stacked mobile cards.
 export async function pseudoContent(locator: Locator, pseudo: '::before' | '::after') {

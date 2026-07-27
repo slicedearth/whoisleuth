@@ -48,6 +48,16 @@ test('DNS delegation fallback preserves resolver failures as inconclusive diagno
   assert.match(requiredValue(result.error), /temporary resolver failure/);
 });
 
+test('DNS delegation fallback keeps an empty Error message explicitly inconclusive', async () => {
+  const result = await checkDnsDelegation('example.test', {
+    resolver: async () => { throw new Error(); },
+  });
+
+  assert.equal(result.delegated, false);
+  assert.deepEqual(result.nameservers, []);
+  assert.equal(result.error, 'Error');
+});
+
 test('DNS delegation fallback caps only the normalized unique nameserver inventory', async () => {
   const records = Array.from({ length: 51 }, (_, index) => `ns${String(index).padStart(2, '0')}.example`);
   records.push('NS00.EXAMPLE.', 'bad_name.example');

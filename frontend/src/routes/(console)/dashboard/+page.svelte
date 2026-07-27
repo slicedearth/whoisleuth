@@ -13,7 +13,11 @@
     startInvestigationGuide,
     type InvestigationRecipeId,
   } from '$lib/investigation-guide';
-  import type { InvestigationSearchIndex } from '$lib/analysis/investigation-search.ts';
+  import {
+    unavailableInvestigationSearchIndex,
+    type InvestigationSearchIndex,
+  } from '$lib/analysis/investigation-search.ts';
+  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
 
   const quickActions: Array<{ href: string; label: string; detail: string; icon: IntelligenceIconName }> = [
     { href: '/lookup', label: 'Check one target', detail: 'Review a domain, IP address, or ASN across separately identified sources.', icon: 'lookup' },
@@ -45,9 +49,10 @@
         profiles: profiles.length,
       };
       investigationIndex = searchIndex;
-    } catch {
+    } catch (cause) {
       summaryError = 'Saved-work counts and local search could not be refreshed. Reload the Dashboard to try again.';
-      investigationIndex = null;
+      investigationIndex ??= unavailableInvestigationSearchIndex(summaryError);
+      if (!isExpectedBrowserLocalDataFailure(cause)) throw cause;
     }
   }
 
@@ -108,7 +113,7 @@
       <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="brand" size={19} /></span><span class="summary-label">Brand profiles</span><strong>{counts.profiles}</strong><p>Saved analysis profile{counts.profiles === 1 ? '' : 's'}</p>
     </a>
   </div>
-  {#if summaryError}<p class="summary-error" role="status">{summaryError}</p>{/if}
+  <p class="summary-error" role="status">{summaryError}</p>
 </section>
 
 <InvestigationSearch index={investigationIndex} />
@@ -145,6 +150,7 @@
 
 <style>
   .summary-error{margin:14px 0 0;color:var(--warning);font-size:var(--text-sm)}
+  .summary-error:empty{display:none}
   .guide-launcher{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:24px;margin-top:28px;padding:21px}
   .guide-launcher h2{margin:4px 0 7px;font:700 var(--text-lg) var(--mono)}
   .guide-launcher>div>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}

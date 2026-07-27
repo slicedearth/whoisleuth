@@ -36,14 +36,29 @@ const BOOLEAN_FIELDS = [
 ] as const;
 const MUTATION_TYPES = new Set(RISK_MUTATION_TYPES);
 
-type UnknownRecord = Record<string, any>;
+type UnknownRecord = Record<string, unknown>;
+type ProjectedThreatIntelligence = {
+  providers: Array<{
+    provider: { id: string };
+    state: string;
+    observation?: { observedAt?: string };
+    findings: Array<{
+      category: string;
+      firstObservedAt?: string;
+      lastObservedAt?: string;
+    }>;
+  }>;
+};
+type CalibrationEvidence = Omit<RiskInput, 'threatIntelligence'> & {
+  threatIntelligence?: ProjectedThreatIntelligence;
+};
 type CalibrationDisposition = 'unreviewed' | 'suspicious' | 'confirmed_abuse' | 'false_positive' | 'expected' | 'closed_no_action';
 type MetricClass = 'positive' | 'negative' | 'excluded';
 type CalibrationRecord = {
   id: string;
   domain: string;
   analystDisposition: CalibrationDisposition;
-  evidence: RiskInput;
+  evidence: CalibrationEvidence;
 };
 type CalibrationDataset = {
   schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
@@ -51,6 +66,59 @@ type CalibrationDataset = {
   records: CalibrationRecord[];
 };
 type ExplainRiskScore = (input: RiskInput) => RiskExplanation | null;
+type CalibrationScoredRecord = {
+  includedInMetrics: boolean;
+  metricClass: MetricClass;
+  score: number | null;
+};
+type ThresholdMetrics = {
+  threshold: number;
+  truePositive: number;
+  falsePositive: number;
+  trueNegative: number;
+  falseNegative: number;
+  precision: number | null;
+  recall: number | null;
+  specificity: number | null;
+  falsePositiveRate: number | null;
+};
+type CalibrationReportRecord = CalibrationScoredRecord & {
+  id: string;
+  domain: string;
+  analystDisposition: CalibrationDisposition;
+  exclusionReason: 'not_scored' | 'contextual_disposition' | null;
+  modelVersion: number;
+  band: string;
+  factors: RiskExplanation['factors'];
+};
+type RiskCalibrationReport = {
+  schema: typeof RISK_CALIBRATION_REPORT_SCHEMA;
+  version: typeof RISK_CALIBRATION_REPORT_VERSION;
+  generatedAt: string;
+  dataset: {
+    schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
+    version: typeof RISK_CALIBRATION_DATASET_VERSION;
+    recordCount: number;
+  };
+  riskModelVersion: number;
+  currentReviewThreshold: number;
+  summary: {
+    total: number;
+    positive: number;
+    negative: number;
+    excluded: number;
+    scoreBands: Record<string, number>;
+  };
+  thresholds: ThresholdMetrics[];
+  records: CalibrationReportRecord[];
+  interpretation: {
+    authority: 'analyst_context_only';
+    statement: string;
+    automaticTuning: false;
+    networkRequests: false;
+    persisted: false;
+  };
+};
 
 function object(value: unknown, field: string): UnknownRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -71,7 +139,7 @@ function optionalTimestamp(value: unknown, field: string): string | undefined {
   return boundedString(value, field, MAX_TIMESTAMP_LENGTH);
 }
 
-function projectThreatIntelligence(value: unknown, field: string): UnknownRecord | undefined {
+function projectThreatIntelligence(value: unknown, field: string): ProjectedThreatIntelligence | undefined {
   if (value === null || value === undefined) return undefined;
   const envelope = object(value, field);
   if (!Array.isArray(envelope.providers)) throw new CliUsageError(`${field}.providers must be an array.`);
@@ -106,11 +174,11 @@ function projectThreatIntelligence(value: unknown, field: string): UnknownRecord
   };
 }
 
-function projectEvidence(value: unknown, field: string): RiskInput {
+function projectEvidence(value: unknown, field: string): CalibrationEvidence {
   const source = object(value, field);
   const availability = boundedString(source.availability ?? source.state, `${field}.availability`, 32);
   if (!AVAILABILITY_STATES.has(availability)) throw new CliUsageError(`${field}.availability is unsupported.`);
-  const result: RiskInput = { availability };
+  const result: CalibrationEvidence = { availability };
 
   for (const name of BOOLEAN_FIELDS) {
     const candidate = source[name];
@@ -215,13 +283,13 @@ function ratio(numerator: number, denominator: number): number | null {
   return denominator ? Number((numerator / denominator).toFixed(4)) : null;
 }
 
-function metricsForThreshold(records: UnknownRecord[], threshold: number): UnknownRecord {
+function metricsForThreshold(records: readonly CalibrationScoredRecord[], threshold: number): ThresholdMetrics {
   let truePositive = 0;
   let falsePositive = 0;
   let trueNegative = 0;
   let falseNegative = 0;
   for (const record of records) {
-    if (!record.includedInMetrics) continue;
+    if (!record.includedInMetrics || record.score === null) continue;
     const flagged = record.score >= threshold;
     if (record.metricClass === 'positive') flagged ? truePositive += 1 : falseNegative += 1;
     else flagged ? falsePositive += 1 : trueNegative += 1;
@@ -256,8 +324,8 @@ export function buildRiskCalibrationReport(
   dataset: CalibrationDataset,
   explainRiskScore: ExplainRiskScore,
   options: { generatedAt?: string; modelVersion: number; reviewThreshold: number },
-): UnknownRecord {
-  const records = dataset.records.map((record) => {
+): RiskCalibrationReport {
+  const records: CalibrationReportRecord[] = dataset.records.map((record) => {
     const explained = explainRiskScore(record.evidence);
     const classification = metricClass(record.analystDisposition);
     const includedInMetrics = classification !== 'excluded' && explained !== null;
@@ -267,7 +335,11 @@ export function buildRiskCalibrationReport(
       analystDisposition: record.analystDisposition,
       metricClass: classification,
       includedInMetrics,
-      exclusionReason: includedInMetrics ? null : explained === null ? 'not_scored' : 'contextual_disposition',
+      exclusionReason: includedInMetrics
+        ? null
+        : explained === null
+          ? 'not_scored' as const
+          : 'contextual_disposition' as const,
       modelVersion: explained?.modelVersion ?? options.modelVersion,
       score: explained?.score ?? null,
       band: scoreBand(explained?.score ?? null),

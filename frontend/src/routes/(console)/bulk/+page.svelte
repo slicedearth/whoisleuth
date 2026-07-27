@@ -16,11 +16,13 @@
   import { clearShortlist, exportShortlist, importShortlist, loadShortlist, MAX_SHORTLIST_IMPORT_BYTES, toggleShortlist, type ShortlistRecord } from '$lib/shortlist';
   import { CASE_DISPOSITIONS, dispositionLabel, editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
+  import type { WatchlistComparableRecord } from '$lib/analysis/watchlist-history.ts';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
   import { computeOpportunityScore, explainRiskScore, formatActivityCell } from '$lib/analysis/scoring.ts';
   import { entityDisplayName, parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
   import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
+  import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
   import { loadRelationshipObservations, retainRelationshipObservation } from '$lib/relationship-observations';
   import { ctCsvFields } from '$lib/analysis/bulk-export.ts';
@@ -30,30 +32,71 @@
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { compactHttpObservation, normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
   import {
+    lookupRecord,
     lookupHttpErrorMessage,
     parseCompactLookupHttpResponse,
     type CompactLookupHttpResponse,
-  } from '$lib/analysis/lookup-response.js';
-  import { defaultBulkSortDirection, sortBulkResults, type BulkSortDirection, type BulkSortKey } from '$lib/analysis/bulk-sort.js';
+  } from '$lib/analysis/lookup-response.ts';
+  import { defaultBulkSortDirection, sortBulkResults, type BulkSortDirection, type BulkSortKey } from '$lib/analysis/bulk-sort.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { readBulkWorkflowState, writeBulkWorkflowState } from '$lib/console-workflow-state.js';
+  import { readBulkWorkflowState, writeBulkWorkflowState } from '$lib/console-workflow-state.ts';
   import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInvestigationGuideReviewDomains } from '$lib/investigation-guide';
+  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
 
   type ScanMode = 'fast' | 'deep';
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
+  interface SavedScanRecord extends WatchlistComparableRecord {
+    availability: string;
+    registrarName: string;
+    nameservers: string[];
+    createdDate?: string | null;
+    expiryDate?: string | null;
+    privacyProtected?: boolean | null;
+    hasMx?: boolean | null;
+    hasSpf?: boolean | null;
+    hasDmarc?: boolean | null;
+    activityStatus?: string | null;
+    pageTitle?: string | null;
+    faviconHash: string | null;
+    faviconPHash: string | null;
+    faviconMatch?: boolean;
+    faviconNearMatch?: boolean;
+    reusesOfficialAssets?: boolean;
+    hasPasswordField?: boolean | null;
+    phishingLanguageMatch?: string | null;
+    riskFactors: Array<{ label: string; points: number }>;
+    mutationTypes: string[];
+    error?: string;
+  }
+  interface BulkDnsCaaRecord {
+    critical: number | string;
+    tag: string;
+    value: string;
+  }
+  interface BulkDnsEvidence {
+    status: string | null;
+    records: {
+      a: string[];
+      aaaa: string[];
+      cname: string[];
+      caa: BulkDnsCaaRecord[];
+    };
+  }
   interface ScanResult {
     domain: string; status: 'complete'|'error'; availability: string; confidence: string;
     registrar: string; activity: string; risk: number|null; opportunity: number|null;
-    mutationTypes: string[]; trusted: 'official'|'partner'|'allowlisted'|null; error: string; saved: Record<string,any>;
+    mutationTypes: string[]; trusted: 'official'|'partner'|'allowlisted'|null; error: string; saved: SavedScanRecord;
     nameservers:string[];faviconHash:string|null;faviconPHash:string|null;faviconMatch:boolean;faviconNearMatch:boolean;reusesOfficialAssets:boolean;hasPasswordField:boolean;phishingLanguageMatch:string|null;
     registrant:Contact|null;abuseEvidence:AbuseEvidence|null;
     ct:CertificateTransparencyProvenance|null;
-    idn:Record<string,any>|null;
-    dns:Record<string,any>|null;dnssec:string|null;relationship:Record<string,any>;
+    idn:ReturnType<typeof analyzeDomainIdn>|null;
+    dns:BulkDnsEvidence|null;dnssec:string|null;relationship:RelationshipObservation;
   }
   const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
   const PAGE_SIZE = 100;
   const RESULT_PUBLISH_MS = 100;
+  const MAX_COMPACT_TEXT_LENGTH = 500;
+  const MAX_COMPACT_DNS_RECORDS = 100;
 
   let handoff = $state<CandidateHandoff|null>(null);
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
@@ -95,8 +138,9 @@
       let retained;
       [profile,shortlist,cases,retained]=await Promise.all([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations()]);
       retainedRelationshipIds=new Set(retained.map((item)=>item.id));
-    }catch{
+    }catch(cause){
       localContextStatus='Some browser-local profile, shortlist, case, or relationship context could not be loaded. Scan results and restored queue state remain available; reload to retry the saved context.';
+      if(!isExpectedBrowserLocalDataFailure(cause))throw cause;
     }
   }
 
@@ -117,6 +161,13 @@
     };
   });
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
+  function plainRecord(value:unknown):Record<string,unknown>|null{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:null;}
+  function boundedText(value:unknown,maxLength=MAX_COMPACT_TEXT_LENGTH):string|null{return typeof value==='string'&&value.length<=maxLength&&!/[\u0000-\u001f\u007f]/u.test(value)?value:null;}
+  function nullableBoolean(value:unknown):boolean|null{return typeof value==='boolean'?value:null;}
+  function nullableNumber(value:unknown):number|null{return typeof value==='number'&&Number.isFinite(value)?value:null;}
+  function boundedStrings(value:unknown):string[]{return Array.isArray(value)?value.slice(0,MAX_COMPACT_DNS_RECORDS).filter((item):item is string=>typeof item==='string'&&item.length<=MAX_COMPACT_TEXT_LENGTH&&!/[\u0000-\u001f\u007f]/u.test(item)):[];}
+  function compactContact(value:unknown):Contact|null{const item=plainRecord(value);if(!item)return null;return{name:boundedText(item.name),org:boundedText(item.org),email:boundedText(item.email,320)};}
+  function compactDnsEvidence(value:unknown):BulkDnsEvidence|null{const dns=plainRecord(value);if(!dns)return null;const records=plainRecord(dns.records);const caa=Array.isArray(records?.caa)?records.caa.slice(0,MAX_COMPACT_DNS_RECORDS).flatMap((value)=>{const item=plainRecord(value);const tag=boundedText(item?.tag,64);const recordValue=boundedText(item?.value);const critical=typeof item?.critical==='number'||typeof item?.critical==='string'?item.critical:null;return tag&&recordValue&&critical!==null?[{critical,tag,value:recordValue}]:[];}):[];return{status:boundedText(dns.status,40),records:{a:boundedStrings(records?.a),aaaa:boundedStrings(records?.aaaa),cname:boundedStrings(records?.cname),caa}};}
   async function trackCase(row:ScanResult){try{const s=row.saved;const{record,created,pruned}=await openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,phishingLanguageMatch:s.phishingLanguageMatch,mutationTypes:s.mutationTypes}});cases=await loadCases();caseStatus=`${created?`Opened a case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function setRowDisposition(row:ScanResult,value:string){const record=caseByDomain.get(row.domain);if(!record)return;try{const{pruned}=await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${row.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the case.';}}
   function parseDomains(){return parsedInput.entries.map((value:string)=>value.toLowerCase());}
@@ -152,15 +203,15 @@
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   async function importShortlistFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;try{if(file.size>MAX_SHORTLIST_IMPORT_BYTES)throw new Error('Shortlist imports are limited to 2 MB.');const result=await importShortlist(JSON.parse(await file.text()));shortlist=await loadShortlist();const skipped=result.skipped?`; skipped ${result.skipped} invalid, duplicate, or over-limit entr${result.skipped===1?'y':'ies'}`:'';shortlistStatus=`Imported ${result.added} new and ${result.updated} updated shortlist entries${skipped}.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Shortlist import failed';}finally{input.value='';}}
   async function importDomainFile(event:Event){const control=event.currentTarget as HTMLInputElement,file=control.files?.[0];if(!file)return;try{if(file.size>MAX_DOMAIN_IMPORT_BYTES)throw new Error('Domain-list imports are limited to 2 MB.');const parsed=parseDomainInput(await file.text());if(!parsed.entries.length)throw new Error('No domain entries were found in that file.');input=parsed.entries.join('\n');status=`Loaded ${parsed.entries.length} unique entries from ${file.name}${parsed.usedHeader?' using its domain column':''}${parsed.duplicates?`; removed ${parsed.duplicates} duplicate${parsed.duplicates===1?'':'s'}`:''}.`;}catch(cause){status=cause instanceof Error?cause.message:'Could not import the domain list.';}finally{control.value='';}}
-  function exportCoverage(){if(!coverage)return;const rows=[['dimension','group','total','protected','registered','available','unknown','coverage_percent'],...coverage.mutationGroups.map((group:any)=>['mutation',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent]),...coverage.tldGroups.map((group:any)=>['tld',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent])];const url=URL.createObjectURL(new Blob([rowsToCsv(rows)],{type:'text/csv'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`defensive-registration-coverage-${new Date().toISOString().slice(0,10)}.csv`;anchor.click();URL.revokeObjectURL(url);}
+  function exportCoverage(){if(!coverage)return;const rows=[['dimension','group','total','protected','registered','available','unknown','coverage_percent'],...coverage.mutationGroups.map((group)=>['mutation',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent]),...coverage.tldGroups.map((group)=>['tld',group.label,group.total,group.protected,group.registered,group.available,group.unknown,group.coveragePercent])];const url=URL.createObjectURL(new Blob([rowsToCsv(rows)],{type:'text/csv'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`defensive-registration-coverage-${new Date().toISOString().slice(0,10)}.csv`;anchor.click();URL.revokeObjectURL(url);}
   async function waitWhilePaused(){if(!paused)return;await new Promise<void>(resolve=>pauseResolvers.push(resolve));}
   function resume(){paused=false;for(const resolve of pauseResolvers.splice(0))resolve();}
   function togglePause(){if(paused)resume();else paused=true;}
   function cancel(){resume();controller?.abort();status=`Cancelled after ${completed} of ${total} lookups.`;}
   async function fetchLookup(domain:string,signal:AbortSignal):Promise<CompactLookupHttpResponse>{const url=`/api/lookup?q=${encodeURIComponent(domain)}&fast=${mode==='fast'?'1':'0'}&compact=1`;let response=await fetch(url,{signal});for(let attempt=0;response.status===429&&attempt<3;attempt++){const seconds=Number(response.headers.get('Retry-After'))||2;await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,seconds*1000);signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Aborted','AbortError'));},{once:true});});response=await fetch(url,{signal});}const body:unknown=await response.json().catch(()=>({}));if(!response.ok)throw new Error(lookupHttpErrorMessage(body,response.status));const parsed=parseCompactLookupHttpResponse(body,domain);if(!parsed.ok)throw new Error(parsed.error);return parsed.value;}
-  function normalize(domain:string,body:Record<string,any>):ScanResult {const av=body.availability||{};const canonicalDomain=String(av.domain||domain);const candidate=provenance(domain)||provenance(canonicalDomain);const matched=profileSignals(canonicalDomain,av,profile);const idn=analyzeDomainIdn(canonicalDomain,profile?.officialDomains||[]);const scoring={...av,...matched,availability:av.state,mutationTypes:candidate?.mutationTypes||[]};const riskExplanation=explainRiskScore(scoring);const risk=riskExplanation?.score??null;const opportunity=computeOpportunityScore(scoring);const nameservers=Array.isArray(av.nameservers)?av.nameservers.map(String):[];const registrant=av.registrant&&typeof av.registrant==='object'?av.registrant as Contact:null;const abuseEvidence=av.abuse?.email?{abuseEmail:String(av.abuse.email),hasMx:av.hasMx??null,activityStatus:av.activityStatus||null,privacyProtected:av.privacyProtected??null,domainAgeDays:av.domainAgeDays??null}:null;const httpSummary=compactHttpObservation(av.http)||{};const relationship=relationshipObservation(av,profile?.officialDomains||[]);const confidence=['high','medium','low'].includes(av.confidence)?av.confidence:'unknown';const saved={domain:canonicalDomain,scanDepth:mode,availability:av.state||'unknown',registrarName:entityDisplayName(av.registrar)||'—',nameservers,createdDate:av.createdDate||null,expiryDate:av.expiryDate||null,privacyProtected:av.privacyProtected??null,hasMx:av.hasMx??null,hasSpf:av.hasSpf??null,hasDmarc:av.hasDmarc??null,activityStatus:av.activityStatus||null,pageTitle:av.pageTitle??null,...httpSummary,faviconHash:av.faviconHash||null,faviconPHash:av.faviconPHash||null,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:av.hasPasswordField??null,phishingLanguageMatch:av.phishingLanguageMatch??null,riskModelVersion:riskExplanation?.modelVersion??null,riskScore:risk,riskFactors:riskExplanation?.factors.map((factor)=>({label:factor.label,points:factor.delta}))||[],mutationTypes:candidate?.mutationTypes||[]};return{domain:canonicalDomain,status:'complete',availability:saved.availability,confidence,registrar:saved.registrarName,activity:formatActivityCell(av.activityStatus,av.hasMx,av.hasSpf,av.hasDmarc),risk,opportunity,mutationTypes:candidate?.mutationTypes||[],trusted:matched.trusted,error:'',saved,nameservers,faviconHash:saved.faviconHash,faviconPHash:saved.faviconPHash,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:Boolean(av.hasPasswordField),phishingLanguageMatch:av.phishingLanguageMatch||null,registrant,abuseEvidence,ct:candidate?.certificateTransparency||null,idn,dns:av.dns&&typeof av.dns==='object'?av.dns:null,dnssec:av.dnssec||null,relationship};}
-  function failedResult(domain:string,message:string):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const idn=analyzeDomainIdn(domain,profile?.officialDomains||[]);return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:profileDomainKind(domain,profile),error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:mode,availability:'error',mutationTypes,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false,hasPasswordField:false,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,relationship:relationshipObservation({},[])};}
-  function riskTitle(row:ScanResult){const factors=Array.isArray(row.saved.riskFactors)?row.saved.riskFactors:[];const lines=factors.map((factor:Record<string,any>)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`);if(row.saved.riskModelVersion)lines.push(`Risk model v${row.saved.riskModelVersion}`);return lines.join('\n')||undefined;}
+  function normalize(domain:string,body:CompactLookupHttpResponse):ScanResult {const av=lookupRecord(body.availability);const canonicalDomain=body.availability.domain;const candidate=provenance(domain)||provenance(canonicalDomain);const matched=profileSignals(canonicalDomain,av,profile);const idn=analyzeDomainIdn(canonicalDomain,profile?.officialDomains||[]);const scoring={...av,...matched,availability:body.availability.state,mutationTypes:candidate?.mutationTypes||[]};const riskExplanation=explainRiskScore(scoring);const risk=riskExplanation?.score??null;const opportunity=computeOpportunityScore(scoring);const nameservers=boundedStrings(av.nameservers);const registrant=compactContact(av.registrant);const abuse=plainRecord(av.abuse);const abuseEmail=boundedText(abuse?.email,320);const hasMx=nullableBoolean(av.hasMx);const hasSpf=nullableBoolean(av.hasSpf);const hasDmarc=nullableBoolean(av.hasDmarc);const activityStatus=boundedText(av.activityStatus,40);const privacyProtected=nullableBoolean(av.privacyProtected);const domainAgeDays=nullableNumber(av.domainAgeDays);const abuseEvidence=abuseEmail?{abuseEmail,hasMx,activityStatus,privacyProtected,domainAgeDays}:null;const httpSummary=compactHttpObservation(av.http)||{};const relationship=relationshipObservation(av,profile?.officialDomains||[]);const saved:SavedScanRecord={domain:canonicalDomain,scanDepth:mode,availability:body.availability.state,registrarName:entityDisplayName(av.registrar)||'—',nameservers,createdDate:boundedText(av.createdDate,64),expiryDate:boundedText(av.expiryDate,64),privacyProtected,hasMx,hasSpf,hasDmarc,activityStatus,pageTitle:boundedText(av.pageTitle,300),...httpSummary,faviconHash:boundedText(av.faviconHash,64),faviconPHash:boundedText(av.faviconPHash,64),faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:nullableBoolean(av.hasPasswordField),phishingLanguageMatch:boundedText(av.phishingLanguageMatch,300),riskModelVersion:riskExplanation?.modelVersion??null,riskScore:risk,riskFactors:riskExplanation?.factors.map((factor)=>({label:factor.label,points:factor.delta}))||[],mutationTypes:candidate?.mutationTypes||[]};return{domain:canonicalDomain,status:'complete',availability:saved.availability,confidence:body.availability.confidence,registrar:saved.registrarName,activity:formatActivityCell(activityStatus,hasMx,hasSpf,hasDmarc),risk,opportunity,mutationTypes:candidate?.mutationTypes||[],trusted:matched.trusted,error:'',saved,nameservers,faviconHash:saved.faviconHash,faviconPHash:saved.faviconPHash,faviconMatch:matched.faviconMatch,faviconNearMatch:matched.faviconNearMatch,reusesOfficialAssets:matched.reusesOfficialAssets,hasPasswordField:saved.hasPasswordField===true,phishingLanguageMatch:saved.phishingLanguageMatch??null,registrant,abuseEvidence,ct:candidate?.certificateTransparency||null,idn,dns:compactDnsEvidence(av.dns),dnssec:boundedText(av.dnssec,40),relationship};}
+  function failedResult(domain:string,message:string):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const idn=analyzeDomainIdn(domain,profile?.officialDomains||[]);return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:profileDomainKind(domain,profile),error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:mode,availability:'error',registrarName:'—',nameservers:[],faviconHash:null,faviconPHash:null,riskFactors:[],mutationTypes,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:false,faviconNearMatch:false,reusesOfficialAssets:false,hasPasswordField:false,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,relationship:relationshipObservation({},[])};}
+  function riskTitle(row:ScanResult){const factors=Array.isArray(row.saved.riskFactors)?row.saved.riskFactors:[];const lines=factors.map((factor)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`);if(row.saved.riskModelVersion)lines.push(`Risk model v${row.saved.riskModelVersion}`);return lines.join('\n')||undefined;}
   function resultDisplayRows(){return visibleResults.map((row)=>{const resultIndex=results.indexOf(row);const caseRecord=caseByDomain.get(row.domain)||null;const outreach=outreachAction(row.domain,row.registrant);const abuse=abuseAction(row.domain,row.abuseEvidence);return{resultIndex,domain:row.domain,shortlisted:isShortlisted(row.domain),unicodeDomain:row.idn?.hasIdn?String(row.idn.unicodeDomain||''):'',mixedScript:Boolean(row.idn?.mixedScript),referenceMatch:Boolean(row.idn?.referenceMatches?.length),trusted:row.trusted||'',faviconMatch:row.faviconMatch,faviconNearMatch:row.faviconNearMatch,reusesOfficialAssets:row.reusesOfficialAssets,hasPasswordField:row.hasPasswordField,phishingLanguageMatch:row.phishingLanguageMatch||'',ct:row.ct?{lastObservedAt:row.ct.lastObservedAt,hostnameCount:row.ct.hostnames.length,certificateCount:row.ct.certificateCount}:null,errorRow:row.status==='error',error:row.error,availability:row.availability,confidence:row.confidence,risk:row.risk,highRisk:(row.risk??-1)>=70&&!row.trusted,riskTitle:riskTitle(row),opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,mutationLabel:row.mutationTypes.map(value=>mutationLabels[value]||value.replaceAll('_',' ')).join(', ')||'—',caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null,outreach:outreach?{mailto:outreach.mailto,body:outreach.body}:null,abuse:abuse?{mailto:abuse.mailto,body:abuse.body}:null};});}
   function resultAt(index:number){return index>=0&&index<results.length?results[index]:null;}
   function toggleSavedAt(index:number){const row=resultAt(index);if(row)toggleSaved(row);}
@@ -192,7 +243,7 @@
   }
   async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}await run(parseDomains(),true);}
   async function retryErrors(){const domains=results.filter(r=>r.status==='error').map(r=>r.domain);results=results.filter(r=>r.status!=='error');await run(domains,false);}
-  function exportCsv(){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_status','registrar','activity','risk','risk_model_version','risk_factors','opportunity','mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=results.map(r=>[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',r.idn?.referenceMatches?.map((match:Record<string,any>)=>match.asciiDomain).join('|')||'',r.availability,r.confidence,r.trusted||'',r.registrar,r.activity,r.risk??'',r.saved.riskModelVersion??'',r.saved.riskFactors?.map((factor:Record<string,any>)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`).join('; ')||'',r.opportunity??'',r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records?.a?.join('|')||'',r.dns?.records?.aaaa?.join('|')||'',r.dns?.records?.cname?.join('|')||'',r.dns?.records?.caa?.map((item:Record<string,any>)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',...ctCsvFields(r.ct)]);const url=URL.createObjectURL(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-bulk-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
+  function exportCsv(){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_status','registrar','activity','risk','risk_model_version','risk_factors','opportunity','mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=results.map(r=>[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',r.idn?.referenceMatches?.map((match)=>match.asciiDomain).join('|')||'',r.availability,r.confidence,r.trusted||'',r.registrar,r.activity,r.risk??'',r.saved.riskModelVersion??'',r.saved.riskFactors?.map((factor)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`).join('; ')||'',r.opportunity??'',r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records.a.join('|')||'',r.dns?.records.aaaa.join('|')||'',r.dns?.records.cname.join('|')||'',r.dns?.records.caa.map((item)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',...ctCsvFields(r.ct)]);const url=URL.createObjectURL(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-bulk-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
   function exportDefensiveIndicators(){const exported=indicatorFormat==='stix'?buildStixIndicatorExport(filtered):indicatorFormat==='misp'?buildMispIndicatorExport(filtered):buildDefensiveIndicatorExport(filtered,{format:indicatorFormat});if(!exported.domains.length){indicatorStatus='No filtered high-risk registered domains are eligible for defensive export.';return;}const url=URL.createObjectURL(new Blob([exported.content],{type:exported.mimeType}));const anchor=document.createElement('a');anchor.href=url;anchor.download=exported.filename;anchor.click();URL.revokeObjectURL(url);indicatorStatus=`Exported ${exported.domains.length} candidate indicator${exported.domains.length===1?'':'s'}${exported.truncated?' from a capped result set':''}. Check for false positives before use.`;}
   async function saveResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}const findings=results.filter(row=>!row.trusted);if(!findings.length){saveStatus='Every result is trusted by the active profile; nothing was added to Monitor.';return;}try{const changes=await saveWatchlist(name,findings.map(r=>r.saved),mode);const excluded=results.length-findings.length;saveStatus=changes.length?`Updated ${name} and recorded ${changes.length} material change${changes.length===1?'':'s'}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`:`Saved ${findings.length} result${findings.length===1?'':'s'} to ${name}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save watchlist.';}}
 </script>
@@ -222,7 +273,7 @@
   {status}
 />
 
-{#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
+<p class="local-context-status" role="status">{localContextStatus}</p>
 
 {#if results.length}
   <section id="results" class="triage card" tabindex="-1">
@@ -304,6 +355,7 @@
 
 <style>
   .local-context-status{margin:12px 0 0;color:var(--warning);font-size:var(--text-sm)}
+  .local-context-status:empty{display:none}
   .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
   .triage :global(#bulk-triage-plot){margin:16px 0}

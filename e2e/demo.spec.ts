@@ -158,6 +158,7 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
 
 test('recovers safely from malformed and future tab state', async ({ page }) => {
   await page.goto('/demo');
+  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await page.evaluate(() => sessionStorage.setItem('whoisleuth:synthetic-demo:v1', '{malformed'));
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();

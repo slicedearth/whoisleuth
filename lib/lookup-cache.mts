@@ -17,7 +17,7 @@ type CacheEntry = {
   size: number;
 };
 
-type CacheFactory = () => unknown | Promise<unknown>;
+type CacheFactory<T = unknown> = () => T | Promise<T>;
 
 const TTL_MS = 3 * 60 * 1000; // 3 minutes
 
@@ -98,12 +98,12 @@ const inFlight = new Map<string, Promise<unknown>>();
 // The cache intentionally holds heterogeneous public lookup results. Callers
 // supply distinct result contracts, so this internal compatibility boundary
 // stays dynamically typed rather than asserting one shared payload shape.
-async function cached(key: string, factory: CacheFactory): Promise<any> {
+async function cached<T>(key: string, factory: CacheFactory<T>): Promise<T> {
   const hit = getCached(key);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) return hit as T;
 
   const pending = inFlight.get(key);
-  if (pending) return pending;
+  if (pending) return pending as Promise<T>;
 
   const promise = (async () => {
     try {

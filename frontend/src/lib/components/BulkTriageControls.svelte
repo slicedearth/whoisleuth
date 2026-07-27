@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BulkSortDirection, BulkSortKey } from '$lib/analysis/bulk-sort.js';
+  import type { BulkSortDirection, BulkSortKey } from '$lib/analysis/bulk-sort.ts';
 
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
   type IndicatorFormat = 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';

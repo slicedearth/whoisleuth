@@ -9,6 +9,7 @@ import {
   MAX_INVESTIGATION_SEARCH_RESULTS,
   MAX_INVESTIGATION_SEARCH_TOKENS,
   searchInvestigationIndex,
+  unavailableInvestigationSearchIndex,
 } from '../frontend/src/lib/analysis/investigation-search.ts';
 import {
   buildInvestigationProjection,
@@ -68,6 +69,17 @@ function indexFor(input: unknown) {
 }
 
 describe('local investigation search index', () => {
+  test('represents an unavailable browser-local search as an explicit bounded state', () => {
+    const index = unavailableInvestigationSearchIndex(`  ${'Search failed. '.repeat(40)}  `);
+    assert.equal(index.state, 'invalid');
+    assert.equal(index.generatedAt, null);
+    assert.equal(index.projectionVersion, null);
+    assert.deepEqual(index.entries, []);
+    assert.equal(index.limitations.length, 1);
+    assert.ok(index.limitations[0].length <= 300);
+    assert.match(index.limitations[0], /^Search failed\./);
+  });
+
   test('builds a versioned empty index from the current projection contract', () => {
     const index = indexFor(projectionInput());
     assert.equal(index.schema, INVESTIGATION_SEARCH_SCHEMA);

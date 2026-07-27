@@ -1,5 +1,5 @@
 <script lang="ts">
-  type JsonRecord = Record<string, any>;
+  type JsonRecord = Record<string, unknown>;
 
   let {
     parsed,
@@ -9,13 +9,23 @@
     source?: string;
   } = $props();
 
+  const isRecord = (value: unknown): value is JsonRecord => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const record = (value: unknown): JsonRecord => isRecord(value) ? value : {};
+  const records = (value: unknown): JsonRecord[] => Array.isArray(value) ? value.filter(isRecord) : [];
   const roleOrder = ['registrar','registrant','administrative','technical','billing','abuse','noc','reseller','sponsor','proxy','notifications'];
-  const populatedRoles = $derived(roleOrder.filter((role) => Array.isArray(parsed.entitiesByRole?.[role]) && parsed.entitiesByRole[role].length));
+  const entitiesByRole = $derived(record(parsed.entitiesByRole));
+  const lifecycle = $derived(record(parsed.lifecycle));
+  const truncatedEntityRoles = $derived(Array.isArray(parsed.truncatedEntityRoles) ? parsed.truncatedEntityRoles : []);
+  const contactsForRole = (role:string):JsonRecord[] => records(entitiesByRole[role]);
+  const populatedRoles = $derived(roleOrder.filter((role) => contactsForRole(role).length));
 
-  function show(value: any): string {
+  function show(value: unknown): string {
     if (value == null || value === '') return '—';
     if (Array.isArray(value)) return value.join(', ') || '—';
-    if (typeof value === 'object') return show(value.name || value.org || value.handle || value.domain);
+    if (typeof value === 'object') {
+      const item = record(value);
+      return show(item.name || item.org || item.handle || item.domain);
+    }
     return String(value);
   }
 
@@ -29,42 +39,42 @@
       Array.isArray(contact.emails) && contact.emails.length ? `Email: ${contact.emails.join(', ')}` : null,
       Array.isArray(contact.phones) && contact.phones.length ? `Phone: ${contact.phones.join(', ')}` : null,
       Array.isArray(contact.addresses) && contact.addresses.length ? `Address: ${contact.addresses.join(' · ')}` : null,
-      Array.isArray(contact.publicIds) && contact.publicIds.length ? `IDs: ${contact.publicIds.map((item: JsonRecord) => `${item.type}: ${item.identifier}`).join(', ')}` : null,
-      Array.isArray(contact.links) && contact.links.length ? `Links: ${contact.links.map((item: JsonRecord) => item.href).join(', ')}` : null,
+      records(contact.publicIds).length ? `IDs: ${records(contact.publicIds).map((item) => `${item.type}: ${item.identifier}`).join(', ')}` : null,
+      records(contact.links).length ? `Links: ${records(contact.links).map((item) => String(item.href || '')).filter(Boolean).join(', ')}` : null,
     ].filter(Boolean) as string[];
   }
 
   function linkText() {
     return Array.isArray(parsed.links)
-      ? parsed.links.map((item: JsonRecord) => [item.rel, item.href].filter(Boolean).join(': ')).join(' · ')
+      ? records(parsed.links).map((item) => [item.rel, item.href].filter(Boolean).join(': ')).join(' · ')
       : '';
   }
 
   function glueText() {
     return Array.isArray(parsed.nameserverDetails)
-      ? parsed.nameserverDetails
-          .filter((item: JsonRecord) => Array.isArray(item.addresses) && item.addresses.length)
-          .map((item: JsonRecord) => `${item.name}: ${item.addresses.join(', ')}`)
+      ? records(parsed.nameserverDetails)
+          .filter((item) => Array.isArray(item.addresses) && item.addresses.length)
+          .map((item) => `${item.name}: ${(item.addresses as unknown[]).join(', ')}`)
           .join(' · ')
       : '';
   }
 
   function dsText() {
     return Array.isArray(parsed.dsData)
-      ? parsed.dsData.map((item: JsonRecord) => [item.keyTag,item.algorithm,item.digestType,item.digest]
+      ? records(parsed.dsData).map((item) => [item.keyTag,item.algorithm,item.digestType,item.digest]
           .filter((value) => value !== null && value !== undefined && value !== '').join(' ')).join(' · ')
       : '';
   }
 
-  function textBlocks(value: any) {
+  function textBlocks(value: unknown) {
     return Array.isArray(value)
-      ? value.map((item: JsonRecord) => `${item.title}: ${(item.descriptions || []).join(' ')}`).join(' · ')
+      ? records(value).map((item) => `${item.title}: ${Array.isArray(item.descriptions) ? item.descriptions.join(' ') : ''}`).join(' · ')
       : '';
   }
 
   function redactionText() {
     return Array.isArray(parsed.redactions)
-      ? parsed.redactions.map((item: JsonRecord) => [
+      ? records(parsed.redactions).map((item) => [
           item.name,item.method,item.reason,item.prePath||item.postPath||item.replacementPath,
         ].filter(Boolean).join(' · ')).join(' | ')
       : '';
@@ -72,11 +82,11 @@
 
   function variantText() {
     return Array.isArray(parsed.variants)
-      ? parsed.variants.map((group: JsonRecord) => {
+      ? records(parsed.variants).map((group) => {
           const names = Array.isArray(group.variantNames)
-            ? group.variantNames.map((name: JsonRecord) => name.unicodeName || name.ldhName).filter(Boolean)
+            ? records(group.variantNames).map((name) => name.unicodeName || name.ldhName).filter(Boolean)
             : [];
-          return [[...(group.relation || []),group.idnTable].filter(Boolean).join(', '),names.join(', ')]
+          return [[...(Array.isArray(group.relation) ? group.relation : []),group.idnTable].filter(Boolean).join(', '),names.join(', ')]
             .filter(Boolean).join(': ');
         }).filter(Boolean).join(' · ')
       : '';
@@ -88,15 +98,15 @@
       : '';
   }
 
-  function formatDate(value: any) {
+  function formatDate(value: unknown) {
     if (!value) return '—';
-    const date = new Date(value);
+    const date = new Date(String(value));
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
   }
 
-  function dateTimeAttribute(value: any) {
+  function dateTimeAttribute(value: unknown) {
     if (!value) return undefined;
-    const date = new Date(value);
+    const date = new Date(String(value));
     return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
   }
 </script>
@@ -121,7 +131,7 @@
   <dt>Language</dt><dd>{show(parsed.language)}</dd>
   <dt>Conformance</dt><dd>{show(parsed.conformance)}{parsed.conformanceTruncated ? ' (capped)' : ''}</dd>
   <dt>Lifecycle events</dt><dd>{Array.isArray(parsed.events) ? parsed.events.length : 0}{parsed.eventsTruncated ? ' (capped)' : ''}</dd>
-  <dt>RDAP database updated</dt><dd><time datetime={dateTimeAttribute(parsed.lifecycle?.databaseUpdatedDateIso || parsed.lifecycle?.databaseUpdatedDate)}>{formatDate(parsed.lifecycle?.databaseUpdatedDateIso || parsed.lifecycle?.databaseUpdatedDate)}</time></dd>
+  <dt>RDAP database updated</dt><dd><time datetime={dateTimeAttribute(lifecycle.databaseUpdatedDateIso || lifecycle.databaseUpdatedDate)}>{formatDate(lifecycle.databaseUpdatedDateIso || lifecycle.databaseUpdatedDate)}</time></dd>
   <dt>Port 43</dt><dd>{show(parsed.port43)}</dd>
   <dt>Parent handle</dt><dd>{show(parsed.parentHandle)}</dd>
   <dt>Redactions</dt><dd>{redactionText() || '—'}{parsed.redactionsTruncated ? ' (capped)' : ''}</dd>
@@ -137,8 +147,8 @@
       {#if parsed.entitiesTruncated}<p>{source} contact data exceeded local display limits. Review the raw response for the complete upstream payload.</p>{/if}
       {#each populatedRoles as role}
         <section>
-          <h4>{role}{parsed.truncatedEntityRoles?.includes(role) ? ' · capped' : ''}</h4>
-          {#each parsed.entitiesByRole[role] as contact}
+          <h4>{role}{truncatedEntityRoles.includes(role) ? ' · capped' : ''}</h4>
+          {#each contactsForRole(role) as contact}
             <article>
               <strong>{contactIdentity(contact)}{contact.truncated ? ' · capped' : ''}</strong>
               {#each contactDetails(contact) as detail}<span>{detail}</span>{/each}

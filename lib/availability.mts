@@ -21,6 +21,7 @@ import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } f
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
 import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
+import { nonEmptyErrorMessage } from './error-detail.mts';
 
 const MAX_HOMEPAGE_BYTES = 300000;
 const DNS_DELEGATION_TIMEOUT_MS = 4000;
@@ -78,10 +79,6 @@ function errorRecord(value: unknown): UnknownRecord {
     : {};
 }
 
-function errorMessage(value: unknown, fallback: string): string {
-  const record = errorRecord(value);
-  return typeof record.message === 'string' ? record.message : fallback;
-}
 type AvailabilityOptions = {
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
@@ -258,7 +255,7 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
       delegated: false,
       nameservers: [],
       nameserversTruncated: false,
-      error: errorMessage(err, String(err)).slice(0, 180),
+      error: nonEmptyErrorMessage(err, String(err)).slice(0, 180),
     };
   } finally {
     clearTimeout(timer);
@@ -336,7 +333,7 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
       const error = errorRecord(err);
       const reason = error.name === 'AbortError'
         ? 'timed out after 6 seconds'
-        : errorMessage(err, 'request failed')
+        : nonEmptyErrorMessage(err, 'request failed')
           .replace(/[\u0000-\u001f\u007f]+/g, ' ')
           .slice(0, 180);
       failures.push({ url: requestUrl, error: `${scheme.toUpperCase()} ${reason}` });

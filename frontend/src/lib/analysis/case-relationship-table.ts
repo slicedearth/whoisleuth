@@ -45,7 +45,7 @@ export interface CaseRelationshipTableOptions extends CaseRelationshipFilterOpti
   page?: unknown;
 }
 
-interface CaseRelationshipTableRow extends CaseRelationshipGroup {
+export interface CaseRelationshipTableRow extends CaseRelationshipGroup {
   caseCount: number;
   omittedCases: number;
   omittedObservations: number;

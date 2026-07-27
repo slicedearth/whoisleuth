@@ -11,18 +11,30 @@ import {
   normalizeWatchlistName,
   serializeWatchlistStore,
 } from './analysis/watchlist-store.ts';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { LEGACY_WATCHLIST_KEY, WATCHLISTS_COLLECTION } from './browser-local-data-definitions.js';
+import type {
+  WatchlistCollection,
+  WatchlistEntry,
+} from './analysis/watchlist-store.ts';
+import type {
+  WatchlistChange,
+  WatchlistComparableRecord,
+  WatchlistDomainHistoryEvent,
+  WatchlistHistoryEvent,
+  WatchlistHistoryGroup,
+} from './analysis/watchlist-history.ts';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { LEGACY_WATCHLIST_KEY, WATCHLISTS_COLLECTION } from './browser-local-data-definitions.ts';
 
 export const WATCHLIST_KEY = LEGACY_WATCHLIST_KEY;
 export const MAX_WATCHLIST_IMPORT_BYTES = 2 * 1024 * 1024;
 
-export interface WatchlistChange { domain:string; field:string; before:unknown; after:unknown; kind:string; tone:string }
-export interface WatchlistEvent { checkedAt:string; mode:string; resultCount:number; conclusiveCount:number; changeCount:number; omittedChanges:number; changes:WatchlistChange[] }
-export interface WatchlistEntry { updatedAt:string; results:Array<Record<string,any>>; baseline:Array<Record<string,any>>; history:WatchlistEvent[] }
-export type Watchlists = Record<string, WatchlistEntry>;
-export interface WatchlistHistoryGroup { key:string; label:string; changes:WatchlistChange[] }
-export interface WatchlistDomainHistoryEvent { checkedAt:string; mode:string; groups:WatchlistHistoryGroup[] }
+export type {
+  WatchlistChange,
+  WatchlistEntry,
+  WatchlistHistoryEvent as WatchlistEvent,
+  WatchlistHistoryGroup,
+};
+export type Watchlists = WatchlistCollection;
 export interface WatchlistDomainHistory {
   domain:string;
   retainedWatchlistChecks:number;
@@ -46,7 +58,7 @@ export async function writeWatchlists(all: Watchlists): Promise<void> {
   await (await browserLocalDataProvider()).update(WATCHLISTS_COLLECTION, () => ({ document: boundedWatchlists(all), result: undefined }));
 }
 
-export async function saveWatchlist(name:string, results:Array<Record<string,any>>, mode:'fast'|'deep'|'saved'): Promise<WatchlistChange[]> {
+export async function saveWatchlist(name:string, results:WatchlistComparableRecord[], mode:'fast'|'deep'|'saved'): Promise<WatchlistChange[]> {
   const normalizedName=normalizeWatchlistName(name);
   if(!normalizedName)throw new Error('Watchlist names must be 1–100 characters and use a safe name.');
   if(results.length>MAX_WATCHLIST_DOMAINS)throw new Error(`Watchlists are limited to ${MAX_WATCHLIST_DOMAINS} domains.`);
@@ -66,5 +78,5 @@ export async function exportWatchlists(){const blob=new Blob([JSON.stringify(bui
 
 export const fieldLabels:Record<string,string>={availability:'Availability',registrarName:'Registrar',nameservers:'Nameservers',createdDate:'Creation date',expiryDate:'Expiry date',privacyProtected:'WHOIS privacy',hasMx:'MX',hasSpf:'SPF',hasDmarc:'DMARC',activityStatus:'Website activity',pageTitle:'Page title',httpEvidenceStatus:'HTTP evidence status',httpFinalOrigin:'Final website origin',httpResponseStatus:'HTTP response status',httpTransportSecurity:'Website transport',httpRedirectCount:'HTTP redirect count',httpCrossOriginRedirect:'Cross-origin redirect',httpHttpsDowngrade:'HTTPS downgrade',httpContentType:'Website content type',httpSecurityHeaders:'Observed security headers',faviconHash:'Favicon',faviconMatch:'Official favicon match',faviconNearMatch:'Official favicon near-match',hasPasswordField:'Password form',phishingLanguageMatch:'Phishing language',reusesOfficialAssets:'Official asset reuse',riskScore:'Risk score'};
 export function formatValue(value:unknown,field=''){if(Array.isArray(value))return (field==='httpSecurityHeaders'?value.map(item=>httpSecurityHeaderLabel(String(item))):value).join(', ')||'None';if(typeof value==='boolean')return value?'Yes':'No';return value==null||value===''?'None':String(value);}
-export function watchlistHistoryDomains(entry:WatchlistEntry|null){return historyDomains(entry) as {domains:string[];omittedDomains:number};}
-export function projectWatchlistDomainHistory(entry:WatchlistEntry|null,domain:string){return projectDomainHistory(entry,domain) as WatchlistDomainHistory|null;}
+export function watchlistHistoryDomains(entry:WatchlistEntry|null){return historyDomains(entry);}
+export function projectWatchlistDomainHistory(entry:WatchlistEntry|null,domain:string):WatchlistDomainHistory|null{return projectDomainHistory(entry,domain) as WatchlistDomainHistory|null;}

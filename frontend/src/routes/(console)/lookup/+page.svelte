@@ -44,20 +44,20 @@
     createLookupViewModel,
     type JsonObject,
     type LookupHttpResponse,
-  } from '$lib/analysis/lookup-response.js';
+  } from '$lib/analysis/lookup-response.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
-  } from '$lib/analysis/lookup-request.js';
+  } from '$lib/analysis/lookup-request.ts';
   import {
     buildLookupReadableReport,
     lookupReadableReportFilename,
-  } from '$lib/analysis/lookup-readable-report.js';
+  } from '$lib/analysis/lookup-readable-report.ts';
   import { createPageBaseline } from '$lib/analysis/page-baseline.ts';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.ts';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.ts';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.js';
+  import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import {
     explainOpportunityScore,

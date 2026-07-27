@@ -7,10 +7,16 @@
     MAX_RELATIONSHIP_GRAPH_PINS,
     projectCaseRelationshipGraph,
   } from '$lib/analysis/case-relationship-graph.ts';
+  import type {
+    CaseRelationshipGraphCaseNode,
+    CaseRelationshipGraphEdge,
+    CaseRelationshipGraphRelationshipNode,
+  } from '$lib/analysis/case-relationship-graph.ts';
+  import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import { buildRelationshipGraphExport } from '$lib/analysis/case-relationship-graph-export.ts';
   import { horizontalConnectionPath } from '$lib/analysis/evidence-topology.ts';
 
-  let { records, summary, onselect }:{records:CaseRecord[];summary:any;onselect?:(record:CaseRecord)=>void}=$props();
+  let { records, summary, onselect }:{records:CaseRecord[];summary:CaseRelationshipSummary;onselect?:(record:CaseRecord)=>void}=$props();
   let selectedId=$state('');
   let type=$state('all');
   let source=$state('all');
@@ -24,8 +30,8 @@
   let exportFormat=$state<'json'|'graphml'|'gexf'>('json');
   let exportMessage=$state('');
   const graph=$derived(projectCaseRelationshipGraph(summary,{type,source,period,completeness,scope,focusId:selectedId,oneHop,pinnedIds,hiddenIds,groupCaseIds}));
-  const selectedNode:any=$derived(graph.nodes.find((node:any)=>node.id===selectedId)||graph.relationshipNodes[0]||graph.caseNodes[0]||null);
-  const actionableSelection=$derived(Boolean(selectedId&&graph.nodes.some((node:any)=>node.id===selectedId)));
+  const selectedNode=$derived(graph.nodes.find((node)=>node.id===selectedId)||graph.relationshipNodes[0]||graph.caseNodes[0]||null);
+  const actionableSelection=$derived(Boolean(selectedId&&graph.nodes.some((node)=>node.id===selectedId)));
   const viewChanged=$derived(graph.view.oneHop||pinnedIds.length>0||hiddenIds.length>0||groupCaseIds.length>0);
 
   function select(id:string){selectedId=id;}
@@ -33,22 +39,22 @@
   function openCase(id:string){const target=records.find((record)=>record.id===id);if(target)onselect?.(target);}
   function clearFilters(){type='all';source='all';period='all';completeness='all';scope='all';selectedId='';oneHop=false;}
   function toggleOneHop(){if(!actionableSelection)return;oneHop=!graph.view.oneHop;}
-  function togglePin(){if(!actionableSelection)return;const id=selectedNode.id;if(pinnedIds.includes(id)){pinnedIds=pinnedIds.filter((item)=>item!==id);return;}if(pinnedIds.length<MAX_RELATIONSHIP_GRAPH_PINS)pinnedIds=[...pinnedIds,id];}
-  function hideSelected(){if(!actionableSelection||hiddenIds.length>=MAX_RELATIONSHIP_GRAPH_HIDDEN)return;const id=selectedNode.id;hiddenIds=[...hiddenIds,id];pinnedIds=pinnedIds.filter((item)=>item!==id);groupCaseIds=groupCaseIds.filter((item)=>item!==id);selectedId='';oneHop=false;}
+  function togglePin(){if(!actionableSelection||!selectedNode)return;const id=selectedNode.id;if(pinnedIds.includes(id)){pinnedIds=pinnedIds.filter((item)=>item!==id);return;}if(pinnedIds.length<MAX_RELATIONSHIP_GRAPH_PINS)pinnedIds=[...pinnedIds,id];}
+  function hideSelected(){if(!actionableSelection||!selectedNode||hiddenIds.length>=MAX_RELATIONSHIP_GRAPH_HIDDEN)return;const id=selectedNode.id;hiddenIds=[...hiddenIds,id];pinnedIds=pinnedIds.filter((item)=>item!==id);groupCaseIds=groupCaseIds.filter((item)=>item!==id);selectedId='';oneHop=false;}
   function resetView(){oneHop=false;pinnedIds=[];hiddenIds=[];groupCaseIds=[];}
   function toggleGroupCase(id:string){if(groupCaseIds.includes(id)){groupCaseIds=groupCaseIds.filter((item)=>item!==id);return;}if(groupCaseIds.length<MAX_RELATIONSHIP_GRAPH_GROUP_CASES)groupCaseIds=[...groupCaseIds,id];}
-  function connectedCaseIds(node:any):string[]{const visible=new Set<string>(graph.caseNodes.map((item:any)=>String(item.id)));const ids:string[]=(node.cases||[]).map((item:any)=>`case:${item.id}`);return [...new Set<string>(ids.filter((id)=>visible.has(id)))];}
-  function canGroupConnectedCases(node:any){const ungrouped=connectedCaseIds(node).filter((id)=>!groupCaseIds.includes(id));return ungrouped.length>0&&ungrouped.length<=MAX_RELATIONSHIP_GRAPH_GROUP_CASES-groupCaseIds.length;}
-  function groupConnectedCases(node:any){if(!canGroupConnectedCases(node))return;groupCaseIds=[...new Set([...groupCaseIds,...connectedCaseIds(node)])];}
+  function connectedCaseIds(node:CaseRelationshipGraphRelationshipNode):string[]{const visible=new Set<string>(graph.caseNodes.map((item)=>String(item.id)));const ids:string[]=node.cases.map((item)=>`case:${item.id}`);return [...new Set<string>(ids.filter((id)=>visible.has(id)))];}
+  function canGroupConnectedCases(node:CaseRelationshipGraphRelationshipNode){const ungrouped=connectedCaseIds(node).filter((id)=>!groupCaseIds.includes(id));return ungrouped.length>0&&ungrouped.length<=MAX_RELATIONSHIP_GRAPH_GROUP_CASES-groupCaseIds.length;}
+  function groupConnectedCases(node:CaseRelationshipGraphRelationshipNode){if(!canGroupConnectedCases(node))return;groupCaseIds=[...new Set([...groupCaseIds,...connectedCaseIds(node)])];}
   function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
   function sourceLabel(value:string){return value.split('_').filter(Boolean).map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')||'Unknown';}
-  function completenessLabel(node:any){if(node.truncated)return 'Partial or truncated';if(node.complete===true)return 'Complete';if(node.complete===false)return 'Partial';return 'Unknown';}
-  function connectedRelationships(node:any){
-    const ids=new Set(graph.edges.filter((edge:any)=>edge.caseId===node.id).map((edge:any)=>edge.relationshipId));
-    return graph.relationshipNodes.filter((item:any)=>ids.has(item.id));
+  function completenessLabel(node:CaseRelationshipGraphRelationshipNode){if(node.truncated)return 'Partial or truncated';if(node.complete===true)return 'Complete';if(node.complete===false)return 'Partial';return 'Unknown';}
+  function connectedRelationships(node:CaseRelationshipGraphCaseNode){
+    const ids=new Set(graph.edges.filter((edge)=>edge.caseId===node.id).map((edge)=>edge.relationshipId));
+    return graph.relationshipNodes.filter((item)=>ids.has(item.id));
   }
-  function edgePath(edge:any){return horizontalConnectionPath({x:edge.x1,y:edge.y1},{x:edge.x2,y:edge.y2});}
-  function relationshipIcon(node:any):IntelligenceIconName{
+  function edgePath(edge:CaseRelationshipGraphEdge){return horizontalConnectionPath({x:edge.x1??0,y:edge.y1??0},{x:edge.x2??0,y:edge.y2??0});}
+  function relationshipIcon(node:CaseRelationshipGraphRelationshipNode):IntelligenceIconName{
     return({nameserver_set:'nameserver',http_final_origin:'origin',ip_address:'ip',certificate:'tls',tracking_identifier:'tracker',favicon:'favicon',official_asset:'asset'} as Record<string,IntelligenceIconName>)[node.type]||'network';
   }
   function downloadGraph(){
@@ -139,7 +145,7 @@
             <div><dt>Sources</dt><dd>{selectedNode.sources?.map(sourceLabel).join(', ')||'Unavailable'}</dd></div>
             <div><dt>Observed</dt><dd>{selectedNode.firstObservedAt?date(selectedNode.firstObservedAt):'Unavailable'}{#if selectedNode.lastObservedAt&&selectedNode.lastObservedAt!==selectedNode.firstObservedAt} to {date(selectedNode.lastObservedAt)}{/if}</dd></div>
             <div><dt>Completeness</dt><dd>{completenessLabel(selectedNode)}</dd></div>
-            {#if selectedNode.campaigns?.length}<div><dt>Campaigns</dt><dd>{selectedNode.campaigns.map((item:any)=>item.label).join(', ')}</dd></div>{/if}
+            {#if selectedNode.campaigns?.length}<div><dt>Campaigns</dt><dd>{selectedNode.campaigns.map((item)=>item.label).join(', ')}</dd></div>{/if}
           </dl>
           {#if selectedNode.observations?.length}
             <details class="observations"><summary>Source observations ({selectedNode.observations.length + selectedNode.omittedObservations})</summary><ul>{#each selectedNode.observations.slice(0,8) as item}<li><strong>{sourceLabel(item.source)}</strong> · {sourceLabel(item.store)} · {sourceLabel(item.scanDepth)} · {sourceLabel(item.status)}<small>{date(item.observedAt)} · {item.truncated?'Truncated':item.complete===true?'Complete':item.complete===false?'Partial':'Completeness unknown'}</small></li>{/each}</ul>{#if selectedNode.observations.length>8||selectedNode.omittedObservations}<p>{Math.max(0,selectedNode.observations.length-8)+selectedNode.omittedObservations} additional observation{Math.max(0,selectedNode.observations.length-8)+selectedNode.omittedObservations===1?'':'s'} omitted from this inspector.</p>{/if}</details>

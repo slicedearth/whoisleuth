@@ -4,7 +4,9 @@ import {
   previewWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from './analysis/workspace-archive.ts';
+import type { WorkspaceArchivePreviewSection } from './analysis/workspace-archive.ts';
 import { enforceStoreBudget, mergeCases } from './analysis/case-model.ts';
+import type { CaseRecord } from './analysis/case-model.ts';
 import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.ts';
 import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/brand-profile-model.ts';
 import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.ts';
@@ -19,7 +21,7 @@ import { loadRelationshipObservations } from './relationship-observations';
 import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import { loadWatchlists } from './watchlists';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import {
   CAMPAIGNS_COLLECTION,
   CASES_COLLECTION,
@@ -28,12 +30,32 @@ import {
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
-} from './browser-local-data-definitions.js';
-import type { AnyLocalDataCollectionDefinition } from './browser-local-data.js';
+} from './browser-local-data-definitions.ts';
+import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 
 export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
+export type WorkspaceImportSummary = {
+  id: string;
+  added: number;
+  updated: number;
+  skipped: number;
+  pruned: number;
+};
+
+function importSummary(
+  id: string,
+  result: { added: number; updated: number; skipped: number; pruned?: number },
+): WorkspaceImportSummary {
+  return {
+    id,
+    added: result.added || 0,
+    updated: result.updated || 0,
+    skipped: result.skipped || 0,
+    pruned: result.pruned || 0,
+  };
+}
 
 const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
 const profileId = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -104,26 +126,26 @@ function restoreSettings(snapshot: Map<string, string | null>) {
   window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: theme }));
 }
 
-async function applySettings(section: any) {
-  const settings = section.normalizedSettings || {};
-  const theme = normalizeThemePreference(settings.theme);
+async function applySettings(section: WorkspaceArchivePreviewSection): Promise<Omit<WorkspaceImportSummary, 'id'>> {
+  const settings = section.normalizedSettings;
+  const theme = normalizeThemePreference(settings?.theme);
   if (!setThemePreference(theme)) throw new Error('Could not save the imported theme preference. Browser storage may be full or unavailable.');
-  if (settings.activeProfileId && (await loadProfiles()).some((profile) => profile.id === settings.activeProfileId)) {
+  if (settings?.activeProfileId && (await loadProfiles()).some((profile) => profile.id === settings.activeProfileId)) {
     setActiveProfile(settings.activeProfileId);
     return { added: 0, updated: section.updated, skipped: 0, pruned: 0 };
   }
-  if (!settings.activeProfileId) setActiveProfile('');
-  return { added: 0, updated: section.updated, skipped: settings.activeProfileId ? 1 : 0, pruned: 0 };
+  if (!settings?.activeProfileId) setActiveProfile('');
+  return { added: 0, updated: section.updated, skipped: settings?.activeProfileId ? 1 : 0, pruned: 0 };
 }
 
 /** Revalidates the archive, then applies only selected ready sections. */
 export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: string[]) {
   const preview = await previewLocalWorkspaceArchive(raw);
   const selected = new Set(selectedIds);
-  const sections = preview.sections.filter((section: any) => section.status === 'ready' && selected.has(section.id));
+  const sections = preview.sections.filter((section) => section.status === 'ready' && selected.has(section.id));
   if (!sections.length) throw new Error('Select at least one supported archive section to merge.');
   const settingsSnapshot = snapshotSettings();
-  const dataSections = sections.filter((section: any) => section.id !== 'settings');
+  const dataSections = sections.filter((section) => section.id !== 'settings');
   const definitionBySection = new Map<string, AnyLocalDataCollectionDefinition>([
     ['cases', CASES_COLLECTION],
     ['campaigns', CAMPAIGNS_COLLECTION],
@@ -133,47 +155,56 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     ['detectionRules', DETECTION_RULES_COLLECTION],
     ['relationshipObservations', RELATIONSHIP_OBSERVATIONS_COLLECTION],
   ]);
-  const definitions = dataSections.map((section: any) => definitionBySection.get(section.id)).filter(Boolean) as AnyLocalDataCollectionDefinition[];
-  let results: any[] = [];
+  const definitions = dataSections
+    .map((section) => definitionBySection.get(section.id))
+    .filter((definition): definition is AnyLocalDataCollectionDefinition => Boolean(definition));
+  let results: WorkspaceImportSummary[] = [];
   let previousDocuments = new Map<string, unknown>();
   try {
     if (definitions.length) {
       results = await (await browserLocalDataProvider()).updateMany(definitions, (documents) => {
         previousDocuments = new Map(documents);
         const next = new Map(documents);
-        const summaries = [];
+        const summaries: WorkspaceImportSummary[] = [];
         for (const section of dataSections) {
-          let result: any;
           if (section.id === 'cases') {
-            const merged = mergeCases(documents.get('cases') as any[], section.data);
-            const bounded = enforceStoreBudget(merged.cases as any[]);
+            const currentCases = Array.isArray(documents.get('cases'))
+              ? documents.get('cases') as CaseRecord[]
+              : [];
+            const merged = mergeCases(currentCases, section.data);
+            const bounded = enforceStoreBudget(merged.cases);
             next.set('cases', bounded.cases);
-            result = { ...merged, pruned: bounded.pruned };
+            summaries.push(importSummary(section.id, { ...merged, pruned: bounded.pruned }));
           } else if (section.id === 'campaigns') {
-            result = mergeCampaigns(documents.get('campaigns'), section.data);
+            const result = mergeCampaigns(documents.get('campaigns'), section.data);
             next.set('campaigns', assertCampaignStoreBudget(result.campaigns).campaigns);
+            summaries.push(importSummary(section.id, result));
           } else if (section.id === 'brandProfiles') {
-            result = mergeBrandProfiles(documents.get('brand_profiles'), section.data, { makeId: profileId });
+            const result = mergeBrandProfiles(documents.get('brand_profiles'), section.data, { makeId: profileId });
             next.set('brand_profiles', assertBrandProfileStoreBudget(result.profiles).profiles);
+            summaries.push(importSummary(section.id, result));
           } else if (section.id === 'watchlists') {
-            result = mergeWatchlistStores(documents.get('watchlists'), section.data);
+            const result = mergeWatchlistStores(documents.get('watchlists'), section.data);
             next.set('watchlists', assertWatchlistStoreBudget(result.watchlists).watchlists);
+            summaries.push(importSummary(section.id, result));
           } else if (section.id === 'shortlist') {
-            result = mergeShortlistStores(documents.get('shortlist'), section.data);
+            const result = mergeShortlistStores(documents.get('shortlist'), section.data);
             next.set('shortlist', assertShortlistStoreBudget(result.entries).entries);
+            summaries.push(importSummary(section.id, result));
           } else if (section.id === 'detectionRules') {
-            result = mergeDetectionRules(documents.get('detection_rules'), section.data);
+            const result = mergeDetectionRules(documents.get('detection_rules'), section.data);
             next.set('detection_rules', assertDetectionRuleStoreBudget(result.rules).rules);
+            summaries.push(importSummary(section.id, result));
           } else if (section.id === 'relationshipObservations') {
-            result = mergeRelationshipObservations(documents.get('relationship_observations'), section.data);
+            const result = mergeRelationshipObservations(documents.get('relationship_observations'), section.data);
             next.set('relationship_observations', result.observations);
+            summaries.push(importSummary(section.id, result));
           } else continue;
-          summaries.push({ id: section.id, added: result.added || 0, updated: result.updated || 0, skipped: result.skipped || 0, pruned: result.pruned || 0 });
         }
         return { documents: next, result: summaries };
       });
     }
-    const settingsSection = sections.find((section: any) => section.id === 'settings');
+    const settingsSection = sections.find((section) => section.id === 'settings');
     if (settingsSection) {
       const result = await applySettings(settingsSection);
       results.push({ id: settingsSection.id, added: result.added || 0, updated: result.updated || 0, skipped: result.skipped || 0, pruned: result.pruned || 0 });

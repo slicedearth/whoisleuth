@@ -124,8 +124,13 @@ describe('website activity classification', () => {
     const result = await checkDomainAvailability('example.test', {
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1', WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1' }),
       rdapRecord: {
+        rdapServer: 'https://rdap.registry.test/domain/example.test',
+        transportSecurity: 'https',
         upstreamStatus: 200,
+        fetchedAt: '2026-07-13T04:05:06.000Z',
+        data: {},
         parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
+        attempts: [],
       },
       fetchHomepage: async () => ({
         text: null,
@@ -152,8 +157,13 @@ describe('website activity classification', () => {
     const result = await checkDomainAvailability('example.test', {
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1', WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1' }),
       rdapRecord: {
+        rdapServer: 'https://rdap.registry.test/domain/example.test',
+        transportSecurity: 'https',
         upstreamStatus: 200,
+        fetchedAt: '2026-07-13T04:05:06.000Z',
+        data: {},
         parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
+        attempts: [],
       },
       fetchHomepage: async () => {
         homepageCalls += 1;
@@ -209,8 +219,13 @@ describe('website activity classification', () => {
     const result = await checkDomainAvailability('example.test', {
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1', WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1' }),
       rdapRecord: {
+        rdapServer: 'https://rdap.registry.test/domain/example.test',
+        transportSecurity: 'https',
         upstreamStatus: 200,
+        fetchedAt: '2026-07-13T04:05:06.000Z',
+        data: {},
         parsed: { statuses: [], nameservers: [], events: [], lifecycle: {} },
+        attempts: [],
       },
       fetchHomepage: async () => ({
         text: '{"value":"<meta property=\\"og:title\\" content=\\"not a page\\">"}',

@@ -22,7 +22,15 @@ const PUBLISHER_FAMILIES: Readonly<Record<string, string>> = Object.freeze({
   threatfox_domain_ioc: 'community-malware-publisher',
 });
 
-type UnknownRecord = Record<string, any>;
+type UnknownRecord = Record<string, unknown>;
+type ProviderRiskEvidence = {
+  providerId: string;
+  publisherFamily: string;
+  qualifyingFindings: number;
+  lastObservedAt: string | null;
+  ageDays: number | null;
+  recent: boolean;
+};
 type ExternalIntelligenceCalibration = {
   version: number;
   contribution: number;
@@ -32,7 +40,7 @@ type ExternalIntelligenceCalibration = {
   recentPublisherCount: number;
   freshestAgeDays: number | null;
   unknownAgeProviderCount: number;
-  sources: UnknownRecord[];
+  sources: ProviderRiskEvidence[];
 };
 
 function record(value: unknown): UnknownRecord | null {
@@ -45,7 +53,7 @@ function timestamp(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function providerEvidence(value: unknown): UnknownRecord | null {
+function providerEvidence(value: unknown): ProviderRiskEvidence | null {
   const provider = record(value);
   const identity = record(provider?.provider);
   const observation = record(provider?.observation);
@@ -53,14 +61,17 @@ function providerEvidence(value: unknown): UnknownRecord | null {
   const publisherFamily = Object.hasOwn(PUBLISHER_FAMILIES, providerId)
     ? PUBLISHER_FAMILIES[providerId]
     : null;
-  if (!publisherFamily || !POSITIVE_STATES.has(provider?.state) || !Array.isArray(provider?.findings)) return null;
+  if (!publisherFamily
+    || typeof provider?.state !== 'string'
+    || !POSITIVE_STATES.has(provider.state)
+    || !Array.isArray(provider.findings)) return null;
 
   const observedAt = timestamp(observation?.observedAt);
   let latestFindingAt: number | null = null;
   let qualifyingFindings = 0;
   for (const item of provider.findings.slice(0, MAX_FINDINGS_PER_PROVIDER)) {
     const finding = record(item);
-    if (!finding || !QUALIFYING_CATEGORIES.has(finding.category)) continue;
+    if (!finding || typeof finding.category !== 'string' || !QUALIFYING_CATEGORIES.has(finding.category)) continue;
     qualifyingFindings += 1;
     const candidate = timestamp(finding.lastObservedAt) ?? timestamp(finding.firstObservedAt);
     if (candidate !== null && (latestFindingAt === null || candidate > latestFindingAt)) latestFindingAt = candidate;
@@ -84,7 +95,7 @@ function providerEvidence(value: unknown): UnknownRecord | null {
 export function calibrateExternalIntelligenceRisk(value: unknown): ExternalIntelligenceCalibration {
   const envelope = record(value);
   const providers = Array.isArray(envelope?.providers) ? envelope.providers.slice(0, MAX_PROVIDERS) : [];
-  const byProvider = new Map<string, UnknownRecord>();
+  const byProvider = new Map<string, ProviderRiskEvidence>();
   for (const item of providers) {
     const evidence = providerEvidence(item);
     if (!evidence || byProvider.has(evidence.providerId)) continue;

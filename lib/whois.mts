@@ -10,7 +10,7 @@ import { safeFetch, readTextCapped, resolvePublicAddresses } from './safe-fetch.
 import { registryDateIso } from './registry-dates.mts';
 import { registryCapabilityFor, type WhoisQueryProfile } from './registry-capabilities.mts';
 
-type UnknownRecord = Record<string, any>;
+type LooseRecord = Record<string, any>;
 type PublicAddressRecord = { address: string; family: number };
 type WhoisHop = {
   server: string;
@@ -50,7 +50,7 @@ type GtRegistryResult = { registered: false } | {
   adminEmail: string | null;
   nameservers: string[];
 };
-type ParsedWhoisRecord = UnknownRecord;
+type ParsedWhoisRecord = LooseRecord;
 type WhoisSocket = {
   write(value: string): unknown;
   destroy(): unknown;
@@ -101,7 +101,7 @@ function whoisTransportForHop(domain: string, hop: number): {
 
 function errorMessage(value: unknown, fallback: string): string {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
-  const message = (value as UnknownRecord).message;
+  const message = (value as LooseRecord).message;
   return message ? String(message) : fallback;
 }
 
@@ -2011,7 +2011,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     expiryDateIso: fields.expiryDateIso,
     updatedDateIso: fields.updatedDateIso,
   };
-  const contactsByRole: Record<string, UnknownRecord[]> = {};
+  const contactsByRole: Record<string, LooseRecord[]> = {};
   for (const [prefix, role] of [
     ['registrant', 'registrant'], ['admin', 'administrative'],
     ['tech', 'technical'], ['billing', 'billing'],

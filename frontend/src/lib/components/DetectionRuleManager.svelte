@@ -45,7 +45,11 @@
   function resetDraft(){name='';riskDelta=0;tag='';match='all';conditions=[newCondition()];}
   async function create(){
     try{
-      const normalizedConditions:DetectionRuleCondition[]=conditions.map((condition)=>({field:condition.field,operator:condition.operator,value:definition(condition.field)?.kind==='number'?Number(condition.value):condition.value}));
+      const normalizedConditions:DetectionRuleCondition[]=conditions.map((condition)=>({
+        field:condition.field,
+        operator:operatorsForRuleField(condition.field).find((operator)=>operator===condition.operator)??'equals',
+        value:definition(condition.field)?.kind==='number'?Number(condition.value):condition.value,
+      }));
       await refresh(await createDetectionRule({name,enabled:true,match,conditions:normalizedConditions,riskDelta:Number(riskDelta),tag}));
       message=`Created custom rule “${name.trim()}”.`;resetDraft();
     }catch(cause){message=cause instanceof Error?cause.message:'Could not create the custom rule.';}

@@ -112,7 +112,7 @@ function formatDiscoverJsonLines(candidates: DiscoverCandidate[], metadata: Disc
 }
 
 function versionedResult(
-  result: UnknownRecord,
+  result: Readonly<object>,
   schema: string,
   version: number,
   generatedAt: string,
@@ -122,15 +122,15 @@ function versionedResult(
   return { ...result, schema, version, generatedAt, [requestedField]: requestedValue };
 }
 
-function buildCliPostureDocument(requestedDomain: string, report: UnknownRecord, generatedAt = new Date().toISOString()): UnknownRecord {
+function buildCliPostureDocument(requestedDomain: string, report: Readonly<object>, generatedAt = new Date().toISOString()): UnknownRecord {
   return versionedResult(report, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
 }
 
-function buildCliHttpDocument(requestedDomain: string, result: UnknownRecord, generatedAt = new Date().toISOString()): UnknownRecord {
+function buildCliHttpDocument(requestedDomain: string, result: Readonly<object>, generatedAt = new Date().toISOString()): UnknownRecord {
   return versionedResult(result, CLI_HTTP_SCHEMA, CLI_HTTP_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
 }
 
-function buildCliTlsDocument(requestedHostname: string, result: UnknownRecord, generatedAt = new Date().toISOString()): UnknownRecord {
+function buildCliTlsDocument(requestedHostname: string, result: Readonly<object>, generatedAt = new Date().toISOString()): UnknownRecord {
   return versionedResult(result, CLI_TLS_SCHEMA, CLI_TLS_SCHEMA_VERSION, generatedAt, 'requestedHostname', requestedHostname);
 }
 

@@ -40,6 +40,22 @@ export type DetectionRuleStore = {
   version: typeof DETECTION_RULE_SCHEMA_VERSION;
   rules: DetectionRule[];
 };
+export type DetectionRuleMatch = {
+  id: string;
+  name: string;
+  riskDelta: number;
+  appliedDelta: number;
+  tag: string;
+};
+export type DetectionRuleEvaluation = {
+  caseId: string;
+  domain: string;
+  builtInRiskScore: number | null;
+  customRiskDelta: number;
+  contextualRiskScore: number | null;
+  matchedRules: DetectionRuleMatch[];
+  suggestedTags: string[];
+};
 type RuleFieldDefinition = {
   value: string;
   label: string;
@@ -231,11 +247,11 @@ export function conditionMatchesCase(conditionRaw: unknown, caseRecord: CaseReco
   return false;
 }
 
-export function evaluateDetectionRules(caseRecord: CaseRecordInput, rawRules: unknown) {
+export function evaluateDetectionRules(caseRecord: CaseRecordInput, rawRules: unknown): DetectionRuleEvaluation {
   const rules = normalizeDetectionRuleStore(rawRules).rules;
-  const matchedRules: Array<{ id: string; name: string; riskDelta: number; appliedDelta: number; tag: string }> = [];
+  const matchedRules: DetectionRuleMatch[] = [];
   let customRiskDelta = 0;
-  const suggestedTags = new Set();
+  const suggestedTags = new Set<string>();
   for (const rule of rules) {
     if (!rule.enabled) continue;
     const results = rule.conditions.map((condition) => conditionMatchesCase(condition, caseRecord));
@@ -260,7 +276,7 @@ export function evaluateDetectionRules(caseRecord: CaseRecordInput, rawRules: un
   };
 }
 
-export function evaluateRuleSet(records: unknown, rawRules: unknown) {
+export function evaluateRuleSet(records: unknown, rawRules: unknown): DetectionRuleEvaluation[] {
   if (!Array.isArray(records)) return [];
   return records.slice(0, 500).map((record) => evaluateDetectionRules(record, rawRules));
 }
