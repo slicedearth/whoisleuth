@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { analyzeWhoisChainAuthority, parseWhoisChain } from '../lib/whois.mts';
+import { requiredValue } from './value-assertions.mts';
 
 const IANA = 'whois.iana.org';
 const REGISTRY = 'whois.verisign-grs.com';
@@ -164,13 +165,30 @@ describe('analyzeWhoisChainAuthority', () => {
 });
 
 describe('parseWhoisChain wires the authority result through', () => {
+  test('normalizes malformed imported hops before authority analysis', () => {
+    const parsed = parseWhoisChain([
+      null,
+      { response: 'Domain Name: UNATTRIBUTED.EXAMPLE' },
+      ianaHop,
+      registryPositive,
+      ...Array.from({ length: 10 }, (_, index) => ({
+        server: `extra-${index}.example`,
+        response: 'No match for domain extra.example.',
+      })),
+    ]);
+
+    assert.equal(parsed.registrationStatus, 'registered');
+    assert.equal(parsed.authoritativeHop, REGISTRY);
+    assert.equal(parsed.notFound, false);
+  });
+
   test('positive registry + "no match" registrar: notFound stays false and fields populate', () => {
     const parsed = parseWhoisChain([ianaHop, registryPositive, registrarNoMatch]);
     assert.equal(parsed.notFound, false);
     assert.equal(parsed.chainStatus, 'partial');
     assert.equal(parsed.conflictingHop, 'whois.exampleregistrar.com');
     assert.ok(parsed.nameservers.length >= 1);
-    assert.match(parsed.registrar, /Example Registrar/);
+    assert.match(requiredValue(parsed.registrar), /Example Registrar/);
   });
 
   test('registry no-match: notFound true with the source hop', () => {

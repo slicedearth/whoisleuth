@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { parseWhoisChain } from '../lib/whois.mts';
+import { requiredValue } from './value-assertions.mts';
+
+function roleContact(
+  parsed: ReturnType<typeof parseWhoisChain>,
+  role: string,
+) {
+  return requiredValue(requiredValue(parsed.contactsByRole[role])[0]);
+}
 
 const rootHop = {
   server: 'whois.iana.org',
@@ -64,7 +72,7 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
     assert.equal(parsed.expiryDateIso, '2030-01-02T03:04:05.000Z');
     assert.equal(parsed.updatedDateIso, '2026-07-12T01:02:03.000Z');
 
-    const registrant = parsed.contactsByRole.registrant[0];
+    const registrant = roleContact(parsed, 'registrant');
     assert.equal(registrant.handle, 'REG-1');
     assert.deepEqual(registrant.names, ['Example Person']);
     assert.deepEqual(registrant.organizations, ['Example Org']);
@@ -76,10 +84,10 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
     assert.deepEqual(registrant.publicIds, [
       { type: 'Registry contact ID', identifier: 'REG-1' },
     ]);
-    assert.equal(parsed.contactsByRole.administrative[0].handle, 'ADMIN-1');
-    assert.equal(parsed.contactsByRole.technical[0].handle, 'TECH-1');
-    assert.equal(parsed.contactsByRole.billing[0].handle, 'BILL-1');
-    assert.deepEqual(parsed.contactsByRole.abuse[0].emails, ['abuse@example.com']);
+    assert.equal(roleContact(parsed, 'administrative').handle, 'ADMIN-1');
+    assert.equal(roleContact(parsed, 'technical').handle, 'TECH-1');
+    assert.equal(roleContact(parsed, 'billing').handle, 'BILL-1');
+    assert.deepEqual(roleContact(parsed, 'abuse').emails, ['abuse@example.com']);
     assert.deepEqual(parsed.fieldsTruncated, []);
   });
 
@@ -115,9 +123,9 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
       'Name Server: NS1.EXAMPLE.COM',
     ].join('\n'));
 
-    assert.equal(parsed.registrantName.length, 300);
-    assert.equal(parsed.registrantStreet.length, 300);
-    assert.equal(parsed.registrantEmail.length, 320);
+    assert.equal(requiredValue(parsed.registrantName).length, 300);
+    assert.equal(requiredValue(parsed.registrantStreet).length, 300);
+    assert.equal(requiredValue(parsed.registrantEmail).length, 320);
     assert.equal(parsed.registrantPhone, undefined);
     assert.deepEqual(parsed.fieldsTruncated, [
       'registrantEmail', 'registrantName', 'registrantStreet',
@@ -137,7 +145,7 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
     ].join('\n'));
 
     assert.equal(parsed.registrantStreet, 'Line one, Line two, Line three, Line four');
-    assert.deepEqual(parsed.contactsByRole.registrant[0].addresses, [
+    assert.deepEqual(roleContact(parsed, 'registrant').addresses, [
       'Line one, Line two, Line three, Line four',
     ]);
     assert.ok(parsed.fieldsTruncated.includes('registrantStreet'));
@@ -180,7 +188,7 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
       'Name Server: NS1.EXAMPLE.EDU',
     ].join('\n'));
 
-    const admin = parsed.contactsByRole.administrative[0];
+    const admin = roleContact(parsed, 'administrative');
     assert.equal(admin.name, 'Jane Doe');
     assert.deepEqual(admin.emails, ['jane@example.edu']);
     assert.deepEqual(admin.phones, ['+61 3 0000 0000']);
@@ -214,9 +222,9 @@ describe('bounded WHOIS lifecycle and contact normalization', () => {
       'Name Server: NS1.EXAMPLE.EDU',
     ].join('\n'));
 
-    assert.equal(parsed.contactsByRole.technical[0].name, 'Technical Person');
+    assert.equal(roleContact(parsed, 'technical').name, 'Technical Person');
     assert.ok(parsed.fieldsTruncated.includes('techAddress'));
-    assert.ok(parsed.techAddress.includes('Address line 19'));
-    assert.equal(parsed.techAddress.includes('Address line 20'), false);
+    assert.ok(requiredValue(parsed.techAddress).includes('Address line 19'));
+    assert.equal(requiredValue(parsed.techAddress).includes('Address line 20'), false);
   });
 });
