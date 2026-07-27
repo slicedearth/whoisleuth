@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   BROWSER_LOCAL_COLLECTIONS,
+  decodeBrowserLocalCollectionRecord,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
@@ -9,13 +10,49 @@ import {
 import {
   BrowserLocalDataError,
   isExpectedBrowserLocalDataFailure,
+  plaintextJsonCodec,
 } from '../frontend/src/lib/browser-local-data.ts';
 import type {
   AnyLocalDataCollectionDefinition,
+  BrowserLocalCollectionManifest,
+  BrowserLocalStoredRecord,
   LocalDataCollectionDefinition,
 } from '../frontend/src/lib/browser-local-data.ts';
 
 const NOW = '2026-07-22T01:00:00.000Z';
+
+function shortlistManifest(): BrowserLocalCollectionManifest {
+  return {
+    collection: 'shortlist',
+    schemaVersion: SHORTLIST_COLLECTION.schemaVersion,
+    codec: plaintextJsonCodec.id,
+    revision: 1,
+    recordCount: 1,
+    serializedBytes: 1,
+    digest: 'fixture-digest',
+    source: 'application',
+    updatedAt: NOW,
+    legacyKey: SHORTLIST_COLLECTION.legacyKey,
+    legacyDigest: null,
+  };
+}
+
+async function shortlistStoredRecord(value: unknown): Promise<BrowserLocalStoredRecord> {
+  const encoded = await plaintextJsonCodec.encode({
+    collection: 'shortlist',
+    id: 'priority.invalid',
+    value,
+  });
+  return {
+    key: ['shortlist', encoded.lookupKey],
+    collection: 'shortlist',
+    lookupKey: encoded.lookupKey,
+    ordinal: 0,
+    codec: plaintextJsonCodec.id,
+    payload: encoded.payload,
+    payloadBytes: new TextEncoder().encode(encoded.payload).byteLength,
+  };
+}
 
 function roundTrip<T>(
   definition: LocalDataCollectionDefinition<T>,
@@ -126,5 +163,38 @@ describe('browser-local collection definitions', () => {
     assert.match(first.id, /^relationship-/);
     assert.notEqual(first.id, 'relationship-untrusted-alias');
     assert.deepEqual(RELATIONSHIP_OBSERVATIONS_COLLECTION.split(result.joined).map((record) => record.id), [first.id]);
+  });
+
+  test('stored record decoding uses the codec and owning collection normalizer before typing values', async () => {
+    const record = await shortlistStoredRecord({
+      domain: 'priority.invalid',
+      scanDepth: 'fast',
+      availability: 'registered',
+      riskModelVersion: 5,
+      riskScore: 40,
+      opportunityScore: 20,
+      mutationTypes: ['omission'],
+      savedAt: NOW,
+    });
+    const decoded = await decodeBrowserLocalCollectionRecord('shortlist', record, shortlistManifest());
+    assert.equal(decoded.id, 'priority.invalid');
+    assert.equal(decoded.value.domain, 'priority.invalid');
+
+    await assert.rejects(
+      decodeBrowserLocalCollectionRecord(
+        'shortlist',
+        await shortlistStoredRecord({ domain: '', savedAt: NOW }),
+        shortlistManifest(),
+      ),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_INTEGRITY',
+    );
+    await assert.rejects(
+      decodeBrowserLocalCollectionRecord(
+        'shortlist',
+        { ...record, payloadBytes: record.payloadBytes + 1 },
+        shortlistManifest(),
+      ),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_INTEGRITY',
+    );
   });
 });

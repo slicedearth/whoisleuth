@@ -101,15 +101,35 @@ export interface WorkspaceArchiveManifest {
   sections: WorkspaceArchiveManifestEntry[];
 }
 
-export interface WorkspaceArchiveDocument<
-  Sections extends Partial<Record<WorkspaceArchiveSectionId, unknown>> =
-    Partial<Record<WorkspaceArchiveSectionId, unknown>>,
-> {
+export interface WorkspaceSettings {
+  activeProfileId: string;
+  theme: WorkspaceTheme;
+}
+
+export interface WorkspaceSettingsDocument {
+  schema: typeof WORKSPACE_SETTINGS_SCHEMA;
+  version: typeof WORKSPACE_SETTINGS_VERSION;
+  activeProfileId: string;
+  theme: WorkspaceTheme;
+}
+
+export interface WorkspaceArchiveSectionMap {
+  cases: ReturnType<typeof buildCaseExport>;
+  campaigns: ReturnType<typeof buildCampaignExport>;
+  brandProfiles: ReturnType<typeof buildBrandProfileExport>;
+  watchlists: ReturnType<typeof buildWatchlistExport>;
+  shortlist: ReturnType<typeof buildShortlistExport>;
+  detectionRules: ReturnType<typeof buildDetectionRuleExport>;
+  relationshipObservations: ReturnType<typeof buildRelationshipObservationExport>;
+  settings: WorkspaceSettingsDocument;
+}
+
+export interface WorkspaceArchiveDocument {
   schema: typeof WORKSPACE_ARCHIVE_SCHEMA;
   version: typeof WORKSPACE_ARCHIVE_VERSION;
   generatedAt: string;
   manifest: WorkspaceArchiveManifest;
-  sections: Sections;
+  sections: WorkspaceArchiveSectionMap;
   limitations: string[];
 }
 
@@ -128,11 +148,6 @@ export interface WorkspaceArchivePreviewSection extends Omit<WorkspaceArchiveSec
   pruned?: number;
   selected: boolean;
   normalizedSettings?: WorkspaceSettings | null;
-}
-
-export interface WorkspaceSettings {
-  activeProfileId: string;
-  theme: WorkspaceTheme;
 }
 
 interface NormalizedWorkspaceInput {
@@ -160,7 +175,6 @@ interface WorkspaceSectionDefinition {
   label: string;
   schema: string | null;
   version: number;
-  build: (input: NormalizedWorkspaceInput, now: string) => unknown;
   count: (data: unknown) => number;
   merge: ((local: NormalizedWorkspaceInput, data: unknown, now: string | null) => WorkspaceMergeResult) | null;
 }
@@ -229,7 +243,7 @@ async function checksum(value: unknown, cryptoProvider: WorkspaceArchiveOptions[
   return `sha256:${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-function settingsDocument(input: NormalizedWorkspaceInput) {
+function settingsDocument(input: NormalizedWorkspaceInput): WorkspaceSettingsDocument {
   const profiles = Array.isArray(input.brandProfiles) ? input.brandProfiles : [];
   const requestedProfileId = typeof input.settings?.activeProfileId === 'string' && SAFE_ID_RE.test(input.settings.activeProfileId)
     ? input.settings.activeProfileId
@@ -242,6 +256,22 @@ function settingsDocument(input: NormalizedWorkspaceInput) {
     version: WORKSPACE_SETTINGS_VERSION,
     activeProfileId,
     theme: normalizeTheme(input.settings?.theme),
+  };
+}
+
+function workspaceArchiveSections(
+  input: NormalizedWorkspaceInput,
+  now: string,
+): WorkspaceArchiveSectionMap {
+  return {
+    cases: buildCaseExport(input.cases, now),
+    campaigns: buildCampaignExport(input.campaigns, now),
+    brandProfiles: buildBrandProfileExport(input.brandProfiles, now),
+    watchlists: buildWatchlistExport(input.watchlists, now),
+    shortlist: buildShortlistExport(input.shortlist, now),
+    detectionRules: buildDetectionRuleExport(input.detectionRules, now),
+    relationshipObservations: buildRelationshipObservationExport(input.relationshipObservations, now),
+    settings: settingsDocument(input),
   };
 }
 
@@ -259,7 +289,6 @@ function objectCount(data: unknown, key: string): number {
 const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   {
     id: 'cases', label: 'Cases', schema: null, version: CASE_SCHEMA_VERSION,
-    build: (input, now) => buildCaseExport(input.cases, now),
     count: (data) => arrayCount(data, 'cases'),
     merge: (local, data) => {
       const result = mergeCases(local.cases, data);
@@ -269,7 +298,6 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   },
   {
     id: 'campaigns', label: 'Campaigns', schema: CAMPAIGN_SCHEMA, version: CAMPAIGN_SCHEMA_VERSION,
-    build: (input, now) => buildCampaignExport(input.campaigns, now),
     count: (data) => arrayCount(data, 'campaigns'),
     merge: (local, data) => {
       const result = mergeCampaigns(local.campaigns, data);
@@ -278,7 +306,6 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   },
   {
     id: 'brandProfiles', label: 'Brand profiles', schema: BRAND_PROFILE_SCHEMA, version: BRAND_PROFILE_SCHEMA_VERSION,
-    build: (input, now) => buildBrandProfileExport(input.brandProfiles, now),
     count: (data) => arrayCount(data, 'profiles'),
     merge: (local, data, now) => {
       const result = mergeBrandProfiles(local.brandProfiles, data, { nowIso: now });
@@ -287,7 +314,6 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   },
   {
     id: 'watchlists', label: 'Watchlists', schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION,
-    build: (input, now) => buildWatchlistExport(input.watchlists, now),
     count: (data) => objectCount(data, 'watchlists'),
     merge: (local, data) => {
       const result = mergeWatchlistStores(local.watchlists, data);
@@ -296,7 +322,6 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   },
   {
     id: 'shortlist', label: 'Shortlist', schema: SHORTLIST_SCHEMA, version: SHORTLIST_SCHEMA_VERSION,
-    build: (input, now) => buildShortlistExport(input.shortlist, now),
     count: (data) => arrayCount(data, 'entries'),
     merge: (local, data) => {
       const result = mergeShortlistStores(local.shortlist, data);
@@ -305,7 +330,6 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
   },
   {
     id: 'detectionRules', label: 'Detection rules', schema: DETECTION_RULE_SCHEMA, version: DETECTION_RULE_SCHEMA_VERSION,
-    build: (input, now) => buildDetectionRuleExport(input.detectionRules, now),
     count: (data) => arrayCount(data, 'rules'),
     merge: (local, data) => {
       const result = mergeDetectionRules(local.detectionRules, data);
@@ -317,13 +341,11 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     label: 'Retained relationship observations',
     schema: RELATIONSHIP_OBSERVATION_SCHEMA,
     version: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
-    build: (input, now) => buildRelationshipObservationExport(input.relationshipObservations, now),
     count: (data) => arrayCount(data, 'observations'),
     merge: (local, data) => mergeRelationshipObservations(local.relationshipObservations, data),
   },
   {
     id: 'settings', label: 'Workspace settings', schema: WORKSPACE_SETTINGS_SCHEMA, version: WORKSPACE_SETTINGS_VERSION,
-    build: (input) => settingsDocument(input),
     count: () => 1,
     merge: null,
   },
@@ -367,18 +389,17 @@ function ensureArchiveBudget(value: unknown): { serialized: string; bytes: numbe
 export async function buildWorkspaceArchive(input: unknown, options: WorkspaceArchiveOptions = {}) {
   const now = timestamp(options.generatedAt) || new Date().toISOString();
   const source = normalizedInput(input);
-  const sections: Partial<Record<WorkspaceArchiveSectionId, unknown>> = {};
+  const sections = workspaceArchiveSections(source, now);
   const manifestSections: WorkspaceArchiveManifestEntry[] = [];
   let totalRecords = 0;
 
   for (const definition of SECTION_DEFINITIONS) {
-    const data = definition.build(source, now);
+    const data = sections[definition.id];
     const sectionBytes = byteLength(serialize(data));
     if (sectionBytes > MAX_WORKSPACE_ARCHIVE_SECTION_BYTES) {
       throw new Error(`${definition.label} exceeds the 5 MiB workspace archive section limit.`);
     }
     const recordCount = definition.count(data);
-    sections[definition.id] = data;
     manifestSections.push({
       id: definition.id,
       schema: definition.schema,

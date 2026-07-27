@@ -72,7 +72,17 @@ import {
   serializeRelationshipObservationStore,
 } from './analysis/relationship-observation-model.ts';
 import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
-import type { LocalDataCollectionDefinition, LocalDataRecord } from './browser-local-data.ts';
+import {
+  BrowserLocalDataError,
+  plaintextJsonCodec,
+} from './browser-local-data.ts';
+import type {
+  AnyLocalDataCollectionDefinition,
+  BrowserLocalCollectionManifest,
+  BrowserLocalStoredRecord,
+  LocalDataCollectionDefinition,
+  LocalDataRecord,
+} from './browser-local-data.ts';
 
 export type BrowserLocalCollectionValueMap = Readonly<{
   cases: CaseRecord;
@@ -86,6 +96,10 @@ export type BrowserLocalCollectionValueMap = Readonly<{
 }>;
 
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
+export type BrowserLocalDecodedCollectionRecord<Collection extends BrowserLocalCollectionId> = Readonly<{
+  id: string;
+  value: BrowserLocalCollectionValueMap[Collection];
+}>;
 
 export const LEGACY_CASES_KEY = 'whois-rdap-cases-v1';
 export const LEGACY_CAMPAIGNS_KEY = 'whoisleuth-campaigns-v1';
@@ -242,3 +256,63 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   DETECTION_RULES_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
 ]);
+
+function browserLocalCollectionDefinition(
+  collection: BrowserLocalCollectionId,
+): AnyLocalDataCollectionDefinition {
+  const definition = BROWSER_LOCAL_COLLECTIONS.find((candidate) => candidate.id === collection);
+  if (!definition) {
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `The ${collection} collection is unavailable.`);
+  }
+  return definition;
+}
+
+/**
+ * Decode one stored record through the configured codec and its owning
+ * collection normalizer. The final type association is asserted only after the
+ * authoritative model accepts the record and preserves its identifier.
+ */
+export async function decodeBrowserLocalCollectionRecord<Collection extends BrowserLocalCollectionId>(
+  collection: Collection,
+  record: BrowserLocalStoredRecord,
+  manifest: BrowserLocalCollectionManifest,
+): Promise<BrowserLocalDecodedCollectionRecord<Collection>> {
+  const definition = browserLocalCollectionDefinition(collection);
+  if (record.collection !== collection
+    || manifest.collection !== collection
+    || record.codec !== manifest.codec
+    || record.codec !== plaintextJsonCodec.id) {
+    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `The ${collection} record metadata is inconsistent.`);
+  }
+  const payloadBytes = new TextEncoder().encode(record.payload).byteLength;
+  if (record.payloadBytes !== payloadBytes
+    || payloadBytes > definition.maximumBytes
+    || !Number.isSafeInteger(record.ordinal)
+    || record.ordinal < 0
+    || record.ordinal >= definition.maximumRecords
+    || !Number.isSafeInteger(manifest.schemaVersion)
+    || manifest.schemaVersion < 1
+    || manifest.schemaVersion > definition.schemaVersion) {
+    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `The ${collection} record bounds are inconsistent.`);
+  }
+  const decoded = await plaintextJsonCodec.decode({
+    collection,
+    lookupKey: record.lookupKey,
+    payload: record.payload,
+  });
+  const normalizedDocument = definition.normalize(definition.join(
+    [{ id: decoded.id, value: decoded.value }],
+    manifest.schemaVersion,
+  ));
+  const normalizedRecords = definition.split(normalizedDocument);
+  const normalized = normalizedRecords.length === 1 && normalizedRecords[0]?.id === decoded.id
+    ? normalizedRecords[0]
+    : null;
+  if (!normalized) {
+    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `The ${collection} record failed model validation.`);
+  }
+  return {
+    id: normalized.id,
+    value: normalized.value as BrowserLocalCollectionValueMap[Collection],
+  };
+}

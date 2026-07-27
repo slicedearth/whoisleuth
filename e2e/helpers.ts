@@ -4,9 +4,10 @@ import type {
   BrowserLocalCollectionManifest,
   BrowserLocalStoredRecord,
 } from '../frontend/src/lib/browser-local-data';
+import { decodeBrowserLocalCollectionRecord } from '../frontend/src/lib/browser-local-data-definitions';
 import type {
+  BrowserLocalDecodedCollectionRecord,
   BrowserLocalCollectionId,
-  BrowserLocalCollectionValueMap,
 } from '../frontend/src/lib/browser-local-data-definitions';
 
 // A few px of tolerance for subpixel layout rounding across engines.
@@ -16,14 +17,14 @@ const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 
 type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
-type BrowserLocalDecodedRecord<Collection extends BrowserLocalCollectionId> = {
-  id: string;
-  value: BrowserLocalCollectionValueMap[Collection];
-};
-
 type BrowserLocalCollectionSnapshot<Collection extends BrowserLocalCollectionId> = {
   manifest: BrowserLocalCollectionManifest;
-  records: BrowserLocalDecodedRecord<Collection>[];
+  records: BrowserLocalDecodedCollectionRecord<Collection>[];
+};
+
+type RawBrowserLocalCollectionSnapshot = {
+  manifest: BrowserLocalCollectionManifest;
+  records: BrowserLocalStoredRecord[];
 };
 
 type BrowserLocalCollectionReadOptions = Readonly<{
@@ -64,10 +65,10 @@ async function tryReadBrowserLocalCollection<Collection extends BrowserLocalColl
   page: Page,
   collection: Collection,
 ): Promise<BrowserLocalCollectionSnapshot<Collection> | null> {
-  return page.evaluate(async ({
+  const snapshot = await page.evaluate(async ({
     databaseName,
     collectionId,
-  }): Promise<BrowserLocalCollectionSnapshot<Collection> | null> => {
+  }): Promise<RawBrowserLocalCollectionSnapshot | null> => {
     if (typeof indexedDB.databases !== 'function') {
       throw new Error('The browser does not support non-creating IndexedDB discovery.');
     }
@@ -106,23 +107,19 @@ async function tryReadBrowserLocalCollection<Collection extends BrowserLocalColl
       if (!manifest) return null;
       return {
         manifest,
-        records: records
-          .sort((left, right) => left.ordinal - right.ordinal)
-          .map((record) => {
-            const parsed = JSON.parse(record.payload) as { id?: unknown; value?: unknown };
-            if (typeof parsed.id !== 'string' || !Object.hasOwn(parsed, 'value')) {
-              throw new Error(`The ${collectionId} test record payload is malformed.`);
-            }
-            return {
-              id: parsed.id,
-              value: parsed.value as BrowserLocalCollectionValueMap[Collection],
-            };
-          }),
+        records: records.sort((left, right) => left.ordinal - right.ordinal),
       };
     } finally {
       database.close();
     }
   }, { databaseName: LOCAL_DATA_DATABASE_NAME, collectionId: collection });
+  if (!snapshot) return null;
+  return {
+    manifest: snapshot.manifest,
+    records: await Promise.all(snapshot.records.map((record) => (
+      decodeBrowserLocalCollectionRecord(collection, record, snapshot.manifest)
+    ))),
+  };
 }
 
 export async function readBrowserLocalCollection<Collection extends BrowserLocalCollectionId>(

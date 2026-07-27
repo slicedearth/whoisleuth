@@ -213,7 +213,7 @@ describe('portable workspace archive', () => {
       id: 'futureSection',
     };
     Reflect.set(archive.sections, 'futureSection', archive.sections.settings);
-    delete archive.sections.settings;
+    Reflect.deleteProperty(archive.sections, 'settings');
     const parsed = await readWorkspaceArchive(archive);
     const section = parsed.sections.find((item) => item.id === 'futureSection');
 

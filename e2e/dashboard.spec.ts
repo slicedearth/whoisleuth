@@ -4,14 +4,6 @@ import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/work
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
-type DownloadedWorkspaceSections = {
-  cases: { cases: Array<{ notes: Array<{ body: string }> }> };
-  relationshipObservations: { observations: Array<{ normalizedValue: string }> };
-  settings: { activeProfileId: string; theme: string };
-};
-
-type DownloadedWorkspaceArchive = WorkspaceArchiveDocument<DownloadedWorkspaceSections>;
-
 function caseRecord(id: string, domain: string, status: string) {
   return {
     id,
@@ -204,7 +196,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
 
   const { download, content } = await downloadWorkspaceArchive(page);
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-\d{4}-\d{2}-\d{2}\.json$/);
-  const archive = JSON.parse(content) as DownloadedWorkspaceArchive;
+  const archive = JSON.parse(content) as WorkspaceArchiveDocument;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
   expect(archive.version).toBe(1);
   expect(archive.manifest.sectionCount).toBe(8);
@@ -271,7 +263,7 @@ test('workspace archive import reports future sections and rolls back an interru
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
-  const future = JSON.parse(content) as DownloadedWorkspaceArchive;
+  const future = JSON.parse(content) as WorkspaceArchiveDocument;
   const futureWatchlistManifest = future.manifest.sections.find((section) => section.id === 'watchlists');
   if (!futureWatchlistManifest) throw new Error('The workspace fixture is missing its watchlists manifest.');
   futureWatchlistManifest.version = 999;
