@@ -6,6 +6,11 @@ import {
   INVESTIGATION_PROJECTION_SCHEMA,
   INVESTIGATION_PROJECTION_VERSION,
   MAX_PROJECTION_OBSERVATIONS,
+  type InvestigationEntity,
+  type InvestigationEntityType,
+  type InvestigationProjection,
+  type InvestigationRelationship,
+  type InvestigationRelationshipType,
 } from '../frontend/src/lib/analysis/investigation-projection.ts';
 import { CASE_SCHEMA_VERSION, MAX_CASES } from '../frontend/src/lib/analysis/case-model.ts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/brand-profile-model.ts';
@@ -27,7 +32,7 @@ const SHA_A = 'a'.repeat(64);
 const SHA_B = 'b'.repeat(64);
 const SHA_C = 'c'.repeat(64);
 
-function snapshot(overrides = {}) {
+function snapshot(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     capturedAt: LATE,
     scanDepth: 'deep',
@@ -38,7 +43,12 @@ function snapshot(overrides = {}) {
   };
 }
 
-function caseRecord(id, domain, evidenceHistory = [snapshot()], overrides = {}) {
+function caseRecord(
+  id: string,
+  domain: string,
+  evidenceHistory: Record<string, unknown>[] = [snapshot()],
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     id,
     domain,
@@ -52,7 +62,7 @@ function caseRecord(id, domain, evidenceHistory = [snapshot()], overrides = {}) 
   };
 }
 
-function currentInput(overrides = {}) {
+function currentInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     cases: { version: CASE_SCHEMA_VERSION, cases: [] },
     campaigns: { version: CAMPAIGN_SCHEMA_VERSION, campaigns: [] },
@@ -62,15 +72,41 @@ function currentInput(overrides = {}) {
   };
 }
 
-function entity(result, type, predicate = () => true) {
+function findEntity(
+  result: InvestigationProjection,
+  type: InvestigationEntityType,
+  predicate: (item: InvestigationEntity) => boolean = () => true,
+): InvestigationEntity | undefined {
   return result.entities.find((item) => item.type === type && predicate(item));
 }
 
-function relationship(result, type) {
+function entity(
+  result: InvestigationProjection,
+  type: InvestigationEntityType,
+  predicate: (item: InvestigationEntity) => boolean = () => true,
+): InvestigationEntity {
+  const found = findEntity(result, type, predicate);
+  assert.ok(found, `Missing ${type} entity`);
+  return found;
+}
+
+function findRelationship(
+  result: InvestigationProjection,
+  type: InvestigationRelationshipType,
+): InvestigationRelationship | undefined {
   return result.relationships.find((item) => item.type === type);
 }
 
-function pageBaseline(overrides = {}) {
+function relationship(
+  result: InvestigationProjection,
+  type: InvestigationRelationshipType,
+): InvestigationRelationship {
+  const found = findRelationship(result, type);
+  assert.ok(found, `Missing ${type} relationship`);
+  return found;
+}
+
+function pageBaseline(overrides: Record<string, unknown> = {}) {
   const pageIdentity = {
     identityVersion: 3,
     version: 1,
@@ -137,6 +173,7 @@ describe('typed local investigation projection', () => {
     assert.equal(relationship(result, 'domain_uses_nameserver_set').lastObservedAt, LATE);
 
     const observation = result.observations.find((item) => item.kind === 'case_evidence');
+    assert.ok(observation);
     assert.equal(observation.source, 'lookup');
     assert.equal(observation.scanDepth, 'deep');
     assert.equal(observation.status, 'partial');
@@ -159,8 +196,8 @@ describe('typed local investigation projection', () => {
         caseRecord('case-unknown', 'unknown.invalid', [snapshot({ ...http, scanDepth: 'unknown' })]),
       ] },
     }), { generatedAt: LATE });
-    assert.equal(entity(result, 'http_origin'), undefined);
-    assert.equal(relationship(result, 'domain_reached_http_origin'), undefined);
+    assert.equal(findEntity(result, 'http_origin'), undefined);
+    assert.equal(findRelationship(result, 'domain_reached_http_origin'), undefined);
     assert.ok(result.observations.some((item) => item.scanDepth === 'unknown'
       && item.limitations.some((value) => value.includes('not comparable'))));
   });
@@ -210,6 +247,7 @@ describe('typed local investigation projection', () => {
       }] },
     }), { generatedAt: LATE });
     const observation = result.observations.find((item) => item.kind === 'brand_page_baseline');
+    assert.ok(observation);
     assert.equal(observation.status, 'success');
     assert.equal(observation.complete, true);
     assert.equal(observation.truncated, false);
@@ -272,6 +310,7 @@ describe('typed local investigation projection', () => {
     const retainedObservation = result.observations.find((item) => item.kind === 'retained_relationship_observation');
     const retainedRelationship = relationship(result, 'domain_resolved_to_ip');
 
+    assert.ok(retainedObservation);
     assert.equal(result.sources.relationshipObservations.state, 'supported');
     assert.equal(entity(result, 'ip_address').properties.ipAddress, '192.0.2.20');
     assert.equal(retainedObservation.store, 'relationshipObservations');
@@ -300,9 +339,9 @@ describe('typed local investigation projection', () => {
         },
       }],
     }), { generatedAt: LATE });
-    assert.equal(entity(result, 'nameserver_set'), undefined);
-    assert.equal(entity(result, 'favicon'), undefined);
-    assert.equal(entity(result, 'certificate'), undefined);
+    assert.equal(findEntity(result, 'nameserver_set'), undefined);
+    assert.equal(findEntity(result, 'favicon'), undefined);
+    assert.equal(findEntity(result, 'certificate'), undefined);
     assert.equal(result.relationships.length, 0);
   });
 
@@ -321,7 +360,9 @@ describe('typed local investigation projection', () => {
     const observation = result.observations[0];
     assert.equal(observation.status, 'partial');
     assert.equal(observation.truncated, true);
-    assert.equal(entity(result, 'nameserver_set').properties.nameservers.length, MAX_NAMESERVERS_PER_ROW);
+    const nameservers = entity(result, 'nameserver_set').properties.nameservers;
+    assert.ok(Array.isArray(nameservers));
+    assert.equal(nameservers.length, MAX_NAMESERVERS_PER_ROW);
     assert.equal(result.truncated, true);
   });
 
