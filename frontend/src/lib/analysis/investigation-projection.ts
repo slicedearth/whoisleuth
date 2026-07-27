@@ -12,7 +12,7 @@ import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
   normalizeBrandProfileStore,
-} from './brand-profile-model.js';
+} from './brand-profile-model.ts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
   MAX_CAMPAIGNS,

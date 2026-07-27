@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   MAX_PROFILE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/brand-profile-model.js';
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   MAX_CAMPAIGN_STORE_BYTES,
 } from '../frontend/src/lib/analysis/campaign-model.ts';
@@ -22,7 +22,7 @@ import {
 } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import {
   MAX_SHORTLIST_STORE_BYTES,
-} from '../frontend/src/lib/analysis/shortlist-model.js';
+} from '../frontend/src/lib/analysis/shortlist-model.ts';
 import {
   MAX_WATCHLIST_STORE_BYTES,
 } from '../frontend/src/lib/analysis/watchlist-store.ts';

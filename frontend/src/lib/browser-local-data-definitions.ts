@@ -21,7 +21,7 @@ import {
   brandProfileStoreVersion,
   normalizeBrandProfileStore,
   serializeBrandProfileStore,
-} from './analysis/brand-profile-model.js';
+} from './analysis/brand-profile-model.ts';
 import {
   MAX_WATCHLISTS,
   MAX_WATCHLIST_STORE_BYTES,
@@ -37,7 +37,7 @@ import {
   normalizeShortlistStore,
   serializeShortlistStore,
   shortlistStoreVersion,
-} from './analysis/shortlist-model.js';
+} from './analysis/shortlist-model.ts';
 import {
   CT_HISTORY_SCHEMA_VERSION,
   MAX_CT_HISTORY_SEARCHES,

@@ -19,7 +19,7 @@ import {
   normalizeProfileTextValues,
   normalizeProfileTlds,
   serializeBrandProfileStore,
-} from '../frontend/src/lib/analysis/brand-profile-model.js';
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 

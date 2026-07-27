@@ -14,7 +14,7 @@ import {
   BRAND_PROFILE_SCHEMA_VERSION,
   buildBrandProfileExport,
   mergeBrandProfiles,
-} from './brand-profile-model.js';
+} from './brand-profile-model.ts';
 import {
   assertCampaignStoreBudget,
   buildCampaignExport,
@@ -35,7 +35,7 @@ import {
   mergeShortlistStores,
   SHORTLIST_SCHEMA,
   SHORTLIST_SCHEMA_VERSION,
-} from './shortlist-model.js';
+} from './shortlist-model.ts';
 import {
   assertDetectionRuleStoreBudget,
   buildDetectionRuleExport,

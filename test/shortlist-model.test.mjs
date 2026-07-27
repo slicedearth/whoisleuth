@@ -12,7 +12,7 @@ import {
   SHORTLIST_SCHEMA,
   SHORTLIST_SCHEMA_VERSION,
   shortlistStoreVersion,
-} from '../frontend/src/lib/analysis/shortlist-model.js';
+} from '../frontend/src/lib/analysis/shortlist-model.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 

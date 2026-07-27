@@ -4,7 +4,7 @@
 // target the same read-only component contracts as the authenticated console so
 // presentation changes do not require a second implementation in this route.
 
-import { normalizeBrandProfile } from './brand-profile-model.js';
+import { normalizeBrandProfile } from './brand-profile-model.ts';
 import { normalizeCase } from './case-model.js';
 import { deriveTimeline } from './evidence-display.js';
 import { RISK_MODEL_VERSION } from './scoring.ts';

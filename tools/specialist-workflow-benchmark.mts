@@ -17,7 +17,7 @@ import {
 } from '../frontend/src/lib/analysis/case-model.js';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/brand-profile-model.js';
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/campaign-model.ts';

@@ -14,7 +14,7 @@ import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
   brandProfileStoreVersion,
-} from '../frontend/src/lib/analysis/brand-profile-model.js';
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   buildCampaignExport,
   CAMPAIGN_SCHEMA,
@@ -56,7 +56,7 @@ import {
   SHORTLIST_SCHEMA,
   SHORTLIST_SCHEMA_VERSION,
   shortlistStoreVersion,
-} from '../frontend/src/lib/analysis/shortlist-model.js';
+} from '../frontend/src/lib/analysis/shortlist-model.ts';
 import {
   buildWatchlistExport,
   WATCHLIST_SCHEMA,
