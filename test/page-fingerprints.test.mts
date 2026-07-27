@@ -1,7 +1,6 @@
-const test = require('node:test');
-const { describe } = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   PAGE_FINGERPRINT_VERSION,
   MAX_FINGERPRINT_SOURCE_BYTES,
   MAX_FINGERPRINT_TOKENS,
@@ -9,11 +8,15 @@ const {
   MAX_FORM_FINGERPRINTS,
   MAX_FORM_CONTROLS,
   createPageFingerprints,
-} = require('../lib/page-fingerprints.mts');
+} from '../lib/page-fingerprints.mts';
+import { requiredValue } from './value-assertions.mts';
 
 const BASE_OPTIONS = Object.freeze({ baseUrl: 'https://example.com/start' });
 
-function fingerprints(html, options = {}) {
+function fingerprints(
+  html: string,
+  options: Parameters<typeof createPageFingerprints>[1] = {},
+) {
   return createPageFingerprints(html, { ...BASE_OPTIONS, ...options });
 }
 
@@ -33,12 +36,12 @@ describe('page fingerprints', () => {
     assert.equal(result.exact.algorithm, 'sha256');
     assert.equal(result.normalizedHtml.algorithm, 'sha256');
     assert.match(result.normalizedHtml.value, /^[a-f0-9]{64}$/);
-    assert.equal(result.visibleText.algorithm, 'simhash64-v1');
-    assert.match(result.visibleText.value, /^[a-f0-9]{16}$/);
+    assert.equal(requiredValue(result.visibleText).algorithm, 'simhash64-v1');
+    assert.match(requiredValue(result.visibleText).value, /^[a-f0-9]{16}$/);
     assert.equal(result.domStructure.algorithm, 'sha256');
     assert.equal(result.domStructure.parser, 'static-tag-sequence-v1');
-    assert.equal(result.formStructure.formCount, 1);
-    assert.equal(result.formStructure.controlCount, 1);
+    assert.equal(requiredValue(result.formStructure).formCount, 1);
+    assert.equal(requiredValue(result.formStructure).controlCount, 1);
     assert.deepEqual(result.resourceHosts.values, ['cdn.example']);
     assert.deepEqual(result.identifiers.values, [{ type: 'tag-container', value: 'GTM-AB12' }]);
     assert.equal(result.complete, true);
@@ -79,17 +82,17 @@ describe('page fingerprints', () => {
 
     assert.notEqual(first.exact.value, second.exact.value);
     assert.equal(first.normalizedHtml.value, second.normalizedHtml.value);
-    assert.equal(first.visibleText.value, second.visibleText.value);
+    assert.equal(requiredValue(first.visibleText).value, requiredValue(second.visibleText).value);
     assert.equal(first.domStructure.value, second.domStructure.value);
-    assert.equal(first.formStructure.value, second.formStructure.value);
+    assert.equal(requiredValue(first.formStructure).value, requiredValue(second.formStructure).value);
   });
 
   test('material visible-text and structure changes affect their independent fingerprints', () => {
     const first = fingerprints('<main><h1>Welcome to the account centre</h1><form><input type="text"></form></main>');
     const second = fingerprints('<main><section><h1>Confirm your payment details</h1><form method="post"><input type="password"><button>Continue</button></form></section></main>');
-    assert.notEqual(first.visibleText.value, second.visibleText.value);
+    assert.notEqual(requiredValue(first.visibleText).value, requiredValue(second.visibleText).value);
     assert.notEqual(first.domStructure.value, second.domStructure.value);
-    assert.notEqual(first.formStructure.value, second.formStructure.value);
+    assert.notEqual(requiredValue(first.formStructure).value, requiredValue(second.formStructure).value);
   });
 
   test('visible text excludes comments and raw or non-executing element bodies', () => {
@@ -100,13 +103,13 @@ describe('page fingerprints', () => {
       <main>Visible account words</main>
     `);
     const expected = fingerprints('<main>Visible account words</main>');
-    assert.equal(result.visibleText.value, expected.visibleText.value);
+    assert.equal(requiredValue(result.visibleText).value, requiredValue(expected.visibleText).value);
   });
 
   test('an unclosed raw-text element cannot leak its body into visible-text fingerprints', () => {
     const result = fingerprints('<main>Visible words</main><script>private trailing script content');
     const expected = fingerprints('<main>Visible words</main><script></script>');
-    assert.equal(result.visibleText.value, expected.visibleText.value);
+    assert.equal(requiredValue(result.visibleText).value, requiredValue(expected.visibleText).value);
     assert.doesNotMatch(JSON.stringify(result), /private|trailing/);
   });
 
@@ -126,16 +129,16 @@ describe('page fingerprints', () => {
   test('form structure ignores field names, values, action paths, and query strings', () => {
     const first = fingerprints('<form method="post" action="https://collect.example/a?token=secret"><input type="password" name="first" value="one"><button type="submit">Go</button></form>');
     const second = fingerprints('<form action="https://collect.example/b?token=other" method="POST"><input value="two" name="second" type="password"><button type="submit">Continue</button></form>');
-    assert.equal(first.formStructure.value, second.formStructure.value);
+    assert.equal(requiredValue(first.formStructure).value, requiredValue(second.formStructure).value);
     assert.doesNotMatch(JSON.stringify(first.formStructure), /secret|collect|first|one/);
   });
 
   test('form structure distinguishes same-origin, external, insecure, and invalid action classes', () => {
     const values = [
-      fingerprints('<form action="/submit"></form>').formStructure.value,
-      fingerprints('<form action="https://external.example/submit"></form>').formStructure.value,
-      fingerprints('<form action="http://external.example/submit"></form>').formStructure.value,
-      fingerprints('<form action="javascript:alert(1)"></form>').formStructure.value,
+      requiredValue(fingerprints('<form action="/submit"></form>').formStructure).value,
+      requiredValue(fingerprints('<form action="https://external.example/submit"></form>').formStructure).value,
+      requiredValue(fingerprints('<form action="http://external.example/submit"></form>').formStructure).value,
+      requiredValue(fingerprints('<form action="javascript:alert(1)"></form>').formStructure).value,
     ];
     assert.equal(new Set(values).size, 4);
   });
@@ -154,12 +157,12 @@ describe('page fingerprints', () => {
       ],
     });
     assert.deepEqual(result.resourceHosts.values, ['a.example', 'z.example']);
-    assert.match(result.resourceHosts.value, /^[a-f0-9]{64}$/);
+    assert.match(requiredValue(result.resourceHosts.value), /^[a-f0-9]{64}$/);
     assert.deepEqual(result.identifiers.values, [
       { type: 'analytics-property', value: 'G-ABC1234567' },
       { type: 'tag-container', value: 'GTM-ZZZZ' },
     ]);
-    assert.match(result.identifiers.value, /^[a-f0-9]{64}$/);
+    assert.match(requiredValue(result.identifiers.value), /^[a-f0-9]{64}$/);
     assert.doesNotMatch(JSON.stringify(result), /secret|\/path|\/other/);
   });
 
@@ -199,21 +202,21 @@ describe('page fingerprints', () => {
 
   test('caps visible-text tokens with explicit partial provenance', () => {
     const result = fingerprints(`<main>${Array.from({ length: MAX_VISIBLE_TEXT_TOKENS + 1 }, (_, index) => `word${index}`).join(' ')}</main>`);
-    assert.equal(result.visibleText.tokenCount, MAX_VISIBLE_TEXT_TOKENS);
-    assert.equal(result.visibleText.truncated, true);
+    assert.equal(requiredValue(result.visibleText).tokenCount, MAX_VISIBLE_TEXT_TOKENS);
+    assert.equal(requiredValue(result.visibleText).truncated, true);
     assert.match(result.limitations.join(' '), /normalized tokens/);
   });
 
   test('caps forms and controls with explicit partial provenance', () => {
     const forms = Array.from({ length: MAX_FORM_FINGERPRINTS + 1 }, () => '<form><input></form>').join('');
     const formLimited = fingerprints(forms);
-    assert.equal(formLimited.formStructure.formCount, MAX_FORM_FINGERPRINTS);
-    assert.equal(formLimited.formStructure.truncated, true);
+    assert.equal(requiredValue(formLimited.formStructure).formCount, MAX_FORM_FINGERPRINTS);
+    assert.equal(requiredValue(formLimited.formStructure).truncated, true);
 
     const controls = `<form>${'<input>'.repeat(MAX_FORM_CONTROLS + 1)}</form>`;
     const controlLimited = fingerprints(controls);
-    assert.equal(controlLimited.formStructure.controlCount, MAX_FORM_CONTROLS);
-    assert.equal(controlLimited.formStructure.truncated, true);
+    assert.equal(requiredValue(controlLimited.formStructure).controlCount, MAX_FORM_CONTROLS);
+    assert.equal(requiredValue(controlLimited.formStructure).truncated, true);
   });
 
   test('upstream source truncation marks the fingerprint collection incomplete', () => {

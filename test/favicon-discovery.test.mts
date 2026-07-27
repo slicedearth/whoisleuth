@@ -3,9 +3,9 @@
 // /favicon.ico. Motivated by real sites (e.g. npm) that serve no
 // /favicon.ico and only point to a CDN PNG this way.
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const { extractIconUrls, buildFaviconCandidates } = require('../lib/favicon.mts');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { buildFaviconCandidates, extractIconUrls } from '../lib/favicon.mts';
 
 const BASE = 'https://example.com/';
 

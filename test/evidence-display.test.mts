@@ -1,16 +1,14 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let display;
-before(async () => {
-  display = await import('../frontend/src/lib/analysis/evidence-display.ts');
-});
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as display from '../frontend/src/lib/analysis/evidence-display.ts';
+import type { CaseEvidenceSnapshot } from '../frontend/src/lib/analysis/case-model.ts';
+import { requiredValue } from './value-assertions.mts';
 
 const ISO = '2026-05-01T00:00:00.000Z';
 const LATER = '2026-06-01T00:00:00.000Z';
 const LATEST = '2026-07-01T00:00:00.000Z';
 
-function deepSnapshot(overrides = {}) {
+function deepSnapshot(overrides: Partial<CaseEvidenceSnapshot> = {}): CaseEvidenceSnapshot {
   return {
     id: 'ev-abc',
     fingerprint: 'abc123',
@@ -35,6 +33,16 @@ function deepSnapshot(overrides = {}) {
     activityStatus: null,
     websiteProbeDetail: null,
     pageTitle: null,
+    httpSummaryVersion: null,
+    httpEvidenceStatus: null,
+    httpFinalOrigin: null,
+    httpResponseStatus: null,
+    httpTransportSecurity: null,
+    httpRedirectCount: null,
+    httpCrossOriginRedirect: null,
+    httpHttpsDowngrade: null,
+    httpContentType: null,
+    httpSecurityHeaders: null,
     faviconMatch: null,
     faviconNearMatch: null,
     reusesOfficialAssets: null,
@@ -45,7 +53,7 @@ function deepSnapshot(overrides = {}) {
   };
 }
 
-function fastSnapshot(overrides = {}) {
+function fastSnapshot(overrides: Partial<CaseEvidenceSnapshot> = {}): CaseEvidenceSnapshot {
   return deepSnapshot({ scanDepth: 'fast', ...overrides });
 }
 
@@ -172,8 +180,8 @@ describe('snapshotFieldGroups', () => {
     });
     const group = display.snapshotFieldGroups(snap).find((item) => item.name === 'HTTP');
     assert.ok(group);
-    assert.equal(group.rows.find((row) => row.field === 'httpFinalOrigin').value, 'https://example.test');
-    assert.equal(group.rows.find((row) => row.field === 'httpRedirectCount').value, 0);
+    assert.equal(requiredValue(group.rows.find((row) => row.field === 'httpFinalOrigin')).value, 'https://example.test');
+    assert.equal(requiredValue(group.rows.find((row) => row.field === 'httpRedirectCount')).value, 0);
   });
 
   test('excludes null, undefined, and empty strings', () => {
@@ -354,8 +362,9 @@ describe('deriveTimeline', () => {
     const entry = display.deriveTimeline([older, newer])[0];
     assert.equal(entry.hasIncomparableChange, true);
     assert.deepEqual(entry.incomparableReasons, ['risk-model']);
-    assert.equal(entry.changes.some((change) => change.field === 'riskScore'), false);
-    assert.equal(entry.changes.some((change) => change.field === 'registrar'), true);
+    const changes = requiredValue(entry.changes);
+    assert.equal(changes.some((change) => change.field === 'riskScore'), false);
+    assert.equal(changes.some((change) => change.field === 'registrar'), true);
   });
 
   test('does not flag incomparable when fingerprints match (identical material)', () => {
@@ -408,7 +417,7 @@ describe('currentEvidenceSummary', () => {
   test('returns the latest snapshot summary fields', () => {
     const older = deepSnapshot({ capturedAt: ISO, availability: 'available', riskScore: 20, registrar: 'OldReg', activityStatus: null });
     const newer = deepSnapshot({ capturedAt: LATER, availability: 'registered', riskScore: 85, registrar: 'NewReg', activityStatus: 'active' });
-    const summary = display.currentEvidenceSummary([older, newer]);
+    const summary = requiredValue(display.currentEvidenceSummary([older, newer]));
     assert.equal(summary.availability, 'registered');
     assert.equal(summary.riskModelVersion, 1);
     assert.equal(summary.riskScore, 85);

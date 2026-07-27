@@ -10,4 +10,10 @@ function arrayValue(value: unknown): unknown[] {
   return value;
 }
 
-export { arrayValue, recordValue };
+function requiredValue<T>(value: T | null | undefined): T {
+  assert.notEqual(value, null);
+  assert.notEqual(value, undefined);
+  return value as T;
+}
+
+export { arrayValue, recordValue, requiredValue };

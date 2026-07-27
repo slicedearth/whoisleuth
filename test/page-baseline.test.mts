@@ -1,10 +1,7 @@
-const { before, describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-let baseline;
-before(async () => {
-  baseline = await import('../frontend/src/lib/analysis/page-baseline.ts');
-});
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as baseline from '../frontend/src/lib/analysis/page-baseline.ts';
+import { requiredValue } from './value-assertions.mts';
 
 const ISO = '2026-07-13T04:05:06.000Z';
 const SHA_A = 'a'.repeat(64);
@@ -55,7 +52,7 @@ function availability(overrides = {}) {
 
 describe('official-site page baseline', () => {
   test('builds the bounded current schema from a deep page-identity response', () => {
-    const result = baseline.createPageBaseline('EXAMPLE.COM.', availability());
+    const result = requiredValue(baseline.createPageBaseline('EXAMPLE.COM.', availability()));
     assert.deepEqual(result, {
       baselineVersion: 1,
       domain: 'example.com',
@@ -98,34 +95,34 @@ describe('official-site page baseline', () => {
   });
 
   test('canonicalizes Unicode domains and canonical hosts through the shared domain normalizer', () => {
-    const result = baseline.createPageBaseline('bücher.example', availability({
+    const result = requiredValue(baseline.createPageBaseline('bücher.example', availability({
       pageIdentity: pageIdentity({ canonical: { url: 'https://BÜCHER.example/path?secret=yes' } }),
-    }));
+    })));
     assert.equal(result.domain, 'xn--bcher-kva.example');
     assert.equal(result.lookupDomain, 'xn--bcher-kva.example');
     assert.equal(result.canonicalHost, 'xn--bcher-kva.example');
   });
 
   test('distinguishes the configured official hostname from the registrable domain actually probed', () => {
-    const result = baseline.createPageBaseline('www.example.com', availability({ domain: 'example.com' }));
+    const result = requiredValue(baseline.createPageBaseline('www.example.com', availability({ domain: 'example.com' })));
     assert.equal(result.domain, 'www.example.com');
     assert.equal(result.lookupDomain, 'example.com');
   });
 
   test('drops invalid or credential-bearing canonical URLs', () => {
-    const credentialed = baseline.createPageBaseline('example.com', availability({
+    const credentialed = requiredValue(baseline.createPageBaseline('example.com', availability({
       pageIdentity: pageIdentity({ canonical: { url: 'https://user:password@example.com/private' } }),
-    }));
-    const invalid = baseline.createPageBaseline('example.com', availability({
+    })));
+    const invalid = requiredValue(baseline.createPageBaseline('example.com', availability({
       pageIdentity: pageIdentity({ canonical: { url: 'javascript:alert(1)' } }),
-    }));
+    })));
     assert.equal(credentialed.canonicalHost, null);
     assert.equal(invalid.canonicalHost, null);
   });
 
   test('normalizes valid persisted baselines and drops unknown fields', () => {
-    const current = baseline.createPageBaseline('example.com', availability());
-    const normalized = baseline.normalizePageBaseline({ ...current, injected: 'discard me', rawHtml: '<secret>' });
+    const current = requiredValue(baseline.createPageBaseline('example.com', availability()));
+    const normalized = requiredValue(baseline.normalizePageBaseline({ ...current, injected: 'discard me', rawHtml: '<secret>' }));
     assert.deepEqual(normalized, current);
     assert.equal('injected' in normalized, false);
     assert.equal('rawHtml' in normalized, false);
@@ -144,14 +141,14 @@ describe('official-site page baseline', () => {
 
   test('bounds and sorts external hosts while reporting truncation', () => {
     const values = Array.from({ length: baseline.MAX_BASELINE_RESOURCE_HOSTS + 5 }, (_, index) => `z${index}.example.net`).reverse();
-    const result = baseline.createPageBaseline('example.com', availability({
+    const result = requiredValue(baseline.createPageBaseline('example.com', availability({
       pageIdentity: pageIdentity({
         fingerprints: {
           ...pageIdentity().fingerprints,
           resourceHosts: { algorithm: 'set-sha256', value: SHA_A, values, truncated: false },
         },
       }),
-    }));
+    })));
     assert.equal(result.resourceHosts.values.length, baseline.MAX_BASELINE_RESOURCE_HOSTS);
     assert.deepEqual(result.resourceHosts.values, [...result.resourceHosts.values].sort());
     assert.equal(result.resourceHosts.truncated, true);
@@ -162,29 +159,29 @@ describe('official-site page baseline', () => {
   test('bounds, deduplicates, and sorts recognized tracking identifiers', () => {
     const values = Array.from({ length: baseline.MAX_BASELINE_IDENTIFIERS + 5 }, (_, index) => ({ type: 'google-analytics', value: `G-ID${String(index).padStart(3, '0')}` })).reverse();
     values.push(values[0], { type: 'invalid_type', value: 'secret/value' });
-    const result = baseline.createPageBaseline('example.com', availability({
+    const result = requiredValue(baseline.createPageBaseline('example.com', availability({
       pageIdentity: pageIdentity({
         fingerprints: {
           ...pageIdentity().fingerprints,
           identifiers: { algorithm: 'set-sha256', value: SHA_A, values, truncated: false },
         },
       }),
-    }));
+    })));
     assert.equal(result.trackingIdentifiers.values.length, baseline.MAX_BASELINE_IDENTIFIERS);
     assert.deepEqual(result.trackingIdentifiers.values, [...result.trackingIdentifiers.values].sort((a, b) => a.type.localeCompare(b.type) || a.value.localeCompare(b.value)));
     assert.equal(result.trackingIdentifiers.truncated, true);
   });
 
   test('rejects overlong/control-bearing titles instead of persisting them', () => {
-    const overlong = baseline.createPageBaseline('example.com', availability({ pageTitle: 'x'.repeat(baseline.MAX_BASELINE_TITLE_LENGTH + 1) }));
-    const control = baseline.createPageBaseline('example.com', availability({ pageTitle: 'Account\nsecret' }));
+    const overlong = requiredValue(baseline.createPageBaseline('example.com', availability({ pageTitle: 'x'.repeat(baseline.MAX_BASELINE_TITLE_LENGTH + 1) })));
+    const control = requiredValue(baseline.createPageBaseline('example.com', availability({ pageTitle: 'Account\nsecret' })));
     assert.equal(overlong.pageTitle, null);
     assert.equal(control.pageTitle, null);
   });
 
   test('keeps absent optional fingerprints explicitly null', () => {
     const fingerprints = { ...pageIdentity().fingerprints, visibleText: null, formStructure: null };
-    const result = baseline.createPageBaseline('example.com', availability({ pageIdentity: pageIdentity({ fingerprints }) }));
+    const result = requiredValue(baseline.createPageBaseline('example.com', availability({ pageIdentity: pageIdentity({ fingerprints }) })));
     assert.equal(result.visibleText, null);
     assert.equal(result.formStructure, null);
     assert.equal(result.complete, true);
@@ -197,7 +194,7 @@ describe('official-site page baseline', () => {
       visibleText: { algorithm: 'simhash64-v1', value: 'not-a-hash', private: 'secret' },
       formStructure: { algorithm: 'sha256', value: SHA_A, formCount: 999, controlCount: 1 },
     };
-    const result = baseline.createPageBaseline('example.com', availability({ pageIdentity: pageIdentity({ fingerprints }) }));
+    const result = requiredValue(baseline.createPageBaseline('example.com', availability({ pageIdentity: pageIdentity({ fingerprints }) })));
     assert.equal(result.visibleText, null);
     assert.equal(result.formStructure, null);
     assert.equal(result.complete, false);
@@ -206,15 +203,15 @@ describe('official-site page baseline', () => {
   });
 
   test('accepts only informative perceptual favicon hashes', () => {
-    const result = baseline.createPageBaseline('example.com', availability({ faviconPHash: '0000000000000000' }));
+    const result = requiredValue(baseline.createPageBaseline('example.com', availability({ faviconPHash: '0000000000000000' })));
     assert.equal(result.faviconPHash, null);
     assert.equal(result.faviconHash, 'e'.repeat(64));
   });
 
   test('partial identity evidence remains explicit and cannot claim completeness', () => {
-    const result = baseline.createPageBaseline('example.com', availability({
+    const result = requiredValue(baseline.createPageBaseline('example.com', availability({
       pageIdentity: pageIdentity({ complete: false, truncated: true }),
-    }));
+    })));
     assert.equal(result.complete, false);
     assert.equal(result.truncated, true);
   });

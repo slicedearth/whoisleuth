@@ -1,11 +1,12 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   MAX_TECHNOLOGY_HTML_CHARS,
   TECHNOLOGY_PROFILE_VERSION,
   analyzeWebsiteTechnology,
-} = require('../lib/website-technology.mts');
+} from '../lib/website-technology.mts';
+import type { TechnologyFinding } from '../lib/website-technology.mts';
 
 const observedAt = '2026-07-22T01:02:03.000Z';
 
@@ -13,8 +14,13 @@ function analyze(overrides = {}) {
   return analyzeWebsiteTechnology({ observedAt, ...overrides });
 }
 
-function finding(result, id) {
-  return result.findings.find((item) => item.id === id);
+function finding(
+  result: ReturnType<typeof analyzeWebsiteTechnology>,
+  id: string,
+): TechnologyFinding {
+  const item = result.findings.find((finding) => finding.id === id);
+  assert.ok(item);
+  return item;
 }
 
 describe('website technology profile', () => {
@@ -80,9 +86,9 @@ describe('website technology profile', () => {
       resourceOrigins: ['https://developer.bigcommerce.com'],
     });
 
-    assert.equal(finding(result, 'adobe-commerce-magento'), undefined);
-    assert.equal(finding(result, 'bigcommerce'), undefined);
-    assert.equal(finding(result, 'woocommerce'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'adobe-commerce-magento'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'bigcommerce'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'woocommerce'), undefined);
   });
 
   test('treats a recognized resource origin alone as medium-confidence evidence', () => {
@@ -239,7 +245,7 @@ describe('website technology profile', () => {
     const result = analyze({ html: `${'x'.repeat(MAX_TECHNOLOGY_HTML_CHARS)}<astro-island>` });
     assert.equal(result.status, 'partial');
     assert.equal(result.truncated, true);
-    assert.equal(finding(result, 'astro'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'astro'), undefined);
     assert.match(result.limitations.join(' '), new RegExp(`first ${MAX_TECHNOLOGY_HTML_CHARS}`));
   });
 

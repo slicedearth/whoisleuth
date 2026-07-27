@@ -1,8 +1,14 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 
-const { checkDomainAvailability, fetchHomepage, deriveWebsiteActivity, forSaleRedirectSignal } = require('../lib/availability.mts');
-const { networkFeaturePolicy } = require('../lib/feature-policy.mts');
+import {
+  checkDomainAvailability,
+  deriveWebsiteActivity,
+  fetchHomepage,
+  forSaleRedirectSignal,
+} from '../lib/availability.mts';
+import { networkFeaturePolicy } from '../lib/feature-policy.mts';
+import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 
 describe('website activity classification', () => {
   test('any HTTP response proves that a web service is active', async () => {
@@ -14,8 +20,9 @@ describe('website activity classification', () => {
       assert.match(result.detail, new RegExp(`HTTP ${status}`));
       assert.equal(deriveWebsiteActivity(result.status, false), 'active');
       assert.equal(result.http.status, 'success');
-      assert.equal(result.http.response.status, status);
-      assert.equal(result.http.response.bodyInspected, false);
+      const response = recordValue(result.http.response);
+      assert.equal(response.status, status);
+      assert.equal(response.bodyInspected, false);
     }
   });
 
@@ -59,9 +66,10 @@ describe('website activity classification', () => {
 
     assert.equal(calls, 2);
     assert.equal(result.http.transportSecurity, 'http');
-    assert.equal(result.http.attempts.length, 2);
-    assert.equal(result.http.attempts[0].outcome, 'error');
-    assert.equal(result.http.attempts[1].outcome, 'response');
+    const attempts = arrayValue(result.http.attempts);
+    assert.equal(attempts.length, 2);
+    assert.equal(recordValue(attempts[0]).outcome, 'error');
+    assert.equal(recordValue(attempts[1]).outcome, 'response');
   });
 
   test('both failed schemes produce explicit inconclusive HTTP evidence', async () => {
@@ -72,7 +80,7 @@ describe('website activity classification', () => {
     assert.equal(result.status, 'inconclusive');
     assert.equal(result.http.status, 'error');
     assert.equal(result.http.complete, false);
-    assert.equal(result.http.attempts.length, 2);
+    assert.equal(arrayValue(result.http.attempts).length, 2);
   });
 
   test('a capped homepage prefix is usable but explicitly partial', async () => {
@@ -82,12 +90,14 @@ describe('website activity classification', () => {
 
     assert.equal(result.status, 'fetched');
     assert.equal(result.http.status, 'partial');
-    assert.equal(result.http.response.capturedBodyBytes, 300000);
-    assert.equal(result.http.response.bodyTruncated, true);
-    assert.equal(result.http.response.bodyHash.algorithm, 'sha256');
-    assert.equal(result.http.response.bodyHash.value, '12e1b9b179b29a4f7e5889b185d7ac71bff0ad1f49a7b391d0911b737a0f5381');
-    assert.equal(result.http.response.bodyHash.scope, 'captured-prefix');
-    assert.equal(result.http.response.bodyHash.bytes, 300000);
+    const response = recordValue(result.http.response);
+    const bodyHash = recordValue(response.bodyHash);
+    assert.equal(response.capturedBodyBytes, 300000);
+    assert.equal(response.bodyTruncated, true);
+    assert.equal(bodyHash.algorithm, 'sha256');
+    assert.equal(bodyHash.value, '12e1b9b179b29a4f7e5889b185d7ac71bff0ad1f49a7b391d0911b737a0f5381');
+    assert.equal(bodyHash.scope, 'captured-prefix');
+    assert.equal(bodyHash.bytes, 300000);
   });
 
   test('a fetched favicon resolves an otherwise inconclusive homepage probe', () => {
@@ -100,10 +110,10 @@ describe('website activity classification', () => {
   });
 
   test('recognizes an explicit for-sale landing path in bounded redirect provenance', () => {
-    assert.match(forSaleRedirectSignal({
+    assert.match(requiredValue(forSaleRedirectSignal({
       finalUrl: 'https://market.example/premium-domains-for-sale',
       redirects: [],
-    }), /for-sale landing-page redirect/i);
+    })), /for-sale landing-page redirect/i);
     assert.equal(forSaleRedirectSignal({
       finalUrl: 'https://market.example/account',
       redirects: [],
@@ -129,9 +139,12 @@ describe('website activity classification', () => {
       fetchFaviconHash: async () => null,
     });
 
-    assert.equal(result.state, 'for_sale');
-    assert.equal(result.activityStatus, 'parked');
-    assert.match(result.detail, /for-sale landing-page redirect/i);
+    const availability = recordValue(result);
+    assert.equal(availability.state, 'for_sale');
+    assert.equal(availability.activityStatus, 'parked');
+    const detail = availability.detail;
+    assert.ok(typeof detail === 'string');
+    assert.match(detail, /for-sale landing-page redirect/i);
   });
 
   test('binds page identity to the homepage HTTP observation without another request', async () => {
@@ -162,24 +175,34 @@ describe('website activity classification', () => {
       fetchFaviconHash: async () => null,
     });
 
+    const availability = recordValue(result);
+    const pageIdentity = recordValue(availability.pageIdentity);
+    const fingerprints = recordValue(pageIdentity.fingerprints);
+    const exactFingerprint = recordValue(fingerprints.exact);
+    const canonical = recordValue(pageIdentity.canonical);
+    const forms = recordValue(pageIdentity.forms);
+    const technologyProfile = recordValue(availability.technologyProfile);
+    const technologyFindings = arrayValue(technologyProfile.findings).map(recordValue);
+    const securityPosture = recordValue(availability.securityPosture);
+    const securityFindings = arrayValue(securityPosture.findings).map(recordValue);
     assert.equal(homepageCalls, 1);
-    assert.equal(result.pageIdentity.identityVersion, 3);
-    assert.equal(result.pageIdentity.observedAt, '2026-07-13T04:05:06.000Z');
-    assert.equal(result.pageIdentity.status, 'partial');
-    assert.equal(result.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
-    assert.equal(result.pageIdentity.fingerprints.exact.source, 'captured-response-bytes');
-    assert.equal(result.pageIdentity.canonical.url, 'https://www.example.test/account');
-    assert.deepEqual(result.pageIdentity.forms.externalActionOrigins, ['https://collect.example']);
-    assert.doesNotMatch(JSON.stringify(result.pageIdentity), /token=|key=|secret|submit/);
-    assert.equal(result.credentialSurfaceProfile, null);
-    assert.equal(result.technologyProfile.status, 'partial');
-    assert.deepEqual(result.technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
-    assert.doesNotMatch(JSON.stringify(result.technologyProfile), /token=|key=|secret|submit|0\.1/);
-    assert.equal(result.securityPosture.postureVersion, 1);
-    assert.equal(result.securityPosture.source, 'derived');
-    assert.equal(result.securityPosture.status, 'partial');
-    assert.equal(result.securityPosture.findings.some((item) => item.id === 'external_form_destinations'), true);
-    assert.doesNotMatch(JSON.stringify(result.securityPosture), /token=|key=|secret|submit|collect\.example/);
+    assert.equal(pageIdentity.identityVersion, 3);
+    assert.equal(pageIdentity.observedAt, '2026-07-13T04:05:06.000Z');
+    assert.equal(pageIdentity.status, 'partial');
+    assert.equal(exactFingerprint.value, 'a'.repeat(64));
+    assert.equal(exactFingerprint.source, 'captured-response-bytes');
+    assert.equal(canonical.url, 'https://www.example.test/account');
+    assert.deepEqual(forms.externalActionOrigins, ['https://collect.example']);
+    assert.doesNotMatch(JSON.stringify(pageIdentity), /token=|key=|secret|submit/);
+    assert.equal(availability.credentialSurfaceProfile, null);
+    assert.equal(technologyProfile.status, 'partial');
+    assert.deepEqual(technologyFindings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
+    assert.doesNotMatch(JSON.stringify(technologyProfile), /token=|key=|secret|submit|0\.1/);
+    assert.equal(securityPosture.postureVersion, 1);
+    assert.equal(securityPosture.source, 'derived');
+    assert.equal(securityPosture.status, 'partial');
+    assert.equal(securityFindings.some((item) => item.id === 'external_form_destinations'), true);
+    assert.doesNotMatch(JSON.stringify(securityPosture), /token=|key=|secret|submit|collect\.example/);
   });
 
   test('does not describe an explicitly non-HTML response as page identity evidence', async () => {
@@ -202,9 +225,12 @@ describe('website activity classification', () => {
       fetchFaviconHash: async () => null,
     });
 
-    assert.equal(result.pageIdentity, null);
-    assert.equal(result.technologyProfile, null);
-    assert.equal(result.securityPosture.source, 'derived');
-    assert.equal(result.securityPosture.findings.some((item) => item.id === 'static_page_evidence_unavailable'), true);
+    const availability = recordValue(result);
+    const securityPosture = recordValue(availability.securityPosture);
+    const findings = arrayValue(securityPosture.findings).map(recordValue);
+    assert.equal(availability.pageIdentity, null);
+    assert.equal(availability.technologyProfile, null);
+    assert.equal(securityPosture.source, 'derived');
+    assert.equal(findings.some((item) => item.id === 'static_page_evidence_unavailable'), true);
   });
 });

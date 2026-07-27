@@ -1,11 +1,12 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   MAX_SECURITY_POSTURE_FINDINGS,
   WEBSITE_SECURITY_POSTURE_VERSION,
   analyzeWebsiteSecurityPosture,
-} = require('../lib/website-security-posture.mts');
+} from '../lib/website-security-posture.mts';
+import type { PostureFinding } from '../lib/website-security-posture.mts';
 
 const OBSERVED_AT = '2026-07-22T02:03:04.000Z';
 
@@ -59,8 +60,13 @@ function analyze(overrides = {}) {
   });
 }
 
-function byId(result, id) {
-  return result.findings.find((item) => item.id === id);
+function byId(
+  result: ReturnType<typeof analyzeWebsiteSecurityPosture>,
+  id: string,
+): PostureFinding {
+  const item = result.findings.find((finding) => finding.id === id);
+  assert.ok(item);
+  return item;
 }
 
 describe('passive website security posture', () => {
@@ -99,7 +105,7 @@ describe('passive website security posture', () => {
     });
     assert.equal(byId(result, 'cleartext_transport').state, 'potential_exposure');
     assert.equal(byId(result, 'https_downgrade').tone, 'review');
-    assert.equal(byId(result, 'strict_transport_security_absent'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'strict_transport_security_absent'), undefined);
   });
 
   test('flags insecure forms and cleartext resource origins from retained static metadata', () => {
@@ -129,8 +135,8 @@ describe('passive website security posture', () => {
     const partial = analyze({
       pageIdentity: pageIdentity({ status: 'partial', complete: false }),
     });
-    assert.equal(byId(partial, 'cleartext_form_actions_absent'), undefined);
-    assert.equal(byId(partial, 'mixed_content_origins_absent'), undefined);
+    assert.equal(partial.findings.find((item) => item.id === 'cleartext_form_actions_absent'), undefined);
+    assert.equal(partial.findings.find((item) => item.id === 'mixed_content_origins_absent'), undefined);
     assert.equal(partial.status, 'partial');
   });
 
@@ -208,11 +214,11 @@ describe('passive website security posture', () => {
       pageIdentity: pageIdentity({ forms: null, resources: null }),
     });
     assert.equal(byId(result, 'http_headers_unavailable').state, 'unavailable');
-    assert.equal(byId(result, 'content_security_policy_absent'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'content_security_policy_absent'), undefined);
     assert.equal(byId(result, 'form_metadata_unavailable').state, 'unavailable');
     assert.equal(byId(result, 'resource_metadata_unavailable').state, 'unavailable');
-    assert.equal(byId(result, 'cleartext_form_actions_absent'), undefined);
-    assert.equal(byId(result, 'mixed_content_origins_absent'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'cleartext_form_actions_absent'), undefined);
+    assert.equal(result.findings.find((item) => item.id === 'mixed_content_origins_absent'), undefined);
     assert.equal(result.status, 'partial');
   });
 

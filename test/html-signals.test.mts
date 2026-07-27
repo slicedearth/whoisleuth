@@ -3,10 +3,9 @@
 // language, external asset hotlinking). Pure text-in/object-out, no
 // network access needed.
 
-const test = require('node:test');
-const { describe } = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   MAX_FORM_ACTION_ORIGINS,
   MAX_FORMS,
   MAX_CONTACT_DOMAINS,
@@ -18,7 +17,8 @@ const {
   PAGE_IDENTITY_VERSION,
   extractHtmlSignals,
   extractPageIdentity,
-} = require('../lib/html-signals.mts');
+} from '../lib/html-signals.mts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('pageTitle', () => {
   test('extracts and trims a <title> tag', () => {
@@ -49,7 +49,7 @@ describe('pageTitle', () => {
 
   test('truncates a very long title', () => {
     const longTitle = 'A'.repeat(300);
-    const result = extractHtmlSignals(`<title>${longTitle}</title>`, 'example.com').pageTitle;
+    const result = requiredValue(extractHtmlSignals(`<title>${longTitle}</title>`, 'example.com').pageTitle);
     assert.ok(result.length <= 201); // 200 chars + the ellipsis character
     assert.ok(result.endsWith('…'));
   });
@@ -124,7 +124,10 @@ describe('externalAssetHosts', () => {
 describe('pageIdentity', () => {
   const observedAt = '2026-07-13T04:05:06.000Z';
 
-  function identity(html, options = {}) {
+  function identity(
+    html: string,
+    options: Parameters<typeof extractPageIdentity>[2] = {},
+  ) {
     return extractPageIdentity(html, 'example.com', {
       baseUrl: 'https://example.com/start/index.html',
       observedAt,
@@ -263,7 +266,7 @@ describe('pageIdentity', () => {
     const result = extractPageIdentity('<link rel="canonical" href="/safe">', '\u0000', {
       baseUrl: 'not a URL', observedAt,
     });
-    assert.equal(result.canonical.url, 'https://invalid.example/safe');
+    assert.equal(requiredValue(result.canonical).url, 'https://invalid.example/safe');
   });
 
   test('returns an empty, complete summary when no identity tags are present', () => {
@@ -292,9 +295,10 @@ describe('pageIdentity', () => {
     const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1"><astro-island></astro-island>', 'example.com', {
       httpServer: 'Caddy', observedAt,
     });
-    assert.deepEqual(result.technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
-    assert.equal(result.technologyProfile.source, 'derived');
-    assert.equal(result.technologyProfile.observedAt, observedAt);
+    const technologyProfile = requiredValue(result.technologyProfile);
+    assert.deepEqual(technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
+    assert.equal(technologyProfile.source, 'derived');
+    assert.equal(technologyProfile.observedAt, observedAt);
   });
 
   test('derives structured identity from the same captured HTML', () => {
@@ -307,9 +311,10 @@ describe('pageIdentity', () => {
       observedAt,
     });
 
-    assert.equal(result.structuredDataIdentity.source, 'html');
-    assert.equal(result.structuredDataIdentity.observedAt, observedAt);
-    assert.deepEqual(result.structuredDataIdentity.entities, [{
+    const structuredDataIdentity = requiredValue(result.structuredDataIdentity);
+    assert.equal(structuredDataIdentity.source, 'html');
+    assert.equal(structuredDataIdentity.observedAt, observedAt);
+    assert.deepEqual(structuredDataIdentity.entities, [{
       types: ['Organization'],
       name: 'Example publisher',
       declaredOrigin: 'https://www.example.com',
@@ -329,28 +334,29 @@ describe('pageIdentity', () => {
       includeCredentialSurfaceProfile: true,
     });
 
-    assert.equal(result.credentialSurfaceProfile.source, 'html');
-    assert.equal(result.credentialSurfaceProfile.observedAt, observedAt);
-    assert.deepEqual(result.credentialSurfaceProfile.inputs, {
+    const credentialSurfaceProfile = requiredValue(result.credentialSurfaceProfile);
+    assert.equal(credentialSurfaceProfile.source, 'html');
+    assert.equal(credentialSurfaceProfile.observedAt, observedAt);
+    assert.deepEqual(credentialSurfaceProfile.inputs, {
       count: 2,
       classifiedCount: 2,
       categories: { password: 1, email: 1, username: 0, one_time_code: 0, payment: 0 },
     });
-    assert.deepEqual(result.credentialSurfaceProfile.forms.actions, {
+    assert.deepEqual(credentialSurfaceProfile.forms.actions, {
       sameOrigin: 0,
       external: 1,
       missing: 0,
       cleartext: 0,
       unclassified: 0,
     });
-    assert.doesNotMatch(JSON.stringify(result.credentialSurfaceProfile), /private-email|private-password|token=|\/private/iu);
+    assert.doesNotMatch(JSON.stringify(credentialSurfaceProfile), /private-email|private-password|token=|\/private/iu);
   });
 
   test('can omit technology analysis while preserving page identity', () => {
     const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1">', 'example.com', {
       includeTechnologyProfile: false,
     });
-    assert.equal(result.pageIdentity.source, 'html');
+    assert.equal(requiredValue(result.pageIdentity).source, 'html');
     assert.equal(result.technologyProfile, null);
   });
 
@@ -360,7 +366,7 @@ describe('pageIdentity', () => {
       'example.com',
       { includeStructuredDataIdentity: false },
     );
-    assert.equal(result.pageIdentity.source, 'html');
+    assert.equal(requiredValue(result.pageIdentity).source, 'html');
     assert.equal(result.structuredDataIdentity, null);
   });
 
@@ -370,7 +376,7 @@ describe('pageIdentity', () => {
       'example.com',
       { includeCredentialSurfaceProfile: false },
     );
-    assert.equal(result.pageIdentity.source, 'html');
+    assert.equal(requiredValue(result.pageIdentity).source, 'html');
     assert.equal(result.credentialSurfaceProfile, null);
   });
 

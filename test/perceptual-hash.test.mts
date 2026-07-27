@@ -6,14 +6,15 @@
 // (small Hamming distance) value while a different image hashes *far*, plus
 // that malformed input fails closed to null.
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
-const zlib = require('node:zlib');
-const { faviconPerceptualHash, hammingDistanceHex } = require('../lib/perceptual-hash.mts');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import zlib from 'node:zlib';
+import { faviconPerceptualHash, hammingDistanceHex } from '../lib/perceptual-hash.mts';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+type PixelFunction = (x: number, y: number) => [number, number, number, number];
 
-function pngChunk(type, data) {
+function pngChunk(type: string, data: Buffer) {
   const length = Buffer.alloc(4);
   length.writeUInt32BE(data.length, 0);
   const crc = Buffer.alloc(4); // decoder ignores CRCs
@@ -21,7 +22,7 @@ function pngChunk(type, data) {
 }
 
 // Builds an 8-bit RGBA (colour type 6) PNG from a pixel function.
-function makePng(width, height, pixelFn) {
+function makePng(width: number, height: number, pixelFn: PixelFunction) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
@@ -49,7 +50,7 @@ function makePng(width, height, pixelFn) {
 
 // A smooth pattern sampled in normalized coordinates, so the *same* image can
 // be rendered at any resolution. Different frequencies => a different image.
-function patternPng(size, fx, fy) {
+function patternPng(size: number, fx: number, fy: number) {
   return makePng(size, size, (x, y) => {
     const u = x / (size - 1);
     const v = y / (size - 1);
@@ -58,7 +59,7 @@ function patternPng(size, fx, fy) {
   });
 }
 
-function icoWrapPng(png) {
+function icoWrapPng(png: Buffer) {
   const header = Buffer.alloc(6);
   header.writeUInt16LE(0, 0); // reserved
   header.writeUInt16LE(1, 2); // type: icon
@@ -75,7 +76,7 @@ function icoWrapPng(png) {
 // A 24-bit uncompressed BMP DIB (bottom-up), height doubled per the ICO
 // convention, wrapped in an ICO directory - exercises the classic
 // favicon.ico decode path.
-function icoWrapDib(size) {
+function icoWrapDib(size: number) {
   const rowSize = Math.floor((24 * size + 31) / 32) * 4;
   const header = Buffer.alloc(40);
   header.writeUInt32LE(40, 0); // header size
@@ -112,7 +113,7 @@ function icoWrapDib(size) {
 // An 8-bit palettized BMP DIB in an ICO - the format Wikipedia/StackOverflow
 // and many classic favicon.ico files actually ship (verified live), and the
 // case that motivated widening the decoder past 24/32-bit.
-function icoWrap8bitDib(size) {
+function icoWrap8bitDib(size: number) {
   const colors = 4; // small grayscale palette to keep the fixture compact
   const rowSize = Math.floor((8 * size + 31) / 32) * 4;
   const header = Buffer.alloc(40);
@@ -169,7 +170,7 @@ function makeZipBombPng() {
 // A 32-bit BMP-in-ICO whose pixels carry a real 2D pattern in BGR but whose
 // alpha plane is entirely `alpha` - used to prove an all-zero alpha plane is
 // treated as opaque rather than compositing the icon to white.
-function icoWrap32bitDib(size, alpha) {
+function icoWrap32bitDib(size: number, alpha: number) {
   const rowSize = size * 4;
   const header = Buffer.alloc(40);
   header.writeUInt32LE(40, 0);
@@ -204,6 +205,7 @@ function icoWrap32bitDib(size, alpha) {
 describe('faviconPerceptualHash', () => {
   test('produces a 16-char hex hash for a PNG', () => {
     const hash = faviconPerceptualHash(patternPng(32, 6, 5));
+    assert.ok(hash);
     assert.match(hash, /^[0-9a-f]{16}$/);
   });
 
@@ -227,6 +229,8 @@ describe('faviconPerceptualHash', () => {
     const opaque = faviconPerceptualHash(icoWrap32bitDib(16, 255));
     // Without the fix the zero-alpha icon composites to white -> uniform ->
     // rejected as low-information (null); with it, it hashes like the opaque one.
+    assert.ok(zeroAlpha);
+    assert.ok(opaque);
     assert.match(zeroAlpha, /^[0-9a-f]{16}$/);
     assert.equal(hammingDistanceHex(zeroAlpha, opaque), 0);
   });
@@ -235,6 +239,7 @@ describe('faviconPerceptualHash', () => {
     const big = faviconPerceptualHash(patternPng(48, 6, 5));
     const small = faviconPerceptualHash(patternPng(16, 6, 5));
     const distance = hammingDistanceHex(big, small);
+    assert.ok(distance !== null);
     assert.ok(distance <= 6, `expected small distance for a resized copy, got ${distance}`);
   });
 
@@ -242,24 +247,29 @@ describe('faviconPerceptualHash', () => {
     const a = faviconPerceptualHash(patternPng(32, 6, 5));
     const b = faviconPerceptualHash(patternPng(32, 13, 2));
     const distance = hammingDistanceHex(a, b);
+    assert.ok(distance !== null);
     assert.ok(distance >= 12, `expected large distance for a different image, got ${distance}`);
   });
 
   test('decodes a PNG embedded in an ICO container', () => {
     const hash = faviconPerceptualHash(icoWrapPng(patternPng(32, 6, 5)));
+    assert.ok(hash);
     assert.match(hash, /^[0-9a-f]{16}$/);
     // Same underlying pixels, whether bare PNG or PNG-in-ICO.
     const bare = faviconPerceptualHash(patternPng(32, 6, 5));
+    assert.ok(bare);
     assert.equal(hammingDistanceHex(hash, bare), 0);
   });
 
   test('decodes a classic 24-bit BMP-in-ICO favicon', () => {
     const hash = faviconPerceptualHash(icoWrapDib(16));
+    assert.ok(hash);
     assert.match(hash, /^[0-9a-f]{16}$/);
   });
 
   test('decodes an 8-bit palettized BMP-in-ICO favicon', () => {
     const hash = faviconPerceptualHash(icoWrap8bitDib(16));
+    assert.ok(hash);
     assert.match(hash, /^[0-9a-f]{16}$/);
   });
 

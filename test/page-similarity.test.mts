@@ -1,12 +1,8 @@
-const { before, describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-let comparison;
-let baseline;
-before(async () => {
-  comparison = await import('../frontend/src/lib/analysis/page-similarity.ts');
-  baseline = await import('../frontend/src/lib/analysis/page-baseline.ts');
-});
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as baseline from '../frontend/src/lib/analysis/page-baseline.ts';
+import * as comparison from '../frontend/src/lib/analysis/page-similarity.ts';
+import { requiredValue } from './value-assertions.mts';
 
 const ISO = '2026-07-13T04:05:06.000Z';
 const LATER = '2026-07-13T05:06:07.000Z';
@@ -39,13 +35,18 @@ function stored(overrides = {}) {
   };
 }
 
-function item(result, id) {
-  return result.components.find((entry) => entry.id === id);
+type PageComparison = NonNullable<ReturnType<typeof comparison.comparePageBaselines>>;
+type PageComparisonComponent = PageComparison['components'][number];
+
+function item(result: PageComparison, id: string): PageComparisonComponent {
+  const entry = result.components.find((component) => component.id === id);
+  assert.ok(entry);
+  return entry;
 }
 
 describe('explainable page-baseline comparison', () => {
   test('reports independent identical components without an aggregate score', () => {
-    const result = comparison.comparePageBaselines(stored(), stored({ domain: 'observed.example', lookupDomain: 'observed.example', observedAt: LATER }));
+    const result = requiredValue(comparison.comparePageBaselines(stored(), stored({ domain: 'observed.example', lookupDomain: 'observed.example', observedAt: LATER })));
     assert.equal(result.comparisonVersion, 1);
     assert.deepEqual(result.counts, { same: 6, overlap: 0, different: 0, notObserved: 0, unavailable: 0 });
     assert.equal(result.partial, false);
@@ -56,19 +57,19 @@ describe('explainable page-baseline comparison', () => {
   });
 
   test('keeps exact component differences separate', () => {
-    const result = comparison.comparePageBaselines(stored(), stored({
+    const result = requiredValue(comparison.comparePageBaselines(stored(), stored({
       normalizedHtml: { algorithm: 'sha256', value: SHA_D, tokenCount: 20, truncated: false },
       domStructure: { algorithm: 'sha256', value: SHA_D, nodeCount: 15, parser: 'static-tag-sequence-v1', truncated: false },
-    }));
+    })));
     assert.equal(item(result, 'normalized_html').status, 'different');
     assert.equal(item(result, 'dom_structure').status, 'different');
     assert.equal(item(result, 'form_structure').status, 'same');
   });
 
   test('reports visible-text bit agreement without calling it copied-text percentage', () => {
-    const result = comparison.comparePageBaselines(stored(), stored({
+    const result = requiredValue(comparison.comparePageBaselines(stored(), stored({
       visibleText: { algorithm: 'simhash64-v1', value: 'f000000000000000', tokenCount: 12, featureCount: 10, truncated: false },
-    }));
+    })));
     const visible = item(result, 'visible_text');
     assert.equal(visible.hammingDistance, 4);
     assert.equal(visible.agreementPercent, 94);
@@ -76,21 +77,21 @@ describe('explainable page-baseline comparison', () => {
   });
 
   test('does not treat absent optional fingerprints as a positive match', () => {
-    const neither = comparison.comparePageBaselines(stored({ visibleText: null, formStructure: null }), stored({ visibleText: null, formStructure: null }));
+    const neither = requiredValue(comparison.comparePageBaselines(stored({ visibleText: null, formStructure: null }), stored({ visibleText: null, formStructure: null })));
     assert.equal(item(neither, 'visible_text').status, 'not_observed');
     assert.equal(item(neither, 'form_structure').status, 'not_observed');
     assert.equal(neither.counts.same, 4);
 
-    const one = comparison.comparePageBaselines(stored({ visibleText: null, formStructure: null }), stored());
+    const one = requiredValue(comparison.comparePageBaselines(stored({ visibleText: null, formStructure: null }), stored()));
     assert.equal(item(one, 'visible_text').status, 'unavailable');
     assert.equal(item(one, 'form_structure').status, 'unavailable');
   });
 
   test('reports bounded set equality, overlap, and disjoint sets independently', () => {
-    const result = comparison.comparePageBaselines(stored(), stored({
+    const result = requiredValue(comparison.comparePageBaselines(stored(), stored({
       resourceHosts: { algorithm: 'set-sha256', value: SHA_D, values: ['cdn.example', 'other.example'], truncated: false },
       trackingIdentifiers: { algorithm: 'set-sha256', value: SHA_D, values: [{ type: 'tag-container', value: 'GTM-OTHER' }], truncated: false },
-    }));
+    })));
     const hosts = item(result, 'resource_hosts');
     assert.equal(hosts.status, 'overlap');
     assert.deepEqual(hosts.sharedValues, ['cdn.example']);
@@ -100,19 +101,19 @@ describe('explainable page-baseline comparison', () => {
 
   test('does not treat two empty sets as a positive match', () => {
     const empty = { algorithm: 'set-sha256', value: null, values: [], truncated: false };
-    const result = comparison.comparePageBaselines(stored({ resourceHosts: empty, trackingIdentifiers: empty }), stored({ resourceHosts: empty, trackingIdentifiers: empty }));
+    const result = requiredValue(comparison.comparePageBaselines(stored({ resourceHosts: empty, trackingIdentifiers: empty }), stored({ resourceHosts: empty, trackingIdentifiers: empty })));
     assert.equal(item(result, 'resource_hosts').status, 'not_observed');
     assert.equal(item(result, 'tracking_identifiers').status, 'not_observed');
     assert.equal(item(result, 'resource_hosts').sharedCount, 0);
   });
 
   test('marks capped evidence partial while preserving component observations', () => {
-    const result = comparison.comparePageBaselines(stored({
+    const result = requiredValue(comparison.comparePageBaselines(stored({
       normalizedHtml: { algorithm: 'sha256', value: SHA_A, tokenCount: 20, truncated: true },
       resourceHosts: { algorithm: 'set-sha256', value: SHA_B, values: ['cdn.example'], truncated: true },
       complete: false,
       truncated: true,
-    }), stored());
+    }), stored()));
     assert.equal(result.partial, true);
     assert.equal(item(result, 'normalized_html').status, 'same');
     assert.equal(item(result, 'normalized_html').partial, true);
@@ -127,10 +128,10 @@ describe('explainable page-baseline comparison', () => {
   });
 
   test('strict normalization drops unknown and hostile fields from the result', () => {
-    const result = comparison.comparePageBaselines(
+    const result = requiredValue(comparison.comparePageBaselines(
       { ...stored(), rawHtml: '<secret>', injected: 'private' },
       { ...stored(), rawResponse: 'private response' },
-    );
+    ));
     assert.doesNotMatch(JSON.stringify(result), /secret|private|rawHtml|rawResponse|injected/);
   });
 
