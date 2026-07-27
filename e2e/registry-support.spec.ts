@@ -30,7 +30,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await expect(page.locator('tbody tr')).toHaveCount(50);
   await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 312 matching profiles (312 total)');
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
-  await expect(standards).toContainText('1113 / 1113');
+  await expect(standards).toContainText('1114 / 1114');
   await expect(standards).toContainText('12 / 14');
   await expect(standards).toContainText('.edu');
   await expect(standards).toContainText('.mil');
