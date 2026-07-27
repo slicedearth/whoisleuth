@@ -1,18 +1,17 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { buildCliCtSearchDocument } = require('../cli/formatters/json.mts');
-const {
+import { parseCliArguments } from '../cli/arguments.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliCtSearchDocument } from '../cli/formatters/json.mts';
+import {
   MAX_CT_TERMINAL_HOSTNAMES,
   MAX_CT_TERMINAL_MATCHES,
   formatTerminalCtSearch,
-} = require('../cli/formatters/terminal.mts');
-const { runCli } = require('../cli/runner.mts');
+} from '../cli/formatters/terminal.mts';
+import { runCli } from '../cli/runner.mts';
+import { arrayValue, recordValue } from './value-assertions.mts';
 
 function capture() {
   let value = '';
@@ -116,8 +115,9 @@ describe('ct-search output', () => {
     const output = formatTerminalCtSearch(document);
     assert.match(output, /\(\+2 more\)/);
     assert.match(output, /Showing 100 of 101 structured matches/);
-    assert.equal(document.matches.length, 101);
-    assert.equal(document.matches[0].hostnames.length, 7);
+    const documentMatches = arrayValue(document.matches);
+    assert.equal(documentMatches.length, 101);
+    assert.equal(arrayValue(recordValue(documentMatches[0]).hostnames).length, 7);
   });
 
   test('empty structured results remain an explicit successful state', () => {

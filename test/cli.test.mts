@@ -1,17 +1,19 @@
-'use strict';
+import { fileURLToPath } from 'node:url';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { Readable, Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { spawnSync } = require('node:child_process');
-const { Readable, Writable } = require('node:stream');
+import { parseCliArguments } from '../cli/arguments.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliLookupDocument } from '../cli/formatters/json.mts';
+import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/terminal.mts';
+import { MAX_STDIN_BYTES, readStdinBounded, runCli } from '../cli/runner.mts';
+import type { ClassifiedQuery } from '../lib/classify.mts';
 
-const { parseCliArguments } = require('../cli/arguments.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { buildCliLookupDocument } = require('../cli/formatters/json.mts');
-const { formatTerminalLookup, safeTerminalValue } = require('../cli/formatters/terminal.mts');
-const { MAX_STDIN_BYTES, readStdinBounded, runCli } = require('../cli/runner.mts');
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 function capture() {
   let value = '';
@@ -25,6 +27,16 @@ function lookupResult(overrides = {}) {
     availability: { applicable: true, domain: 'example.com', state: 'registered', confidence: 'high' },
     diagnostics: { version: 4, rdap: { status: 'success', endpoint: 'https://rdap.invalid/domain/example.com' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
     ...overrides,
+  };
+}
+
+function classifiedDomain(value: string, inputHostname = value): ClassifiedQuery {
+  return {
+    type: 'domain',
+    value,
+    inputHostname,
+    registrableDomain: value,
+    isSubdomain: inputHostname !== value,
   };
 }
 
@@ -139,7 +151,7 @@ describe('CLI lookup runner', () => {
 });
 
 test('machine document and terminal formatter preserve explicit source states', () => {
-  const document = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, lookupResult(), '2026-07-14T00:00:00.000Z');
+  const document = buildCliLookupDocument('example.com', classifiedDomain('example.com'), lookupResult(), '2026-07-14T00:00:00.000Z');
   const terminal = formatTerminalLookup(document);
   assert.match(terminal, /Availability\s+Registered/);
   assert.match(terminal, /RDAP\s+Success/);
@@ -171,7 +183,7 @@ test('terminal lookup separately attributes represented registrar RDAP diagnosti
       availability: { status: 'complete' },
     },
   });
-  const document = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, result, '2026-07-14T00:00:00.000Z', 'deep');
+  const document = buildCliLookupDocument('example.com', classifiedDomain('example.com'), result, '2026-07-14T00:00:00.000Z', 'deep');
   const terminal = formatTerminalLookup(document);
 
   assert.match(terminal, /Registrar RDAP Success/);
@@ -192,7 +204,7 @@ test('terminal lookup preserves registrar skip states and omits absent diagnosti
       availability: { status: 'complete' },
     },
   });
-  const skippedDocument = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, skipped, '2026-07-14T00:00:00.000Z');
+  const skippedDocument = buildCliLookupDocument('example.com', classifiedDomain('example.com'), skipped, '2026-07-14T00:00:00.000Z');
   assert.match(formatTerminalLookup(skippedDocument), /Registrar RDAP Skipped/);
 
   const absentDocument = buildCliLookupDocument('AS65536', { type: 'asn', value: 'AS65536' }, lookupResult(), '2026-07-14T00:00:00.000Z');
@@ -209,7 +221,7 @@ test('terminal lookup presents bounded observed network registration context', (
       rawContact: 'must-not-render@example.test',
     },
   });
-  const document = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, result, '2026-07-14T00:00:00.000Z', 'deep');
+  const document = buildCliLookupDocument('example.com', classifiedDomain('example.com'), result, '2026-07-14T00:00:00.000Z', 'deep');
   const terminal = formatTerminalLookup(document);
 
   assert.match(terminal, /Network RDAP\s+Success/);
@@ -318,7 +330,7 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   });
   const document = buildCliLookupDocument(
     'example.com',
-    { type: 'domain', value: 'example.com', registrableDomain: 'example.com' },
+    classifiedDomain('example.com'),
     result,
     '2026-07-24T00:00:00.000Z',
     'deep',
@@ -362,7 +374,7 @@ test('terminal lookup explains represented registry access constraints', () => {
       availability: { status: 'complete' },
     },
   });
-  const document = buildCliLookupDocument('restricted.invalid', { type: 'domain', value: 'restricted.invalid', registrableDomain: 'restricted.invalid' }, restricted, '2026-07-17T00:00:00.000Z', 'deep');
+  const document = buildCliLookupDocument('restricted.invalid', classifiedDomain('restricted.invalid'), restricted, '2026-07-17T00:00:00.000Z', 'deep');
   const terminal = formatTerminalLookup(document);
 
   assert.match(terminal, /Registry access \.es/);
@@ -387,14 +399,15 @@ test('terminal registry access context remains bounded and absent by default', (
       availability: { status: 'complete' },
     },
   });
-  const constrainedDocument = buildCliLookupDocument('unpublished.invalid', { type: 'domain', value: 'unpublished.invalid', registrableDomain: 'unpublished.invalid' }, constrained, '2026-07-17T00:00:00.000Z', 'deep');
+  const constrainedDocument = buildCliLookupDocument('unpublished.invalid', classifiedDomain('unpublished.invalid'), constrained, '2026-07-17T00:00:00.000Z', 'deep');
   const constrainedTerminal = formatTerminalLookup(constrainedDocument);
   const accessNote = constrainedTerminal.split('\n').find((line) => line.startsWith('Access note'));
 
   assert.doesNotMatch(constrainedTerminal, /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+  assert.ok(accessNote);
   assert.ok(accessNote.length <= 'Access note    '.length + 240);
 
-  const ordinaryDocument = buildCliLookupDocument('example.com', { type: 'domain', value: 'example.com', registrableDomain: 'example.com' }, lookupResult(), '2026-07-17T00:00:00.000Z');
+  const ordinaryDocument = buildCliLookupDocument('example.com', classifiedDomain('example.com'), lookupResult(), '2026-07-17T00:00:00.000Z');
   assert.doesNotMatch(formatTerminalLookup(ordinaryDocument), /Registry access|WHOIS access|RDAP access|Access note/);
 });
 

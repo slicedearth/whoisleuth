@@ -1,13 +1,13 @@
-'use strict';
+import { fileURLToPath } from 'node:url';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
-const { spawnSync } = require('node:child_process');
+import { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage } from '../cli/errors.mts';
 
-const { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage } = require('../cli/errors.mts');
-
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '..');
 const BIN = join(ROOT, 'bin', 'whoisleuth.mts');
 
@@ -64,7 +64,7 @@ function savedLookup() {
   };
 }
 
-function runBinary(args, input = '') {
+function runBinary(args: string[], input = '') {
   return spawnSync(process.execPath, [BIN, ...args], {
     cwd: ROOT,
     encoding: 'utf8',

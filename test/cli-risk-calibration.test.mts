@@ -1,13 +1,11 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Readable, Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Readable, Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { formatTerminalRiskCalibration } = require('../cli/formatters/terminal.mts');
-const {
+import { parseCliArguments } from '../cli/arguments.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { formatTerminalRiskCalibration } from '../cli/formatters/terminal.mts';
+import {
   MAX_RISK_CALIBRATION_INPUT_BYTES,
   MAX_RISK_CALIBRATION_RECORDS,
   RISK_CALIBRATION_DATASET_SCHEMA,
@@ -15,9 +13,9 @@ const {
   buildRiskCalibrationReport,
   parseRiskCalibrationDataset,
   readRiskCalibrationInputBounded,
-} = require('../cli/risk-calibration.mts');
-const { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } = require('../lib/risk-scoring.mts');
-const { runCli } = require('../cli/runner.mts');
+} from '../cli/risk-calibration.mts';
+import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { runCli } from '../cli/runner.mts';
 
 function capture() {
   let value = '';
@@ -179,7 +177,7 @@ describe('offline Risk calibration report', () => {
       excluded: 2,
       scoreBands: { not_scored: 1, '0_39': 2, '40_69': 0, '70_100': 1 },
     });
-    const current = report.thresholds.find((item) => item.threshold === 70);
+    const current = report.thresholds.find((item: { threshold: number }) => item.threshold === 70);
     assert.deepEqual(current, {
       threshold: 70,
       truePositive: 1,

@@ -1,28 +1,43 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const {
+import { parseCliArguments } from '../cli/arguments.mts';
+import {
   DEFAULT_DISCOVERY_TLDS,
   MAX_DISCOVERY_DICTIONARY_BYTES,
   MAX_DISCOVERY_TLD_TEXT_LENGTH,
   MAX_DISCOVERY_TLD_TOKENS_INSPECTED,
   normalizeDiscoveryTlds,
   readDiscoveryDictionaryBounded,
-} = require('../cli/discover.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const {
+} from '../cli/discover.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import {
   buildCliDiscoverDocument,
   formatDiscoverJsonLines,
-} = require('../cli/formatters/json.mts');
-const {
+} from '../cli/formatters/json.mts';
+import {
   MAX_DISCOVER_TERMINAL_CANDIDATES,
   formatTerminalDiscover,
-} = require('../cli/formatters/terminal.mts');
-const { runCli } = require('../cli/runner.mts');
+} from '../cli/formatters/terminal.mts';
+import { runCli } from '../cli/runner.mts';
+import { arrayValue, recordValue } from './value-assertions.mts';
+
+type DiscoveryCandidate = ReturnType<typeof candidate>;
+type GenerationResult = Record<string, unknown> & {
+  version: number;
+  candidates: DiscoveryCandidate[];
+  inputValid: boolean;
+  truncated: boolean;
+  limitReasons: string[];
+  rejectedVariantCount: number;
+  limits: Record<string, number>;
+};
+type GenerationRun = (
+  seed: string,
+  tlds: string[],
+  options: Record<string, unknown>,
+) => GenerationResult;
 
 function capture() {
   let value = '';
@@ -46,8 +61,8 @@ function candidate(index = 0) {
   };
 }
 
-function generationResult(overrides = {}) {
-  return {
+function generationResult(overrides: Record<string, unknown> = {}): GenerationResult {
+  const result: GenerationResult = {
     version: 1,
     candidates: [candidate()],
     inputValid: true,
@@ -55,11 +70,11 @@ function generationResult(overrides = {}) {
     limitReasons: [],
     rejectedVariantCount: 0,
     limits: { tlds: 20, nameVariants: 1500, candidates: 2000 },
-    ...overrides,
   };
+  return { ...result, ...overrides } as GenerationResult;
 }
 
-function fakeGenerator(run) {
+function fakeGenerator(run: GenerationRun) {
   const mutationFamilies = [
     'character_omission',
     'dictionary',
@@ -72,10 +87,12 @@ function fakeGenerator(run) {
     MUTATION_FAMILY_IDS: mutationFamilies,
     MUTATION_LABELS: { character_omission: 'Character omission' },
     generateTyposquatCandidateSet: run,
-    normalizeMutationFamilyIds: (raw) => Array.isArray(raw)
-      ? [...new Set(raw.filter((value) => mutationFamilies.includes(value)))]
+    normalizeMutationFamilyIds: (raw: unknown) => Array.isArray(raw)
+      ? [...new Set(raw.filter((value): value is string => (
+        typeof value === 'string' && mutationFamilies.includes(value)
+      )))]
       : [],
-    normalizeCustomDictionaryTerms: (raw) => {
+    normalizeCustomDictionaryTerms: (raw: unknown) => {
       const values = String(raw || '').split(/\s+/).map((value) => value.trim()).filter(Boolean);
       return { values, truncated: false, rejectedCount: 0 };
     },
@@ -228,7 +245,7 @@ describe('discover output', () => {
   });
 
   test('JSONL items are independently versioned and empty results emit no blank record', () => {
-    const lines = formatDiscoverJsonLines([candidate(0), candidate(1)], metadata).trim().split('\n').map(JSON.parse);
+    const lines = formatDiscoverJsonLines([candidate(0), candidate(1)], metadata).trim().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(lines.map((item) => item.schema), ['whoisleuth.cli.discover.item', 'whoisleuth.cli.discover.item']);
     assert.ok(lines.every((item) => item.version === 2));
     assert.ok(lines.every((item) => item.generatedAt === metadata.generatedAt));
@@ -243,7 +260,7 @@ describe('discover output', () => {
     const output = formatTerminalDiscover(document, { character_omission: 'Character omission' });
     assert.match(output, /candidate-0\.test — Character omission/);
     assert.match(output, /Showing 200 of 201 candidates/);
-    assert.equal(document.candidates.length, 201);
+    assert.equal(arrayValue(document.candidates).length, 201);
   });
 
   test('terminal output presents Unicode and DNS-safe forms together', () => {
@@ -277,7 +294,7 @@ describe('discover runner', () => {
   test('passes normalized controls to the shared generator and emits JSON', async () => {
     const stdout = capture();
     const stderr = capture();
-    let received;
+    let received: Record<string, unknown> | undefined;
     const code = await runCli([
       'discover', 'Example Brand', '--json', '--preset', 'impersonation',
       '--keyboard', 'qwertz', '--tlds', 'COM, .net, com',
@@ -304,7 +321,7 @@ describe('discover runner', () => {
 
   test('stdin and quiet mode use defaults without producing output', async () => {
     const stdout = capture();
-    let received;
+    let received: Record<string, unknown> | undefined;
     const code = await runCli(['discover', '--quiet'], {
       stdout: stdout.stream,
       stderr: capture().stream,
@@ -335,7 +352,7 @@ describe('discover runner', () => {
 
   test('loads a bounded dictionary without exposing its terms in machine metadata', async () => {
     const stdout = capture();
-    let received;
+    let received: Record<string, unknown> | undefined;
     const code = await runCli([
       'discover', 'example.test', '--dictionary', 'private-terms.txt', '--json',
     ], {
@@ -348,7 +365,7 @@ describe('discover runner', () => {
       }),
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.equal(received.options.dictionaryTerms, 'invoice\ncustomer-care\n');
+    assert.equal(recordValue(recordValue(received).options).dictionaryTerms, 'invoice\ncustomer-care\n');
     const document = JSON.parse(stdout.value());
     assert.equal(document.dictionaryTermCount, 2);
     assert.equal(document.rejectedDictionaryTermCount, 0);
@@ -358,7 +375,7 @@ describe('discover runner', () => {
 
   test('passes a validated custom family selection and records it in machine metadata', async () => {
     const stdout = capture();
-    let received;
+    let received: Record<string, unknown> | undefined;
     const code = await runCli([
       'discover', 'example.test', '--families', 'pluralization,dictionary', '--json',
     ], {
@@ -370,13 +387,13 @@ describe('discover runner', () => {
       }),
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.deepEqual(received.options.mutationTypes, ['pluralization', 'dictionary']);
+    assert.deepEqual(recordValue(recordValue(received).options).mutationTypes, ['pluralization', 'dictionary']);
     assert.deepEqual(JSON.parse(stdout.value()).mutationFamilies, ['pluralization', 'dictionary']);
   });
 
   test('accepts the explicit advanced Unicode family without enabling other families', async () => {
     const stdout = capture();
-    let received;
+    let received: Record<string, unknown> | undefined;
     const code = await runCli([
       'discover', 'scope.invalid', '--families', 'unicode_homoglyph_depth_2', '--json',
     ], {
@@ -390,12 +407,12 @@ describe('discover runner', () => {
       }),
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.deepEqual(received.options.mutationTypes, ['unicode_homoglyph_depth_2']);
+    assert.deepEqual(recordValue(recordValue(received).options).mutationTypes, ['unicode_homoglyph_depth_2']);
     assert.deepEqual(JSON.parse(stdout.value()).mutationFamilies, ['unicode_homoglyph_depth_2']);
   });
 
   test('accepts a local dictionary for token-replacement-only generation', async () => {
-    let received;
+    let received: Record<string, unknown> | undefined;
     const code = await runCli([
       'discover', 'alpha-portal.test',
       '--families', 'dictionary_token_replacement',

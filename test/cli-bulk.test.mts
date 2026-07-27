@@ -1,22 +1,22 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Readable, Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Readable, Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const {
+import { parseCliArguments } from '../cli/arguments.mts';
+import {
   MAX_BULK_INPUT_BYTES,
   MAX_DEEP_BULK_QUERIES,
   MAX_FAST_BULK_QUERIES,
   parseBulkQueries,
   readTextStreamBounded,
   runBulkLookups,
-} = require('../cli/bulk.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { buildCliBulkDocument, formatJsonLines } = require('../cli/formatters/json.mts');
-const { formatTerminalBulk } = require('../cli/formatters/terminal.mts');
-const { runCli } = require('../cli/runner.mts');
+} from '../cli/bulk.mts';
+import type { BulkLookupResult, ClassifiedQuery } from '../cli/bulk.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliBulkDocument, formatJsonLines } from '../cli/formatters/json.mts';
+import { formatTerminalBulk } from '../cli/formatters/terminal.mts';
+import { runCli } from '../cli/runner.mts';
+import { arrayValue, recordValue } from './value-assertions.mts';
 
 function capture() {
   let value = '';
@@ -31,7 +31,7 @@ function capture() {
   };
 }
 
-function classified(query) {
+function classified(query: string): ClassifiedQuery {
   const inputHostname = query.toLowerCase().replace(/^www\./, '');
   return {
     type: 'domain',
@@ -42,7 +42,7 @@ function classified(query) {
   };
 }
 
-function compactResult(domain) {
+function compactResult(domain: string) {
   return {
     availability: {
       applicable: true,
@@ -127,7 +127,7 @@ describe('bounded bulk input', () => {
 describe('bulk lookup execution', () => {
   test('preserves input order, bounds concurrency, and uses compact shared lookups', async () => {
     const queries = ['one.test', 'two.test', 'three.test', 'four.test'];
-    const receivedOptions = [];
+    const receivedOptions: Array<{ fast: boolean; compact: true }> = [];
     let active = 0;
     let maximumActive = 0;
     const results = await runBulkLookups(queries, {
@@ -152,7 +152,7 @@ describe('bulk lookup execution', () => {
     const results = await runBulkLookups(['example.com', 'www.example.com'], {
       concurrency: 2,
       classifyQuery: (query) => ({
-        type: 'domain',
+        type: 'domain' as const,
         value: 'example.com',
         inputHostname: query,
         registrableDomain: 'example.com',
@@ -165,7 +165,10 @@ describe('bulk lookup execution', () => {
       },
     });
     assert.equal(lookups, 1);
-    assert.deepEqual(results.map((item) => item.classified.inputHostname), ['example.com', 'www.example.com']);
+    assert.deepEqual(results.map((item) => {
+      assert.equal(item.ok, true);
+      return item.classified.inputHostname;
+    }), ['example.com', 'www.example.com']);
   });
 
   test('keeps bounded classification and lookup failures beside successful results', async () => {
@@ -181,15 +184,19 @@ describe('bulk lookup execution', () => {
       },
     });
     assert.deepEqual(results.map((item) => item.ok), [true, false, false]);
-    assert.ok(results[1].error.length <= 300);
-    assert.doesNotMatch(results[1].error, /[\x00-\x1f\x7f]/);
-    assert.equal(results[2].error, 'upstream failure');
+    const classificationFailure = results[1];
+    const lookupFailure = results[2];
+    assert.equal(classificationFailure.ok, false);
+    assert.equal(lookupFailure.ok, false);
+    assert.ok(classificationFailure.error.length <= 300);
+    assert.doesNotMatch(classificationFailure.error, /[\x00-\x1f\x7f]/);
+    assert.equal(lookupFailure.error, 'upstream failure');
   });
 });
 
 describe('bulk output and runner', () => {
   test('JSON and JSONL outputs are versioned, timestamped, ordered, and summarized', () => {
-    const items = [
+    const items: BulkLookupResult[] = [
       { index: 0, query: 'one.test', ok: true, classified: classified('one.test'), result: compactResult('one.test') },
       { index: 1, query: 'bad', ok: false, error: 'Invalid query' },
     ];
@@ -197,16 +204,16 @@ describe('bulk output and runner', () => {
     const document = buildCliBulkDocument(items, metadata);
     assert.equal(document.schema, 'whoisleuth.cli.bulk');
     assert.deepEqual(document.summary, { total: 2, succeeded: 1, failed: 1, duplicatesRemoved: 2 });
-    assert.deepEqual(document.results.map((item) => item.query), ['one.test', 'bad']);
-    const lines = formatJsonLines(items, metadata).trim().split('\n').map(JSON.parse);
+    assert.deepEqual(arrayValue(document.results).map((item) => recordValue(item).query), ['one.test', 'bad']);
+    const lines = formatJsonLines(items, metadata).trim().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(lines.map((item) => item.schema), ['whoisleuth.cli.bulk.item', 'whoisleuth.cli.bulk.item']);
     assert.ok(lines.every((item) => item.generatedAt === metadata.generatedAt));
   });
 
   test('terminal output presents each state and a compact summary', () => {
     const output = formatTerminalBulk([
-      { index: 0, query: 'one.test', ok: true, classified: classified('one.test'), result: compactResult('one.test') },
-      { index: 1, query: 'bad', ok: false, error: 'Invalid query' },
+      { query: 'one.test', ok: true, result: compactResult('one.test') },
+      { query: 'bad', ok: false, error: 'Invalid query' },
     ], { duplicates: 1 });
     assert.match(output, /✓ one\.test — Registered \(High confidence\)/);
     assert.match(output, /! bad — Invalid query/);

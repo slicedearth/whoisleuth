@@ -4,10 +4,12 @@ import { createRequire } from 'node:module';
 
 import { fetchHomepage } from '../lib/availability.mts';
 import { classifyQuery } from '../lib/classify.mts';
+import type { ClassifiedQuery } from '../lib/classify.mts';
 import { searchCertificateTransparency } from '../lib/ct-search.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
 import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/registry-capabilities.mts';
+import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
 import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
 import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 import { CliUsageError, parseCliArguments } from './arguments.mts';
@@ -125,14 +127,59 @@ function commandHelp(command: CliCommand): string {
 }
 
 type WritableLike = { write(value: string): unknown };
+type LookupDependency = (
+  classified: ClassifiedQuery,
+  options?: { fast?: boolean; compact?: boolean },
+) => unknown | Promise<unknown>;
+type DiscoveryGeneratorDependency = {
+  MAX_GENERATION_TLDS: number;
+  MUTATION_FAMILY_IDS: readonly string[];
+  MUTATION_LABELS: Readonly<Record<string, string>>;
+  normalizeMutationFamilyIds(raw: unknown): string[];
+  normalizeCustomDictionaryTerms(raw: unknown): { values: string[]; rejectedCount: number };
+  generateTyposquatCandidateSet(
+    seed: string,
+    tlds: string[],
+    options: Record<string, unknown>,
+  ): UnknownRecord & {
+    inputValid: boolean;
+    candidates: Array<{ domain: unknown; source: unknown; tld: unknown; mutationTypes: unknown }>;
+  };
+};
 type CliDependencies = {
   stdout?: WritableLike;
   stderr?: WritableLike;
   stdin?: BoundedTextStream;
+  readStdin?: () => string | Promise<string>;
+  readBulkInput?: (source?: string | null) => string | Promise<string>;
+  readCompareInput?: (source?: string | null) => string | Promise<string>;
+  readDiscoveryDictionary?: (source: string) => string | Promise<string>;
+  readExportInput?: (source?: string | null) => string | Promise<string>;
+  readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
+  now?: () => string;
+  classifyQuery?: typeof classifyQuery;
+  runUnifiedLookup?: LookupDependency;
+  searchCertificateTransparency?: (keyword: unknown) => unknown | Promise<unknown>;
+  loadTyposquatGenerator?: () => Promise<DiscoveryGeneratorDependency>;
+  normalizeAuditDomain?: (raw: unknown) => string | null;
+  normalizeDkimSelectors?: (raw: unknown) => string[];
+  checkDomainPosture?: (
+    domain: string,
+    options?: { dkimSelectors?: unknown[] },
+  ) => unknown | Promise<unknown>;
+  fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
+  normalizeTlsHostname?: (value: unknown) => string | null;
+  collectTlsIntelligence?: (hostname: string) => unknown | Promise<unknown>;
+  registryCapabilityFor?: (value: unknown) => RegistryCompatibilityRow | null;
+  registryCapabilitiesVersion?: number;
+  explainRiskScore?: typeof explainRiskScore;
+  riskModelVersion?: number;
+  riskReviewThreshold?: number;
+  loadRegistryComparison?: () => Promise<typeof import('../lib/registry-comparison.mts')>;
+  loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
   // Tests and embedders inject bounded implementations for every external
   // operation; individual commands validate their results at existing module
   // boundaries before formatting or persistence.
-  [key: string]: any;
 };
 
 async function readStdinBounded(

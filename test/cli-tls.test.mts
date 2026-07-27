@@ -1,14 +1,12 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { buildCliTlsDocument } = require('../cli/formatters/json.mts');
-const { MAX_TLS_TERMINAL_ALT_NAMES, formatTerminalTls } = require('../cli/formatters/terminal.mts');
-const { runCli } = require('../cli/runner.mts');
+import { parseCliArguments } from '../cli/arguments.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliTlsDocument } from '../cli/formatters/json.mts';
+import { MAX_TLS_TERMINAL_ALT_NAMES, formatTerminalTls } from '../cli/formatters/terminal.mts';
+import { runCli } from '../cli/runner.mts';
 
 function capture() {
   let value = '';
@@ -183,7 +181,7 @@ describe('TLS CLI runner', () => {
       stdout: stdout.stream,
       stderr: capture().stream,
       readStdin: async () => 'login.example.test',
-      normalizeTlsHostname: (value) => value,
+      normalizeTlsHostname: (value) => typeof value === 'string' ? value : null,
       collectTlsIntelligence: async () => { collections++; return tlsObservation(); },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
@@ -209,7 +207,7 @@ describe('TLS CLI runner', () => {
     const code = await runCli(['tls', 'login.example.test', '--json'], {
       stdout: stdout.stream,
       stderr: capture().stream,
-      normalizeTlsHostname: (value) => value,
+      normalizeTlsHostname: (value) => typeof value === 'string' ? value : null,
       collectTlsIntelligence: async () => tlsObservation({ status: 'error', complete: false, certificate: null, chain: [], findings: [] }),
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
@@ -221,7 +219,7 @@ describe('TLS CLI runner', () => {
     const code = await runCli(['tls', 'login.example.test'], {
       stdout: capture().stream,
       stderr: stderr.stream,
-      normalizeTlsHostname: (value) => value,
+      normalizeTlsHostname: (value) => typeof value === 'string' ? value : null,
       collectTlsIntelligence: async () => { throw new Error(`collector failed\n${'x'.repeat(500)}`); },
     });
     assert.equal(code, EXIT_CODES.LOOKUP_FAILED);

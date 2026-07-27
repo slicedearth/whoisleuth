@@ -1,10 +1,12 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { statSync } = require('node:fs');
-const { join } = require('node:path');
+import { fileURLToPath } from 'node:url';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { statSync } from 'node:fs';
+import { join } from 'node:path';
 
-const packageJson = require('../package.json');
+import packageJson from '../package.json' with { type: 'json' };
 
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const EXPECTED_PACKAGE_FILES = [
   'bin/**/*.mts',
   'cli/**/*.mts',

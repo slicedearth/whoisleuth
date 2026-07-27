@@ -1,15 +1,13 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { buildCliHttpDocument } = require('../cli/formatters/json.mts');
-const { formatTerminalHttp } = require('../cli/formatters/terminal.mts');
-const { MAX_HTTP_CLI_DETAIL_LENGTH, buildHttpProbeResult } = require('../cli/http.mts');
-const { runCli } = require('../cli/runner.mts');
+import { parseCliArguments } from '../cli/arguments.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliHttpDocument } from '../cli/formatters/json.mts';
+import { formatTerminalHttp } from '../cli/formatters/terminal.mts';
+import { MAX_HTTP_CLI_DETAIL_LENGTH, buildHttpProbeResult } from '../cli/http.mts';
+import { runCli } from '../cli/runner.mts';
 
 function capture() {
   let value = '';
@@ -109,6 +107,7 @@ describe('HTTP CLI result normalization', () => {
     assert.equal(result.domain, 'example.test');
     assert.equal(result.probeStatus, 'fetched');
     assert.equal(result.activityStatus, 'active');
+    assert.ok(result.http);
     assert.equal(result.http.finalUrl, 'https://www.example.test/home');
     assert.equal(Object.hasOwn(result, 'text'), false);
     assert.equal(JSON.stringify(result).includes('captured body'), false);
@@ -117,6 +116,7 @@ describe('HTTP CLI result normalization', () => {
 
   test('bounds and control-sanitizes probe detail', () => {
     const result = buildHttpProbeResult('example.test', homepageProbe({ detail: `ok\n${'x'.repeat(500)}` }));
+    assert.ok(result.detail);
     assert.ok(result.detail.length <= MAX_HTTP_CLI_DETAIL_LENGTH);
     assert.equal(result.detail.includes('\n'), false);
   });
@@ -130,6 +130,7 @@ describe('HTTP CLI result normalization', () => {
     }));
     assert.equal(result.probeStatus, 'inconclusive');
     assert.equal(result.activityStatus, 'unreachable');
+    assert.ok(result.http);
     assert.equal(result.http.status, 'error');
   });
 
@@ -205,7 +206,7 @@ describe('HTTP CLI runner', () => {
       stdout: stdout.stream,
       stderr: capture().stream,
       readStdin: async () => 'example.test',
-      normalizeAuditDomain: (value) => value,
+      normalizeAuditDomain: (value) => typeof value === 'string' ? value : null,
       fetchHomepage: async () => { probes++; return homepageProbe(); },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
@@ -231,7 +232,7 @@ describe('HTTP CLI runner', () => {
     const code = await runCli(['http', 'example.test'], {
       stdout: capture().stream,
       stderr: stderr.stream,
-      normalizeAuditDomain: (value) => value,
+      normalizeAuditDomain: (value) => typeof value === 'string' ? value : null,
       fetchHomepage: async () => { throw new Error(`probe failed\n${'x'.repeat(500)}`); },
     });
     assert.equal(code, EXIT_CODES.LOOKUP_FAILED);

@@ -1,22 +1,21 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Readable, Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { mkdtemp, rm, writeFile } = require('node:fs/promises');
-const { tmpdir } = require('node:os');
-const { join } = require('node:path');
-const { Readable, Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const { buildCliEvidenceExport, formatCliEvidenceExport } = require('../cli/export-evidence.mts');
-const {
+import { parseCliArguments } from '../cli/arguments.mts';
+import { buildCliEvidenceExport, formatCliEvidenceExport } from '../cli/export-evidence.mts';
+import {
   MAX_MARKDOWN_VALUE_LENGTH,
   escapeMarkdownValue,
   formatLookupEvidenceMarkdown,
-} = require('../cli/formatters/markdown.mts');
-const { formatLookupEvidenceHtml } = require('../cli/formatters/html.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { runCli } = require('../cli/runner.mts');
+} from '../cli/formatters/markdown.mts';
+import { formatLookupEvidenceHtml } from '../cli/formatters/html.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { runCli } from '../cli/runner.mts';
+import { arrayValue, recordValue } from './value-assertions.mts';
 
 function capture() {
   let value = '';
@@ -137,9 +136,12 @@ function savedLookup(overrides = {}) {
   };
 }
 
-function withRegistryAccess(source = savedLookup(), overrides = {}) {
+function withRegistryAccess(
+  source = savedLookup(),
+  overrides: Record<string, unknown> = {},
+) {
   source.diagnostics.version = 5;
-  source.diagnostics.registryAccess = {
+  recordValue(source.diagnostics).registryAccess = {
     suffix: 'zz',
     coverageState: 'access_documented',
     whoisAccessProfile: 'source-ip-authorization-required',
@@ -202,17 +204,27 @@ describe('lookup evidence export conversion', () => {
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
     assert.equal(result.schemaVersion, 19);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
-    assert.equal(result.query.submitted, 'login.example.test');
-    assert.equal(result.query.registrableDomain, 'example.test');
-    assert.equal(result.sources.rdap.raw.publicContact, 'published@example.test');
-    assert.match(result.sources.whois.chain[0].response, /Registrant Email/);
-    assert.equal(result.analysis.availability.tls.protocol, 'TLSv1.3');
-    assert.equal(result.analysis.availability.credentialSurfaceProfile.inputs.categories.username, 1);
-    assert.equal(result.sources.network.network.name, 'Example edge network');
-    assert.equal(result.analysis.idn, null);
-    assert.equal(result.analysis.registryComparison.counts.conflict, 0);
-    assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 0);
-    assert.ok(result.analysis.registrarPublicationComparison.counts.equivalent > 0);
+    const query = recordValue(result.query);
+    const sources = recordValue(result.sources);
+    const analysis = recordValue(result.analysis);
+    const rdap = recordValue(sources.rdap);
+    const whois = recordValue(sources.whois);
+    const network = recordValue(sources.network);
+    const availability = recordValue(analysis.availability);
+    const credentialSurface = recordValue(availability.credentialSurfaceProfile);
+    const registryComparison = recordValue(analysis.registryComparison);
+    const registrarComparison = recordValue(analysis.registrarPublicationComparison);
+    assert.equal(query.submitted, 'login.example.test');
+    assert.equal(query.registrableDomain, 'example.test');
+    assert.equal(recordValue(rdap.raw).publicContact, 'published@example.test');
+    assert.match(String(recordValue(arrayValue(whois.chain)[0]).response), /Registrant Email/);
+    assert.equal(recordValue(availability.tls).protocol, 'TLSv1.3');
+    assert.equal(recordValue(recordValue(credentialSurface.inputs).categories).username, 1);
+    assert.equal(recordValue(network.network).name, 'Example edge network');
+    assert.equal(analysis.idn, null);
+    assert.equal(recordValue(registryComparison.counts).conflict, 0);
+    assert.equal(recordValue(registrarComparison.counts).conflict, 0);
+    assert.ok(Number(recordValue(registrarComparison.counts).equivalent) > 0);
     assert.equal(JSON.stringify(result).includes('REGISTRAR-OBJECT'), false);
     assert.equal(JSON.stringify(result).includes('private-registrar@example.test'), false);
     assert.equal(JSON.stringify(result).includes('privateNestedValue'), false);
@@ -223,23 +235,30 @@ describe('lookup evidence export conversion', () => {
   test('retains bounded registry-access diagnostics already present in the lookup contract', async () => {
     const source = withRegistryAccess();
     const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
-    assert.deepEqual(result.diagnostics.registryAccess, source.diagnostics.registryAccess);
+    assert.deepEqual(
+      recordValue(result.diagnostics).registryAccess,
+      recordValue(source.diagnostics).registryAccess,
+    );
   });
 
   test('preserves partial source states in analysis instead of inventing conflicts', async () => {
     const source = savedLookup();
     source.whois.parsed.chainStatus = 'partial';
-    source.whois.parsed.registrar = null;
+    recordValue(source.whois.parsed).registrar = null;
     source.diagnostics.whois.status = 'partial';
     const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
-    const registrar = result.analysis.registryComparison.fields.find((item) => item.label === 'Registrar');
-    assert.equal(registrar.status, 'whois_incomplete');
-    assert.equal(result.analysis.registryComparison.counts.conflict, 0);
+    const analysis = recordValue(result.analysis);
+    const comparison = recordValue(analysis.registryComparison);
+    const registrar = arrayValue(comparison.fields)
+      .map(recordValue)
+      .find((item) => item.label === 'Registrar');
+    assert.equal(registrar?.status, 'whois_incomplete');
+    assert.equal(recordValue(comparison.counts).conflict, 0);
   });
 
   test('rejects malformed comparison fields before producing a package', async () => {
     const source = savedLookup();
-    source.rdap.parsed.nameservers = 'ns1.example.test';
+    recordValue(source.rdap.parsed).nameservers = 'ns1.example.test';
     assert.throws(
       () => buildCliEvidenceExport(JSON.stringify(source), { buildLookupEvidence() {} }),
       /must be an array/
@@ -248,7 +267,7 @@ describe('lookup evidence export conversion', () => {
 
   test('rejects malformed registrar publication comparison fields before producing a package', async () => {
     const source = savedLookup();
-    source.rdap.registrarRdap.parsed.nameservers = 'ns1.example.test';
+    recordValue(source.rdap.registrarRdap.parsed).nameservers = 'ns1.example.test';
     assert.throws(
       () => buildCliEvidenceExport(JSON.stringify(source), { buildLookupEvidence() {} }),
       /rdap\.registrarRdap\.parsed\.nameservers must be an array/
@@ -257,7 +276,7 @@ describe('lookup evidence export conversion', () => {
 
   test('rejects inconsistent registrar publication source states before producing a package', async () => {
     const missingParsed = savedLookup();
-    missingParsed.rdap.registrarRdap.parsed = null;
+    recordValue(missingParsed.rdap.registrarRdap).parsed = null;
     assert.throws(
       () => buildCliEvidenceExport(JSON.stringify(missingParsed), { buildLookupEvidence() {} }),
       /Successful registrar RDAP input is missing normalized parsed data/
@@ -349,8 +368,11 @@ describe('lookup evidence Markdown rendering', () => {
 
   test('bounds displayed values and lists while disclosing omissions', async () => {
     const result = buildCliEvidenceExport(JSON.stringify(savedLookup()), await evidenceModule());
-    result.query.submitted = 'x'.repeat(MAX_MARKDOWN_VALUE_LENGTH + 100);
-    result.sources.rdap.parsed.nameservers = Array.from({ length: 51 }, (_, index) => `ns${index}.example.test`);
+    recordValue(result.query).submitted = 'x'.repeat(MAX_MARKDOWN_VALUE_LENGTH + 100);
+    recordValue(recordValue(recordValue(result.sources).rdap).parsed).nameservers = Array.from(
+      { length: 51 },
+      (_, index) => `ns${index}.example.test`,
+    );
     const markdown = formatLookupEvidenceMarkdown(result);
     assert.doesNotMatch(markdown, new RegExp(`x{${MAX_MARKDOWN_VALUE_LENGTH + 1}}`));
     assert.match(markdown, /and \d+ more/);
@@ -360,8 +382,8 @@ describe('lookup evidence Markdown rendering', () => {
   test('uses diagnostics for an explicitly skipped source instead of calling it unknown', async () => {
     const source = savedLookup();
     source.mode = 'fast';
-    source.whois = { skipped: true, detail: 'WHOIS is omitted in fast mode.' };
-    source.diagnostics.whois = { status: 'skipped' };
+    recordValue(source).whois = { skipped: true, detail: 'WHOIS is omitted in fast mode.' };
+    recordValue(source.diagnostics).whois = { status: 'skipped' };
     const result = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule());
     const markdown = formatLookupEvidenceMarkdown(result);
     assert.match(markdown, /### WHOIS[\s\S]*\*\*Source status:\*\* Skipped/);
@@ -409,8 +431,10 @@ describe('lookup evidence HTML rendering', () => {
 
   test('escapes hostile source values rather than creating HTML elements or attributes', async () => {
     const result = buildCliEvidenceExport(JSON.stringify(savedLookup()), await evidenceModule());
-    result.query.submitted = '\"><script>alert(1)</script><img src=x onerror=alert(2)>';
-    result.sources.rdap.parsed.registrar = { name: '<form action=https://malicious.invalid>Submit</form>' };
+    recordValue(result.query).submitted = '\"><script>alert(1)</script><img src=x onerror=alert(2)>';
+    recordValue(recordValue(recordValue(result.sources).rdap).parsed).registrar = {
+      name: '<form action=https://malicious.invalid>Submit</form>',
+    };
     const html = formatLookupEvidenceHtml(result);
     assert.doesNotMatch(html, /<script\b|<img\b|<form\b/i);
     assert.match(html, /&lt;script&gt;/);
@@ -451,7 +475,7 @@ describe('evidence export CLI runner', () => {
   });
 
   test('passes an optional filename to an injected input reader', async () => {
-    let received;
+    let received: string | null | undefined;
     const code = await runCli(['export', 'saved.json'], {
       stdout: capture().stream,
       stderr: capture().stream,

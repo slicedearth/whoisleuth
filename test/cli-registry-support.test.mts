@@ -1,18 +1,17 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Readable, Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Readable, Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const {
+import { parseCliArguments } from '../cli/arguments.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import {
   MAX_REGISTRY_SUPPORT_REFERENCES,
   MAX_REGISTRY_SUPPORT_TEXT_LENGTH,
   buildRegistrySupportDocument,
-} = require('../cli/registry-support.mts');
-const { runCli } = require('../cli/runner.mts');
-const { registryCapabilityFor } = require('../lib/registry-capabilities.mts');
+} from '../cli/registry-support.mts';
+import { runCli } from '../cli/runner.mts';
+import { registryCapabilityFor } from '../lib/registry-capabilities.mts';
+import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
 
 function capture() {
   let value = '';
@@ -22,8 +21,10 @@ function capture() {
   };
 }
 
-function fixtureCapability(overrides = {}) {
-  return {
+function fixtureCapability(
+  overrides: Record<string, unknown> = {},
+): RegistryCompatibilityRow & Record<string, unknown> {
+  const capability: RegistryCompatibilityRow = {
     id: 'fixture-profile',
     suffixes: ['test'],
     registryClass: 'generic',
@@ -42,8 +43,8 @@ function fixtureCapability(overrides = {}) {
     documentationUrls: ['https://www.iana.org/domains/root/db/test.html'],
     limitation: 'Fixture coverage does not prove current reachability.',
     explicitSuffixProfile: true,
-    ...overrides,
   };
+  return { ...capability, ...overrides };
 }
 
 describe('registry-support argument parsing', () => {
@@ -233,6 +234,8 @@ describe('registry-support runner', () => {
   test('actual catalogue lookup returns a defensive copy', () => {
     const first = registryCapabilityFor('example.uk');
     const second = registryCapabilityFor('example.uk');
+    assert.ok(first);
+    assert.ok(second);
     first.fixtureScenarios.push('changed');
     assert.doesNotMatch(second.fixtureScenarios.join(','), /changed/);
   });

@@ -1,16 +1,15 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { buildCliPostureDocument } = require('../cli/formatters/json.mts');
-const { MAX_POSTURE_TERMINAL_RECORDS, formatTerminalPosture } = require('../cli/formatters/terminal.mts');
-const { MAX_POSTURE_SELECTORS, normalizePostureSelectors } = require('../cli/posture.mts');
-const { runCli } = require('../cli/runner.mts');
-const { normalizeDkimSelectors } = require('../lib/domain-posture.mts');
+import { parseCliArguments } from '../cli/arguments.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliPostureDocument } from '../cli/formatters/json.mts';
+import { MAX_POSTURE_TERMINAL_RECORDS, formatTerminalPosture } from '../cli/formatters/terminal.mts';
+import { MAX_POSTURE_SELECTORS, normalizePostureSelectors } from '../cli/posture.mts';
+import { runCli } from '../cli/runner.mts';
+import { normalizeDkimSelectors } from '../lib/domain-posture.mts';
+import { arrayValue, recordValue } from './value-assertions.mts';
 
 function capture() {
   let value = '';
@@ -116,7 +115,8 @@ describe('posture output', () => {
     const output = formatTerminalPosture(document);
     assert.match(output, /2 more omitted/);
     assert.doesNotMatch(output, /record-6/);
-    assert.equal(document.checks[0].records.length, MAX_POSTURE_TERMINAL_RECORDS + 2);
+    const firstCheck = recordValue(arrayValue(document.checks)[0]);
+    assert.equal(arrayValue(firstCheck.records).length, MAX_POSTURE_TERMINAL_RECORDS + 2);
   });
 
   test('terminal output sanitizes upstream control characters and handles an empty check list', () => {
@@ -137,6 +137,7 @@ describe('posture runner', () => {
       normalizeAuditDomain: () => 'example.test',
       normalizeDkimSelectors,
       checkDomainPosture: async (domain, options) => {
+        assert.ok(options);
         received = { domain, options };
         return postureReport({ domain, dkimSelectors: options.dkimSelectors });
       },
@@ -156,7 +157,7 @@ describe('posture runner', () => {
       stdout: stdout.stream,
       stderr: capture().stream,
       readStdin: async () => 'example.test',
-      normalizeAuditDomain: (value) => value,
+      normalizeAuditDomain: (value) => typeof value === 'string' ? value : null,
       checkDomainPosture: async () => { audits++; return postureReport(); },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
@@ -182,7 +183,7 @@ describe('posture runner', () => {
     const code = await runCli(['posture', 'example.test'], {
       stdout: capture().stream,
       stderr: stderr.stream,
-      normalizeAuditDomain: (value) => value,
+      normalizeAuditDomain: (value) => typeof value === 'string' ? value : null,
       checkDomainPosture: async () => { throw new Error(`resolver failed\n${'x'.repeat(500)}`); },
     });
     assert.equal(code, EXIT_CODES.LOOKUP_FAILED);

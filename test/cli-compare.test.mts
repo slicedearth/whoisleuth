@@ -1,14 +1,12 @@
-'use strict';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Readable, Writable } from 'node:stream';
 
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const { mkdtemp, rm, writeFile } = require('node:fs/promises');
-const { tmpdir } = require('node:os');
-const { join } = require('node:path');
-const { Readable, Writable } = require('node:stream');
-
-const { parseCliArguments } = require('../cli/arguments.mts');
-const {
+import { parseCliArguments } from '../cli/arguments.mts';
+import {
   MAX_COMPARE_EVENTS,
   MAX_COMPARE_INPUT_BYTES,
   MAX_COMPARE_LIST_ITEMS,
@@ -18,11 +16,64 @@ const {
   compareLookupDocument,
   parseCliLookupDocument,
   readCompareInputBounded,
-} = require('../cli/compare.mts');
-const EXIT_CODES = require('../cli/exit-codes.mts').default;
-const { buildCliCompareDocument } = require('../cli/formatters/json.mts');
-const { formatTerminalCompare } = require('../cli/formatters/terminal.mts');
-const { runCli } = require('../cli/runner.mts');
+} from '../cli/compare.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliCompareDocument } from '../cli/formatters/json.mts';
+import { formatTerminalCompare } from '../cli/formatters/terminal.mts';
+import { runCli } from '../cli/runner.mts';
+import { arrayValue, recordValue } from './value-assertions.mts';
+
+type RegistryAccessFixture = Record<string, unknown> & {
+  suffix: string;
+  coverageState: string;
+  whoisAccessProfile: string;
+  rdapAccessProfile: string;
+  limitation: string;
+  authority: string;
+};
+
+type LookupFixture = Record<string, unknown> & {
+  rdap: {
+    data: Record<string, unknown>;
+    parsed: {
+      domain: string;
+      handle: string;
+      registrar: { name: string };
+      registrarIanaId: string;
+      lifecycle: unknown;
+      dnssec: string;
+      statuses: unknown;
+      nameservers: string[];
+      events?: unknown;
+    };
+    registrarRdap?: {
+      status: string;
+      data?: Record<string, unknown>;
+      parsed: unknown;
+      detail?: string;
+    };
+  };
+  whois: {
+    chain: Array<Record<string, unknown>>;
+    parsed: {
+      domainName: string;
+      registryDomainId: string;
+      registrar: string;
+      registrarIanaId: string;
+      createdDate: string;
+      createdDateIso: string;
+      dnssec: string;
+      statuses: unknown;
+      nameservers: string[];
+    };
+  };
+  diagnostics: {
+    version: number;
+    rdap: { status: string; registrar?: { status: string } };
+    whois: { status: string };
+    registryAccess?: RegistryAccessFixture;
+  };
+};
 
 function capture() {
   let value = '';
@@ -37,8 +88,8 @@ function capture() {
   };
 }
 
-function lookupDocument(overrides = {}) {
-  return {
+function lookupDocument(overrides: Record<string, unknown> = {}): LookupFixture {
+  const document = {
     schema: 'whoisleuth.cli.lookup',
     version: 1,
     generatedAt: '2026-07-14T06:00:00.000Z',
@@ -83,12 +134,15 @@ function lookupDocument(overrides = {}) {
       rdap: { status: 'success' },
       whois: { status: 'complete' },
     },
-    ...overrides,
   };
+  return { ...document, ...overrides } as LookupFixture;
 }
 
-function withRegistrarPublication(source, overrides = {}) {
-  source.rdap.registrarRdap = {
+function withRegistrarPublication(
+  source: LookupFixture,
+  overrides: Record<string, unknown> = {},
+): LookupFixture & { rdap: LookupFixture['rdap'] & { registrarRdap: NonNullable<LookupFixture['rdap']['registrarRdap']> } } {
+  const registrarRdap = {
     status: 'success',
     data: { privateContact: 'must not enter comparison output' },
     parsed: {
@@ -107,11 +161,18 @@ function withRegistrarPublication(source, overrides = {}) {
     },
     ...overrides,
   };
-  source.diagnostics.rdap.registrar = { status: source.rdap.registrarRdap.status };
-  return source;
+  source.rdap.registrarRdap = registrarRdap;
+  source.diagnostics.rdap.registrar = { status: registrarRdap.status };
+  return source as LookupFixture & {
+    rdap: LookupFixture['rdap'] & { registrarRdap: NonNullable<LookupFixture['rdap']['registrarRdap']> };
+  };
 }
 
-function withRegistryAccess(source = lookupDocument(), overrides = {}, version = 5) {
+function withRegistryAccess(
+  source = lookupDocument(),
+  overrides: Record<string, unknown> = {},
+  version = 5,
+): LookupFixture & { diagnostics: LookupFixture['diagnostics'] & { registryAccess: RegistryAccessFixture } } {
   source.diagnostics.version = version;
   source.diagnostics.registryAccess = {
     suffix: 'zz',
@@ -122,7 +183,9 @@ function withRegistryAccess(source = lookupDocument(), overrides = {}, version =
     authority: 'context_only',
     ...overrides,
   };
-  return source;
+  return source as LookupFixture & {
+    diagnostics: LookupFixture['diagnostics'] & { registryAccess: RegistryAccessFixture };
+  };
 }
 
 async function comparisonModule() {
@@ -156,11 +219,11 @@ describe('comparison input boundary', () => {
     const before = structuredClone(source);
     const parsed = parseCliLookupDocument(JSON.stringify(source));
     assert.equal(parsed.query, 'example.test');
-    assert.equal(parsed.rdapParsed.registrar.name, 'Example Registrar, LLC');
+    assert.equal(recordValue(parsed.rdapParsed.registrar).name, 'Example Registrar, LLC');
     assert.equal(parsed.whoisParsed.registrar, 'Example Registrar LLC');
     assert.equal(parsed.registrarRdapRepresented, true);
     assert.equal(parsed.registrarRdapStatus, 'success');
-    assert.equal(parsed.registrarRdapParsed.registrar.name, 'Example Registrar LLC');
+    assert.equal(recordValue(parsed.registrarRdapParsed.registrar).name, 'Example Registrar LLC');
     assert.equal(Object.hasOwn(parsed.rdapParsed, 'data'), false);
     assert.equal(JSON.stringify(parsed).includes('payload must not be copied'), false);
     assert.equal(JSON.stringify(parsed).includes('REGISTRAR-SPECIFIC-HANDLE'), false);
@@ -280,6 +343,7 @@ describe('comparison input boundary', () => {
     assert.throws(() => parseCliLookupDocument(JSON.stringify(registrar)), /registrarRdap\.parsed must be an object/);
 
     const mismatched = withRegistrarPublication(lookupDocument());
+    assert.ok(mismatched.diagnostics.rdap.registrar);
     mismatched.diagnostics.rdap.registrar.status = 'error';
     assert.throws(() => parseCliLookupDocument(JSON.stringify(mismatched)), /statuses do not match/);
   });
@@ -303,11 +367,16 @@ describe('comparison output', () => {
     const parsed = parseCliLookupDocument(JSON.stringify(source));
     const shared = await comparisonModule();
     const result = compareLookupDocument(parsed, shared.compareRegistrySources, shared.compareRdapPublications);
-    assert.equal(result.counts.conflict, 1);
-    assert.ok(result.counts.equivalent >= 7);
-    assert.equal(result.fields.find((item) => item.label === 'Registrar').status, 'conflict');
-    assert.equal(result.registrarPublicationComparison.fields.find((item) => item.label === 'Statuses').status, 'equivalent');
-    assert.equal(result.registrarPublicationComparison.counts.conflict, 0);
+    const counts = recordValue(result.counts);
+    const fields = arrayValue(result.fields).map(recordValue);
+    const publication = recordValue(result.registrarPublicationComparison);
+    const publicationFields = arrayValue(publication.fields).map(recordValue);
+    const publicationCounts = recordValue(publication.counts);
+    assert.equal(counts.conflict, 1);
+    assert.ok(Number(counts.equivalent) >= 7);
+    assert.equal(fields.find((item) => item.label === 'Registrar')?.status, 'conflict');
+    assert.equal(publicationFields.find((item) => item.label === 'Statuses')?.status, 'equivalent');
+    assert.equal(publicationCounts.conflict, 0);
     assert.equal(JSON.stringify(result).includes('payload must not be copied'), false);
     assert.equal(JSON.stringify(result).includes('privateContact'), false);
   });
@@ -331,8 +400,10 @@ describe('comparison output', () => {
       shared.compareRegistrySources,
       shared.compareRdapPublications,
     );
-    assert.equal(unavailable.registrarPublicationComparison.counts.conflict, 0);
-    assert.ok(unavailable.registrarPublicationComparison.counts.registrar_unavailable > 0);
+    const unavailablePublication = recordValue(unavailable.registrarPublicationComparison);
+    const unavailableCounts = recordValue(unavailablePublication.counts);
+    assert.equal(unavailableCounts.conflict, 0);
+    assert.ok(Number(unavailableCounts.registrar_unavailable) > 0);
   });
 
   test('requires the registrar comparison dependency only when the source was represented', async () => {
@@ -356,9 +427,10 @@ describe('comparison output', () => {
     });
     const shared = await comparisonModule();
     const result = compareLookupDocument(parseCliLookupDocument(JSON.stringify(source)), shared.compareRegistrySources);
-    assert.equal(result.sourceHealth.whois.condition, 'unavailable');
-    assert.ok(result.fields.every((item) => item.status === 'whois_unavailable'));
-    assert.ok(result.fields.every((item) => item.whoisDisplay === 'Source skipped'));
+    assert.equal(recordValue(recordValue(result.sourceHealth).whois).condition, 'unavailable');
+    const fields = arrayValue(result.fields).map(recordValue);
+    assert.ok(fields.every((item) => item.status === 'whois_unavailable'));
+    assert.ok(fields.every((item) => item.whoisDisplay === 'Source skipped'));
   });
 
   test('protects the versioned JSON envelope from result-field collisions', () => {
@@ -450,7 +522,7 @@ describe('comparison CLI runner', () => {
 
   test('passes an optional filename to the bounded input dependency', async () => {
     const shared = await comparisonModule();
-    let source;
+    let source: string | null | undefined;
     const code = await runCli(['compare', 'saved.json', '--quiet'], {
       stdout: capture().stream,
       stderr: capture().stream,
