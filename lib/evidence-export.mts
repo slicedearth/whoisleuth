@@ -3,7 +3,7 @@ import { compareRdapPublications, compareRegistrySources } from './registry-comp
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
 export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 19;
 
-type LooseRecord = Record<string, any>;
+type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
 
 const REGISTRAR_RDAP_STATUSES = new Set([
@@ -14,8 +14,8 @@ const NETWORK_ADDRESS_SOURCES = new Set(['tls_connection', 'dns_a', 'dns_aaaa'])
 const REVERSE_DNS_STATUSES = new Set(['success', 'partial', 'not_found', 'unsupported', 'skipped', 'error']);
 const SECURITY_TXT_STATES = new Set(['present', 'stale', 'partial', 'absent', 'malformed', 'unsupported', 'unavailable']);
 
-function recordOrNull(value: unknown): LooseRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as LooseRecord : null;
+function recordOrNull(value: unknown): UnknownRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
 }
 
 function cloneJson(value: unknown): unknown {
@@ -95,7 +95,12 @@ function boundedUriList(value: unknown, protocols: string[]): string[] {
 
 function securityTxtSource(value: unknown) {
   const source = recordOrNull(value);
-  if (!source || source.securityTxtVersion !== 1 || !SECURITY_TXT_STATES.has(source.state)) return null;
+  if (
+    !source
+    || source.securityTxtVersion !== 1
+    || typeof source.state !== 'string'
+    || !SECURITY_TXT_STATES.has(source.state)
+  ) return null;
   return {
     securityTxtVersion: 1,
     version: source.version === 1 ? 1 : null,
@@ -139,7 +144,12 @@ function networkAttempt(value: unknown) {
 
 function networkSource(value: unknown) {
   const source = recordOrNull(value);
-  if (!source || source.contextVersion !== 1 || !NETWORK_CONTEXT_STATUSES.has(source.status)) return null;
+  if (
+    !source
+    || source.contextVersion !== 1
+    || typeof source.status !== 'string'
+    || !NETWORK_CONTEXT_STATUSES.has(source.status)
+  ) return null;
   const endpoint = recordOrNull(source.endpoint);
   const rdap = recordOrNull(source.rdap);
   const network = recordOrNull(source.network);
@@ -158,7 +168,10 @@ function networkSource(value: unknown) {
     limitations: boundedStringList(source.limitations, 10, 300),
     diagnostics: diagnostics ? {
       requestCount: boundedInteger(diagnostics.requestCount, 1),
-      addressSource: NETWORK_ADDRESS_SOURCES.has(diagnostics.addressSource) ? diagnostics.addressSource : null,
+      addressSource: typeof diagnostics.addressSource === 'string'
+        && NETWORK_ADDRESS_SOURCES.has(diagnostics.addressSource)
+        ? diagnostics.addressSource
+        : null,
       httpStatus: boundedHttpStatus(diagnostics.httpStatus),
       cidrCount: boundedInteger(diagnostics.cidrCount, 16),
     } : null,
@@ -166,7 +179,10 @@ function networkSource(value: unknown) {
     endpoint: endpoint ? {
       address: boundedString(endpoint.address, 64),
       family: endpoint.family === 4 || endpoint.family === 6 ? endpoint.family : null,
-      selectedFrom: NETWORK_ADDRESS_SOURCES.has(endpoint.selectedFrom) ? endpoint.selectedFrom : null,
+      selectedFrom: typeof endpoint.selectedFrom === 'string'
+        && NETWORK_ADDRESS_SOURCES.has(endpoint.selectedFrom)
+        ? endpoint.selectedFrom
+        : null,
     } : null,
     rdap: rdap ? {
       endpoint: rdapEndpoint,
@@ -194,6 +210,7 @@ function reverseDnsSource(value: unknown) {
   if (!source
     || source.version !== 1
     || source.source !== 'reverse_dns'
+    || typeof source.status !== 'string'
     || !REVERSE_DNS_STATUSES.has(source.status)) {
     return null;
   }
@@ -226,8 +243,8 @@ function reverseDnsSource(value: unknown) {
   };
 }
 
-function rdapSource(rdap: LooseRecord | null | undefined) {
-  const source = rdap || {};
+function rdapSource(rdap: unknown) {
+  const source = recordOrNull(rdap) || {};
   if (source.error) return {
     status: 'error',
     error: String(source.error),
@@ -245,31 +262,34 @@ function rdapSource(rdap: LooseRecord | null | undefined) {
   };
 }
 
-function whoisSource(whois: LooseRecord | null | undefined) {
-  const source = whois || {};
+function whoisSource(whois: unknown) {
+  const source = recordOrNull(whois) || {};
   if (source.error) return { status: 'error', error: String(source.error) };
-  const parsed = source.parsed || null;
+  const parsed = recordOrNull(source.parsed);
+  const chain = Array.isArray(source.chain) ? source.chain : [];
+  const firstHop = recordOrNull(chain[0]);
   return {
-    status: parsed && parsed.chainStatus ? parsed.chainStatus : 'unknown',
-    queriedAt: source.chain && source.chain[0] ? source.chain[0].queriedAt || null : null,
-    authoritativeHop: parsed ? parsed.authoritativeHop || null : null,
-    failedHop: parsed ? parsed.failedHop || null : null,
-    conflictingHop: parsed ? parsed.conflictingHop || null : null,
+    status: parsed?.chainStatus || 'unknown',
+    queriedAt: firstHop?.queriedAt || null,
+    authoritativeHop: parsed?.authoritativeHop || null,
+    failedHop: parsed?.failedHop || null,
+    conflictingHop: parsed?.conflictingHop || null,
     parsed: cloneJson(parsed),
-    chain: cloneJson(source.chain || []),
+    chain: cloneJson(chain),
   };
 }
 
-function registrarPublicationComparison(body: LooseRecord, registryParsed: LooseRecord | null) {
+function registrarPublicationComparison(body: UnknownRecord, registryParsed: UnknownRecord | null) {
   const rdap = recordOrNull(body.rdap);
   const registrar = recordOrNull(rdap?.registrarRdap);
-  const rdapDiagnostics = recordOrNull(body.diagnostics?.rdap);
+  const diagnostics = recordOrNull(body.diagnostics);
+  const rdapDiagnostics = recordOrNull(diagnostics?.rdap);
   const registrarDiagnostics = recordOrNull(rdapDiagnostics?.registrar);
   if (!registrar && !registrarDiagnostics) return null;
 
   const reportedStatus = registrar?.status ?? registrarDiagnostics?.status;
   const parsed = recordOrNull(registrar?.parsed);
-  const registrarStatus = REGISTRAR_RDAP_STATUSES.has(reportedStatus)
+  const registrarStatus = typeof reportedStatus === 'string' && REGISTRAR_RDAP_STATUSES.has(reportedStatus)
     ? (reportedStatus === 'success' && !parsed ? 'partial' : reportedStatus)
     : 'error';
   return compareRdapPublications(registryParsed, parsed, {
@@ -278,11 +298,16 @@ function registrarPublicationComparison(body: LooseRecord, registryParsed: Loose
   });
 }
 
-export function buildLookupEvidence(response: LooseRecord | null | undefined, options: LookupEvidenceOptions = {}) {
+export function buildLookupEvidence(response: unknown, options: LookupEvidenceOptions = {}) {
   const { generatedAt = new Date().toISOString(), idnAnalysis = null } = options;
-  const body = response || {};
-  const rdapParsed = body.rdap && !body.rdap.error ? body.rdap.parsed : null;
-  const whoisParsed = body.whois && !body.whois.error ? body.whois.parsed : null;
+  const body = recordOrNull(response) || {};
+  const rdap = recordOrNull(body.rdap);
+  const whois = recordOrNull(body.whois);
+  const diagnostics = recordOrNull(body.diagnostics);
+  const rdapDiagnostics = recordOrNull(diagnostics?.rdap);
+  const whoisDiagnostics = recordOrNull(diagnostics?.whois);
+  const rdapParsed = rdap && !rdap.error ? recordOrNull(rdap.parsed) : null;
+  const whoisParsed = whois && !whois.error ? recordOrNull(whois.parsed) : null;
   return {
     schema: LOOKUP_EVIDENCE_SCHEMA,
     schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
@@ -297,8 +322,8 @@ export function buildLookupEvidence(response: LooseRecord | null | undefined, op
     },
     diagnostics: cloneJson(body.diagnostics),
     sources: {
-      rdap: rdapSource(body.rdap),
-      whois: whoisSource(body.whois),
+      rdap: rdapSource(rdap),
+      whois: whoisSource(whois),
       reverseDns: reverseDnsSource(body.reverseDns),
       network: networkSource(body.networkContext),
       securityTxt: securityTxtSource(body.securityTxt),
@@ -307,16 +332,17 @@ export function buildLookupEvidence(response: LooseRecord | null | undefined, op
       availability: cloneJson(body.availability),
       idn: cloneJson(idnAnalysis),
       registryComparison: compareRegistrySources(rdapParsed, whoisParsed, {
-        rdapStatus: body.diagnostics?.rdap?.status,
-        whoisStatus: body.diagnostics?.whois?.status,
+        rdapStatus: rdapDiagnostics?.status,
+        whoisStatus: whoisDiagnostics?.status,
       }),
       registrarPublicationComparison: registrarPublicationComparison(body, rdapParsed),
     },
   };
 }
 
-export function evidenceFilename(response: LooseRecord | null | undefined, now = Date.now()) {
-  const rawTarget = response?.registrableDomain || response?.inputHostname || response?.query || 'lookup';
+export function evidenceFilename(response: unknown, now = Date.now()) {
+  const record = recordOrNull(response);
+  const rawTarget = record?.registrableDomain || record?.inputHostname || record?.query || 'lookup';
   const target = String(rawTarget)
     .toLowerCase()
     .replace(/[^a-z0-9.-]+/g, '-')

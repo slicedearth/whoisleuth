@@ -537,6 +537,19 @@ describe('lookup evidence export', () => {
     assert.equal(result.sources.securityTxt, null);
   });
 
+  test('bounds malformed imported lookup structures at the export boundary', () => {
+    const result = evidence.buildLookupEvidence({
+      rdap: { parsed: 'invalid' },
+      whois: { parsed: 'invalid', chain: [null, 'invalid'] },
+      diagnostics: 'invalid',
+    });
+
+    assert.deepEqual(result.analysis.registryComparison.fields, []);
+    assert.equal(result.analysis.registrarPublicationComparison, null);
+    assert.equal(result.sources.whois.status, 'unknown');
+    assert.equal(result.sources.whois.queriedAt, null);
+  });
+
   test('creates a bounded, filesystem-safe filename', () => {
     const filename = evidence.evidenceFilename(
       { registrableDomain: 'Bücher.Example/path' },

@@ -213,6 +213,15 @@ describe('compareRegistrySources', () => {
       whois: { status: null, condition: 'complete' },
     });
   });
+
+  test('treats malformed imported structures as empty source records', () => {
+    const result = comparison.compareRegistrySources(
+      { lifecycle: 'invalid', events: [null, 'invalid'] },
+      ['invalid'],
+    );
+
+    assert.deepEqual(result.fields, []);
+  });
 });
 
 describe('compareRdapPublications', () => {
@@ -305,5 +314,15 @@ describe('compareRdapPublications', () => {
     comparison.compareRdapPublications(registry, registrar);
     assert.deepEqual(registry, beforeRegistry);
     assert.deepEqual(registrar, beforeRegistrar);
+  });
+
+  test('ignores malformed nested registrar lifecycle data', () => {
+    const result = comparison.compareRdapPublications(
+      { domain: 'example.test' },
+      { domain: 'example.test', lifecycle: 'invalid' },
+    );
+
+    assert.equal(field(result, 'Domain').status, 'equivalent');
+    assert.equal(result.counts.conflict, 0);
   });
 });
