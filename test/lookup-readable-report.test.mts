@@ -7,8 +7,13 @@ import {
   lookupReadableReportFilename,
   projectLookupForReadableReport,
 } from '../lib/lookup-readable-report.mts';
+import {
+  isJsonObject,
+  type JsonObject,
+  type LookupHttpResponse,
+} from '../lib/lookup-response-contract.mts';
 
-function lookupResponse(overrides = {}) {
+function lookupResponse(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
     query: 'report.example.test',
     type: 'domain',
@@ -110,6 +115,11 @@ function lookupResponse(overrides = {}) {
   };
 }
 
+function object(value: unknown): JsonObject {
+  assert.ok(isJsonObject(value));
+  return value;
+}
+
 describe('browser-local readable Lookup report', () => {
   test('projects known normalized evidence before formatting and does not mutate the response', () => {
     const source = lookupResponse();
@@ -125,8 +135,13 @@ describe('browser-local readable Lookup report', () => {
     assert.equal(serialized.includes('rawNetworkMarker'), false);
     assert.equal(serialized.includes('REGISTRAR-1'), false);
     assert.equal(serialized.includes('must-not-enter-readable-report'), false);
-    assert.equal(projected.availability.dns.records.soa[0].nsname, 'ns1.example.test');
-    assert.equal(projected.availability.dns.records.soa[0].serial, 2026072601);
+    const availability = object(projected.availability);
+    const dns = object(availability.dns);
+    const records = object(dns.records);
+    assert.ok(Array.isArray(records.soa));
+    const soa = object(records.soa[0]);
+    assert.equal(soa.nsname, 'ns1.example.test');
+    assert.equal(soa.serial, 2026072601);
     assert.deepEqual(source, before);
   });
 

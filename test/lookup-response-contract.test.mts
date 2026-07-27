@@ -16,6 +16,7 @@ import {
   MAX_THREAT_INTELLIGENCE_PROVIDERS,
   createLookupHttpResponse,
   createLookupViewModel,
+  isJsonObject,
   lookupHttpErrorMessage,
   normalizeLookupTiming,
   parseCompactLookupHttpResponse,
@@ -180,7 +181,7 @@ describe('Lookup HTTP response contract', () => {
   });
 
   test('bounds the additive top-level envelope', () => {
-    const oversized = response();
+    const oversized: Record<string, unknown> = response();
     for (let index = 0; Object.keys(oversized).length <= MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS; index += 1) {
       oversized[`extra${index}`] = index;
     }
@@ -221,7 +222,10 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(view.httpSecurityHeaders.contentSecurityPolicy, 'default-src none');
     assert.deepEqual(view.tlsSubject.commonNames, ['example.test']);
     assert.equal(view.pageOpenGraphUrl.url, 'https://example.test/');
+    assert.ok(isJsonObject(view.credentialSurfaceProfile.inputs));
     assert.equal(view.credentialSurfaceProfile.inputs.classifiedCount, 2);
+    assert.ok(Array.isArray(view.structuredDataIdentity.entities));
+    assert.ok(isJsonObject(view.structuredDataIdentity.entities[0]));
     assert.equal(view.structuredDataIdentity.entities[0].name, 'Example publisher');
     assert.equal(view.securityPostureSummary.observed, 1);
     assert.equal(view.registryAccess.suffix, 'test');
@@ -232,27 +236,28 @@ describe('Lookup HTTP response contract', () => {
   });
 
   test('bounds and filters provider records in the view model while preserving raw evidence', () => {
-    const providers = Array.from(
+    const providers: unknown[] = Array.from(
       { length: MAX_THREAT_INTELLIGENCE_PROVIDERS + 4 },
       (_, index) => ({ id: `provider-${index}` }),
     );
     providers.splice(2, 0, null, 'invalid');
-    const raw = response({ threatIntelligence: { version: 1, providers } });
+    const threatIntelligence = { version: 1, providers };
+    const raw = response({ threatIntelligence });
     const parsed = parseLookupHttpResponse(raw);
     assert.equal(parsed.ok, true);
 
     const view = createLookupViewModel(parsed.value);
     assert.equal(view.threatIntelligenceProviders.length, MAX_THREAT_INTELLIGENCE_PROVIDERS);
     assert.equal(view.threatIntelligenceProviders[0].id, 'provider-0');
-    assert.equal(view.threatIntelligenceProviders.at(-1).id, 'provider-9');
-    assert.equal(raw.threatIntelligence.providers.length, MAX_THREAT_INTELLIGENCE_PROVIDERS + 6);
+    assert.equal(view.threatIntelligenceProviders.at(-1)?.id, 'provider-9');
+    assert.equal(threatIntelligence.providers.length, MAX_THREAT_INTELLIGENCE_PROVIDERS + 6);
   });
 
   test('builds the same additive HTTP envelope for domain and non-domain results', () => {
     const domain = createLookupHttpResponse(
       'portal.example.test',
       {
-        type: 'domain', value: 'example.test', inputHostname: 'portal.example.test',
+        type: 'domain', inputHostname: 'portal.example.test',
         registrableDomain: 'example.test', isSubdomain: true,
       },
       {
@@ -269,7 +274,7 @@ describe('Lookup HTTP response contract', () => {
 
     const ip = createLookupHttpResponse(
       '192.0.2.1',
-      { type: 'ipv4', value: '192.0.2.1' },
+      { type: 'ipv4' },
       { rdap: {}, whois: {}, availability: {}, diagnostics: {} },
     );
     assert.equal(ip.type, 'ipv4');
@@ -306,7 +311,7 @@ describe('compact Bulk Lookup HTTP response contract', () => {
   });
 
   test('rejects absent, scalar, array, oversized, and future-shaped availability', () => {
-    const oversizedAvailability = compactResponse().availability;
+    const oversizedAvailability: Record<string, unknown> = compactResponse().availability;
     for (let index = 0; Object.keys(oversizedAvailability).length <= MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS; index += 1) {
       oversizedAvailability[`extra${index}`] = index;
     }

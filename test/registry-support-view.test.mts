@@ -75,14 +75,17 @@ test('inspects explicit and generic suffix support through the shared catalogue'
   assert.equal(generic.profile.whoisDiscovery, 'iana-referral');
 
   const education = inspectRegistrySupport('.edu');
+  assert.ok(education.profile);
   assert.equal(education.profile.registryClass, 'sponsored');
   assert.equal(education.profile.rdapAccessProfile, 'no-iana-service');
 
   const military = inspectRegistrySupport('.mil');
+  assert.ok(military.profile);
   assert.equal(military.profile.registryClass, 'sponsored');
   assert.equal(military.profile.coverageState, 'access_documented');
 
   const infrastructure = inspectRegistrySupport('.arpa');
+  assert.ok(infrastructure.profile);
   assert.equal(infrastructure.profile.registryClass, 'infrastructure');
   assert.equal(infrastructure.profile.coverageState, 'access_documented');
 });
@@ -107,10 +110,12 @@ test('normalizes IDN suffixes while keeping malformed and empty inspection state
 
 test('returns a defensive inspection profile rather than shared mutable catalogue data', () => {
   const first = inspectRegistrySupport('.uk');
+  assert.ok(first.profile);
   first.profile.suffixes[0] = 'changed';
   first.profile.fixtureScenarios.push('changed');
 
   const second = inspectRegistrySupport('.uk');
+  assert.ok(second.profile);
   assert.deepEqual(second.profile.suffixes, ['uk']);
   assert.equal(second.profile.fixtureScenarios.includes('changed'), false);
 });
@@ -173,8 +178,8 @@ test('sorts bounded filtered rows deterministically without mutating catalogue o
   assert.deepEqual(rows.map((row) => row.id), before);
 
   const byCoverage = sortRegistrySupportRows(rows, 'coverage', 'asc');
-  assert.equal(byCoverage[0].coverageState, 'access_documented');
-  assert.equal(byCoverage.at(-1).coverageState, 'fixture_verified');
+  assert.equal(byCoverage[0]?.coverageState, 'access_documented');
+  assert.equal(byCoverage.at(-1)?.coverageState, 'fixture_verified');
   assert.equal(sortRegistrySupportRows(null, 'suffix', 'asc').length, 0);
 });
 

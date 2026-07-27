@@ -5,8 +5,12 @@ import {
   LOOKUP_CLIENT_TIMEOUT_MS,
   requestLookup,
 } from '../frontend/src/lib/analysis/lookup-request.ts';
+import type { LookupRequestOptions } from '../lib/lookup-request.mts';
+import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
 
-function response(overrides = {}) {
+type FetchImplementation = NonNullable<LookupRequestOptions['fetchImpl']>;
+
+function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
     query: 'example.test',
     type: 'domain',
@@ -68,8 +72,10 @@ describe('Lookup browser request boundary', () => {
   });
 
   test('distinguishes a bounded client timeout from analyst cancellation', async () => {
-    const pendingFetch = (_input, init) => new Promise((_resolve, reject) => {
-      init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    const pendingFetch: FetchImplementation = (_input, init) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      assert.ok(signal);
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
     });
     const timedOut = await requestLookup('/api/lookup?q=example.test', {
       fetchImpl: pendingFetch,
@@ -104,6 +110,8 @@ describe('Lookup browser request boundary', () => {
       fetchImpl: async () => { fetchCalled = true; throw new Error('must not run'); },
     });
     assert.equal(fetchCalled, false);
+    assert.equal(cancelled.ok, false);
+    if (cancelled.ok) assert.fail('Expected a cancelled Lookup outcome.');
     assert.equal(cancelled.kind, 'cancelled');
 
     const failed = await requestLookup('/api/lookup?q=example.test', {

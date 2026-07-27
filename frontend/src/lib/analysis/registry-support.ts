@@ -92,7 +92,7 @@ export function inspectRegistrySupport(value: unknown): {
 }
 
 export function filterRegistrySupportRows(
-  rows: readonly RegistryCompatibilityRow[],
+  rows: readonly RegistryCompatibilityRow[] | null,
   query: unknown,
   coverage: unknown,
 ): RegistryCompatibilityRow[] {
@@ -122,7 +122,7 @@ export function filterRegistrySupportRows(
 }
 
 export function sortRegistrySupportRows(
-  rows: readonly RegistryCompatibilityRow[],
+  rows: readonly RegistryCompatibilityRow[] | null,
   sortKey: unknown,
   direction: unknown,
 ): RegistryCompatibilityRow[] {

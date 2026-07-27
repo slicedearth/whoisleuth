@@ -17,11 +17,11 @@ import {
   toolNavigation,
 } from '../frontend/src/lib/workspaces.ts';
 
-function unique(values) {
+function unique<T>(values: readonly T[]): boolean {
   return new Set(values).size === values.length;
 }
 
-function allStrings(value) {
+function allStrings(value: unknown): string[] {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.flatMap(allStrings);
   if (value && typeof value === 'object') return Object.values(value).flatMap(allStrings);
@@ -55,9 +55,11 @@ test('tool guide covers every public-facing investigation tool once', () => {
 });
 
 test('navigation, tool guide, and reference guide use one canonical product vocabulary', () => {
-  const routeLabel = (item) => [item.href.slice(1), item.label];
-  const guideLabel = (item) => [item.id, item.name];
-  const sortById = (entries) => [...entries].sort(([left], [right]) => left.localeCompare(right));
+  const routeLabel = (item: { href: string; label: string }): [string, string] => [item.href.slice(1), item.label];
+  const guideLabel = (item: { id: string; name: string }): [string, string] => [item.id, item.name];
+  const sortById = (entries: ReadonlyArray<[string, string]>): Array<[string, string]> => (
+    [...entries].sort(([left], [right]) => left.localeCompare(right))
+  );
 
   assert.deepEqual(sortById(toolNavigation.map(routeLabel)), sortById(toolGuides.map(guideLabel)));
   assert.deepEqual(sortById(referenceResources.map(routeLabel)), sortById(referenceGuides.map(guideLabel)));

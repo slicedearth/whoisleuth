@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { LookupRequestController } from '../frontend/src/lib/controllers/lookup-request-controller.ts';
+import {
+  LookupRequestController,
+  type LookupRequest,
+} from '../frontend/src/lib/controllers/lookup-request-controller.ts';
+import type {
+  LookupRequestOutcome,
+} from '../lib/lookup-request.mts';
+import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
 
-function validResponse(query = 'example.test') {
+function validResponse(query = 'example.test'): LookupHttpResponse {
   return {
     query,
     type: 'domain',
@@ -15,9 +22,9 @@ function validResponse(query = 'example.test') {
   };
 }
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((settle) => {
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
     resolve = settle;
   });
   return { promise, resolve };
@@ -25,8 +32,8 @@ function deferred() {
 
 describe('Lookup request controller', () => {
   test('returns only the current typed request outcome', async () => {
-    const first = deferred();
-    const second = deferred();
+    const first = deferred<LookupRequestOutcome>();
+    const second = deferred<LookupRequestOutcome>();
     const controller = new LookupRequestController({
       request: (url) => url.includes('second.example.test') ? second.promise : first.promise,
     });
@@ -45,11 +52,12 @@ describe('Lookup request controller', () => {
   });
 
   test('forwards cancellation without retaining a stale result', async () => {
-    let suppliedSignal;
+    let suppliedSignal: AbortSignal | undefined;
     const controller = new LookupRequestController({
       request: async (_url, options) => {
         suppliedSignal = options.signal;
-        await new Promise((resolve) => options.signal.addEventListener('abort', resolve, { once: true }));
+        assert.ok(suppliedSignal);
+        await new Promise((resolve) => suppliedSignal?.addEventListener('abort', resolve, { once: true }));
         return { ok: false, kind: 'cancelled', message: 'Lookup cancelled.' };
       },
     });
@@ -57,6 +65,7 @@ describe('Lookup request controller', () => {
     const run = controller.run('/api/lookup?q=example.test', () => {});
     await Promise.resolve();
     controller.cancel();
+    assert.ok(suppliedSignal);
     assert.equal(suppliedSignal.aborted, true);
     assert.deepEqual(await run, {
       state: 'complete',
@@ -66,13 +75,14 @@ describe('Lookup request controller', () => {
   });
 
   test('disposal aborts work and suppresses post-navigation completion', async () => {
-    const pending = deferred();
-    let suppliedSignal;
+    const pending = deferred<LookupRequestOutcome>();
+    let suppliedSignal: AbortSignal | undefined;
+    const request: LookupRequest = (_url, options) => {
+      suppliedSignal = options.signal;
+      return pending.promise;
+    };
     const controller = new LookupRequestController({
-      request: (_url, options) => {
-        suppliedSignal = options.signal;
-        return pending.promise;
-      },
+      request,
     });
 
     const run = controller.run('/api/lookup?q=example.test', () => {});
@@ -80,6 +90,7 @@ describe('Lookup request controller', () => {
     controller.dispose();
     pending.resolve({ ok: true, value: validResponse() });
 
+    assert.ok(suppliedSignal);
     assert.equal(suppliedSignal.aborted, true);
     assert.deepEqual(await run, { state: 'stale' });
     assert.deepEqual(
