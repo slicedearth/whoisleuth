@@ -1,10 +1,7 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let model;
-before(async () => {
-  model = await import('../frontend/src/lib/analysis/case-model.ts');
-});
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import * as model from '../frontend/src/lib/analysis/case-model.ts';
+import { requiredValue } from './value-assertions.mts';
 
 const ISO = '2026-05-01T00:00:00.000Z';
 const LATER = '2026-06-01T00:00:00.000Z';
@@ -14,7 +11,7 @@ const SAFE = /^[A-Za-z0-9_-]{1,64}$/;
 
 // A material deep capture (explicit depth + deep-scan signals) used across the
 // comparison and dedup suites.
-function deepEvidence(overrides = {}) {
+function deepEvidence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     scanDepth: 'deep',
     availability: 'registered',
@@ -27,8 +24,15 @@ function deepEvidence(overrides = {}) {
   };
 }
 
-function caseExport(cases) {
+function caseExport(cases: unknown[]): { version: number; cases: unknown[] } {
   return { version: model.CASE_SCHEMA_VERSION, cases };
+}
+
+function normalizedSnapshot(
+  raw: unknown,
+  options: { source?: string; fallback?: string | null } = {},
+): model.CaseEvidenceSnapshot {
+  return requiredValue(model.normalizeSnapshot(raw, options));
 }
 
 describe('domain normalization', () => {
@@ -91,11 +95,11 @@ describe('status and disposition validation', () => {
   });
 
   test('normalizeCase falls back to defaults for invalid status/disposition/source', () => {
-    const record = model.normalizeCase(
+    const record = requiredValue(model.normalizeCase(
       { domain: 'bad.example', status: 'archived', disposition: 'nope', source: 'satellite' },
       undefined,
       ISO,
-    );
+    ));
     assert.equal(record.status, 'new');
     assert.equal(record.disposition, 'unreviewed');
     assert.equal(record.source, 'unknown');
@@ -114,7 +118,7 @@ describe('case creation and updates', () => {
     assert.equal(record.source, 'lookup');
     assert.deepEqual(record.tags, ['Phish']);
     assert.equal(record.notes.length, 1);
-    assert.equal(record.notes[0].body, 'first note');
+    assert.equal(requiredValue(record.notes[0]).body, 'first note');
     assert.equal(record.createdAt, ISO);
     assert.equal(record.updatedAt, ISO);
     assert.deepEqual(record.evidenceHistory, []);
@@ -129,7 +133,7 @@ describe('case creation and updates', () => {
     const { record } = model.updateCase(cases, cases[0].id, { status: 'escalated', disposition: 'confirmed_abuse', note: 'escalating' }, LATER);
     assert.equal(record.status, 'escalated');
     assert.equal(record.disposition, 'confirmed_abuse');
-    assert.equal(record.notes.at(-1).body, 'escalating');
+    assert.equal(requiredValue(record.notes.at(-1)).body, 'escalating');
     assert.equal(record.updatedAt, LATER);
     assert.equal(record.createdAt, ISO);
   });
@@ -190,7 +194,7 @@ describe('case ids are unique, stable, and safe', () => {
     const first = model.normalizeCaseStore(raw).cases;
     const second = model.normalizeCaseStore(first).cases;
     const third = model.normalizeCaseStore(second).cases;
-    const ids = (cases) => cases.map((c) => `${c.domain}:${c.id}`).sort();
+    const ids = (cases: model.CaseRecord[]) => cases.map((c) => `${c.domain}:${c.id}`).sort();
     assert.deepEqual(ids(second), ids(first));
     assert.deepEqual(ids(third), ids(first));
   });
@@ -200,11 +204,11 @@ describe('case ids are unique, stable, and safe', () => {
       { domain: 'a.example', id: 'dup', status: 'new', updatedAt: ISO },
       { domain: 'b.example', id: 'dup', status: 'new', updatedAt: ISO },
     ]).cases;
-    const target = cases.find((c) => c.domain === 'b.example');
-    const other = cases.find((c) => c.domain === 'a.example');
+    const target = requiredValue(cases.find((c) => c.domain === 'b.example'));
+    const other = requiredValue(cases.find((c) => c.domain === 'a.example'));
     const updated = model.updateCase(cases, target.id, { status: 'escalated' }, LATER).cases;
-    assert.equal(updated.find((c) => c.domain === 'b.example').status, 'escalated');
-    assert.equal(updated.find((c) => c.domain === 'a.example').status, 'new');
+    assert.equal(requiredValue(updated.find((c) => c.domain === 'b.example')).status, 'escalated');
+    assert.equal(requiredValue(updated.find((c) => c.domain === 'a.example')).status, 'new');
 
     const afterDelete = updated.filter((c) => c.id !== other.id);
     assert.equal(afterDelete.length, 1);
@@ -236,7 +240,7 @@ describe('imports cannot reset local analyst decisions', () => {
     assert.equal(merged.status, 'escalated');
     assert.equal(merged.disposition, 'confirmed_abuse');
     assert.equal(merged.source, 'bulk');
-    assert.equal(model.latestCaseEvidence(merged).availability, 'registered');
+    assert.equal(requiredValue(model.latestCaseEvidence(merged)).availability, 'registered');
     assert.equal(merged.evidenceHistory.length, 1);
     assert.equal(result.updated, 1);
   });
@@ -249,7 +253,7 @@ describe('imports cannot reset local analyst decisions', () => {
     assert.equal(merged.status, 'escalated');
     assert.equal(merged.disposition, 'confirmed_abuse');
     assert.equal(merged.source, 'bulk');
-    assert.equal(model.latestCaseEvidence(merged).availability, 'registered');
+    assert.equal(requiredValue(model.latestCaseEvidence(merged)).availability, 'registered');
     assert.equal(merged.evidenceHistory.length, 1);
   });
 
@@ -295,7 +299,7 @@ describe('imports cannot reset local analyst decisions', () => {
 describe('note and tag limits', () => {
   test('tags are deduped case-insensitively, length-capped, and count-bounded', () => {
     const tags = Array.from({ length: 40 }, (_, i) => `tag-${i}`);
-    const record = model.normalizeCase({ domain: 'bad.example', tags: [...tags, 'TAG-0', 'x'.repeat(80)] }, undefined, ISO);
+    const record = requiredValue(model.normalizeCase({ domain: 'bad.example', tags: [...tags, 'TAG-0', 'x'.repeat(80)] }, undefined, ISO));
     assert.equal(record.tags.length, model.MAX_TAGS_PER_CASE);
     assert.equal(record.tags.filter((t) => t.toLowerCase() === 'tag-0').length, 1);
     assert.ok(record.tags.every((t) => t.length <= model.MAX_TAG_LENGTH));
@@ -303,7 +307,7 @@ describe('note and tag limits', () => {
 
   test('note bodies are trimmed and length-capped', () => {
     const record = model.createCase({ domain: 'bad.example', note: 'a'.repeat(5000) }, ISO);
-    assert.equal(record.notes[0].body.length, model.MAX_NOTE_LENGTH);
+    assert.equal(requiredValue(record.notes[0]).body.length, model.MAX_NOTE_LENGTH);
   });
 
   test('updateCase refuses to exceed the per-case note bound', () => {
@@ -330,7 +334,7 @@ describe('note and tag limits', () => {
 
 describe('snapshot normalization', () => {
   test('bounds scalars, arrays, and factor families', () => {
-    const snap = model.normalizeSnapshot(
+    const snap = normalizedSnapshot(
       {
         availability: 'registered',
         registrar: 'r'.repeat(500),
@@ -343,43 +347,43 @@ describe('snapshot normalization', () => {
       },
       { fallback: ISO },
     );
-    assert.ok(snap.registrar.length <= model.MAX_EVIDENCE_STRING_LENGTH);
-    assert.ok(snap.pageTitle.length <= model.MAX_EVIDENCE_TITLE_LENGTH);
-    assert.ok(snap.websiteProbeDetail.length <= model.MAX_EVIDENCE_DETAIL_LENGTH);
+    assert.ok(requiredValue(snap.registrar).length <= model.MAX_EVIDENCE_STRING_LENGTH);
+    assert.ok(requiredValue(snap.pageTitle).length <= model.MAX_EVIDENCE_TITLE_LENGTH);
+    assert.ok(requiredValue(snap.websiteProbeDetail).length <= model.MAX_EVIDENCE_DETAIL_LENGTH);
     assert.equal(snap.nameservers.length, model.MAX_EVIDENCE_NAMESERVERS);
     assert.equal(snap.mutationTypes.length, model.MAX_EVIDENCE_MUTATIONS);
     assert.equal(snap.riskFactors.length, model.MAX_EVIDENCE_FACTORS);
     assert.equal(snap.opportunityFactors.length, model.MAX_EVIDENCE_FACTORS);
     // The scoring module's `delta` is accepted and stored as `points`.
-    assert.equal(snap.opportunityFactors[0].points, 0);
+    assert.equal(requiredValue(snap.opportunityFactors[0]).points, 0);
   });
 
   test('clamps scores to 0-100', () => {
-    const high = model.normalizeSnapshot({ riskScore: 5000, opportunityScore: 250.7 }, { fallback: ISO });
+    const high = normalizedSnapshot({ riskScore: 5000, opportunityScore: 250.7 }, { fallback: ISO });
     assert.equal(high.riskScore, 100);
     assert.equal(high.opportunityScore, 100);
-    const low = model.normalizeSnapshot({ riskScore: -20 }, { fallback: ISO });
+    const low = normalizedSnapshot({ riskScore: -20 }, { fallback: ISO });
     assert.equal(low.riskScore, 0);
   });
 
   test('retains only a bounded risk model version attached to risk evidence', () => {
-    const current = model.normalizeSnapshot({ availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: ISO });
+    const current = normalizedSnapshot({ availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: ISO });
     assert.equal(current.riskModelVersion, 1);
-    const malformed = model.normalizeSnapshot({ availability: 'registered', riskModelVersion: '1', riskScore: 42 }, { fallback: ISO });
+    const malformed = normalizedSnapshot({ availability: 'registered', riskModelVersion: '1', riskScore: 42 }, { fallback: ISO });
     assert.equal(malformed.riskModelVersion, null);
-    const orphaned = model.normalizeSnapshot({ availability: 'registered', riskModelVersion: 1 }, { fallback: ISO });
+    const orphaned = normalizedSnapshot({ availability: 'registered', riskModelVersion: 1 }, { fallback: ISO });
     assert.equal(orphaned.riskModelVersion, null);
   });
 
   test('preserves null vs false for booleans', () => {
-    const snap = model.normalizeSnapshot({ availability: 'registered', hasMx: false, hasSpf: true }, { fallback: ISO });
+    const snap = normalizedSnapshot({ availability: 'registered', hasMx: false, hasSpf: true }, { fallback: ISO });
     assert.equal(snap.hasMx, false); // an observed "no MX", not missing data
     assert.equal(snap.hasSpf, true);
     assert.equal(snap.hasDmarc, null); // absent -> null, never coerced to false
   });
 
   test('retains only the bounded compact HTTP summary in deep evidence', () => {
-    const snap = model.normalizeSnapshot({
+    const snap = normalizedSnapshot({
       scanDepth: 'deep',
       availability: 'registered',
       httpSummaryVersion: 1,
@@ -407,7 +411,7 @@ describe('snapshot normalization', () => {
   });
 
   test('fast evidence cannot retain compact HTTP fields as observed values', () => {
-    const snap = model.normalizeSnapshot({
+    const snap = normalizedSnapshot({
       scanDepth: 'fast', availability: 'registered', httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpResponseStatus: 200,
     }, { fallback: ISO });
     assert.equal(snap.httpEvidenceStatus, null);
@@ -416,7 +420,7 @@ describe('snapshot normalization', () => {
   });
 
   test('normalizes nameservers case-insensitively, strips terminal dots, dedups, and sorts', () => {
-    const snap = model.normalizeSnapshot({ nameservers: ['B.NS.example.', 'a.ns.example', 'A.NS.example', 'a.ns.example.'] }, { fallback: ISO });
+    const snap = normalizedSnapshot({ nameservers: ['B.NS.example.', 'a.ns.example', 'A.NS.example', 'a.ns.example.'] }, { fallback: ISO });
     assert.deepEqual(snap.nameservers, ['a.ns.example', 'b.ns.example']);
   });
 
@@ -430,30 +434,30 @@ describe('snapshot normalization', () => {
   });
 
   test('discards unknown properties', () => {
-    const snap = model.normalizeSnapshot({ availability: 'registered', rawWhois: 'x'.repeat(9999), cookies: 'y', foo: 1 }, { fallback: ISO });
+    const snap = normalizedSnapshot({ availability: 'registered', rawWhois: 'x'.repeat(9999), cookies: 'y', foo: 1 }, { fallback: ISO });
     assert.equal('rawWhois' in snap, false);
     assert.equal('cookies' in snap, false);
     assert.equal('foo' in snap, false);
   });
 
   test('produces stable, DOM-safe ids and fingerprints', () => {
-    const a = model.normalizeSnapshot(deepEvidence(), { fallback: ISO });
-    const b = model.normalizeSnapshot(deepEvidence(), { fallback: LATER, source: 'bulk' });
+    const a = normalizedSnapshot(deepEvidence(), { fallback: ISO });
+    const b = normalizedSnapshot(deepEvidence(), { fallback: LATER, source: 'bulk' });
     assert.equal(a.fingerprint, b.fingerprint); // identity ignores time and source
     assert.equal(a.id, b.id);
     assert.match(a.id, SAFE);
   });
 
   test('validates scanDepth as a machine enum and defaults to unknown', () => {
-    assert.equal(model.normalizeSnapshot({ availability: 'registered', scanDepth: 'deep' }, { fallback: ISO }).scanDepth, 'deep');
-    assert.equal(model.normalizeSnapshot({ availability: 'registered', scanDepth: 'fast' }, { fallback: ISO }).scanDepth, 'fast');
-    assert.equal(model.normalizeSnapshot({ availability: 'registered', scanDepth: 'turbo' }, { fallback: ISO }).scanDepth, 'unknown');
-    assert.equal(model.normalizeSnapshot({ availability: 'registered' }, { fallback: ISO }).scanDepth, 'unknown');
+    assert.equal(normalizedSnapshot({ availability: 'registered', scanDepth: 'deep' }, { fallback: ISO }).scanDepth, 'deep');
+    assert.equal(normalizedSnapshot({ availability: 'registered', scanDepth: 'fast' }, { fallback: ISO }).scanDepth, 'fast');
+    assert.equal(normalizedSnapshot({ availability: 'registered', scanDepth: 'turbo' }, { fallback: ISO }).scanDepth, 'unknown');
+    assert.equal(normalizedSnapshot({ availability: 'registered' }, { fallback: ISO }).scanDepth, 'unknown');
   });
 
   test('a fast capture stores unevaluated deep signals as null, not false', () => {
     // A profile default of `false` for a fast scan is unevaluated, not observed.
-    const fast = model.normalizeSnapshot(
+    const fast = normalizedSnapshot(
       { scanDepth: 'fast', availability: 'registered', riskScore: 20, faviconMatch: false, hasMx: false, hasPasswordField: false },
       { fallback: ISO },
     );
@@ -462,19 +466,19 @@ describe('snapshot normalization', () => {
     assert.equal(fast.hasPasswordField, null);
     assert.equal(fast.riskScore, 20); // a fast risk score is still kept
     // An unknown-depth capture is trusted: an observed false stays false.
-    const unknown = model.normalizeSnapshot({ availability: 'registered', hasMx: false }, { fallback: ISO });
+    const unknown = normalizedSnapshot({ availability: 'registered', hasMx: false }, { fallback: ISO });
     assert.equal(unknown.hasMx, false);
   });
 
   test('captures of different depth are not confused (distinct fingerprints)', () => {
-    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered' }, { fallback: ISO });
-    const deep = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered' }, { fallback: ISO });
+    const fast = normalizedSnapshot({ scanDepth: 'fast', availability: 'registered' }, { fallback: ISO });
+    const deep = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered' }, { fallback: ISO });
     assert.notEqual(fast.fingerprint, deep.fingerprint);
   });
 
   test('factor pairs are deduplicated and sorted so input order cannot shift the fingerprint', () => {
-    const a = model.normalizeSnapshot({ availability: 'registered', riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }, { label: 'A', points: 40 }] }, { fallback: ISO });
-    const b = model.normalizeSnapshot({ availability: 'registered', riskFactors: [{ label: 'B', points: 30 }, { label: 'A', points: 40 }] }, { fallback: ISO });
+    const a = normalizedSnapshot({ availability: 'registered', riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }, { label: 'A', points: 40 }] }, { fallback: ISO });
+    const b = normalizedSnapshot({ availability: 'registered', riskFactors: [{ label: 'B', points: 30 }, { label: 'A', points: 40 }] }, { fallback: ISO });
     assert.deepEqual(a.riskFactors, [{ label: 'A', points: 40 }, { label: 'B', points: 30 }]); // deduped + sorted (points desc)
     assert.equal(a.fingerprint, b.fingerprint); // order-independent
   });
@@ -588,8 +592,8 @@ describe('evidence history retention', () => {
     const history = model.normalizeEvidenceHistory(raws, { source: 'lookup' });
     assert.equal(history.length, model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE);
     // Newest survive: the retained window ends at the newest capture.
-    assert.equal(history.at(-1).capturedAt, raws.at(-1).capturedAt);
-    assert.equal(history.at(-1).riskScore, raws.at(-1).riskScore);
+    assert.equal(requiredValue(history.at(-1)).capturedAt, requiredValue(raws.at(-1)).capturedAt);
+    assert.equal(requiredValue(history.at(-1)).riskScore, requiredValue(raws.at(-1)).riskScore);
   });
 
   test('retention is deterministic across repeated normalization', () => {
@@ -654,8 +658,8 @@ describe('importing evidence history', () => {
     const merged = model.mergeCases(local, imported).cases[0];
     assert.equal(merged.evidenceHistory.length, 2);
     // The local capture (LATEST) is still the latest; the timestamp-less import fell back to ISO.
-    assert.equal(model.latestCaseEvidence(merged).riskScore, 30);
-    assert.equal(model.latestCaseEvidence(merged).capturedAt, LATEST);
+    assert.equal(requiredValue(model.latestCaseEvidence(merged)).riskScore, 30);
+    assert.equal(requiredValue(model.latestCaseEvidence(merged)).capturedAt, LATEST);
   });
 
   test('re-importing the same payload is idempotent and keeps the local case id', () => {
@@ -672,8 +676,11 @@ describe('importing evidence history', () => {
 });
 
 describe('compareCaseEvidence', () => {
-  const snap = (overrides, at = ISO) => model.normalizeSnapshot(deepEvidence(overrides), { fallback: at });
-  const find = (changes, field) => changes.find((c) => c.field === field);
+  const snap = (overrides: Record<string, unknown>, at = ISO) => normalizedSnapshot(deepEvidence(overrides), { fallback: at });
+  const find = (
+    changes: ReturnType<typeof model.compareCaseEvidence>,
+    field: string,
+  ) => changes.find((change) => change.field === field);
 
   test('reports a risk-score increase with a danger tone', () => {
     const changes = model.compareCaseEvidence(snap({ riskScore: 40 }), snap({ riskScore: 85 }));
@@ -685,21 +692,21 @@ describe('compareCaseEvidence', () => {
   });
 
   test('keeps unversioned or differently-versioned risk scores readable but incomparable', () => {
-    const unversioned = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskScore: 90 }, { fallback: ISO });
-    const current = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });
+    const unversioned = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskScore: 90 }, { fallback: ISO });
+    const current = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });
     assert.equal(unversioned.riskScore, 90);
     assert.equal(unversioned.riskModelVersion, null);
     assert.equal(find(model.compareCaseEvidence(unversioned, current), 'riskScore'), undefined);
     assert.deepEqual(model.caseEvidenceIncomparableReasons(unversioned, current), ['risk-model']);
 
-    const future = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 2, riskScore: 80 }, { fallback: LATER });
+    const future = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 2, riskScore: 80 }, { fallback: LATER });
     assert.equal(find(model.compareCaseEvidence(current, future), 'riskScore'), undefined);
     assert.deepEqual(model.caseEvidenceIncomparableReasons(current, future), ['risk-model']);
   });
 
   test('reports ordinary changes while separately disclosing a risk-model mismatch', () => {
-    const unversioned = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', registrar: 'Old Registrar', riskScore: 90 }, { fallback: ISO });
-    const current = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', registrar: 'New Registrar', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });
+    const unversioned = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', registrar: 'Old Registrar', riskScore: 90 }, { fallback: ISO });
+    const current = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', registrar: 'New Registrar', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });
     const changes = model.compareCaseEvidence(unversioned, current);
     assert.ok(find(changes, 'registrar'));
     assert.equal(find(changes, 'riskScore'), undefined);
@@ -715,8 +722,8 @@ describe('compareCaseEvidence', () => {
 
   test('reports mail and web signal changes', () => {
     const changes = model.compareCaseEvidence(snap({ hasMx: false, hasPasswordField: false }), snap({ hasMx: true, hasPasswordField: true }));
-    assert.equal(find(changes, 'hasMx').tone, 'warn');
-    assert.equal(find(changes, 'hasPasswordField').tone, 'danger');
+    assert.equal(requiredValue(find(changes, 'hasMx')).tone, 'warn');
+    assert.equal(requiredValue(find(changes, 'hasPasswordField')).tone, 'danger');
   });
 
   test('treats nameservers as a set and reports genuine set changes', () => {
@@ -739,8 +746,8 @@ describe('compareCaseEvidence', () => {
     // Reproduces the exact failure: a deep capture saw an official favicon
     // match; a later FAST capture carries the profile's default `false`. That
     // must not be read as the favicon match being removed.
-    const previous = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', faviconMatch: true, activityStatus: 'active' }, { fallback: ISO });
-    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', faviconMatch: false }, { fallback: LATER });
+    const previous = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', faviconMatch: true, activityStatus: 'active' }, { fallback: ISO });
+    const fast = normalizedSnapshot({ scanDepth: 'fast', availability: 'registered', faviconMatch: false }, { fallback: LATER });
     assert.equal(fast.faviconMatch, null); // coerced away as unevaluated
     const changes = model.compareCaseEvidence(previous, fast);
     assert.equal(find(changes, 'faviconMatch'), undefined);
@@ -748,8 +755,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports a meaningful fast->fast risk-score change', () => {
-    const a = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 20 }, { fallback: ISO });
-    const b = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 65 }, { fallback: LATER });
+    const a = normalizedSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 20 }, { fallback: ISO });
+    const b = normalizedSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 65 }, { fallback: LATER });
     const change = find(model.compareCaseEvidence(a, b), 'riskScore');
     assert.ok(change);
     assert.equal(change.before, 20);
@@ -757,14 +764,14 @@ describe('compareCaseEvidence', () => {
   });
 
   test('does not report a risk change caused solely by fast vs deep depth', () => {
-    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 20 }, { fallback: ISO });
-    const deep = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 80, activityStatus: 'active', hasMx: true }, { fallback: LATER });
+    const fast = normalizedSnapshot({ scanDepth: 'fast', availability: 'registered', riskModelVersion: 1, riskScore: 20 }, { fallback: ISO });
+    const deep = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 80, activityStatus: 'active', hasMx: true }, { fallback: LATER });
     assert.equal(find(model.compareCaseEvidence(fast, deep), 'riskScore'), undefined);
   });
 
   test('reports a deep->deep signal removal', () => {
-    const before = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: true }, { fallback: ISO });
-    const after = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: false }, { fallback: LATER });
+    const before = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: true }, { fallback: ISO });
+    const after = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: false }, { fallback: LATER });
     const change = find(model.compareCaseEvidence(before, after), 'faviconMatch');
     assert.ok(change);
     assert.equal(change.before, true);
@@ -773,14 +780,14 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports compact HTTP changes only across two deep observations', () => {
-    const before = model.normalizeSnapshot({
+    const before = normalizedSnapshot({
       scanDepth: 'deep', availability: 'registered',
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'success', httpFinalOrigin: 'https://example.test', httpResponseStatus: 200,
       httpTransportSecurity: 'https', httpRedirectCount: 0, httpCrossOriginRedirect: false,
       httpHttpsDowngrade: false, httpContentType: 'text/html', httpSecurityHeaders: ['hsts'],
     }, { fallback: ISO });
-    const after = model.normalizeSnapshot({
+    const after = normalizedSnapshot({
       scanDepth: 'deep', availability: 'registered',
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'partial', httpFinalOrigin: 'http://other.example.test', httpResponseStatus: 403,
@@ -789,19 +796,19 @@ describe('compareCaseEvidence', () => {
     }, { fallback: LATER });
     const changes = model.compareCaseEvidence(before, after);
     const byField = new Map(changes.map((change) => [change.field, change]));
-    assert.equal(byField.get('httpTransportSecurity').tone, 'danger');
-    assert.equal(byField.get('httpHttpsDowngrade').tone, 'danger');
-    assert.equal(byField.get('httpCrossOriginRedirect').tone, 'warn');
-    assert.deepEqual(byField.get('httpSecurityHeaders').before, ['hsts']);
-    assert.deepEqual(byField.get('httpSecurityHeaders').after, []);
+    assert.equal(requiredValue(byField.get('httpTransportSecurity')).tone, 'danger');
+    assert.equal(requiredValue(byField.get('httpHttpsDowngrade')).tone, 'danger');
+    assert.equal(requiredValue(byField.get('httpCrossOriginRedirect')).tone, 'warn');
+    assert.deepEqual(requiredValue(byField.get('httpSecurityHeaders')).before, ['hsts']);
+    assert.deepEqual(requiredValue(byField.get('httpSecurityHeaders')).after, []);
 
-    const fast = model.normalizeSnapshot({ scanDepth: 'fast', availability: 'registered' }, { fallback: LATER });
+    const fast = normalizedSnapshot({ scanDepth: 'fast', availability: 'registered' }, { fallback: LATER });
     assert.equal(model.compareCaseEvidence(before, fast).some((change) => change.field.startsWith('http')), false);
   });
 
   test('reports a factor change even when the total score is unchanged', () => {
-    const before = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }, { fallback: ISO });
-    const after = model.normalizeSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }, { fallback: LATER });
+    const before = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }, { fallback: ISO });
+    const after = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }, { fallback: LATER });
     const changes = model.compareCaseEvidence(before, after);
     assert.equal(find(changes, 'riskScore'), undefined); // total unchanged
     assert.ok(find(changes, 'riskFactors')); // composition changed -> explainable material change
@@ -824,7 +831,7 @@ describe('compareCaseEvidence', () => {
 });
 
 describe('serialized store byte budget', () => {
-  function notesCase(index, noteCount) {
+  function notesCase(index: number, noteCount: number) {
     const bigText = 'x'.repeat(model.MAX_NOTE_LENGTH);
     return {
       domain: `notes-${index}.example`,
@@ -833,7 +840,7 @@ describe('serialized store byte budget', () => {
     };
   }
 
-  function fatSnapshot(index, position) {
+  function fatSnapshot(index: number, position: number) {
     return {
       availability: 'registered',
       riskScore: position, // distinct material per position
@@ -859,7 +866,9 @@ describe('serialized store byte budget', () => {
 
   test('fails with a friendly error when analyst notes alone exceed the budget', () => {
     // ~4.4 MB of notes, no evidence to prune.
-    const cases = Array.from({ length: 44 }, (_, i) => notesCase(i, model.MAX_NOTES_PER_CASE));
+    const cases = model.normalizeCaseStore(
+      Array.from({ length: 44 }, (_, i) => notesCase(i, model.MAX_NOTES_PER_CASE)),
+    ).cases;
     assert.throws(() => model.enforceStoreBudget(cases), /storage budget/i);
   });
 
@@ -890,8 +899,9 @@ describe('serialized store byte budget', () => {
     // At least one evidence case still retains its newest snapshot.
     assert.ok(result.cases.some((c) => c.domain.startsWith('ev-') && c.evidenceHistory.length >= 1));
     // A returned record equals its serialized-persisted form (no pre-prune copy).
-    const sample = result.cases.find((c) => c.domain.startsWith('ev-'));
-    const persisted = JSON.parse(model.serializeCaseStore(result.cases)).cases.find((c) => c.id === sample.id);
+    const sample = requiredValue(result.cases.find((c) => c.domain.startsWith('ev-')));
+    const persistedCases = model.normalizeCaseStore(JSON.parse(model.serializeCaseStore(result.cases))).cases;
+    const persisted = requiredValue(persistedCases.find((c) => c.id === sample.id));
     assert.deepEqual(sample, persisted);
   });
 });
@@ -1002,7 +1012,7 @@ describe('import merge', () => {
     const result = model.mergeCases(local, imported);
     assert.equal(result.added, 1);
     assert.equal(result.updated, 1);
-    const shared = result.cases.find((c) => c.domain === 'shared.example');
+    const shared = requiredValue(result.cases.find((c) => c.domain === 'shared.example'));
     assert.equal(shared.status, 'escalated');
     assert.deepEqual(shared.tags, ['imported']);
   });

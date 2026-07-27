@@ -1,12 +1,9 @@
-const { describe, test, before } = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import * as evidence from '../frontend/src/lib/analysis/evidence-export.ts';
+import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 
-let evidence;
-before(async () => {
-  evidence = await import('../frontend/src/lib/analysis/evidence-export.ts');
-});
-
-function fixtureResponse() {
+function fixtureResponse(): Record<string, unknown> {
   return {
     query: 'login.example.com',
     type: 'domain',
@@ -308,79 +305,128 @@ describe('lookup evidence export', () => {
       providers: [{ provider: { id: 'fixture_provider' }, findings: [{ detail: 'provider-only-secret' }] }],
     };
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
+    const diagnostics = recordValue(result.diagnostics);
+    const rdapDiagnostics = recordValue(diagnostics.rdap);
+    const registrarDiagnostics = recordValue(rdapDiagnostics.registrar);
+    const rdapRaw = recordValue(result.sources.rdap.raw);
+    const rdapParsed = recordValue(result.sources.rdap.parsed);
+    const rdapAttempts = arrayValue(result.sources.rdap.attempts).map(recordValue);
+    const whoisChain = arrayValue(result.sources.whois.chain).map(recordValue);
+    const network = requiredValue(result.sources.network);
+    const networkEndpoint = requiredValue(network.endpoint);
+    const networkRegistration = requiredValue(network.network);
+    const networkRdap = requiredValue(network.rdap);
+    const networkAttempts = networkRdap.attempts.map(recordValue);
+    const reverseDns = requiredValue(result.sources.reverseDns);
+    const reverseDnsDiagnostics = requiredValue(reverseDns.diagnostics);
+    const securityTxt = requiredValue(result.sources.securityTxt);
+    const availability = recordValue(result.analysis.availability);
+    const http = recordValue(availability.http);
+    const httpResponse = recordValue(http.response);
+    const bodyHash = recordValue(httpResponse.bodyHash);
+    const tls = recordValue(availability.tls);
+    const certificate = recordValue(tls.certificate);
+    const pageIdentity = recordValue(availability.pageIdentity);
+    const canonical = recordValue(pageIdentity.canonical);
+    const forms = recordValue(pageIdentity.forms);
+    const resources = recordValue(pageIdentity.resources);
+    const pageFingerprints = recordValue(pageIdentity.fingerprints);
+    const exactFingerprint = recordValue(pageFingerprints.exact);
+    const visibleTextFingerprint = recordValue(pageFingerprints.visibleText);
+    const resourceHostFingerprint = recordValue(pageFingerprints.resourceHosts);
+    const trackingIdentifiers = arrayValue(pageIdentity.trackingIdentifiers).map(recordValue);
+    const credentialSurface = recordValue(availability.credentialSurfaceProfile);
+    const credentialInputs = recordValue(credentialSurface.inputs);
+    const credentialCategories = recordValue(credentialInputs.categories);
+    const credentialForms = recordValue(credentialSurface.forms);
+    const credentialActions = recordValue(credentialForms.actions);
+    const structuredData = recordValue(availability.structuredDataIdentity);
+    const structuredEntities = arrayValue(structuredData.entities).map(recordValue);
+    const dns = recordValue(availability.dns);
+    const dnsRecords = recordValue(dns.records);
+    const httpsRecords = arrayValue(dnsRecords.https).map(recordValue);
+    const httpsParameters = recordValue(requiredValue(httpsRecords[0]).parameters);
+    const opaqueParameters = arrayValue(httpsParameters.opaque).map(recordValue);
+    const technology = recordValue(availability.technologyProfile);
+    const technologyFindings = arrayValue(technology.findings).map(recordValue);
+    const libraryProfile = recordValue(technology.browserLibraryProfile);
+    const libraryFindings = arrayValue(libraryProfile.findings).map(recordValue);
+    const securityPosture = recordValue(availability.securityPosture);
+    const securityFindings = arrayValue(securityPosture.findings).map(recordValue);
+    const registrarComparison = requiredValue(result.analysis.registrarPublicationComparison);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
     assert.equal(result.schemaVersion, 19);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
-    assert.equal(result.diagnostics.rdap.status, 'success');
-    assert.equal(result.diagnostics.rdap.registrar.status, 'success');
+    assert.equal(rdapDiagnostics.status, 'success');
+    assert.equal(registrarDiagnostics.status, 'success');
     assert.equal(result.sources.rdap.endpoint, 'https://rdap.example/domain/example.com');
     assert.equal(result.sources.rdap.transportSecurity, 'https');
-    assert.equal(result.sources.rdap.raw.ldhName, 'EXAMPLE.COM');
-    assert.equal(result.sources.rdap.parsed.linksTruncated, true);
-    assert.equal(result.sources.rdap.parsed.noticesTruncated, false);
-    assert.equal(result.sources.rdap.attempts[0].outcome, 'success');
+    assert.equal(rdapRaw.ldhName, 'EXAMPLE.COM');
+    assert.equal(rdapParsed.linksTruncated, true);
+    assert.equal(rdapParsed.noticesTruncated, false);
+    assert.equal(requiredValue(rdapAttempts[0]).outcome, 'success');
     assert.equal(Object.hasOwn(result.sources.rdap, 'registrarRdap'), false);
     assert.equal(JSON.stringify(result.sources).includes('privateTestValue'), false);
     assert.equal(JSON.stringify(result).includes('provider-only-secret'), false);
-    assert.equal(result.sources.whois.chain[1].response, 'Domain Name: EXAMPLE.COM');
+    assert.equal(requiredValue(whoisChain[1]).response, 'Domain Name: EXAMPLE.COM');
     assert.equal(result.sources.whois.authoritativeHop, 'whois.registry.example');
-    assert.equal(result.sources.network.endpoint.address, '93.184.216.34');
-    assert.equal(result.sources.network.network.holder, 'Example network holder');
-    assert.deepEqual(result.sources.network.network.cidrs, ['93.184.216.0/24']);
-    assert.equal(result.sources.network.rdap.attempts[0].outcome, 'success');
-    assert.equal(result.sources.network.rdap.endpoint, 'https://network.example/ip/93.184.216.34');
-    assert.equal(result.sources.network.rdap.attempts[0].endpoint, 'https://network.example/ip/93.184.216.34');
-    assert.equal(JSON.stringify(result.sources.network).includes('must-not-export'), false);
-    assert.equal(JSON.stringify(result.sources.network).includes('unknownImportedField'), false);
-    assert.equal(result.sources.reverseDns.status, 'success');
-    assert.deepEqual(result.sources.reverseDns.records.ptr, ['edge.example.test']);
-    assert.equal(result.sources.reverseDns.diagnostics.ptr.status, 'success');
-    assert.equal(JSON.stringify(result.sources.reverseDns).includes('must-not-export'), false);
-    assert.equal(result.sources.securityTxt.state, 'present');
-    assert.deepEqual(result.sources.securityTxt.contacts, ['mailto:security@example.test']);
-    assert.equal(result.sources.securityTxt.finalUrl, 'https://login.example.com/.well-known/security.txt');
-    assert.equal(JSON.stringify(result.sources.securityTxt).includes('must-not-export-security-txt-body'), false);
-    assert.equal(JSON.stringify(result.sources.securityTxt).includes('javascript:'), false);
-    assert.equal(result.analysis.availability.hasMx, true);
-    assert.equal(result.analysis.availability.http.response.status, 200);
-    assert.equal(result.analysis.availability.http.response.bodyHash.value, 'a'.repeat(64));
-    assert.equal(result.analysis.availability.http.response.bodyHash.scope, 'complete-body');
-    assert.equal(result.analysis.availability.tls.connectedAddress, '93.184.216.34');
-    assert.equal(result.analysis.availability.tls.certificate.fingerprintSha256, '2'.repeat(64));
-    assert.equal(result.analysis.availability.pageIdentity.identityVersion, 3);
-    assert.equal(result.analysis.availability.pageIdentity.canonical.url, 'https://example.com/');
-    assert.equal(result.analysis.availability.pageIdentity.forms.postCount, 1);
-    assert.deepEqual(result.analysis.availability.pageIdentity.resources.externalOrigins, ['https://cdn.example']);
-    assert.deepEqual(result.analysis.availability.pageIdentity.contactDomains, ['example.com']);
-    assert.equal(result.analysis.availability.pageIdentity.trackingIdentifiers[0].value, 'GTM-AB12');
-    assert.equal(result.analysis.availability.pageIdentity.fingerprints.fingerprintVersion, 1);
-    assert.equal(result.analysis.availability.pageIdentity.fingerprints.exact.value, 'a'.repeat(64));
-    assert.equal(result.analysis.availability.pageIdentity.fingerprints.visibleText.value, 'c'.repeat(16));
-    assert.deepEqual(result.analysis.availability.pageIdentity.fingerprints.resourceHosts.values, ['cdn.example']);
-    assert.equal(result.analysis.availability.credentialSurfaceProfile.credentialSurfaceVersion, 1);
-    assert.equal(result.analysis.availability.credentialSurfaceProfile.inputs.categories.password, 1);
-    assert.equal(result.analysis.availability.credentialSurfaceProfile.forms.actions.external, 1);
-    assert.equal(result.analysis.availability.structuredDataIdentity.structuredDataVersion, 1);
-    assert.equal(result.analysis.availability.structuredDataIdentity.entities[0].name, 'Example publisher');
-    assert.equal(result.analysis.availability.dns.records.https[0].parameters.opaque[0].name, 'ech');
-    assert.equal(result.analysis.availability.technologyProfile.profileVersion, 3);
-    assert.equal(result.analysis.availability.technologyProfile.findings[0].name, 'Fixture Framework');
-    assert.equal(result.analysis.availability.technologyProfile.browserLibraryProfile.profileVersion, 1);
-    assert.equal(result.analysis.availability.technologyProfile.browserLibraryProfile.findings[0].advisoryCount, 1);
-    assert.equal(result.analysis.availability.securityPosture.postureVersion, 1);
-    assert.equal(result.analysis.availability.securityPosture.findings[0].state, 'observed_absence');
+    assert.equal(networkEndpoint.address, '93.184.216.34');
+    assert.equal(networkRegistration.holder, 'Example network holder');
+    assert.deepEqual(networkRegistration.cidrs, ['93.184.216.0/24']);
+    assert.equal(requiredValue(networkAttempts[0]).outcome, 'success');
+    assert.equal(networkRdap.endpoint, 'https://network.example/ip/93.184.216.34');
+    assert.equal(requiredValue(networkAttempts[0]).endpoint, 'https://network.example/ip/93.184.216.34');
+    assert.equal(JSON.stringify(network).includes('must-not-export'), false);
+    assert.equal(JSON.stringify(network).includes('unknownImportedField'), false);
+    assert.equal(reverseDns.status, 'success');
+    assert.deepEqual(reverseDns.records.ptr, ['edge.example.test']);
+    assert.equal(requiredValue(reverseDnsDiagnostics.ptr).status, 'success');
+    assert.equal(JSON.stringify(reverseDns).includes('must-not-export'), false);
+    assert.equal(securityTxt.state, 'present');
+    assert.deepEqual(securityTxt.contacts, ['mailto:security@example.test']);
+    assert.equal(securityTxt.finalUrl, 'https://login.example.com/.well-known/security.txt');
+    assert.equal(JSON.stringify(securityTxt).includes('must-not-export-security-txt-body'), false);
+    assert.equal(JSON.stringify(securityTxt).includes('javascript:'), false);
+    assert.equal(availability.hasMx, true);
+    assert.equal(httpResponse.status, 200);
+    assert.equal(bodyHash.value, 'a'.repeat(64));
+    assert.equal(bodyHash.scope, 'complete-body');
+    assert.equal(tls.connectedAddress, '93.184.216.34');
+    assert.equal(certificate.fingerprintSha256, '2'.repeat(64));
+    assert.equal(pageIdentity.identityVersion, 3);
+    assert.equal(canonical.url, 'https://example.com/');
+    assert.equal(forms.postCount, 1);
+    assert.deepEqual(resources.externalOrigins, ['https://cdn.example']);
+    assert.deepEqual(pageIdentity.contactDomains, ['example.com']);
+    assert.equal(requiredValue(trackingIdentifiers[0]).value, 'GTM-AB12');
+    assert.equal(pageFingerprints.fingerprintVersion, 1);
+    assert.equal(exactFingerprint.value, 'a'.repeat(64));
+    assert.equal(visibleTextFingerprint.value, 'c'.repeat(16));
+    assert.deepEqual(resourceHostFingerprint.values, ['cdn.example']);
+    assert.equal(credentialSurface.credentialSurfaceVersion, 1);
+    assert.equal(credentialCategories.password, 1);
+    assert.equal(credentialActions.external, 1);
+    assert.equal(structuredData.structuredDataVersion, 1);
+    assert.equal(requiredValue(structuredEntities[0]).name, 'Example publisher');
+    assert.equal(requiredValue(opaqueParameters[0]).name, 'ech');
+    assert.equal(technology.profileVersion, 3);
+    assert.equal(requiredValue(technologyFindings[0]).name, 'Fixture Framework');
+    assert.equal(libraryProfile.profileVersion, 1);
+    assert.equal(requiredValue(libraryFindings[0]).advisoryCount, 1);
+    assert.equal(securityPosture.postureVersion, 1);
+    assert.equal(requiredValue(securityFindings[0]).state, 'observed_absence');
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
-    assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 1);
-    assert.equal(result.analysis.registrarPublicationComparison.counts.equivalent, 7);
-    assert.equal(result.analysis.registrarPublicationComparison.sourceHealth.registry.status, 'success');
-    assert.equal(result.analysis.registrarPublicationComparison.sourceHealth.registrar.status, 'success');
-    const expiry = result.analysis.registrarPublicationComparison.fields.find((field) => field.label === 'Expires');
+    assert.equal(registrarComparison.counts.conflict, 1);
+    assert.equal(registrarComparison.counts.equivalent, 7);
+    assert.equal(registrarComparison.sourceHealth.registry.status, 'success');
+    assert.equal(registrarComparison.sourceHealth.registrar.status, 'success');
+    const expiry = requiredValue(registrarComparison.fields.find((field) => field.label === 'Expires'));
     assert.equal(expiry.registryDisplay, '2030-01-01T00:00:00Z');
     assert.equal(expiry.registrarDisplay, '2031-01-01');
-    assert.equal(result.analysis.registrarPublicationComparison.fields.some((field) => field.label === 'Registry object ID'), false);
+    assert.equal(registrarComparison.fields.some((field) => field.label === 'Registry object ID'), false);
     assert.equal(JSON.stringify(result).includes('REGISTRAR-OBJECT'), false);
     assert.equal(JSON.stringify(result).includes('private-nested@example.test'), false);
     assert.equal(result.generatedAt, '2026-07-11T02:00:00.000Z');
@@ -399,30 +445,38 @@ describe('lookup evidence export', () => {
     });
 
     assert.equal(result.schemaVersion, 19);
-    assert.equal(result.analysis.idn.version, 1);
-    assert.equal(result.analysis.idn.unicodeDomain, 'éxample.test');
+    const idn = recordValue(result.analysis.idn);
+    assert.equal(idn.version, 1);
+    assert.equal(idn.unicodeDomain, 'éxample.test');
   });
 
   test('retains bounded DNS provenance already present in the availability assessment', () => {
     const response = fixtureResponse();
-    response.availability.dns = {
+    recordValue(response.availability).dns = {
       version: 1, status: 'partial', source: 'dns', complete: false, truncated: false,
       records: { a: ['192.0.2.1'], caa: [{ critical: 0, tag: 'issue', value: 'ca.example' }] },
       diagnostics: { a: { status: 'success' }, caa: { status: 'error', error: 'resolver timed out' } },
     };
     const result = evidence.buildLookupEvidence(response);
-    assert.deepEqual(result.analysis.availability.dns.records.a, ['192.0.2.1']);
-    assert.equal(result.analysis.availability.dns.version, 1);
-    assert.equal(result.analysis.availability.dns.diagnostics.caa.status, 'error');
+    const availability = recordValue(result.analysis.availability);
+    const dns = recordValue(availability.dns);
+    const records = recordValue(dns.records);
+    const diagnostics = recordValue(dns.diagnostics);
+    assert.deepEqual(records.a, ['192.0.2.1']);
+    assert.equal(dns.version, 1);
+    assert.equal(recordValue(diagnostics.caa).status, 'error');
   });
 
   test('retains partial source failures without failing the export', () => {
     const response = fixtureResponse();
     response.rdap = { error: 'RDAP timed out', attempts: [{ outcome: 'timeout' }] };
-    response.whois.parsed.chainStatus = 'partial';
-    response.whois.parsed.failedHop = 'whois.registrar.example';
-    response.diagnostics.rdap.status = 'error';
-    response.diagnostics.whois.status = 'partial';
+    const whois = recordValue(response.whois);
+    const whoisParsed = recordValue(whois.parsed);
+    whoisParsed.chainStatus = 'partial';
+    whoisParsed.failedHop = 'whois.registrar.example';
+    const diagnostics = recordValue(response.diagnostics);
+    recordValue(diagnostics.rdap).status = 'error';
+    recordValue(diagnostics.whois).status = 'partial';
     const result = evidence.buildLookupEvidence(response);
 
     assert.deepEqual(result.sources.rdap, {
@@ -438,23 +492,26 @@ describe('lookup evidence export', () => {
 
   test('keeps an unavailable registrar publication neutral instead of inventing a discrepancy', () => {
     const response = fixtureResponse();
-    response.rdap.registrarRdap = {
+    const rdap = recordValue(response.rdap);
+    rdap.registrarRdap = {
       status: 'unsupported',
       detail: 'The registry did not publish an eligible registrar RDAP link.',
     };
-    response.diagnostics.rdap.registrar = { status: 'unsupported' };
+    const diagnostics = recordValue(response.diagnostics);
+    recordValue(diagnostics.rdap).registrar = { status: 'unsupported' };
     const result = evidence.buildLookupEvidence(response);
+    const comparison = requiredValue(result.analysis.registrarPublicationComparison);
 
-    assert.equal(result.analysis.registrarPublicationComparison.counts.conflict, 0);
-    assert.equal(result.analysis.registrarPublicationComparison.counts.registry_only, 0);
-    assert.ok(result.analysis.registrarPublicationComparison.counts.registrar_unavailable > 0);
-    assert.equal(result.analysis.registrarPublicationComparison.sourceHealth.registrar.condition, 'unavailable');
+    assert.equal(comparison.counts.conflict, 0);
+    assert.equal(comparison.counts.registry_only, 0);
+    assert.ok(comparison.counts.registrar_unavailable > 0);
+    assert.equal(comparison.sourceHealth.registrar.condition, 'unavailable');
   });
 
   test('uses null when no registrar publication follow-up was represented', () => {
     const response = fixtureResponse();
-    delete response.rdap.registrarRdap;
-    delete response.diagnostics.rdap.registrar;
+    delete recordValue(response.rdap).registrarRdap;
+    delete recordValue(recordValue(response.diagnostics).rdap).registrar;
     const result = evidence.buildLookupEvidence(response);
     assert.equal(result.analysis.registrarPublicationComparison, null);
   });

@@ -1,14 +1,18 @@
 // Covers the frontend's framework-neutral opportunity/risk score formulas
-// and supporting formatters. The analysis modules are ESM through the
-// frontend workspace, so tests load them with dynamic import().
+// and supporting formatters.
 
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import * as scoring from '../frontend/src/lib/analysis/scoring.ts';
+import { requiredValue } from './value-assertions.mts';
 
-let scoring;
-before(async () => {
-  scoring = await import('../frontend/src/lib/analysis/scoring.ts');
-});
+function opportunityExplanation(value: unknown): scoring.OpportunityExplanation {
+  return requiredValue(scoring.explainOpportunityScore(value));
+}
+
+function riskExplanation(value: scoring.RiskInput): scoring.RiskExplanation {
+  return requiredValue(scoring.explainRiskScore(value));
+}
 
 describe('fmtAge', () => {
   test('null/undefined pass through as null', () => {
@@ -106,7 +110,7 @@ describe('explainOpportunityScore / computeOpportunityScore', () => {
   });
 
   test('a domain age of exactly zero contributes no factor', () => {
-    const explained = scoring.explainOpportunityScore({ availability: 'registered', domainAgeDays: 0 });
+    const explained = opportunityExplanation({ availability: 'registered', domainAgeDays: 0 });
     assert.equal(explained.factors.length, 1); // base only
     assert.equal(explained.score, 40);
   });
@@ -151,7 +155,7 @@ describe('explainRiskScore / computeRiskScore', () => {
 
   test('stamps the explicit model version and gives ordinary states a low base score', () => {
     assert.equal(scoring.RISK_MODEL_VERSION, 6);
-    assert.equal(scoring.explainRiskScore({ availability: 'registered' }).modelVersion, 6);
+    assert.equal(riskExplanation({ availability: 'registered' }).modelVersion, 6);
     assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 10);
     assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 5);
     assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 8);
@@ -231,7 +235,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('correlated observations stay in one family and receive no corroboration bonus', () => {
-    const brand = scoring.explainRiskScore({
+    const brand = riskExplanation({
       availability: 'registered',
       faviconMatch: true,
       reusesOfficialAssets: true,
@@ -239,7 +243,7 @@ describe('explainRiskScore / computeRiskScore', () => {
     assert.equal(brand.score, 34);
     assert.equal(brand.factors.some((factor) => factor.label.includes('Corroborating')), false);
 
-    const credential = scoring.explainRiskScore({
+    const credential = riskExplanation({
       availability: 'registered',
       phishingLanguageMatch: 'verify your account',
       hasPasswordField: true,
@@ -249,7 +253,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('two distinct contextual families receive a visible bounded bonus', () => {
-    const explained = scoring.explainRiskScore({
+    const explained = riskExplanation({
       availability: 'registered',
       mutationTypes: ['dictionary'],
       faviconMatch: true,
@@ -262,7 +266,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('strong evidence across all three families reaches danger with visible factors', () => {
-    const explained = scoring.explainRiskScore({
+    const explained = riskExplanation({
       availability: 'registered',
       mutationTypes: ['dictionary'],
       faviconMatch: true,
@@ -295,7 +299,7 @@ describe('explainRiskScore / computeRiskScore', () => {
 
   test('a lone external publisher and two same-publisher datasets add no Risk points', () => {
     const finding = { category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' };
-    const provider = (id) => ({
+    const provider = (id: string) => ({
       provider: { id }, state: 'success', findings: [finding],
       observation: { observedAt: '2026-07-15T00:00:00.000Z' },
     });
@@ -310,12 +314,12 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('two independent recent publisher families add one explainable bounded factor', () => {
-    const provider = (id) => ({
+    const provider = (id: string) => ({
       provider: { id }, state: 'success',
       findings: [{ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' }],
       observation: { observedAt: '2026-07-15T00:00:00.000Z' },
     });
-    const explained = scoring.explainRiskScore({
+    const explained = riskExplanation({
       availability: 'registered',
       threatIntelligence: { providers: [provider('urlscan_search'), provider('urlhaus_host')] },
     });
@@ -327,7 +331,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('external evidence crosses the danger band only with independent publisher corroboration', () => {
-    const provider = (id) => ({
+    const provider = (id: string) => ({
       provider: { id }, state: 'success',
       findings: [{ category: 'phishing', lastObservedAt: '2026-07-12T00:00:00.000Z' }],
       observation: { observedAt: '2026-07-15T00:00:00.000Z' },
@@ -359,7 +363,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('unknown providers and malformed external records cannot affect Risk', () => {
-    const explained = scoring.explainRiskScore({
+    const explained = riskExplanation({
       availability: 'registered',
       threatIntelligence: {
         providers: [
@@ -390,7 +394,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('malformed truthy values cannot create impersonation or operational factors', () => {
-    const explained = scoring.explainRiskScore({
+    const explained = riskExplanation({
       availability: 'registered',
       faviconMatch: 'true',
       faviconNearMatch: 1,
@@ -449,7 +453,11 @@ describe('formatScoreBreakdown', () => {
   });
 
   test('joins each factor and the total with the given separator, defaulting to newlines', () => {
-    const explained = { score: 45, factors: [{ label: 'A', delta: 40 }, { label: 'B', delta: -5 }, { label: 'C', delta: 10 }] };
+    const explained: scoring.RiskExplanation = {
+      modelVersion: scoring.RISK_MODEL_VERSION,
+      score: 45,
+      factors: [{ label: 'A', delta: 40 }, { label: 'B', delta: -5 }, { label: 'C', delta: 10 }],
+    };
     assert.equal(scoring.formatScoreBreakdown(explained), 'A +40\nB -5\nC +10\nTotal 45');
     assert.equal(scoring.formatScoreBreakdown(explained, '; '), 'A +40; B -5; C +10; Total 45');
   });

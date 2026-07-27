@@ -1,10 +1,7 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let caseReport;
-before(async () => {
-  caseReport = await import('../frontend/src/lib/analysis/case-report.ts');
-});
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+import * as caseReport from '../frontend/src/lib/analysis/case-report.ts';
+import { recordValue, requiredValue } from './value-assertions.mts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,7 +11,7 @@ const ISO = '2026-05-01T00:00:00.000Z';
 const LATER = '2026-06-01T00:00:00.000Z';
 const LATEST = '2026-07-01T00:00:00.000Z';
 
-function snapshot(overrides = {}) {
+function snapshot(overrides: Record<string, unknown> = {}) {
   return {
     id: 'ev-abc',
     fingerprint: 'abc123',
@@ -49,7 +46,7 @@ function snapshot(overrides = {}) {
   };
 }
 
-function caseRecord(overrides = {}) {
+function caseRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: 'case-1',
     domain: 'test.invalid',
@@ -113,7 +110,7 @@ describe('buildCaseReport JSON', () => {
     assert.equal(entry.hasIncomparableChange, false);
     assert.equal(entry.snapshot.id, 'ev-1');
     // Current assessment matches the snapshot.
-    assert.equal(json.currentAssessment.id, 'ev-1');
+    assert.equal(requiredValue(json.currentAssessment).id, 'ev-1');
   });
 
   test('multiple snapshots, chronological order', () => {
@@ -132,9 +129,9 @@ describe('buildCaseReport JSON', () => {
     assert.ok(Array.isArray(json.evidenceTimeline[1].changes));
     assert.ok(json.evidenceTimeline[1].changes.length > 0);
     // Current assessment is the latest.
-    assert.equal(json.currentAssessment.id, 'ev-new');
-    assert.equal(json.currentAssessment.riskScore, 85);
-    assert.equal(json.currentAssessment.riskModelVersion, 1);
+    assert.equal(requiredValue(json.currentAssessment).id, 'ev-new');
+    assert.equal(requiredValue(json.currentAssessment).riskScore, 85);
+    assert.equal(requiredValue(json.currentAssessment).riskModelVersion, 1);
   });
 
   test('repeated observation timestamps', () => {
@@ -182,8 +179,8 @@ describe('buildCaseReport JSON', () => {
     const { json, markdown } = caseReport.buildCaseReport(caseRecord({ evidenceHistory: [legacy, current] }), { generatedAt: LATER });
     const entry = json.evidenceTimeline[1];
     assert.deepEqual(entry.incomparableReasons, ['risk-model']);
-    assert.equal(entry.changes.some((change) => change.field === 'riskScore'), false);
-    assert.equal(entry.changes.some((change) => change.field === 'registrar'), true);
+    assert.equal(requiredValue(entry.changes).some((change) => change.field === 'riskScore'), false);
+    assert.equal(requiredValue(entry.changes).some((change) => change.field === 'registrar'), true);
     assert.match(markdown, /different or unversioned models/);
     assert.match(markdown, /Risk model: v1/);
   });
@@ -234,10 +231,11 @@ describe('buildCaseReport JSON', () => {
     const rec = caseRecord({
       notes: [{ createdAt: ISO, body: 'Sensitive note content.' }],
     });
-    const { json, markdown } = caseReport.buildCaseReport(rec, {
+    const invalidOptions = {
       includeNotes: 'true',
       generatedAt: ISO,
-    });
+    } as unknown as Parameters<typeof caseReport.buildCaseReport>[1];
+    const { json, markdown } = caseReport.buildCaseReport(rec, invalidOptions);
 
     assert.equal(json.case.notesIncluded, false);
     assert.equal('notes' in json.case, false);
@@ -277,7 +275,7 @@ describe('buildCaseReport JSON', () => {
     const snap = json.evidenceTimeline[0].snapshot;
     assert.equal('_customField' in snap, false);
     assert.equal('anotherUnknown' in snap, false);
-    assert.equal(json.case._futureProp, undefined);
+    assert.equal(recordValue(json.case)._futureProp, undefined);
   });
 
   test('exports the compact HTTP summary without rich response material', () => {
@@ -296,7 +294,7 @@ describe('buildCaseReport JSON', () => {
       rawHeaders: { server: 'secret' },
     })] });
     const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
-    const exported = json.currentAssessment;
+    const exported = requiredValue(json.currentAssessment);
     assert.equal(exported.httpFinalOrigin, 'https://example.test');
     assert.equal(exported.httpResponseStatus, 200);
     assert.deepEqual(exported.httpSecurityHeaders, ['content-security-policy', 'hsts']);
@@ -328,8 +326,9 @@ describe('buildCaseReport JSON', () => {
 
   test('undefined evidenceHistory handled safely', () => {
     const rec = caseRecord();
-    delete rec.evidenceHistory;
-    const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
+    const { evidenceHistory: _omitted, ...withoutEvidenceHistory } = rec;
+    const malformedRecord = withoutEvidenceHistory as unknown as Parameters<typeof caseReport.buildCaseReport>[0];
+    const { json } = caseReport.buildCaseReport(malformedRecord, { generatedAt: ISO });
 
     assert.equal(json.currentAssessment, null);
     assert.deepStrictEqual(json.evidenceTimeline, []);
