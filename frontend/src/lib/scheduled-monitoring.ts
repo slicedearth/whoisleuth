@@ -9,7 +9,7 @@ import {
   SCHEDULED_WATCHLIST_STATUSES,
 } from './analysis/scheduled-monitor-model.ts';
 import { normalizeWatchlistEntry } from './analysis/watchlist-history.ts';
-import type { WatchlistEntry } from './watchlists';
+import type { WatchlistEntry } from './watchlists.ts';
 
 export type ScheduledWatchlistStatus = typeof SCHEDULED_WATCHLIST_STATUSES[number];
 export type ScheduledWatchlist = {

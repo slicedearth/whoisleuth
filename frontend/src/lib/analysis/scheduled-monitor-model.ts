@@ -419,15 +419,6 @@ export function normalizeScheduledMonitorState(value: unknown): ScheduledMonitor
   });
 }
 
-/**
- * @param {{
- *   name: unknown,
- *   entry: any,
- *   intervalHours?: number,
- *   now?: string,
- *   id?: string,
- * }} options
- */
 export function createScheduledWatchlist({
   name,
   entry,

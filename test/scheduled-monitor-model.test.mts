@@ -19,13 +19,19 @@ import {
   SCHEDULED_MONITOR_SCHEMA,
   SCHEDULED_MONITOR_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type { ScheduledWatchlist } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 const NOW = '2026-07-16T08:00:00.000Z';
 const WATCHLIST_ID = 'watchlist-00000001';
 const RUN_ID = 'active-run-000001';
 const LEASE_ID = 'lease-token-00001';
 
-function entry(overrides = {}) {
+function required<T>(value: T | null | undefined): T {
+  assert.ok(value);
+  return value;
+}
+
+function entry(overrides: Record<string, unknown> = {}) {
   return {
     updatedAt: NOW,
     results: [{
@@ -40,7 +46,7 @@ function entry(overrides = {}) {
   };
 }
 
-function watchlist(overrides = {}) {
+function watchlist(overrides: Record<string, unknown> = {}): ScheduledWatchlist {
   return createScheduledWatchlist({
     name: 'Priority domains',
     entry: entry(),
@@ -51,7 +57,7 @@ function watchlist(overrides = {}) {
   });
 }
 
-function state(watchlists = [watchlist()], activeRun = null) {
+function state(watchlists: readonly unknown[] = [watchlist()], activeRun: unknown = null) {
   return {
     schema: SCHEDULED_MONITOR_SCHEMA,
     version: SCHEDULED_MONITOR_SCHEMA_VERSION,
@@ -89,7 +95,7 @@ test('creates a strict scheduled watchlist from compact authority-aware evidence
   assert.equal(result.entry.results[0].rawWhois, undefined);
   assert.equal(result.entry.results[0].unknown, undefined);
   assert.equal(result.entry.baseline[0].rawRdap, undefined);
-  assert.equal(result.entry.privateStoreField, undefined);
+  assert.equal(Object.hasOwn(result.entry, 'privateStoreField'), false);
   assert.deepEqual(Object.keys(result).sort(), [
     'createdAt', 'enabled', 'entry', 'id', 'intervalHours', 'lastError', 'lastRunAt',
     'name', 'nextRunAt', 'prunedHistoryEvents', 'revision', 'sources', 'status', 'updatedAt',
@@ -165,13 +171,13 @@ test('keeps only bounded recent history and discloses newly omitted relevant cha
     changes,
   }));
   const result = watchlist({ entry: entry({ history }) });
-  const latest = result.entry.history.at(-1);
+  const latest = required(result.entry.history.at(-1));
   assert.equal(result.entry.history.length, MAX_SCHEDULED_HISTORY_EVENTS);
   assert.equal(latest.changes.length, MAX_SCHEDULED_CHANGES_PER_EVENT);
   assert.equal(latest.omittedChanges, 7);
   assert.equal(latest.changeCount, 107);
-  assert.equal(latest.changes[0].raw, undefined);
-  assert.equal(result.entry.history[0].checkedAt, '2026-07-04T08:00:00.000Z');
+  assert.equal(Object.hasOwn(required(latest.changes[0]), 'raw'), false);
+  assert.equal(required(result.entry.history[0]).checkedAt, '2026-07-04T08:00:00.000Z');
 });
 
 test('filters baseline and history evidence to the scheduled membership', () => {
@@ -195,7 +201,7 @@ test('filters baseline and history evidence to the scheduled membership', () => 
     }],
   }) });
   assert.deepEqual(result.entry.baseline.map((item) => item.domain), ['alpha.example']);
-  assert.deepEqual(result.entry.history[0].changes.map((item) => item.domain), ['alpha.example']);
+  assert.deepEqual(required(result.entry.history[0]).changes.map((item) => item.domain), ['alpha.example']);
 });
 
 test('normalizes disabled and malformed operational fields without inventing activity', () => {
@@ -207,13 +213,14 @@ test('normalizes disabled and malformed operational fields without inventing act
     lastError: ` failed\n${'x'.repeat(500)} `,
     unknown: 'drop me',
   };
-  const result = normalizeScheduledMonitorState(state([source])).watchlists[0];
+  const result = required(normalizeScheduledMonitorState(state([source])).watchlists[0]);
   assert.equal(result.enabled, false);
   assert.equal(result.status, 'paused');
   assert.equal(result.nextRunAt, null);
+  assert.ok(result.lastError);
   assert.equal(result.lastError.includes('\n'), false);
   assert.equal(result.lastError.length, 300);
-  assert.equal(result.unknown, undefined);
+  assert.equal(Object.hasOwn(result, 'unknown'), false);
 });
 
 test('retains a consistent active run and derives only bounded public progress', () => {
@@ -241,18 +248,20 @@ test('retains a consistent active run and derives only bounded public progress',
     rawQueue: ['drop me'],
   };
   const normalized = normalizeScheduledMonitorState(state([storedWatchlist], activeRun));
-  assert.equal(normalized.watchlists[0].status, 'running');
-  assert.equal(normalized.activeRun.results[0].rawWhois, undefined);
-  assert.deepEqual(normalized.activeRun.lease, {
+  assert.equal(required(normalized.watchlists[0]).status, 'running');
+  const normalizedRun = required(normalized.activeRun);
+  assert.equal(normalizedRun.results[0]?.rawWhois, undefined);
+  assert.deepEqual(normalizedRun.lease, {
     token: LEASE_ID,
     cursor: 1,
     expiresAt: '2026-07-16T08:05:00.000Z',
   });
   const publicState = scheduledMonitorPublicState(normalized);
-  assert.deepEqual(publicState.watchlists[0].progress, { completed: 1, total: 2 });
-  assert.equal(publicState.activeRun, undefined);
-  assert.equal(publicState.watchlists[0].sources, undefined);
-  assert.equal(publicState.watchlists[0].lease, undefined);
+  const publicWatchlist = required(publicState.watchlists[0]);
+  assert.deepEqual(publicWatchlist.progress, { completed: 1, total: 2 });
+  assert.equal(Object.hasOwn(publicState, 'activeRun'), false);
+  assert.equal(Object.hasOwn(publicWatchlist, 'sources'), false);
+  assert.equal(Object.hasOwn(publicWatchlist, 'lease'), false);
 });
 
 test('drops active runs with stale revisions, changed sources, invalid cursors, or misordered results', () => {
@@ -280,12 +289,12 @@ test('drops active runs with stale revisions, changed sources, invalid cursors, 
       { ...storedWatchlist, status: 'running' },
     ], activeRun));
     assert.equal(normalized.activeRun, null);
-    assert.equal(normalized.watchlists[0].status, 'idle');
+    assert.equal(required(normalized.watchlists[0]).status, 'idle');
   }
   const orphanedQueue = normalizeScheduledMonitorState(state([
     { ...storedWatchlist, status: 'queued' },
   ], null));
-  assert.equal(orphanedQueue.watchlists[0].status, 'idle');
+  assert.equal(required(orphanedQueue.watchlists[0]).status, 'idle');
 });
 
 test('drops runs for disabled watchlists and releases malformed leases without losing valid progress', () => {
@@ -305,12 +314,12 @@ test('drops runs for disabled watchlists and releases malformed leases without l
   const normalized = normalizeScheduledMonitorState(state([storedWatchlist], activeRun));
   assert.ok(normalized.activeRun);
   assert.equal(normalized.activeRun.lease, null);
-  assert.equal(normalized.watchlists[0].status, 'queued');
+  assert.equal(required(normalized.watchlists[0]).status, 'queued');
 
   const disabled = { ...storedWatchlist, enabled: false, status: 'paused' };
   const paused = normalizeScheduledMonitorState(state([disabled], activeRun));
   assert.equal(paused.activeRun, null);
-  assert.equal(paused.watchlists[0].status, 'paused');
+  assert.equal(required(paused.watchlists[0]).status, 'paused');
 });
 
 test('rejects oversized normalized stores before encryption', () => {
@@ -373,7 +382,7 @@ test('prunes the oldest hosted history with an explicit cumulative count to pres
     result.pruned,
   );
   assert.ok(result.state.watchlists.every((item) => item.entry.history.length >= 1));
-  assert.ok(result.state.watchlists.some((item, index) => item.revision > watchlists[index].revision));
+  assert.ok(result.state.watchlists.some((item, index) => item.revision > required(watchlists[index]).revision));
   assert.ok(new TextEncoder().encode(JSON.stringify(result.state)).byteLength <= MAX_SCHEDULED_MONITOR_STATIC_BYTES);
   assert.throws(
     () => pruneScheduledMonitorHistoryToStaticBudget({
@@ -391,5 +400,5 @@ test('normalization does not mutate authenticated stored input', () => {
   const before = structuredClone(input);
   const result = normalizeScheduledMonitorState(input);
   assert.deepEqual(input, before);
-  assert.equal(result.watchlists[0].unknown, undefined);
+  assert.equal(Object.hasOwn(required(result.watchlists[0]), 'unknown'), false);
 });

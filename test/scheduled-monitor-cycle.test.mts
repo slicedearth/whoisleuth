@@ -13,18 +13,24 @@ import {
   emptyScheduledMonitorState,
   normalizeScheduledMonitorState,
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type {
+  ScheduledMonitorState,
+  ScheduledWatchlist,
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type { ScheduledMonitorCycleOptions } from '../lib/scheduled-monitor-cycle.mts';
+import type { VersionedTextStore } from '../lib/scheduled-monitor-repository.mts';
 
 const START = Date.parse('2026-07-16T10:00:00.000Z');
 
-class MemoryVersionedTextStore {
-  value = null;
-  version = null;
+class MemoryVersionedTextStore implements VersionedTextStore {
+  value: string | null = null;
+  version: string | null = null;
 
   async read() {
     return { value: this.value, version: this.version };
   }
 
-  async compareAndSet(_key, expectedVersion, nextValue) {
+  async compareAndSet(_key: string, expectedVersion: string | null, nextValue: string) {
     if (this.version !== expectedVersion) return false;
     this.value = nextValue;
     this.version = String(Number(this.version || 0) + 1);
@@ -32,7 +38,7 @@ class MemoryVersionedTextStore {
   }
 }
 
-function fixtureEntry(domains) {
+function fixtureEntry(domains: readonly string[]) {
   return {
     updatedAt: new Date(START).toISOString(),
     results: domains.map((domain) => ({
@@ -50,7 +56,7 @@ function fixtureEntry(domains) {
   };
 }
 
-function scheduledWatchlist(domains) {
+function scheduledWatchlist(domains: readonly string[]): ScheduledWatchlist {
   return createScheduledWatchlist({
     id: 'watchlist-00000001',
     name: 'Priority domains',
@@ -60,10 +66,10 @@ function scheduledWatchlist(domains) {
   });
 }
 
-async function harness(domains = []) {
+async function harness(domains: readonly string[] = []) {
   let now = START;
   let id = 0;
-  const repository = new ScheduledMonitorRepository({
+  const repository = new ScheduledMonitorRepository<ScheduledMonitorState>({
     rawStore: new MemoryVersionedTextStore(),
     encryptionKey: randomBytes(32).toString('base64'),
     namespace: 'whoisleuth:scheduled-monitor:cycle-test',
@@ -76,8 +82,11 @@ async function harness(domains = []) {
       result: null,
     }));
   }
-  const lookupCalls = [];
-  const options = {
+  const lookupCalls: Array<{
+    domain: string;
+    options: { fast: true; compact: true };
+  }> = [];
+  const options: ScheduledMonitorCycleOptions = {
     repository,
     lookup: async (domain, lookupOptions) => {
       lookupCalls.push({ domain, options: structuredClone(lookupOptions) });
@@ -90,7 +99,7 @@ async function harness(domains = []) {
     repository,
     lookupCalls,
     options,
-    advance(milliseconds) { now += milliseconds; },
+    advance(milliseconds: number) { now += milliseconds; },
   };
 }
 
@@ -121,16 +130,21 @@ test('a cycle starts at most two fast compact lookups and leaves durable progres
     { fast: true, compact: true },
   ]);
   let state = await h.repository.read();
+  assert.ok(state.activeRun);
   assert.equal(state.activeRun.cursor, 2);
-  assert.equal(state.watchlists[0].entry.results[0].availability, 'available');
+  const initialWatchlist = state.watchlists[0];
+  assert.ok(initialWatchlist);
+  assert.equal(initialWatchlist.entry.results[0]?.availability, 'available');
 
   const second = await runScheduledMonitorCycle(h.options);
   assert.equal(second.status, 'complete');
   assert.equal(second.lookupDeliveries, 1);
   state = await h.repository.read();
   assert.equal(state.activeRun, null);
-  assert.equal(state.watchlists[0].status, 'complete');
-  assert.deepEqual(state.watchlists[0].entry.results.map((item) => item.availability), [
+  const completedWatchlist = state.watchlists[0];
+  assert.ok(completedWatchlist);
+  assert.equal(completedWatchlist.status, 'complete');
+  assert.deepEqual(completedWatchlist.entry.results.map((item) => item.availability), [
     'registered',
     'registered',
     'registered',
@@ -152,7 +166,9 @@ test('a cycle defers another lookup when the soft deadline no longer leaves a sa
     lookupDeliveries: 1,
     deferredDeliveries: 1,
   });
-  assert.equal((await h.repository.read()).activeRun.cursor, 1);
+  const state = await h.repository.read();
+  assert.ok(state.activeRun);
+  assert.equal(state.activeRun.cursor, 1);
 });
 
 test('cycle summaries contain counts and states but no domain or delivery payloads', async () => {
@@ -169,9 +185,12 @@ test('cycle summaries contain counts and states but no domain or delivery payloa
 });
 
 test('invalid cycle dependencies and clocks fail before lookup work', async () => {
+  // @ts-expect-error Runtime validation must reject a missing options object.
   await assert.rejects(runScheduledMonitorCycle(), /cycle options are required/i);
+  // @ts-expect-error Runtime validation must reject incomplete dependencies.
   await assert.rejects(runScheduledMonitorCycle({}), /lookup function is required/i);
   await assert.rejects(
+    // @ts-expect-error Runtime validation must reject a non-callable identifier source.
     runScheduledMonitorCycle({ lookup: async () => ({}), randomUUID: null }),
     /identifier function is required/i,
   );

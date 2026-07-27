@@ -18,6 +18,10 @@ import {
   runScheduledMonitorManagementFunction,
   runScheduledMonitorManagementRequest,
 } from '../netlify/functions/scheduled-monitor-management.mts';
+import type { EnvironmentInput } from '../lib/scheduled-monitor-configuration.mts';
+import type { NetlifyFunctionEvent } from '../lib/netlify-function-types.mts';
+import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mts';
+import type { ManagementFunctionOptions } from '../netlify/functions/scheduled-monitor-management.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'scheduled-management-test-password';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'scheduled-management-test-session-secret';
@@ -26,7 +30,13 @@ const NOW = '2026-07-16T12:00:00.000Z';
 const key = randomBytes(32).toString('base64');
 const namespace = 'whoisleuth:scheduled-monitor:management-function-test';
 
-function readyEnv() {
+type BlobEntry = Readonly<{
+  data: string;
+  etag: string;
+  metadata: Record<string, never>;
+}>;
+
+function readyEnv(): EnvironmentInput {
   return {
     [ENABLE_ENV]: '1',
     [KEY_ENV]: key,
@@ -34,7 +44,7 @@ function readyEnv() {
   };
 }
 
-function authenticatedHeaders(overrides = {}) {
+function authenticatedHeaders(overrides: Record<string, string> = {}): Record<string, string> {
   const cookie = buildSessionCookie(createSessionToken()).split(';')[0];
   return {
     cookie,
@@ -44,11 +54,15 @@ function authenticatedHeaders(overrides = {}) {
   };
 }
 
-function event(httpMethod = 'GET', body = null, headers = authenticatedHeaders()) {
+function event(
+  httpMethod = 'GET',
+  body: string | null = null,
+  headers: Record<string, string> = authenticatedHeaders(),
+): NetlifyFunctionEvent {
   return { httpMethod, body, headers };
 }
 
-function fixtureEntry(domains = ['alpha.invalid']) {
+function fixtureEntry(domains: readonly string[] = ['alpha.invalid']) {
   return {
     updatedAt: NOW,
     results: domains.map((domain) => ({
@@ -62,21 +76,25 @@ function fixtureEntry(domains = ['alpha.invalid']) {
   };
 }
 
-class FakeBlobStore {
-  entry = null;
+class FakeBlobStore implements NetlifyBlobStore {
+  entry: BlobEntry | null = null;
   reads = 0;
   writes = 0;
 
-  async getWithMetadata() {
+  async getWithMetadata(_key: string, _options: { consistency: 'strong'; type: 'text' }) {
     this.reads += 1;
     return this.entry;
   }
 
-  async set(_key, value, options) {
+  async set(
+    _key: string,
+    value: string,
+    options: { onlyIfNew: true } | { onlyIfMatch: string },
+  ) {
     this.writes += 1;
     const current = this.entry?.etag || null;
-    if ((options.onlyIfNew === true && current !== null)
-      || (options.onlyIfMatch !== undefined && options.onlyIfMatch !== current)) {
+    if (('onlyIfNew' in options && options.onlyIfNew === true && current !== null)
+      || ('onlyIfMatch' in options && options.onlyIfMatch !== current)) {
       return { modified: false };
     }
     const etag = `"v${this.writes}"`;
@@ -98,18 +116,18 @@ test('the canonical API route maps only to the authenticated management function
 
 test('rejects unsupported methods, missing authentication, and cross-site mutations before Blob construction', async () => {
   let constructions = 0;
-  const options = {
+  const options: ManagementFunctionOptions = {
     env: readyEnv(),
     blobStoreFactory: () => { constructions += 1; return new FakeBlobStore(); },
   };
   const method = await runScheduledMonitorManagementFunction(event('DELETE'), options);
   assert.equal(method.statusCode, 405);
-  assert.equal(method.headers.Allow, 'GET, POST');
+  assert.equal(new Headers(method.headers).get('Allow'), 'GET, POST');
 
   const unauthenticated = await runScheduledMonitorManagementFunction(event('GET', null, {}), options);
   assert.equal(unauthenticated.statusCode, 401);
-  assert.equal(unauthenticated.headers['Cache-Control'], 'no-store');
-  assert.equal(JSON.parse(unauthenticated.body).errorCode, 'AUTH_REQUIRED');
+  assert.equal(new Headers(unauthenticated.headers).get('Cache-Control'), 'no-store');
+  assert.equal(JSON.parse(unauthenticated.body || '').errorCode, 'AUTH_REQUIRED');
 
   const crossSite = await runScheduledMonitorManagementFunction(event(
     'POST',
@@ -117,7 +135,7 @@ test('rejects unsupported methods, missing authentication, and cross-site mutati
     authenticatedHeaders({ origin: 'https://other.example' }),
   ), options);
   assert.equal(crossSite.statusCode, 403);
-  assert.equal(JSON.parse(crossSite.body).errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
+  assert.equal(JSON.parse(crossSite.body || '').errorCode, 'CROSS_SITE_REQUEST_BLOCKED');
   assert.equal(constructions, 0);
 });
 
@@ -127,9 +145,9 @@ test('disabled configuration fails closed without constructing or reading a Blob
     env: {},
     blobStoreFactory: () => { constructions += 1; return new FakeBlobStore(); },
   });
-  const body = JSON.parse(response.body);
+  const body = JSON.parse(response.body || '');
   assert.equal(response.statusCode, 503);
-  assert.equal(response.headers['Cache-Control'], 'no-store');
+  assert.equal(new Headers(response.headers).get('Cache-Control'), 'no-store');
   assert.equal(body.errorCode, SCHEDULED_MONITOR_UNAVAILABLE_CODE);
   assert.match(body.error, /not enabled/i);
   assert.equal(constructions, 0);
@@ -197,6 +215,7 @@ test('the web boundary caps declared and streamed request bodies before Blob con
           controller.close();
         },
       }),
+      // @ts-expect-error Node's streamed Request body requires its runtime-specific duplex option.
       duplex: 'half',
     },
   ), MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES);
@@ -211,22 +230,22 @@ test('invalid and oversized bodies fail before Blob construction', async () => {
   };
   const malformed = await runScheduledMonitorManagementFunction(event('POST', '{'), options);
   assert.equal(malformed.statusCode, 400);
-  assert.equal(JSON.parse(malformed.body).errorCode, MANAGEMENT_ERROR_CODES.INVALID_REQUEST);
+  assert.equal(JSON.parse(malformed.body || '').errorCode, MANAGEMENT_ERROR_CODES.INVALID_REQUEST);
 
   const oversized = await runScheduledMonitorManagementFunction(event(
     'POST',
     'x'.repeat(MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES + 1),
   ), options);
   assert.equal(oversized.statusCode, 413);
-  assert.equal(JSON.parse(oversized.body).errorCode, 'REQUEST_TOO_LARGE');
+  assert.equal(JSON.parse(oversized.body || '').errorCode, 'REQUEST_TOO_LARGE');
   assert.equal(constructions, 0);
 });
 
 test('creates, reads, pauses, resumes, replaces, and deletes through one encrypted store', async () => {
   const store = new FakeBlobStore();
-  const names = [];
+  const names: string[] = [];
   let sequence = 0;
-  const options = {
+  const options: ManagementFunctionOptions = {
     env: readyEnv(),
     blobStoreFactory: (name) => { names.push(name); return store; },
     now: () => Date.parse(NOW),
@@ -238,11 +257,12 @@ test('creates, reads, pauses, resumes, replaces, and deletes through one encrypt
     entry: fixtureEntry(),
     intervalHours: 24,
   })), options);
-  const created = JSON.parse(create.body);
+  const created = JSON.parse(create.body || '');
   assert.equal(create.statusCode, 200);
-  assert.equal(create.headers['Cache-Control'], 'no-store');
+  assert.equal(new Headers(create.headers).get('Cache-Control'), 'no-store');
   assert.equal(created.action, 'created');
   assert.equal(created.state.watchlists[0].domainCount, 1);
+  assert.ok(store.entry);
   assert.equal(store.entry.data.includes('alpha.invalid'), false);
 
   const id = created.id;
@@ -259,7 +279,7 @@ test('creates, reads, pauses, resumes, replaces, and deletes through one encrypt
   }
 
   const read = await runScheduledMonitorManagementFunction(event(), options);
-  const current = JSON.parse(read.body);
+  const current = JSON.parse(read.body || '');
   assert.equal(read.statusCode, 200);
   assert.equal(current.state.watchlists[0].entry.results[0].domain, 'beta.invalid');
   assert.equal(current.state.watchlists[0].enabled, true);
@@ -269,7 +289,7 @@ test('creates, reads, pauses, resumes, replaces, and deletes through one encrypt
     action: 'delete', id,
   })), options);
   assert.equal(removed.statusCode, 200);
-  assert.deepEqual(JSON.parse(removed.body).state.watchlists, []);
+  assert.deepEqual(JSON.parse(removed.body || '').state.watchlists, []);
   assert.ok(names.every((name) => name === SCHEDULED_MONITOR_STORE_NAME));
 });
 
@@ -291,7 +311,7 @@ test('maps expected conflicts and hides unexpected storage failures', async () =
     event('POST', JSON.stringify(command)), options,
   );
   assert.equal(duplicate.statusCode, 409);
-  assert.equal(JSON.parse(duplicate.body).errorCode, MANAGEMENT_ERROR_CODES.NAME_CONFLICT);
+  assert.equal(JSON.parse(duplicate.body || '').errorCode, MANAGEMENT_ERROR_CODES.NAME_CONFLICT);
 
   const failed = await runScheduledMonitorManagementFunction(event(), {
     env: readyEnv(),
@@ -301,14 +321,14 @@ test('maps expected conflicts and hides unexpected storage failures', async () =
     }),
   });
   assert.equal(failed.statusCode, 503);
-  assert.equal(failed.body.includes('private provider detail'), false);
-  assert.equal(JSON.parse(failed.body).errorCode, SCHEDULED_MONITOR_UNAVAILABLE_CODE);
+  assert.equal((failed.body || '').includes('private provider detail'), false);
+  assert.equal(JSON.parse(failed.body || '').errorCode, SCHEDULED_MONITOR_UNAVAILABLE_CODE);
 });
 
 test('applies a dedicated authenticated-session rate ceiling before Blob work', async () => {
   const headers = authenticatedHeaders();
   let constructions = 0;
-  let response;
+  let response: Awaited<ReturnType<typeof runScheduledMonitorManagementFunction>> | undefined;
   for (let index = 0; index < 61; index += 1) {
     response = await runScheduledMonitorManagementFunction(event('GET', null, headers), {
       env: {},
@@ -316,9 +336,10 @@ test('applies a dedicated authenticated-session rate ceiling before Blob work', 
     });
     if (response.statusCode === 429) break;
   }
+  assert.ok(response);
   assert.equal(response.statusCode, 429);
-  assert.equal(response.headers['Cache-Control'], 'no-store');
-  assert.ok(Number(response.headers['Retry-After']) >= 1);
-  assert.equal(JSON.parse(response.body).errorCode, 'RATE_LIMITED');
+  assert.equal(new Headers(response.headers).get('Cache-Control'), 'no-store');
+  assert.ok(Number(new Headers(response.headers).get('Retry-After')) >= 1);
+  assert.equal(JSON.parse(response.body || '').errorCode, 'RATE_LIMITED');
   assert.equal(constructions, 0);
 });

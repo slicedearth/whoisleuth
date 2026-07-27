@@ -8,6 +8,11 @@ import {
 
 const NOW = '2026-07-16T12:00:00.000Z';
 
+function required<T>(value: T | null | undefined): T {
+  assert.ok(value);
+  return value;
+}
+
 function entry(domain = 'alpha.invalid') {
   return {
     updatedAt: NOW,
@@ -24,7 +29,7 @@ function entry(domain = 'alpha.invalid') {
   };
 }
 
-function publicWatchlist(overrides = {}) {
+function publicWatchlist(overrides: Record<string, unknown> = {}) {
   return {
     id: 'watchlist-00000001',
     name: 'Priority domains',
@@ -45,7 +50,7 @@ function publicWatchlist(overrides = {}) {
   };
 }
 
-function responseFixture(overrides = {}) {
+function responseFixture(overrides: Record<string, unknown> = {}) {
   return {
     state: {
       schema: 'whoisleuth.scheduled-monitor',
@@ -72,9 +77,10 @@ test('normalizes public hosted state and discards unknown compact evidence and o
   assert.ok(result);
   assert.equal(result.action, null);
   assert.equal(result.id, null);
-  assert.equal(result.state.watchlists[0].entry.results[0].rawWhois, undefined);
-  assert.equal(result.state.watchlists[0].entry.privateField, undefined);
-  assert.equal(result.state.watchlists[0].lease, undefined);
+  const watchlist = required(result.state.watchlists[0]);
+  assert.equal(watchlist.entry.results[0]?.rawWhois, undefined);
+  assert.equal(Object.hasOwn(watchlist.entry, 'privateField'), false);
+  assert.equal(Object.hasOwn(watchlist, 'lease'), false);
   assert.equal(result.capacity.remainingLookupsPerWeek, 3017);
 });
 
@@ -88,9 +94,10 @@ test('accepts a bounded mutation result and validates progress against membershi
       watchlists: [publicWatchlist({ status: 'running', progress: { completed: 0, total: 1 } })],
     },
   }));
+  assert.ok(result);
   assert.equal(result.action, 'updated');
   assert.equal(result.id, 'watchlist-00000001');
-  assert.deepEqual(result.state.watchlists[0].progress, { completed: 0, total: 1 });
+  assert.deepEqual(required(result.state.watchlists[0]).progress, { completed: 0, total: 1 });
 
   assert.equal(normalizeScheduledMonitoringResponse(responseFixture({
     state: {
@@ -132,13 +139,15 @@ test('deduplicates bounded watchlists by id and case-insensitive name', () => {
       ],
     },
   }));
+  assert.ok(result);
   assert.equal(result.state.watchlists.length, 1);
 });
 
 test('GET and POST use the canonical same-origin no-store endpoint contract', async () => {
-  const calls = [];
-  const fetcher = async (url, options) => {
-    calls.push({ url, options: structuredClone(options) });
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const fetcher: typeof fetch = async (input, options) => {
+    const url = String(input);
+    calls.push({ url, options: structuredClone(options || {}) });
     return new Response(JSON.stringify(responseFixture({
       ...(options?.method === 'POST' ? { action: 'created', id: 'watchlist-00000001' } : {}),
     })), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -148,16 +157,19 @@ test('GET and POST use the canonical same-origin no-store endpoint contract', as
     action: 'create', name: 'Priority domains', entry: entry(), intervalHours: 24,
   }, fetcher);
 
-  assert.deepEqual(calls[0], {
+  assert.deepEqual(required(calls[0]), {
     url: '/api/scheduled-monitor',
     options: { credentials: 'same-origin', cache: 'no-store' },
   });
-  assert.equal(calls[1].url, '/api/scheduled-monitor');
-  assert.equal(calls[1].options.method, 'POST');
-  assert.equal(calls[1].options.credentials, 'same-origin');
-  assert.equal(calls[1].options.cache, 'no-store');
-  assert.equal(calls[1].options.headers['Content-Type'], 'application/json');
-  assert.deepEqual(JSON.parse(calls[1].options.body), {
+  const post = required(calls[1]);
+  assert.equal(post.url, '/api/scheduled-monitor');
+  assert.equal(post.options.method, 'POST');
+  assert.equal(post.options.credentials, 'same-origin');
+  assert.equal(post.options.cache, 'no-store');
+  assert.equal(new Headers(post.options.headers).get('Content-Type'), 'application/json');
+  const postBody = post.options.body;
+  assert.equal(typeof postBody, 'string');
+  assert.deepEqual(JSON.parse(typeof postBody === 'string' ? postBody : ''), {
     action: 'create', name: 'Priority domains', entry: entry(), intervalHours: 24,
   });
 });

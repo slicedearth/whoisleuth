@@ -7,6 +7,7 @@ import {
   createScheduledMonitorManager,
   MANAGEMENT_ERROR_CODES,
   scheduledMonitorCapacity,
+  ScheduledMonitorManagementError,
   THEORETICAL_LOOKUPS_PER_WEEK,
 } from '../lib/scheduled-monitor-management.mts';
 import {
@@ -15,11 +16,33 @@ import {
   MAX_SCHEDULED_WATCHLISTS,
   normalizeScheduledMonitorState,
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type {
+  ScheduledMonitorActiveRun,
+  ScheduledMonitorState,
+  ScheduledWatchlist,
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type {
+  ScheduledMonitorManagerOptions,
+  ScheduledMonitorRepositoryContract,
+} from '../lib/scheduled-monitor-management.mts';
 
 const NOW_MS = Date.parse('2026-07-16T12:00:00.000Z');
 const NOW = new Date(NOW_MS).toISOString();
 
-function entry(domains = ['alpha.invalid']) {
+type WatchlistFixtureOptions = Readonly<{
+  id?: string;
+  name?: string;
+  domains?: readonly string[];
+  intervalHours?: number;
+  now?: string;
+}>;
+
+function required<T>(value: T | null | undefined): T {
+  assert.ok(value);
+  return value;
+}
+
+function entry(domains: readonly string[] = ['alpha.invalid']) {
   return {
     updatedAt: NOW,
     results: domains.map((domain) => ({
@@ -39,11 +62,14 @@ function watchlist({
   domains = ['alpha.invalid'],
   intervalHours = 24,
   now = NOW,
-} = {}) {
+}: WatchlistFixtureOptions = {}): ScheduledWatchlist {
   return createScheduledWatchlist({ id, name, entry: entry(domains), intervalHours, now });
 }
 
-function state(watchlists = [], activeRun = null) {
+function state(
+  watchlists: readonly ScheduledWatchlist[] = [],
+  activeRun: ScheduledMonitorActiveRun | null = null,
+): ScheduledMonitorState {
   return normalizeScheduledMonitorState({
     ...emptyScheduledMonitorState(),
     watchlists,
@@ -51,17 +77,29 @@ function state(watchlists = [], activeRun = null) {
   });
 }
 
-class MemoryRepository {
-  constructor(initial = state()) {
+class MemoryRepository implements ScheduledMonitorRepositoryContract {
+  state: ScheduledMonitorState;
+  writes = 0;
+
+  constructor(initial: ScheduledMonitorState = state()) {
     this.state = structuredClone(initial);
-    this.writes = 0;
   }
 
   async read() {
     return structuredClone(this.state);
   }
 
-  async update(mutator) {
+  async update<Result>(mutator: (
+    state: ScheduledMonitorState,
+  ) => {
+    state: ScheduledMonitorState;
+    result: Result;
+    changed?: boolean;
+  } | Promise<{
+    state: ScheduledMonitorState;
+    result: Result;
+    changed?: boolean;
+  }>) {
     const outcome = await mutator(structuredClone(this.state));
     if (outcome.changed !== false) {
       this.state = normalizeScheduledMonitorState(outcome.state);
@@ -71,7 +109,10 @@ class MemoryRepository {
   }
 }
 
-function manager(initial = state(), overrides = {}) {
+function manager(
+  initial: ScheduledMonitorState = state(),
+  overrides: Omit<Partial<ScheduledMonitorManagerOptions>, 'repository'> = {},
+) {
   const repository = new MemoryRepository(initial);
   let sequence = 0;
   return {
@@ -85,8 +126,9 @@ function manager(initial = state(), overrides = {}) {
   };
 }
 
-function managementCode(code) {
-  return (error) => {
+function managementCode(code: string) {
+  return (error: unknown) => {
+    assert.ok(error instanceof ScheduledMonitorManagementError);
     assert.equal(error.code, code);
     return true;
   };
@@ -133,10 +175,11 @@ test('reads only bounded public state and capacity without operational leases', 
   const harness = manager(state([item], activeRun));
   const result = await harness.manager.read();
 
-  assert.equal(result.state.watchlists[0].name, 'Priority domains');
-  assert.deepEqual(result.state.watchlists[0].progress, { completed: 0, total: 1 });
-  assert.equal(result.state.activeRun, undefined);
-  assert.equal(result.state.watchlists[0].sources, undefined);
+  const publicWatchlist = required(result.state.watchlists[0]);
+  assert.equal(publicWatchlist.name, 'Priority domains');
+  assert.deepEqual(publicWatchlist.progress, { completed: 0, total: 1 });
+  assert.equal(Object.hasOwn(result.state, 'activeRun'), false);
+  assert.equal(Object.hasOwn(publicWatchlist, 'sources'), false);
   assert.equal(result.capacity.projectedLookupsPerWeek, 7);
   assert.equal(harness.repository.writes, 0);
 });
@@ -152,9 +195,10 @@ test('creates a normalized scheduled watchlist and drops unknown compact evidenc
 
   assert.equal(result.action, 'created');
   assert.equal(result.id, 'generated-00000001');
-  assert.equal(result.state.watchlists[0].name, 'Priority domains');
-  assert.equal(result.state.watchlists[0].entry.results[0].domain, 'alpha.invalid');
-  assert.equal(result.state.watchlists[0].entry.results[0].rawWhois, undefined);
+  const created = required(result.state.watchlists[0]);
+  assert.equal(created.name, 'Priority domains');
+  assert.equal(created.entry.results[0]?.domain, 'alpha.invalid');
+  assert.equal(created.entry.results[0]?.rawWhois, undefined);
   assert.equal(result.capacity.projectedLookupsPerWeek, 14);
   assert.equal(harness.repository.writes, 1);
 });
@@ -266,7 +310,7 @@ test('updates names, membership, intervals, and enabled state while superseding 
     intervalHours: 12,
     enabled: false,
   });
-  const updated = result.state.watchlists[0];
+  const updated = required(result.state.watchlists[0]);
 
   assert.equal(result.action, 'updated');
   assert.equal(updated.name, 'Updated domains');
@@ -275,29 +319,34 @@ test('updates names, membership, intervals, and enabled state while superseding 
   assert.equal(updated.status, 'paused');
   assert.equal(updated.nextRunAt, null);
   assert.equal(updated.revision, 2);
-  assert.equal(updated.entry.results[0].domain, 'beta.invalid');
+  assert.equal(updated.entry.results[0]?.domain, 'beta.invalid');
   assert.equal(updated.progress, null);
   assert.equal((await harness.repository.read()).activeRun, null);
 });
 
 test('resuming or materially changing a schedule queues it from the management timestamp', async () => {
-  const original = { ...watchlist(), enabled: false, status: 'paused', nextRunAt: null };
+  const original: ScheduledWatchlist = {
+    ...watchlist(),
+    enabled: false,
+    status: 'paused',
+    nextRunAt: null,
+  };
   const harness = manager(state([original]));
   const resumed = await harness.manager.execute({
     action: 'update',
     id: original.id,
     enabled: true,
   });
-  assert.equal(resumed.state.watchlists[0].nextRunAt, NOW);
-  assert.equal(resumed.state.watchlists[0].status, 'idle');
+  assert.equal(required(resumed.state.watchlists[0]).nextRunAt, NOW);
+  assert.equal(required(resumed.state.watchlists[0]).status, 'idle');
 
   const interval = await harness.manager.execute({
     action: 'update',
     id: original.id,
     intervalHours: 6,
   });
-  assert.equal(interval.state.watchlists[0].nextRunAt, NOW);
-  assert.equal(interval.state.watchlists[0].revision, 3);
+  assert.equal(required(interval.state.watchlists[0]).nextRunAt, NOW);
+  assert.equal(required(interval.state.watchlists[0]).revision, 3);
 });
 
 test('a semantically empty update avoids a repository write and revision change', async () => {
@@ -312,7 +361,7 @@ test('a semantically empty update avoids a repository write and revision change'
   });
 
   assert.equal(result.action, 'unchanged');
-  assert.equal(result.state.watchlists[0].revision, 1);
+  assert.equal(required(result.state.watchlists[0]).revision, 1);
   assert.equal(harness.repository.writes, 0);
 });
 
@@ -354,12 +403,15 @@ test('pure command application does not mutate the input state or command', () =
 
   assert.deepEqual(sourceState, beforeState);
   assert.deepEqual(command, beforeCommand);
-  assert.equal(result.state.watchlists[0].enabled, false);
+  assert.equal(required(result.state.watchlists[0]).enabled, false);
 });
 
 test('validates manager dependencies, clock, and generated identifiers', async () => {
+  // @ts-expect-error Runtime validation must reject incomplete manager options.
   assert.throws(() => createScheduledMonitorManager({}), /repository is required/i);
+  // @ts-expect-error Runtime validation must reject a non-callable clock.
   assert.throws(() => createScheduledMonitorManager({ repository: new MemoryRepository(), now: 1 }), /clock is required/i);
+  // @ts-expect-error Runtime validation must reject a non-callable identifier source.
   assert.throws(() => createScheduledMonitorManager({ repository: new MemoryRepository(), randomUUID: null }), /identifier source/i);
 
   const badClock = manager(state(), { now: () => Number.NaN });

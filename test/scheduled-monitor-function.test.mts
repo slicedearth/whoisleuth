@@ -16,11 +16,19 @@ import {
   NAMESPACE_ENV,
   SCHEDULED_MONITOR_UNAVAILABLE_CODE,
 } from '../lib/scheduled-monitor-runtime.mts';
+import type { EnvironmentInput } from '../lib/scheduled-monitor-configuration.mts';
+import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mts';
 
 const key = randomBytes(32).toString('base64');
 const namespace = 'whoisleuth:scheduled-monitor:function-test';
 
-function readyEnv(overrides = {}) {
+type BlobEntry = Readonly<{
+  data: string;
+  etag: string;
+  metadata: Record<string, never>;
+}>;
+
+function readyEnv(overrides: EnvironmentInput = {}): EnvironmentInput {
   return {
     [ENABLE_ENV]: '1',
     [KEY_ENV]: key,
@@ -29,21 +37,25 @@ function readyEnv(overrides = {}) {
   };
 }
 
-class FakeBlobStore {
-  entry = null;
+class FakeBlobStore implements NetlifyBlobStore {
+  entry: BlobEntry | null = null;
   reads = 0;
   writes = 0;
 
-  async getWithMetadata() {
+  async getWithMetadata(_key: string, _options: { consistency: 'strong'; type: 'text' }) {
     this.reads += 1;
     return this.entry;
   }
 
-  async set(_key, value, options) {
+  async set(
+    _key: string,
+    value: string,
+    options: { onlyIfNew: true } | { onlyIfMatch: string },
+  ) {
     this.writes += 1;
     const current = this.entry?.etag || null;
-    if ((options.onlyIfNew === true && current !== null)
-      || (options.onlyIfMatch !== undefined && options.onlyIfMatch !== current)) {
+    if (('onlyIfNew' in options && options.onlyIfNew === true && current !== null)
+      || ('onlyIfMatch' in options && options.onlyIfMatch !== current)) {
       return { modified: false };
     }
     this.entry = { data: value, etag: `"v${this.writes}"`, metadata: {} };
@@ -192,7 +204,7 @@ test('a manual invocation from a non-production deploy cannot touch the site-wid
 
 test('the scheduled production context runs even when published provenance is false', async () => {
   const blobs = new FakeBlobStore();
-  const names = [];
+  const names: string[] = [];
   const result = await runScheduledMonitorFunction({
     env: readyEnv(),
     deploy: { context: 'production', published: false },
@@ -249,14 +261,18 @@ test('malformed enabled configuration fails before Blob construction or lookup w
       lookups += 1;
       return {};
     },
-  }), (error) => error.code === SCHEDULED_MONITOR_UNAVAILABLE_CODE);
+  }), (error: unknown) => (
+    error instanceof Error
+    && 'code' in error
+    && error.code === SCHEDULED_MONITOR_UNAVAILABLE_CODE
+  ));
   assert.equal(storeConstructions, 0);
   assert.equal(lookups, 0);
 });
 
 test('a ready worker constructs the one named store and runs an idle bounded cycle', async () => {
   const blobs = new FakeBlobStore();
-  const names = [];
+  const names: string[] = [];
   const result = await runScheduledMonitorFunction({
     env: readyEnv(),
     blobStoreFactory: (name) => {

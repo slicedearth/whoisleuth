@@ -16,12 +16,26 @@ import {
   emptyScheduledMonitorState,
   normalizeScheduledMonitorState,
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type { EnvironmentInput } from '../lib/scheduled-monitor-configuration.mts';
+import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mts';
+import type { ScheduledMonitorState } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 const START = Date.parse('2026-07-16T12:00:00.000Z');
 const key = randomBytes(32).toString('base64');
 const namespace = 'whoisleuth:scheduled-monitor:runtime-test';
 
-function readyEnv(overrides = {}) {
+type BlobEntry = Readonly<{
+  data: string;
+  etag: string;
+  metadata: Record<string, never>;
+}>;
+
+function required<T>(value: T | null | undefined): T {
+  assert.ok(value);
+  return value;
+}
+
+function readyEnv(overrides: EnvironmentInput = {}): EnvironmentInput {
   return {
     [ENABLE_ENV]: '1',
     [KEY_ENV]: key,
@@ -30,21 +44,25 @@ function readyEnv(overrides = {}) {
   };
 }
 
-class FakeBlobStore {
-  entry = null;
+class FakeBlobStore implements NetlifyBlobStore {
+  entry: BlobEntry | null = null;
   reads = 0;
   writes = 0;
 
-  async getWithMetadata() {
+  async getWithMetadata(_key: string, _options: { consistency: 'strong'; type: 'text' }) {
     this.reads += 1;
     return this.entry;
   }
 
-  async set(_key, value, options) {
+  async set(
+    _key: string,
+    value: string,
+    options: { onlyIfNew: true } | { onlyIfMatch: string },
+  ) {
     this.writes += 1;
     const current = this.entry?.etag || null;
-    if ((options.onlyIfNew === true && current !== null)
-      || (options.onlyIfMatch !== undefined && options.onlyIfMatch !== current)) {
+    if (('onlyIfNew' in options && options.onlyIfNew === true && current !== null)
+      || ('onlyIfMatch' in options && options.onlyIfMatch !== current)) {
       return { modified: false };
     }
     const etag = `"v${this.writes}"`;
@@ -53,7 +71,7 @@ class FakeBlobStore {
   }
 }
 
-function fixtureEntry(domains) {
+function fixtureEntry(domains: readonly string[]) {
   return {
     updatedAt: new Date(START).toISOString(),
     results: domains.map((domain) => ({
@@ -85,7 +103,7 @@ test('configuration is disabled by default and accepts explicit true and false v
 });
 
 test('malformed enabled configuration fails closed without exposing the encryption key', () => {
-  const cases = [
+  const cases: Array<readonly [EnvironmentInput, string]> = [
     [{ [ENABLE_ENV]: true }, ENABLE_ENV],
     [{ [ENABLE_ENV]: 'sometimes' }, ENABLE_ENV],
     [{ [ENABLE_ENV]: '1', [NAMESPACE_ENV]: namespace }, KEY_ENV],
@@ -96,6 +114,7 @@ test('malformed enabled configuration fails closed without exposing the encrypti
   for (const [env, expected] of cases) {
     const configuration = scheduledMonitorRuntimeConfiguration(env);
     assert.equal(configuration.status, 'unavailable');
+    assert.ok(configuration.reason);
     assert.match(configuration.reason, new RegExp(expected));
     assert.equal(JSON.stringify(configuration).includes(key), false);
   }
@@ -122,7 +141,8 @@ test('disabled and unavailable runtimes perform no Blob or lookup work', async (
     blobStore: blobs,
     lookup: async () => { lookups += 1; return {}; },
   });
-  await assert.rejects(unavailable.run(), (error) => {
+  await assert.rejects(unavailable.run(), (error: unknown) => {
+    assert.ok(error instanceof Error && 'code' in error);
     assert.equal(error.code, SCHEDULED_MONITOR_UNAVAILABLE_CODE);
     return true;
   });
@@ -138,14 +158,19 @@ test('an enabled runtime requires a Blob store before reading or looking up', as
     lookup: async () => { lookups += 1; return {}; },
   });
   assert.equal(runtime.status, 'unavailable');
+  assert.ok(runtime.reason);
   assert.match(runtime.reason, /Blob storage is unavailable/i);
-  await assert.rejects(runtime.run(), (error) => error.code === SCHEDULED_MONITOR_UNAVAILABLE_CODE);
+  await assert.rejects(runtime.run(), (error: unknown) => (
+    error instanceof Error
+    && 'code' in error
+    && error.code === SCHEDULED_MONITOR_UNAVAILABLE_CODE
+  ));
   assert.equal(lookups, 0);
 });
 
 test('a ready runtime composes encrypted storage and the fast compact cycle without exposing secrets', async () => {
   const blobs = new FakeBlobStore();
-  const repository = new ScheduledMonitorRepository({
+  const repository = new ScheduledMonitorRepository<ScheduledMonitorState>({
     rawStore: createNetlifyBlobVersionedTextStore(blobs),
     encryptionKey: key,
     namespace,
@@ -165,7 +190,10 @@ test('a ready runtime composes encrypted storage and the fast compact cycle with
     },
     result: null,
   }));
-  const calls = [];
+  const calls: Array<{
+    domain: string;
+    options: { fast: true; compact: true };
+  }> = [];
   let id = 0;
   const runtime = createScheduledMonitorRuntime({
     env: readyEnv(),
@@ -185,12 +213,12 @@ test('a ready runtime composes encrypted storage and the fast compact cycle with
   const result = await runtime.run();
   assert.equal(result.status, 'complete');
   assert.deepEqual(calls, [{ domain: 'alpha.invalid', options: { fast: true, compact: true } }]);
-  assert.equal(blobs.entry.data.includes('alpha.invalid'), false);
+  assert.equal(required(blobs.entry).data.includes('alpha.invalid'), false);
 });
 
 test('the default lookup path honors the hosted lookup emergency switch without network work', async () => {
   const blobs = new FakeBlobStore();
-  const repository = new ScheduledMonitorRepository({
+  const repository = new ScheduledMonitorRepository<ScheduledMonitorState>({
     rawStore: createNetlifyBlobVersionedTextStore(blobs),
     encryptionKey: key,
     namespace,
@@ -220,6 +248,7 @@ test('the default lookup path honors the hosted lookup emergency switch without 
   const result = await runtime.run();
   assert.equal(result.status, 'partial');
   const state = await repository.read();
-  assert.equal(state.watchlists[0].entry.results[0].availability, 'error');
-  assert.equal(state.watchlists[0].entry.baseline[0].availability, 'available');
+  const watchlist = required(state.watchlists[0]);
+  assert.equal(watchlist.entry.results[0]?.availability, 'error');
+  assert.equal(watchlist.entry.baseline[0]?.availability, 'available');
 });

@@ -25,6 +25,7 @@ type ScheduledMonitorCycleResult = {
   processedDeliveries: unknown;
   lookupDeliveries: unknown;
   deferredDeliveries: unknown;
+  [key: string]: unknown;
 };
 type ScheduledFunctionOptions = Omit<RuntimeOptions, 'blobStore'> & {
   blobStoreFactory?: BlobStoreFactory;

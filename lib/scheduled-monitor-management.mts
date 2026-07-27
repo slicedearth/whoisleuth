@@ -42,6 +42,10 @@ type ScheduledMonitorManagerOptions = {
   randomUUID?: () => string;
 };
 type ScheduledMonitorCommand = Record<string, unknown>;
+type ScheduledMonitorCommandResult = {
+  action: 'created' | 'updated' | 'deleted' | 'unchanged';
+  id: string;
+};
 type CapacityReport = {
   version: 1;
   triggerIntervalMinutes: number;
@@ -202,7 +206,7 @@ function assertUniqueName(
   }
 }
 
-function publicResult(state: ScheduledMonitorState, result: Record<string, unknown>) {
+function publicResult(state: ScheduledMonitorState, result: ScheduledMonitorCommandResult) {
   return {
     ...result,
     state: scheduledMonitorPublicState(state),
@@ -248,7 +252,7 @@ function applyCreate(
   command: ScheduledMonitorCommand,
   timestamp: string,
   id: string,
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   if (state.watchlists.length >= MAX_SCHEDULED_WATCHLISTS) {
     managementError(
       MANAGEMENT_ERROR_CODES.LIMIT_REACHED,
@@ -289,7 +293,7 @@ function applyUpdate(
   state: ScheduledMonitorState,
   command: ScheduledMonitorCommand,
   timestamp: string,
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   if (!isScheduledMonitorId(command.id)) {
     managementError(MANAGEMENT_ERROR_CODES.INVALID_REQUEST, 'Scheduled watchlist identifier is invalid.');
   }
@@ -368,7 +372,7 @@ function applyUpdate(
 function applyDelete(
   state: ScheduledMonitorState,
   command: ScheduledMonitorCommand,
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   if (!isScheduledMonitorId(command.id)) {
     managementError(MANAGEMENT_ERROR_CODES.INVALID_REQUEST, 'Scheduled watchlist identifier is invalid.');
   }
@@ -390,7 +394,7 @@ function applyScheduledMonitorCommand(
   value: unknown,
   commandInput: unknown,
   options: { now: () => number; randomUUID: () => string },
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   const state = normalizeScheduledMonitorState(value);
   const command = normalizeCommand(commandInput);
   if (command.action === 'delete') return applyDelete(state, command);

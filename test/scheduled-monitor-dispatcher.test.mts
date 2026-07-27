@@ -21,10 +21,35 @@ import {
   normalizeScheduledMonitorState,
 } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 import { ScheduledMonitorRepository } from '../lib/scheduled-monitor-repository.mts';
+import type {
+  ScheduledMonitorDelivery,
+  ScheduledMonitorDispatcherOptions,
+} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts';
+import type {
+  ScheduledMonitorState,
+  ScheduledWatchlist,
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type { VersionedTextStore } from '../lib/scheduled-monitor-repository.mts';
 
 const START = Date.parse('2026-07-16T08:00:00.000Z');
 
-function fixtureEntry(domains = ['alpha.example', 'beta.example']) {
+type WatchlistFixtureOptions = Readonly<{
+  id?: string;
+  name?: string;
+  domains?: readonly string[];
+  nextRunAt?: string;
+}>;
+type DeliveryRecord = Readonly<{
+  message: ScheduledMonitorDelivery;
+  options: { deduplicationKey: string };
+}>;
+
+function required<T>(value: T | null | undefined): T {
+  assert.ok(value);
+  return value;
+}
+
+function fixtureEntry(domains: readonly string[] = ['alpha.example', 'beta.example']) {
   return {
     updatedAt: new Date(START).toISOString(),
     results: domains.map((domain) => ({
@@ -47,7 +72,7 @@ function scheduledWatchlist({
   name = 'Priority domains',
   domains,
   nextRunAt,
-} = {}) {
+}: WatchlistFixtureOptions = {}): ScheduledWatchlist {
   const record = createScheduledWatchlist({
     id,
     name,
@@ -59,18 +84,16 @@ function scheduledWatchlist({
   return record;
 }
 
-class MemoryVersionedTextStore {
-  constructor() {
-    this.value = null;
-    this.version = null;
-    this.writeCalls = 0;
-  }
+class MemoryVersionedTextStore implements VersionedTextStore {
+  value: string | null = null;
+  version: string | null = null;
+  writeCalls = 0;
 
   async read() {
     return { value: this.value, version: this.version };
   }
 
-  async compareAndSet(_key, expectedVersion, nextValue) {
+  async compareAndSet(_key: string, expectedVersion: string | null, nextValue: string) {
     this.writeCalls += 1;
     if (this.version !== expectedVersion) return false;
     this.value = nextValue;
@@ -79,19 +102,25 @@ class MemoryVersionedTextStore {
   }
 }
 
-async function harness({ lookup, enqueue } = {}) {
+async function harness({
+  lookup,
+  enqueue,
+}: Partial<Pick<ScheduledMonitorDispatcherOptions, 'lookup' | 'enqueue'>> = {}) {
   let now = START;
   let id = 0;
   const rawStore = new MemoryVersionedTextStore();
-  const repository = new ScheduledMonitorRepository({
+  const repository = new ScheduledMonitorRepository<ScheduledMonitorState>({
     rawStore,
     encryptionKey: randomBytes(32).toString('base64'),
     namespace: 'whoisleuth:scheduled-monitor:dispatcher-test',
     emptyState: emptyScheduledMonitorState,
     normalizeState: normalizeScheduledMonitorState,
   });
-  const deliveries = [];
-  const lookupCalls = [];
+  const deliveries: DeliveryRecord[] = [];
+  const lookupCalls: Array<{
+    domain: string;
+    options: { fast: true; compact: true };
+  }> = [];
   const dispatcher = new ScheduledMonitorDispatcher({
     repository,
     lookup: lookup || (async (domain, options) => {
@@ -116,8 +145,8 @@ async function harness({ lookup, enqueue } = {}) {
     rawStore,
     deliveries,
     lookupCalls,
-    advance(milliseconds) { now += milliseconds; },
-    async seed(watchlists) {
+    advance(milliseconds: number) { now += milliseconds; },
+    async seed(watchlists: ScheduledWatchlist[]) {
       await repository.update((state) => ({
         state: { ...state, watchlists, activeRun: null },
         result: null,
@@ -161,13 +190,14 @@ test('a tick selects the earliest due watchlist and publishes no domain data', a
   ]);
   assert.equal(await h.dispatcher.tick(), 'queued');
   assert.equal(h.deliveries.length, 1);
-  assert.equal(h.deliveries[0].message.kind, 'continue');
+  assert.equal(required(h.deliveries[0]).message.kind, 'continue');
   assert.equal(JSON.stringify(h.deliveries).includes('alpha.example'), false);
-  assert.match(h.deliveries[0].options.deduplicationKey, /^scheduled-monitor-generated-/);
+  assert.match(required(h.deliveries[0]).options.deduplicationKey, /^scheduled-monitor-generated-/);
   const state = await h.repository.read();
-  assert.equal(state.activeRun.watchlistId, 'watchlist-00000001');
-  assert.deepEqual(state.activeRun.sources, [{ domain: 'alpha.example' }, { domain: 'beta.example' }]);
-  assert.equal(state.watchlists.find((item) => item.id === 'watchlist-00000001').status, 'queued');
+  const activeRun = required(state.activeRun);
+  assert.equal(activeRun.watchlistId, 'watchlist-00000001');
+  assert.deepEqual(activeRun.sources, [{ domain: 'alpha.example' }, { domain: 'beta.example' }]);
+  assert.equal(required(state.watchlists.find((item) => item.id === 'watchlist-00000001')).status, 'queued');
 });
 
 test('idle ticks and busy leases are true no-op updates', async () => {
@@ -184,9 +214,9 @@ test('idle ticks and busy leases are true no-op updates', async () => {
 
   await h.seed([scheduledWatchlist()]);
   await h.dispatcher.tick();
-  const message = h.deliveries.at(-1).message;
+  const message = required(h.deliveries.at(-1)).message;
   await h.repository.update((state) => {
-    state.activeRun.lease = {
+    required(state.activeRun).lease = {
       token: 'lease-token-00001',
       cursor: 0,
       expiresAt: new Date(START + SCHEDULED_MONITOR_LEASE_MS).toISOString(),
@@ -202,9 +232,11 @@ test('sequential deliveries complete a scan through fast compact lookups', async
   const h = await harness();
   await h.seed([scheduledWatchlist()]);
   assert.equal(await h.dispatcher.tick(), 'queued');
-  const first = h.deliveries.at(-1).message;
+  const first = required(h.deliveries.at(-1)).message;
+  assert.equal(first.kind, 'continue');
   assert.equal(await h.dispatcher.continue(first), 'continue');
-  const second = h.deliveries.at(-1).message;
+  const second = required(h.deliveries.at(-1)).message;
+  assert.equal(second.kind, 'continue');
   assert.equal(second.cursor, 1);
   assert.equal(await h.dispatcher.continue(second), 'complete');
 
@@ -213,18 +245,18 @@ test('sequential deliveries complete a scan through fast compact lookups', async
     { domain: 'beta.example', options: { fast: true, compact: true } },
   ]);
   const state = await h.repository.read();
-  const record = state.watchlists[0];
+  const record = required(state.watchlists[0]);
   assert.equal(state.activeRun, null);
   assert.equal(record.status, 'complete');
   assert.equal(record.lastError, null);
   assert.equal(record.revision, 2);
   assert.equal(record.lastRunAt, '2026-07-16T08:00:00.000Z');
   assert.equal(record.nextRunAt, '2026-07-17T08:00:00.000Z');
-  assert.equal(record.entry.history.at(-1).changeCount, 2);
+  assert.equal(required(record.entry.history.at(-1)).changeCount, 2);
   assert.deepEqual(record.entry.results.map((item) => item.mutationTypes), [['substitution'], ['substitution']]);
-  assert.equal(h.deliveries.at(-1).message.kind, 'tick');
+  assert.equal(required(h.deliveries.at(-1)).message.kind, 'tick');
   assert.equal(
-    h.deliveries.at(-1).options.deduplicationKey,
+    required(h.deliveries.at(-1)).options.deduplicationKey,
     `scheduled-monitor-tick-after-${first.runId}`,
   );
 });
@@ -240,27 +272,31 @@ test('lookup misses and failures complete as partial without erasing conclusive 
   });
   await h.seed([scheduledWatchlist()]);
   await h.dispatcher.tick();
-  assert.equal(await h.dispatcher.continue(h.deliveries.at(-1).message), 'continue');
-  assert.equal(await h.dispatcher.continue(h.deliveries.at(-1).message), 'partial');
-  const record = (await h.repository.read()).watchlists[0];
+  assert.equal(await h.dispatcher.continue(required(h.deliveries.at(-1)).message), 'continue');
+  assert.equal(await h.dispatcher.continue(required(h.deliveries.at(-1)).message), 'partial');
+  const record = required((await h.repository.read()).watchlists[0]);
   assert.equal(record.status, 'partial');
+  assert.ok(record.lastError);
   assert.match(record.lastError, /2 of 2 scheduled lookups were inconclusive/i);
   assert.deepEqual(record.entry.results.map((item) => item.availability), ['unknown', 'error']);
   assert.deepEqual(record.entry.baseline.map((item) => item.availability), ['available', 'available']);
-  assert.equal(record.entry.history.at(-1).changeCount, 0);
+  assert.equal(required(record.entry.history.at(-1)).changeCount, 0);
 });
 
 test('duplicate cursors resume current progress and expired leases can be reclaimed', async () => {
   const h = await harness();
   await h.seed([scheduledWatchlist()]);
   await h.dispatcher.tick();
-  const first = h.deliveries.at(-1).message;
+  const first = required(h.deliveries.at(-1)).message;
+  assert.equal(first.kind, 'continue');
   assert.equal(await h.dispatcher.continue(first), 'continue');
   assert.equal(await h.dispatcher.continue(first), 'resumed');
-  assert.equal(h.deliveries.at(-1).message.cursor, 1);
+  const resumed = required(h.deliveries.at(-1)).message;
+  assert.equal(resumed.kind, 'continue');
+  assert.equal(resumed.cursor, 1);
 
   await h.repository.update((state) => {
-    state.activeRun.lease = {
+    required(state.activeRun).lease = {
       token: 'lease-token-00001',
       cursor: 1,
       expiresAt: new Date(START + SCHEDULED_MONITOR_LEASE_MS).toISOString(),
@@ -268,7 +304,7 @@ test('duplicate cursors resume current progress and expired leases can be reclai
     return { state, result: null };
   });
   h.advance(SCHEDULED_MONITOR_LEASE_MS + 1);
-  assert.equal(await h.dispatcher.continue(h.deliveries.at(-1).message), 'complete');
+  assert.equal(await h.dispatcher.continue(required(h.deliveries.at(-1)).message), 'complete');
 });
 
 test('a stale partial run retains prior evidence, backs off, and allows another due list to start', async () => {
@@ -284,26 +320,31 @@ test('a stale partial run retains prior evidence, backs off, and allows another 
   await h.seed([first, second]);
   await h.dispatcher.tick();
   await h.repository.update((state) => {
-    state.activeRun.cursor = 1;
-    state.activeRun.results = [{ domain: 'alpha.example', availability: 'registered' }];
-    state.activeRun.updatedAt = new Date(START).toISOString();
+    const activeRun = required(state.activeRun);
+    activeRun.cursor = 1;
+    activeRun.results = [scheduledLookupResult(
+      { domain: 'alpha.example' },
+      { availability: { state: 'registered' } },
+    )];
+    activeRun.updatedAt = new Date(START).toISOString();
     return { state, result: null };
   });
   h.advance(SCHEDULED_MONITOR_STALE_RUN_MS);
   assert.equal(await h.dispatcher.tick(), 'queued');
   const state = await h.repository.read();
-  const expired = state.watchlists.find((item) => item.id === first.id);
+  const expired = required(state.watchlists.find((item) => item.id === first.id));
   assert.equal(expired.status, 'partial');
+  assert.ok(expired.lastError);
   assert.match(expired.lastError, /expired after 1 of 2/i);
   assert.equal(expired.nextRunAt, '2026-07-16T11:00:00.000Z');
-  assert.equal(state.activeRun.watchlistId, second.id);
+  assert.equal(required(state.activeRun).watchlistId, second.id);
 });
 
 test('a revision change during lookup supersedes stale work without applying its result', async () => {
-  let resolveLookup;
-  let started;
-  const lookupStarted = new Promise((resolve) => { started = resolve; });
-  const lookupResult = new Promise((resolve) => { resolveLookup = resolve; });
+  let resolveLookup: (value: unknown) => void = () => {};
+  let started: () => void = () => {};
+  const lookupStarted = new Promise<void>((resolve) => { started = resolve; });
+  const lookupResult = new Promise<unknown>((resolve) => { resolveLookup = resolve; });
   const h = await harness({
     lookup: async () => {
       started();
@@ -312,24 +353,26 @@ test('a revision change during lookup supersedes stale work without applying its
   });
   await h.seed([scheduledWatchlist({ domains: ['alpha.example'] })]);
   await h.dispatcher.tick();
-  const continuation = h.dispatcher.continue(h.deliveries.at(-1).message);
+  const continuation = h.dispatcher.continue(required(h.deliveries.at(-1)).message);
   await lookupStarted;
   await h.repository.update((state) => {
-    state.watchlists[0].revision += 1;
-    state.watchlists[0].updatedAt = '2026-07-16T08:01:00.000Z';
+    const watchlist = required(state.watchlists[0]);
+    watchlist.revision += 1;
+    watchlist.updatedAt = '2026-07-16T08:01:00.000Z';
     return { state, result: null };
   });
   resolveLookup({ availability: { state: 'registered' } });
   assert.equal(await continuation, 'superseded');
   const state = await h.repository.read();
   assert.equal(state.activeRun, null);
-  assert.equal(state.watchlists[0].lastRunAt, null);
-  assert.equal(state.watchlists[0].entry.results[0].availability, 'available');
+  const watchlist = required(state.watchlists[0]);
+  assert.equal(watchlist.lastRunAt, null);
+  assert.equal(watchlist.entry.results[0]?.availability, 'available');
 });
 
 test('queue publication failure leaves a resumable opaque run', async () => {
   let fail = true;
-  const published = [];
+  const published: ScheduledMonitorDelivery[] = [];
   const h = await harness({
     enqueue: async (message) => {
       if (fail) throw new Error('queue unavailable');
@@ -344,7 +387,7 @@ test('queue publication failure leaves a resumable opaque run', async () => {
 
   fail = false;
   assert.equal(await h.dispatcher.tick(), 'queued');
-  assert.deepEqual(published[0], scheduledMonitorContinueDelivery(stranded.activeRun.id, 0));
+  assert.deepEqual(published[0], scheduledMonitorContinueDelivery(required(stranded.activeRun).id, 0));
 });
 
 test('a continuation publication failure retains the completed cursor for the next tick', async () => {
@@ -357,11 +400,12 @@ test('a continuation publication failure retains the completed cursor for the ne
   });
   await h.seed([scheduledWatchlist()]);
   await h.dispatcher.tick();
-  const first = scheduledMonitorContinueDelivery((await h.repository.read()).activeRun.id, 0);
+  const first = scheduledMonitorContinueDelivery(required((await h.repository.read()).activeRun).id, 0);
+  assert.ok(first);
   await assert.rejects(h.dispatcher.continue(first), /queue unavailable/i);
   const progressed = await h.repository.read();
-  assert.equal(progressed.activeRun.cursor, 1);
-  assert.equal(progressed.activeRun.lease, null);
+  assert.equal(required(progressed.activeRun).cursor, 1);
+  assert.equal(required(progressed.activeRun).lease, null);
   assert.equal(await h.dispatcher.tick(), 'queued');
   assert.equal(publications, 3);
 });
@@ -379,7 +423,7 @@ test('process accepts the strict tick envelope and delegates into the dispatcher
   const h = await harness();
   await h.seed([scheduledWatchlist()]);
   assert.equal(await h.dispatcher.process(scheduledMonitorTickDelivery()), 'queued');
-  assert.equal(h.deliveries[0].message.kind, 'continue');
+  assert.equal(required(h.deliveries[0]).message.kind, 'continue');
 });
 
 test('scheduled result projection retains only compact registration evidence within its byte cap', () => {
@@ -394,6 +438,7 @@ test('scheduled result projection retains only compact registration evidence wit
     diagnostics: { secret: true },
     rdap: { raw: true },
   });
+  assert.ok(result.registrarName);
   assert.equal(result.registrarName.length, 300);
   assert.equal(result.nameservers.length, 12);
   assert.equal(result.rawRdap, undefined);
@@ -412,6 +457,7 @@ test('scheduled result projection retains only compact registration evidence wit
 });
 
 test('constructor rejects incomplete execution contracts and invalid generated identifiers', async () => {
+  // @ts-expect-error Runtime validation must reject incomplete dependencies.
   assert.throws(() => new ScheduledMonitorDispatcher({}), /repository is required/i);
   const h = await harness();
   const invalid = new ScheduledMonitorDispatcher({
