@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
 import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
+import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -111,8 +112,23 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
 }
 
 async function downloadWorkspaceArchive(page: import('@playwright/test').Page) {
+  await page.getByText('How workspace backups work', { exact: true }).click();
   const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download backup' }).click();
+  await page.getByRole('button', { name: 'Download unencrypted backup' }).click();
+  const download = await pending;
+  const body = await (await download.createReadStream()).toArray();
+  return { download, content: Buffer.concat(body).toString('utf-8') };
+}
+
+async function downloadEncryptedWorkspaceArchive(
+  page: import('@playwright/test').Page,
+  passphrase: string,
+) {
+  await page.getByRole('button', { name: 'Download encrypted backup' }).click();
+  await page.getByLabel(/^Passphrase/).fill(passphrase);
+  await page.getByLabel('Confirm passphrase').fill(passphrase);
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Encrypt and download' }).click();
   const download = await pending;
   const body = await (await download.createReadStream()).toArray();
   return { download, content: Buffer.concat(body).toString('utf-8') };
@@ -215,7 +231,48 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(page.getByRole('status')).toContainText('Downloaded a workspace backup with 8 verified data sections');
+  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 8 verified data sections');
+});
+
+test('the dashboard encrypts and locally unlocks a portable workspace backup', async ({ page }) => {
+  const passphrase = 'portable archive fixture passphrase';
+  await page.goto('/dashboard');
+  await seedArchiveWorkspace(page);
+
+  const { download, content } = await downloadEncryptedWorkspaceArchive(page, passphrase);
+  expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-encrypted-\d{4}-\d{2}-\d{2}\.json$/);
+  const envelope = JSON.parse(content) as EncryptedWorkspaceArchiveEnvelope;
+  expect(envelope.schema).toBe('whoisleuth.encrypted-workspace-archive');
+  expect(envelope.version).toBe(1);
+  expect(envelope.kdf).toMatchObject({ name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000 });
+  expect(envelope.cipher).toMatchObject({ name: 'AES-GCM', keyBits: 256, tagBits: 128 });
+  expect(content).not.toContain('archive-case.invalid');
+  expect(content).not.toContain('Analyst archive note');
+  expect(content).not.toContain(passphrase);
+  await expect(page.getByRole('status')).toContainText('Keep the passphrase separately');
+
+  await migrateLegacyBrowserData(page, {}, { clearStorage: true });
+  await page.getByLabel('Review backup file').setInputFiles({
+    name: 'workspace-encrypted.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(content),
+  });
+  await expect(page.getByRole('status')).toContainText('Encrypted backup selected');
+  await page.getByLabel('Backup passphrase').fill('incorrect archive passphrase');
+  await page.getByRole('button', { name: 'Unlock and review' }).click();
+  await expect(page.getByRole('status')).toContainText('passphrase is incorrect or the encrypted file is corrupted');
+  await expect(page.getByLabel('Backup passphrase')).toHaveValue('');
+
+  await page.getByLabel('Backup passphrase').fill(passphrase);
+  await page.getByRole('button', { name: 'Unlock and review' }).click();
+  const preview = page.locator('.preview');
+  await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
+  await expect(preview.locator('li')).toHaveCount(8);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  await preview.getByRole('button', { name: 'Add selected data' }).click();
+  const cases = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: 2 });
+  expect(cases.records.map((record) => record.value.domain)).toContain('archive-case.invalid');
 });
 
 test('workspace archive import previews conflicts before a non-destructive mobile-safe merge', async ({ page }) => {

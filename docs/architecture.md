@@ -217,7 +217,9 @@ maintainer-run `npm run platform:local-data` command derives that total from the
 owning constants without reading user data. The native provider preserves those
 application bounds while removing the single-origin local-storage capacity
 assumption. Browser tests use only fixed synthetic records and isolate their
-database state. Application-level encryption, PWA support, and synchronization
+database state. Portable workspace archives can be wrapped in browser-local
+passphrase-based authenticated encryption. The active IndexedDB codec remains
+plaintext, while a live encrypted vault, PWA support, and synchronization
 remain separate decisions documented in
 [the browser-local data architecture](browser-local-data.md).
 

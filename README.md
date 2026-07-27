@@ -47,6 +47,12 @@ navigation without shortening the policy.
 | **Monitor** | Manage cases, campaigns, analyst-selected relationship observations, watchlists, timelines, and evidence reports. | Ordinary investigation state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
 | **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
 
+Dashboard can download the bounded workspace as an encrypted portable backup.
+The passphrase and encryption work stay in the browser, and the ordinary
+versioned archive is still validated before any reviewed non-destructive
+import. This protects the downloaded file while locked; the active IndexedDB
+workspace remains plaintext and browser-local.
+
 Deep domain Lookup can combine:
 
 - IANA-bootstrap RDAP and bounded WHOIS referral-chain evidence;

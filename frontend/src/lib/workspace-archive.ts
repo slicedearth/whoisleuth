@@ -5,6 +5,11 @@ import {
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from './analysis/workspace-archive.ts';
 import type { WorkspaceArchivePreviewSection } from './analysis/workspace-archive.ts';
+import {
+  MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
+  decryptWorkspaceArchive,
+  encryptWorkspaceArchive,
+} from './analysis/workspace-archive-crypto.ts';
 import { enforceStoreBudget, mergeCases } from './analysis/case-model.ts';
 import type { CaseRecord } from './analysis/case-model.ts';
 import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.ts';
@@ -34,6 +39,13 @@ import {
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
+export {
+  MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
+  MAX_WORKSPACE_ARCHIVE_PASSPHRASE_BYTES,
+  MIN_WORKSPACE_ARCHIVE_PASSPHRASE_CHARACTERS,
+  inspectEncryptedWorkspaceArchive,
+  isEncryptedWorkspaceArchive,
+} from './analysis/workspace-archive-crypto.ts';
 
 export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
 export type WorkspaceImportSummary = {
@@ -101,6 +113,29 @@ export async function createWorkspaceArchiveDownload(generatedAt = new Date().to
     filename: `whoisleuth-workspace-${archive.generatedAt.slice(0, 10)}.json`,
     mimeType: 'application/json;charset=utf-8',
   };
+}
+
+export async function createEncryptedWorkspaceArchiveDownload(
+  passphrase: string,
+  generatedAt = new Date().toISOString(),
+) {
+  const archive = await createWorkspaceArchive(generatedAt);
+  const envelope = await encryptWorkspaceArchive(archive, passphrase);
+  const content = `${JSON.stringify(envelope, null, 2)}\n`;
+  if (new TextEncoder().encode(content).byteLength > MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES) {
+    throw new Error('The encrypted workspace archive exceeds its 13.4 MiB envelope limit.');
+  }
+  return {
+    archive,
+    envelope,
+    content,
+    filename: `whoisleuth-workspace-encrypted-${archive.generatedAt.slice(0, 10)}.json`,
+    mimeType: 'application/json;charset=utf-8',
+  };
+}
+
+export async function decryptLocalWorkspaceArchive(raw: unknown, passphrase: string) {
+  return decryptWorkspaceArchive(raw, passphrase);
 }
 
 export async function previewLocalWorkspaceArchive(raw: unknown) {

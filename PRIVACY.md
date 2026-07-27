@@ -360,7 +360,10 @@ default (see the README), so many lookups return no personal data at all.
   legacy compatibility copies before returning to an older build, subject to
   local-storage quota. The IndexedDB record codec is currently plaintext JSON;
   SHA-256 manifest digests detect corruption but are not encryption. A
-  downloaded workspace archive remains the safer portable backup.
+  downloaded workspace archive remains the safer portable backup and can be
+  wrapped in passphrase-based authenticated encryption entirely in the
+  browser. This protects the downloaded file while locked, not the active
+  browser database or an open Console.
   The appearance selector can also retain one bounded `dark`, `light`, or
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
   server. It is included only when you deliberately download a unified
@@ -426,10 +429,18 @@ default (see the README), so many lookups return no personal data at all.
   checksums, previews conflicts before a non-destructive merge, and excludes
   sessions, passwords, API credentials, hosted-monitor encryption keys, raw
   upstream payloads, tab state, Certificate Transparency history, and unrelated
-  browser storage. It is unencrypted, so secure it like the analyst records it
-  contains. Nothing is uploaded or retained by the
-  server when you export. From that point on, the file is yours to manage -
-  store it appropriately and delete it once you no longer need it.
+  browser storage. The recommended download uses browser-native
+  PBKDF2-HMAC-SHA-256 and AES-256-GCM to encrypt that ordinary archive with a
+  passphrase. The passphrase and derived key are not persisted, sent, logged,
+  or recoverable. A separately labelled unencrypted download remains
+  available. Encrypted import decrypts in browser memory, reports the same
+  error for a wrong passphrase or corrupted authenticated ciphertext, and then
+  applies the ordinary archive validation and reviewed merge. Archive
+  encryption cannot protect an unlocked Console from same-origin code, a
+  malicious extension, device malware, a keylogger, or a weak or reused
+  passphrase. Nothing is uploaded or retained by the server when you export or
+  import. From that point on, the file is yours to manage, so store it
+  appropriately and delete it once you no longer need it.
 - **Official-domain posture audits**: handled per request and discarded. The
   server queries public DNS, the domain registry's RDAP service for DNSSEC
   delegation status, and (only when advertised) the official domain's own

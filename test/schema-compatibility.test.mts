@@ -46,6 +46,11 @@ import {
   WORKSPACE_SETTINGS_VERSION,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import {
+  ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA,
+  ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
+  MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
+} from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
+import {
   buildCaseExport,
   CASE_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/case-model.ts';
@@ -124,7 +129,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 51);
+    assert.equal(inventory.entries.length, 52);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -142,6 +147,9 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
+    assert.equal(byId(inventory, 'export.encrypted-workspace-archive').schema, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA);
+    assert.equal(byId(inventory, 'export.encrypted-workspace-archive').currentVersion, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(byId(inventory, 'export.encrypted-workspace-archive').byteBudget, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);
     assert.equal(byId(inventory, 'export.workspace-settings-section').schema, WORKSPACE_SETTINGS_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-settings-section').currentVersion, WORKSPACE_SETTINGS_VERSION);
     assert.equal(byId(inventory, 'cli.deployment-self-check').schema, DEPLOYMENT_SELF_CHECK_SCHEMA);

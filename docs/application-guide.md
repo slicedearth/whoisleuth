@@ -38,7 +38,8 @@ Dashboard is the landing page inside the signed-in Console. It provides:
 - a disposable search across known case, campaign, and profile fields;
 - guided investigations for a brand sweep, infrastructure pivot, or new-domain
   triage; and
-- deliberate export and import of the versioned workspace archive.
+- deliberate encrypted or unencrypted export and reviewed import of the
+  versioned workspace archive.
 
 While the Console opens, it distinguishes session confirmation, browser-local
 workspace preparation, and destination loading. Those phases describe the
@@ -393,16 +394,21 @@ are never retained automatically: Bulk writes one only after the analyst
 selects **Retain observation**. Browser storage can still be cleared or evicted
 and does not synchronize across devices.
 
-Dashboard can create one deliberate, unencrypted workspace archive for the
-supported collections and preferences, including retained relationship
-observations. Import previews changes and uses the existing non-destructive
-merge rules. The archive excludes sessions, passwords, API credentials,
-hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser
-storage.
+Dashboard can create one deliberate workspace archive for the supported
+collections and preferences, including retained relationship observations.
+The recommended download wraps the ordinary checksummed archive in
+passphrase-based browser-local authenticated encryption. The passphrase is
+never stored or sent to the server and cannot be recovered. A separately
+labelled unencrypted download remains available for compatibility. Import
+detects either format, unlocks encrypted files locally, previews changes, and
+uses the existing non-destructive merge rules. Both formats exclude sessions,
+passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
+state, and unrelated browser storage.
 
-The active IndexedDB codec is plaintext JSON. Application-level encryption is
-a separate design decision. See [browser-local data architecture](browser-local-data.md)
-for migration, rollback, capacity, and encryption boundaries.
+The active IndexedDB codec remains plaintext JSON. Archive encryption protects
+the downloaded file while locked, not an open Console or the active browser
+database. See [browser-local data architecture](browser-local-data.md) for the
+full threat model, migration, rollback, capacity, and encryption boundaries.
 
 ## Reports and exports
 
