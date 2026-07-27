@@ -35,7 +35,24 @@ export type LocalDataCollectionDefinition<T> = Readonly<{
   join: (records: LocalDataRecord[], schemaVersion: number) => unknown;
 }>;
 
-export type AnyLocalDataCollectionDefinition = LocalDataCollectionDefinition<any>;
+// Heterogeneous batch operations cannot retain each collection's private
+// document type in one array. Method syntax keeps those parameters correlated
+// at the concrete definition while the provider treats mixed documents as
+// unknown until the owning definition normalizes them.
+export type AnyLocalDataCollectionDefinition = Readonly<{
+  id: string;
+  label: string;
+  legacyKey: string;
+  schemaVersion: number;
+  maximumBytes: number;
+  maximumRecords: number;
+  empty(): unknown;
+  normalize(raw: unknown): unknown;
+  version(raw: unknown): number | null;
+  serialize(document: unknown): string;
+  split(document: unknown): LocalDataRecord[];
+  join(records: LocalDataRecord[], schemaVersion: number): unknown;
+}>;
 
 export type EncodedLocalDataRecord = Readonly<{
   lookupKey: string;
@@ -83,9 +100,8 @@ type CollectionManifest = Readonly<{
   legacyDigest: string | null;
 }>;
 
-type PreparedCollection<T> = Readonly<{
-  definition: LocalDataCollectionDefinition<T>;
-  document: T;
+type PreparedCollection = Readonly<{
+  definition: AnyLocalDataCollectionDefinition;
   records: StoredRecord[];
   serializedBytes: number;
   digest: string;
@@ -98,7 +114,7 @@ type CollectionSnapshot<T> = Readonly<{
   manifest: CollectionManifest;
 }>;
 
-function collectionContentMatches(prepared: PreparedCollection<any>, manifest: CollectionManifest, codec: string): boolean {
+function collectionContentMatches(prepared: PreparedCollection, manifest: CollectionManifest, codec: string): boolean {
   return manifest.schemaVersion === prepared.definition.schemaVersion
     && manifest.codec === codec
     && manifest.recordCount === prepared.records.length
@@ -341,7 +357,7 @@ export class BrowserLocalDataProvider {
         current.set(definition.id, snapshot.document);
       }
       const updated = updater(current);
-      const prepared: PreparedCollection<any>[] = [];
+      const prepared: PreparedCollection[] = [];
       for (let index = 0; index < definitions.length; index++) {
         const definition = definitions[index];
         const snapshot = snapshots[index];
@@ -449,7 +465,7 @@ export class BrowserLocalDataProvider {
     const migratedCollections: string[] = [];
     const retainedLegacyKeys: string[] = [];
     if (missing.length) {
-      const prepared: PreparedCollection<any>[] = [];
+      const prepared: PreparedCollection[] = [];
       for (const definition of missing) {
         let raw: string | null;
         try { raw = this.#storage.getItem(definition.legacyKey); }
@@ -514,7 +530,7 @@ export class BrowserLocalDataProvider {
     input: unknown,
     source: CollectionManifest['source'],
     legacyDigest: string | null,
-  ): Promise<PreparedCollection<T>> {
+  ): Promise<PreparedCollection> {
     let document: T;
     try { document = definition.normalize(input); }
     catch (cause) {
@@ -563,7 +579,6 @@ export class BrowserLocalDataProvider {
     }
     return Object.freeze({
       definition,
-      document,
       records: storedRecords,
       serializedBytes,
       digest: await sha256(canonicalRecordContent(storedRecords)),
@@ -678,7 +693,7 @@ export class BrowserLocalDataProvider {
     }
   }
 
-  async #commit(prepared: readonly PreparedCollection<any>[], expectedRevisions: ReadonlyMap<string, number>): Promise<void> {
+  async #commit(prepared: readonly PreparedCollection[], expectedRevisions: ReadonlyMap<string, number>): Promise<void> {
     const database = await this.#database();
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readwrite');
     const done = transactionComplete(transaction, 'Saving browser-local data', this.timeoutMs);

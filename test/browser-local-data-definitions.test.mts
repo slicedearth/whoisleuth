@@ -10,10 +10,21 @@ import {
   BrowserLocalDataError,
   isExpectedBrowserLocalDataFailure,
 } from '../frontend/src/lib/browser-local-data.ts';
-import type { AnyLocalDataCollectionDefinition } from '../frontend/src/lib/browser-local-data.ts';
+import type {
+  AnyLocalDataCollectionDefinition,
+  LocalDataCollectionDefinition,
+} from '../frontend/src/lib/browser-local-data.ts';
 
 const NOW = '2026-07-22T01:00:00.000Z';
 
+function roundTrip<T>(
+  definition: LocalDataCollectionDefinition<T>,
+  document: unknown,
+): { before: string; after: string; joined: T };
+function roundTrip(
+  definition: AnyLocalDataCollectionDefinition,
+  document: unknown,
+): { before: string; after: string; joined: unknown };
 function roundTrip(definition: AnyLocalDataCollectionDefinition, document: unknown) {
   const normalized = definition.normalize(document);
   const before = definition.serialize(normalized);
@@ -55,9 +66,11 @@ describe('browser-local collection definitions', () => {
       }],
     };
     const result = roundTrip(SHORTLIST_COLLECTION, input);
+    const first = result.joined[0];
+    assert.ok(first);
     assert.equal(result.after, result.before);
     assert.equal(result.joined.length, 1);
-    assert.equal(result.joined[0].domain, 'priority.invalid');
+    assert.equal(first.domain, 'priority.invalid');
     assert.deepEqual(SHORTLIST_COLLECTION.split(result.joined).map((record) => record.id), ['priority.invalid']);
   });
 
@@ -106,10 +119,12 @@ describe('browser-local collection definitions', () => {
       }],
     };
     const result = roundTrip(RELATIONSHIP_OBSERVATIONS_COLLECTION, input);
+    const first = result.joined[0];
+    assert.ok(first);
     assert.equal(result.after, result.before);
     assert.equal(result.joined.length, 1);
-    assert.match(result.joined[0].id, /^relationship-/);
-    assert.notEqual(result.joined[0].id, 'relationship-untrusted-alias');
-    assert.deepEqual(RELATIONSHIP_OBSERVATIONS_COLLECTION.split(result.joined).map((record) => record.id), [result.joined[0].id]);
+    assert.match(first.id, /^relationship-/);
+    assert.notEqual(first.id, 'relationship-untrusted-alias');
+    assert.deepEqual(RELATIONSHIP_OBSERVATIONS_COLLECTION.split(result.joined).map((record) => record.id), [first.id]);
   });
 });
