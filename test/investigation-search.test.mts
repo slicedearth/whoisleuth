@@ -28,7 +28,7 @@ const EARLY = '2026-07-01T00:00:00.000Z';
 const LATE = '2026-07-19T00:00:00.000Z';
 const SHA = 'a'.repeat(64);
 
-function snapshot(overrides = {}) {
+function snapshot(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     capturedAt: LATE,
     scanDepth: 'deep',
@@ -39,7 +39,7 @@ function snapshot(overrides = {}) {
   };
 }
 
-function caseRecord(id, domain, overrides = {}) {
+function caseRecord(id: string, domain: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id,
     domain,
@@ -53,7 +53,7 @@ function caseRecord(id, domain, overrides = {}) {
   };
 }
 
-function projectionInput(overrides = {}) {
+function projectionInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     cases: { version: CASE_SCHEMA_VERSION, cases: [] },
     campaigns: { version: CAMPAIGN_SCHEMA_VERSION, campaigns: [] },
@@ -63,7 +63,7 @@ function projectionInput(overrides = {}) {
   };
 }
 
-function indexFor(input) {
+function indexFor(input: unknown) {
   return buildInvestigationSearchIndex(buildInvestigationProjection(input, { generatedAt: LATE }));
 }
 
@@ -104,6 +104,8 @@ describe('local investigation search index', () => {
     const response = searchInvestigationIndex(index, 'candidate.invalid');
     const caseResult = response.results.find((result) => result.entityType === 'case');
     const domainResult = response.results.find((result) => result.entityType === 'domain');
+    assert.ok(caseResult);
+    assert.ok(domainResult);
     assert.equal(caseResult.href, '/monitor?case=case-source');
     assert.equal(caseResult.action, 'Open case');
     assert.equal(domainResult.href, '/monitor?case=case-source');
@@ -132,6 +134,8 @@ describe('local investigation search index', () => {
     }));
     const brand = searchInvestigationIndex(index, 'reserved identity').results.find((result) => result.entityType === 'brand');
     const campaign = searchInvestigationIndex(index, 'priority review').results.find((result) => result.entityType === 'campaign');
+    assert.ok(brand);
+    assert.ok(campaign);
     assert.equal(brand.href, '/brands?profile=profile-source');
     assert.equal(brand.action, 'Open profile');
     assert.equal(campaign.href, '/monitor?view=campaigns&campaign=campaign-source');
@@ -203,6 +207,7 @@ describe('local investigation search index', () => {
     assert.equal(result.action, 'Open retained observation');
     assert.equal(result.classification, 'derived');
     const domain = searchInvestigationIndex(index, 'first.invalid').results.find((item) => item.entityType === 'domain');
+    assert.ok(domain);
     assert.equal(domain.href, '/monitor?case=case-retained-domain');
     assert.equal(domain.action, 'Open source case');
   });
@@ -249,6 +254,7 @@ describe('local investigation search index', () => {
       cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-source', 'candidate.invalid')] },
     }));
     const result = searchInvestigationIndex(index, 'candidate.invalid').results.find((item) => item.entityType === 'domain');
+    assert.ok(result);
     assert.equal(result.complete, null);
     assert.equal(result.truncated, null);
     assert.ok(result.limitations.some((value) => value.includes('source-health')));
