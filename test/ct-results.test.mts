@@ -1,25 +1,20 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as bounds from '../frontend/src/lib/analysis/ct-results.ts';
+import { requiredValue } from './value-assertions.mts';
 
-let normalizeCtResponse;
-let normalizeCtProvenance;
-let mergeCtProvenance;
-let ctCandidateMatchesFilter;
-let bounds;
-before(async () => {
-  const mod = await import('../frontend/src/lib/analysis/ct-results.ts');
-  normalizeCtResponse = mod.normalizeCtResponse;
-  normalizeCtProvenance = mod.normalizeCtProvenance;
-  mergeCtProvenance = mod.mergeCtProvenance;
-  ctCandidateMatchesFilter = mod.ctCandidateMatchesFilter;
-  bounds = mod;
-});
+const {
+  ctCandidateMatchesFilter,
+  mergeCtProvenance,
+  normalizeCtProvenance,
+  normalizeCtResponse,
+} = bounds;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function match(overrides = {}) {
+function match(overrides: Record<string, unknown> = {}) {
   return {
     domain: 'example.com',
     hostnames: ['a.example.com'],
@@ -28,6 +23,14 @@ function match(overrides = {}) {
     certificateCount: 3,
     ...overrides,
   };
+}
+
+function firstCandidate(result: bounds.CtNormalizationResult): bounds.CtCandidate {
+  return requiredValue(result.candidates[0]);
+}
+
+function firstCt(result: bounds.CtNormalizationResult): bounds.CtProvenance {
+  return requiredValue(firstCandidate(result).certificateTransparency);
 }
 
 // ---------------------------------------------------------------------------
@@ -43,12 +46,12 @@ describe('structured response', () => {
     assert.equal(result.certCount, 42);
     assert.equal(result.truncated, false);
     assert.equal(result.candidates.length, 1);
-    const candidate = result.candidates[0];
+    const candidate = firstCandidate(result);
     assert.equal(candidate.domain, 'example.com');
     assert.equal(candidate.source, 'example');
     assert.deepStrictEqual(candidate.mutationTypes, ['certificate_transparency']);
-    assert.deepStrictEqual(candidate.certificateTransparency.hostnames, ['a.example.com']);
-    assert.equal(candidate.certificateTransparency.certificateCount, 3);
+    assert.deepStrictEqual(requiredValue(candidate.certificateTransparency).hostnames, ['a.example.com']);
+    assert.equal(requiredValue(candidate.certificateTransparency).certificateCount, 3);
   });
 
   test('one candidate per canonical domain (merge across duplicate matches)', () => {
@@ -62,7 +65,7 @@ describe('structured response', () => {
       'src',
     );
     assert.equal(result.candidates.length, 1);
-    const ct = result.candidates[0].certificateTransparency;
+    const ct = firstCt(result);
     // union of hostnames, deduped + sorted
     assert.deepStrictEqual(ct.hostnames, ['a.example.com', 'b.example.com']);
     // earliest first observation
@@ -97,7 +100,7 @@ describe('structured response', () => {
     hostnames.push('H00.EXAMPLE.COM'); // dup after lowercasing
     hostnames.push('not a hostname');
     const result = normalizeCtResponse({ matches: [match({ hostnames })] }, 'src');
-    const out = result.candidates[0].certificateTransparency.hostnames;
+    const out = firstCt(result).hostnames;
     assert.equal(out.length, bounds.MAX_CT_HOSTNAMES);
     assert.deepStrictEqual([...out], [...out].sort());
     assert.equal(new Set(out).size, out.length);
@@ -116,7 +119,7 @@ describe('structured response', () => {
       { matches: [match({ hostnames: ['ok.example.com', 'bad host', 123] })] },
       'src',
     );
-    assert.deepStrictEqual(result.candidates[0].certificateTransparency.hostnames, ['ok.example.com']);
+    assert.deepStrictEqual(firstCt(result).hostnames, ['ok.example.com']);
   });
 
   test('malformed and overlong timestamps become null, candidate survives', () => {
@@ -125,20 +128,20 @@ describe('structured response', () => {
       { matches: [match({ firstObservedAt: 'not-a-date', lastObservedAt: long })] },
       'src',
     );
-    const ct = result.candidates[0].certificateTransparency;
+    const ct = firstCt(result);
     assert.equal(ct.firstObservedAt, null);
     assert.equal(ct.lastObservedAt, null);
     // hostnames/count still carry the candidate
-    assert.equal(result.candidates[0].domain, 'example.com');
+    assert.equal(firstCandidate(result).domain, 'example.com');
   });
 
   test('malformed, negative, non-finite, and excessive certificate counts clamp', () => {
-    assert.equal(normalizeCtResponse({ matches: [match({ certificateCount: -5 })] }, 's').candidates[0].certificateTransparency.certificateCount, 0);
-    assert.equal(normalizeCtResponse({ matches: [match({ certificateCount: Infinity })] }, 's').candidates[0].certificateTransparency.certificateCount, 0);
-    assert.equal(normalizeCtResponse({ matches: [match({ certificateCount: NaN })] }, 's').candidates[0].certificateTransparency.certificateCount, 0);
-    assert.equal(normalizeCtResponse({ matches: [match({ certificateCount: '3' })] }, 's').candidates[0].certificateTransparency.certificateCount, 0);
+    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: -5 })] }, 's')).certificateCount, 0);
+    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: Infinity })] }, 's')).certificateCount, 0);
+    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: NaN })] }, 's')).certificateCount, 0);
+    assert.equal(firstCt(normalizeCtResponse({ matches: [match({ certificateCount: '3' })] }, 's')).certificateCount, 0);
     assert.equal(
-      normalizeCtResponse({ matches: [match({ certificateCount: 9e12 })] }, 's').candidates[0].certificateTransparency.certificateCount,
+      firstCt(normalizeCtResponse({ matches: [match({ certificateCount: 9e12 })] }, 's')).certificateCount,
       bounds.MAX_CT_CERTIFICATE_COUNT,
     );
   });
@@ -152,10 +155,10 @@ describe('structured response', () => {
 
   test('unknown keys are discarded', () => {
     const result = normalizeCtResponse({ matches: [match({ evil: 'x', __proto__: {} })] }, 's');
-    assert.deepStrictEqual(Object.keys(result.candidates[0].certificateTransparency).sort(), [
+    assert.deepStrictEqual(Object.keys(firstCt(result)).sort(), [
       'certificateCount', 'firstObservedAt', 'hostnames', 'lastObservedAt',
     ]);
-    assert.ok(!('evil' in result.candidates[0]));
+    assert.ok(!('evil' in firstCandidate(result)));
   });
 
   test('does not mutate the input response', () => {
@@ -189,7 +192,7 @@ describe('input-processing caps', () => {
     for (let i = 0; i < bounds.MAX_CT_INPUT_HOSTNAMES + 10; i++) hostnames.push(`h${i}.example.com`);
     const result = normalizeCtResponse({ matches: [match({ hostnames })] }, 's');
     assert.equal(result.truncated, true);
-    assert.equal(result.candidates[0].certificateTransparency.hostnames.length, bounds.MAX_CT_HOSTNAMES);
+    assert.equal(firstCt(result).hostnames.length, bounds.MAX_CT_HOSTNAMES);
   });
 
   test('backend truncated flag is preserved even without a local cap hit', () => {
@@ -235,13 +238,13 @@ describe('normalizeCtProvenance (handoff revalidation)', () => {
   });
 
   test('round-trip is idempotent (save then load)', () => {
-    const once = normalizeCtProvenance({
+    const once = requiredValue(normalizeCtProvenance({
       hostnames: ['b.example.com', 'a.example.com', 'a.example.com'],
       firstObservedAt: '2026-01-01T00:00:00Z',
       lastObservedAt: '2026-02-01T00:00:00Z',
       certificateCount: 4,
       extra: 'discard-me',
-    });
+    }));
     const twice = normalizeCtProvenance(once);
     assert.deepStrictEqual(twice, once);
     assert.deepStrictEqual(once.hostnames, ['a.example.com', 'b.example.com']);
@@ -249,7 +252,7 @@ describe('normalizeCtProvenance (handoff revalidation)', () => {
   });
 
   test('contradictory first/last observation ordering is corrected', () => {
-    const ct = normalizeCtProvenance({ firstObservedAt: '2026-06-01T00:00:00Z', lastObservedAt: '2026-01-01T00:00:00Z' });
+    const ct = requiredValue(normalizeCtProvenance({ firstObservedAt: '2026-06-01T00:00:00Z', lastObservedAt: '2026-01-01T00:00:00Z' }));
     assert.equal(ct.firstObservedAt, '2026-01-01T00:00:00.000Z');
     assert.equal(ct.lastObservedAt, '2026-06-01T00:00:00.000Z');
   });

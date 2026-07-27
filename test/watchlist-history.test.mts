@@ -1,10 +1,19 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as history from '../frontend/src/lib/analysis/watchlist-history.ts';
+import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 
-let history;
-before(async () => {
-  history = await import('../frontend/src/lib/analysis/watchlist-history.ts');
-});
+function firstBaseline(entry: history.WatchlistEntry) {
+  return requiredValue(entry.baseline[0]);
+}
+
+function firstEvent(entry: history.WatchlistEntry) {
+  return requiredValue(entry.history[0]);
+}
+
+function changeByField(changes: history.WatchlistChange[], field: string) {
+  return requiredValue(changes.find((change) => change.field === field));
+}
 
 describe('watchlist history', () => {
   test('upgrades the old latest-snapshot schema without losing results', () => {
@@ -14,9 +23,9 @@ describe('watchlist history', () => {
     };
     const normalized = history.normalizeWatchlistEntry(oldEntry);
     assert.equal(normalized.results.length, 1);
-    assert.equal(normalized.baseline[0].domain, 'brand.example');
+    assert.equal(firstBaseline(normalized).domain, 'brand.example');
     assert.equal(normalized.history.length, 1);
-    assert.equal(normalized.history[0].changeCount, 0);
+    assert.equal(firstEvent(normalized).changeCount, 0);
   });
 
   test('records material registration, infrastructure, and risk-signal changes', () => {
@@ -37,9 +46,9 @@ describe('watchlist history', () => {
     }], { checkedAt: '2026-01-02T00:00:00.000Z', mode: 'deep' });
 
     const fields = new Set(second.changes.map((change) => change.field));
-    assert.equal(second.changes.find((change) => change.field === 'availability').kind, 'new_registration');
-    assert.equal(second.changes.find((change) => change.field === 'hasPasswordField').kind, 'risk_signal_added');
-    assert.equal(second.changes.find((change) => change.field === 'faviconMatch').kind, 'risk_signal_added');
+    assert.equal(changeByField(second.changes, 'availability').kind, 'new_registration');
+    assert.equal(changeByField(second.changes, 'hasPasswordField').kind, 'risk_signal_added');
+    assert.equal(changeByField(second.changes, 'faviconMatch').kind, 'risk_signal_added');
     assert.ok(fields.has('registrarName'));
     assert.ok(fields.has('nameservers'));
     assert.ok(fields.has('hasMx'));
@@ -115,10 +124,10 @@ describe('watchlist history', () => {
       httpHttpsDowngrade: true, httpContentType: 'text/plain', httpSecurityHeaders: [],
     }], { mode: 'deep' });
     const byField = new Map(second.changes.map((change) => [change.field, change]));
-    assert.equal(byField.get('httpFinalOrigin').kind, 'infrastructure_changed');
-    assert.equal(byField.get('httpTransportSecurity').tone, 'danger');
-    assert.equal(byField.get('httpHttpsDowngrade').kind, 'risk_signal_added');
-    assert.deepEqual(byField.get('httpSecurityHeaders').after, []);
+    assert.equal(requiredValue(byField.get('httpFinalOrigin')).kind, 'infrastructure_changed');
+    assert.equal(requiredValue(byField.get('httpTransportSecurity')).tone, 'danger');
+    assert.equal(requiredValue(byField.get('httpHttpsDowngrade')).kind, 'risk_signal_added');
+    assert.deepEqual(requiredValue(byField.get('httpSecurityHeaders')).after, []);
 
     const fast = history.appendWatchlistScan(second.entry, [{
       domain: 'brand.example', availability: 'registered', scanDepth: 'fast',
@@ -141,20 +150,21 @@ describe('watchlist history', () => {
   });
 
   test('bounds retained events while keeping the latest checks', () => {
-    let entry = null;
+    let entry: history.WatchlistEntry | null = null;
     for (let index = 0; index < history.MAX_WATCHLIST_HISTORY_EVENTS + 3; index += 1) {
       entry = history.appendWatchlistScan(entry, [{
         domain: 'brand.example', availability: index % 2 ? 'registered' : 'available', scanDepth: 'fast',
       }], { checkedAt: `2026-01-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`, mode: 'fast' }).entry;
     }
-    assert.equal(entry.history.length, history.MAX_WATCHLIST_HISTORY_EVENTS);
-    assert.equal(entry.history.at(-1).checkedAt, '2026-01-15T00:00:00.000Z');
+    const retained = requiredValue(entry);
+    assert.equal(retained.history.length, history.MAX_WATCHLIST_HISTORY_EVENTS);
+    assert.equal(requiredValue(retained.history.at(-1)).checkedAt, '2026-01-15T00:00:00.000Z');
   });
 
   test('stored results retain only bounded known evidence and rescan provenance', () => {
     const nameservers = Array.from({ length: history.MAX_WATCHLIST_NAMESERVERS + 5 }, (_, index) => `ns-${index}.example`);
     const mutationTypes = Array.from({ length: history.MAX_WATCHLIST_MUTATION_TYPES + 5 }, (_, index) => `TYPE-${index}`);
-    const [stored] = history.compactWatchlistResults([{
+    const stored = requiredValue(history.compactWatchlistResults([{
       domain: 'HTTPS://Brand.Example/private',
       availability: 'registered',
       scanDepth: 'deep',
@@ -164,10 +174,10 @@ describe('watchlist history', () => {
       mutationTypes,
       unknown: { secret: true },
       rawHeaders: { authorization: 'secret' },
-    }]);
+    }])[0]);
     assert.equal(stored.domain, 'brand.example');
-    assert.equal(stored.registrarName.length, 300);
-    assert.equal(stored.pageTitle.length, 200);
+    assert.equal(requiredValue(stored.registrarName).length, 300);
+    assert.equal(stringValue(stored.pageTitle).length, 200);
     assert.equal(stored.nameservers.length, history.MAX_WATCHLIST_NAMESERVERS);
     assert.equal(stored.mutationTypes.length, history.MAX_WATCHLIST_MUTATION_TYPES);
     assert.equal(stored.unknown, undefined);
@@ -189,8 +199,8 @@ describe('watchlist history', () => {
     const before = structuredClone(values);
     const result = history.compactWatchlistResults(values);
     assert.equal(result.length, 1);
-    assert.equal(result[0].domain, 'duplicate.example');
-    assert.equal(result[0].availability, 'registered');
+    assert.equal(requiredValue(result[0]).domain, 'duplicate.example');
+    assert.equal(requiredValue(result[0]).availability, 'registered');
     assert.deepEqual(values, before);
   });
 
@@ -213,16 +223,17 @@ describe('watchlist history', () => {
       }],
     });
     assert.equal(entry.updatedAt, '1970-01-01T00:00:00.000Z');
-    assert.equal(entry.history[0].checkedAt, '1970-01-01T00:00:00.000Z');
-    assert.equal(entry.history[0].mode, 'saved');
-    assert.equal(entry.history[0].resultCount, 1);
-    assert.equal(entry.history[0].conclusiveCount, 0);
-    assert.equal(entry.history[0].changeCount, history.MAX_WATCHLIST_CHANGES_PER_EVENT);
-    assert.equal(entry.history[0].changes.length, history.MAX_WATCHLIST_CHANGES_PER_EVENT);
-    assert.equal(entry.history[0].changes[0].after.length, 200);
-    assert.equal(entry.history[0].changes[1].kind, 'field_changed');
-    assert.equal(entry.history[0].changes[1].tone, 'neutral');
-    assert.equal(entry.history[0].changes[0].secret, undefined);
+    const event = firstEvent(entry);
+    assert.equal(event.checkedAt, '1970-01-01T00:00:00.000Z');
+    assert.equal(event.mode, 'saved');
+    assert.equal(event.resultCount, 1);
+    assert.equal(event.conclusiveCount, 0);
+    assert.equal(event.changeCount, history.MAX_WATCHLIST_CHANGES_PER_EVENT);
+    assert.equal(event.changes.length, history.MAX_WATCHLIST_CHANGES_PER_EVENT);
+    assert.equal(stringValue(requiredValue(event.changes[0]).after).length, 200);
+    assert.equal(requiredValue(event.changes[1]).kind, 'field_changed');
+    assert.equal(requiredValue(event.changes[1]).tone, 'neutral');
+    assert.equal(recordValue(requiredValue(event.changes[0])).secret, undefined);
   });
 
   test('append stores the compact snapshot rather than caller-owned raw objects', () => {
@@ -266,7 +277,7 @@ describe('watchlist history', () => {
       ],
     });
     const before = structuredClone(entry);
-    const projected = history.projectWatchlistDomainHistory(entry, 'FOCUS.EXAMPLE.');
+    const projected = requiredValue(history.projectWatchlistDomainHistory(entry, 'FOCUS.EXAMPLE.'));
 
     assert.equal(projected.domain, 'focus.example');
     assert.equal(projected.retainedWatchlistChecks, 3);
@@ -283,14 +294,14 @@ describe('watchlist history', () => {
   });
 
   test('domain history keeps watchlist-wide omissions neutral', () => {
-    const projected = history.projectWatchlistDomainHistory({
+    const projected = requiredValue(history.projectWatchlistDomainHistory({
       updatedAt: '2026-07-02T00:00:00.000Z',
       results: [{ domain: 'quiet.example', availability: 'registered' }],
       history: [{
         checkedAt: '2026-07-02T00:00:00.000Z', mode: 'fast', resultCount: 1,
         conclusiveCount: 1, changeCount: 7, omittedChanges: 7, changes: [],
       }],
-    }, 'quiet.example');
+    }, 'quiet.example'));
     assert.equal(projected.materialChangeCount, 0);
     assert.equal(projected.events.length, 0);
     assert.equal(projected.omittedChanges, 7);

@@ -1,11 +1,16 @@
-const { describe, test, before } = require('node:test');
-const assert = require('node:assert/strict');
-const { domainToASCII } = require('url');
+import { domainToASCII } from 'node:url';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as idn from '../frontend/src/lib/analysis/idn-confusables.ts';
+import { requiredValue } from './value-assertions.mts';
 
-let idn;
-before(async () => {
-  idn = await import('../frontend/src/lib/analysis/idn-confusables.ts');
-});
+function analysis(domain: unknown, references?: readonly unknown[]) {
+  return requiredValue(idn.analyzeDomainIdn(domain, references));
+}
+
+function firstLabel(result: ReturnType<typeof analysis>) {
+  return requiredValue(result.labels[0]);
+}
 
 describe('punycode decoding and dual domain representation', () => {
   test('decodes a known internationalized label without a runtime dependency', () => {
@@ -26,8 +31,8 @@ describe('punycode decoding and dual domain representation', () => {
   });
 
   test('normalizes Unicode and ACE input to the same analysis identity', () => {
-    const fromUnicode = idn.analyzeDomainIdn('BÜCHER.example.');
-    const fromAscii = idn.analyzeDomainIdn('xn--bcher-kva.example');
+    const fromUnicode = analysis('BÜCHER.example.');
+    const fromAscii = analysis('xn--bcher-kva.example');
     assert.equal(fromUnicode.asciiDomain, fromAscii.asciiDomain);
     assert.equal(fromUnicode.unicodeDomain, fromAscii.unicodeDomain);
     assert.equal(fromUnicode.skeleton, fromAscii.skeleton);
@@ -44,34 +49,34 @@ describe('punycode decoding and dual domain representation', () => {
 
 describe('script analysis', () => {
   test('detects a Latin and Cyrillic mixture within one label', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('раypal.com'));
+    const result = analysis(domainToASCII('раypal.com'));
     assert.equal(result.hasIdn, true);
     assert.equal(result.mixedScript, true);
-    assert.deepEqual(result.labels[0].scripts, ['Cyrillic', 'Latin']);
+    assert.deepEqual(firstLabel(result).scripts, ['Cyrillic', 'Latin']);
     assert.ok(result.findings.some((finding) => finding.id === 'mixed_script_label'));
   });
 
   test('does not flag a legitimate same-script accented label as mixed', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('café.example'));
+    const result = analysis(domainToASCII('café.example'));
     assert.equal(result.hasIdn, true);
     assert.equal(result.mixedScript, false);
-    assert.deepEqual(result.labels[0].scripts, ['Latin']);
+    assert.deepEqual(firstLabel(result).scripts, ['Latin']);
   });
 
   test('does not flag a single-script Cyrillic label as mixed', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('пример.example'));
+    const result = analysis(domainToASCII('пример.example'));
     assert.equal(result.mixedScript, false);
-    assert.deepEqual(result.labels[0].scripts, ['Cyrillic']);
+    assert.deepEqual(firstLabel(result).scripts, ['Cyrillic']);
   });
 
   test('treats Han, Hiragana, and Katakana as a compatible Japanese label', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('日本ごカナ.jp'));
+    const result = analysis(domainToASCII('日本ごカナ.jp'));
     assert.equal(result.mixedScript, false);
-    assert.deepEqual(result.labels[0].scripts, ['Han', 'Hiragana', 'Katakana']);
+    assert.deepEqual(firstLabel(result).scripts, ['Han', 'Hiragana', 'Katakana']);
   });
 
   test('does not confuse scripts used by different labels with mixed-script labels', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('日本語.example'));
+    const result = analysis(domainToASCII('日本語.example'));
     assert.deepEqual(result.scripts, ['Han', 'Latin']);
     assert.equal(result.mixedScript, false);
   });
@@ -79,7 +84,7 @@ describe('script analysis', () => {
 
 describe('versioned visual skeleton comparison', () => {
   test('matches a mixed-script lookalike to an official ASCII domain', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('раypal.com'), ['paypal.com']);
+    const result = analysis(domainToASCII('раypal.com'), ['paypal.com']);
     assert.equal(result.version, 1);
     assert.equal(result.mappingVersion, 'tr39-17.0.0-bounded-ascii-v3');
     assert.equal(result.skeleton, 'paypal.com');
@@ -88,14 +93,14 @@ describe('versioned visual skeleton comparison', () => {
   });
 
   test('supports same-script accent folding while retaining a cautious finding', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('café.example'), ['cafe.example']);
+    const result = analysis(domainToASCII('café.example'), ['cafe.example']);
     assert.equal(result.mixedScript, false);
     assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['cafe.example']);
-    assert.match(result.findings.at(-1).detail, /similarity evidence, not proof/i);
+    assert.match(requiredValue(result.findings.at(-1)).detail, /similarity evidence, not proof/i);
   });
 
   test('does not match an unrelated official domain', () => {
-    const result = idn.analyzeDomainIdn(domainToASCII('bücher.example'), ['library.example']);
+    const result = analysis(domainToASCII('bücher.example'), ['library.example']);
     assert.deepEqual(result.referenceMatches, []);
   });
 
@@ -105,10 +110,10 @@ describe('versioned visual skeleton comparison', () => {
 
   test('matches a newly curated Coptic lookalike with explicit script provenance', () => {
     const ascii = domainToASCII('ⲥope.example');
-    const result = idn.analyzeDomainIdn(ascii, ['cope.example']);
+    const result = analysis(ascii, ['cope.example']);
     assert.equal(result.mappingVersion, 'tr39-17.0.0-bounded-ascii-v3');
     assert.equal(result.skeleton, 'cope.example');
-    assert.deepEqual(result.labels[0].scripts, ['Coptic', 'Latin']);
+    assert.deepEqual(firstLabel(result).scripts, ['Coptic', 'Latin']);
     assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['cope.example']);
   });
 
@@ -118,19 +123,19 @@ describe('versioned visual skeleton comparison', () => {
   });
 
   test('matches generated mixed-script and whole-label additions', () => {
-    const mixed = idn.analyzeDomainIdn(domainToASCII('𐑈ecure.example'), ['secure.example']);
+    const mixed = analysis(domainToASCII('𐑈ecure.example'), ['secure.example']);
     assert.equal(mixed.skeleton, 'secure.example');
     assert.deepEqual(mixed.referenceMatches.map((match) => match.asciiDomain), ['secure.example']);
 
-    const whole = idn.analyzeDomainIdn(domainToASCII('քւց.example'), ['fig.example']);
+    const whole = analysis(domainToASCII('քւց.example'), ['fig.example']);
     assert.equal(whole.skeleton, 'fig.example');
-    assert.deepEqual(whole.labels[0].scripts, ['Armenian']);
+    assert.deepEqual(firstLabel(whole).scripts, ['Armenian']);
     assert.deepEqual(whole.referenceMatches.map((match) => match.asciiDomain), ['fig.example']);
   });
 
   test('bounds reference processing and reports truncation', () => {
     const references = Array.from({ length: 60 }, (_, index) => `unrelated-${index}.example`);
-    const result = idn.analyzeDomainIdn(domainToASCII('café.example'), references);
+    const result = analysis(domainToASCII('café.example'), references);
     assert.equal(result.truncated, true);
     assert.deepEqual(result.referenceMatches, []);
   });

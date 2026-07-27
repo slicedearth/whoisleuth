@@ -1,11 +1,8 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-const { domainToASCII } = require('node:url');
-
-let generator;
-before(async () => {
-  generator = await import('../frontend/src/lib/analysis/typosquat-generator.ts');
-});
+import { domainToASCII } from 'node:url';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as generator from '../frontend/src/lib/analysis/typosquat-generator.ts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('provenance-aware typosquat generation', () => {
   test('retains every mutation family that produces the same domain', () => {
@@ -26,7 +23,7 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('tracks same-name TLD typos separately', () => {
-    const candidate = generator.generateTyposquatCandidates('acme.com', []).find((item) => item.domain === 'acme.cm');
+    const candidate = requiredValue(generator.generateTyposquatCandidates('acme.com', []).find((item) => item.domain === 'acme.cm'));
     assert.deepEqual(candidate.mutationTypes, ['tld_typo']);
     assert.equal(candidate.tld, 'cm');
   });
@@ -43,14 +40,14 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('retains both label and TLD mutation provenance when both change', () => {
-    const candidate = generator.generateTyposquatCandidates('acme.com', ['net'])
-      .find((item) => item.domain === 'acm.net');
+    const candidate = requiredValue(generator.generateTyposquatCandidates('acme.com', ['net'])
+      .find((item) => item.domain === 'acm.net'));
     assert.deepEqual(candidate.mutationTypes, ['character_omission', 'tld_substitution']);
   });
 
   test('merges selected substitutions with same-name TLD typo provenance', () => {
-    const candidate = generator.generateTyposquatCandidates('acme.com', ['co'])
-      .find((item) => item.domain === 'acme.co');
+    const candidate = requiredValue(generator.generateTyposquatCandidates('acme.com', ['co'])
+      .find((item) => item.domain === 'acme.co'));
     assert.deepEqual(candidate.mutationTypes, ['tld_typo', 'tld_substitution']);
   });
 
@@ -63,7 +60,7 @@ describe('provenance-aware typosquat generation', () => {
       .filter((candidate) => candidate.mutationTypes.includes('tld_substitution'))
       .map((candidate) => candidate.tld));
     assert.equal(substitutionTlds.size, generator.MAX_GENERATION_TLDS - 1);
-    assert.equal(substitutionTlds.has(fallbackTlds.at(-1)), false);
+    assert.equal(substitutionTlds.has(requiredValue(fallbackTlds.at(-1))), false);
     assert.equal(result.truncated, true);
     assert.ok(result.limitReasons.includes('tlds'));
   });

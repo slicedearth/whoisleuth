@@ -1,20 +1,34 @@
-const { before, describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-let history;
-before(async () => {
-  history = await import('../frontend/src/lib/analysis/ct-history.ts');
-});
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as history from '../frontend/src/lib/analysis/ct-history.ts';
+import { requiredValue } from './value-assertions.mts';
 
 const FIRST = '2026-07-01T00:00:00.000Z';
 const SECOND = '2026-07-02T00:00:00.000Z';
 
-function record(store, query, domains, checkedAt, options = {}) {
-  return history.recordCtHistorySearch(store, query, domains, {
+type NonEmptyStore = Omit<history.CtHistoryStore, 'entries'> & {
+  entries: [history.CtHistoryEntry, ...history.CtHistoryEntry[]];
+};
+type HistoryResult = ReturnType<typeof history.recordCtHistorySearch> & { store: NonEmptyStore };
+
+function nonEmptyStore(store: history.CtHistoryStore): NonEmptyStore {
+  assert.ok(store.entries.length > 0);
+  return store as NonEmptyStore;
+}
+
+function record(
+  store: unknown,
+  query: unknown,
+  domains: readonly unknown[],
+  checkedAt: string,
+  options: history.RecordCtHistoryOptions = {},
+): HistoryResult {
+  const result = history.recordCtHistorySearch(store, query, domains, {
     checkedAt,
     certificateCount: options.certificateCount ?? domains.length,
     truncated: options.truncated ?? false,
   });
+  return { ...result, store: nonEmptyStore(result.store) };
 }
 
 describe('CT search baselines', () => {
@@ -34,7 +48,7 @@ describe('CT search baselines', () => {
     assert.equal(second.comparison.previousCheckedAt, FIRST);
     assert.deepStrictEqual(second.comparison.newDomains, ['c.example']);
     assert.deepStrictEqual(second.store.entries[0].domains, ['b.example', 'c.example']);
-    assert.equal(second.store.entries[0].history.at(-1).newCount, 1);
+    assert.equal(requiredValue(second.store.entries[0].history.at(-1)).newCount, 1);
   });
 
   test('query matching is case-insensitive and whitespace-normalized', () => {
@@ -52,7 +66,7 @@ describe('CT search baselines', () => {
     assert.equal(capped.comparison.baselineUpdated, false);
     assert.equal(capped.store.entries[0].baselineAt, FIRST);
     assert.deepStrictEqual(capped.store.entries[0].domains, ['a.example', 'b.example']);
-    assert.equal(capped.store.entries[0].history.at(-1).truncated, true);
+    assert.equal(requiredValue(capped.store.entries[0].history.at(-1)).truncated, true);
   });
 
   test('a first capped search does not create a partial baseline', () => {
@@ -77,27 +91,28 @@ describe('CT search baselines', () => {
 
 describe('CT history retention and recovery', () => {
   test('per-query check history keeps only the newest bounded events', () => {
-    let store = null;
+    let store: NonEmptyStore | null = null;
     for (let index = 0; index < history.MAX_CT_HISTORY_EVENTS + 3; index++) {
       store = record(store, 'example', [`d${index}.example`], new Date(Date.UTC(2026, 0, index + 1)).toISOString()).store;
     }
-    const events = store.entries[0].history;
+    const events = requiredValue(store).entries[0].history;
     assert.equal(events.length, history.MAX_CT_HISTORY_EVENTS);
-    assert.equal(events.at(-1).checkedAt, new Date(Date.UTC(2026, 0, history.MAX_CT_HISTORY_EVENTS + 3)).toISOString());
+    assert.equal(requiredValue(events.at(-1)).checkedAt, new Date(Date.UTC(2026, 0, history.MAX_CT_HISTORY_EVENTS + 3)).toISOString());
   });
 
   test('the store keeps only the most recently updated search queries', () => {
-    let store = null;
+    let store: NonEmptyStore | null = null;
     for (let index = 0; index < history.MAX_CT_HISTORY_SEARCHES + 3; index++) {
       store = record(store, `query ${index}`, [`d${index}.example`], new Date(Date.UTC(2026, 0, index + 1)).toISOString()).store;
     }
-    assert.equal(store.entries.length, history.MAX_CT_HISTORY_SEARCHES);
-    assert.equal(store.entries[0].query, `query ${history.MAX_CT_HISTORY_SEARCHES + 2}`);
-    assert.equal(store.entries.some((entry) => entry.query === 'query 0'), false);
+    const retained = requiredValue(store);
+    assert.equal(retained.entries.length, history.MAX_CT_HISTORY_SEARCHES);
+    assert.equal(retained.entries[0].query, `query ${history.MAX_CT_HISTORY_SEARCHES + 2}`);
+    assert.equal(retained.entries.some((entry) => entry.query === 'query 0'), false);
   });
 
   test('malformed entries and unknown fields are discarded without throwing', () => {
-    const store = history.normalizeCtHistoryStore({
+    const store = nonEmptyStore(history.normalizeCtHistoryStore({
       version: 1,
       evil: true,
       entries: [
@@ -105,7 +120,7 @@ describe('CT history retention and recovery', () => {
         { query: 'bad\nquery', updatedAt: FIRST },
         { query: 'valid', baselineAt: FIRST, updatedAt: FIRST, domains: ['A.EXAMPLE'], history: [{ checkedAt: FIRST, resultCount: 1, unknown: 'x' }], unknown: 'x' },
       ],
-    });
+    }));
     assert.equal(store.entries.length, 1);
     assert.deepStrictEqual(store.entries[0].domains, ['a.example']);
     assert.deepStrictEqual(Object.keys(store.entries[0]).sort(), ['baselineAt', 'domains', 'history', 'query', 'updatedAt']);
@@ -113,10 +128,10 @@ describe('CT history retention and recovery', () => {
   });
 
   test('duplicate query entries resolve to the most recently updated record', () => {
-    const store = history.normalizeCtHistoryStore({ entries: [
+    const store = nonEmptyStore(history.normalizeCtHistoryStore({ entries: [
       { query: 'example', baselineAt: FIRST, updatedAt: FIRST, domains: ['old.example'], history: [] },
       { query: 'EXAMPLE', baselineAt: SECOND, updatedAt: SECOND, domains: ['new.example'], history: [] },
-    ] });
+    ] }));
     assert.equal(store.entries.length, 1);
     assert.deepStrictEqual(store.entries[0].domains, ['new.example']);
   });
@@ -138,7 +153,7 @@ describe('CT history retention and recovery', () => {
     const baseline = record(null, 'example', ['baseline.example'], FIRST);
     const domains = Array.from({ length: history.MAX_CT_HISTORY_NEW_DOMAINS + 20 }, (_, index) => `new-${index}.example`);
     const next = record(baseline.store, 'example', domains, SECOND);
-    const event = next.store.entries[0].history.at(-1);
+    const event = requiredValue(next.store.entries[0].history.at(-1));
     assert.equal(next.comparison.newCount, domains.length);
     assert.equal(event.newCount, domains.length);
     assert.equal(event.newDomains.length, history.MAX_CT_HISTORY_NEW_DOMAINS);
@@ -150,13 +165,14 @@ describe('CT history retention and recovery', () => {
       const prefix = `d${index}`.padEnd(63, 'x');
       return `${prefix}.${suffix}`;
     });
-    let store = null;
+    let store: NonEmptyStore | null = null;
     for (let index = 0; index < history.MAX_CT_HISTORY_SEARCHES; index++) {
       store = record(store, `large query ${index}`, domains, new Date(Date.UTC(2026, 0, index + 1)).toISOString()).store;
     }
-    const bytes = new TextEncoder().encode(JSON.stringify(store)).length;
+    const retained = requiredValue(store);
+    const bytes = new TextEncoder().encode(JSON.stringify(retained)).length;
     assert.ok(bytes <= history.MAX_CT_HISTORY_STORE_BYTES);
-    assert.ok(store.entries.length < history.MAX_CT_HISTORY_SEARCHES);
-    assert.equal(store.entries[0].domains.length, history.MAX_CT_HISTORY_DOMAINS);
+    assert.ok(retained.entries.length < history.MAX_CT_HISTORY_SEARCHES);
+    assert.equal(retained.entries[0].domains.length, history.MAX_CT_HISTORY_DOMAINS);
   });
 });

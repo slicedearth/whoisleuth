@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { OBSERVATION_VERSION, createObservation, readObservationEnvelope } = require('../lib/observation.mts');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { OBSERVATION_VERSION, createObservation, readObservationEnvelope } from '../lib/observation.mts';
 
 test('creates a deterministic bounded observation envelope', () => {
   const result = createObservation({

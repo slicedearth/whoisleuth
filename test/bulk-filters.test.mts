@@ -1,10 +1,6 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let filters;
-before(async () => {
-  filters = await import('../frontend/src/lib/analysis/bulk-filters.ts');
-});
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as filters from '../frontend/src/lib/analysis/bulk-filters.ts';
 
 const records = [
   { domain: 'open.example', availability: 'available', mutationTypes: ['dictionary'] },

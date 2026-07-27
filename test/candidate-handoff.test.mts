@@ -1,23 +1,30 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as core from '../frontend/src/lib/candidate-handoff-core.ts';
+import { requiredValue } from './value-assertions.mts';
 
 // Tests the framework-neutral handoff core directly without requiring browser
 // sessionStorage. buildHandoff is exactly what saveCandidateHandoff serializes;
 // parseHandoff is exactly what loadCandidateHandoff runs on the raw sessionStorage
 // value, so passing a hand-built object to parseHandoff models a hostile payload
 // written straight into sessionStorage.
-let core;
-before(async () => {
-  core = await import('../frontend/src/lib/candidate-handoff-core.ts');
-});
-
 // Models the full save -> sessionStorage -> load path.
-function roundTrip(source, candidates, generated) {
+type NonEmptyHandoff = Omit<core.CandidateHandoff, 'candidates'> & {
+  candidates: [core.Candidate, ...core.Candidate[]];
+};
+
+function roundTrip(
+  source: core.HandoffSource,
+  candidates: readonly unknown[],
+  generated?: readonly unknown[],
+): NonEmptyHandoff {
   const stored = JSON.parse(JSON.stringify(core.buildHandoff(source, candidates, generated, '2026-07-12T00:00:00.000Z')));
-  return core.parseHandoff(stored);
+  const loaded = requiredValue(core.parseHandoff(stored));
+  assert.ok(loaded.candidates.length > 0);
+  return loaded as NonEmptyHandoff;
 }
 
-function ctCandidate(overrides = {}) {
+function ctCandidate(overrides: Record<string, unknown> = {}) {
   return {
     domain: 'example.com',
     source: 'example',
@@ -37,7 +44,7 @@ describe('candidate handoff CT provenance', () => {
     const loaded = roundTrip('certificate-transparency', [ctCandidate()]);
     assert.equal(loaded.version, 1);
     assert.equal(loaded.candidates.length, 1);
-    const ct = loaded.candidates[0].certificateTransparency;
+    const ct = requiredValue(loaded.candidates[0].certificateTransparency);
     assert.deepStrictEqual(ct.hostnames, ['a.example.com', 'login.example.com']);
     assert.equal(ct.firstObservedAt, '2026-01-01T00:00:00.000Z');
     assert.equal(ct.lastObservedAt, '2026-06-01T00:00:00.000Z');
@@ -55,7 +62,7 @@ describe('candidate handoff CT provenance', () => {
     const stored = core.buildHandoff('certificate-transparency', [
       ctCandidate({ certificateTransparency: { hostnames: ['a.example.com'], firstObservedAt: null, lastObservedAt: null, certificateCount: 1, junk: 'x' } }),
     ]);
-    assert.deepStrictEqual(Object.keys(stored.candidates[0].certificateTransparency).sort(), [
+    assert.deepStrictEqual(Object.keys(requiredValue(requiredValue(stored.candidates[0]).certificateTransparency)).sort(), [
       'certificateCount', 'firstObservedAt', 'hostnames', 'lastObservedAt',
     ]);
   });
@@ -74,7 +81,7 @@ describe('candidate handoff CT provenance', () => {
     const loaded = roundTrip('certificate-transparency', [
       ctCandidate({ certificateTransparency: { hostnames, firstObservedAt: null, lastObservedAt: null, certificateCount: 1 } }),
     ]);
-    const ct = loaded.candidates[0].certificateTransparency;
+    const ct = requiredValue(loaded.candidates[0].certificateTransparency);
     assert.equal(ct.hostnames.length, 50);
     assert.ok(ct.hostnames.every((h) => h.length <= 253));
   });
@@ -83,7 +90,7 @@ describe('candidate handoff CT provenance', () => {
     const loaded = roundTrip('certificate-transparency', [
       ctCandidate({ certificateTransparency: { hostnames: ['a.example.com'], firstObservedAt: 'garbage', lastObservedAt: '2026-06-01T00:00:00Z', certificateCount: 1 } }),
     ]);
-    const ct = loaded.candidates[0].certificateTransparency;
+    const ct = requiredValue(loaded.candidates[0].certificateTransparency);
     assert.equal(ct.firstObservedAt, null);
     assert.equal(ct.lastObservedAt, '2026-06-01T00:00:00.000Z');
   });
@@ -92,7 +99,7 @@ describe('candidate handoff CT provenance', () => {
     const loaded = roundTrip('certificate-transparency', [
       ctCandidate({ certificateTransparency: { hostnames: ['a.example.com'], firstObservedAt: null, lastObservedAt: null, certificateCount: 9e12 } }),
     ]);
-    assert.equal(loaded.candidates[0].certificateTransparency.certificateCount, 1_000_000);
+    assert.equal(requiredValue(loaded.candidates[0].certificateTransparency).certificateCount, 1_000_000);
   });
 
   test('mutation provenance and bounded source are retained', () => {
@@ -116,7 +123,7 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
         { domain: 'good.example', source: 's', mutationTypes: [] },
       ],
     };
-    const loaded = core.parseHandoff(stored);
+    const loaded = requiredValue(core.parseHandoff(stored));
     assert.deepStrictEqual(loaded.candidates.map((c) => c.domain), ['good.example']);
   });
 
@@ -125,7 +132,7 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
       version: 1, createdAt: '2026-07-12T00:00:00.000Z', source: 'manual',
       candidates: [{ domain: 'https://evil.example.com/login?x=1', source: 's', mutationTypes: [] }],
     };
-    const loaded = core.parseHandoff(stored);
+    const loaded = requiredValue(core.parseHandoff(stored));
     assert.deepStrictEqual(loaded.candidates.map((c) => c.domain), ['evil.example.com']);
   });
 
@@ -140,7 +147,7 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
         { domain: 'ok.example', source: 's', mutationTypes: [] },
       ],
     };
-    const loaded = core.parseHandoff(stored);
+    const loaded = requiredValue(core.parseHandoff(stored));
     assert.deepStrictEqual(loaded.candidates.map((c) => c.domain), ['ok.example']);
   });
 

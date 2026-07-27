@@ -1,18 +1,10 @@
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let ctCsvFields;
-let CT_HOSTNAME_CSV_DELIMITER;
-let rowsToCsv;
-let toCsvValue;
-before(async () => {
-  const exportMod = await import('../frontend/src/lib/analysis/bulk-export.ts');
-  ctCsvFields = exportMod.ctCsvFields;
-  CT_HOSTNAME_CSV_DELIMITER = exportMod.CT_HOSTNAME_CSV_DELIMITER;
-  const utils = await import('../frontend/src/lib/analysis/utils.ts');
-  rowsToCsv = utils.rowsToCsv;
-  toCsvValue = utils.toCsvValue;
-});
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  CT_HOSTNAME_CSV_DELIMITER,
+  ctCsvFields,
+} from '../frontend/src/lib/analysis/bulk-export.ts';
+import { rowsToCsv, toCsvValue } from '../frontend/src/lib/analysis/utils.ts';
 
 describe('ctCsvFields', () => {
   test('populated CT provenance maps to the four columns', () => {

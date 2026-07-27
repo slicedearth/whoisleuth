@@ -1,12 +1,9 @@
 // Covers the browser-safe analysis helpers consumed by the Svelte tools.
 
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-
-let utils;
-before(async () => {
-  utils = await import('../frontend/src/lib/analysis/utils.ts');
-});
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as utils from '../frontend/src/lib/analysis/utils.ts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('isValidEmailAddress', () => {
   test('accepts an ordinary single address', () => {
@@ -48,7 +45,7 @@ describe('entityDisplayName', () => {
     assert.equal(utils.entityDisplayName({ name: 'Example\u0000 Registrar\n LLC' }), 'Example Registrar LLC');
     assert.equal(utils.entityDisplayName({ unknown: 'value' }), null);
     assert.equal(utils.entityDisplayName([]), null);
-    assert.equal(utils.entityDisplayName('x'.repeat(400)).length, 300);
+    assert.equal(requiredValue(utils.entityDisplayName('x'.repeat(400))).length, 300);
   });
 });
 
