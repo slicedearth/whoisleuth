@@ -8,6 +8,8 @@ import {
   SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA,
   SCHEMA_COMPATIBILITY_INVENTORY_VERSION,
   validateSchemaCompatibilityEntries,
+  type SchemaCompatibilityEntry,
+  type SchemaCompatibilityInventory,
 } from '../tools/schema-compatibility.mts';
 import {
   buildBrandProfileExport,
@@ -104,7 +106,12 @@ import {
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
-function byId(inventory, id) {
+function recordValue(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
+function byId(inventory: SchemaCompatibilityInventory, id: string): SchemaCompatibilityEntry {
   const value = inventory.entries.find((entry) => entry.id === id);
   assert.ok(value, `Missing schema compatibility entry ${id}`);
   return value;
@@ -194,17 +201,17 @@ describe('schema compatibility inventory', () => {
     assert.throws(() => validateSchemaCompatibilityEntries(budget), /byte budget/i);
 
     const metadata = structuredClone(inventory.entries);
-    metadata[0].futureVersionBehavior = 'guess';
+    Reflect.set(metadata[0], 'futureVersionBehavior', 'guess');
     assert.throws(() => validateSchemaCompatibilityEntries(metadata), /compatibility metadata/i);
 
     const writeSemantics = structuredClone(inventory.entries);
-    writeSemantics[0].writeSemantics = 'silent_overwrite';
+    Reflect.set(writeSemantics[0], 'writeSemantics', 'silent_overwrite');
     assert.throws(() => validateSchemaCompatibilityEntries(writeSemantics), /compatibility metadata/i);
   });
 
   test('binds browser export entries to the schemas emitted by their real builders', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    const fixtures = [
+    const fixtures: Array<readonly [string, unknown, string | null, number]> = [
       ['export.cases', buildCaseExport([], NOW), null, CASE_SCHEMA_VERSION],
       ['export.brand-profiles', buildBrandProfileExport([], NOW), BRAND_PROFILE_SCHEMA, BRAND_PROFILE_SCHEMA_VERSION],
       ['export.campaigns', buildCampaignExport([], NOW), CAMPAIGN_SCHEMA, CAMPAIGN_SCHEMA_VERSION],
@@ -215,10 +222,11 @@ describe('schema compatibility inventory', () => {
     ];
     for (const [id, document, schema, version] of fixtures) {
       const listed = byId(inventory, id);
-      assert.equal(document.schema ?? null, schema);
-      assert.equal(document.version, version);
-      assert.equal(listed.schema, document.schema ?? null);
-      assert.equal(listed.currentVersion, document.version);
+      const normalizedDocument = recordValue(document);
+      assert.equal(normalizedDocument.schema ?? null, schema);
+      assert.equal(normalizedDocument.version, version);
+      assert.equal(listed.schema, normalizedDocument.schema ?? null);
+      assert.equal(listed.currentVersion, normalizedDocument.version);
     }
 
     const caseReport = buildCaseReport({
@@ -233,8 +241,14 @@ describe('schema compatibility inventory', () => {
 
   test('binds CLI entries to the schemas emitted by their real builders', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    const fixtures = [
-      ['cli.lookup', buildCliLookupDocument('schema.invalid', { type: 'domain', inputHostname: 'schema.invalid', registrableDomain: 'schema.invalid', isSubdomain: false }, {}, NOW)],
+    const fixtures: Array<readonly [string, unknown]> = [
+      ['cli.lookup', buildCliLookupDocument('schema.invalid', {
+        type: 'domain',
+        value: 'schema.invalid',
+        inputHostname: 'schema.invalid',
+        registrableDomain: 'schema.invalid',
+        isSubdomain: false,
+      }, {}, NOW)],
       ['cli.bulk', buildCliBulkDocument([], { generatedAt: NOW })],
       ['cli.ct-search', buildCliCtSearchDocument('schema', {}, NOW)],
       ['cli.discover', buildCliDiscoverDocument('schema', {}, { generatedAt: NOW, seed: 'schema', preset: 'balanced', keyboardLayout: 'qwerty', tlds: [] })],
@@ -245,8 +259,9 @@ describe('schema compatibility inventory', () => {
     ];
     for (const [id, document] of fixtures) {
       const listed = byId(inventory, id);
-      assert.equal(listed.schema, document.schema);
-      assert.equal(listed.currentVersion, document.version);
+      const normalizedDocument = recordValue(document);
+      assert.equal(listed.schema, normalizedDocument.schema);
+      assert.equal(listed.currentVersion, normalizedDocument.version);
     }
   });
 
@@ -276,10 +291,9 @@ describe('schema compatibility inventory', () => {
     assert.doesNotMatch(report, /\/Users\//);
     assert.doesNotMatch(report, /localStorage|sessionStorage/);
 
-    assert.throws(
-      () => formatSchemaCompatibilityInventory({ ...inventory, version: 2 }),
-      /current inventory contract/i,
-    );
+    const futureInventory = structuredClone(inventory);
+    Reflect.set(futureInventory, 'version', 2);
+    assert.throws(() => formatSchemaCompatibilityInventory(futureInventory), /current inventory contract/i);
     assert.throws(
       () => formatSchemaCompatibilityInventory({ ...inventory, limitations: ['bad\nvalue'] }),
       /limitations are invalid/i,
