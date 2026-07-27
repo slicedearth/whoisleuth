@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 let caseReport;
 before(async () => {
-  caseReport = await import('../frontend/src/lib/analysis/case-report.js');
+  caseReport = await import('../frontend/src/lib/analysis/case-report.ts');
 });
 
 // ---------------------------------------------------------------------------

@@ -9,7 +9,7 @@
     formatSnapshotValue,
     scanDepthLabel,
     snapshotFieldGroups
-  } from '$lib/analysis/evidence-display.js';
+  } from '$lib/analysis/evidence-display.ts';
 
   let { record }: { record: CaseRecord } = $props();
   let timelineExpanded = $state(true);

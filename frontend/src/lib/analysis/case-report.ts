@@ -10,6 +10,7 @@
 // data. Reports contain only the normalized case record.
 
 import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
+import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 
 // ---------------------------------------------------------------------------
@@ -42,7 +43,40 @@ const LIMITATIONS_TEXT = [
  * @param {string} text
  * @returns {string}
  */
-function escapeMarkdownInline(text) {
+type ReportOptions = { includeNotes?: boolean; generatedAt?: string };
+type ReportReason = 'scan-depth' | 'risk-model' | 'other';
+type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
+type ReportTimelineEntry = {
+  snapshot: CaseEvidenceSnapshot;
+  isBaseline: boolean;
+  hasRepeatedObservation: boolean;
+  changes: ReportChange[] | null;
+  hasIncomparableChange: boolean;
+  incomparableReasons: ReportReason[];
+};
+type CaseReportJson = {
+  schema: typeof CASE_REPORT_SCHEMA;
+  schemaVersion: typeof CASE_REPORT_SCHEMA_VERSION;
+  generatedAt: string;
+  application: { name: string };
+  case: {
+    id: string;
+    domain: string;
+    status: string;
+    disposition: string;
+    tags: string[];
+    source: string;
+    openedAt: string;
+    updatedAt: string;
+    notesIncluded: boolean;
+    notes?: Array<{ createdAt: string; body: string }>;
+  };
+  currentAssessment: CaseEvidenceSnapshot | null;
+  evidenceTimeline: ReportTimelineEntry[];
+  limitations: string;
+};
+
+function escapeMarkdownInline(text: unknown): string {
   return String(text)
     .replace(/[\r\n\u2028\u2029]+/g, ' ')
     .replace(/([\\`*_{}\[\]<>()#+!|~])/g, '\\$1')
@@ -59,7 +93,7 @@ function escapeMarkdownInline(text) {
  * @param {string} text
  * @returns {string}
  */
-function escapeMarkdownNote(text) {
+function escapeMarkdownNote(text: unknown): string {
   return String(text)
     .replace(/\r\n?/g, '\n')
     .split('\n')
@@ -78,7 +112,7 @@ function escapeMarkdownNote(text) {
  * @param {string} [field]
  * @returns {string}
  */
-function formatReportValue(value, field) {
+function formatReportValue(value: unknown, field?: string): string {
   if (value === null || value === undefined) return 'Not observed';
   if (typeof value === 'boolean') return value ? 'Detected' : 'Not detected';
   if (Array.isArray(value)) {
@@ -103,9 +137,12 @@ function formatReportValue(value, field) {
  * @param {import('./case-model.ts').CaseEvidenceSnapshot} snapshot
  * @returns {object}
  */
-function pickKnownSnapshotFields(snapshot) {
-  const factors = (value) => Array.isArray(value)
-    ? value.map((factor) => ({ label: String(factor?.label ?? ''), points: Number(factor?.points) || 0 }))
+function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): CaseEvidenceSnapshot {
+  const factors = (value: unknown): EvidenceFactor[] => Array.isArray(value)
+    ? value.map((factor) => {
+      const item = factor && typeof factor === 'object' ? factor as Record<string, unknown> : {};
+      return { label: String(item.label ?? ''), points: Number(item.points) || 0 };
+    })
     : [];
   return {
     id: snapshot.id,
@@ -155,10 +192,6 @@ function pickKnownSnapshotFields(snapshot) {
 // ---------------------------------------------------------------------------
 
 /**
- * @typedef {{ includeNotes?: boolean, generatedAt?: string }} ReportOptions
- */
-
-/**
  * Builds a case report object and its Markdown representation from a single
  * CaseRecord. The returned object is a plain JSON-safe value; the Markdown is
  * a single string. Does not mutate the source record.
@@ -167,15 +200,17 @@ function pickKnownSnapshotFields(snapshot) {
  * @param {ReportOptions} [options]
  * @returns {{ json: object, markdown: string }}
  */
-export function buildCaseReport(caseRecord, options = {}) {
+export function buildCaseReport(
+  caseRecord: CaseRecord,
+  options: ReportOptions = {},
+): { json: CaseReportJson; markdown: string } {
   const { generatedAt } = options;
   const includeNotes = options.includeNotes === true;
   const now = generatedAt || new Date().toISOString();
 
   // --- Build JSON report ---
 
-  /** @type {Array<object>} */
-  const timelineEntries = [];
+  const timelineEntries: ReportTimelineEntry[] = [];
 
   if (Array.isArray(caseRecord.evidenceHistory) && caseRecord.evidenceHistory.length > 0) {
     const chronological = [...caseRecord.evidenceHistory];
@@ -184,22 +219,21 @@ export function buildCaseReport(caseRecord, options = {}) {
       const isBaseline = i === 0;
       const hasRepeatedObservation = snapshot.firstCapturedAt !== snapshot.capturedAt;
 
-      /** @type {Array<object> | null} */
-      let changes = null;
+      let changes: ReportChange[] | null = null;
       let hasIncomparableChange = false;
-      let incomparableReasons = [];
+      let incomparableReasons: ReportReason[] = [];
 
       if (!isBaseline) {
         const previous = chronological[i - 1];
         const rawChanges = compareCaseEvidence(previous, snapshot);
         incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot);
         if (rawChanges.length > 0) {
-          changes = rawChanges.map((c) => ({
-            field: c.field,
-            label: c.label,
-            before: c.before,
-            after: c.after,
-            tone: c.tone,
+          changes = rawChanges.map((change) => ({
+            field: change.field,
+            label: change.label,
+            before: change.before,
+            after: change.after,
+            tone: change.tone,
           }));
         } else if (snapshot.fingerprint !== previous.fingerprint && incomparableReasons.length === 0) {
           incomparableReasons = ['other'];
@@ -221,7 +255,7 @@ export function buildCaseReport(caseRecord, options = {}) {
   const latest = latestCaseEvidence({ evidenceHistory: caseRecord.evidenceHistory ?? undefined });
   const currentAssessment = latest ? pickKnownSnapshotFields(latest) : null;
 
-  const json = {
+  const json: CaseReportJson = {
     schema: CASE_REPORT_SCHEMA,
     schemaVersion: CASE_REPORT_SCHEMA_VERSION,
     generatedAt: now,
@@ -259,8 +293,8 @@ export function buildCaseReport(caseRecord, options = {}) {
  * @param {object} report
  * @returns {string}
  */
-function buildMarkdown(report) {
-  const lines = [];
+function buildMarkdown(report: CaseReportJson): string {
+  const lines: string[] = [];
 
   // Title
   const domain = escapeMarkdownInline(report.case.domain || 'unknown');
@@ -440,7 +474,11 @@ function buildMarkdown(report) {
  * @param {string} [generatedAt] - ISO timestamp (injectable for tests)
  * @returns {string}
  */
-export function caseReportFilename(domain, format, generatedAt) {
+export function caseReportFilename(
+  domain: unknown,
+  format: 'json' | 'md',
+  generatedAt?: string,
+): string {
   const safeDomain = String(domain || '')
     .toLowerCase()
     .replace(/[^a-z0-9.-]+/g, '-')

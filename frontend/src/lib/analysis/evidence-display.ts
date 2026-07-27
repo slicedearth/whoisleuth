@@ -4,6 +4,7 @@
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
 import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
+import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 
 // ---------------------------------------------------------------------------
@@ -55,7 +56,23 @@ const FIELD_LABELS = {
 };
 
 /** Fields grouped into display sections. Order within each group is deliberate. */
-const FIELD_GROUPS = [
+type SnapshotField = keyof CaseEvidenceSnapshot;
+type EvidenceChange = ReturnType<typeof compareCaseEvidence>[number];
+export type TimelineEntry = {
+  snapshot: CaseEvidenceSnapshot;
+  isBaseline: boolean;
+  hasRepeatedObservation: boolean;
+  changes: EvidenceChange[] | null;
+  hasIncomparableChange: boolean;
+  incomparableReasons: Array<'scan-depth' | 'risk-model' | 'other'>;
+  displayIndex: number;
+};
+type SnapshotGroup = {
+  name: string;
+  rows: Array<{ field: SnapshotField; label: string; value: unknown }>;
+};
+
+const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
   {
     name: 'Registration',
     fields: ['availability', 'confidence', 'registrar', 'createdDate', 'expiryDate', 'nameservers'],
@@ -87,8 +104,10 @@ const FIELD_GROUPS = [
  * @param {string} depth
  * @returns {string}
  */
-export function scanDepthLabel(depth) {
-  return SCAN_DEPTH_LABELS[depth] || 'Unknown depth';
+export function scanDepthLabel(depth: unknown): string {
+  return typeof depth === 'string' && depth in SCAN_DEPTH_LABELS
+    ? SCAN_DEPTH_LABELS[depth as keyof typeof SCAN_DEPTH_LABELS]
+    : 'Unknown depth';
 }
 
 /**
@@ -96,8 +115,8 @@ export function scanDepthLabel(depth) {
  * @param {string} field
  * @returns {string}
  */
-export function fieldLabel(field) {
-  return FIELD_LABELS[field] || field;
+export function fieldLabel(field: string): string {
+  return field in FIELD_LABELS ? FIELD_LABELS[field as keyof typeof FIELD_LABELS] : field;
 }
 
 /**
@@ -107,7 +126,7 @@ export function fieldLabel(field) {
  * @param {unknown} value
  * @returns {string}
  */
-export function formatSnapshotValue(field, value) {
+export function formatSnapshotValue(field: string, value: unknown): string {
   if (value === null || value === undefined) return 'Not observed';
   if (typeof value === 'boolean') return value ? 'Detected' : 'Not detected';
   if (Array.isArray(value)) {
@@ -115,7 +134,13 @@ export function formatSnapshotValue(field, value) {
     if (field === 'httpSecurityHeaders') return value.map(httpSecurityHeaderLabel).join(', ');
     // Factor arrays: each element is { label, points }.
     if (field === 'riskFactors' || field === 'opportunityFactors') {
-      return value.map((f) => `${f.label} (${f.points > 0 ? '+' : ''}${f.points})`).join(', ');
+      return value.map((factor) => {
+        if (!factor || typeof factor !== 'object') return String(factor);
+        const item = factor as Record<string, unknown>;
+        const label = String(item.label ?? '');
+        const points = typeof item.points === 'number' ? item.points : 0;
+        return `${label} (${points > 0 ? '+' : ''}${points})`;
+      }).join(', ');
     }
     return value.join(', ');
   }
@@ -131,11 +156,10 @@ export function formatSnapshotValue(field, value) {
  * @param {import('./case-model.ts').CaseEvidenceSnapshot} snapshot
  * @returns {Array<{ name: string, rows: Array<{ field: string, label: string, value: unknown }> }>}
  */
-export function snapshotFieldGroups(snapshot) {
-  /** @type {Array<{ name: string, rows: Array<{ field: string, label: string, value: unknown }> }>} */
-  const groups = [];
+export function snapshotFieldGroups(snapshot: CaseEvidenceSnapshot): SnapshotGroup[] {
+  const groups: SnapshotGroup[] = [];
   for (const group of FIELD_GROUPS) {
-    const rows = [];
+    const rows: SnapshotGroup['rows'] = [];
     for (const field of group.fields) {
       const value = snapshot[field];
       if (isPresentValue(value)) {
@@ -147,7 +171,7 @@ export function snapshotFieldGroups(snapshot) {
   return groups;
 }
 
-function isPresentValue(value) {
+function isPresentValue(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === 'string') return value.trim() !== '';
   if (Array.isArray(value)) return value.length > 0;
@@ -164,14 +188,14 @@ function isPresentValue(value) {
  * @param {{ field: string, label: string, before: unknown, after: unknown, tone: string }} change
  * @returns {{ field: string, label: string, beforeText: string, afterText: string, tone: string, kind: string }}
  */
-export function formatChangeEntry(change) {
+export function formatChangeEntry(change: EvidenceChange) {
   const beforeText = formatChangeValue(change.field, change.before);
   const afterText = formatChangeValue(change.field, change.after);
   const kind = classifyChangeKind(change.field, change.before, change.after);
   return { field: change.field, label: change.label, beforeText, afterText, tone: change.tone, kind };
 }
 
-function formatChangeValue(field, value) {
+function formatChangeValue(field: string, value: unknown): string {
   if (value === null || value === undefined) return 'Not observed';
   if (Array.isArray(value)) {
     if (value.length === 0) return 'None';
@@ -179,7 +203,9 @@ function formatChangeValue(field, value) {
     if (field === 'riskFactors' || field === 'opportunityFactors') {
       return value.map((f) => {
         if (typeof f === 'object' && f !== null && 'label' in f && 'points' in f) {
-          return `${f.label} (${f.points > 0 ? '+' : ''}${f.points})`;
+          const label = String(f.label);
+          const points = typeof f.points === 'number' ? f.points : 0;
+          return `${label} (${points > 0 ? '+' : ''}${points})`;
         }
         return String(f);
       }).join(', ');
@@ -191,7 +217,7 @@ function formatChangeValue(field, value) {
   return String(value);
 }
 
-function classifyChangeKind(field, before, after) {
+function classifyChangeKind(field: string, before: unknown, after: unknown): string {
   const bPresent = before !== null && before !== undefined && (!Array.isArray(before) || before.length > 0);
   const aPresent = after !== null && after !== undefined && (!Array.isArray(after) || after.length > 0);
   if (!bPresent && aPresent) return 'added';
@@ -204,10 +230,6 @@ function classifyChangeKind(field, before, after) {
 // ---------------------------------------------------------------------------
 // Timeline derivation
 // ---------------------------------------------------------------------------
-
-/**
- * @typedef {{ snapshot: import('./case-model.ts').CaseEvidenceSnapshot, isBaseline: boolean, hasRepeatedObservation: boolean, changes: Array<{ field: string, label: string, before: unknown, after: unknown, tone: string }> | null, hasIncomparableChange: boolean, incomparableReasons: Array<'scan-depth' | 'risk-model' | 'other'>, displayIndex: number }} TimelineEntry
- */
 
 /**
  * Derives a display-ready timeline from a case's evidence history. Returns
@@ -224,25 +246,22 @@ function classifyChangeKind(field, before, after) {
  * @param {import('./case-model.ts').CaseEvidenceSnapshot[]} evidenceHistory
  * @returns {TimelineEntry[]}
  */
-export function deriveTimeline(evidenceHistory) {
+export function deriveTimeline(evidenceHistory: CaseEvidenceSnapshot[] | null | undefined): TimelineEntry[] {
   if (!Array.isArray(evidenceHistory) || evidenceHistory.length === 0) return [];
 
   // Work on a copy; chronological order is the stored order.
   const chronological = [...evidenceHistory];
 
-  /** @type {TimelineEntry[]} */
-  const entries = [];
+  const entries: TimelineEntry[] = [];
 
   for (let i = 0; i < chronological.length; i++) {
     const snapshot = chronological[i];
     const isBaseline = i === 0;
     const hasRepeatedObservation = snapshot.firstCapturedAt !== snapshot.capturedAt;
 
-    /** @type {TimelineEntry['changes']} */
-    let changes = null;
+    let changes: TimelineEntry['changes'] = null;
     let hasIncomparableChange = false;
-    /** @type {TimelineEntry['incomparableReasons']} */
-    let incomparableReasons = [];
+    let incomparableReasons: TimelineEntry['incomparableReasons'] = [];
 
     if (!isBaseline) {
       const previous = chronological[i - 1];
@@ -285,7 +304,7 @@ export function deriveTimeline(evidenceHistory) {
  * @param {TimelineEntry[]} entries
  * @returns {TimelineEntry[]}
  */
-export function filterChangedOnly(entries) {
+export function filterChangedOnly(entries: TimelineEntry[]): TimelineEntry[] {
   return entries.filter((e) => e.isBaseline || (e.changes && e.changes.length > 0));
 }
 
@@ -295,9 +314,11 @@ export function filterChangedOnly(entries) {
  * @param {string} source
  * @returns {string}
  */
-export function evidenceSourceLabel(source) {
+export function evidenceSourceLabel(source: unknown): string {
   const labels = { lookup: 'Lookup', bulk: 'Bulk', monitor: 'Monitor', import: 'Import', unknown: 'Unknown' };
-  return labels[source] || String(source || '');
+  return typeof source === 'string' && source in labels
+    ? labels[source as keyof typeof labels]
+    : String(source || '');
 }
 
 /**
@@ -307,7 +328,7 @@ export function evidenceSourceLabel(source) {
  * @param {import('./case-model.ts').CaseEvidenceSnapshot[] | null | undefined} evidenceHistory
  * @returns {{ availability: string | null, riskModelVersion: number | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
  */
-export function currentEvidenceSummary(evidenceHistory) {
+export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] | null | undefined) {
   const latest = latestCaseEvidence({ evidenceHistory: evidenceHistory ?? undefined });
   if (!latest) return null;
   return {

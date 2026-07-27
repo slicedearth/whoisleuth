@@ -24,7 +24,7 @@ import {
   buildCaseReport,
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-report.js';
+} from '../frontend/src/lib/analysis/case-report.ts';
 import {
   MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
   RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
