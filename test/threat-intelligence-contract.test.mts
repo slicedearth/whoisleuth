@@ -1,7 +1,6 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_SCHEMA,
   MAX_FINDINGS,
@@ -25,9 +24,10 @@ const {
   buildThreatIntelligenceProviderMatrix,
   buildCuratedConnectorMatrix,
   runCuratedConnectorFixture,
-} = require('../lib/threat-intelligence-contract.mts');
+} from '../lib/threat-intelligence-contract.mts';
+import { recordValue, requiredValue } from './value-assertions.mts';
 
-function provider(overrides = {}) {
+function provider(overrides: Record<string, unknown> = {}) {
   return defineThreatIntelligenceProvider({
     id: 'fixture_feed',
     label: 'Fixture feed',
@@ -56,7 +56,7 @@ function provider(overrides = {}) {
   });
 }
 
-function finding(overrides = {}) {
+function finding(overrides: Record<string, unknown> = {}) {
   return {
     id: 'fixture-1',
     category: 'phishing',
@@ -72,7 +72,7 @@ function finding(overrides = {}) {
   };
 }
 
-function connector(overrides = {}) {
+function connector(overrides: Record<string, unknown> = {}) {
   return defineCuratedConnector({
     id: 'fixture_connector',
     label: 'Fixture connector',
@@ -125,7 +125,12 @@ function connector(overrides = {}) {
   });
 }
 
-function connectorEntity(key, type, value, overrides = {}) {
+function connectorEntity(
+  key: string,
+  type: string,
+  value: unknown,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     key,
     type,
@@ -136,7 +141,12 @@ function connectorEntity(key, type, value, overrides = {}) {
   };
 }
 
-function connectorRelationship(type, fromKey, toKey, overrides = {}) {
+function connectorRelationship(
+  type: string,
+  fromKey: string,
+  toKey: string,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     type,
     fromKey,
@@ -306,7 +316,7 @@ describe('threat-intelligence result normalization', () => {
   });
 
   test('normalizes, sorts, deduplicates, and bounds provider findings', () => {
-    const findings = Array.from({ length: MAX_FINDINGS + 5 }, (_, index) => finding({
+    const findings: unknown[] = Array.from({ length: MAX_FINDINGS + 5 }, (_, index) => finding({
       id: `finding-${index}`,
       firstObservedAt: '2026-07-01T00:00:00Z',
       lastObservedAt: `2026-07-${String((index % 20) + 1).padStart(2, '0')}T00:00:00Z`,
@@ -329,7 +339,9 @@ describe('threat-intelligence result normalization', () => {
     const result = createThreatIntelligenceResult(provider(), { type: 'domain', value: 'example.test' }, { state: 'success', findings });
     assert.equal(result.state, 'partial');
     assert.equal(result.findings.length, MAX_FINDINGS);
-    assert.equal(result.observation.diagnostics.discarded >= 10, true);
+    const discarded = result.observation.diagnostics.discarded;
+    if (typeof discarded !== 'number') assert.fail('expected a numeric discarded count');
+    assert.equal(discarded >= 10, true);
   });
 
   test('deduplicates provider IDs deterministically regardless of response order', () => {
@@ -367,7 +379,7 @@ describe('threat-intelligence result normalization', () => {
       retryAfterSeconds: 100_000,
       limitations: Array.from({ length: 20 }, (_, index) => `limitation-${index}`),
     });
-    assert.equal(result.detail.length, 500);
+    assert.equal(requiredValue(result.detail).length, 500);
     assert.equal(result.upstreamStatus, null);
     assert.equal(result.retryAfterSeconds, null);
     assert.equal(result.observation.limitations.length, 10);
@@ -618,8 +630,12 @@ describe('curated connector result normalization', () => {
     assert.equal(result.relationships.length, 1);
     assert.equal(Object.keys(result.entities.find((item) => item.canonical === 'first.test')?.attributes || {}).length, 20);
     assert.equal(result.observation.diagnostics.discarded_entities, 0);
-    assert.ok(result.observation.diagnostics.discarded_attributes >= 5);
-    assert.ok(result.observation.diagnostics.discarded_relationships >= 1);
+    const discardedAttributes = result.observation.diagnostics.discarded_attributes;
+    const discardedRelationships = result.observation.diagnostics.discarded_relationships;
+    if (typeof discardedAttributes !== 'number') assert.fail('expected a numeric discarded-attribute count');
+    if (typeof discardedRelationships !== 'number') assert.fail('expected a numeric discarded-relationship count');
+    assert.ok(discardedAttributes >= 5);
+    assert.ok(discardedRelationships >= 1);
     assert.equal(result.observation.diagnostics.discarded_metadata, 2);
     assert.equal(result.observation.truncated, true);
 
@@ -652,7 +668,9 @@ describe('curated connector result normalization', () => {
     });
     assert.equal(result.entities.length, MAX_CONNECTOR_ENTITIES);
     assert.equal(result.state, 'partial');
-    assert.ok(result.observation.diagnostics.discarded_entities >= MAX_CONNECTOR_INPUT_ENTITIES - MAX_CONNECTOR_ENTITIES + 5);
+    const discardedEntities = result.observation.diagnostics.discarded_entities;
+    if (typeof discardedEntities !== 'number') assert.fail('expected a numeric discarded-entity count');
+    assert.ok(discardedEntities >= MAX_CONNECTOR_INPUT_ENTITIES - MAX_CONNECTOR_ENTITIES + 5);
     assert.equal(result.observation.diagnostics.discarded_relationships, MAX_CONNECTOR_INPUT_RELATIONSHIPS + 5);
   });
 
@@ -674,7 +692,10 @@ describe('curated connector result normalization', () => {
     assert.deepEqual(forward.relationships, reverse.relationships);
     assert.deepEqual(input, before);
     assert.equal(forward.entities.length, 2);
-    assert.equal(forward.entities.find((item) => item.canonical === 'second.test').label, 'A alias');
+    assert.equal(
+      requiredValue(forward.entities.find((item) => item.canonical === 'second.test')).label,
+      'A alias',
+    );
     assert.equal(forward.state, 'partial');
   });
 
@@ -750,9 +771,12 @@ describe('curated connector fixture harness', () => {
       calls += 1;
       assert.equal(Object.isFrozen(target), true);
       assert.deepEqual(rest, []);
+      const fixturePayload = recordValue(payload);
+      const records = Array.isArray(fixturePayload.records) ? fixturePayload.records : [];
+      const fixtureRecord = recordValue(requiredValue(records[0]));
       return {
         state: 'success',
-        entities: [connectorEntity('record', 'domain', payload.records[0].name)],
+        entities: [connectorEntity('record', 'domain', fixtureRecord.name)],
         relationships: [],
       };
     });

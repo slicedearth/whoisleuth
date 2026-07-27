@@ -1,21 +1,29 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   THREATFOX_PROVIDER,
   THREATFOX_SEARCH_ENDPOINT,
   THREATFOX_MAX_RESULTS,
   THREATFOX_MAX_RESPONSE_BYTES,
   createThreatfoxIntelligenceAdapter,
   threatfoxConfiguration,
-} = require('../lib/threatfox-intelligence.mts');
+} from '../lib/threatfox-intelligence.mts';
+import { requiredValue, stringValue } from './value-assertions.mts';
+
+type AdapterDependencies = NonNullable<Parameters<typeof createThreatfoxIntelligenceAdapter>[0]>;
+type FetchDetailed = NonNullable<AdapterDependencies['fetchDetailed']>;
+type FetchCall = {
+  url: Parameters<FetchDetailed>[0];
+  options: Parameters<FetchDetailed>[1];
+  dependencies: Parameters<FetchDetailed>[2];
+};
 
 const ENABLED_ENV = Object.freeze({
   WHOISLEUTH_ENABLE_THREATFOX: '1',
   ABUSECH_AUTH_KEY: 'fixture-auth-key',
 });
 
-function iocRecord(overrides = {}) {
+function iocRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: '123456',
     ioc: 'example.com',
@@ -34,19 +42,45 @@ function iocRecord(overrides = {}) {
   };
 }
 
-function jsonResponse(body, status = 200, headers = {}) {
+function jsonResponse(
+  body: unknown,
+  status = 200,
+  headers: HeadersInit = {},
+): Response {
+  const responseHeaders = new Headers(headers);
+  responseHeaders.set('content-type', 'application/json');
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: responseHeaders,
   });
 }
 
-function fixtureAdapter(responseFactory, calls = []) {
+function detailedResponse(
+  response: Response,
+  requestedUrl = THREATFOX_SEARCH_ENDPOINT,
+): Awaited<ReturnType<FetchDetailed>> {
+  return {
+    response,
+    requestedUrl,
+    finalUrl: requestedUrl,
+    redirected: false,
+    redirectCount: 0,
+    redirectLimitReached: false,
+    hops: [],
+    durationMs: 1,
+    status: response.status,
+  };
+}
+
+function fixtureAdapter(
+  responseFactory: () => Response | Promise<Response>,
+  calls: FetchCall[] = [],
+) {
   return createThreatfoxIntelligenceAdapter({
     now: () => Date.parse('2026-07-15T03:04:05.000Z'),
     fetchDetailed: async (url, options, dependencies) => {
       calls.push({ url, options, dependencies });
-      return { response: await responseFactory() };
+      return detailedResponse(await responseFactory(), url);
     },
   });
 }
@@ -77,17 +111,19 @@ describe('malware-IOC provider policy and configuration', () => {
 
 describe('malware-IOC lookup', () => {
   test('posts only an exact registrable-domain query to the fixed endpoint', async () => {
-    const calls = [];
+    const calls: FetchCall[] = [];
     const adapter = fixtureAdapter(async () => jsonResponse({ query_status: 'ok', data: [iocRecord()] }), calls);
     const result = await adapter.lookupDomain('login.example.com', { env: ENABLED_ENV });
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, THREATFOX_SEARCH_ENDPOINT);
-    assert.deepEqual(JSON.parse(calls[0].options.body), {
+    const call = requiredValue(calls[0]);
+    const options = requiredValue(call.options);
+    assert.equal(call.url, THREATFOX_SEARCH_ENDPOINT);
+    assert.deepEqual(JSON.parse(stringValue(options.body)), {
       query: 'search_ioc', search_term: 'example.com', exact_match: true,
     });
-    assert.equal(calls[0].options.headers['auth-key'], 'fixture-auth-key');
-    assert.equal(calls[0].dependencies.maxRedirects, 0);
-    assert.equal(calls[0].url.includes('fixture-auth-key'), false);
+    assert.equal(new Headers(options.headers).get('auth-key'), 'fixture-auth-key');
+    assert.equal(requiredValue(call.dependencies).maxRedirects, 0);
+    assert.equal(call.url.includes('fixture-auth-key'), false);
     assert.equal(result.state, 'success');
     assert.deepEqual(result.target, { type: 'domain', value: 'example.com', exposure: 'registrable_domain' });
     assert.equal(result.findings.length, 1);
@@ -151,11 +187,12 @@ describe('malware-IOC lookup', () => {
   });
 
   test('maps quota, credential, and upstream failures without retaining bodies', async () => {
-    for (const fixture of [
+    const fixtures: Array<{ status: number; expected: string; headers: Record<string, string> }> = [
       { status: 429, expected: 'rate_limited', headers: { 'retry-after': '90' } },
       { status: 403, expected: 'unavailable', headers: {} },
       { status: 503, expected: 'error', headers: {} },
-    ]) {
+    ];
+    for (const fixture of fixtures) {
       const adapter = fixtureAdapter(async () => jsonResponse({ secret: 'provider detail' }, fixture.status, fixture.headers));
       const result = await adapter.lookupDomain('example.com', { env: ENABLED_ENV });
       assert.equal(result.state, fixture.expected);
@@ -168,7 +205,7 @@ describe('malware-IOC lookup', () => {
   test('rejects oversized, malformed, and unexpected successful responses', async () => {
     const fixtures = [
       createThreatfoxIntelligenceAdapter({
-        fetchDetailed: async () => ({ response: jsonResponse({ query_status: 'ok', data: [] }) }),
+        fetchDetailed: async () => detailedResponse(jsonResponse({ query_status: 'ok', data: [] })),
         readResponse: async () => ({ text: '{}', truncated: true, bytesRead: THREATFOX_MAX_RESPONSE_BYTES }),
       }),
       fixtureAdapter(async () => new Response('{', { status: 200 })),
@@ -191,8 +228,8 @@ describe('malware-IOC lookup', () => {
     await adapter.lookupDomain('example.com', { env: ENABLED_ENV });
     assert.equal(calls, 2);
 
-    let release;
-    const held = new Promise((resolve) => { release = resolve; });
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
     const concurrent = fixtureAdapter(async () => {
       await held;
       return jsonResponse({ query_status: 'no_result', data: [] });
@@ -201,7 +238,7 @@ describe('malware-IOC lookup', () => {
     await new Promise((resolve) => setImmediate(resolve));
     const second = await concurrent.lookupDomain('example.net', { env: ENABLED_ENV });
     assert.equal(second.state, 'unavailable');
-    release();
+    requiredValue(release)();
     await first;
   });
 

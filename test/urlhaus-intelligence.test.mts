@@ -1,21 +1,29 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   URLHAUS_PROVIDER,
   URLHAUS_HOST_ENDPOINT,
   URLHAUS_MAX_RESULTS,
   URLHAUS_MAX_RESPONSE_BYTES,
   createUrlhausIntelligenceAdapter,
   urlhausConfiguration,
-} = require('../lib/urlhaus-intelligence.mts');
+} from '../lib/urlhaus-intelligence.mts';
+import { requiredValue, stringValue } from './value-assertions.mts';
+
+type AdapterDependencies = NonNullable<Parameters<typeof createUrlhausIntelligenceAdapter>[0]>;
+type FetchDetailed = NonNullable<AdapterDependencies['fetchDetailed']>;
+type FetchCall = {
+  url: Parameters<FetchDetailed>[0];
+  options: Parameters<FetchDetailed>[1];
+  dependencies: Parameters<FetchDetailed>[2];
+};
 
 const ENABLED_ENV = Object.freeze({
   WHOISLEUTH_ENABLE_URLHAUS: '1',
   URLHAUS_AUTH_KEY: 'fixture-auth-key',
 });
 
-function hostRecord(overrides = {}) {
+function hostRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: '123456',
     urlhaus_reference: 'https://urlhaus.abuse.ch/url/123456/',
@@ -28,7 +36,7 @@ function hostRecord(overrides = {}) {
   };
 }
 
-function responseBody(overrides = {}) {
+function responseBody(overrides: Record<string, unknown> = {}) {
   return {
     query_status: 'ok',
     host: 'example.com',
@@ -39,19 +47,45 @@ function responseBody(overrides = {}) {
   };
 }
 
-function jsonResponse(body, status = 200, headers = {}) {
+function jsonResponse(
+  body: unknown,
+  status = 200,
+  headers: HeadersInit = {},
+): Response {
+  const responseHeaders = new Headers(headers);
+  responseHeaders.set('content-type', 'application/json');
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: responseHeaders,
   });
 }
 
-function fixtureAdapter(responseFactory, calls = []) {
+function detailedResponse(
+  response: Response,
+  requestedUrl = URLHAUS_HOST_ENDPOINT,
+): Awaited<ReturnType<FetchDetailed>> {
+  return {
+    response,
+    requestedUrl,
+    finalUrl: requestedUrl,
+    redirected: false,
+    redirectCount: 0,
+    redirectLimitReached: false,
+    hops: [],
+    durationMs: 1,
+    status: response.status,
+  };
+}
+
+function fixtureAdapter(
+  responseFactory: () => Response | Promise<Response>,
+  calls: FetchCall[] = [],
+) {
   return createUrlhausIntelligenceAdapter({
     now: () => Date.parse('2026-07-15T02:03:04.000Z'),
     fetchDetailed: async (url, options, dependencies) => {
       calls.push({ url, options, dependencies });
-      return { response: await responseFactory() };
+      return detailedResponse(await responseFactory(), url);
     },
   });
 }
@@ -103,18 +137,20 @@ describe('malware-host lookup', () => {
   });
 
   test('posts only the registrable domain to the fixed endpoint with a header credential', async () => {
-    const calls = [];
+    const calls: FetchCall[] = [];
     const adapter = fixtureAdapter(async () => jsonResponse(responseBody()), calls);
     const result = await adapter.lookupDomain('login.example.com', { env: ENABLED_ENV });
 
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, URLHAUS_HOST_ENDPOINT);
-    assert.equal(calls[0].options.method, 'POST');
-    assert.equal(calls[0].options.body, 'host=example.com');
-    assert.equal(calls[0].options.headers['auth-key'], 'fixture-auth-key');
-    assert.equal(calls[0].dependencies.maxRedirects, 0);
-    assert.equal(JSON.stringify(calls[0]).includes('private/payload'), false);
-    assert.equal(calls[0].url.includes('fixture-auth-key'), false);
+    const call = requiredValue(calls[0]);
+    const options = requiredValue(call.options);
+    assert.equal(call.url, URLHAUS_HOST_ENDPOINT);
+    assert.equal(options.method, 'POST');
+    assert.equal(options.body, 'host=example.com');
+    assert.equal(new Headers(options.headers).get('auth-key'), 'fixture-auth-key');
+    assert.equal(requiredValue(call.dependencies).maxRedirects, 0);
+    assert.equal(JSON.stringify(call).includes('private/payload'), false);
+    assert.equal(call.url.includes('fixture-auth-key'), false);
     assert.equal(result.state, 'success');
     assert.deepEqual(result.target, { type: 'domain', value: 'example.com', exposure: 'registrable_domain' });
     assert.equal(result.findings.length, 1);
@@ -171,15 +207,16 @@ describe('malware-host lookup', () => {
     assert.equal(result.state, 'partial');
     assert.equal(result.findings.length, URLHAUS_MAX_RESULTS);
     assert.equal(result.observation.truncated, true);
-    assert.match(result.detail, /additional provider records may exist/i);
+    assert.match(requiredValue(result.detail), /additional provider records may exist/i);
   });
 
   test('maps quota, credential, and upstream failures without exposing response bodies', async () => {
-    for (const fixture of [
+    const fixtures: Array<{ status: number; expected: string; headers: Record<string, string> }> = [
       { status: 429, expected: 'rate_limited', headers: { 'retry-after': '60' } },
       { status: 403, expected: 'unavailable', headers: {} },
       { status: 503, expected: 'error', headers: {} },
-    ]) {
+    ];
+    for (const fixture of fixtures) {
       const adapter = fixtureAdapter(async () => jsonResponse({ message: 'secret provider detail' }, fixture.status, fixture.headers));
       const result = await adapter.lookupDomain('example.com', { env: ENABLED_ENV });
       assert.equal(result.state, fixture.expected);
@@ -198,7 +235,7 @@ describe('malware-host lookup', () => {
   test('rejects oversized, malformed, and unexpected successful responses', async () => {
     const fixtures = [
       createUrlhausIntelligenceAdapter({
-        fetchDetailed: async () => ({ response: jsonResponse(responseBody()) }),
+        fetchDetailed: async () => detailedResponse(jsonResponse(responseBody())),
         readResponse: async () => ({ text: '{}', truncated: true, bytesRead: URLHAUS_MAX_RESPONSE_BYTES }),
       }),
       fixtureAdapter(async () => new Response('{', { status: 200 })),
@@ -223,8 +260,8 @@ describe('malware-host lookup', () => {
   });
 
   test('enforces one active provider request per runtime instance', async () => {
-    let release;
-    const held = new Promise((resolve) => { release = resolve; });
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
     const adapter = fixtureAdapter(async () => {
       await held;
       return jsonResponse(responseBody());
@@ -233,8 +270,8 @@ describe('malware-host lookup', () => {
     await new Promise((resolve) => setImmediate(resolve));
     const second = await adapter.lookupDomain('example.net', { env: ENABLED_ENV });
     assert.equal(second.state, 'unavailable');
-    assert.match(second.detail, /concurrency limit/i);
-    release();
+    assert.match(requiredValue(second.detail), /concurrency limit/i);
+    requiredValue(release)();
     assert.equal((await first).state, 'success');
   });
 
