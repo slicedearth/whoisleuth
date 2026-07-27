@@ -9,7 +9,7 @@ import {
 
 const OBSERVED_AT = '2026-07-15T00:00:00.000Z';
 
-function provider(id, overrides = {}) {
+function provider(id: string, overrides: Record<string, unknown> = {}) {
   return {
     provider: { id, label: 'Untrusted label' },
     state: 'success',
@@ -80,6 +80,7 @@ test('corroborated stale or unknown-age evidence receives the lower contribution
   assert.equal(result.recentPublisherCount, 0);
   assert.equal(result.unknownAgeProviderCount, 1);
   assert.equal(result.contribution, 10);
+  assert.ok(result.factor);
   assert.equal(result.factor.label, 'Corroborated external phishing/malware records');
 });
 
@@ -123,7 +124,7 @@ test('provider and finding traversal stop at their hard input caps', () => {
   assert.deepEqual(providerResult.sources.map((source) => source.providerId), ['urlscan_search']);
   assert.equal(providerResult.contribution, 0);
 
-  const findings = Array.from({ length: 100 }, () => ({ category: 'suspicious' }));
+  const findings: Array<Record<string, unknown>> = Array.from({ length: 100 }, () => ({ category: 'suspicious' }));
   findings.push({ category: 'malware', lastObservedAt: '2026-07-12T00:00:00.000Z' });
   const findingResult = calibrateExternalIntelligenceRisk({
     providers: [provider('urlscan_search', { findings })],

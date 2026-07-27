@@ -17,7 +17,7 @@ import {
 
 function capture() {
   let value = '';
-  return { stream: { write(chunk) { value += String(chunk); } }, value: () => value };
+  return { stream: { write(chunk: unknown) { value += String(chunk); } }, value: () => value };
 }
 
 function manifests(version = '1.5.0') {

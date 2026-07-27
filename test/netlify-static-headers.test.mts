@@ -2,18 +2,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-function headerRules(source) {
+function headerRules(source: string): string[] {
   return source
     .split('[[headers]]')
     .slice(1)
-    .map((block) => block.split(/\n\[\[/, 1)[0]);
+    .map((block: string) => block.split(/\n\[\[/, 1)[0]);
 }
 
 test('prerendered responses resist edge script injection without weakening immutable assets', async () => {
   const source = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
   const rules = headerRules(source);
-  const immutableIndex = rules.findIndex((rule) => /for = "\/_app\/immutable\/\*"/.test(rule));
-  const fallbackIndex = rules.findIndex((rule) => /for = "\/\*"/.test(rule));
+  const immutableIndex = rules.findIndex((rule: string) => /for = "\/_app\/immutable\/\*"/.test(rule));
+  const fallbackIndex = rules.findIndex((rule: string) => /for = "\/\*"/.test(rule));
 
   assert.notEqual(immutableIndex, -1);
   assert.notEqual(fallbackIndex, -1);

@@ -29,6 +29,11 @@ function fixtureRepository(vulnerabilityCount = 1) {
   };
 }
 
+function record(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value));
+  return value as Record<string, unknown>;
+}
+
 describe('pinned browser-library catalogue projection', () => {
   test('automatically verifies the checked-in generated module digest', async () => {
     const [moduleText, expectedDigest] = await Promise.all([
@@ -47,7 +52,7 @@ describe('pinned browser-library catalogue projection', () => {
 
   test('projects and renders deterministic bounded catalogue data', () => {
     const projected = projectRepository(fixtureRepository(130));
-    const vulnerabilities = projected.fixture.vulnerabilities;
+    const vulnerabilities = record(projected.fixture).vulnerabilities;
 
     assert.ok(Array.isArray(vulnerabilities));
     assert.equal(vulnerabilities.length, 128);

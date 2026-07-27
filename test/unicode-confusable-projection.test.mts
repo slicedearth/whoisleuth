@@ -34,7 +34,7 @@ const FIXTURE_SHA256 = 'b5b2b3e065acda4e3e951b6e1614c5e95ecc773fa0d64ccf7e2f6fe7
 
 function capture() {
   let value = '';
-  return { stream: { write(chunk) { value += String(chunk); } }, value: () => value };
+  return { stream: { write(chunk: unknown) { value += String(chunk); } }, value: () => value };
 }
 
 describe('bounded Unicode confusable source projection', () => {

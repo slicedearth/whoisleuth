@@ -10,7 +10,7 @@ import {
 
 const OBSERVED_AT = '2026-07-27T01:02:03.000Z';
 
-function analyze(html, overrides = {}) {
+function analyze(html: string, overrides: Record<string, unknown> = {}) {
   return analyzeStructuredDataIdentity({
     html,
     baseUrl: 'https://shop.example.test/catalogue?session=private',

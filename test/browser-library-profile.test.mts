@@ -108,8 +108,16 @@ describe('bounded browser-library profile', () => {
       assert.equal(profile.complete, false);
       assert.equal(profile.truncated, true);
       assert.ok(profile.findings.length <= MAX_LIBRARY_FINDINGS);
-      assert.ok(profile.diagnostics.inlineCharactersExamined <= MAX_INLINE_SCRIPT_TOTAL_CHARS);
-      assert.ok(profile.diagnostics.scriptsExamined <= MAX_SCRIPT_ELEMENTS);
+      const inlineCharactersExamined = profile.diagnostics.inlineCharactersExamined;
+      const scriptsExamined = profile.diagnostics.scriptsExamined;
+      assert.equal(typeof inlineCharactersExamined, 'number');
+      assert.equal(typeof scriptsExamined, 'number');
+      if (typeof inlineCharactersExamined === 'number') {
+        assert.ok(inlineCharactersExamined <= MAX_INLINE_SCRIPT_TOTAL_CHARS);
+      }
+      if (typeof scriptsExamined === 'number') {
+        assert.ok(scriptsExamined <= MAX_SCRIPT_ELEMENTS);
+      }
     }
   });
 

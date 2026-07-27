@@ -4,7 +4,7 @@ import { buildMispIndicatorExport, MAX_MISP_ATTRIBUTES } from '../frontend/src/l
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
-function result(domain, overrides = {}) {
+function result(domain: string, overrides: Record<string, unknown> = {}) {
   return {
     domain, availability: 'registered', risk: 80, trusted: null, status: 'complete',
     saved: { scanDepth: 'deep', riskModelVersion: 4, observedAt: '2026-07-14T07:59:00.000Z' },
@@ -17,7 +17,7 @@ function uuids() {
   return () => `00000000-0000-4000-8000-${String(++value).padStart(12, '0')}`;
 }
 
-function exported(records, options = {}) {
+function exported(records: unknown[], options: Record<string, unknown> = {}) {
   return buildMispIndicatorExport(records, { generatedAt: NOW, uuidFactory: uuids(), ...options });
 }
 
@@ -74,7 +74,7 @@ test('canonicalizes, sorts, deduplicates, and excludes ineligible results', () =
     result('trusted.example', { trusted: 'official' }), result('low.example', { risk: 69 }),
   ]);
   assert.deepEqual(output.domains, ['a.example', 'z.example']);
-  assert.deepEqual(JSON.parse(output.content).Event.Attribute.map((item) => item.value), ['a.example', 'z.example']);
+  assert.deepEqual(JSON.parse(output.content).Event.Attribute.map((item: Record<string, unknown>) => item.value), ['a.example', 'z.example']);
 });
 
 test('caps attributes and reports truncation', () => {

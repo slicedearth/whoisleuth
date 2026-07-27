@@ -13,7 +13,7 @@ const {
 
 const observedAt = '2026-07-27T04:05:06.000Z';
 
-function profile(html, options = {}) {
+function profile(html: string, options: Record<string, unknown> = {}) {
   return analyzeCredentialSurfaceProfile({
     html,
     baseUrl: 'https://portal.example/start',

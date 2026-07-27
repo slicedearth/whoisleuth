@@ -13,7 +13,7 @@ import {
 
 function capture() {
   let value = '';
-  return { stream: { write(chunk) { value += String(chunk); } }, value: () => value };
+  return { stream: { write(chunk: unknown) { value += String(chunk); } }, value: () => value };
 }
 
 function fixtureLockfile() {
@@ -29,7 +29,7 @@ function fixtureLockfile() {
   };
 }
 
-async function writeFixturePackage(root, name, licenseText = '') {
+async function writeFixturePackage(root: string, name: string, licenseText = '') {
   const directory = path.join(root, 'node_modules', name);
   await mkdir(directory, { recursive: true });
   if (licenseText) await writeFile(path.join(directory, 'LICENSE'), licenseText, 'utf8');

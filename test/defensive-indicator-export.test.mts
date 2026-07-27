@@ -9,7 +9,7 @@ import {
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
-function result(domain, overrides = {}) {
+function result(domain: string, overrides: Record<string, unknown> = {}) {
   return { domain, availability: 'registered', risk: 80, trusted: null, status: 'complete', ...overrides };
 }
 
