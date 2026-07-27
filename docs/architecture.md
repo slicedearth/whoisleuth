@@ -276,6 +276,21 @@ The test pyramid is designed to avoid dependence on public services:
    verification sequence for pushes and pull requests, retaining browser
    artifacts only on failure.
 
+### Enforced dependency boundaries
+
+`npm run architecture:check` validates the application dependency graph during
+local verification and CI. It rejects circular dependencies, prevents browser
+modules from reaching server networking, authentication, secret, filesystem,
+CLI, or function code, and requires optional intelligence adapters to import the
+provider-neutral contract directly.
+
+Scheduled monitoring calls the shared Lookup dispatcher with both `fast` and
+`compact` fixed to `true`. Because that dispatcher owns the runtime collector
+gates, the architecture rule permits the dispatcher dependency but prohibits a
+scheduled fast or compact entry point from importing a deep-only collector
+directly. This is the only deliberate exception; it avoids duplicating lookup
+orchestration while keeping bypasses mechanically detectable.
+
 The on-demand `npm run schema:inventory` report is assembled from the owning
 contract constants and readers rather than a copied version table. Its explicit
 supported-version lists make a contract bump fail tests until legacy handling,

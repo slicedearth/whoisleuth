@@ -254,6 +254,20 @@ Replace `--check` with `--write` only when deliberately updating the generated
 projection and its digest together. The command reads only the supplied local
 file and does not download a catalogue.
 
+### Architectural dependency boundaries
+
+```bash
+npm run architecture:check
+```
+
+This development-only check rejects circular application dependencies, browser
+imports of server-only code, direct deep-collector imports from scheduled fast
+and compact entry points, and optional intelligence adapters that bypass the
+provider-neutral contract. The existing guarded Lookup dispatcher is the narrow
+exception for fast and compact callers: its runtime profile gates remain the
+authority for choosing collectors. The check reads local source and the locked
+dependency graph only; it makes no network request and has no production effect.
+
 ### Registry drift
 
 ```bash

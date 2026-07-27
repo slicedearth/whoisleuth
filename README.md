@@ -205,6 +205,7 @@ npm test
 npm run typecheck
 npm run check
 npm run build
+npm run architecture:check
 npm run test:e2e:built
 git diff --check
 npm audit --omit=dev
