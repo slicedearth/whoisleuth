@@ -139,7 +139,7 @@
   onMount(()=>{void (async()=>{
     await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships()]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
     const focus=page.url.searchParams.get('case');
-    if(focus){view='cases';if(cases.some(record=>record.id===focus)){const target=cases.find(record=>record.id===focus)!;showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');}}
+    if(focus){view='cases';const target=cases.find(record=>record.id===focus);if(target){showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');}}
     else if(page.url.searchParams.get('view')==='watchlists')view='watchlists';
     else if(page.url.searchParams.get('view')==='cases')view='cases';
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';

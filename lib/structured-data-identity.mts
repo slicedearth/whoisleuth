@@ -229,7 +229,8 @@ function analyzeStructuredDataIdentity(input: StructuredDataIdentityInput = {}) 
 
     const pending: Array<{ value: unknown; depth: number }> = [{ value: parsed, depth: 0 }];
     while (pending.length) {
-      const current = pending.pop()!;
+      const current = pending.pop();
+      if (!current) break;
       if (current.depth > MAX_STRUCTURED_DATA_DEPTH) {
         limitReached = true;
         continue;

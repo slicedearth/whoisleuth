@@ -246,30 +246,34 @@ function srcsetUrls(value: unknown): { urls: string[]; truncated: boolean } {
 
 function resourceReferences(tagName: string, attributes: Map<string, string>): { references: ResourceReference[]; truncated: boolean } {
   const references: ResourceReference[] = [];
+  const pushAttribute = (type: ResourceReference['type'], name: string) => {
+    const value = attributes.get(name);
+    if (value !== undefined) references.push({ type, value });
+  };
   if (tagName === 'img') {
-    if (attributes.has('src')) references.push({ type: 'image', value: attributes.get('src')! });
+    pushAttribute('image', 'src');
     const srcset = srcsetUrls(attributes.get('srcset'));
     references.push(...srcset.urls.map((value): ResourceReference => ({ type: 'image', value })));
     return { references, truncated: srcset.truncated };
   }
-  if (tagName === 'script' && attributes.has('src')) references.push({ type: 'script', value: attributes.get('src')! });
+  if (tagName === 'script') pushAttribute('script', 'src');
   if (tagName === 'link') {
     const rels = String(attributes.get('rel') || '').toLowerCase().split(/\s+/).filter(Boolean);
-    if (rels.some((rel) => RESOURCE_LINK_RELS.has(rel)) && attributes.has('href')) {
-      references.push({ type: rels.includes('stylesheet') ? 'stylesheet' : 'link', value: attributes.get('href')! });
+    if (rels.some((rel) => RESOURCE_LINK_RELS.has(rel))) {
+      pushAttribute(rels.includes('stylesheet') ? 'stylesheet' : 'link', 'href');
     }
   }
-  if (['iframe', 'frame'].includes(tagName) && attributes.has('src')) references.push({ type: 'frame', value: attributes.get('src')! });
+  if (['iframe', 'frame'].includes(tagName)) pushAttribute('frame', 'src');
   if (tagName === 'source') {
-    if (attributes.has('src')) references.push({ type: 'media', value: attributes.get('src')! });
+    pushAttribute('media', 'src');
     const srcset = srcsetUrls(attributes.get('srcset'));
     references.push(...srcset.urls.map((value): ResourceReference => ({ type: 'media', value })));
     return { references, truncated: srcset.truncated };
   }
-  if (['video', 'audio'].includes(tagName) && attributes.has('src')) references.push({ type: 'media', value: attributes.get('src')! });
-  if (tagName === 'video' && attributes.has('poster')) references.push({ type: 'image', value: attributes.get('poster')! });
-  if (tagName === 'object' && attributes.has('data')) references.push({ type: 'object', value: attributes.get('data')! });
-  if (tagName === 'embed' && attributes.has('src')) references.push({ type: 'object', value: attributes.get('src')! });
+  if (['video', 'audio'].includes(tagName)) pushAttribute('media', 'src');
+  if (tagName === 'video') pushAttribute('image', 'poster');
+  if (tagName === 'object') pushAttribute('object', 'data');
+  if (tagName === 'embed') pushAttribute('object', 'src');
   return { references, truncated: false };
 }
 

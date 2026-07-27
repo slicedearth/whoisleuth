@@ -297,10 +297,8 @@ async function safeFetchDetailed(
     const dispatcher = makeDispatcher(records);
     const hopStartedAt = now();
 
-    // `dispatcher` is a real, supported undici extension to Node's global
-    // fetch (used above to pin the connection) - TS's built-in fetch types
-    // don't know about it since it's outside the standard fetch spec.
-    /** @type {RequestInit & { dispatcher?: import('undici').Dispatcher }} */
+    // `dispatcher` is a supported undici extension used to pin the connection.
+    // Keep the non-standard property local to this request boundary.
     const fetchOptions: RequestInit & { dispatcher?: unknown } = { ...options, redirect: 'manual', dispatcher };
     let response: Response;
     try {

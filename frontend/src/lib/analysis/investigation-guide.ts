@@ -470,6 +470,19 @@ export function buildInvestigationGuideSummary(
   const recipe = investigationGuideRecipe(guide?.recipeId);
   const normalizedGeneratedAt = timestamp(generatedAt);
   if (!guide || !recipe || !normalizedGeneratedAt) return null;
+  const stages: InvestigationGuideSummary['stages'] = [];
+  for (const stageDefinition of recipe.stages) {
+    const progress = guide.stages.find((candidate) => candidate.id === stageDefinition.id);
+    if (!progress) return null;
+    stages.push({
+      id: stageDefinition.id,
+      workspace: stageDefinition.workspace,
+      outcome: progress.outcome,
+      approved: progress.approvedAt !== null,
+      opened: progress.openedAt !== null,
+      updatedAt: progress.updatedAt,
+    });
+  }
   return {
     schema: INVESTIGATION_GUIDE_EXPORT_SCHEMA,
     version: INVESTIGATION_GUIDE_EXPORT_VERSION,
@@ -479,17 +492,7 @@ export function buildInvestigationGuideSummary(
     status: guide.status,
     createdAt: guide.createdAt,
     updatedAt: guide.updatedAt,
-    stages: recipe.stages.map((stageDefinition) => {
-      const progress = guide.stages.find((candidate) => candidate.id === stageDefinition.id)!;
-      return {
-        id: stageDefinition.id,
-        workspace: stageDefinition.workspace,
-        outcome: progress.outcome,
-        approved: progress.approvedAt !== null,
-        opened: progress.openedAt !== null,
-        updatedAt: progress.updatedAt,
-      };
-    }),
+    stages,
     limitations: [
       'This compact summary records analyst-controlled recipe progress only. It contains no raw evidence, notes, credentials, provider responses, or scan results.',
       'Opened, approved, complete, partial, and skipped states are analyst workflow markers, not findings or claims about the target.',
