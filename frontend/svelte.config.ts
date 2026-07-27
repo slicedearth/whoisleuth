@@ -1,7 +1,8 @@
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import type { Config } from '@sveltejs/kit';
 
-export default {
+const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter({ pages: 'build', assets: 'build', strict: true }),
@@ -20,4 +21,6 @@ export default {
       }
     }
   }
-};
+} satisfies Config;
+
+export default config;
