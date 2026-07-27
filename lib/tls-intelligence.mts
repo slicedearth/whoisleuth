@@ -569,6 +569,14 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
     if (resolutionDeadline !== undefined) clearTimer(resolutionDeadline);
   }
   const selected = records[0];
+  if (!selected) {
+    return failedTlsObservation('TLS target has no resolved addresses', {
+      sniHost: normalizedHostname,
+      connectionAttempts: 0,
+      observedAt: observedAt(),
+      durationMs: now() - started,
+    });
+  }
   const connect = options.connect || (tls.connect as unknown as TlsConnect);
   const checkServerIdentity = options.checkServerIdentity || ((host: string, certificate: unknown) => tls.checkServerIdentity(host, certificate as tls.PeerCertificate));
   const remainingMs = Math.max(0, timeoutMs - Math.max(0, now() - started));

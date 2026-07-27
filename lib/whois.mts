@@ -238,7 +238,8 @@ function extractReferral(whoisText: string): string | null {
   ];
   for (const re of patterns) {
     const m = whoisText.match(re);
-    if (m) return m[1].trim();
+    const referral = m?.[1]?.trim();
+    if (referral) return referral;
   }
   return null;
 }
@@ -289,7 +290,8 @@ function extractIconFields(html: string, iconMap: Record<string, string>): Recor
   const fields: Record<string, string> = {};
   for (let i = 1; i < parts.length; i += 2) {
     const value = (parts[i + 1] || '').trim();
-    if (value && !fields[parts[i]]) fields[parts[i]] = value;
+    const key = parts[i];
+    if (key && value && !fields[key]) fields[key] = value;
   }
   return fields;
 }
@@ -338,14 +340,14 @@ async function fetchGtRegistryWhois(
     });
 
     const serversSection = sectionBetween(html, /Servers\s*<\/h4>/i, [/<div class="span6">/i]);
-    const nameservers = [...serversSection.matchAll(/<strong>\s*([a-zA-Z0-9.\-]+)\.?\s*<\/strong>/gi)].map((m) =>
-      m[1].trim()
-    );
+    const nameservers = [...serversSection.matchAll(/<strong>\s*([a-zA-Z0-9.\-]+)\.?\s*<\/strong>/gi)]
+      .map((match) => match[1]?.trim())
+      .filter((value): value is string => Boolean(value));
 
     return {
       registered: true,
-      status: statusMatch ? statusMatch[1].trim() : null,
-      expiryDate: expiryMatch ? expiryMatch[1].trim() : null,
+      status: statusMatch?.[1]?.trim() || null,
+      expiryDate: expiryMatch?.[1]?.trim() || null,
       registrantOrg: org.org || null,
       registrantAddress: org.address || null,
       registrantPhone: org.phone || null,
@@ -449,7 +451,8 @@ async function buildWhoisChainUncached(
     currentServer = referral;
   }
 
-  if (queryStr.toLowerCase().endsWith('.gt') && chain.length === 1 && !('error' in chain[0])) {
+  const firstHop = chain[0];
+  if (queryStr.toLowerCase().endsWith('.gt') && chain.length === 1 && firstHop && !('error' in firstHop)) {
     try {
       const gtResult = await fetchGtWhois(queryStr);
       if (gtResult) {
@@ -500,9 +503,11 @@ function resolveFredContact(text: string, handle: string | null | undefined) {
 
   const get = (re: RegExp): string | null => {
     const m = block.match(re);
-    return m ? m[1].trim() : null;
+    return m?.[1]?.trim() || null;
   };
-  const addresses = [...block.matchAll(/^[ \t]*address:[ \t]*(.+)$/gim)].map((m) => m[1].trim());
+  const addresses = [...block.matchAll(/^[ \t]*address:[ \t]*(.+)$/gim)]
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => Boolean(value));
 
   return {
     name: get(/^[ \t]*name:[ \t]*(.+)$/im),
@@ -768,7 +773,7 @@ function analyzeWhoisChainAuthority(chain: unknown) {
     notFound: registrationStatus === 'not_found',
     notFoundSource: registrationStatus === 'not_found' && authoritative ? authoritative.server : null,
     authoritativeHop: authoritative ? authoritative.server : null,
-    failedHop: failed.length ? failed[0].server : null,
+    failedHop: failed[0]?.server ?? null,
     conflictingHop: conflict ? conflict.server : null,
     chainStatus: authoritative && failed.length === 0 && !conflict ? 'complete' : 'partial',
   };
@@ -906,7 +911,9 @@ function collectBareWhoisNameservers(
     }
     const hostMatch = trimmed.match(/^([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\.?(?:\s|$)/);
     if (!hostMatch) break;
-    const result = addBoundedWhoisSetValue(nameservers, hostMatch[1].replace(/\.$/, ''), {
+    const hostname = hostMatch[1];
+    if (!hostname) break;
+    const result = addBoundedWhoisSetValue(nameservers, hostname.replace(/\.$/, ''), {
       maxEntries: MAX_WHOIS_NAMESERVERS,
       maxLength: 253,
       field: 'nameservers',
@@ -1285,8 +1292,9 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
       const candidates = isRootHop ? res.slice(0, 1) : res;
       for (const re of candidates) {
         const m = text.match(re);
-        if (m) {
-          const value = m[1].trim();
+        const matchedValue = m?.[1];
+        if (matchedValue) {
+          const value = matchedValue.trim();
           // Some WHOIS formats use "Registered: yes/no" as a boolean state,
           // while others use "Registered: <date>" for creation time. Never
           // store the boolean form as a date ("no" previously became a truthy
@@ -1309,8 +1317,9 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     if (!isRootHop) {
       if (isRegisterBg) {
         const domainLine = text.match(/^[ \t]*DOMAIN NAME[ \t]*:[ \t]*([^\r\n]+)/im);
-        if (domainLine) {
-          const boundedLine = domainLine[1].slice(0, MAX_WHOIS_FIELD_LENGTH);
+        const rawDomainLine = domainLine?.[1];
+        if (rawDomainLine) {
+          const boundedLine = rawDomainLine.slice(0, MAX_WHOIS_FIELD_LENGTH);
           const parenthesized = boundedLine.match(/\(([a-z0-9.-]{1,253})\)[ \t]*$/i)?.[1] || '';
           const leadingAscii = boundedLine.match(/^([a-z0-9.-]{1,253})(?:[ \t]|$)/i)?.[1] || '';
           const unicodeDomain = boundedLine.replace(/[ \t]+\([^\r\n()]{1,253}\)[ \t]*$/, '').trim();
@@ -1632,12 +1641,13 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
         const nameserverHeader = text.match(/^[ \t]*nameservers[ \t]*:[ \t]*(.*)$/im);
         if (nameserverHeader) {
           const candidates = [
-            nameserverHeader[1],
+            nameserverHeader[1] ?? '',
             ...text.slice((nameserverHeader.index ?? 0) + nameserverHeader[0].length)
               .split('\n').slice(1, MAX_WHOIS_NAMESERVERS + 2),
           ];
           let found = 0;
           for (const line of candidates) {
+            if (line === undefined) continue;
             const trimmed = line.trim();
             if (!trimmed) {
               if (found > 0) break;
@@ -1645,7 +1655,9 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
             }
             const hostMatch = trimmed.match(/^([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\.?(?:\s|$)/);
             if (!hostMatch) break;
-            const result = addBoundedWhoisSetValue(nameservers, hostMatch[1].replace(/\.$/, ''), {
+            const hostname = hostMatch[1];
+            if (!hostname) break;
+            const result = addBoundedWhoisSetValue(nameservers, hostname.replace(/\.$/, ''), {
               maxEntries: MAX_WHOIS_NAMESERVERS, maxLength: 253,
               field: 'nameservers', truncatedFields,
             });
@@ -1869,19 +1881,19 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
     // is distinctive enough to not need root-hop gating.
     if (!fields.domainName) {
       const m = text.match(/\[Domain Name\][ \t]*(.+)/i);
-      if (m) fields.domainName = m[1].trim();
+      if (m?.[1]) fields.domainName = m[1].trim();
     }
     if (!fields.registrantName) {
       const m = text.match(/\[Registrant\][ \t]*(.+)/i);
-      if (m) fields.registrantName = m[1].trim();
+      if (m?.[1]) fields.registrantName = m[1].trim();
     }
     if (!fields.createdDate) {
       const m = text.match(/\[登録年月日\][ \t]*(.+)/);
-      if (m) fields.createdDate = m[1].trim();
+      if (m?.[1]) fields.createdDate = m[1].trim();
     }
     if (!fields.expiryDate) {
       const m = text.match(/\[有効期限\][ \t]*(.+)/);
-      if (m) fields.expiryDate = m[1].trim();
+      if (m?.[1]) fields.expiryDate = m[1].trim();
     }
     for (const m of text.matchAll(/\[状態\][ \t]*(.+)/g)) {
       if (addBoundedWhoisSetValue(statuses, m[1], {
@@ -2015,7 +2027,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
   for (const [prefix, role] of [
     ['registrant', 'registrant'], ['admin', 'administrative'],
     ['tech', 'technical'], ['billing', 'billing'],
-  ]) {
+  ] as const) {
     const contact = normalizedWhoisContact(fields, prefix, role, truncatedFields);
     if (contact) contactsByRole[role] = [contact];
   }

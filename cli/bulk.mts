@@ -118,6 +118,7 @@ async function runBulkLookups(queries: string[], options: BulkLookupOptions = {}
       const index = cursor++;
       if (index >= queries.length) return;
       const query = queries[index];
+      if (query === undefined) return;
       try {
         const classified = classifyQuery(query);
         const lookupKey = `${classified.type}:${classified.value}`;

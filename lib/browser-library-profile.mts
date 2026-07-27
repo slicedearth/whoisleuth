@@ -150,17 +150,19 @@ function matchPattern(pattern: unknown, value: string): string[] {
 function matchReplacementPattern(pattern: unknown, value: string): string[] {
   if (typeof pattern !== 'string' || pattern.length === 0 || pattern.length > 2_048) return [];
   const descriptor = /^\/(.*[^\\])\/([^/]+)\/$/.exec(pattern);
-  if (!descriptor) return [];
+  const expressionSource = descriptor?.[1];
+  const replacement = descriptor?.[2];
+  if (!expressionSource || replacement === undefined) return [];
   let expression: RegExp;
   try {
-    expression = new RegExp(descriptor[1], 'g');
+    expression = new RegExp(expressionSource, 'g');
   } catch {
     return [];
   }
   const matches: string[] = [];
   let match: RegExpExecArray | null;
   while ((match = expression.exec(value)) && matches.length < MAX_MATCHES_PER_PATTERN) {
-    const replaced = match[0].replace(new RegExp(descriptor[1]), descriptor[2]).replace(/(?:\.|-)?min$/i, '');
+    const replaced = match[0].replace(new RegExp(expressionSource), replacement).replace(/(?:\.|-)?min$/i, '');
     if (VERSION_RE.test(replaced)) matches.push(replaced);
     if (match[0] === '') expression.lastIndex += 1;
   }

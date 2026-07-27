@@ -51,21 +51,24 @@ function buildKeyboardAdjacency(rows: KeyboardRow[]): Readonly<Record<string, st
   const positions = new Map<string, KeyboardPosition>();
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex];
+    if (!row) continue;
     for (let index = 0; index < row.keys.length; index += 1) {
-      positions.set(row.keys[index], { rowIndex, index, x: index + row.offset });
+      positions.set(row.keys.charAt(index), { rowIndex, index, x: index + row.offset });
     }
   }
   const adjacency: Record<string, string> = {};
   for (const [key, position] of positions) {
     const neighbours: string[] = [];
-    const sameRow = rows[position.rowIndex].keys;
-    if (position.index > 0) neighbours.push(sameRow[position.index - 1]);
-    if (position.index + 1 < sameRow.length) neighbours.push(sameRow[position.index + 1]);
+    const sameRow = rows[position.rowIndex]?.keys ?? '';
+    if (position.index > 0) neighbours.push(sameRow.charAt(position.index - 1));
+    if (position.index + 1 < sameRow.length) neighbours.push(sameRow.charAt(position.index + 1));
     for (const adjacentRowIndex of [position.rowIndex - 1, position.rowIndex + 1]) {
       const adjacentRow = rows[adjacentRowIndex];
       if (!adjacentRow) continue;
       for (let index = 0; index < adjacentRow.keys.length; index += 1) {
-        if (Math.abs((index + adjacentRow.offset) - position.x) <= 0.51) neighbours.push(adjacentRow.keys[index]);
+        if (Math.abs((index + adjacentRow.offset) - position.x) <= 0.51) {
+          neighbours.push(adjacentRow.keys.charAt(index));
+        }
       }
     }
     adjacency[key] = [...new Set(neighbours)].join('');
@@ -296,9 +299,11 @@ function splitDomainParts(input: unknown): DomainParts | null {
 
   if (trimmed.includes('.')) {
     const match = trimmed.match(/^([a-z0-9-]+)\.([a-z]+)$/);
-    if (!match || !isValidDomainLabel(match[1]) || !TLD_RE.test(match[2])) return null;
-    const tokens = match[1].split('-');
-    return { name: match[1], tld: match[2], wordTokens: tokens.length >= 2 && tokens.length <= 4 && tokens.every(Boolean) ? tokens : [] };
+    const name = match?.[1];
+    const tld = match?.[2];
+    if (!isValidDomainLabel(name) || typeof tld !== 'string' || !TLD_RE.test(tld)) return null;
+    const tokens = name.split('-');
+    return { name, tld, wordTokens: tokens.length >= 2 && tokens.length <= 4 && tokens.every(Boolean) ? tokens : [] };
   }
 
   // Preserve the established brand-label convenience while refusing to turn
@@ -325,10 +330,11 @@ function distinctWordOrders(tokens: unknown): string[][] {
     }
     const seenAtDepth = new Set<string>();
     for (let index = 0; index < strings.length; index += 1) {
-      if (used[index] || seenAtDepth.has(strings[index])) continue;
-      seenAtDepth.add(strings[index]);
+      const value = strings[index];
+      if (used[index] || !value || seenAtDepth.has(value)) continue;
+      seenAtDepth.add(value);
       used[index] = true;
-      current.push(strings[index]);
+      current.push(value);
       visit();
       current.pop();
       used[index] = false;
@@ -405,7 +411,9 @@ export function normalizeCustomDictionaryTerms(raw: unknown): { values: string[]
 
 function resolveGenerationPreset(options: GenerationOptions): GenerationPreset {
   const requested = typeof options?.preset === 'string' ? options.preset : DEFAULT_GENERATION_PRESET;
-  return GENERATION_PRESETS[requested] || GENERATION_PRESETS[DEFAULT_GENERATION_PRESET];
+  const preset = GENERATION_PRESETS[requested] ?? GENERATION_PRESETS[DEFAULT_GENERATION_PRESET];
+  if (!preset) throw new Error('Default generation preset is unavailable');
+  return preset;
 }
 
 export function normalizeMutationFamilyIds(raw: unknown): string[] {
@@ -447,7 +455,9 @@ function pluralForms(name: string, wordTokens: string[]): string[] {
 
 function resolveKeyboardLayout(options: GenerationOptions): KeyboardLayout {
   const requested = typeof options?.keyboardLayout === 'string' ? options.keyboardLayout : DEFAULT_KEYBOARD_LAYOUT;
-  return KEYBOARD_LAYOUTS[requested] || KEYBOARD_LAYOUTS[DEFAULT_KEYBOARD_LAYOUT];
+  const layout = KEYBOARD_LAYOUTS[requested] ?? KEYBOARD_LAYOUTS[DEFAULT_KEYBOARD_LAYOUT];
+  if (!layout) throw new Error('Default keyboard layout is unavailable');
+  return layout;
 }
 
 function selectCandidateTlds(sourceTld: string | null, fallbackTlds: unknown, enabledFamilies: Set<string>) {
@@ -615,6 +625,7 @@ export function estimateTyposquatCandidateCount(rawInput: unknown, fallbackTlds:
   for (const [mutationType, rawCount] of Object.entries(rawFamilyCounts)) {
     if (!enabledFamilies.has(mutationType)) continue;
     const familyLimit = FAMILY_NEW_VARIANT_LIMITS[mutationType];
+    if (familyLimit === undefined) continue;
     rawVariantMaximum += Math.min(rawCount, familyLimit);
     if (rawCount > familyLimit) familyLimitPossible = true;
   }
@@ -743,7 +754,7 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
   }
   if (enabledFamilies.has('keyboard_substitution') || enabledFamilies.has('keyboard_insertion')) {
     for (let i = 0; i < name.length; i += 1) {
-      const adjacent = keyboardLayout.adjacent[name[i]];
+      const adjacent = keyboardLayout.adjacent[name.charAt(i)];
       if (!adjacent) continue;
       for (const key of adjacent) {
         if (enabledFamilies.has('keyboard_substitution')) {
@@ -758,9 +769,10 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
   }
   if (enabledFamilies.has('vowel_swap')) {
     for (let i = 0; i < name.length; i += 1) {
-      if (!VOWELS.includes(name[i])) continue;
+      const character = name.charAt(i);
+      if (!VOWELS.includes(character)) continue;
       for (const vowel of VOWELS) {
-        if (vowel !== name[i]) addVariant(state, name.slice(0, i) + vowel + name.slice(i + 1), 'vowel_swap');
+        if (vowel !== character) addVariant(state, name.slice(0, i) + vowel + name.slice(i + 1), 'vowel_swap');
       }
     }
   }

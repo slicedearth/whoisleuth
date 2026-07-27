@@ -59,18 +59,19 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
   }
   const argv = rawArgv.map(boundedArgument);
   if (!argv.length) return { action: 'help' };
+  const firstArgument = argv[0] ?? '';
   const helpRequested = argv.includes('--help') || argv.includes('-h');
   if (helpRequested) {
     if (argv.length === 1) return { action: 'help' };
-    if (argv.length === 2 && isCliCommand(argv[0])) return { action: 'help', command: argv[0] };
+    if (argv.length === 2 && isCliCommand(firstArgument)) return { action: 'help', command: firstArgument };
     throw new CliUsageError('Help accepts only an optional command name.');
   }
-  if (argv[0] === '--version' || argv[0] === '-V') {
+  if (firstArgument === '--version' || firstArgument === '-V') {
     if (argv.length !== 1) throw new CliUsageError('--version does not accept other arguments.');
     return { action: 'version' };
   }
 
-  const command = argv[0];
+  const command = firstArgument;
   if (!isCliCommand(command)) {
     throw new CliUsageError(`Unknown command "${command}". This release supports: ${CLI_COMMANDS.join(', ')}.`);
   }
@@ -122,6 +123,7 @@ function parseBulkArguments(argv: string[]): Extract<CliArguments, { action: 'bu
   let concurrency: number | null = null;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
+    if (argument === undefined) break;
     if (argument === '--json' || argument === '--jsonl') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
       output = argument === '--json' ? 'json' : 'jsonl';
@@ -182,6 +184,7 @@ function parseDiscoverArguments(argv: string[]): Extract<CliArguments, { action:
   let keyboardSet = false;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
+    if (argument === undefined) break;
     if (argument === '--json' || argument === '--jsonl') {
       if (output !== 'terminal') throw new CliUsageError('Choose only one output format.');
       output = argument === '--json' ? 'json' : 'jsonl';
@@ -240,6 +243,7 @@ function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 
   let selectorText: string | null = null;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
+    if (argument === undefined) break;
     if (argument === '--json') {
       if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
       output = 'json';

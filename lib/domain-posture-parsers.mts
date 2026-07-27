@@ -64,7 +64,9 @@ function parseSpfRecords(records: unknown) {
     return result;
   }
 
-  const terms = spfRecords[0].split(/\s+/).slice(1).filter(Boolean);
+  const record = spfRecords[0];
+  if (!record) return result;
+  const terms = record.split(/\s+/).slice(1).filter(Boolean);
   const allIndex = terms.findIndex((term) => /^[+?~-]?all$/i.test(term));
   const allTerm = allIndex === -1 ? null : terms[allIndex];
   const redirectTerm = terms.find((term) => /^redirect=/i.test(term));
@@ -79,7 +81,7 @@ function parseSpfRecords(records: unknown) {
     result.issues.push('The record has more than 10 top-level DNS-querying terms.');
   }
   if (allTerm) {
-    const qualifier = /^[?~-]/.test(allTerm) ? allTerm[0] : '+';
+    const qualifier = /^[?~-]/.test(allTerm) ? (allTerm[0] ?? '+') : '+';
     result.terminalPolicy = ({ '-': 'fail', '~': 'softfail', '?': 'neutral', '+': 'pass' } as Record<string, string>)[qualifier] || null;
     if (allIndex !== terms.length - 1) result.issues.push('Terms after the all mechanism are unreachable.');
   } else if (result.redirect) {

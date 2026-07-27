@@ -139,8 +139,12 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
       malformedCount += 1;
       continue;
     }
-    const field = match[1].toLowerCase();
-    const value = match[2].trim();
+    const field = match[1]?.toLowerCase();
+    const value = match[2]?.trim();
+    if (!field || value === undefined) {
+      malformedCount += 1;
+      continue;
+    }
     let normalized: string | null = null;
     if (field === 'contact') {
       normalized = normalizedPublishedUri(value, CONTACT_PROTOCOLS);

@@ -30,7 +30,7 @@ function isRdapRegistryAccessProfile(value: unknown): value is string {
 
 function registryAccessProfileLabel(value: unknown): string {
   return isRegistryAccessProfile(value)
-    ? REGISTRY_ACCESS_PROFILE_LABELS[value]
+    ? REGISTRY_ACCESS_PROFILE_LABELS[value] ?? 'Unknown'
     : 'Unknown';
 }
 

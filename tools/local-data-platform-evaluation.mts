@@ -214,7 +214,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   const stderr = options.stderr || process.stderr;
   try {
     const parsed = parseArguments(args);
-    const report = buildLocalDataPlatformEvaluation({ now: options.now });
+    const report = buildLocalDataPlatformEvaluation(options.now ? { now: options.now } : {});
     stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : formatLocalDataPlatformEvaluation(report)}\n`);
     return 0;
   } catch (error) {

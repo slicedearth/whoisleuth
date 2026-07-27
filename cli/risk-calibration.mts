@@ -156,17 +156,22 @@ function projectThreatIntelligence(value: unknown, field: string): ProjectedThre
       if (provider.findings.length > MAX_FINDINGS_PER_PROVIDER) {
         throw new CliUsageError(`${prefix}.findings exceeds the ${MAX_FINDINGS_PER_PROVIDER}-finding limit.`);
       }
+      const observedAt = observation
+        ? optionalTimestamp(observation.observedAt, `${prefix}.observation.observedAt`)
+        : undefined;
       return {
         provider: { id: boundedString(identity.id, `${prefix}.provider.id`, 64) },
         state: boundedString(provider.state, `${prefix}.state`, 32),
-        observation: observation ? { observedAt: optionalTimestamp(observation.observedAt, `${prefix}.observation.observedAt`) } : undefined,
+        ...(observation ? { observation: observedAt ? { observedAt } : {} } : {}),
         findings: provider.findings.map((findingValue: unknown, findingIndex: number) => {
           const findingPrefix = `${prefix}.findings[${findingIndex}]`;
           const finding = object(findingValue, findingPrefix);
+          const firstObservedAt = optionalTimestamp(finding.firstObservedAt, `${findingPrefix}.firstObservedAt`);
+          const lastObservedAt = optionalTimestamp(finding.lastObservedAt, `${findingPrefix}.lastObservedAt`);
           return {
             category: boundedString(finding.category, `${findingPrefix}.category`, 64),
-            firstObservedAt: optionalTimestamp(finding.firstObservedAt, `${findingPrefix}.firstObservedAt`),
-            lastObservedAt: optionalTimestamp(finding.lastObservedAt, `${findingPrefix}.lastObservedAt`),
+            ...(firstObservedAt ? { firstObservedAt } : {}),
+            ...(lastObservedAt ? { lastObservedAt } : {}),
           };
         }),
       };

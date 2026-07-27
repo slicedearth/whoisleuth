@@ -174,7 +174,7 @@ function confusionFor(
 function candidateCounts(label: string, groups: Readonly<Record<string, string>>) {
   const singleSubstitutionCandidates = new Set<string>();
   for (let index = 0; index < label.length; index += 1) {
-    for (const substitution of [...(groups[label[index]] || '')].slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII)) {
+    for (const substitution of [...(groups[label.charAt(index)] || '')].slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII)) {
       const unicode = `${label.slice(0, index)}${substitution}${label.slice(index + 1)}`;
       const ascii = domainToASCII(`${unicode}.example`).replace(/\.example$/u, '');
       if (ascii.startsWith('xn--')) singleSubstitutionCandidates.add(ascii);

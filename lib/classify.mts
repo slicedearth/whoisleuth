@@ -73,7 +73,7 @@ function classifyQuery(raw: string): ClassifiedQuery {
   // Strip a scheme and any path/query/fragment. A single terminal root dot
   // (`example.com.`, the fully-qualified form) is normalized away, but more
   // than one is malformed - a valid name has at most one root label.
-  const withoutScheme = trimmed.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0];
+  const withoutScheme = trimmed.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0] ?? '';
   if (withoutScheme.endsWith('..')) {
     throw new Error(`"${trimmed}" has more than one terminal dot.`);
   }

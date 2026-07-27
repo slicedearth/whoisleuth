@@ -81,7 +81,7 @@ function getForwardedProtocol(
   const value = h['x-forwarded-proto'] || h['X-Forwarded-Proto'];
   if (typeof value !== 'string') return null;
   const parts = value.split(',').map((part) => part.trim().toLowerCase()).filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : null;
+  return parts.at(-1) ?? null;
 }
 
 function getClientIp(
@@ -109,7 +109,7 @@ function getClientIp(
   const forwardedFor = h['x-forwarded-for'] || h['X-Forwarded-For'];
   if (typeof forwardedFor === 'string' && forwardedFor) {
     const parts = forwardedFor.split(',').map((p) => p.trim());
-    return parts[parts.length - 1];
+    return parts.at(-1) || fallback || 'unknown';
   }
 
   return fallback || 'unknown';

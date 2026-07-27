@@ -1364,7 +1364,7 @@ function registryCompatibilityMatrix(): RegistryCompatibilityRow[] {
       ...cloneCapability(capability, { suffixes: [suffix] }),
       explicitSuffixProfile: true,
     })))
-    .sort((a, b) => a.suffixes[0].localeCompare(b.suffixes[0]));
+    .sort((a, b) => (a.suffixes[0] ?? '').localeCompare(b.suffixes[0] ?? ''));
 }
 
 export {

@@ -156,9 +156,12 @@ function parseArguments(args: readonly string[]): { mode: CatalogMode; source: s
   ) {
     throw new TypeError('Usage: npm run catalog:retire -- --source <pinned-jsrepository.json> <--check|--write>');
   }
+  const mode = modes[0];
+  const source = args[sourceIndex + 1];
+  if (!mode || !source) throw new TypeError('The catalogue mode and source are required.');
   return {
-    mode: modes[0].slice(2) as CatalogMode,
-    source: args[sourceIndex + 1],
+    mode: mode.slice(2) as CatalogMode,
+    source,
   };
 }
 

@@ -135,6 +135,7 @@ function ipv4ToLong(ip: string): number {
 
 function ipInCidrV4(ip: string, cidr: string): boolean {
   const [range, bitsStr] = cidr.split('/');
+  if (!range) return false;
   const bits = bitsStr !== undefined ? parseInt(bitsStr, 10) : 32;
   const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
   return (ipv4ToLong(ip) & mask) === (ipv4ToLong(range) & mask);
@@ -144,7 +145,9 @@ function expandIpv6(ip: string): string[] {
   let head = ip;
   let tail = '';
   if (ip.includes('::')) {
-    [head, tail] = ip.split('::');
+    const [headPart = '', tailPart = ''] = ip.split('::');
+    head = headPart;
+    tail = tailPart;
   } else {
     tail = '';
   }
@@ -165,6 +168,7 @@ function ipv6ToBigInt(ip: string): bigint {
 
 function ipInCidrV6(ip: string, cidr: string): boolean {
   const [range, bitsStr] = cidr.split('/');
+  if (!range) return false;
   const bits = bitsStr !== undefined ? parseInt(bitsStr, 10) : 128;
   const full = (1n << 128n) - 1n;
   const mask = bits === 0 ? 0n : (full << BigInt(128 - bits)) & full;
@@ -274,7 +278,7 @@ async function findRdapBases(type: string, value: string): Promise<string[]> {
     for (const [ranges, urls] of bootstrap.services) {
       for (const range of ranges) {
         const [start, end] = range.includes('-') ? range.split('-').map(Number) : [Number(range), Number(range)];
-        if (num >= start && num <= end) return uniqueBases(urls);
+        if (start !== undefined && end !== undefined && num >= start && num <= end) return uniqueBases(urls);
       }
     }
     return [];
@@ -426,8 +430,9 @@ function domainEndpointIdentity(raw: string, domain: string): string | null {
     const canonical = canonicalDomain(domain);
     const path = url.pathname.replace(/\/+$/, '');
     const match = path.match(/\/domain\/([^/]+)$/i);
-    if (!canonical || !match) return null;
-    const pathDomain = canonicalDomain(decodeURIComponent(match[1]));
+    const encodedDomain = match?.[1];
+    if (!canonical || !encodedDomain) return null;
+    const pathDomain = canonicalDomain(decodeURIComponent(encodedDomain));
     if (pathDomain !== canonical) return null;
     return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}/domain/${canonical}`;
   } catch {
@@ -472,7 +477,7 @@ function selectRegistrarRdapLink(domain: string, links: unknown, registryEndpoin
     if (net.isIP(hostname)) continue;
 
     const type = typeof link.type === 'string'
-      ? link.type.split(';', 1)[0].trim().toLowerCase()
+      ? (link.type.split(';', 1)[0] ?? '').trim().toLowerCase()
       : '';
     if (type && type !== 'application/rdap+json') continue;
 

@@ -104,7 +104,7 @@ export default async function scheduledMonitorHandler(
   _request: Request,
   context: { deploy?: ScheduledDeployContext } = {},
 ): Promise<void> {
-  const result = await runScheduledMonitorFunction({ deploy: context.deploy });
+  const result = await runScheduledMonitorFunction(context.deploy ? { deploy: context.deploy } : {});
   console.info(JSON.stringify(scheduledMonitorLogRecord(result, context.deploy)));
 }
 

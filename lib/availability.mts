@@ -662,15 +662,21 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         || responseContentType.trim() === ''
         || /^(?:text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(responseContentType.trim());
       htmlSignals = extractHtmlSignals(page, domain, {
-        baseUrl: typeof homepage.http?.finalUrl === 'string' ? homepage.http.finalUrl : undefined,
-        observedAt: typeof homepage.http?.observedAt === 'string' ? homepage.http.observedAt : undefined,
+        ...(typeof homepage.http?.finalUrl === 'string' ? { baseUrl: homepage.http.finalUrl } : {}),
+        ...(typeof homepage.http?.observedAt === 'string' ? { observedAt: homepage.http.observedAt } : {}),
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
         exactBodyHash: homepage.http?.response?.bodyHash,
         httpServer: homepage.http?.response?.server,
         includePageIdentity: pageIdentityEligible,
-        includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile,
-        includeStructuredDataIdentity: options.includeStructuredDataIdentity,
-        includeTechnologyProfile: options.includeTechnologyProfile,
+        ...(options.includeCredentialSurfaceProfile !== undefined
+          ? { includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile }
+          : {}),
+        ...(options.includeStructuredDataIdentity !== undefined
+          ? { includeStructuredDataIdentity: options.includeStructuredDataIdentity }
+          : {}),
+        ...(options.includeTechnologyProfile !== undefined
+          ? { includeTechnologyProfile: options.includeTechnologyProfile }
+          : {}),
       });
     }
   }

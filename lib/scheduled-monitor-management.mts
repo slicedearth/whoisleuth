@@ -302,6 +302,9 @@ function applyUpdate(
     managementError(MANAGEMENT_ERROR_CODES.NOT_FOUND, 'The scheduled watchlist was not found.');
   }
   const current = state.watchlists[index];
+  if (!current) {
+    managementError(MANAGEMENT_ERROR_CODES.NOT_FOUND, 'The scheduled watchlist was not found.');
+  }
   const name = Object.hasOwn(command, 'name')
     ? normalizeScheduledWatchlistName(command.name)
     : current.name;
