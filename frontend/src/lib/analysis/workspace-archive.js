@@ -42,7 +42,7 @@ import {
   DETECTION_RULE_SCHEMA,
   DETECTION_RULE_SCHEMA_VERSION,
   mergeDetectionRules,
-} from './detection-rule-model.js';
+} from './detection-rule-model.ts';
 import {
   buildRelationshipObservationExport,
   mergeRelationshipObservations,

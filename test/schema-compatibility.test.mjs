@@ -50,7 +50,7 @@ import {
   buildDetectionRuleExport,
   DETECTION_RULE_SCHEMA,
   DETECTION_RULE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/detection-rule-model.js';
+} from '../frontend/src/lib/analysis/detection-rule-model.ts';
 import {
   buildShortlistExport,
   SHORTLIST_SCHEMA,

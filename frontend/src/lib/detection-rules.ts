@@ -9,9 +9,10 @@ import {
   RULE_FIELD_DEFINITIONS,
   serializeDetectionRuleStore,
   updateDetectionRule as updateRule,
-} from './analysis/detection-rule-model.js';
+} from './analysis/detection-rule-model.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.js';
 import { DETECTION_RULES_COLLECTION, LEGACY_DETECTION_RULES_KEY } from './browser-local-data-definitions.js';
+import type { CaseRecord } from './cases.ts';
 
 export {
   MAX_RULE_IMPORT_BYTES,
@@ -21,7 +22,7 @@ export {
   MAX_RULE_TAG_LENGTH,
   operatorsForRuleField,
   RULE_FIELD_DEFINITIONS,
-} from './analysis/detection-rule-model.js';
+} from './analysis/detection-rule-model.ts';
 
 export const DETECTION_RULES_KEY = LEGACY_DETECTION_RULES_KEY;
 
@@ -77,11 +78,11 @@ export async function exportDetectionRules(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-export function evaluateCaseRules(record: unknown, rules: DetectionRule[] = []): DetectionRuleEvaluation {
+export function evaluateCaseRules(record: CaseRecord, rules: DetectionRule[] = []): DetectionRuleEvaluation {
   return evaluateDetectionRules(record, rules) as DetectionRuleEvaluation;
 }
 
-export function evaluateCasesAgainstRules(records: unknown[], rules: DetectionRule[] = []): DetectionRuleEvaluation[] {
+export function evaluateCasesAgainstRules(records: CaseRecord[], rules: DetectionRule[] = []): DetectionRuleEvaluation[] {
   return evaluateRuleSet(records, rules) as DetectionRuleEvaluation[];
 }
 

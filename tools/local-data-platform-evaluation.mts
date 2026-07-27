@@ -16,7 +16,7 @@ import {
 } from '../frontend/src/lib/analysis/ct-history.ts';
 import {
   MAX_RULE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/detection-rule-model.js';
+} from '../frontend/src/lib/analysis/detection-rule-model.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
 } from '../frontend/src/lib/analysis/relationship-observation-model.ts';

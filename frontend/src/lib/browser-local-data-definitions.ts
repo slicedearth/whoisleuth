@@ -54,7 +54,7 @@ import {
   detectionRuleStoreVersion,
   normalizeDetectionRuleStore,
   serializeDetectionRuleStore,
-} from './analysis/detection-rule-model.js';
+} from './analysis/detection-rule-model.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
   MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,

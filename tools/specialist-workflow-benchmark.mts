@@ -23,7 +23,7 @@ import {
 } from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   evaluateRuleSet,
-} from '../frontend/src/lib/analysis/detection-rule-model.js';
+} from '../frontend/src/lib/analysis/detection-rule-model.ts';
 import {
   buildInvestigationProjection,
 } from '../frontend/src/lib/analysis/investigation-projection.ts';

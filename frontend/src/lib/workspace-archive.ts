@@ -9,7 +9,7 @@ import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-m
 import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/brand-profile-model.ts';
 import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.ts';
 import { assertShortlistStoreBudget, mergeShortlistStores } from './analysis/shortlist-model.ts';
-import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.js';
+import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.ts';
 import { mergeRelationshipObservations } from './analysis/relationship-observation-model.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { loadCampaigns } from './campaigns';

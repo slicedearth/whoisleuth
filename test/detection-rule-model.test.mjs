@@ -19,7 +19,7 @@ import {
   operatorsForRuleField,
   serializeDetectionRuleStore,
   updateDetectionRule,
-} from '../frontend/src/lib/analysis/detection-rule-model.js';
+} from '../frontend/src/lib/analysis/detection-rule-model.ts';
 
 function snapshot(overrides = {}) {
   return {
