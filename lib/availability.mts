@@ -71,6 +71,17 @@ type DnsDelegation = {
   nameserversTruncated: boolean;
   error: string | null;
 };
+
+function errorRecord(value: unknown): UnknownRecord {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as UnknownRecord
+    : {};
+}
+
+function errorMessage(value: unknown, fallback: string): string {
+  const record = errorRecord(value);
+  return typeof record.message === 'string' ? record.message : fallback;
+}
 type AvailabilityOptions = {
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
@@ -239,14 +250,15 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
       error: null,
     };
   } catch (err) {
-    if (MISSING_DNS_CODES.has(err && err.code)) {
+    const error = errorRecord(err);
+    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) {
       return { delegated: false, nameservers: [], nameserversTruncated: false, error: null };
     }
     return {
       delegated: false,
       nameservers: [],
       nameserversTruncated: false,
-      error: String(err && err.message ? err.message : err).slice(0, 180),
+      error: errorMessage(err, String(err)).slice(0, 180),
     };
   } finally {
     clearTimeout(timer);
@@ -321,9 +333,10 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
         }),
       };
     } catch (err) {
-      const reason = err && err.name === 'AbortError'
+      const error = errorRecord(err);
+      const reason = error.name === 'AbortError'
         ? 'timed out after 6 seconds'
-        : String(err && err.message ? err.message : 'request failed')
+        : errorMessage(err, 'request failed')
           .replace(/[\u0000-\u001f\u007f]+/g, ' ')
           .slice(0, 180);
       failures.push({ url: requestUrl, error: `${scheme.toUpperCase()} ${reason}` });
@@ -414,16 +427,18 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         }
         if (record.parsed) {
           const parsed = record.parsed;
-          statuses = Array.isArray(parsed.statuses) ? parsed.statuses.map((s) => s.toLowerCase()) : [];
+          statuses = Array.isArray(parsed.statuses)
+            ? parsed.statuses.filter((status: unknown): status is string => typeof status === 'string').map((status: string) => status.toLowerCase())
+            : [];
           nameservers = Array.isArray(parsed.nameservers) ? parsed.nameservers : [];
           registrar = compactContact(parsed.registrar);
           registrant = compactContact(parsed.registrant);
           abuse = compactContact(parsed.abuse);
           const events = Array.isArray(parsed.events) ? parsed.events : [];
           createdDate = parsed.lifecycle?.createdDate
-            || (events.find((e) => e.action === 'registration') || {}).date || null;
+            || (events.find((event: UnknownRecord) => event.action === 'registration') || {}).date || null;
           expiryDate = parsed.lifecycle?.expiryDate
-            || (events.find((e) => e.action === 'expiration') || {}).date || null;
+            || (events.find((event: UnknownRecord) => event.action === 'expiration') || {}).date || null;
           createdDateIso = parsed.lifecycle?.createdDateIso || registryDateIso(createdDate);
           expiryDateIso = parsed.lifecycle?.expiryDateIso || registryDateIso(expiryDate);
           dnssec = parsed.dnssec || null;
@@ -463,7 +478,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         };
       }
       if (parsed.nameservers.length) nameservers = parsed.nameservers;
-      if (parsed.statuses.length) statuses = parsed.statuses.map((s) => s.toLowerCase());
+      if (parsed.statuses.length) statuses = parsed.statuses.map((status: string) => status.toLowerCase());
       if (parsed.registrar) {
         registrar = {
           handle: null,

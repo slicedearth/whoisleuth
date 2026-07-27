@@ -16,7 +16,7 @@ const handleWhois: NetlifyFunctionHandler = async (event) => {
   try {
     classified = classifyQuery(q);
   } catch (err) {
-    return json(400, { error: err.message });
+    return json(400, { error: err instanceof Error ? err.message : 'Invalid query' });
   }
 
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('whois'), async () => {

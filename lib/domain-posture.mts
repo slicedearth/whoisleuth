@@ -65,6 +65,17 @@ type PostureInput = {
   dkim: DkimQuery[];
 };
 
+function errorRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function errorMessage(value: unknown, fallback: string): string {
+  const record = errorRecord(value);
+  return typeof record.message === 'string' ? record.message : fallback;
+}
+
 function asMxRecords(records: unknown[]): MxRecord[] {
   return records as MxRecord[];
 }
@@ -117,8 +128,9 @@ async function resolveDns(label: string, factory: () => Promise<unknown[]>): Pro
   try {
     return { records: await withTimeout(factory(), label), error: null };
   } catch (err) {
-    if (MISSING_DNS_CODES.has(err && err.code)) return { records: [], error: null };
-    return { records: [], error: err && err.message ? err.message : String(err) };
+    const error = errorRecord(err);
+    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return { records: [], error: null };
+    return { records: [], error: errorMessage(err, String(err)) };
   }
 }
 
@@ -456,7 +468,13 @@ async function fetchMtaStsPolicy(domain: string): Promise<MtaStsPolicyFetch> {
     if (body.truncated) return { text: '', contentType: res.headers.get('content-type'), error: `Policy exceeds ${MAX_POLICY_BYTES} bytes.` };
     return { text: body.text, contentType: res.headers.get('content-type'), error: null };
   } catch (err) {
-    return { text: '', contentType: null, error: err && err.name === 'AbortError' ? 'Policy fetch timed out.' : (err.message || String(err)) };
+    return {
+      text: '',
+      contentType: null,
+      error: errorRecord(err).name === 'AbortError'
+        ? 'Policy fetch timed out.'
+        : errorMessage(err, String(err)),
+    };
   } finally {
     clearTimeout(timeout);
   }
