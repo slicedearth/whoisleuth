@@ -15,11 +15,11 @@
 // then never finishes the body - the same failure mode a malicious domain
 // could produce.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const http = require('node:http');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as http from 'node:http';
 
-function startStallingServer() {
+function startStallingServer(): Promise<http.Server> {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -31,11 +31,12 @@ function startStallingServer() {
   });
 }
 
-async function fetchWithDeadlineCoveringTheRead(url, timeoutMs) {
+async function fetchWithDeadlineCoveringTheRead(url: string, timeoutMs: number) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { signal: controller.signal });
+    assert.ok(res.body);
     const reader = res.body.getReader();
     await reader.read(); // consumes the initial chunk the server did send
     return await reader.read(); // this is the read the old code left unguarded
@@ -46,7 +47,9 @@ async function fetchWithDeadlineCoveringTheRead(url, timeoutMs) {
 
 test('a timeout held through the body read aborts a stalled response instead of hanging', async () => {
   const server = await startStallingServer();
-  const port = server.address().port;
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const port = address.port;
   const deadlineMs = 300;
   const start = Date.now();
 

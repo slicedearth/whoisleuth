@@ -1,8 +1,7 @@
-const { EventEmitter } = require('node:events');
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { EventEmitter } from 'node:events';
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   TLS_PROFILE_VERSION,
   MAX_ALT_NAMES,
   MAX_CHAIN_CERTIFICATES,
@@ -14,12 +13,27 @@ const {
   normalizePublicAddressRecords,
   normalizeTlsHostname,
   skippedTlsObservation,
-} = require('../lib/tls-intelligence.mts');
+} from '../lib/tls-intelligence.mts';
+import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 
 const OBSERVED_AT = '2026-07-13T10:00:00.000Z';
 const NOW = new Date('2026-07-13T10:00:00.000Z');
 
-function certificate(overrides = {}) {
+type TestCertificate = {
+  subject: Record<string, string>;
+  issuer: Record<string, string>;
+  subjectaltname: string;
+  serialNumber: string;
+  valid_from: string | null;
+  valid_to: string | null;
+  fingerprint256: string;
+  bits: number;
+  ca: boolean;
+  issuerCertificate?: TestCertificate;
+};
+type TestHandshake = Parameters<typeof buildTlsObservation>[0];
+
+function certificate(overrides: Partial<TestCertificate> = {}): TestCertificate {
   return {
     subject: { CN: 'login.example.test', O: 'Example organization', C: 'AU' },
     issuer: { CN: 'Example issuing CA', O: 'Example CA' },
@@ -34,7 +48,7 @@ function certificate(overrides = {}) {
   };
 }
 
-function handshake(overrides = {}) {
+function handshake(overrides: Partial<TestHandshake> = {}): TestHandshake {
   return {
     connectedAddress: '93.184.216.34',
     sniHost: 'login.example.test',
@@ -52,7 +66,14 @@ function handshake(overrides = {}) {
 }
 
 class FakeTlsSocket extends EventEmitter {
-  constructor(peer = certificate()) {
+  peer: TestCertificate;
+  remoteAddress: string;
+  alpnProtocol: string;
+  authorized: boolean;
+  authorizationError: null;
+  destroyedByCollector: boolean;
+
+  constructor(peer: TestCertificate = certificate()) {
     super();
     this.peer = peer;
     this.remoteAddress = '93.184.216.34';
@@ -62,7 +83,7 @@ class FakeTlsSocket extends EventEmitter {
     this.destroyedByCollector = false;
   }
 
-  getPeerCertificate() { return this.peer; }
+  getPeerCertificate(_detailed: boolean) { return this.peer; }
   getProtocol() { return 'TLSv1.3'; }
   getCipher() { return { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' }; }
   getEphemeralKeyInfo() { return { type: 'ECDH', name: 'X25519', size: 253 }; }
@@ -120,17 +141,18 @@ describe('certificate profile normalization', () => {
     assert.equal(result.sniHost, 'login.example.test');
     assert.equal(result.protocol, 'TLSv1.3');
     assert.equal(result.alpnProtocol, 'h2');
-    assert.equal(result.cipher.name, 'TLS_AES_256_GCM_SHA384');
-    assert.equal(result.ephemeralKey.name, 'X25519');
+    assert.equal(requiredValue(result.cipher).name, 'TLS_AES_256_GCM_SHA384');
+    assert.equal(requiredValue(result.ephemeralKey).name, 'X25519');
     assert.equal(result.authorization.authorized, true);
     assert.equal(result.hostname.matches, true);
     assert.equal(result.validity.status, 'valid');
-    assert.deepEqual(result.certificate.subject.commonNames, ['login.example.test']);
-    assert.deepEqual(result.certificate.subjectAltNames.dnsNames, ['*.example.test', 'login.example.test']);
-    assert.deepEqual(result.certificate.subjectAltNames.ipAddresses, ['93.184.216.34']);
-    assert.equal(result.certificate.serialNumber, 'a1b2c3');
-    assert.equal(result.certificate.fingerprintSha256, 'a'.repeat(64));
-    assert.equal(result.certificate.publicKey.bits, 2048);
+    const normalizedCertificate = requiredValue(result.certificate);
+    assert.deepEqual(normalizedCertificate.subject.commonNames, ['login.example.test']);
+    assert.deepEqual(requiredValue(normalizedCertificate.subjectAltNames).dnsNames, ['*.example.test', 'login.example.test']);
+    assert.deepEqual(requiredValue(normalizedCertificate.subjectAltNames).ipAddresses, ['93.184.216.34']);
+    assert.equal(normalizedCertificate.serialNumber, 'a1b2c3');
+    assert.equal(normalizedCertificate.fingerprintSha256, 'a'.repeat(64));
+    assert.equal(requiredValue(normalizedCertificate.publicKey).bits, 2048);
     assert.equal(result.chain.length, 2);
     assert.equal(result.chain[1].isCertificateAuthority, true);
     assert.equal(result.findings[0].id, 'wildcard_certificate');
@@ -175,8 +197,10 @@ describe('certificate profile normalization', () => {
     }), { now: NOW });
     assert.equal(missingFingerprint.status, 'partial');
     assert.equal(missingFingerprint.complete, false);
-    assert.equal(missingFingerprint.certificate.fingerprintSha256, null);
-    assert.ok(missingFingerprint.diagnostics.discardedFields >= 1);
+    assert.equal(requiredValue(missingFingerprint.certificate).fingerprintSha256, null);
+    const discardedFields = missingFingerprint.diagnostics.discardedFields;
+    assert.ok(typeof discardedFields === 'number');
+    assert.ok(discardedFields >= 1);
 
     const missingValidation = buildTlsObservation(handshake({
       authorized: null,
@@ -224,7 +248,9 @@ describe('certificate profile normalization', () => {
     });
     assert.equal(failed.status, 'error');
     assert.equal(failed.complete, false);
-    assert.ok(failed.diagnostics.error.length <= 240);
+    const failureDetail = failed.diagnostics.error;
+    assert.ok(typeof failureDetail === 'string');
+    assert.ok(failureDetail.length <= 240);
     assert.equal(failed.certificate, null);
 
     const skipped = skippedTlsObservation();
@@ -239,8 +265,8 @@ describe('one-connection TLS collection', () => {
     const socket = new FakeTlsSocket();
     let calls = 0;
     let connectionOptions;
-    const scheduledDeadlines = [];
-    const clearedDeadlines = [];
+    const scheduledDeadlines: Array<{ callback: () => void; ms: number }> = [];
+    const clearedDeadlines: unknown[] = [];
     const resultPromise = collectTlsIntelligence('LOGIN.EXAMPLE.TEST', {
       resolveAddresses: async () => [
         { address: '93.184.216.34', family: 4 },
@@ -258,7 +284,8 @@ describe('one-connection TLS collection', () => {
       observedAt: () => OBSERVED_AT,
       now: (() => { let value = 1000; return () => value += 10; })(),
     });
-    const result = await resultPromise;
+    const result = recordValue(await resultPromise);
+    const diagnostics = recordValue(result.diagnostics);
 
     assert.equal(calls, 1);
     assert.deepEqual(connectionOptions, {
@@ -271,7 +298,7 @@ describe('one-connection TLS collection', () => {
     assert.equal(result.status, 'success');
     assert.equal(result.connectedAddress, '93.184.216.34');
     assert.equal(result.sniHost, 'login.example.test');
-    assert.equal(result.diagnostics.connectionAttempts, 1);
+    assert.equal(diagnostics.connectionAttempts, 1);
     assert.equal(scheduledDeadlines.length, 2);
     assert.equal(scheduledDeadlines[0].ms, 5000);
     assert.ok(scheduledDeadlines[1].ms > 0 && scheduledDeadlines[1].ms <= 5000);
@@ -281,17 +308,19 @@ describe('one-connection TLS collection', () => {
 
   test('records a hostname mismatch from the runtime checker without failing the handshake observation', async () => {
     const socket = new FakeTlsSocket();
-    const result = await collectTlsIntelligence('login.example.test', {
+    const result = recordValue(await collectTlsIntelligence('login.example.test', {
       resolveAddresses: async () => [{ address: '93.184.216.34', family: 4 }],
       connect: (_options, callback) => { queueMicrotask(callback); return socket; },
       checkServerIdentity: () => Object.assign(new Error('Hostname mismatch'), { code: 'ERR_TLS_CERT_ALTNAME_INVALID' }),
       observedAt: () => OBSERVED_AT,
       now: () => NOW.getTime(),
-    });
+    }));
+    const hostname = recordValue(result.hostname);
+    const findings = arrayValue(result.findings).map(recordValue);
     assert.equal(result.status, 'success');
-    assert.equal(result.hostname.matches, false);
-    assert.match(result.hostname.error, /Hostname mismatch/);
-    assert.ok(result.findings.some((finding) => finding.id === 'hostname_mismatch'));
+    assert.equal(hostname.matches, false);
+    assert.match(String(hostname.error), /Hostname mismatch/);
+    assert.ok(findings.some((finding) => finding.id === 'hostname_mismatch'));
   });
 
   test('fails closed before connecting when resolution is private, malformed, or fails', async () => {
@@ -301,20 +330,21 @@ describe('one-connection TLS collection', () => {
       async () => [{ address: 'not-an-ip', family: 4 }],
       async () => { throw new Error('resolver unavailable'); },
     ]) {
-      const result = await collectTlsIntelligence('example.test', {
+      const result = recordValue(await collectTlsIntelligence('example.test', {
         resolveAddresses,
         connect: () => { connectCalls += 1; throw new Error('must not connect'); },
         observedAt: () => OBSERVED_AT,
-      });
+      }));
+      const diagnostics = recordValue(result.diagnostics);
       assert.equal(result.status, 'error');
-      assert.equal(result.diagnostics.connectionAttempts, 0);
+      assert.equal(diagnostics.connectionAttempts, 0);
     }
     assert.equal(connectCalls, 0);
   });
 
   test('bounds address resolution within the same overall collection deadline', async () => {
     let connectCalls = 0;
-    let deadlineCallback;
+    let deadlineCallback: (() => void) | undefined;
     const resultPromise = collectTlsIntelligence('example.test', {
       resolveAddresses: () => new Promise(() => {}),
       connect: () => { connectCalls += 1; throw new Error('must not connect'); },
@@ -322,25 +352,26 @@ describe('one-connection TLS collection', () => {
       clearTimer: () => {},
       observedAt: () => OBSERVED_AT,
     });
-    const result = await resultPromise;
+    const result = recordValue(await resultPromise);
+    const diagnostics = recordValue(result.diagnostics);
     assert.equal(typeof deadlineCallback, 'function');
     assert.equal(result.status, 'error');
-    assert.match(result.diagnostics.error, /resolution timed out/i);
-    assert.equal(result.diagnostics.connectionAttempts, 0);
+    assert.match(String(diagnostics.error), /resolution timed out/i);
+    assert.equal(diagnostics.connectionAttempts, 0);
     assert.equal(connectCalls, 0);
   });
 
   test('converts synchronous connection failures and timeouts into bounded evidence', async () => {
-    const synchronous = await collectTlsIntelligence('example.test', {
+    const synchronous = recordValue(await collectTlsIntelligence('example.test', {
       resolveAddresses: async () => [{ address: '93.184.216.34', family: 4 }],
       connect: () => { throw new Error('connect failed'); },
       observedAt: () => OBSERVED_AT,
-    });
+    }));
     assert.equal(synchronous.status, 'error');
-    assert.equal(synchronous.diagnostics.connectionAttempts, 1);
+    assert.equal(recordValue(synchronous.diagnostics).connectionAttempts, 1);
 
     const socket = new FakeTlsSocket();
-    let deadlineCallback;
+    let deadlineCallback: (() => void) | undefined;
     let timerCalls = 0;
     const timeoutPromise = collectTlsIntelligence('example.test', {
       resolveAddresses: async () => [{ address: '93.184.216.34', family: 4 }],
@@ -354,9 +385,9 @@ describe('one-connection TLS collection', () => {
       clearTimer: () => {},
       observedAt: () => OBSERVED_AT,
     });
-    const timedOut = await timeoutPromise;
+    const timedOut = recordValue(await timeoutPromise);
     assert.equal(timedOut.status, 'error');
-    assert.match(timedOut.diagnostics.error, /timed out/i);
+    assert.match(String(recordValue(timedOut.diagnostics).error), /timed out/i);
     assert.equal(socket.destroyedByCollector, true);
   });
 });

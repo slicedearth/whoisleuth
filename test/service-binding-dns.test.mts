@@ -1,9 +1,8 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const net = require('node:net');
-const fc = require('fast-check');
-
-const {
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import net from 'node:net';
+import fc from 'fast-check';
+import {
   MAX_SERVICE_BINDING_RECORDS,
   ServiceBindingDnsError,
   buildServiceBindingDnsQuery,
@@ -11,9 +10,28 @@ const {
   parseResolverEndpoint,
   parseServiceBindingDnsResponse,
   resolveServiceBindingRecords,
-} = require('../lib/service-binding-dns.mts');
+} from '../lib/service-binding-dns.mts';
+import type {
+  ResolverEndpoint,
+  ServiceBindingRecordType,
+} from '../lib/service-binding-dns.mts';
+import { requiredValue } from './value-assertions.mts';
 
-function dnsName(name) {
+type WireAnswer = {
+  rdata: Buffer;
+  type?: number;
+  ttl?: number;
+  owner?: string;
+};
+type WireResponseOptions = {
+  id?: number;
+  name?: string;
+  type?: number;
+  flags?: number;
+  answers?: WireAnswer[];
+};
+
+function dnsName(name: string): Buffer {
   if (name === '.') return Buffer.from([0]);
   return Buffer.concat([
     ...name.split('.').map((label) => {
@@ -24,20 +42,20 @@ function dnsName(name) {
   ]);
 }
 
-function serviceParameter(key, value) {
+function serviceParameter(key: number, value: Buffer): Buffer {
   const header = Buffer.alloc(4);
   header.writeUInt16BE(key, 0);
   header.writeUInt16BE(value.length, 2);
   return Buffer.concat([header, value]);
 }
 
-function u16(...values) {
+function u16(...values: number[]): Buffer {
   const output = Buffer.alloc(values.length * 2);
   values.forEach((value, index) => output.writeUInt16BE(value, index * 2));
   return output;
 }
 
-function serviceRdata(priority, target, parameters = []) {
+function serviceRdata(priority: number, target: string, parameters: Buffer[] = []): Buffer {
   const header = Buffer.alloc(2);
   header.writeUInt16BE(priority, 0);
   return Buffer.concat([header, dnsName(target), ...parameters]);
@@ -49,7 +67,7 @@ function response({
   type = 65,
   flags = 0x8180,
   answers = [],
-}) {
+}: WireResponseOptions): Buffer {
   const header = Buffer.alloc(12);
   header.writeUInt16BE(id, 0);
   header.writeUInt16BE(flags, 2);
@@ -151,11 +169,11 @@ test('preserves alias mode and advisory unavailable state without following eith
     name: 'example.test',
     type: 'HTTPS',
   });
-  assert.equal(result.records[0].target, null);
-  assert.equal(result.records[0].serviceUnavailable, true);
-  assert.equal(result.records[1].target, 'service.example.test');
-  assert.equal(result.records[1].parametersIgnored, true);
-  assert.equal(result.records[1].parameters.port, null);
+  assert.equal(requiredValue(result.records[0]).target, null);
+  assert.equal(requiredValue(result.records[0]).serviceUnavailable, true);
+  assert.equal(requiredValue(result.records[1]).target, 'service.example.test');
+  assert.equal(requiredValue(result.records[1]).parametersIgnored, true);
+  assert.equal(requiredValue(result.records[1]).parameters.port, null);
 });
 
 test('rejects malformed parameter ordering, values, and inconsistent requirements', () => {
@@ -199,7 +217,7 @@ test('uses only normalized system resolver endpoints and retries bounded failure
   const fixture = response({
     answers: [{ rdata: serviceRdata(1, '.', [serviceParameter(1, Buffer.from([2, 0x68, 0x32]))]) }],
   });
-  const seen = [];
+  const seen: ResolverEndpoint[] = [];
   const result = await resolveServiceBindingRecords('example.test', 'HTTPS', {
     transactionId: 0x1234,
     servers: ['not-a-resolver', '192.0.2.53', '[2001:db8::53]:5353'],
@@ -214,7 +232,7 @@ test('uses only normalized system resolver endpoints and retries bounded failure
     { address: '192.0.2.53', port: 53, family: 4 },
     { address: '2001:db8::53', port: 5353, family: 6 },
   ]);
-  assert.equal(result.records[0].parameters.alpn[0], 'h2');
+  assert.equal(requiredValue(result.records[0]).parameters.alpn[0], 'h2');
   assert.deepEqual(parseResolverEndpoint('resolver.example.test'), null);
 });
 
@@ -243,7 +261,7 @@ test('maps authoritative no-data and NXDOMAIN responses to stable missing states
       servers: ['192.0.2.53'],
       exchange: async () => response({}),
     }),
-    (error) => error.code === 'ENODATA',
+    (error: unknown) => error instanceof ServiceBindingDnsError && error.code === 'ENODATA',
   );
   await assert.rejects(
     resolveServiceBindingRecords('example.test', 'HTTPS', {
@@ -251,15 +269,19 @@ test('maps authoritative no-data and NXDOMAIN responses to stable missing states
       servers: ['192.0.2.53'],
       exchange: async () => response({ flags: 0x8183 }),
     }),
-    (error) => error.code === 'ENOTFOUND',
+    (error: unknown) => error instanceof ServiceBindingDnsError && error.code === 'ENOTFOUND',
   );
 });
 
 test('property checks keep arbitrary DNS input deterministic, bounded, and terminating', () => {
   fc.assert(fc.property(
     fc.uint8Array({ maxLength: 2048 }),
-    (bytes) => {
-      const expected = { transactionId: 0x1234, name: 'example.test', type: 'HTTPS' };
+    (bytes: Uint8Array) => {
+      const expected: { transactionId: number; name: string; type: ServiceBindingRecordType } = {
+        transactionId: 0x1234,
+        name: 'example.test',
+        type: 'HTTPS',
+      };
       let first;
       let second;
       try {
@@ -278,6 +300,6 @@ test('property checks keep arbitrary DNS input deterministic, bounded, and termi
 test('property checks format all 16-byte IPv6 hints as valid addresses', () => {
   fc.assert(fc.property(
     fc.uint8Array({ minLength: 16, maxLength: 16 }),
-    (bytes) => assert.equal(net.isIP(formatIpv6(Buffer.from(bytes))), 6),
+    (bytes: Uint8Array) => assert.equal(net.isIP(formatIpv6(Buffer.from(bytes))), 6),
   ), { numRuns: 600, seed: 5952 });
 });

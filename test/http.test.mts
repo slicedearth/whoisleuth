@@ -1,13 +1,13 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   MAX_API_JSON_BODY_BYTES,
   apiErrorResponseFor,
   apiUnexpectedErrorResponse,
   json,
   withNetlifyApiErrorBoundary,
-} = require('../lib/http.mts');
+} from '../lib/http.mts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('Netlify JSON responses', () => {
   test('include the API security headers emitted by the Express server', () => {
@@ -70,13 +70,13 @@ describe('Netlify JSON responses', () => {
 
   test('Netlify error boundaries preserve ordinary responses and sanitize thrown failures', async () => {
     const success = withNetlifyApiErrorBoundary(async () => json(200, { ok: true }));
-    assert.deepEqual(JSON.parse((await success({})).body), { ok: true });
+    assert.deepEqual(JSON.parse(requiredValue((await success({})).body)), { ok: true });
 
     const expectedError = withNetlifyApiErrorBoundary(async () => json(400, {
       error: 'Expected validation detail',
       errorCode: 'INVALID_QUERY',
     }));
-    assert.deepEqual(JSON.parse((await expectedError({})).body), {
+    assert.deepEqual(JSON.parse(requiredValue((await expectedError({})).body)), {
       error: 'Expected validation detail',
       errorCode: 'INVALID_QUERY',
     });
@@ -87,10 +87,10 @@ describe('Netlify JSON responses', () => {
     const response = await unexpectedError({});
     assert.equal(response.statusCode, 500);
     assert.equal(response.headers['Cache-Control'], 'no-store');
-    assert.deepEqual(JSON.parse(response.body), {
+    assert.deepEqual(JSON.parse(requiredValue(response.body)), {
       error: 'Internal server error',
       errorCode: 'LOOKUP_FAILED',
     });
-    assert.doesNotMatch(response.body, /private|secret|upstream|path/i);
+    assert.doesNotMatch(requiredValue(response.body), /private|secret|upstream|path/i);
   });
 });

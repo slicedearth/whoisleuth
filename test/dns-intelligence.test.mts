@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
   collectDnsIntelligence,
   collectReverseDnsIntelligence,
   normalizeAddresses,
@@ -10,15 +10,19 @@ const {
   normalizeCaa,
   normalizePtr,
   normalizeSoa,
-} = require('../lib/dns-intelligence.mts');
+} from '../lib/dns-intelligence.mts';
+import { recordValue, requiredValue } from './value-assertions.mts';
 
-function missing() {
-  const error = new Error('no data');
+type DnsOptions = NonNullable<Parameters<typeof collectDnsIntelligence>[1]>;
+type DnsResolvers = NonNullable<DnsOptions['resolvers']>;
+
+async function missing(): Promise<never> {
+  const error = new Error('no data') as NodeJS.ErrnoException;
   error.code = 'ENODATA';
   throw error;
 }
 
-function resolvers(overrides = {}) {
+function resolvers(overrides: Partial<DnsResolvers> = {}): DnsResolvers {
   return {
     resolve4: missing,
     resolve6: missing,
@@ -119,7 +123,7 @@ test('collector returns deterministic bounded evidence and compatible mail signa
       resolveCname: missing,
       resolveNs: async () => ['ns2.example.', 'ns1.example.'],
       resolveMx: async () => [{ priority: 10, exchange: 'mail.example.' }],
-      resolveTxt: async (name) => name.startsWith('_dmarc.') ? [['v=DMARC1; p=reject']] : [['other=value'], ['v=spf1 -all']],
+      resolveTxt: async (name: string) => name.startsWith('_dmarc.') ? [['v=DMARC1; p=reject']] : [['other=value'], ['v=spf1 -all']],
       resolveCaa: async () => [{ critical: 0, tag: 'issue', value: 'ca.example' }],
       resolveSoa: async () => ({
         nsname: 'ns1.example.',
@@ -170,17 +174,17 @@ test('collector returns deterministic bounded evidence and compatible mail signa
   assert.deepEqual(result.records.ns, ['ns1.example', 'ns2.example']);
   assert.deepEqual(result.records.spf, ['v=spf1 -all']);
   assert.deepEqual(result.records.dmarc, ['v=DMARC1; p=reject']);
-  assert.equal(result.records.soa[0].nsname, 'ns1.example');
-  assert.equal(result.records.soa[0].serial, 2026072701);
-  assert.deepEqual(result.records.https[0].parameters.alpn, ['h2', 'h3']);
-  assert.deepEqual(result.records.https[0].parameters.opaque, [{ key: 5, name: 'ech', length: 72 }]);
+  assert.equal(requiredValue(requiredValue(result.records.soa)[0]).nsname, 'ns1.example');
+  assert.equal(requiredValue(requiredValue(result.records.soa)[0]).serial, 2026072701);
+  assert.deepEqual(requiredValue(requiredValue(result.records.https)[0]).parameters.alpn, ['h2', 'h3']);
+  assert.deepEqual(requiredValue(requiredValue(result.records.https)[0]).parameters.opaque, [{ key: 5, name: 'ech', length: 72 }]);
   assert.equal(result.hasMx, true);
   assert.equal(result.hasNullMx, false);
   assert.equal(result.hasSpf, true);
   assert.equal(result.hasDmarc, true);
-  assert.equal(result.diagnostics.cname.status, 'not_found');
-  assert.equal(result.diagnostics.soa.status, 'success');
-  assert.equal(result.diagnostics.https.status, 'success');
+  assert.equal(recordValue(result.diagnostics.cname).status, 'not_found');
+  assert.equal(recordValue(result.diagnostics.soa).status, 'success');
+  assert.equal(recordValue(result.diagnostics.https).status, 'success');
 });
 
 test('extended SOA and HTTPS work is omitted unless the deep single-lookup caller requests it', async () => {
@@ -218,7 +222,7 @@ test('authoritative absence remains false while resolver failure remains unknown
   assert.equal(result.hasMx, null);
   assert.equal(result.hasSpf, false);
   assert.equal(result.hasDmarc, false);
-  assert.match(result.diagnostics.mx.error, /resolver unavailable/);
+  assert.match(String(recordValue(result.diagnostics.mx).error), /resolver unavailable/);
 });
 
 test('discarded malformed neighbours make the observation explicitly partial', async () => {
@@ -228,7 +232,7 @@ test('discarded malformed neighbours make the observation explicitly partial', a
   assert.equal(result.status, 'partial');
   assert.equal(result.complete, false);
   assert.deepEqual(result.records.a, ['192.0.2.1']);
-  assert.equal(result.diagnostics.a.discarded, 1);
+  assert.equal(recordValue(result.diagnostics.a).discarded, 1);
 });
 
 test('all resolver failures produce an error observation without leaking controls', async () => {
@@ -240,7 +244,7 @@ test('all resolver failures produce an error observation without leaking control
   assert.equal(result.status, 'error');
   assert.equal(result.complete, false);
   assert.equal(result.hasSpf, null);
-  assert.doesNotMatch(result.diagnostics.a.error, /\n/);
+  assert.doesNotMatch(String(recordValue(result.diagnostics.a).error), /\n/);
 });
 
 test('a stalled resolver is bounded by the per-query deadline', async () => {
@@ -249,8 +253,8 @@ test('a stalled resolver is bounded by the per-query deadline', async () => {
     timeoutMs: 5,
   });
   assert.equal(result.status, 'partial');
-  assert.equal(result.diagnostics.a.status, 'error');
-  assert.match(result.diagnostics.a.error, /timed out/);
+  assert.equal(recordValue(result.diagnostics.a).status, 'error');
+  assert.match(String(recordValue(result.diagnostics.a).error), /timed out/);
 });
 
 test('reverse DNS retains bounded normalized PTR names as non-authoritative context', async () => {
@@ -267,7 +271,7 @@ test('reverse DNS retains bounded normalized PTR names as non-authoritative cont
   assert.equal(result.observedAt, '2026-07-27T00:00:00.000Z');
   assert.equal(result.durationMs, 5);
   assert.deepEqual(result.records.ptr, ['ptr1.example', 'ptr2.example']);
-  assert.equal(result.diagnostics.ptr.discarded, 1);
+  assert.equal(recordValue(result.diagnostics.ptr).discarded, 1);
   assert.match(result.limitations.join(' '), /does not prove hosting control/i);
 });
 
@@ -292,7 +296,7 @@ test('reverse DNS distinguishes no PTR data, resolver failure, and ineligible ad
   assert.equal(absent.complete, true);
   assert.equal(failed.status, 'error');
   assert.equal(failed.complete, false);
-  assert.match(failed.diagnostics.ptr.error, /resolver unavailable/);
+  assert.match(String(recordValue(failed.diagnostics.ptr).error), /resolver unavailable/);
   assert.equal(unsupported.status, 'unsupported');
   assert.equal(unsupported.complete, false);
   assert.equal(calls, 0);

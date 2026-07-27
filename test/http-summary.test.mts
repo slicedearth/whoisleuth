@@ -1,13 +1,10 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-async function moduleUnderTest() {
-  return import('../frontend/src/lib/analysis/http-summary.ts');
-}
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as summary from '../frontend/src/lib/analysis/http-summary.ts';
+import { requiredValue } from './value-assertions.mts';
 
 describe('compact HTTP summary', () => {
   test('derives bounded response facts without retaining paths, header values, or redirect inventories', async () => {
-    const summary = await moduleUnderTest();
     const result = summary.compactHttpObservation({
       status: 'success',
       source: 'http',
@@ -54,38 +51,34 @@ describe('compact HTTP summary', () => {
   });
 
   test('retains partial terminal responses but rejects failed, skipped, or response-less observations', async () => {
-    const summary = await moduleUnderTest();
-    assert.equal(summary.compactHttpObservation({ status: 'partial', response: { status: 206 } }).httpEvidenceStatus, 'partial');
+    assert.equal(requiredValue(summary.compactHttpObservation({ status: 'partial', response: { status: 206 } })).httpEvidenceStatus, 'partial');
     assert.equal(summary.compactHttpObservation({ status: 'error', response: null }), null);
     assert.equal(summary.compactHttpObservation({ status: 'skipped', response: null }), null);
     assert.equal(summary.compactHttpObservation({ status: 'success', response: null }), null);
   });
 
   test('derives transport from a safe final origin when explicit provenance is absent', async () => {
-    const summary = await moduleUnderTest();
-    const result = summary.compactHttpObservation({
+    const result = requiredValue(summary.compactHttpObservation({
       status: 'success', finalUrl: 'http://example.test/path', response: { status: 204, securityHeaders: {} },
-    });
+    }));
     assert.equal(result.httpFinalOrigin, 'http://example.test');
     assert.equal(result.httpTransportSecurity, 'http');
     assert.deepEqual(result.httpSecurityHeaders, []);
   });
 
   test('uses the retained origin as the canonical transport source', async () => {
-    const summary = await moduleUnderTest();
-    const rich = summary.compactHttpObservation({
+    const rich = requiredValue(summary.compactHttpObservation({
       status: 'success', finalUrl: 'https://example.test/path', transportSecurity: 'http', response: { status: 200 },
-    });
-    const imported = summary.normalizeHttpSummary({
+    }));
+    const imported = requiredValue(summary.normalizeHttpSummary({
       ...rich,
       httpTransportSecurity: 'http',
-    });
+    }));
     assert.equal(rich.httpTransportSecurity, 'https');
     assert.equal(imported.httpTransportSecurity, 'https');
   });
 
   test('revalidates compact imports field-by-field and discards unknown keys', async () => {
-    const summary = await moduleUnderTest();
     const result = summary.normalizeHttpSummary({
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'success',
@@ -115,11 +108,10 @@ describe('compact HTTP summary', () => {
   });
 
   test('rejects malformed required fields and nulls malformed optional fields', async () => {
-    const summary = await moduleUnderTest();
     assert.equal(summary.normalizeHttpSummary({ httpSummaryVersion: 1, httpEvidenceStatus: 'error', httpResponseStatus: 200 }), null);
     assert.equal(summary.normalizeHttpSummary({ httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpResponseStatus: 99 }), null);
     assert.equal(summary.normalizeHttpSummary({ httpSummaryVersion: 2, httpEvidenceStatus: 'success', httpResponseStatus: 200 }), null);
-    const result = summary.normalizeHttpSummary({
+    const result = requiredValue(summary.normalizeHttpSummary({
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'success',
       httpResponseStatus: 200,
@@ -127,7 +119,7 @@ describe('compact HTTP summary', () => {
       httpRedirectCount: 99,
       httpContentType: 'not a mime',
       httpSecurityHeaders: 'hsts',
-    });
+    }));
     assert.equal(result.httpFinalOrigin, null);
     assert.equal(result.httpRedirectCount, null);
     assert.equal(result.httpContentType, null);
@@ -135,18 +127,17 @@ describe('compact HTTP summary', () => {
   });
 
   test('bounds imported header-token work and rejects malformed rich header values', async () => {
-    const summary = await moduleUnderTest();
     const tokens = Array.from({ length: summary.MAX_HTTP_SECURITY_HEADER_INPUTS + 1 }, () => 'unknown');
     tokens[tokens.length - 1] = 'hsts';
-    const imported = summary.normalizeHttpSummary({
+    const imported = requiredValue(summary.normalizeHttpSummary({
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'success',
       httpResponseStatus: 200,
       httpSecurityHeaders: tokens,
-    });
+    }));
     assert.deepEqual(imported.httpSecurityHeaders, []);
 
-    const rich = summary.compactHttpObservation({
+    const rich = requiredValue(summary.compactHttpObservation({
       status: 'success',
       response: {
         status: 200,
@@ -156,12 +147,11 @@ describe('compact HTTP summary', () => {
           referrerPolicy: 'strict-origin',
         },
       },
-    });
+    }));
     assert.deepEqual(rich.httpSecurityHeaders, ['referrer-policy']);
   });
 
   test('does not mutate either rich or compact input', async () => {
-    const summary = await moduleUnderTest();
     const rich = { status: 'success', finalUrl: 'https://example.test/path', response: { status: 200, securityHeaders: {} } };
     const compact = { httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpResponseStatus: 200, httpSecurityHeaders: ['hsts'] };
     const richBefore = structuredClone(rich);

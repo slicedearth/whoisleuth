@@ -1,13 +1,13 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   MAX_NETWORK_ATTEMPTS,
   MAX_NETWORK_CIDRS,
   OBSERVED_NETWORK_CONTEXT_VERSION,
   collectObservedNetworkContext,
   selectObservedNetworkAddress,
-} = require('../lib/observed-network-context.mts');
+} from '../lib/observed-network-context.mts';
+import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 
 const OBSERVED_AT = '2026-07-22T03:04:05.000Z';
 const IPV4 = '93.184.216.34';
@@ -105,7 +105,7 @@ describe('observed network context', () => {
   });
 
   test('fetches one IP RDAP object and retains only bounded registration context', async () => {
-    const calls = [];
+    const calls: Array<{ type: string; address: string }> = [];
     const result = await collectObservedNetworkContext(availability(), {
       fetchRdapRecord: async (type, address) => {
         calls.push({ type, address });
@@ -135,8 +135,9 @@ describe('observed network context', () => {
       networkType: 'DIRECT ALLOCATION',
       databaseUpdatedAt: '2026-07-21T12:00:00.000Z',
     });
-    assert.equal(result.rdap.endpoint, `https://rdap.registry.test/ip/${IPV4}`);
-    assert.equal(result.rdap.fetchedAt, OBSERVED_AT);
+    const rdap = recordValue(result.rdap);
+    assert.equal(rdap.endpoint, `https://rdap.registry.test/ip/${IPV4}`);
+    assert.equal(rdap.fetchedAt, OBSERVED_AT);
     assert.equal(result.diagnostics.requestCount, 1);
     assert.equal(result.diagnostics.addressSource, 'tls_connection');
     assert.doesNotMatch(JSON.stringify(result), /privateRawPayload|contact@example|private contact data/);
@@ -154,7 +155,7 @@ describe('observed network context', () => {
     assert.equal(result.status, 'partial');
     assert.equal(result.complete, false);
     assert.equal(result.truncated, true);
-    assert.equal(result.network.cidrs.length, MAX_NETWORK_CIDRS);
+    assert.equal(arrayValue(recordValue(result.network).cidrs).length, MAX_NETWORK_CIDRS);
     assert.match(result.limitations.join(' '), /server declared/i);
     assert.match(result.limitations.join(' '), /local retention limit/i);
   });
@@ -213,8 +214,11 @@ describe('observed network context', () => {
     });
     assert.equal(result.status, 'error');
     assert.equal(result.complete, false);
-    assert.equal(result.rdap.attempts.length, MAX_NETWORK_ATTEMPTS);
-    assert.equal(result.rdap.attempts[0].endpoint.includes('?'), false);
+    const retainedAttempts = arrayValue(recordValue(result.rdap).attempts);
+    assert.equal(retainedAttempts.length, MAX_NETWORK_ATTEMPTS);
+    const endpoint = recordValue(requiredValue(retainedAttempts[0])).endpoint;
+    assert.ok(typeof endpoint === 'string');
+    assert.equal(endpoint.includes('?'), false);
     assert.doesNotMatch(JSON.stringify(result), /private upstream failure|must not escape|secret=value/);
   });
 

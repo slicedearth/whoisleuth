@@ -7,10 +7,9 @@
 // whichever string form it wants - every form has to resolve to the same
 // classification.
 
-const test = require('node:test');
-const { describe } = require('node:test');
-const assert = require('node:assert/strict');
-const { isPrivateAddress } = require('../lib/safe-fetch.mts');
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { isPrivateAddress } from '../lib/safe-fetch.mts';
 
 describe('IPv4', () => {
   test('flags loopback, RFC1918, and link-local ranges', () => {

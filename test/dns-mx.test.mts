@@ -5,9 +5,9 @@
 // the pure classifyMxRecords() function directly against synthetic record
 // arrays - no network access or DNS mocking needed.
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { classifyMxRecords } = require('../lib/dns-mx.mts');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { classifyMxRecords } from '../lib/dns-mx.mts';
 
 test('a null MX record (root target, no trailing dot) is not counted as mail configured', () => {
   const result = classifyMxRecords([{ exchange: '', priority: 0 }]);

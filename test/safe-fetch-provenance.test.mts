@@ -1,42 +1,45 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   MAX_SAFE_FETCH_URL_LENGTH,
   safeFetchDetailed,
   readBytesCapped,
   readTextCapped,
-} = require('../lib/safe-fetch.mts');
+} from '../lib/safe-fetch.mts';
 
 const PUBLIC_ADDRESSES = [{ address: '8.8.8.8', family: 4 }];
 
-function fixtureDependencies(responses, overrides = {}) {
-  const requests = [];
-  const resolved = [];
-  const closedDispatchers = [];
+type SafeFetchDependencies = NonNullable<Parameters<typeof safeFetchDetailed>[2]>;
+type FixtureRequest = { url: string; options: RequestInit & { dispatcher?: unknown } };
+
+function fixtureDependencies(responses: Response[], overrides: Partial<SafeFetchDependencies> = {}) {
+  const requests: FixtureRequest[] = [];
+  const resolved: string[] = [];
+  const closedDispatchers: number[] = [];
   let clock = 1000;
+  const dependencies: SafeFetchDependencies = {
+    resolvePublicAddresses: async (hostname) => {
+      resolved.push(hostname);
+      return PUBLIC_ADDRESSES;
+    },
+    pinnedDispatcher: () => {
+      const id = closedDispatchers.length;
+      return { close: async () => { closedDispatchers.push(id); } };
+    },
+    fetch: async (url, options) => {
+      requests.push({ url, options });
+      const response = responses.shift();
+      if (!response) throw new Error('Unexpected fixture request');
+      return response;
+    },
+    now: () => clock += 5,
+    ...overrides,
+  };
   return {
     requests,
     resolved,
     closedDispatchers,
-    dependencies: {
-      resolvePublicAddresses: async (hostname) => {
-        resolved.push(hostname);
-        return PUBLIC_ADDRESSES;
-      },
-      pinnedDispatcher: () => {
-        const id = closedDispatchers.length;
-        return { close: async () => { closedDispatchers.push(id); } };
-      },
-      fetch: async (url, options) => {
-        requests.push({ url, options });
-        const response = responses.shift();
-        if (!response) throw new Error('Unexpected fixture request');
-        return response;
-      },
-      now: () => clock += 5,
-      ...overrides,
-    },
+    dependencies,
   };
 }
 
@@ -155,8 +158,8 @@ describe('safe fetch redirect provenance', () => {
 
   test('starts graceful final cleanup without blocking response consumption', async () => {
     let closeStarted = 0;
-    let finishClose;
-    const closeFinished = new Promise((resolve) => { finishClose = resolve; });
+    let finishClose!: () => void;
+    const closeFinished = new Promise<void>((resolve) => { finishClose = resolve; });
     const terminal = new Response('stream remains readable', { status: 200 });
     const fixture = fixtureDependencies([terminal], {
       pinnedDispatcher: () => ({

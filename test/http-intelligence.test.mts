@@ -1,13 +1,13 @@
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-
-const {
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   MAX_HTTP_PROVENANCE_URL,
   buildHttpObservation,
   failedHttpObservation,
   normalizeProvenanceUrl,
   skippedHttpObservation,
-} = require('../lib/http-intelligence.mts');
+} from '../lib/http-intelligence.mts';
+import { requiredValue } from './value-assertions.mts';
 
 const OBSERVED_AT = '2026-07-13T00:00:00.000Z';
 
@@ -26,7 +26,7 @@ describe('HTTP provenance URL normalization', () => {
   });
 
   test('replaces an overlong path with a bounded origin URL', () => {
-    const result = normalizeProvenanceUrl(`https://example.com/${'a'.repeat(MAX_HTTP_PROVENANCE_URL)}`);
+    const result = requiredValue(normalizeProvenanceUrl(`https://example.com/${'a'.repeat(MAX_HTTP_PROVENANCE_URL)}`));
     assert.equal(result.url, 'https://example.com/');
     assert.equal(result.pathTruncated, true);
   });
@@ -109,13 +109,13 @@ describe('buildHttpObservation', () => {
     assert.equal(result.redirectLimitReached, true);
     assert.equal(result.httpsDowngrade, true);
     assert.equal(result.response.bodyTruncated, true);
-    assert.equal(result.response.bodyHash.scope, 'captured-prefix');
-    assert.equal(result.response.bodyHash.bytes, 300000);
+    assert.equal(requiredValue(result.response.bodyHash).scope, 'captured-prefix');
+    assert.equal(requiredValue(result.response.bodyHash).bytes, 300000);
     assert.equal(result.limitations.length, 2);
   });
 
   test('bounds malformed and excessive response metadata', () => {
-    const fixtureHeaders = {
+    const fixtureHeaders: Record<string, string> = {
       'content-length': '90071992547409930',
       server: `ok\n${'x'.repeat(500)}`,
       'content-security-policy': 'x'.repeat(2000),
@@ -123,7 +123,7 @@ describe('buildHttpObservation', () => {
     const result = buildHttpObservation({
       response: {
         status: 204,
-        headers: { get: (name) => fixtureHeaders[name] || null },
+        headers: { get: (name: string) => fixtureHeaders[name] || null },
       },
       requestedUrl: 'https://example.com/',
       finalUrl: 'https://example.com/',
@@ -131,8 +131,8 @@ describe('buildHttpObservation', () => {
     }, { observedAt: OBSERVED_AT, capturedBodyBytes: Number.MAX_SAFE_INTEGER });
 
     assert.equal(result.response.declaredContentLength, null);
-    assert.ok(result.response.server.length <= 200);
-    assert.ok(result.response.securityHeaders.contentSecurityPolicy.length <= 1024);
+    assert.ok(requiredValue(result.response.server).length <= 200);
+    assert.ok(requiredValue(result.response.securityHeaders.contentSecurityPolicy).length <= 1024);
     assert.equal(result.response.capturedBodyBytes, 5 * 1024 * 1024);
     assert.equal(result.response.bodyHash, null);
   });
@@ -165,7 +165,7 @@ describe('non-success observations', () => {
 
     assert.equal(result.status, 'error');
     assert.equal(result.attempts.length, 2);
-    assert.ok(result.attempts[0].error.length <= 180);
+    assert.ok(requiredValue(requiredValue(result.attempts[0]).error).length <= 180);
     assert.equal(JSON.stringify(result).includes('secret'), false);
   });
 
