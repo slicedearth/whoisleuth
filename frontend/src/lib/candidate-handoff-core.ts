@@ -4,7 +4,7 @@
 // candidate-handoff.ts is a thin sessionStorage wrapper around buildHandoff /
 // parseHandoff.
 
-import { normalizeDomain } from './analysis/case-model.js';
+import { normalizeDomain } from './analysis/case-model.ts';
 import { normalizeCtProvenance } from './analysis/ct-results.ts';
 import type { CtProvenance } from './analysis/ct-results.ts';
 

@@ -11,7 +11,7 @@
 // re-derives registrable domains in the browser - it only normalizes and
 // bounds what the server sent.
 
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 
 // The stable mutation/source token every CT-derived candidate carries so Bulk,
 // coverage, and the handoff can recognise its provenance.

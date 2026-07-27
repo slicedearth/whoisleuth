@@ -1,5 +1,5 @@
 // Browser-local analyst case store. All validation, normalization, bounding,
-// merge, byte-budget, and export shaping live in analysis/case-model.js (pure +
+// merge, byte-budget, and export shaping live in analysis/case-model.ts (pure +
 // unit tested); this wrapper owns asynchronous provider access and downloads.
 // Cases never leave the browser and hold no raw registry responses - only a
 // bounded, chronological history of evidence snapshots.
@@ -10,7 +10,7 @@ import {
   normalizeDomain,
   openOrCreateCase,
   updateCase,
-} from './analysis/case-model.js';
+} from './analysis/case-model.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.js';
 import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.js';
 
@@ -23,7 +23,7 @@ export {
   MAX_CASE_IMPORT_BYTES,
   sourceLabel,
   statusLabel,
-} from './analysis/case-model.js';
+} from './analysis/case-model.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
 

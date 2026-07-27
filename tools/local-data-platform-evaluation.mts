@@ -10,7 +10,7 @@ import {
 } from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   MAX_CASE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/case-model.js';
+} from '../frontend/src/lib/analysis/case-model.ts';
 import {
   MAX_CT_HISTORY_STORE_BYTES,
 } from '../frontend/src/lib/analysis/ct-history.ts';

@@ -7,7 +7,7 @@ import {
   CASE_SCHEMA_VERSION,
   enforceStoreBudget,
   mergeCases,
-} from './case-model.js';
+} from './case-model.ts';
 import {
   assertBrandProfileStoreBudget,
   BRAND_PROFILE_SCHEMA,

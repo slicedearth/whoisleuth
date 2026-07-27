@@ -7,7 +7,7 @@ import {
   INVESTIGATION_PROJECTION_VERSION,
   MAX_PROJECTION_OBSERVATIONS,
 } from '../frontend/src/lib/analysis/investigation-projection.ts';
-import { CASE_SCHEMA_VERSION, MAX_CASES } from '../frontend/src/lib/analysis/case-model.js';
+import { CASE_SCHEMA_VERSION, MAX_CASES } from '../frontend/src/lib/analysis/case-model.ts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.ts';
 import { createPageBaseline } from '../frontend/src/lib/analysis/page-baseline.ts';

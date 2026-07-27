@@ -2,7 +2,7 @@
 // persistence and downloads; this module owns schema migration, semantic field
 // bounds, import merging, and exact serialized-byte accounting.
 
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 import { normalizePageBaseline } from './page-baseline.ts';
 import type { PageBaseline } from './page-baseline.ts';
 import { isInformativeFaviconHash } from './utils.ts';

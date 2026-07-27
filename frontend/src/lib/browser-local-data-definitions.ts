@@ -5,7 +5,7 @@ import {
   normalizeCaseStore,
   parseStoreVersion,
   serializeCaseStore,
-} from './analysis/case-model.js';
+} from './analysis/case-model.ts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
   MAX_CAMPAIGNS,

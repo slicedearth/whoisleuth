@@ -1,4 +1,4 @@
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 import { parse } from 'tldts';
 
 export const INVESTIGATION_GUIDE_SCHEMA = 'whoisleuth.investigation-recipe';

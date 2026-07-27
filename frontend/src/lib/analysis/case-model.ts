@@ -99,44 +99,133 @@ const REGISTERED_LIKE = new Set(['registered', 'for_sale', 'expiring']);
 // treated as untrusted and deterministically repaired.
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-/**
- * @typedef {{ id: string, body: string, createdAt: string }} CaseNote
- * @typedef {{ label: string, points: number }} EvidenceFactor
- * @typedef {{ id: string, fingerprint: string, firstCapturedAt: string, capturedAt: string, source: string, scanDepth: string, availability: string | null, confidence: string | null, riskModelVersion: number | null, riskScore: number | null, opportunityScore: number | null, riskFactors: EvidenceFactor[], opportunityFactors: EvidenceFactor[], registrar: string | null, createdDate: string | null, expiryDate: string | null, nameservers: string[], hasMx: boolean | null, hasSpf: boolean | null, hasDmarc: boolean | null, activityStatus: string | null, websiteProbeDetail: string | null, pageTitle: string | null, httpSummaryVersion: number | null, httpEvidenceStatus: string | null, httpFinalOrigin: string | null, httpResponseStatus: number | null, httpTransportSecurity: string | null, httpRedirectCount: number | null, httpCrossOriginRedirect: boolean | null, httpHttpsDowngrade: boolean | null, httpContentType: string | null, httpSecurityHeaders: string[] | null, faviconMatch: boolean | null, faviconNearMatch: boolean | null, reusesOfficialAssets: boolean | null, hasPasswordField: boolean | null, phishingLanguageMatch: string | null, mutationTypes: string[] }} CaseEvidenceSnapshot
- * @typedef {{ id: string, domain: string, status: string, disposition: string, tags: string[], notes: CaseNote[], source: string, evidenceHistory: CaseEvidenceSnapshot[], createdAt: string, updatedAt: string }} CaseRecord
- * @typedef {{ version: number, cases: CaseRecord[] }} CaseStore
- */
+export type CaseNote = { id: string; body: string; createdAt: string };
+export type EvidenceFactor = { label: string; points: number };
+export type CaseEvidenceSnapshot = {
+  id: string;
+  fingerprint: string;
+  firstCapturedAt: string;
+  capturedAt: string;
+  source: string;
+  scanDepth: string;
+  availability: string | null;
+  confidence: string | null;
+  riskModelVersion: number | null;
+  riskScore: number | null;
+  opportunityScore: number | null;
+  riskFactors: EvidenceFactor[];
+  opportunityFactors: EvidenceFactor[];
+  registrar: string | null;
+  createdDate: string | null;
+  expiryDate: string | null;
+  nameservers: string[];
+  hasMx: boolean | null;
+  hasSpf: boolean | null;
+  hasDmarc: boolean | null;
+  activityStatus: string | null;
+  websiteProbeDetail: string | null;
+  pageTitle: string | null;
+  httpSummaryVersion: number | null;
+  httpEvidenceStatus: string | null;
+  httpFinalOrigin: string | null;
+  httpResponseStatus: number | null;
+  httpTransportSecurity: string | null;
+  httpRedirectCount: number | null;
+  httpCrossOriginRedirect: boolean | null;
+  httpHttpsDowngrade: boolean | null;
+  httpContentType: string | null;
+  httpSecurityHeaders: string[] | null;
+  faviconMatch: boolean | null;
+  faviconNearMatch: boolean | null;
+  reusesOfficialAssets: boolean | null;
+  hasPasswordField: boolean | null;
+  phishingLanguageMatch: string | null;
+  mutationTypes: string[];
+};
+type CaseEvidenceMaterial = Omit<CaseEvidenceSnapshot, 'id' | 'fingerprint' | 'firstCapturedAt' | 'capturedAt' | 'source'>;
+export type CaseRecord = {
+  id: string;
+  domain: string;
+  status: string;
+  disposition: string;
+  tags: string[];
+  notes: CaseNote[];
+  source: string;
+  evidenceHistory: CaseEvidenceSnapshot[];
+  createdAt: string;
+  updatedAt: string;
+};
+export type CaseStore = { version: typeof CASE_SCHEMA_VERSION; cases: CaseRecord[] };
+export type CaseInput = {
+  domain: unknown;
+  status?: unknown;
+  disposition?: unknown;
+  source?: unknown;
+  tags?: unknown;
+  evidence?: unknown;
+  note?: unknown;
+};
+export type CasePatch = Omit<Partial<CaseInput>, 'domain'>;
+type SnapshotOptions = { source?: string; fallback?: string | null };
+type ImportPatch = {
+  domain: string;
+  rawId: string | null;
+  status: string | undefined;
+  disposition: string | undefined;
+  source: string | undefined;
+  evidenceHistory: CaseEvidenceSnapshot[];
+  tags: string[];
+  notes: CaseNote[];
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
+type CompareFieldSpec = {
+  field: keyof CaseEvidenceSnapshot;
+  label: string;
+  type: string;
+  depthGate?: 'both-deep' | 'comparable';
+  modelGate?: 'risk';
+  direction?: 'risk';
+  emptyGuard?: boolean;
+};
 
-export function statusLabel(value) {
-  return STATUS_LABELS[value] || String(value || '');
-}
-export function dispositionLabel(value) {
-  return DISPOSITION_LABELS[value] || String(value || '');
-}
-export function sourceLabel(value) {
-  return SOURCE_LABELS[value] || String(value || '');
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-export function isValidStatus(value) {
-  return STATUS_VALUES.has(value);
+export function statusLabel(value: unknown): string {
+  return (typeof value === 'string' ? STATUS_LABELS[value] : '') || String(value || '');
 }
-export function isValidDisposition(value) {
-  return DISPOSITION_VALUES.has(value);
+export function dispositionLabel(value: unknown): string {
+  return (typeof value === 'string' ? DISPOSITION_LABELS[value] : '') || String(value || '');
+}
+export function sourceLabel(value: unknown): string {
+  return (typeof value === 'string' ? SOURCE_LABELS[value] : '') || String(value || '');
+}
+
+export function isValidStatus(value: unknown): value is string {
+  return typeof value === 'string' && STATUS_VALUES.has(value);
+}
+export function isValidDisposition(value: unknown): value is string {
+  return typeof value === 'string' && DISPOSITION_VALUES.has(value);
 }
 
 /** Fresh, safe, effectively-unique id for a brand-new local record. */
-export function makeId() {
+export function makeId(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
   return `case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function safeId(value) {
+function safeId(value: unknown): string | null {
   return typeof value === 'string' && SAFE_ID_RE.test(value) ? value : null;
 }
 
 // Deterministic 32-bit FNV-1a hash -> base36, so a repaired id or evidence
 // fingerprint is a pure function of its input (stable across normalization).
-function hashString(value) {
+function hashString(value: string): string {
   let hash = 2166136261 >>> 0;
   for (let index = 0; index < value.length; index++) {
     hash ^= value.charCodeAt(index);
@@ -145,7 +234,7 @@ function hashString(value) {
   return hash.toString(36);
 }
 
-function deterministicId(domain) {
+function deterministicId(domain: string): string {
   return `c-${hashString(domain)}`;
 }
 
@@ -159,7 +248,7 @@ function deterministicId(domain) {
  * @param {unknown} value
  * @returns {string}
  */
-export function normalizeDomain(value) {
+export function normalizeDomain(value: unknown): string {
   const raw = String(value == null ? '' : value).trim();
   if (!raw || /[\s\x00-\x1f\x7f]/.test(raw)) return '';
   let hostname;
@@ -184,25 +273,25 @@ export function normalizeDomain(value) {
   return hostname;
 }
 
-function normalizeStatus(value) {
-  return STATUS_VALUES.has(value) ? value : DEFAULT_STATUS;
+function normalizeStatus(value: unknown): string {
+  return typeof value === 'string' && STATUS_VALUES.has(value) ? value : DEFAULT_STATUS;
 }
-function normalizeDisposition(value) {
-  return DISPOSITION_VALUES.has(value) ? value : DEFAULT_DISPOSITION;
+function normalizeDisposition(value: unknown): string {
+  return typeof value === 'string' && DISPOSITION_VALUES.has(value) ? value : DEFAULT_DISPOSITION;
 }
-function normalizeSource(value) {
-  return SOURCE_VALUES.has(value) ? value : DEFAULT_SOURCE;
+function normalizeSource(value: unknown): string {
+  return typeof value === 'string' && SOURCE_VALUES.has(value) ? value : DEFAULT_SOURCE;
 }
 
 /** Parsed ISO string, or null when missing/invalid (used for import ordering). */
-function isoOrNull(value) {
+function isoOrNull(value: unknown): string | null {
   if (typeof value === 'string') {
     const parsed = Date.parse(value);
     if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
   }
   return null;
 }
-function isoOrNow(value, fallback) {
+function isoOrNow(value: unknown, fallback: string): string {
   return isoOrNull(value) || fallback;
 }
 
@@ -210,10 +299,10 @@ function isoOrNow(value, fallback) {
  * @param {unknown} value
  * @returns {string[]}
  */
-export function normalizeTags(value) {
+export function normalizeTags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const tags = [];
+  const seen = new Set<string>();
+  const tags: string[] = [];
   for (const raw of value) {
     const tag = String(raw == null ? '' : raw).trim().slice(0, MAX_TAG_LENGTH);
     if (!tag) continue;
@@ -230,7 +319,7 @@ export function normalizeTags(value) {
  * @param {unknown} body
  * @returns {string}
  */
-export function normalizeNoteBody(body) {
+export function normalizeNoteBody(body: unknown): string {
   return String(body == null ? '' : body).trim().slice(0, MAX_NOTE_LENGTH);
 }
 
@@ -244,8 +333,8 @@ export function normalizeNoteBody(body) {
  * @param {string | null} fallback
  * @returns {CaseNote | null}
  */
-function normalizeNote(raw, fallback) {
-  const record = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+function normalizeNote(raw: unknown, fallback: string | null): CaseNote | null {
+  const record = objectRecord(raw);
   const body = normalizeNoteBody(record.body);
   if (!body) return null;
   const createdAt = isoOrNull(record.createdAt) || fallback;
@@ -264,10 +353,10 @@ function normalizeNote(raw, fallback) {
  *   updatedAt for imports, never the current time)
  * @returns {CaseNote[]}
  */
-function normalizeNotes(value, fallback) {
+function normalizeNotes(value: unknown, fallback: string | null): CaseNote[] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const notes = [];
+  const seen = new Set<string>();
+  const notes: CaseNote[] = [];
   for (const raw of value) {
     const note = normalizeNote(raw, fallback);
     if (!note || seen.has(note.id)) continue;
@@ -283,19 +372,19 @@ function normalizeNotes(value, fallback) {
 // Evidence snapshot normalization
 // ---------------------------------------------------------------------------
 
-function evidenceString(value, max = MAX_EVIDENCE_STRING_LENGTH) {
+function evidenceString(value: unknown, max: number = MAX_EVIDENCE_STRING_LENGTH): string | null {
   if (value == null) return null;
   const text = String(value).trim().slice(0, max);
   return text || null;
 }
 
-function clampScore(value) {
+function clampScore(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.min(100, Math.round(value)))
     : null;
 }
 
-function boolOrNull(value) {
+function boolOrNull(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
@@ -304,14 +393,15 @@ function boolOrNull(value) {
 // are deduplicated and the result is sorted deterministically (largest
 // contribution first, then label) so input order alone can never change a
 // snapshot's fingerprint and two equal factor sets in different order collapse.
-function normalizeFactors(value) {
+function normalizeFactors(value: unknown): EvidenceFactor[] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const out = [];
+  const seen = new Set<string>();
+  const out: EvidenceFactor[] = [];
   for (const raw of value) {
     if (!raw || typeof raw !== 'object') continue;
-    const label = evidenceString(raw.label);
-    const source = raw.points ?? raw.delta;
+    const item = objectRecord(raw);
+    const label = evidenceString(item.label);
+    const source = item.points ?? item.delta;
     const rounded = typeof source === 'number' && Number.isFinite(source) ? Math.round(source) : null;
     if (label === null || rounded === null) continue;
     const points = rounded === 0 ? 0 : rounded; // collapse -0 to 0
@@ -326,13 +416,13 @@ function normalizeFactors(value) {
 
 // Case-insensitive, terminal-dot-stripped, deduplicated and sorted so a
 // nameserver set has one canonical form regardless of source casing/order.
-function normalizeNameserverList(value) {
+function normalizeNameserverList(value: unknown): string[] {
   const values = Array.isArray(value)
     ? value
     : typeof value === 'string'
       ? value.split(/[;\s]+/)
       : [];
-  const seen = new Set();
+  const seen = new Set<string>();
   for (const raw of values) {
     const ns = String(raw == null ? '' : raw).trim().toLowerCase().replace(/\.$/, '').slice(0, MAX_EVIDENCE_STRING_LENGTH);
     if (ns) seen.add(ns);
@@ -340,9 +430,9 @@ function normalizeNameserverList(value) {
   return [...seen].sort().slice(0, MAX_EVIDENCE_NAMESERVERS);
 }
 
-function normalizeMutationList(value) {
+function normalizeMutationList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set();
+  const seen = new Set<string>();
   for (const raw of value) {
     const token = String(raw == null ? '' : raw).trim().slice(0, MAX_EVIDENCE_STRING_LENGTH);
     if (token) seen.add(token);
@@ -350,11 +440,11 @@ function normalizeMutationList(value) {
   return [...seen].sort().slice(0, MAX_EVIDENCE_MUTATIONS);
 }
 
-function registrarKey(value) {
+function registrarKey(value: unknown): string {
   return String(value == null ? '' : value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function dayOf(value) {
+function dayOf(value: unknown): string | null {
   const iso = isoOrNull(value);
   return iso ? iso.slice(0, 10) : null;
 }
@@ -364,14 +454,14 @@ function dayOf(value) {
 // 'deep' evaluates them; 'unknown' is for migrated/imported evidence whose depth
 // we cannot trust.
 const EVIDENCE_SCAN_DEPTHS = new Set(['fast', 'deep']);
-function normalizeScanDepth(value) {
+function normalizeScanDepth(value: unknown): string {
   return typeof value === 'string' && EVIDENCE_SCAN_DEPTHS.has(value) ? value : 'unknown';
 }
 
 // Signals only a deep scan evaluates. On a 'fast' capture these are forced to
 // null (an unevaluated field, not an observed `false`) so a later comparison
 // cannot mistake "not scanned" for "signal removed".
-const DEEP_SIGNAL_FIELDS = [
+const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
   'hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'pageTitle', 'websiteProbeDetail',
   'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
   'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
@@ -382,7 +472,7 @@ const DEEP_SIGNAL_FIELDS = [
 // everything except capture timestamps, snapshot id and source. `scanDepth` is
 // included so captures of differing completeness can never be confused for one
 // another. Deterministic ordering here is what makes the fingerprint stable.
-const MATERIAL_FIELD_ORDER = [
+const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'scanDepth',
   'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
@@ -398,10 +488,12 @@ const MATERIAL_FIELD_ORDER = [
 // The canonical, comparison-safe value of a material field. Registrar casing,
 // nameserver order, and sub-day timestamps are collapsed so they can never
 // count as a "change"; a non-conclusive availability contributes nothing.
-function materialValue(field, snapshot) {
+function materialValue(field: keyof CaseEvidenceMaterial, snapshot: CaseEvidenceMaterial): unknown {
   switch (field) {
     case 'availability':
-      return CONCLUSIVE_AVAILABILITY.has(snapshot.availability) ? snapshot.availability : null;
+      return typeof snapshot.availability === 'string' && CONCLUSIVE_AVAILABILITY.has(snapshot.availability)
+        ? snapshot.availability
+        : null;
     case 'registrar':
       return registrarKey(snapshot.registrar) || null;
     case 'createdDate':
@@ -423,7 +515,7 @@ function materialValue(field, snapshot) {
   }
 }
 
-function isEmptyMaterial(value) {
+function isEmptyMaterial(value: unknown): boolean {
   if (value === null || value === undefined) return true;
   if (Array.isArray(value)) return value.length === 0;
   if (typeof value === 'string') return value.trim() === '';
@@ -437,7 +529,7 @@ const NON_EVIDENCE_MATERIAL = new Set(['scanDepth', 'confidence']);
 // A snapshot with no material evidence (only timestamps/source/depth, or only a
 // bare confidence/unknown-availability) is dropped rather than added to a
 // timeline.
-function hasMaterialEvidence(snapshot) {
+function hasMaterialEvidence(snapshot: CaseEvidenceMaterial): boolean {
   for (const field of MATERIAL_FIELD_ORDER) {
     if (NON_EVIDENCE_MATERIAL.has(field)) continue;
     if (!isEmptyMaterial(materialValue(field, snapshot))) return true;
@@ -446,9 +538,8 @@ function hasMaterialEvidence(snapshot) {
 }
 
 // Deterministic string form of the material identity, keys in fixed order.
-function canonicalMaterialString(snapshot) {
-  /** @type {Record<string, unknown>} */
-  const canonical = {};
+function canonicalMaterialString(snapshot: CaseEvidenceMaterial): string {
+  const canonical: Record<string, unknown> = {};
   for (const field of MATERIAL_FIELD_ORDER) canonical[field] = materialValue(field, snapshot);
   return JSON.stringify(canonical);
 }
@@ -465,18 +556,21 @@ function canonicalMaterialString(snapshot) {
  * @param {{ source?: string, fallback?: string | null }} [options]
  * @returns {CaseEvidenceSnapshot | null}
  */
-export function normalizeSnapshot(raw, options = {}) {
+export function normalizeSnapshot(raw: unknown, options: SnapshotOptions = {}): CaseEvidenceSnapshot | null {
   const built = buildSnapshot(raw, options);
   return built ? built.snapshot : null;
 }
 
 /** @returns {{ snapshot: CaseEvidenceSnapshot, material: string } | null} */
-function buildSnapshot(raw, options) {
+function buildSnapshot(
+  raw: unknown,
+  options: SnapshotOptions,
+): { snapshot: CaseEvidenceSnapshot; material: string } | null {
   if (!raw || typeof raw !== 'object') return null;
-  const record = /** @type {Record<string, unknown>} */ (raw);
+  const record = objectRecord(raw);
   const scanDepth = normalizeScanDepth(record.scanDepth);
   const httpSummary = normalizeHttpSummary(record);
-  const fields = {
+  const fields: CaseEvidenceMaterial = {
     scanDepth,
     availability: evidenceString(record.availability),
     confidence: evidenceString(record.confidence),
@@ -518,7 +612,29 @@ function buildSnapshot(raw, options) {
   // A fast capture never evaluates the deep signals, so any value supplied for
   // them (e.g. a profile's default `false`) is discarded as unevaluated.
   if (scanDepth === 'fast') {
-    for (const field of DEEP_SIGNAL_FIELDS) fields[field] = null;
+    Object.assign(fields, {
+      hasMx: null,
+      hasSpf: null,
+      hasDmarc: null,
+      activityStatus: null,
+      websiteProbeDetail: null,
+      pageTitle: null,
+      httpSummaryVersion: null,
+      httpEvidenceStatus: null,
+      httpFinalOrigin: null,
+      httpResponseStatus: null,
+      httpTransportSecurity: null,
+      httpRedirectCount: null,
+      httpCrossOriginRedirect: null,
+      httpHttpsDowngrade: null,
+      httpContentType: null,
+      httpSecurityHeaders: null,
+      faviconMatch: null,
+      faviconNearMatch: null,
+      reusesOfficialAssets: null,
+      hasPasswordField: null,
+      phishingLanguageMatch: null,
+    });
   }
   if (!hasMaterialEvidence(fields)) return null;
 
@@ -535,8 +651,7 @@ function buildSnapshot(raw, options) {
 
   const material = canonicalMaterialString(fields);
   const fingerprint = hashString(material);
-  /** @type {CaseEvidenceSnapshot} */
-  const snapshot = {
+  const snapshot: CaseEvidenceSnapshot = {
     id: `ev-${fingerprint}`,
     fingerprint,
     firstCapturedAt,
@@ -547,15 +662,15 @@ function buildSnapshot(raw, options) {
   return { snapshot, material };
 }
 
-function sourceRank(source) {
-  return EVIDENCE_SOURCE_RANK[source] ?? 0;
+function sourceRank(source: string): number {
+  return EVIDENCE_SOURCE_RANK[source as keyof typeof EVIDENCE_SOURCE_RANK] ?? 0;
 }
 
 // Deterministic winner between two sources for the same material evidence.
 // Higher rank wins; on a rank tie (e.g. lookup vs bulk) the source tied to the
 // later observation wins; if those also tie, the lexically-smaller source is
 // chosen so the result never depends on input order.
-function chooseSource(kept, incoming) {
+function chooseSource(kept: CaseEvidenceSnapshot, incoming: CaseEvidenceSnapshot): string {
   const rankKept = sourceRank(kept.source);
   const rankIncoming = sourceRank(incoming.source);
   if (rankIncoming !== rankKept) return rankIncoming > rankKept ? incoming.source : kept.source;
@@ -567,7 +682,10 @@ function chooseSource(kept, incoming) {
 
 // Two materially identical captures collapse into one timeline entry: earliest
 // first-seen, latest observed time, and a deterministically-chosen source.
-function mergeDuplicateSnapshots(kept, incoming) {
+function mergeDuplicateSnapshots(
+  kept: CaseEvidenceSnapshot,
+  incoming: CaseEvidenceSnapshot,
+): CaseEvidenceSnapshot {
   const firstCapturedAt = Date.parse(incoming.firstCapturedAt) < Date.parse(kept.firstCapturedAt)
     ? incoming.firstCapturedAt
     : kept.firstCapturedAt;
@@ -578,7 +696,7 @@ function mergeDuplicateSnapshots(kept, incoming) {
   return { ...kept, firstCapturedAt, capturedAt, source };
 }
 
-function compareSnapshotChrono(a, b) {
+function compareSnapshotChrono(a: CaseEvidenceSnapshot, b: CaseEvidenceSnapshot): number {
   return (
     Date.parse(a.capturedAt) - Date.parse(b.capturedAt) ||
     Date.parse(a.firstCapturedAt) - Date.parse(b.firstCapturedAt) ||
@@ -596,10 +714,12 @@ function compareSnapshotChrono(a, b) {
  * @param {{ source?: string, fallback?: string | null }} [options]
  * @returns {CaseEvidenceSnapshot[]}
  */
-export function normalizeEvidenceHistory(rawList, options = {}) {
+export function normalizeEvidenceHistory(
+  rawList: unknown,
+  options: SnapshotOptions = {},
+): CaseEvidenceSnapshot[] {
   const list = Array.isArray(rawList) ? rawList : [];
-  /** @type {Map<string, CaseEvidenceSnapshot>} */
-  const byMaterial = new Map();
+  const byMaterial = new Map<string, CaseEvidenceSnapshot>();
   for (const raw of list) {
     const built = buildSnapshot(raw, options);
     if (!built) continue;
@@ -613,8 +733,8 @@ export function normalizeEvidenceHistory(rawList, options = {}) {
   return assignUniqueSnapshotIds(kept);
 }
 
-function assignUniqueSnapshotIds(snapshots) {
-  const used = new Set();
+function assignUniqueSnapshotIds(snapshots: CaseEvidenceSnapshot[]): CaseEvidenceSnapshot[] {
+  const used = new Set<string>();
   return snapshots.map((snapshot) => {
     let id = safeId(snapshot.id) || `ev-${snapshot.fingerprint}`;
     if (used.has(id)) {
@@ -633,7 +753,9 @@ function assignUniqueSnapshotIds(snapshots) {
  * @param {{ evidenceHistory?: CaseEvidenceSnapshot[] } | null | undefined} record
  * @returns {CaseEvidenceSnapshot | null}
  */
-export function latestCaseEvidence(record) {
+export function latestCaseEvidence(
+  record: { evidenceHistory?: CaseEvidenceSnapshot[] } | null | undefined,
+): CaseEvidenceSnapshot | null {
   const history = record && Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
   return history.length ? history[history.length - 1] : null;
 }
@@ -649,7 +771,7 @@ export function latestCaseEvidence(record) {
 //                  (fast->fast or deep->deep), so a risk delta caused solely by
 //                  a mode change is never reported.
 //   (absent)     - always comparable (data available in every capture).
-const COMPARE_FIELDS = [
+const COMPARE_FIELDS: CompareFieldSpec[] = [
   { field: 'availability', label: 'Availability', type: 'availability' },
   { field: 'confidence', label: 'Confidence', type: 'token' },
   { field: 'riskScore', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
@@ -683,17 +805,24 @@ const COMPARE_FIELDS = [
   { field: 'mutationTypes', label: 'Mutation types', type: 'set' },
 ];
 
-function depthComparable(a, b) {
+function depthComparable(a: unknown, b: unknown): boolean {
   return a === b && (a === 'fast' || a === 'deep');
 }
 
-function riskModelComparable(previous, current) {
+function riskModelComparable(
+  previous: CaseEvidenceSnapshot | null | undefined,
+  current: CaseEvidenceSnapshot | null | undefined,
+): boolean {
   const before = normalizeRiskModelVersion(previous?.riskModelVersion);
   const after = normalizeRiskModelVersion(current?.riskModelVersion);
   return before !== null && before === after;
 }
 
-function valuesMateriallyEqual(field, previous, current) {
+function valuesMateriallyEqual(
+  field: keyof CaseEvidenceMaterial,
+  previous: CaseEvidenceSnapshot,
+  current: CaseEvidenceSnapshot,
+): boolean {
   return JSON.stringify(materialValue(field, previous)) === JSON.stringify(materialValue(field, current));
 }
 
@@ -706,10 +835,12 @@ function valuesMateriallyEqual(field, previous, current) {
  * @param {CaseEvidenceSnapshot | null | undefined} current
  * @returns {Array<'scan-depth' | 'risk-model'>}
  */
-export function caseEvidenceIncomparableReasons(previous, current) {
+export function caseEvidenceIncomparableReasons(
+  previous: CaseEvidenceSnapshot | null | undefined,
+  current: CaseEvidenceSnapshot | null | undefined,
+): Array<'scan-depth' | 'risk-model'> {
   if (!previous || !current || previous.fingerprint === current.fingerprint) return [];
-  /** @type {Array<'scan-depth' | 'risk-model'>} */
-  const reasons = [];
+  const reasons: Array<'scan-depth' | 'risk-model'> = [];
   const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
     || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
   if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');
@@ -723,18 +854,22 @@ export function caseEvidenceIncomparableReasons(previous, current) {
   return reasons;
 }
 
-function isPresent(value) {
+function isPresent(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === 'string') return value.trim() !== '';
   if (Array.isArray(value)) return value.length > 0;
   return true;
 }
 
-function setsEqual(a, b) {
+function setsEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function compareField(spec, before, after) {
+function compareField(
+  spec: CompareFieldSpec,
+  before: unknown,
+  after: unknown,
+): { before: unknown; after: unknown; tone: string } | null {
   switch (spec.type) {
     case 'score': {
       const b = clampScore(before);
@@ -749,7 +884,8 @@ function compareField(spec, before, after) {
     }
     case 'availability': {
       // Only compare two conclusive states; unknown/error can't prove a change.
-      if (!CONCLUSIVE_AVAILABILITY.has(before) || !CONCLUSIVE_AVAILABILITY.has(after)) return null;
+      if (typeof before !== 'string' || typeof after !== 'string'
+        || !CONCLUSIVE_AVAILABILITY.has(before) || !CONCLUSIVE_AVAILABILITY.has(after)) return null;
       if (before === after) return null;
       let tone = 'warn';
       if (before === 'available' && REGISTERED_LIKE.has(after)) tone = 'danger';
@@ -770,7 +906,7 @@ function compareField(spec, before, after) {
       const normalizeSet = spec.field === 'nameservers'
         ? normalizeNameserverList
         : spec.field === 'httpSecurityHeaders'
-          ? (value) => Array.isArray(value) ? [...value].sort() : []
+          ? (value: unknown) => Array.isArray(value) ? [...value].sort() : []
           : normalizeMutationList;
       const b = normalizeSet(before);
       const a = normalizeSet(after);
@@ -855,12 +991,15 @@ function compareField(spec, before, after) {
  * @param {CaseEvidenceSnapshot | null | undefined} current
  * @returns {Array<{ field: string, label: string, before: unknown, after: unknown, tone: string }>}
  */
-export function compareCaseEvidence(previous, current) {
+export function compareCaseEvidence(
+  previous: CaseEvidenceSnapshot | null | undefined,
+  current: CaseEvidenceSnapshot | null | undefined,
+): EvidenceChange[] {
   if (!previous || !current) return [];
   const bothDeep = previous.scanDepth === 'deep' && current.scanDepth === 'deep';
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
   const comparableRiskModel = riskModelComparable(previous, current);
-  const changes = [];
+  const changes: EvidenceChange[] = [];
   for (const spec of COMPARE_FIELDS) {
     if (spec.depthGate === 'both-deep' && !bothDeep) continue;
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
@@ -880,13 +1019,20 @@ export function compareCaseEvidence(previous, current) {
 
 // A case's own source maps onto snapshot provenance for newly captured
 // evidence. A hand-opened ('manual') case has no scan provenance.
-function inferCaptureSource(caseSource) {
-  return EVIDENCE_SOURCE_SET.has(caseSource) && caseSource !== 'import' ? caseSource : DEFAULT_EVIDENCE_SOURCE;
+function inferCaptureSource(caseSource: unknown): string {
+  return typeof caseSource === 'string' && EVIDENCE_SOURCE_SET.has(caseSource) && caseSource !== 'import'
+    ? caseSource
+    : DEFAULT_EVIDENCE_SOURCE;
 }
 
 // Builds a case's bounded current-schema evidence history. Uses a lenient
 // local fallback timestamp so recoverable current data always loads.
-function normalizeCaseEvidence(record, createdAt, updatedAt, now) {
+function normalizeCaseEvidence(
+  record: Record<string, unknown>,
+  createdAt: string,
+  updatedAt: string,
+  now: string,
+): CaseEvidenceSnapshot[] {
   const localFallback = updatedAt || createdAt || now;
   if (Array.isArray(record.evidenceHistory)) {
     return normalizeEvidenceHistory(record.evidenceHistory, { source: DEFAULT_EVIDENCE_SOURCE, fallback: localFallback });
@@ -905,9 +1051,13 @@ function normalizeCaseEvidence(record, createdAt, updatedAt, now) {
  * @param {string} [nowIso]
  * @returns {CaseRecord | null}
  */
-export function normalizeCase(raw, existing, nowIso) {
+export function normalizeCase(
+  raw: unknown,
+  existing?: CaseRecord,
+  nowIso?: string,
+): CaseRecord | null {
   const now = nowIso || new Date().toISOString();
-  const record = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  const record = objectRecord(raw);
   const domain = normalizeDomain(existing ? existing.domain : record.domain);
   if (!domain) return null;
   const createdAt = existing ? existing.createdAt : isoOrNow(record.createdAt, now);
@@ -931,8 +1081,8 @@ export function normalizeCase(raw, existing, nowIso) {
  * domain order so the repair is deterministic across repeated normalization.
  * @param {CaseRecord[]} cases
  */
-function assignUniqueIds(cases) {
-  const used = new Set();
+function assignUniqueIds(cases: CaseRecord[]): void {
+  const used = new Set<string>();
   for (const record of [...cases].sort((a, b) => a.domain.localeCompare(b.domain))) {
     let id = safeId(record.id) || deterministicId(record.domain);
     if (used.has(id)) {
@@ -954,10 +1104,9 @@ function assignUniqueIds(cases) {
  * @param {unknown} raw
  * @returns {CaseStore}
  */
-export function normalizeCaseStore(raw) {
+export function normalizeCaseStore(raw: unknown): CaseStore {
   const now = new Date().toISOString();
-  /** @type {Map<string, CaseRecord>} */
-  const byDomain = new Map();
+  const byDomain = new Map<string, CaseRecord>();
   for (const item of asCaseList(raw)) {
     const normalized = normalizeCase(item, undefined, now);
     if (!normalized) continue;
@@ -980,19 +1129,16 @@ export function normalizeCaseStore(raw) {
  * @param {unknown} raw
  * @returns {number | null}
  */
-export function parseStoreVersion(raw) {
-  if (raw && typeof raw === 'object' && typeof (/** @type {Record<string, unknown>} */ (raw).version) === 'number') {
-    return /** @type {number} */ (/** @type {Record<string, unknown>} */ (raw).version);
-  }
-  return null;
+export function parseStoreVersion(raw: unknown): number | null {
+  const value = objectRecord(raw).version;
+  return typeof value === 'number' ? value : null;
 }
 
 /** @param {unknown} raw @returns {unknown[]} */
-function asCaseList(raw) {
+function asCaseList(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
-  if (raw && typeof raw === 'object' && Array.isArray(/** @type {Record<string, unknown>} */ (raw).cases)) {
-    return /** @type {unknown[]} */ (/** @type {Record<string, unknown>} */ (raw).cases);
-  }
+  const cases = objectRecord(raw).cases;
+  if (Array.isArray(cases)) return cases;
   return [];
 }
 
@@ -1001,7 +1147,7 @@ function asCaseList(raw) {
  * @param {string} [nowIso]
  * @returns {CaseRecord}
  */
-export function createCase(input, nowIso) {
+export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   const now = nowIso || new Date().toISOString();
   const domain = normalizeDomain(input.domain);
   if (!domain) throw new Error('A valid domain is required to open a case.');
@@ -1032,7 +1178,11 @@ export function createCase(input, nowIso) {
  * @param {string} [nowIso]
  * @returns {{ cases: CaseRecord[], record: CaseRecord, created: boolean }}
  */
-export function openOrCreateCase(cases, input, nowIso) {
+export function openOrCreateCase(
+  cases: CaseRecord[],
+  input: CaseInput,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord; created: boolean } {
   const domain = normalizeDomain(input.domain);
   if (!domain) throw new Error('A valid domain is required to open a case.');
   const existing = cases.find((item) => item.domain === domain);
@@ -1054,7 +1204,12 @@ export function openOrCreateCase(cases, input, nowIso) {
  * @param {string} [nowIso]
  * @returns {{ cases: CaseRecord[], record: CaseRecord }}
  */
-export function updateCase(cases, id, patch, nowIso) {
+export function updateCase(
+  cases: CaseRecord[],
+  id: string,
+  patch: CasePatch,
+  nowIso?: string,
+): { cases: CaseRecord[]; record: CaseRecord } {
   const now = nowIso || new Date().toISOString();
   const index = cases.findIndex((item) => item.id === id);
   if (index < 0) throw new Error('That case no longer exists.');
@@ -1076,8 +1231,7 @@ export function updateCase(cases, id, patch, nowIso) {
       { source: inferCaptureSource(source), fallback: now },
     );
   }
-  /** @type {CaseRecord} */
-  const record = {
+  const record: CaseRecord = {
     ...current,
     status: patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
     disposition: patch.disposition !== undefined ? normalizeDisposition(patch.disposition) : current.disposition,
@@ -1093,17 +1247,13 @@ export function updateCase(cases, id, patch, nowIso) {
 }
 
 /**
- * @typedef {{ domain: string, rawId: string | null, status: string | undefined, disposition: string | undefined, source: string | undefined, evidenceHistory: CaseEvidenceSnapshot[], tags: string[], notes: CaseNote[], createdAt: string | null, updatedAt: string | null }} ImportPatch
- */
-
-/**
  * A valid, present machine value or undefined - never a default. Keeps import
  * validation distinct from local recovery.
  * @param {unknown} value
  * @param {Set<string>} valid
  * @returns {string | undefined}
  */
-function importScalar(value, valid) {
+function importScalar(value: unknown, valid: Set<string>): string | undefined {
   return typeof value === 'string' && valid.has(value) ? value : undefined;
 }
 
@@ -1117,8 +1267,8 @@ function importScalar(value, valid) {
  * @param {unknown} raw
  * @returns {ImportPatch | null}
  */
-function extractImportPatch(raw) {
-  const record = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+function extractImportPatch(raw: unknown): ImportPatch | null {
+  const record = objectRecord(raw);
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const importFallback = isoOrNull(record.updatedAt) || isoOrNull(record.createdAt) || null;
@@ -1142,8 +1292,8 @@ function extractImportPatch(raw) {
 }
 
 /** @param {CaseNote[]} a @param {CaseNote[]} b @returns {CaseNote[]} */
-function unionNotes(a, b) {
-  const byId = new Map();
+function unionNotes(a: CaseNote[], b: CaseNote[]): CaseNote[] {
+  const byId = new Map<string, CaseNote>();
   for (const note of [...a, ...b]) {
     if (!byId.has(note.id)) byId.set(note.id, note);
   }
@@ -1155,12 +1305,15 @@ function unionNotes(a, b) {
 // collapses (earliest firstCapturedAt, latest capturedAt), distinct snapshots
 // are retained subject to the per-case bound, and an older import can never
 // move an existing observation backwards.
-function mergeEvidenceHistories(local, imported) {
+function mergeEvidenceHistories(
+  local: CaseEvidenceSnapshot[],
+  imported: CaseEvidenceSnapshot[],
+): CaseEvidenceSnapshot[] {
   return normalizeEvidenceHistory([...local, ...imported], { source: 'import', fallback: null });
 }
 
 /** @param {ImportPatch} patch @param {string} now @returns {CaseRecord} */
-function caseFromPatch(patch, now) {
+function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
   return {
     id: '', // assigned by mergeCases so it can guarantee uniqueness against locals
     domain: patch.domain,
@@ -1184,7 +1337,7 @@ function caseFromPatch(patch, now) {
  * @param {ImportPatch} patch
  * @returns {CaseRecord}
  */
-function applyImportPatch(local, patch) {
+function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
   const importNewer = patch.updatedAt !== null && Date.parse(patch.updatedAt) > Date.parse(local.updatedAt);
   return {
     ...local,
@@ -1195,11 +1348,11 @@ function applyImportPatch(local, patch) {
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
-    updatedAt: importNewer ? /** @type {string} */ (patch.updatedAt) : local.updatedAt,
+    updatedAt: importNewer ? (patch.updatedAt ?? local.updatedAt) : local.updatedAt,
   };
 }
 
-function pickFreeId(preferred, domain, used) {
+function pickFreeId(preferred: unknown, domain: string, used: Set<string>): string {
   const wanted = safeId(preferred);
   let id = wanted && !used.has(wanted) ? wanted : deterministicId(domain);
   const base = deterministicId(domain);
@@ -1219,14 +1372,17 @@ function pickFreeId(preferred, domain, used) {
  * @param {unknown} importedRaw
  * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number }}
  */
-export function mergeCases(localCases, importedRaw) {
+export function mergeCases(
+  localCases: CaseRecord[],
+  importedRaw: unknown,
+): { cases: CaseRecord[]; added: number; updated: number; skipped: number } {
   const importedVersion = parseStoreVersion(importedRaw);
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
   }
   if (importedVersion !== CASE_SCHEMA_VERSION
     || !importedRaw || typeof importedRaw !== 'object'
-    || !Array.isArray(/** @type {Record<string, unknown>} */ (importedRaw).cases)) {
+    || !Array.isArray(objectRecord(importedRaw).cases)) {
     throw new Error(`Expected a WHOISleuth case export using schema ${CASE_SCHEMA_VERSION}.`);
   }
   const local = normalizeCaseStore(localCases).cases;
@@ -1268,11 +1424,11 @@ export function mergeCases(localCases, importedRaw) {
  * @param {CaseRecord[]} cases
  * @returns {string}
  */
-export function serializeCaseStore(cases) {
+export function serializeCaseStore(cases: CaseRecord[]): string {
   return JSON.stringify({ version: CASE_SCHEMA_VERSION, cases });
 }
 
-function byteLength(text) {
+function byteLength(text: string): number {
   if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(text).length;
   return unescape(encodeURIComponent(text)).length;
 }
@@ -1280,8 +1436,11 @@ function byteLength(text) {
 // Every prunable snapshot in deterministic global order (oldest first). With
 // `allowLast` false a case's newest snapshot is never a candidate, so removing
 // candidates can't change which snapshot is "newest" and the order stays stable.
-function collectPrunableSnapshots(cases, allowLast) {
-  const items = [];
+function collectPrunableSnapshots(
+  cases: CaseRecord[],
+  allowLast: boolean,
+): Array<{ index: number; snapshot: CaseEvidenceSnapshot; key: string }> {
+  const items: Array<{ index: number; snapshot: CaseEvidenceSnapshot; key: string }> = [];
   for (let index = 0; index < cases.length; index++) {
     const history = cases[index].evidenceHistory;
     const limit = history.length - (allowLast ? 0 : 1);
@@ -1300,7 +1459,7 @@ function collectPrunableSnapshots(cases, allowLast) {
 // Analyst-authored data (notes, tags, status, disposition, identity) is never
 // touched. A running byte estimate keeps this near-linear; an exact re-serialize
 // verifies the result and prunes a little further if the estimate undershot.
-function pruneOldestSnapshots(cases, allowLast) {
+function pruneOldestSnapshots(cases: CaseRecord[], allowLast: boolean): number {
   let total = byteLength(serializeCaseStore(cases));
   if (total <= MAX_CASE_STORE_BYTES) return 0;
   let removed = 0;
@@ -1330,7 +1489,7 @@ function pruneOldestSnapshots(cases, allowLast) {
  * @param {CaseRecord[]} cases
  * @returns {{ cases: CaseRecord[], pruned: number }}
  */
-export function enforceStoreBudget(cases) {
+export function enforceStoreBudget(cases: CaseRecord[]): { cases: CaseRecord[]; pruned: number } {
   const working = normalizeCaseStore(cases).cases;
   if (byteLength(serializeCaseStore(working)) <= MAX_CASE_STORE_BYTES) {
     return { cases: working, pruned: 0 };
@@ -1351,7 +1510,10 @@ export function enforceStoreBudget(cases) {
  * @param {string} [nowIso]
  * @returns {{ version: number, exportedAt: string, cases: CaseRecord[] }}
  */
-export function buildCaseExport(cases, nowIso) {
+export function buildCaseExport(
+  cases: CaseRecord[],
+  nowIso?: string,
+): { version: typeof CASE_SCHEMA_VERSION; exportedAt: string; cases: CaseRecord[] } {
   return {
     version: CASE_SCHEMA_VERSION,
     exportedAt: nowIso || new Date().toISOString(),

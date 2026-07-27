@@ -3,7 +3,7 @@
 // latestCaseEvidence) and produces display-ready derivations and formatted
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
-import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.js';
+import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 
 // ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ export function formatSnapshotValue(field, value) {
  * have a present (non-null, non-empty) value. Returns an array of groups; each
  * group has `name` and `rows` (array of `{ field, label, value }`). Empty
  * groups are excluded.
- * @param {import('./case-model.js').CaseEvidenceSnapshot} snapshot
+ * @param {import('./case-model.ts').CaseEvidenceSnapshot} snapshot
  * @returns {Array<{ name: string, rows: Array<{ field: string, label: string, value: unknown }> }>}
  */
 export function snapshotFieldGroups(snapshot) {
@@ -206,7 +206,7 @@ function classifyChangeKind(field, before, after) {
 // ---------------------------------------------------------------------------
 
 /**
- * @typedef {{ snapshot: import('./case-model.js').CaseEvidenceSnapshot, isBaseline: boolean, hasRepeatedObservation: boolean, changes: Array<{ field: string, label: string, before: unknown, after: unknown, tone: string }> | null, hasIncomparableChange: boolean, incomparableReasons: Array<'scan-depth' | 'risk-model' | 'other'>, displayIndex: number }} TimelineEntry
+ * @typedef {{ snapshot: import('./case-model.ts').CaseEvidenceSnapshot, isBaseline: boolean, hasRepeatedObservation: boolean, changes: Array<{ field: string, label: string, before: unknown, after: unknown, tone: string }> | null, hasIncomparableChange: boolean, incomparableReasons: Array<'scan-depth' | 'risk-model' | 'other'>, displayIndex: number }} TimelineEntry
  */
 
 /**
@@ -221,7 +221,7 @@ function classifyChangeKind(field, before, after) {
  *   `hasIncomparableChange` and `incomparableReasons` explain why.
  * - `hasRepeatedObservation` is true when `firstCapturedAt !== capturedAt`.
  *
- * @param {import('./case-model.js').CaseEvidenceSnapshot[]} evidenceHistory
+ * @param {import('./case-model.ts').CaseEvidenceSnapshot[]} evidenceHistory
  * @returns {TimelineEntry[]}
  */
 export function deriveTimeline(evidenceHistory) {
@@ -304,7 +304,7 @@ export function evidenceSourceLabel(source) {
  * The most recent snapshot's concise summary fields, or null when there is no
  * evidence. Used for the compact current-evidence summary near the top of an
  * expanded case.
- * @param {import('./case-model.js').CaseEvidenceSnapshot[] | null | undefined} evidenceHistory
+ * @param {import('./case-model.ts').CaseEvidenceSnapshot[] | null | undefined} evidenceHistory
  * @returns {{ availability: string | null, riskModelVersion: number | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
  */
 export function currentEvidenceSummary(evidenceHistory) {

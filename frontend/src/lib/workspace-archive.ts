@@ -4,7 +4,7 @@ import {
   previewWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from './analysis/workspace-archive.js';
-import { enforceStoreBudget, mergeCases } from './analysis/case-model.js';
+import { enforceStoreBudget, mergeCases } from './analysis/case-model.ts';
 import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.ts';
 import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/brand-profile-model.ts';
 import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.ts';

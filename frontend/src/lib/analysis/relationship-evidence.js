@@ -4,7 +4,7 @@
 // module deliberately produces no aggregate score and is never a persistence
 // boundary.
 
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 import { groupBySimilarFavicon } from './utils.ts';
 
 export const RELATIONSHIP_EVIDENCE_VERSION = 2;

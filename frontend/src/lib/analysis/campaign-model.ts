@@ -2,7 +2,7 @@
 // reference normalized case domains rather than copying case evidence, notes,
 // or mutable case ids. The browser wrapper owns persistence and downloads.
 
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 
 export const CAMPAIGN_SCHEMA = 'whoisleuth.campaigns';
 export const CAMPAIGN_SCHEMA_VERSION = 1;

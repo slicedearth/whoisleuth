@@ -8,7 +8,7 @@ import {
   MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
   normalizeDomain,
   normalizeSnapshot,
-} from './case-model.js';
+} from './case-model.ts';
 import {
   INVESTIGATION_PROJECTION_SCHEMA,
   INVESTIGATION_PROJECTION_VERSION,

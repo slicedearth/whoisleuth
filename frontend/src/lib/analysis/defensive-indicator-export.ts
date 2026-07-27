@@ -1,7 +1,7 @@
 // Pure defensive-domain export formatting for filtered Bulk findings. These
 // files are generated locally and never submitted or applied automatically.
 
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 
 export const DEFENSIVE_INDICATOR_EXPORT_VERSION = 1;
 export const MAX_DEFENSIVE_INDICATORS = 2000;

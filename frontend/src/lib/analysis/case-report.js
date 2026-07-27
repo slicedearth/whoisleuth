@@ -9,7 +9,7 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.js';
+import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 
 // ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ function formatReportValue(value, field) {
 /**
  * Returns a shallow clone of a snapshot containing only known schema fields.
  * Unknown/imported keys are never included.
- * @param {import('./case-model.js').CaseEvidenceSnapshot} snapshot
+ * @param {import('./case-model.ts').CaseEvidenceSnapshot} snapshot
  * @returns {object}
  */
 function pickKnownSnapshotFields(snapshot) {

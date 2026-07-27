@@ -1,4 +1,4 @@
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 import { PAGE_FINGERPRINT_VERSION, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
 
 type JsonRecord = Record<string, unknown>;

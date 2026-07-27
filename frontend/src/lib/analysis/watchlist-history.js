@@ -5,7 +5,7 @@
 
 import { explainRiskScore, normalizeRiskModelVersion } from './scoring.ts';
 import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from './http-summary.ts';
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;
 export const MAX_WATCHLIST_CHANGES_PER_EVENT = 500;

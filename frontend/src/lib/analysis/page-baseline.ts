@@ -3,7 +3,7 @@
 // HTML, URLs, headers, redirect inventories, and parser diagnostics never
 // cross this storage boundary.
 
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 import { isInformativeFaviconHash } from './utils.ts';
 
 export const PAGE_BASELINE_VERSION = 1;

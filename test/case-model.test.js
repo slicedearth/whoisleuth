@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 let model;
 before(async () => {
-  model = await import('../frontend/src/lib/analysis/case-model.js');
+  model = await import('../frontend/src/lib/analysis/case-model.ts');
 });
 
 const ISO = '2026-05-01T00:00:00.000Z';

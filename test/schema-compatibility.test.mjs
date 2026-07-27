@@ -45,7 +45,7 @@ import {
 import {
   buildCaseExport,
   CASE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-model.js';
+} from '../frontend/src/lib/analysis/case-model.ts';
 import {
   buildDetectionRuleExport,
   DETECTION_RULE_SCHEMA,

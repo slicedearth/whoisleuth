@@ -1,4 +1,4 @@
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 
 export const RELATIONSHIP_OBSERVATION_SCHEMA = 'whoisleuth.relationship-observations';
 export const RELATIONSHIP_OBSERVATION_SCHEMA_VERSION = 1;

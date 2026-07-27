@@ -7,7 +7,7 @@ import {
   MAX_CASES,
   normalizeCaseStore,
   normalizeDomain,
-} from './case-model.js';
+} from './case-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,

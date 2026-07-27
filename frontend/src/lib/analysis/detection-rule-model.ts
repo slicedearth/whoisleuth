@@ -2,7 +2,7 @@
 // small structured language: field names and operators come from allowlists,
 // so imported rules cannot execute code or reach outside bounded case evidence.
 
-import { latestCaseEvidence } from './case-model.js';
+import { latestCaseEvidence } from './case-model.ts';
 
 export const DETECTION_RULE_SCHEMA = 'whoisleuth.detection-rules';
 export const DETECTION_RULE_SCHEMA_VERSION = 1;

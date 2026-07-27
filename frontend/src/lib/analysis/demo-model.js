@@ -5,7 +5,7 @@
 // presentation changes do not require a second implementation in this route.
 
 import { normalizeBrandProfile } from './brand-profile-model.ts';
-import { normalizeCase } from './case-model.js';
+import { normalizeCase } from './case-model.ts';
 import { deriveTimeline } from './evidence-display.js';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 

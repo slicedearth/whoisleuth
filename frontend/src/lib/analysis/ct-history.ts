@@ -3,7 +3,7 @@
 // this module owns validation, comparison, retention, and schema shaping so it
 // can be exercised under node --test.
 
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 
 export const CT_HISTORY_SCHEMA_VERSION = 1;
 export const MAX_CT_HISTORY_SEARCHES = 30;

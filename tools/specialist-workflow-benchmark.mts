@@ -14,7 +14,7 @@ import { runUnifiedLookup } from '../lib/lookup.mts';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import {
   CASE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-model.js';
+} from '../frontend/src/lib/analysis/case-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
 } from '../frontend/src/lib/analysis/brand-profile-model.ts';
