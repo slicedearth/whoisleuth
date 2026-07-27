@@ -44,6 +44,7 @@ test('normalizes campaign text, domains, timestamps and identity', () => {
     createdAt: 'not-a-date',
     updatedAt: '2026-07-02T00:00:00Z',
   }, NOW);
+  assert.ok(result);
   assert.ok(result.id.startsWith('campaign-'));
   assert.equal(result.name.length, MAX_CAMPAIGN_NAME_LENGTH);
   assert.equal(result.description.length, MAX_CAMPAIGN_DESCRIPTION_LENGTH);
@@ -64,6 +65,7 @@ test('flattens campaign names and removes unsafe description controls', () => {
     description: 'First\r\nsecond\u0000\u0007\nthird',
     createdAt: NOW,
   }, NOW);
+  assert.ok(result);
   assert.equal(result.name, 'Multi line name');
   assert.equal(result.description, 'First\nsecond\nthird');
 });
@@ -87,7 +89,9 @@ test('normalizes a store by recency and caps campaign count', () => {
   assert.equal(result.version, CAMPAIGN_SCHEMA_VERSION);
   assert.equal(result.campaigns.length, MAX_CAMPAIGNS);
   assert.equal(result.campaigns[0].id, `campaign-${MAX_CAMPAIGNS + 3}`);
-  assert.equal(result.campaigns.at(-1).id, 'campaign-4');
+  const oldest = result.campaigns.at(-1);
+  assert.ok(oldest);
+  assert.equal(oldest.id, 'campaign-4');
 });
 
 test('duplicate ids recover to the newest record', () => {
@@ -107,7 +111,9 @@ test('equal-time duplicate recovery and store ordering are input-order independe
   const forward = normalizeCampaignStore([duplicateA, sameNameB, duplicateZ, sameNameA]);
   const reverse = normalizeCampaignStore([sameNameA, duplicateZ, sameNameB, duplicateA]);
   assert.deepEqual(forward, reverse);
-  assert.equal(forward.campaigns.find((item) => item.id === 'duplicate').name, 'Zulu');
+  const duplicate = forward.campaigns.find((item) => item.id === 'duplicate');
+  assert.ok(duplicate);
+  assert.equal(duplicate.name, 'Zulu');
   assert.deepEqual(forward.campaigns.filter((item) => item.name === 'Same').map((item) => item.id), ['same-a', 'same-b']);
 });
 
@@ -241,8 +247,8 @@ test('builds a deterministic portable export without case evidence or notes', ()
   assert.equal(result.schema, 'whoisleuth.campaigns');
   assert.equal(result.version, 1);
   assert.equal(result.exportedAt, NOW);
-  assert.equal(result.campaigns[0].evidence, undefined);
-  assert.equal(result.campaigns[0].notes, undefined);
+  assert.equal(Reflect.get(result.campaigns[0], 'evidence'), undefined);
+  assert.equal(Reflect.get(result.campaigns[0], 'notes'), undefined);
   assert.match(result.limitations, /do not prove/);
 });
 

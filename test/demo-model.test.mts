@@ -84,6 +84,7 @@ describe('synthetic demo state', () => {
 
   test('adapts fixtures to production lookup, relationship, and case component contracts', () => {
     const lookup = syntheticDemoLookupView('credential-lure');
+    assert.ok(lookup);
     assert.equal(lookup.assessment.risk.score, 78);
     assert.equal(lookup.registry.rdapParsed.domain, 'northstar-login.example');
     assert.deepEqual(
@@ -106,6 +107,7 @@ describe('synthetic demo state', () => {
     assert.deepEqual(relationships[0].domains, ['northstar-login.example', 'northstarr.example']);
 
     const record = syntheticDemoCaseRecord(completeState());
+    assert.ok(record);
     assert.equal(record.domain, 'northstar-login.example');
     assert.equal(record.evidenceHistory.length, 2);
     assert.notEqual(record.evidenceHistory[0].firstCapturedAt, record.evidenceHistory[0].capturedAt);

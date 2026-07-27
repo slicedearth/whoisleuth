@@ -55,6 +55,7 @@ test('normalizes semantic list fields and drops unusable values', () => {
     allowlistedRegistrars: ['  Example   Registrar  ', 'bad\tregistrar'],
     dkimSelectors: [' MAIL.ONE ', '.mail.one.', 'bad_selector'],
   }));
+  assert.ok(result);
   assert.deepEqual(result.officialDomains, ['example.invalid']);
   assert.deepEqual(result.productNames, ['Account Centre']);
   assert.deepEqual(result.tlds, ['com']);
@@ -71,6 +72,7 @@ test('bounds names and free-text values without retaining controls', () => {
     trademarkOwner: 'Owner\u0000hidden',
     trademarkRegistration: 'R'.repeat(MAX_PROFILE_TEXT_LENGTH + 20),
   }));
+  assert.ok(result);
   assert.equal(result.name.length, MAX_PROFILE_NAME_LENGTH);
   assert.equal(result.productNames[0].length, MAX_PROFILE_TEXT_LENGTH);
   assert.equal(result.trademarkOwner, '');
@@ -100,6 +102,7 @@ test('normalizes hash fields and discards degenerate perceptual hashes', () => {
     officialFaviconHash: 'A'.repeat(64),
     officialFaviconPHash: '0000000000000000',
   }));
+  assert.ok(result);
   assert.equal(result.officialFaviconHash, 'a'.repeat(64));
   assert.equal(result.officialFaviconPHash, '');
 });
@@ -125,19 +128,26 @@ test('retains a bounded page baseline only while its domain remains official', (
     complete: true,
     truncated: false,
   };
-  assert.ok(normalizeBrandProfile(profile({ pageBaseline: baseline })).pageBaseline);
-  assert.equal(normalizeBrandProfile(profile({ officialDomains: ['other.invalid'], pageBaseline: baseline })).pageBaseline, null);
+  const retained = normalizeBrandProfile(profile({ pageBaseline: baseline }));
+  const discarded = normalizeBrandProfile(profile({ officialDomains: ['other.invalid'], pageBaseline: baseline }));
+  assert.ok(retained);
+  assert.ok(discarded);
+  assert.ok(retained.pageBaseline);
+  assert.equal(discarded.pageBaseline, null);
 });
 
 test('requires a bounded safe id and usable name', () => {
   assert.equal(normalizeBrandProfile(profile({ id: '../bad' })), null);
   assert.equal(normalizeBrandProfile(profile({ name: ' ' })), null);
-  assert.equal(normalizeBrandProfile(profile({ id: '../bad' }), { makeId: () => 'generated-id' }).id, 'generated-id');
+  const generated = normalizeBrandProfile(profile({ id: '../bad' }), { makeId: () => 'generated-id' });
+  assert.ok(generated);
+  assert.equal(generated.id, 'generated-id');
 });
 
 test('preserves existing identity and creation time while touching updates', () => {
   const existing = profile({ id: 'existing-id', createdAt: '2026-07-01T00:00:00.000Z' });
   const result = normalizeBrandProfile(profile({ id: 'replacement-id', name: 'Updated' }), { existing, touch: true, nowIso: NOW });
+  assert.ok(result);
   assert.equal(result.id, 'existing-id');
   assert.equal(result.createdAt, '2026-07-01T00:00:00.000Z');
   assert.equal(result.updatedAt, NOW);
@@ -218,5 +228,5 @@ test('portable exports carry schema identity and only normalized profiles', () =
   assert.equal(result.schema, 'whoisleuth.brand-profiles');
   assert.equal(result.version, BRAND_PROFILE_SCHEMA_VERSION);
   assert.equal(result.exportedAt, NOW);
-  assert.equal(result.profiles[0].private, undefined);
+  assert.equal(Reflect.get(result.profiles[0], 'private'), undefined);
 });

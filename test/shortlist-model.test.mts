@@ -42,10 +42,13 @@ test('normalizes known shortlist evidence and discards arbitrary imported fields
   const before = structuredClone(source);
   const normalized = normalizeShortlistRecord(source);
   assert.deepEqual(source, before);
+  assert.ok(normalized);
   assert.equal(normalized.domain, 'example.invalid');
   assert.equal(normalized.riskScore, 100);
   assert.equal(normalized.opportunityScore, 0);
-  assert.equal(normalized.registrarName.length, 300);
+  const registrarName = normalized.registrarName;
+  assert.ok(typeof registrarName === 'string');
+  assert.equal(registrarName.length, 300);
   assert.equal(normalized.riskFactors.length, 1);
   assert.equal(normalized.riskFactors[0].label.length, 200);
   assert.equal(normalized.riskFactors[0].points, 100);
@@ -87,8 +90,12 @@ test('imports add, update, and disclose invalid and duplicate entries', () => {
     ],
   });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 1, skipped: 2 });
-  assert.equal(result.entries.find((item) => item.domain === 'local.invalid').riskScore, 33);
-  assert.equal(result.entries.find((item) => item.domain === 'added.invalid').riskScore, 88);
+  const updated = result.entries.find((item) => item.domain === 'local.invalid');
+  const added = result.entries.find((item) => item.domain === 'added.invalid');
+  assert.ok(updated);
+  assert.ok(added);
+  assert.equal(updated.riskScore, 33);
+  assert.equal(added.riskScore, 88);
 });
 
 test('imports the current portable envelope without treating export metadata as evidence', () => {

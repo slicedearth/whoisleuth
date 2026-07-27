@@ -55,6 +55,7 @@ test('normalizes allowlisted conditions and rejects executable or malformed inpu
 test('normalizes and bounds a complete rule', () => {
   const conditions = Array.from({ length: MAX_RULE_CONDITIONS + 3 }, () => ({ field: 'hasMx', operator: 'equals', value: true }));
   const result = normalizeDetectionRule(rule({ name: '  Match   mail  ', conditions, riskDelta: 999, tag: ' REVIEW ' }));
+  assert.ok(result);
   assert.equal(result.name, 'Match mail');
   assert.equal(result.conditions.length, MAX_RULE_CONDITIONS);
   assert.equal(result.riskDelta, 0);
@@ -64,8 +65,13 @@ test('normalizes and bounds a complete rule', () => {
 test('rejects rules without names, ids, or valid conditions at the right boundaries', () => {
   assert.equal(normalizeDetectionRule(rule({ name: '' })), null);
   assert.equal(normalizeDetectionRule(rule({ conditions: [{ field: 'bad', operator: 'equals', value: 1 }] })), null);
-  assert.equal(normalizeDetectionRule(rule({ id: '../bad' })).id, null);
-  assert.match(normalizeDetectionRule(rule({ id: '../bad' }), { generateId: true }).id, /^[A-Za-z0-9_-]{1,64}$/);
+  const preservedInvalidId = normalizeDetectionRule(rule({ id: '../bad' }));
+  const generatedId = normalizeDetectionRule(rule({ id: '../bad' }), { generateId: true });
+  assert.ok(preservedInvalidId);
+  assert.ok(generatedId);
+  assert.equal(preservedInvalidId.id, null);
+  assert.ok(typeof generatedId.id === 'string');
+  assert.match(generatedId.id, /^[A-Za-z0-9_-]{1,64}$/);
 });
 
 test('evaluates boolean, numeric, enum, text, list and case-level conditions', () => {
@@ -106,7 +112,9 @@ test('aggregate custom contribution is capped without changing built-in evidence
   const result = evaluateDetectionRules(record, rules);
   assert.equal(result.customRiskDelta, MAX_CUSTOM_RISK_TOTAL);
   assert.equal(result.contextualRiskScore, 100);
-  assert.equal(result.matchedRules.at(-1).appliedDelta, 0);
+  const lastMatch = result.matchedRules.at(-1);
+  assert.ok(lastMatch);
+  assert.equal(lastMatch.appliedDelta, 0);
   assert.deepEqual(record, before);
 });
 
@@ -124,7 +132,9 @@ test('creates, updates, toggles and caps rules without source mutation', () => {
   assert.equal(source.length, 1);
   assert.equal(created.rules.length, 2);
   const updated = updateDetectionRule(created.rules, created.record.id, { enabled: false });
-  assert.equal(updated.find((item) => item.id === created.record.id).enabled, false);
+  const updatedRecord = updated.find((item) => item.id === created.record.id);
+  assert.ok(updatedRecord);
+  assert.equal(updatedRecord.enabled, false);
   assert.throws(() => createDetectionRule(Array.from({ length: MAX_DETECTION_RULES }, (_, index) => rule({ id: `r-${index}` })), rule()), /limited to/);
 });
 
@@ -141,7 +151,9 @@ test('import validates schema and version and merges by stable id', () => {
   assert.throws(() => mergeDetectionRules([], { version: 2, rules: [] }), /newer schema/);
   const result = mergeDetectionRules([rule()], { schema: 'whoisleuth.detection-rules', version: 1, rules: [rule({ name: 'Replacement' }), rule({ id: 'rule-2' }), { name: 'invalid' }] });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 1, skipped: 1 });
-  assert.equal(result.rules.find((item) => item.id === 'rule-1').name, 'Replacement');
+  const replacement = result.rules.find((item) => item.id === 'rule-1');
+  assert.ok(replacement);
+  assert.equal(replacement.name, 'Replacement');
 });
 
 test('serialization, budget and export expose only normalized portable data', () => {
