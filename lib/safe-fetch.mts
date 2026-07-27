@@ -55,7 +55,7 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 function isPrivateIpv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
   if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return true; // malformed - fail closed
-  const [a, b, c] = parts;
+  const [a = -1, b = -1, c = -1] = parts;
   if (a === 0) return true; // "this network"
   if (a === 10) return true; // RFC1918
   if (a === 100 && b >= 64 && b <= 127) return true; // RFC6598 shared address space (carrier-grade NAT) - routes inside provider networks, not the open internet
@@ -95,9 +95,14 @@ function expandIpv6Groups(ip: string): string[] {
     return part.split(':').flatMap((group) => {
       if (!group.includes('.')) return [group];
       const bytes = group.split('.').map(Number);
+      const [first = -1, second = -1, third = -1, fourth = -1] = bytes;
+      if (
+        bytes.length !== 4
+        || [first, second, third, fourth].some((byte) => !Number.isInteger(byte))
+      ) return [];
       return [
-        (((bytes[0] << 8) | bytes[1]) >>> 0).toString(16),
-        (((bytes[2] << 8) | bytes[3]) >>> 0).toString(16),
+        (((first << 8) | second) >>> 0).toString(16),
+        (((third << 8) | fourth) >>> 0).toString(16),
       ];
     });
   };
@@ -120,8 +125,16 @@ function groupsToIpv4(hiGroup: string, loGroup: string): string | null {
 function isPrivateIpv6(ip: string): boolean {
   const groups = expandIpv6Groups(ip.toLowerCase());
   if (groups.length !== 8) return true; // couldn't parse cleanly - fail closed
-  const [g0, g1, g2, g3, g4, g5, , g7] = groups;
-  const g6 = groups[6];
+  const [
+    g0 = '',
+    g1 = '',
+    g2 = '',
+    g3 = '',
+    g4 = '',
+    g5 = '',
+    g6 = '',
+    g7 = '',
+  ] = groups;
 
   if (groups.every((g) => g === '0000')) return true; // :: (unspecified)
   if (groups.slice(0, 7).every((g) => g === '0000') && g7 === '0001') return true; // ::1 (loopback)
@@ -207,13 +220,15 @@ async function resolvePublicAddresses(hostname: string): Promise<PublicAddressRe
 // `callback(err, address, family)`, or `callback(err, addressObjects)` when
 // called with `{ all: true }` (Node's Happy Eyeballs dual-stack racing).
 function pinnedDispatcher(records: PublicAddressRecord[]): Agent {
+  const firstRecord = records[0];
+  if (!firstRecord) throw new Error('Cannot pin a request without a validated public address');
   return new Agent({
     connect: {
       lookup(_hostname, options, callback) {
         if (options && options.all) {
           callback(null, records.map(({ address, family }) => ({ address, family })));
         } else {
-          callback(null, records[0].address, records[0].family);
+          callback(null, firstRecord.address, firstRecord.family);
         }
       },
     },

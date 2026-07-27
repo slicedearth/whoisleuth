@@ -39,6 +39,10 @@ const MAX_DIM = 1024;
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
+function byteAt(bytes: Uint8Array | Uint8ClampedArray, index: number): number {
+  return bytes[index] ?? 0;
+}
+
 function isPng(buf: Buffer): boolean {
   return buf.length >= 8 && buf.subarray(0, 8).equals(PNG_SIGNATURE);
 }
@@ -86,9 +90,9 @@ function decodePng(buf: Buffer): DecodedImage | null {
     if (type === 'IHDR') {
       width = buf.readUInt32BE(dataStart);
       height = buf.readUInt32BE(dataStart + 4);
-      bitDepth = data[8];
-      colorType = data[9];
-      interlace = data[12];
+      bitDepth = byteAt(data, 8);
+      colorType = byteAt(data, 9);
+      interlace = byteAt(data, 12);
     } else if (type === 'PLTE') {
       palette = data;
     } else if (type === 'tRNS') {
@@ -128,13 +132,13 @@ function decodePng(buf: Buffer): DecodedImage | null {
   const recon = new Uint8Array(stride * height);
   let pos = 0;
   for (let y = 0; y < height; y += 1) {
-    const filterType = raw[pos];
+    const filterType = byteAt(raw, pos);
     pos += 1;
     for (let x = 0; x < stride; x += 1) {
-      const rawVal = raw[pos + x];
-      const a = x >= channels ? recon[y * stride + x - channels] : 0;
-      const b = y > 0 ? recon[(y - 1) * stride + x] : 0;
-      const c = x >= channels && y > 0 ? recon[(y - 1) * stride + x - channels] : 0;
+      const rawVal = byteAt(raw, pos + x);
+      const a = x >= channels ? byteAt(recon, y * stride + x - channels) : 0;
+      const b = y > 0 ? byteAt(recon, (y - 1) * stride + x) : 0;
+      const c = x >= channels && y > 0 ? byteAt(recon, (y - 1) * stride + x - channels) : 0;
       let value;
       switch (filterType) {
         case 0: value = rawVal; break;
@@ -153,23 +157,29 @@ function decodePng(buf: Buffer): DecodedImage | null {
   const pixels = new Uint8ClampedArray(width * height * 4);
   for (let i = 0; i < width * height; i += 1) {
     const s = i * channels;
-    let r;
-    let g;
-    let b;
+    let r = 0;
+    let g = 0;
+    let b = 0;
     let alpha = 255;
     if (colorType === 0) {
-      r = g = b = recon[s];
+      r = g = b = byteAt(recon, s);
     } else if (colorType === 4) {
-      r = g = b = recon[s];
-      alpha = recon[s + 1];
+      r = g = b = byteAt(recon, s);
+      alpha = byteAt(recon, s + 1);
     } else if (colorType === 2) {
-      r = recon[s]; g = recon[s + 1]; b = recon[s + 2];
+      r = byteAt(recon, s); g = byteAt(recon, s + 1); b = byteAt(recon, s + 2);
     } else if (colorType === 6) {
-      r = recon[s]; g = recon[s + 1]; b = recon[s + 2]; alpha = recon[s + 3];
+      r = byteAt(recon, s);
+      g = byteAt(recon, s + 1);
+      b = byteAt(recon, s + 2);
+      alpha = byteAt(recon, s + 3);
     } else { // palette
-      const idx = recon[s];
-      r = palette![idx * 3]; g = palette![idx * 3 + 1]; b = palette![idx * 3 + 2];
-      if (transparency && idx < transparency.length) alpha = transparency[idx];
+      const idx = byteAt(recon, s);
+      if (!palette || idx * 3 + 2 >= palette.length) return null;
+      r = byteAt(palette, idx * 3);
+      g = byteAt(palette, idx * 3 + 1);
+      b = byteAt(palette, idx * 3 + 2);
+      if (transparency && idx < transparency.length) alpha = byteAt(transparency, idx);
     }
     const d = i * 4;
     pixels[d] = r; pixels[d + 1] = g; pixels[d + 2] = b; pixels[d + 3] = alpha;
@@ -215,7 +225,7 @@ function decodeDib(buf: Buffer): DecodedImage | null {
   const paletteColor = (index: number): [number, number, number] => {
     if (!palette || index >= palette.count) return [0, 0, 0];
     const p = palette.start + index * 4;
-    return [buf[p + 2], buf[p + 1], buf[p]]; // stored BGRA -> RGB
+    return [byteAt(buf, p + 2), byteAt(buf, p + 1), byteAt(buf, p)]; // stored BGRA -> RGB
   };
 
   const pixels = new Uint8ClampedArray(width * height * 4);
@@ -223,22 +233,22 @@ function decodeDib(buf: Buffer): DecodedImage | null {
   for (let y = 0; y < height; y += 1) {
     const srcRow = pixelStart + (height - 1 - y) * rowSize; // stored bottom-up
     for (let x = 0; x < width; x += 1) {
-      let r;
-      let g;
-      let b;
+      let r = 0;
+      let g = 0;
+      let b = 0;
       let alpha = 255;
       if (bitCount === 24 || bitCount === 32) {
         const s = srcRow + x * (bitCount / 8);
-        b = buf[s]; g = buf[s + 1]; r = buf[s + 2];
-        if (bitCount === 32) alpha = buf[s + 3];
+        b = byteAt(buf, s); g = byteAt(buf, s + 1); r = byteAt(buf, s + 2);
+        if (bitCount === 32) alpha = byteAt(buf, s + 3);
       } else if (bitCount === 8) {
-        [r, g, b] = paletteColor(buf[srcRow + x]);
+        [r, g, b] = paletteColor(byteAt(buf, srcRow + x));
       } else if (bitCount === 4) {
-        const byte = buf[srcRow + (x >> 1)];
+        const byte = byteAt(buf, srcRow + (x >> 1));
         const index = x & 1 ? byte & 0x0f : byte >> 4;
         [r, g, b] = paletteColor(index);
       } else { // 1-bit
-        const byte = buf[srcRow + (x >> 3)];
+        const byte = byteAt(buf, srcRow + (x >> 3));
         const index = (byte >> (7 - (x & 7))) & 1;
         [r, g, b] = paletteColor(index);
       }
@@ -309,10 +319,10 @@ function grayscaleGrid(image: DecodedImage, cols: number, rows: number): Float64
       for (let y = y0; y < y1 && y < height; y += 1) {
         for (let x = x0; x < x1 && x < width; x += 1) {
           const d = (y * width + x) * 4;
-          const a = pixels[d + 3] / 255;
-          const r = pixels[d] * a + 255 * (1 - a);
-          const g = pixels[d + 1] * a + 255 * (1 - a);
-          const b = pixels[d + 2] * a + 255 * (1 - a);
+          const a = byteAt(pixels, d + 3) / 255;
+          const r = byteAt(pixels, d) * a + 255 * (1 - a);
+          const g = byteAt(pixels, d + 1) * a + 255 * (1 - a);
+          const b = byteAt(pixels, d + 2) * a + 255 * (1 - a);
           sum += 0.299 * r + 0.587 * g + 0.114 * b;
           n += 1;
         }
@@ -340,7 +350,7 @@ const MIN_INFORMATIVE_BITS = 10;
 
 function popcountHex(hex: string): number {
   let bits = 0;
-  for (let i = 0; i < hex.length; i += 1) bits += POPCOUNT[parseInt(hex[i], 16)];
+  for (let i = 0; i < hex.length; i += 1) bits += POPCOUNT[parseInt(hex.charAt(i), 16)] ?? 0;
   return bits;
 }
 
@@ -362,7 +372,7 @@ function dHash(image: DecodedImage): string | null {
     let nibble = 0;
     let bitsInNibble = 0;
     for (let x = 0; x < cols - 1; x += 1) {
-      const bit = grid[y * cols + x] > grid[y * cols + x + 1] ? 1 : 0;
+      const bit = (grid[y * cols + x] ?? 0) > (grid[y * cols + x + 1] ?? 0) ? 1 : 0;
       nibble = (nibble << 1) | bit;
       bitsInNibble += 1;
       if (bitsInNibble === 4) {
@@ -404,7 +414,7 @@ function hammingDistanceHex(a: unknown, b: unknown): number | null {
   if (!HEX_HASH_RE.test(a) || !HEX_HASH_RE.test(b)) return null;
   let distance = 0;
   for (let i = 0; i < 16; i += 1) {
-    distance += POPCOUNT[parseInt(a[i], 16) ^ parseInt(b[i], 16)];
+    distance += POPCOUNT[parseInt(a.charAt(i), 16) ^ parseInt(b.charAt(i), 16)] ?? 0;
   }
   return distance;
 }

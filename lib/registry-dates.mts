@@ -51,28 +51,28 @@ function parseRegistryDate(input: unknown): Date | null {
   // DD.MM.YYYY[ HH:MM:SS] - e.g. 14.03.2024 10:46:48
   let match = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
   if (match) {
-    const [, day, month, year, hour, minute, second] = match;
+    const [, day = '', month = '', year = '', hour = '0', minute = '0', second = '0'] = match;
     return utcDateFromParts(+year, +month, +day, +(hour || 0), +(minute || 0), +(second || 0));
   }
 
   // YYYY. MM. DD. - e.g. 2006. 09. 18.
   match = value.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/);
   if (match) {
-    const [, year, month, day] = match;
+    const [, year = '', month = '', day = ''] = match;
     return utcDateFromParts(+year, +month, +day);
   }
 
   // YYYY.MM.DD HH:MM:SS - used by NASK's .pl WHOIS service.
   match = value.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
   if (match) {
-    const [, year, month, day, hour, minute, second] = match;
+    const [, year = '', month = '', day = '', hour = '', minute = '', second = ''] = match;
     return utcDateFromParts(+year, +month, +day, +hour, +minute, +second);
   }
 
   // YYYY/MM/DD - an unambiguous year-first form used by CIRA WHOIS.
   match = value.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
   if (match) {
-    const [, year, month, day] = match;
+    const [, year = '', month = '', day = ''] = match;
     return utcDateFromParts(+year, +month, +day);
   }
 
@@ -81,23 +81,30 @@ function parseRegistryDate(input: unknown): Date | null {
   // and optional clock time are projected into the additive ISO companion.
   match = value.match(/^(\d{4})(\d{2})(\d{2})(?:\s+(\d{1,2}):(\d{2}):(\d{2})|\s+#[0-9]{1,20})?$/);
   if (match) {
-    const [, year, month, day, hour, minute, second] = match;
+    const [, year = '', month = '', day = '', hour = '0', minute = '0', second = '0'] = match;
     return utcDateFromParts(+year, +month, +day, +(hour || 0), +(minute || 0), +(second || 0));
   }
 
   // YYYY-Mon-DD. - e.g. 1999-Feb-16.
   match = value.match(/^(\d{4})-([A-Za-z]{3})-(\d{1,2})\.?$/);
   if (match) {
-    const month = REGISTRY_MONTHS[match[2].toLowerCase()];
-    return month ? utcDateFromParts(+match[1], month, +match[3]) : null;
+    const month = REGISTRY_MONTHS[(match[2] ?? '').toLowerCase()];
+    return month ? utcDateFromParts(+(match[1] ?? ''), month, +(match[3] ?? '')) : null;
   }
 
   // DD-Mon-YYYY[ HH:MM:SS] - used by several ICANN-style ccTLD services.
   match = value.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
   if (match) {
-    const month = REGISTRY_MONTHS[match[2].toLowerCase()];
+    const month = REGISTRY_MONTHS[(match[2] ?? '').toLowerCase()];
     return month
-      ? utcDateFromParts(+match[3], month, +match[1], +(match[4] || 0), +(match[5] || 0), +(match[6] || 0))
+      ? utcDateFromParts(
+        +(match[3] ?? ''),
+        month,
+        +(match[1] ?? ''),
+        +(match[4] || 0),
+        +(match[5] || 0),
+        +(match[6] || 0),
+      )
       : null;
   }
 
@@ -107,7 +114,7 @@ function parseRegistryDate(input: unknown): Date | null {
   // global shape. The four-digit final year remains distinct from ISO below.
   match = value.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (match) {
-    const [, day, month, year] = match;
+    const [, day = '', month = '', year = ''] = match;
     return utcDateFromParts(+year, +month, +day);
   }
 
@@ -116,7 +123,18 @@ function parseRegistryDate(input: unknown): Date | null {
   // unrelated prose is not accepted as a lifecycle timestamp.
   match = value.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\s+\(GMT([+-])(\d{1,2}):(\d{2})\)$/i);
   if (match) {
-    const [, year, month, day, hour, minute, second, sign, offsetHours, offsetMinutes] = match;
+    const [
+      ,
+      year = '',
+      month = '',
+      day = '',
+      hour = '',
+      minute = '',
+      second = '',
+      sign = '',
+      offsetHours = '',
+      offsetMinutes = '',
+    ] = match;
     const local = utcDateFromParts(+year, +month, +day, +hour, +minute, +second);
     if (!local || +offsetHours > 23 || +offsetMinutes > 59) return null;
     const offsetMs = (+offsetHours * 60 + +offsetMinutes) * 60000;
@@ -128,7 +146,18 @@ function parseRegistryDate(input: unknown): Date | null {
   // marker and validate the calendar and offset before normalization.
   match = value.match(/^(\d{1,2})-(\d{1,2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+GMT([+-])(\d{1,2})(?::(\d{2}))?$/i);
   if (match) {
-    const [, day, month, year, hour, minute, second, sign, offsetHours, offsetMinutes = '0'] = match;
+    const [
+      ,
+      day = '',
+      month = '',
+      year = '',
+      hour = '',
+      minute = '',
+      second = '',
+      sign = '',
+      offsetHours = '',
+      offsetMinutes = '0',
+    ] = match;
     const local = utcDateFromParts(+year, +month, +day, +hour, +minute, +second);
     if (!local || +offsetHours > 23 || +offsetMinutes > 59) return null;
     const offsetMs = (+offsetHours * 60 + +offsetMinutes) * 60000;
@@ -138,8 +167,8 @@ function parseRegistryDate(input: unknown): Date | null {
   // DD Mon YYYY - the compact English month form published by THNIC.
   match = value.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
   if (match) {
-    const month = REGISTRY_MONTHS[match[2].toLowerCase()];
-    return month ? utcDateFromParts(+match[3], month, +match[1]) : null;
+    const month = REGISTRY_MONTHS[(match[2] ?? '').toLowerCase()];
+    return month ? utcDateFromParts(+(match[3] ?? ''), month, +(match[1] ?? '')) : null;
   }
 
   // Ordinal-day Month YYYY[ at HH:MM:SS.sss] - the English form published
@@ -148,18 +177,18 @@ function parseRegistryDate(input: unknown): Date | null {
   // evidence.
   match = value.match(/^(\d{1,2})(st|nd|rd|th)\s+([A-Za-z]{3,9})\s+(\d{4})(?:\s+at\s+(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?)?$/i);
   if (match) {
-    const day = +match[1];
-    const suffix = match[2].toLowerCase();
+    const day = +(match[1] ?? '');
+    const suffix = (match[2] ?? '').toLowerCase();
     const expectedSuffix = day % 100 >= 11 && day % 100 <= 13
       ? 'th'
       : (({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] || 'th');
     if (suffix !== expectedSuffix) return null;
-    const monthText = match[3].toLowerCase();
+    const monthText = (match[3] ?? '').toLowerCase();
     const month = REGISTRY_MONTH_NAMES[monthText] || REGISTRY_MONTHS[monthText];
     const millisecond = match[8] ? Number(`${match[8]}00`.slice(0, 3)) : 0;
     return month
       ? utcDateFromParts(
-        +match[4], month, day, +(match[5] || 0), +(match[6] || 0),
+        +(match[4] ?? ''), month, day, +(match[5] || 0), +(match[6] || 0),
         +(match[7] || 0), millisecond,
       )
       : null;
@@ -170,9 +199,16 @@ function parseRegistryDate(input: unknown): Date | null {
   // calendar components determine the canonical UTC companion.
   match = value.match(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/i);
   if (match) {
-    const month = REGISTRY_MONTHS[match[1].toLowerCase()];
+    const month = REGISTRY_MONTHS[(match[1] ?? '').toLowerCase()];
     return month
-      ? utcDateFromParts(+match[3], month, +match[2], +(match[4] || 0), +(match[5] || 0), +(match[6] || 0))
+      ? utcDateFromParts(
+        +(match[3] ?? ''),
+        month,
+        +(match[2] ?? ''),
+        +(match[4] || 0),
+        +(match[5] || 0),
+        +(match[6] || 0),
+      )
       : null;
   }
 
@@ -181,15 +217,28 @@ function parseRegistryDate(input: unknown): Date | null {
   // the twelve exact English names from a fixed table.
   match = value.match(/^([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{4})$/);
   if (match) {
-    const month = REGISTRY_MONTH_NAMES[match[1].toLowerCase()];
-    return month ? utcDateFromParts(+match[3], month, +match[2]) : null;
+    const month = REGISTRY_MONTH_NAMES[(match[1] ?? '').toLowerCase()];
+    return month ? utcDateFromParts(+(match[3] ?? ''), month, +(match[2] ?? '')) : null;
   }
 
   // ISO 8601-shaped dates and timestamps. A missing timezone is deliberately
   // interpreted as UTC so Express and function deployments agree.
   match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(?:([Zz])|([+-])(\d{2}):?(\d{2}))?)?$/);
   if (!match) return null;
-  const [, year, month, day, hour, minute, second, fraction, zulu, offsetSign, offsetHours, offsetMinutes] = match;
+  const [
+    ,
+    year = '',
+    month = '',
+    day = '',
+    hour = '0',
+    minute = '0',
+    second = '0',
+    fraction,
+    zulu,
+    offsetSign,
+    offsetHours = '0',
+    offsetMinutes = '0',
+  ] = match;
   const millisecond = fraction ? Number(`${fraction}000`.slice(0, 3)) : 0;
   const local = utcDateFromParts(+year, +month, +day, +(hour || 0), +(minute || 0), +(second || 0), millisecond);
   if (!local) return null;
