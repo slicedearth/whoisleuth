@@ -3,15 +3,14 @@
     "target": "ES2022",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "allowJs": true,
     "allowImportingTsExtensions": true,
-    "checkJs": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
-    "strict": false,
-    "strictNullChecks": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["node"]
@@ -20,8 +19,8 @@
     "lib/**/*.ts",
     "lib/**/*.mts",
     "lib/**/*.cts",
-    "server.ts",
-    "netlify/**/*.js",
+    "server.mts",
+    "frontend/svelte.config.ts",
     "netlify/**/*.ts",
     "netlify/**/*.mts",
     "netlify/**/*.cts",
@@ -33,6 +32,9 @@
     "bin/**/*.cts",
     "tools/**/*.ts",
     "tools/**/*.mts",
-    "tools/**/*.cts"
+    "tools/**/*.cts",
+    "fixtures/**/*.ts",
+    "fixtures/**/*.mts",
+    "fixtures/**/*.cts"
   ]
 }

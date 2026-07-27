@@ -39,40 +39,40 @@ import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/brand-profile-model.js';
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   CAMPAIGN_SCHEMA,
   CAMPAIGN_SCHEMA_VERSION,
   MAX_CAMPAIGN_IMPORT_BYTES,
   MAX_CAMPAIGN_STORE_BYTES,
-} from '../frontend/src/lib/analysis/campaign-model.js';
+} from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-report.js';
+} from '../frontend/src/lib/analysis/case-report.ts';
 import {
   CASE_SCHEMA_VERSION,
   MAX_CASE_IMPORT_BYTES,
   MAX_CASE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/case-model.js';
+} from '../frontend/src/lib/analysis/case-model.ts';
 import {
   CT_HISTORY_SCHEMA_VERSION,
   MAX_CT_HISTORY_STORE_BYTES,
-} from '../frontend/src/lib/analysis/ct-history.js';
+} from '../frontend/src/lib/analysis/ct-history.ts';
 import {
   DEFENSIVE_INDICATOR_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/defensive-indicator-export.js';
+} from '../frontend/src/lib/analysis/defensive-indicator-export.ts';
 import {
   DETECTION_RULE_SCHEMA,
   DETECTION_RULE_SCHEMA_VERSION,
   MAX_RULE_IMPORT_BYTES,
   MAX_RULE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/detection-rule-model.js';
+} from '../frontend/src/lib/analysis/detection-rule-model.ts';
 import {
   SYNTHETIC_DEMO_EXPORT_SCHEMA,
   SYNTHETIC_DEMO_EXPORT_VERSION,
   SYNTHETIC_DEMO_VERSION,
-} from '../frontend/src/lib/analysis/demo-model.js';
+} from '../frontend/src/lib/analysis/demo-model.ts';
 import {
   INVESTIGATION_GUIDE_EXPORT_SCHEMA,
   INVESTIGATION_GUIDE_EXPORT_VERSION,
@@ -88,7 +88,7 @@ import {
   MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
   RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
   RELATIONSHIP_GRAPH_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/case-relationship-graph-export.js';
+} from '../frontend/src/lib/analysis/case-relationship-graph-export.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
   RELATIONSHIP_OBSERVATION_SCHEMA,
@@ -100,39 +100,39 @@ import {
   WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_SETTINGS_SCHEMA,
   WORKSPACE_SETTINGS_VERSION,
-} from '../frontend/src/lib/analysis/workspace-archive.js';
+} from '../frontend/src/lib/analysis/workspace-archive.ts';
 import {
   INVESTIGATION_SEARCH_SCHEMA,
   INVESTIGATION_SEARCH_VERSION,
 } from '../frontend/src/lib/analysis/investigation-search.ts';
 import {
   MISP_INDICATOR_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/misp-indicator-export.js';
+} from '../frontend/src/lib/analysis/misp-indicator-export.ts';
 import {
   SCHEDULED_MONITOR_DELIVERY_SCHEMA,
   SCHEDULED_MONITOR_DELIVERY_VERSION,
-} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts';
 import {
   MAX_SCHEDULED_MONITOR_STORE_BYTES,
   SCHEDULED_MONITOR_SCHEMA,
   SCHEDULED_MONITOR_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 import {
   MAX_SHORTLIST_STORE_BYTES,
   SHORTLIST_SCHEMA,
   SHORTLIST_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/shortlist-model.js';
+} from '../frontend/src/lib/analysis/shortlist-model.ts';
 import {
   STIX_INDICATOR_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/stix-indicator-export.js';
+} from '../frontend/src/lib/analysis/stix-indicator-export.ts';
 import {
   MAX_WATCHLIST_STORE_BYTES,
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/watchlist-store.js';
+} from '../frontend/src/lib/analysis/watchlist-store.ts';
 import {
   HANDOFF_VERSION,
-} from '../frontend/src/lib/candidate-handoff-core.js';
+} from '../frontend/src/lib/candidate-handoff-core.ts';
 import {
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
@@ -208,37 +208,37 @@ function entry(value: SchemaCompatibilityEntry): SchemaCompatibilityEntry {
 const standardsCoverage = registryStandardsCoverageSnapshot();
 
 const ENTRIES: SchemaCompatibilityEntry[] = [
-  entry({ id: 'browser.cases', kind: 'browser_store', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CASE_STORE_BYTES, owner: 'frontend/src/lib/analysis/case-model.js', note: 'Known fields can be read from newer local envelopes, but wrappers block overwrite and downgraded export.' }),
-  entry({ id: 'browser.brand-profiles', kind: 'browser_store', schema: null, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_PROFILE_STORE_BYTES, owner: 'frontend/src/lib/analysis/brand-profile-model.js', note: 'Version 1 bare arrays normalize to the current bounded store; the schema string belongs to portable exports.' }),
-  entry({ id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CAMPAIGN_STORE_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.js', note: 'Bare arrays remain recoverable; explicit future versions are not overwritten; the schema string belongs to portable exports.' }),
-  entry({ id: 'browser.watchlists', kind: 'browser_store', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/watchlist-store.js', note: 'Legacy map-shaped stores normalize to the current envelope.' }),
-  entry({ id: 'browser.shortlist', kind: 'browser_store', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_SHORTLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/shortlist-model.js', note: 'Legacy arrays normalize to the current compact envelope.' }),
-  entry({ id: 'browser.ct-history', kind: 'browser_store', schema: null, currentVersion: CT_HISTORY_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CT_HISTORY_STORE_BYTES, owner: 'frontend/src/lib/analysis/ct-history.js', note: 'Malformed values degrade to an empty bounded history; future stores are not overwritten.' }),
-  entry({ id: 'browser.detection-rules', kind: 'browser_store', schema: null, currentVersion: DETECTION_RULE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_RULE_STORE_BYTES, owner: 'frontend/src/lib/analysis/detection-rule-model.js', note: 'Only allowlisted structured rule fields and operators survive normalization; the schema string belongs to portable exports.' }),
+  entry({ id: 'browser.cases', kind: 'browser_store', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CASE_STORE_BYTES, owner: 'frontend/src/lib/analysis/case-model.ts', note: 'Known fields can be read from newer local envelopes, but wrappers block overwrite and downgraded export.' }),
+  entry({ id: 'browser.brand-profiles', kind: 'browser_store', schema: null, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_PROFILE_STORE_BYTES, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Version 1 bare arrays normalize to the current bounded store; the schema string belongs to portable exports.' }),
+  entry({ id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CAMPAIGN_STORE_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.ts', note: 'Bare arrays remain recoverable; explicit future versions are not overwritten; the schema string belongs to portable exports.' }),
+  entry({ id: 'browser.watchlists', kind: 'browser_store', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/watchlist-store.ts', note: 'Legacy map-shaped stores normalize to the current envelope.' }),
+  entry({ id: 'browser.shortlist', kind: 'browser_store', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_SHORTLIST_STORE_BYTES, owner: 'frontend/src/lib/analysis/shortlist-model.ts', note: 'Legacy arrays normalize to the current compact envelope.' }),
+  entry({ id: 'browser.ct-history', kind: 'browser_store', schema: null, currentVersion: CT_HISTORY_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_CT_HISTORY_STORE_BYTES, owner: 'frontend/src/lib/analysis/ct-history.ts', note: 'Malformed values degrade to an empty bounded history; future stores are not overwritten.' }),
+  entry({ id: 'browser.detection-rules', kind: 'browser_store', schema: null, currentVersion: DETECTION_RULE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_RULE_STORE_BYTES, owner: 'frontend/src/lib/analysis/detection-rule-model.ts', note: 'Only allowlisted structured rule fields and operators survive normalization; the schema string belongs to portable exports.' }),
   entry({ id: 'browser.relationship-observations', kind: 'browser_store', schema: RELATIONSHIP_OBSERVATION_SCHEMA, currentVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite', byteBudget: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, owner: 'frontend/src/lib/analysis/relationship-observation-model.ts', note: 'Only explicit analyst selections from bounded Bulk relationship evidence are retained; identities are re-derived from normalized values and members.' }),
-  entry({ id: 'tab.candidate-handoff', kind: 'tab_store', schema: null, currentVersion: HANDOFF_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'discard', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/candidate-handoff-core.js', note: 'Bounded session handoff; unsupported envelopes are ignored.' }),
+  entry({ id: 'tab.candidate-handoff', kind: 'tab_store', schema: null, currentVersion: HANDOFF_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'discard', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/candidate-handoff-core.ts', note: 'Bounded session handoff; unsupported envelopes are ignored.' }),
   entry({ id: 'tab.investigation-guide', kind: 'tab_store', schema: null, currentVersion: INVESTIGATION_GUIDE_VERSION, supportedVersions: [1, 2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'ephemeral_replace', byteBudget: MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES, owner: 'frontend/src/lib/analysis/investigation-guide.ts', note: 'Version 1 navigation records normalize into the bounded version 2 recipe state; future records remain untouched.' }),
-  entry({ id: 'tab.synthetic-demo', kind: 'tab_store', schema: null, currentVersion: SYNTHETIC_DEMO_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'discard', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.js', note: 'Fixed synthetic fixtures remain separate from investigation stores.' }),
-  entry({ id: 'hosted.scheduled-monitor', kind: 'hosted_store', schema: SCHEDULED_MONITOR_SCHEMA, currentVersion: SCHEDULED_MONITOR_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'optimistic_replace', byteBudget: MAX_SCHEDULED_MONITOR_STORE_BYTES, owner: 'frontend/src/lib/analysis/scheduled-monitor-model.js', note: 'Compact authority-aware evidence only; raw responses and expanded contacts are excluded.' }),
+  entry({ id: 'tab.synthetic-demo', kind: 'tab_store', schema: null, currentVersion: SYNTHETIC_DEMO_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'discard', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.ts', note: 'Fixed synthetic fixtures remain separate from investigation stores.' }),
+  entry({ id: 'hosted.scheduled-monitor', kind: 'hosted_store', schema: SCHEDULED_MONITOR_SCHEMA, currentVersion: SCHEDULED_MONITOR_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'optimistic_replace', byteBudget: MAX_SCHEDULED_MONITOR_STORE_BYTES, owner: 'frontend/src/lib/analysis/scheduled-monitor-model.ts', note: 'Compact authority-aware evidence only; raw responses and expanded contacts are excluded.' }),
   entry({ id: 'hosted.scheduled-monitor-envelope', kind: 'hosted_store', schema: ENVELOPE_SCHEMA, currentVersion: ENVELOPE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'optimistic_replace', byteBudget: MAX_ENVELOPE_BYTES, owner: 'lib/scheduled-monitor-crypto.mts', note: 'Authenticated encrypted envelope; version and namespace are part of authenticated context.' }),
-  entry({ id: 'hosted.scheduled-monitor-delivery', kind: 'hosted_store', schema: SCHEDULED_MONITOR_DELIVERY_SCHEMA, currentVersion: SCHEDULED_MONITOR_DELIVERY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/analysis/scheduled-monitor-dispatcher.js', note: 'Opaque bounded queue message with an allowlisted key set.' }),
-  entry({ id: 'export.cases', kind: 'export', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CASE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/case-model.js', note: 'Non-destructive merge; current exports intentionally reject legacy and future import versions.' }),
-  entry({ id: 'export.brand-profiles', kind: 'export', schema: BRAND_PROFILE_SCHEMA, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/brand-profile-model.js', note: 'Non-destructive merge by bounded normalized profile identity.' }),
-  entry({ id: 'export.campaigns', kind: 'export', schema: CAMPAIGN_SCHEMA, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CAMPAIGN_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.js', note: 'Non-destructive merge; unversioned legacy campaign arrays remain accepted.' }),
-  entry({ id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/watchlist-store.js', note: 'Non-destructive collection merge with current schema required.' }),
-  entry({ id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/shortlist-model.js', note: 'Non-destructive domain merge with current schema required.' }),
-  entry({ id: 'export.detection-rules', kind: 'export', schema: DETECTION_RULE_SCHEMA, currentVersion: DETECTION_RULE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_RULE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/detection-rule-model.js', note: 'Non-destructive rule merge; imported conditions remain allowlisted and non-executable.' }),
-  entry({ id: 'export.case-report', kind: 'export', schema: CASE_REPORT_SCHEMA, currentVersion: CASE_REPORT_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-report.js', note: 'Local report output; not an import or persistence contract.' }),
+  entry({ id: 'hosted.scheduled-monitor-delivery', kind: 'hosted_store', schema: SCHEDULED_MONITOR_DELIVERY_SCHEMA, currentVersion: SCHEDULED_MONITOR_DELIVERY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: null, owner: 'frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts', note: 'Opaque bounded queue message with an allowlisted key set.' }),
+  entry({ id: 'export.cases', kind: 'export', schema: null, currentVersion: CASE_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CASE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/case-model.ts', note: 'Non-destructive merge; current exports intentionally reject legacy and future import versions.' }),
+  entry({ id: 'export.brand-profiles', kind: 'export', schema: BRAND_PROFILE_SCHEMA, currentVersion: BRAND_PROFILE_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/brand-profile-model.ts', note: 'Non-destructive merge by bounded normalized profile identity.' }),
+  entry({ id: 'export.campaigns', kind: 'export', schema: CAMPAIGN_SCHEMA, currentVersion: CAMPAIGN_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_CAMPAIGN_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/campaign-model.ts', note: 'Non-destructive merge; unversioned legacy campaign arrays remain accepted.' }),
+  entry({ id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/watchlist-store.ts', note: 'Non-destructive collection merge with current schema required.' }),
+  entry({ id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/shortlist-model.ts', note: 'Non-destructive domain merge with current schema required.' }),
+  entry({ id: 'export.detection-rules', kind: 'export', schema: DETECTION_RULE_SCHEMA, currentVersion: DETECTION_RULE_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: true, futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge', byteBudget: MAX_RULE_IMPORT_BYTES, owner: 'frontend/src/lib/analysis/detection-rule-model.ts', note: 'Non-destructive rule merge; imported conditions remain allowlisted and non-executable.' }),
+  entry({ id: 'export.case-report', kind: 'export', schema: CASE_REPORT_SCHEMA, currentVersion: CASE_REPORT_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/case-report.ts', note: 'Local report output; not an import or persistence contract.' }),
   entry({ id: 'export.investigation-recipe-summary', kind: 'export', schema: INVESTIGATION_GUIDE_EXPORT_SCHEMA, currentVersion: INVESTIGATION_GUIDE_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_INVESTIGATION_GUIDE_EXPORT_BYTES, owner: 'frontend/src/lib/analysis/investigation-guide.ts', note: 'Compact analyst workflow metadata only; raw evidence, notes, credentials, provider responses, and scan results are excluded.' }),
-  entry({ id: 'export.relationship-graph', kind: 'export', schema: RELATIONSHIP_GRAPH_EXPORT_SCHEMA, currentVersion: RELATIONSHIP_GRAPH_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES, owner: 'frontend/src/lib/analysis/case-relationship-graph-export.js', note: 'One canonical bounded relationship document serialized as WHOISleuth JSON, GraphML, or GEXF; transient graph view state is excluded.' }),
+  entry({ id: 'export.relationship-graph', kind: 'export', schema: RELATIONSHIP_GRAPH_EXPORT_SCHEMA, currentVersion: RELATIONSHIP_GRAPH_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES, owner: 'frontend/src/lib/analysis/case-relationship-graph-export.ts', note: 'One canonical bounded relationship document serialized as WHOISleuth JSON, GraphML, or GEXF; transient graph view state is excluded.' }),
   entry({ id: 'export.relationship-observations', kind: 'export', schema: RELATIONSHIP_OBSERVATION_SCHEMA, currentVersion: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, owner: 'frontend/src/lib/analysis/relationship-observation-model.ts', note: 'Workspace-archive section for bounded analyst-selected derived pivots; raw scan and lookup responses are excluded.' }),
-  entry({ id: 'export.workspace-archive', kind: 'export', schema: WORKSPACE_ARCHIVE_SCHEMA, currentVersion: WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive.js', note: 'Manifested local archive with per-section checksums, preview-first import, and rollback on browser-store write failure.' }),
-  entry({ id: 'export.workspace-settings-section', kind: 'export', schema: WORKSPACE_SETTINGS_SCHEMA, currentVersion: WORKSPACE_SETTINGS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/workspace-archive.js', note: 'Nested archive section limited to the active Brand Profile identifier and dark, light, or system theme preference.' }),
+  entry({ id: 'export.workspace-archive', kind: 'export', schema: WORKSPACE_ARCHIVE_SCHEMA, currentVersion: WORKSPACE_ARCHIVE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: MAX_WORKSPACE_ARCHIVE_BYTES, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Manifested local archive with per-section checksums, preview-first import, and rollback on browser-store write failure.' }),
+  entry({ id: 'export.workspace-settings-section', kind: 'export', schema: WORKSPACE_SETTINGS_SCHEMA, currentVersion: WORKSPACE_SETTINGS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge', byteBudget: null, owner: 'frontend/src/lib/analysis/workspace-archive.ts', note: 'Nested archive section limited to the active Brand Profile identifier and dark, light, or system theme preference.' }),
   entry({ id: 'export.lookup-evidence', kind: 'export', schema: LOOKUP_EVIDENCE_SCHEMA, currentVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION, supportedVersions: [12, 13, 14, 15, 16, 17, 18, 19], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/evidence-export.mts', note: 'Full-fidelity normalized lookup package; distinct from compact browser evidence.' }),
-  entry({ id: 'export.defensive-indicators', kind: 'export', schema: null, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.js', note: 'Review-only text formats; never submitted or applied automatically.' }),
-  entry({ id: 'export.stix-indicators', kind: 'export', schema: null, currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/stix-indicator-export.js', note: 'STIX 2.1 bundle with direct observations separated from heuristic indicators.' }),
-  entry({ id: 'export.misp-indicators', kind: 'export', schema: null, currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/misp-indicator-export.js', note: 'Unpublished, non-IDS, non-correlating event for reviewed import.' }),
-  entry({ id: 'export.synthetic-demo', kind: 'export', schema: SYNTHETIC_DEMO_EXPORT_SCHEMA, currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.js', note: 'Explicitly synthetic fixed-fixture package, never live evidence.' }),
+  entry({ id: 'export.defensive-indicators', kind: 'export', schema: null, currentVersion: DEFENSIVE_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/defensive-indicator-export.ts', note: 'Review-only text formats; never submitted or applied automatically.' }),
+  entry({ id: 'export.stix-indicators', kind: 'export', schema: null, currentVersion: STIX_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/stix-indicator-export.ts', note: 'STIX 2.1 bundle with direct observations separated from heuristic indicators.' }),
+  entry({ id: 'export.misp-indicators', kind: 'export', schema: null, currentVersion: MISP_INDICATOR_EXPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/misp-indicator-export.ts', note: 'Unpublished, non-IDS, non-correlating event for reviewed import.' }),
+  entry({ id: 'export.synthetic-demo', kind: 'export', schema: SYNTHETIC_DEMO_EXPORT_SCHEMA, currentVersion: SYNTHETIC_DEMO_EXPORT_VERSION, supportedVersions: [2, 3, 4, 5], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'frontend/src/lib/analysis/demo-model.ts', note: 'Explicitly synthetic fixed-fixture package, never live evidence.' }),
   entry({ id: 'cli.lookup', kind: 'cli_document', schema: CLI_LOOKUP_SCHEMA, currentVersion: CLI_LOOKUP_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Saved domain lookups are parsed for compare and evidence export only at the exact current version.' }),
   entry({ id: 'cli.bulk', kind: 'cli_document', schema: CLI_BULK_SCHEMA, currentVersion: CLI_BULK_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded bulk result document.' }),
   entry({ id: 'cli.bulk-item', kind: 'cli_document', schema: CLI_BULK_ITEM_SCHEMA, currentVersion: CLI_BULK_SCHEMA_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'cli/formatters/json.mts', note: 'One bounded bulk JSONL or document item.' }),

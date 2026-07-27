@@ -59,10 +59,10 @@ type TlsFailureOptions = {
   sniHost?: unknown;
 };
 type TlsSocket = {
-  remoteAddress?: string;
-  alpnProtocol?: string | false;
-  authorized?: boolean;
-  authorizationError?: Error | string | null;
+  remoteAddress?: string | undefined;
+  alpnProtocol?: string | false | null | undefined;
+  authorized?: boolean | undefined;
+  authorizationError?: Error | string | null | undefined;
   getPeerCertificate(detailed: boolean): unknown;
   getProtocol(): string | null;
   getCipher(): unknown;
@@ -97,6 +97,10 @@ const MAX_ERROR_LENGTH = 240;
 const MAX_SERIAL_LENGTH = 128;
 const MAX_SAN_SOURCE_LENGTH = 32 * 1024;
 const MAX_CERTIFICATE_BYTES = 256 * 1024;
+
+function defaultTlsConnect(options: tls.ConnectionOptions, callback: () => void): TlsSocket {
+  return tls.connect(options, callback);
+}
 
 function tracker(): Tracker {
   return { truncated: false, discarded: 0 };
@@ -537,10 +541,6 @@ function skippedTlsObservation(detail = 'TLS intelligence is disabled by deploym
   };
 }
 
-/**
- * @param {string} hostname
- * @param {{ resolveAddresses?: Function, connect?: Function, checkServerIdentity?: Function, timeoutMs?: number, now?: Function, observedAt?: Function, setTimer?: Function, clearTimer?: Function }} [options]
- */
 async function collectTlsIntelligence(hostname: string, options: TlsCollectOptions = {}) {
   const normalizedHostname = normalizeTlsHostname(hostname);
   const now = options.now || Date.now;
@@ -569,7 +569,15 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
     if (resolutionDeadline !== undefined) clearTimer(resolutionDeadline);
   }
   const selected = records[0];
-  const connect = options.connect || (tls.connect as unknown as TlsConnect);
+  if (!selected) {
+    return failedTlsObservation('TLS target has no resolved addresses', {
+      sniHost: normalizedHostname,
+      connectionAttempts: 0,
+      observedAt: observedAt(),
+      durationMs: now() - started,
+    });
+  }
+  const connect = options.connect || defaultTlsConnect;
   const checkServerIdentity = options.checkServerIdentity || ((host: string, certificate: unknown) => tls.checkServerIdentity(host, certificate as tls.PeerCertificate));
   const remainingMs = Math.max(0, timeoutMs - Math.max(0, now() - started));
   if (remainingMs === 0) {

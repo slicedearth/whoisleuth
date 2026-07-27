@@ -86,15 +86,6 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 // review instead of suppressing an entire rule or file.
 const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   Object.freeze({ ruleId: 'js/request-forgery', file: 'lib/safe-fetch.mts', primaryLocationLineHash: 'fec0b1d981cb94bf:1', primaryLocationStartColumnFingerprint: '17', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/case-report.test.js', primaryLocationLineHash: '1beaf56a554ac9e4:1', primaryLocationStartColumnFingerprint: '13', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/case-report.test.js', primaryLocationLineHash: '49fe07e43d4a51e4:1', primaryLocationStartColumnFingerprint: '10', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.js', primaryLocationLineHash: '87440f158d857689:1', primaryLocationStartColumnFingerprint: '10', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.js', primaryLocationLineHash: 'e1adbaf9d2d01b06:1', primaryLocationStartColumnFingerprint: '10', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.js', primaryLocationLineHash: '63133cb78baecb59:1', primaryLocationStartColumnFingerprint: '10', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.js', primaryLocationLineHash: 'f8a646c95a35d1c8:1', primaryLocationStartColumnFingerprint: '11', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.js', primaryLocationLineHash: '6456a8f043208483:1', primaryLocationStartColumnFingerprint: '10', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.js', primaryLocationLineHash: '71a5d98ca5aaf83a:1', primaryLocationStartColumnFingerprint: '69', reason: 'used_in_tests' as const }),
-  Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.js', primaryLocationLineHash: '5c4c60322ce69230:1', primaryLocationStartColumnFingerprint: '10', reason: 'used_in_tests' as const }),
   Object.freeze({ ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: 'bb6b221105506c3:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
 ]);

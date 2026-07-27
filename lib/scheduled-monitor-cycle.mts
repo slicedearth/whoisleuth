@@ -7,7 +7,8 @@ import {
   normalizeScheduledMonitorDelivery,
   ScheduledMonitorDispatcher,
   scheduledMonitorTickDelivery,
-} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.js';
+  type ScheduledMonitorDelivery,
+} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts';
 
 type ScheduledMonitorCycleOptions = {
   repository: unknown;
@@ -17,7 +18,7 @@ type ScheduledMonitorCycleOptions = {
 };
 
 type QueuedDelivery = {
-  delivery: Record<string, unknown>;
+  delivery: ScheduledMonitorDelivery;
   deduplicationKey: string;
 };
 
@@ -100,6 +101,7 @@ async function runScheduledMonitorCycle(options: ScheduledMonitorCycleOptions) {
   let stopReason: 'complete' | 'lookup_limit' | 'deadline' | 'delivery_limit' = 'complete';
   while (pending.length > 0 && processedDeliveries < MAX_CYCLE_DELIVERIES) {
     const next = pending[0];
+    if (!next) break;
     const isLookup = next.delivery.kind === 'continue';
     const elapsed = Math.max(0, finiteTime(now) - startedAt);
     if (isLookup && lookupDeliveries >= MAX_CYCLE_LOOKUPS) {

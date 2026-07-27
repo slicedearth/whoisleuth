@@ -1,4 +1,4 @@
-import { normalizeDomain } from './case-model.js';
+import { normalizeDomain } from './case-model.ts';
 
 export const RELATIONSHIP_OBSERVATION_SCHEMA = 'whoisleuth.relationship-observations';
 export const RELATIONSHIP_OBSERVATION_SCHEMA_VERSION = 1;
@@ -42,6 +42,14 @@ export interface RelationshipObservation {
 export interface RelationshipObservationStore {
   version: typeof RELATIONSHIP_OBSERVATION_SCHEMA_VERSION;
   observations: RelationshipObservation[];
+}
+
+export interface RelationshipObservationExport {
+  schema: typeof RELATIONSHIP_OBSERVATION_SCHEMA;
+  version: typeof RELATIONSHIP_OBSERVATION_SCHEMA_VERSION;
+  generatedAt: string;
+  observations: RelationshipObservation[];
+  limitations: string[];
 }
 
 export interface RelationshipObservationInput {
@@ -466,7 +474,7 @@ export function mergeRelationshipObservations(
 export function buildRelationshipObservationExport(
   raw: unknown,
   generatedAt = new Date().toISOString(),
-): UnknownRecord {
+): RelationshipObservationExport {
   const normalized = normalizeRelationshipObservationStore(raw);
   return {
     schema: RELATIONSHIP_OBSERVATION_SCHEMA,

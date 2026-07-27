@@ -17,7 +17,7 @@ function objectOrNull(value: unknown): UnknownRecord | null {
 
 function buildCliEvidenceExport(
   text: unknown,
-  evidenceModule: EvidenceModule | null | undefined,
+  evidenceModule: unknown,
   generatedAt = new Date().toISOString(),
 ): UnknownRecord {
   const source = parseSavedLookupDocument(text, { label: 'Evidence export input' });
@@ -25,13 +25,15 @@ function buildCliEvidenceExport(
   // model. Raw source payloads are retained deliberately, but remain bounded
   // by the saved-document byte ceiling and are never interpreted here.
   projectCliLookupComparisonInput(source);
-  if (!evidenceModule || typeof evidenceModule.buildLookupEvidence !== 'function') {
+  const dependency = objectOrNull(evidenceModule);
+  if (!dependency || typeof dependency.buildLookupEvidence !== 'function') {
     throw new TypeError('Lookup evidence export dependency is required.');
   }
-  const result = objectOrNull(evidenceModule.buildLookupEvidence(source, { generatedAt, idnAnalysis: null }));
+  const buildLookupEvidence = dependency.buildLookupEvidence as EvidenceModule['buildLookupEvidence'];
+  const result = objectOrNull(buildLookupEvidence(source, { generatedAt, idnAnalysis: null }));
   if (!result
-      || result.schema !== evidenceModule.LOOKUP_EVIDENCE_SCHEMA
-      || result.schemaVersion !== evidenceModule.LOOKUP_EVIDENCE_SCHEMA_VERSION) {
+      || result.schema !== dependency.LOOKUP_EVIDENCE_SCHEMA
+      || result.schemaVersion !== dependency.LOOKUP_EVIDENCE_SCHEMA_VERSION) {
     throw new TypeError('Lookup evidence builder returned an unsupported report contract.');
   }
   return result;

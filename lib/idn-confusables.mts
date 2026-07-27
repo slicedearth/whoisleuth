@@ -297,6 +297,7 @@ function advancedConfusablePlan(raw: unknown): AdvancedConfusablePlan {
     for (let rightIndex = leftIndex + 1; rightIndex < positions.length; rightIndex += 1) {
       const left = positions[leftIndex];
       const right = positions[rightIndex];
+      if (!left || !right) continue;
       let eligibleForPair = 0;
       for (const script of ADVANCED_CONFUSABLE_SCRIPT_ORDER) {
         eligibleForPair += (left.byScript.get(script)?.length || 0)

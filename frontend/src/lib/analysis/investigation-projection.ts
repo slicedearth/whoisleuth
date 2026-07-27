@@ -7,22 +7,22 @@ import {
   MAX_CASES,
   normalizeCaseStore,
   normalizeDomain,
-} from './case-model.js';
+} from './case-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
   normalizeBrandProfileStore,
-} from './brand-profile-model.js';
+} from './brand-profile-model.ts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
   MAX_CAMPAIGNS,
   normalizeCampaignStore,
-} from './campaign-model.js';
+} from './campaign-model.ts';
 import {
   MAX_NAMESERVERS_PER_ROW,
   MAX_RELATIONSHIP_ROWS,
   RELATIONSHIP_EVIDENCE_VERSION,
-} from './relationship-evidence.js';
+} from './relationship-evidence.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,

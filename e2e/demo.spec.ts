@@ -139,9 +139,11 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
     const rect = button.getBoundingClientRect();
     return { top: rect.top, left: rect.left };
   }));
-  expect(Math.abs(stagePositions[0].top - stagePositions[1].top)).toBeLessThanOrEqual(1);
-  expect(stagePositions[1].left).toBeGreaterThan(stagePositions[0].left);
-  expect(stagePositions[2].top).toBeGreaterThan(stagePositions[0].top);
+  const [firstStage, secondStage, thirdStage] = stagePositions;
+  if (!firstStage || !secondStage || !thirdStage) throw new Error('The demo did not render its first three stages.');
+  expect(Math.abs(firstStage.top - secondStage.top)).toBeLessThanOrEqual(1);
+  expect(secondStage.left).toBeGreaterThan(firstStage.left);
+  expect(thirdStage.top).toBeGreaterThan(firstStage.top);
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
@@ -158,6 +160,7 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
 
 test('recovers safely from malformed and future tab state', async ({ page }) => {
   await page.goto('/demo');
+  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await page.evaluate(() => sessionStorage.setItem('whoisleuth:synthetic-demo:v1', '{malformed'));
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();

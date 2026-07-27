@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
-  import { buildCaseReport, caseReportFilename } from '$lib/analysis/case-report.js';
+  import { buildCaseReport, caseReportFilename } from '$lib/analysis/case-report.ts';
 
   let {
     record,

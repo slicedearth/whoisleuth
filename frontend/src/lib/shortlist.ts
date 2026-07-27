@@ -4,24 +4,15 @@ import {
   mergeShortlistStores,
   normalizeShortlistRecord,
   serializeShortlistStore,
-} from './analysis/shortlist-model.js';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { LEGACY_SHORTLIST_KEY, SHORTLIST_COLLECTION } from './browser-local-data-definitions.js';
+  type ShortlistRecord,
+} from './analysis/shortlist-model.ts';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { LEGACY_SHORTLIST_KEY, SHORTLIST_COLLECTION } from './browser-local-data-definitions.ts';
 
 export const SHORTLIST_KEY = LEGACY_SHORTLIST_KEY;
 export const MAX_SHORTLIST_IMPORT_BYTES = 2 * 1024 * 1024;
 
-export interface ShortlistRecord {
-  domain: string;
-  availability: string;
-  riskScore: number | null;
-  opportunityScore: number | null;
-  registrarName?: string | null;
-  activityStatus?: string | null;
-  mutationTypes: string[];
-  savedAt: string;
-  [key: string]: unknown;
-}
+export type { ShortlistRecord };
 
 export async function loadShortlist(): Promise<ShortlistRecord[]> {
   return (await browserLocalDataProvider()).read(SHORTLIST_COLLECTION) as Promise<ShortlistRecord[]>;
@@ -32,7 +23,7 @@ function boundedShortlist(records: ShortlistRecord[]): ShortlistRecord[] {
 }
 
 export async function toggleShortlist(raw: unknown): Promise<boolean> {
-  const record = normalizeShortlistRecord(raw, { fallbackTimestamp: new Date().toISOString() }) as ShortlistRecord | null;
+  const record = normalizeShortlistRecord(raw, { fallbackTimestamp: new Date().toISOString() });
   if (!record) throw new Error('Invalid shortlist record.');
   return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
     const records = [...current] as ShortlistRecord[];
@@ -54,7 +45,7 @@ export async function importShortlist(value: unknown) {
   return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
     const result = mergeShortlistStores(current, value);
     return {
-      document: boundedShortlist(result.entries as ShortlistRecord[]),
+      document: boundedShortlist(result.entries),
       result: { added: result.added, updated: result.updated, skipped: result.skipped },
     };
   });

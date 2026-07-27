@@ -35,7 +35,24 @@ export type LocalDataCollectionDefinition<T> = Readonly<{
   join: (records: LocalDataRecord[], schemaVersion: number) => unknown;
 }>;
 
-export type AnyLocalDataCollectionDefinition = LocalDataCollectionDefinition<any>;
+// Heterogeneous batch operations cannot retain each collection's private
+// document type in one array. Method syntax keeps those parameters correlated
+// at the concrete definition while the provider treats mixed documents as
+// unknown until the owning definition normalizes them.
+export type AnyLocalDataCollectionDefinition = Readonly<{
+  id: string;
+  label: string;
+  legacyKey: string;
+  schemaVersion: number;
+  maximumBytes: number;
+  maximumRecords: number;
+  empty(): unknown;
+  normalize(raw: unknown): unknown;
+  version(raw: unknown): number | null;
+  serialize(document: unknown): string;
+  split(document: unknown): LocalDataRecord[];
+  join(records: LocalDataRecord[], schemaVersion: number): unknown;
+}>;
 
 export type EncodedLocalDataRecord = Readonly<{
   lookupKey: string;
@@ -59,7 +76,7 @@ export interface BrowserLocalDataCodec {
   decode(input: Readonly<{ collection: string; lookupKey: string; payload: string }>): Promise<DecodedLocalDataRecord>;
 }
 
-type StoredRecord = Readonly<{
+export type BrowserLocalStoredRecord = Readonly<{
   key: [string, string];
   collection: string;
   lookupKey: string;
@@ -69,7 +86,7 @@ type StoredRecord = Readonly<{
   payloadBytes: number;
 }>;
 
-type CollectionManifest = Readonly<{
+export type BrowserLocalCollectionManifest = Readonly<{
   collection: string;
   schemaVersion: number;
   codec: string;
@@ -83,22 +100,25 @@ type CollectionManifest = Readonly<{
   legacyDigest: string | null;
 }>;
 
-type PreparedCollection<T> = Readonly<{
-  definition: LocalDataCollectionDefinition<T>;
-  document: T;
-  records: StoredRecord[];
+type PreparedCollection = Readonly<{
+  definition: AnyLocalDataCollectionDefinition;
+  records: BrowserLocalStoredRecord[];
   serializedBytes: number;
   digest: string;
-  source: CollectionManifest['source'];
+  source: BrowserLocalCollectionManifest['source'];
   legacyDigest: string | null;
 }>;
 
 type CollectionSnapshot<T> = Readonly<{
   document: T;
-  manifest: CollectionManifest;
+  manifest: BrowserLocalCollectionManifest;
 }>;
 
-function collectionContentMatches(prepared: PreparedCollection<any>, manifest: CollectionManifest, codec: string): boolean {
+function collectionContentMatches(
+  prepared: PreparedCollection,
+  manifest: BrowserLocalCollectionManifest,
+  codec: string,
+): boolean {
   return manifest.schemaVersion === prepared.definition.schemaVersion
     && manifest.codec === codec
     && manifest.recordCount === prepared.records.length
@@ -109,15 +129,15 @@ function collectionContentMatches(prepared: PreparedCollection<any>, manifest: C
 export type BrowserLocalDataInitialization = Readonly<{
   state: 'ready';
   databaseName: string;
-  migratedCollections: string[];
-  retainedLegacyKeys: string[];
+  migratedCollections: readonly string[];
+  retainedLegacyKeys: readonly string[];
   codec: string;
 }>;
 
 export type LegacyRollbackCopyResult = Readonly<{
   collectionCount: number;
   serializedBytes: number;
-  keys: string[];
+  keys: readonly string[];
 }>;
 
 export class BrowserLocalDataError extends Error {
@@ -128,6 +148,10 @@ export class BrowserLocalDataError extends Error {
     this.name = 'BrowserLocalDataError';
     this.code = code;
   }
+}
+
+export function isExpectedBrowserLocalDataFailure(cause: unknown): boolean {
+  return cause instanceof BrowserLocalDataError || cause instanceof DOMException;
 }
 
 function boundedIdentifier(value: unknown, label: string, maximumLength: number): string {
@@ -147,7 +171,7 @@ function isDigest(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/u.test(value);
 }
 
-function canonicalRecordContent(records: readonly StoredRecord[]): string {
+function canonicalRecordContent(records: readonly BrowserLocalStoredRecord[]): string {
   return JSON.stringify(records.map((record) => [
     record.lookupKey,
     record.ordinal,
@@ -327,18 +351,41 @@ export class BrowserLocalDataProvider {
     for (const definition of definitions) await this.#requireDefinition(definition);
     for (let attempt = 1; attempt <= MAX_LOCAL_DATA_UPDATE_ATTEMPTS; attempt++) {
       const snapshots = await Promise.all(definitions.map((definition) => this.#readSnapshot(definition)));
-      const current = new Map(definitions.map((definition, index) => [definition.id, snapshots[index].document]));
-      const updated = updater(current);
-      const prepared: PreparedCollection<any>[] = [];
+      const current = new Map<string, unknown>();
       for (let index = 0; index < definitions.length; index++) {
         const definition = definitions[index];
+        const snapshot = snapshots[index];
+        if (!definition || !snapshot) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local batch snapshot is incomplete.');
+        }
+        current.set(definition.id, snapshot.document);
+      }
+      const updated = updater(current);
+      const prepared: PreparedCollection[] = [];
+      for (let index = 0; index < definitions.length; index++) {
+        const definition = definitions[index];
+        const snapshot = snapshots[index];
+        if (!definition || !snapshot) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local batch snapshot is incomplete.');
+        }
         if (!updated.documents.has(definition.id)) {
           throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', `The ${definition.label} batch update did not return a document.`);
         }
-        prepared.push(await this.#prepare(definition, updated.documents.get(definition.id), 'application', snapshots[index].manifest.legacyDigest));
+        prepared.push(await this.#prepare(definition, updated.documents.get(definition.id), 'application', snapshot.manifest.legacyDigest));
       }
-      const revisions = new Map(definitions.map((definition, index) => [definition.id, snapshots[index].manifest.revision]));
-      const changed = prepared.filter((item, index) => !collectionContentMatches(item, snapshots[index].manifest, this.codec.id));
+      const revisions = new Map<string, number>();
+      for (let index = 0; index < definitions.length; index++) {
+        const definition = definitions[index];
+        const snapshot = snapshots[index];
+        if (!definition || !snapshot) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local batch snapshot is incomplete.');
+        }
+        revisions.set(definition.id, snapshot.manifest.revision);
+      }
+      const changed = prepared.filter((item, index) => {
+        const snapshot = snapshots[index];
+        return !snapshot || !collectionContentMatches(item, snapshot.manifest, this.codec.id);
+      });
       if (!changed.length) return updated.result;
       try {
         await this.#commit(changed, revisions);
@@ -394,7 +441,7 @@ export class BrowserLocalDataProvider {
     return Object.freeze({
       collectionCount: copies.length,
       serializedBytes: copies.reduce((sum, copy) => sum + copy.bytes, 0),
-      keys: Object.freeze(copies.map((copy) => copy.key)) as unknown as string[],
+      keys: Object.freeze(copies.map((copy) => copy.key)),
     });
   }
 
@@ -412,7 +459,7 @@ export class BrowserLocalDataProvider {
     const done = transactionComplete(transaction, 'Reading local-data manifests', this.timeoutMs);
     const manifestStore = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
     const manifests = await Promise.all(definitions.map((definition) => requestResult(
-      manifestStore.get(definition.id) as IDBRequest<CollectionManifest | undefined>,
+      manifestStore.get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
       `Reading the ${definition.label} manifest`,
       this.timeoutMs,
     )));
@@ -422,7 +469,7 @@ export class BrowserLocalDataProvider {
     const migratedCollections: string[] = [];
     const retainedLegacyKeys: string[] = [];
     if (missing.length) {
-      const prepared: PreparedCollection<any>[] = [];
+      const prepared: PreparedCollection[] = [];
       for (const definition of missing) {
         let raw: string | null;
         try { raw = this.#storage.getItem(definition.legacyKey); }
@@ -460,8 +507,8 @@ export class BrowserLocalDataProvider {
     return Object.freeze({
       state: 'ready',
       databaseName: this.databaseName,
-      migratedCollections: Object.freeze(migratedCollections.slice()) as unknown as string[],
-      retainedLegacyKeys: Object.freeze(retainedLegacyKeys.slice()) as unknown as string[],
+      migratedCollections: Object.freeze(migratedCollections.slice()),
+      retainedLegacyKeys: Object.freeze(retainedLegacyKeys.slice()),
       codec: this.codec.id,
     });
   }
@@ -485,9 +532,9 @@ export class BrowserLocalDataProvider {
   async #prepare<T>(
     definition: LocalDataCollectionDefinition<T>,
     input: unknown,
-    source: CollectionManifest['source'],
+    source: BrowserLocalCollectionManifest['source'],
     legacyDigest: string | null,
-  ): Promise<PreparedCollection<T>> {
+  ): Promise<PreparedCollection> {
     let document: T;
     try { document = definition.normalize(input); }
     catch (cause) {
@@ -500,14 +547,18 @@ export class BrowserLocalDataProvider {
       throw new BrowserLocalDataError('LOCAL_DATA_RECORD_LIMIT', `${definition.label} exceeds its record limit.`);
     }
     const seen = new Set<string>();
-    const storedRecords: StoredRecord[] = [];
+    const storedRecords: BrowserLocalStoredRecord[] = [];
     let encodedBytes = 0;
     for (let ordinal = 0; ordinal < records.length; ordinal++) {
-      const id = boundedIdentifier(records[ordinal].id, `${definition.label} record identifier`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
+      const record = records[ordinal];
+      if (!record) {
+        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an incomplete record.`);
+      }
+      const id = boundedIdentifier(record.id, `${definition.label} record identifier`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
       if (seen.has(id)) throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} contains a duplicate record identifier.`);
       seen.add(id);
       let encoded: EncodedLocalDataRecord;
-      try { encoded = await this.codec.encode({ collection: definition.id, id, value: records[ordinal].value }); }
+      try { encoded = await this.codec.encode({ collection: definition.id, id, value: record.value }); }
       catch (cause) {
         throw new BrowserLocalDataError('LOCAL_DATA_ENCODING_FAILED', `${definition.label} could not be encoded for browser storage.`, { cause });
       }
@@ -532,7 +583,6 @@ export class BrowserLocalDataProvider {
     }
     return Object.freeze({
       definition,
-      document,
       records: storedRecords,
       serializedBytes,
       digest: await sha256(canonicalRecordContent(storedRecords)),
@@ -546,12 +596,12 @@ export class BrowserLocalDataProvider {
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readonly');
     const done = transactionComplete(transaction, `Reading ${definition.label}`, this.timeoutMs);
     const manifest = await requestResult(
-      transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<CollectionManifest | undefined>,
+      transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
       `Reading the ${definition.label} manifest`,
       this.timeoutMs,
     );
     const records = await requestResult(
-      transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(definition.id) as IDBRequest<StoredRecord[]>,
+      transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(definition.id) as IDBRequest<BrowserLocalStoredRecord[]>,
       `Reading ${definition.label}`,
       this.timeoutMs,
     );
@@ -616,7 +666,10 @@ export class BrowserLocalDataProvider {
     return Object.freeze({ document, manifest });
   }
 
-  #assertManifest<T>(definition: LocalDataCollectionDefinition<T>, manifest: CollectionManifest): void {
+  #assertManifest<T>(
+    definition: LocalDataCollectionDefinition<T>,
+    manifest: BrowserLocalCollectionManifest,
+  ): void {
     if (!manifest || typeof manifest !== 'object'
       || manifest.collection !== definition.id
       || !Number.isSafeInteger(manifest.schemaVersion)
@@ -647,7 +700,7 @@ export class BrowserLocalDataProvider {
     }
   }
 
-  async #commit(prepared: readonly PreparedCollection<any>[], expectedRevisions: ReadonlyMap<string, number>): Promise<void> {
+  async #commit(prepared: readonly PreparedCollection[], expectedRevisions: ReadonlyMap<string, number>): Promise<void> {
     const database = await this.#database();
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readwrite');
     const done = transactionComplete(transaction, 'Saving browser-local data', this.timeoutMs);
@@ -658,12 +711,13 @@ export class BrowserLocalDataProvider {
 
     try {
       const current = await Promise.all(prepared.map((item) => requestResult(
-        manifests.get(item.definition.id) as IDBRequest<CollectionManifest | undefined>,
+        manifests.get(item.definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
         `Checking the ${item.definition.label} revision`,
         this.timeoutMs,
       )));
       for (let index = 0; index < prepared.length; index++) {
         const item = prepared[index];
+        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
         const currentRevision = current[index]?.revision || 0;
         if (currentRevision !== expectedRevisions.get(item.definition.id)) {
           transaction.abort();
@@ -673,6 +727,7 @@ export class BrowserLocalDataProvider {
       }
       for (let index = 0; index < prepared.length; index++) {
         const item = prepared[index];
+        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
         const currentRevision = current[index]?.revision || 0;
         records.delete(IDBKeyRange.bound([item.definition.id], [item.definition.id, []]));
         for (const record of item.records) records.put(record);
@@ -688,7 +743,7 @@ export class BrowserLocalDataProvider {
           updatedAt,
           legacyKey: item.definition.legacyKey,
           legacyDigest: item.legacyDigest,
-        }) satisfies CollectionManifest);
+        }) satisfies BrowserLocalCollectionManifest);
       }
       await done;
     } catch (cause) {

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createRequire } from 'node:module';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -26,6 +25,7 @@ import {
   generateConfusableProjection,
   renderConfusableProjectionModule,
 } from '../lib/unicode-confusable-projection.mts';
+import CALIBRATION_CASES from '../fixtures/idn-confusable-calibration.mts';
 
 type WritableLike = { write(value: string): unknown };
 type CalibrationCase = Readonly<{
@@ -58,8 +58,6 @@ export const MAX_TOTAL_CANDIDATE_GROWTH_RATIO = 0.5;
 export const MAX_SEED_CANDIDATE_GROWTH_RATIO = 0.75;
 export const MAX_CALIBRATION_SEEDS = 20;
 
-const require = createRequire(import.meta.url);
-const CALIBRATION_CASES = require('../fixtures/idn-confusable-calibration.js') as unknown;
 const CALIBRATION_SEEDS = Object.freeze([
   'scope',
   'figure',
@@ -176,7 +174,7 @@ function confusionFor(
 function candidateCounts(label: string, groups: Readonly<Record<string, string>>) {
   const singleSubstitutionCandidates = new Set<string>();
   for (let index = 0; index < label.length; index += 1) {
-    for (const substitution of [...(groups[label[index]] || '')].slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII)) {
+    for (const substitution of [...(groups[label.charAt(index)] || '')].slice(0, MAX_GENERATION_CONFUSABLES_PER_ASCII)) {
       const unicode = `${label.slice(0, index)}${substitution}${label.slice(index + 1)}`;
       const ascii = domainToASCII(`${unicode}.example`).replace(/\.example$/u, '');
       if (ascii.startsWith('xn--')) singleSubstitutionCandidates.add(ascii);

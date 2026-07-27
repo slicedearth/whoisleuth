@@ -120,7 +120,9 @@ function parseRootZoneTldList(value: unknown): RootZoneObservation {
   const lines = text.split(/\r?\n/u);
   const header = lines.find((line) => line.startsWith('# Version '));
   const match = /^# Version ([0-9]{8,20}), Last Updated (.{1,64})$/u.exec(header || '');
-  if (!match) throw new TypeError('The IANA root-zone list did not contain the expected version header.');
+  const version = match?.[1];
+  const lastUpdated = match?.[2];
+  if (!version || !lastUpdated) throw new TypeError('The IANA root-zone list did not contain the expected version header.');
   const tlds: string[] = [];
   const seen = new Set<string>();
   for (const line of lines) {
@@ -138,8 +140,8 @@ function parseRootZoneTldList(value: unknown): RootZoneObservation {
   if (!tlds.length) throw new TypeError('The IANA root-zone list contained no suffixes.');
   tlds.sort((left, right) => left.localeCompare(right));
   return Object.freeze({
-    version: match[1],
-    lastUpdatedAt: canonicalTimestamp(match[2], 'The IANA root-zone update time'),
+    version,
+    lastUpdatedAt: canonicalTimestamp(lastUpdated, 'The IANA root-zone update time'),
     tlds: Object.freeze(tlds),
   });
 }
@@ -335,13 +337,22 @@ function evaluateRegistryDrift(
   const rdap = rdapBootstrap.value;
   const activeTlds = root ? new Set(root.tlds) : null;
   const rdapSuffixes = rdap ? new Set(rdap.suffixes) : null;
-  const rows = [...capabilities].sort((left, right) => left.suffixes[0].localeCompare(right.suffixes[0]));
+  const rows = capabilities
+    .flatMap((row) => row.suffixes[0] ? [row] : [])
+    .sort((left, right) => (left.suffixes[0] ?? '').localeCompare(right.suffixes[0] ?? ''));
   const inactiveProfiles = activeTlds
-    ? rows.map((row) => row.suffixes[0]).filter((suffix) => !activeTlds.has(suffix))
+    ? rows.flatMap((row) => {
+        const suffix = row.suffixes[0];
+        return suffix && !activeTlds.has(suffix) ? [suffix] : [];
+      })
     : null;
   const rdapMismatches = rdapSuffixes
-    ? rows.filter((row) => rdapSuffixes.has(row.suffixes[0]) !== (row.rdapAccessProfile === 'iana-bootstrap'))
-      .map((row) => row.suffixes[0])
+    ? rows.flatMap((row) => {
+        const suffix = row.suffixes[0];
+        return suffix && rdapSuffixes.has(suffix) !== (row.rdapAccessProfile === 'iana-bootstrap')
+          ? [suffix]
+          : [];
+      })
     : null;
   const unassignedRdapSuffixes = activeTlds && rdapSuffixes
     ? [...rdapSuffixes].filter((suffix) => !activeTlds.has(suffix))
@@ -406,9 +417,14 @@ async function runRegistryDriftAudit(options: RegistryDriftAuditOptions = {}) {
   const totalTimeoutMs = boundedTimeout(options.totalTimeoutMs, REGISTRY_AUDIT_TOTAL_TIMEOUT_MS, REGISTRY_AUDIT_TOTAL_TIMEOUT_MS);
   const totalDeadline = Date.now() + totalTimeoutMs;
   const fetchSource = options.fetchSource || defaultFetchSource;
+  const rootZoneDefinition = SOURCE_DEFINITIONS[0];
+  const rdapBootstrapDefinition = SOURCE_DEFINITIONS[1];
+  if (!rootZoneDefinition || !rdapBootstrapDefinition) {
+    throw new TypeError('Registry drift source definitions are incomplete.');
+  }
   const [rootZone, rdapBootstrap] = await Promise.all([
-    collectSource(SOURCE_DEFINITIONS[0], fetchSource, totalDeadline, requestTimeoutMs, parseRootZoneTldList),
-    collectSource(SOURCE_DEFINITIONS[1], fetchSource, totalDeadline, requestTimeoutMs, parseRdapBootstrap),
+    collectSource(rootZoneDefinition, fetchSource, totalDeadline, requestTimeoutMs, parseRootZoneTldList),
+    collectSource(rdapBootstrapDefinition, fetchSource, totalDeadline, requestTimeoutMs, parseRdapBootstrap),
   ]);
   const checks = evaluateRegistryDrift(snapshot, capabilities, rootZone, rdapBootstrap);
   return Object.freeze({

@@ -25,7 +25,7 @@
     SYNTHETIC_DEMO_STAGES, SYNTHETIC_DEMO_STORAGE_KEY, SYNTHETIC_DEMO_VERSION,
     syntheticDemoCandidate, syntheticDemoCaseRecord, syntheticDemoLookupView,
     syntheticDemoRelationshipGroups, syntheticDemoStage, syntheticDemoTimeline,
-  } from '$lib/analysis/demo-model.js';
+  } from '$lib/analysis/demo-model.ts';
 
   type View='dashboard'|'brands'|'discover'|'bulk'|'lookup'|'monitor';
   type CandidateFilter='all'|'high'|'related';

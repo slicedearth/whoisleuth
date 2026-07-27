@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { CliUsageError } from './arguments.mts';
+import type { ClassifiedQuery } from '../lib/classify.mts';
 
 const MAX_BULK_INPUT_BYTES = 1024 * 1024;
 const MAX_FAST_BULK_QUERIES = 500;
@@ -8,12 +9,6 @@ const MAX_DEEP_BULK_QUERIES = 50;
 type BoundedTextStream = {
   isTTY?: boolean;
   [Symbol.asyncIterator]?: () => AsyncIterator<unknown>;
-};
-
-type ClassifiedQuery = {
-  type: string;
-  value: string;
-  [key: string]: unknown;
 };
 
 type BulkLookupOptions = {
@@ -123,6 +118,7 @@ async function runBulkLookups(queries: string[], options: BulkLookupOptions = {}
       const index = cursor++;
       if (index >= queries.length) return;
       const query = queries[index];
+      if (query === undefined) return;
       try {
         const classified = classifyQuery(query);
         const lookupKey = `${classified.type}:${classified.value}`;

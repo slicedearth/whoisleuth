@@ -3,9 +3,10 @@
   import {
     SYNTHETIC_DEMO_CANDIDATES,
     syntheticDemoTimeline,
-  } from '$lib/analysis/demo-model.js';
+  } from '$lib/analysis/demo-model.ts';
 
   const selected = SYNTHETIC_DEMO_CANDIDATES[0];
+  if (!selected) throw new Error('The synthetic homepage preview requires one candidate.');
   const timeline = syntheticDemoTimeline(selected.id, true);
   const topologyNodes = [
     { id: 'registry', label: 'Registry', detail: selected.evidence.registry.status, status: 'success', side: 'left' as const, glyph: 'R', family: 'registry' as const },

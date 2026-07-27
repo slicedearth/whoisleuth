@@ -21,6 +21,7 @@ import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } f
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
 import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
+import { nonEmptyErrorMessage } from './error-detail.mts';
 
 const MAX_HOMEPAGE_BYTES = 300000;
 const DNS_DELEGATION_TIMEOUT_MS = 4000;
@@ -71,6 +72,18 @@ type DnsDelegation = {
   nameserversTruncated: boolean;
   error: string | null;
 };
+
+function errorRecord(value: unknown): UnknownRecord {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as UnknownRecord
+    : {};
+}
+
+function rdapEventDate(events: UnknownRecord[], action: string): string | null {
+  const date = events.find((event) => event.action === action)?.date;
+  return typeof date === 'string' ? date : null;
+}
+
 type AvailabilityOptions = {
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
@@ -83,9 +96,9 @@ type AvailabilityOptions = {
   fetchHomepage?: (domain: string) => Promise<HomepageResult>;
   fetchFaviconHash?: typeof fetchFaviconHash;
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
-  rdapRecord?: Awaited<ReturnType<typeof fetchRdapRecord>> | null;
+  rdapRecord?: unknown;
   whoisChain?: Awaited<ReturnType<typeof buildWhoisChain>> | null;
-  rdapRecordPromise?: Promise<Awaited<ReturnType<typeof fetchRdapRecord>> | null>;
+  rdapRecordPromise?: Promise<unknown>;
   whoisChainPromise?: Promise<Awaited<ReturnType<typeof buildWhoisChain>> | null>;
   dnsDelegation?: DnsDelegation | null;
   resolveNs?: (domain: string) => Promise<string[]>;
@@ -239,14 +252,15 @@ async function checkDnsDelegation(domain: string, { resolver = dns.resolveNs }: 
       error: null,
     };
   } catch (err) {
-    if (MISSING_DNS_CODES.has(err && err.code)) {
+    const error = errorRecord(err);
+    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) {
       return { delegated: false, nameservers: [], nameserversTruncated: false, error: null };
     }
     return {
       delegated: false,
       nameservers: [],
       nameserversTruncated: false,
-      error: String(err && err.message ? err.message : err).slice(0, 180),
+      error: nonEmptyErrorMessage(err, String(err)).slice(0, 180),
     };
   } finally {
     clearTimeout(timer);
@@ -321,9 +335,10 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
         }),
       };
     } catch (err) {
-      const reason = err && err.name === 'AbortError'
+      const error = errorRecord(err);
+      const reason = error.name === 'AbortError'
         ? 'timed out after 6 seconds'
-        : String(err && err.message ? err.message : 'request failed')
+        : nonEmptyErrorMessage(err, 'request failed')
           .replace(/[\u0000-\u001f\u007f]+/g, ' ')
           .slice(0, 180);
       failures.push({ url: requestUrl, error: `${scheme.toUpperCase()} ${reason}` });
@@ -396,37 +411,53 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       // separate fetch+parse here - same registry data either way, and this
       // also picks up that function's short-TTL cache (lib/lookup-cache.mts)
       // and upstream timeout for free.
-      const record = hasPreloadedRdapPromise
+      const recordValue = hasPreloadedRdapPromise
         ? await options.rdapRecordPromise
         : hasPreloadedRdap
           ? options.rdapRecord
           : await fetchRdapRecord('domain', domain);
-      if (record) {
-        rdapServer = record.rdapServer;
-        if (record.upstreamStatus === 404) {
+      const record = errorRecord(recordValue);
+      const recordRdapServer = typeof record.rdapServer === 'string' ? record.rdapServer : null;
+      const upstreamStatus = typeof record.upstreamStatus === 'number' ? record.upstreamStatus : null;
+      if (Object.keys(record).length) {
+        rdapServer = recordRdapServer;
+        if (upstreamStatus === 404) {
           return {
             state: 'available',
             confidence: 'high',
             detail: 'The registry\'s RDAP service has no record for this domain.',
             source: 'rdap',
-            rdapServer: record.rdapServer,
+            rdapServer: recordRdapServer,
           };
         }
-        if (record.parsed) {
-          const parsed = record.parsed;
-          statuses = Array.isArray(parsed.statuses) ? parsed.statuses.map((s) => s.toLowerCase()) : [];
-          nameservers = Array.isArray(parsed.nameservers) ? parsed.nameservers : [];
+        const parsed = errorRecord(record.parsed);
+        if (Object.keys(parsed).length) {
+          statuses = Array.isArray(parsed.statuses)
+            ? parsed.statuses.filter((status: unknown): status is string => typeof status === 'string').map((status: string) => status.toLowerCase())
+            : [];
+          nameservers = Array.isArray(parsed.nameservers)
+            ? parsed.nameservers.filter((nameserver: unknown): nameserver is string => typeof nameserver === 'string')
+            : [];
           registrar = compactContact(parsed.registrar);
           registrant = compactContact(parsed.registrant);
           abuse = compactContact(parsed.abuse);
-          const events = Array.isArray(parsed.events) ? parsed.events : [];
-          createdDate = parsed.lifecycle?.createdDate
-            || (events.find((e) => e.action === 'registration') || {}).date || null;
-          expiryDate = parsed.lifecycle?.expiryDate
-            || (events.find((e) => e.action === 'expiration') || {}).date || null;
-          createdDateIso = parsed.lifecycle?.createdDateIso || registryDateIso(createdDate);
-          expiryDateIso = parsed.lifecycle?.expiryDateIso || registryDateIso(expiryDate);
-          dnssec = parsed.dnssec || null;
+          const events = Array.isArray(parsed.events)
+            ? parsed.events.map(errorRecord)
+            : [];
+          const lifecycle = errorRecord(parsed.lifecycle);
+          createdDate = typeof lifecycle.createdDate === 'string'
+            ? lifecycle.createdDate
+            : rdapEventDate(events, 'registration');
+          expiryDate = typeof lifecycle.expiryDate === 'string'
+            ? lifecycle.expiryDate
+            : rdapEventDate(events, 'expiration');
+          createdDateIso = typeof lifecycle.createdDateIso === 'string'
+            ? lifecycle.createdDateIso
+            : registryDateIso(createdDate);
+          expiryDateIso = typeof lifecycle.expiryDateIso === 'string'
+            ? lifecycle.expiryDateIso
+            : registryDateIso(expiryDate);
+          dnssec = typeof parsed.dnssec === 'string' ? parsed.dnssec : null;
           rdapFound = true;
           registrationSource = 'rdap';
         }
@@ -463,7 +494,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         };
       }
       if (parsed.nameservers.length) nameservers = parsed.nameservers;
-      if (parsed.statuses.length) statuses = parsed.statuses.map((s) => s.toLowerCase());
+      if (parsed.statuses.length) statuses = parsed.statuses.map((status: string) => status.toLowerCase());
       if (parsed.registrar) {
         registrar = {
           handle: null,
@@ -650,15 +681,21 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         || responseContentType.trim() === ''
         || /^(?:text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(responseContentType.trim());
       htmlSignals = extractHtmlSignals(page, domain, {
-        baseUrl: typeof homepage.http?.finalUrl === 'string' ? homepage.http.finalUrl : undefined,
-        observedAt: typeof homepage.http?.observedAt === 'string' ? homepage.http.observedAt : undefined,
+        ...(typeof homepage.http?.finalUrl === 'string' ? { baseUrl: homepage.http.finalUrl } : {}),
+        ...(typeof homepage.http?.observedAt === 'string' ? { observedAt: homepage.http.observedAt } : {}),
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
         exactBodyHash: homepage.http?.response?.bodyHash,
         httpServer: homepage.http?.response?.server,
         includePageIdentity: pageIdentityEligible,
-        includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile,
-        includeStructuredDataIdentity: options.includeStructuredDataIdentity,
-        includeTechnologyProfile: options.includeTechnologyProfile,
+        ...(options.includeCredentialSurfaceProfile !== undefined
+          ? { includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile }
+          : {}),
+        ...(options.includeStructuredDataIdentity !== undefined
+          ? { includeStructuredDataIdentity: options.includeStructuredDataIdentity }
+          : {}),
+        ...(options.includeTechnologyProfile !== undefined
+          ? { includeTechnologyProfile: options.includeTechnologyProfile }
+          : {}),
       });
     }
   }

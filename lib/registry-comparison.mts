@@ -12,7 +12,7 @@ const REDACTION_MARKERS = [
   /masked/i,
 ];
 
-type LooseRecord = Record<string, any>;
+type UnknownRecord = Record<string, unknown>;
 type PublishedState = 'absent' | 'redacted' | 'value';
 type SourceCondition = 'complete' | 'incomplete' | 'unavailable';
 type FieldState = PublishedState | Exclude<SourceCondition, 'complete'>;
@@ -59,8 +59,14 @@ function fieldState(value: unknown, condition: SourceCondition): FieldState {
 
 function registrarValue(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value || null;
-  const record = value as LooseRecord;
+  const record = value as UnknownRecord;
   return record.name || record.org || record.handle || null;
+}
+
+function record(value: unknown): UnknownRecord {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as UnknownRecord
+    : {};
 }
 
 function normalizeText(value: unknown): string | null {
@@ -151,13 +157,14 @@ function displayValue(value: unknown, state: FieldState, status: unknown): strin
   return String(value);
 }
 
-function findRdapEvent(rdap: LooseRecord, action: string): unknown {
-  const event = Array.isArray(rdap?.events) ? rdap.events.find((item) => item.action === action) : null;
+function findRdapEvent(rdap: UnknownRecord, action: string): unknown {
+  if (!Array.isArray(rdap.events)) return null;
+  const event = rdap.events.map(record).find((item) => item.action === action);
   return event?.date || null;
 }
 
-function rdapLifecycleDate(rdap: LooseRecord, field: string, fallbackAction: string): unknown {
-  const value = rdap?.lifecycle?.[field];
+function rdapLifecycleDate(rdap: UnknownRecord, field: string, fallbackAction: string): unknown {
+  const value = record(rdap.lifecycle)[field];
   return typeof value === 'string' && value ? value : findRdapEvent(rdap, fallbackAction);
 }
 
@@ -218,12 +225,12 @@ function compareField(
 }
 
 export function compareRegistrySources(
-  rdapParsed: LooseRecord | null | undefined,
-  whoisParsed: LooseRecord | null | undefined,
+  rdapParsed: unknown,
+  whoisParsed: unknown,
   options: RegistryComparisonOptions = {},
 ) {
-  const rdap: LooseRecord = rdapParsed || {};
-  const whois: LooseRecord = whoisParsed || {};
+  const rdap = record(rdapParsed);
+  const whois = record(whoisParsed);
   const sourceHealth = {
     rdapStatus: options.rdapStatus || null,
     whoisStatus: options.whoisStatus || null,
@@ -232,11 +239,13 @@ export function compareRegistrySources(
   };
   const statusNormalizer = options.statusNormalizer || normalizeStatus;
   const dateField = (label: string, field: string, fallbackAction: string) => {
+    const rdapLifecycle = record(rdap.lifecycle);
+    const whoisLifecycle = record(whois.lifecycle);
     const rdapValue = rdapLifecycleDate(rdap, field, fallbackAction);
-    const whoisValue = whois[field] || whois.lifecycle?.[field] || null;
+    const whoisValue = whois[field] || whoisLifecycle[field] || null;
     return compareField(label, rdapValue, whoisValue, normalizeDate, sourceHealth, {
-      rdap: rdap.lifecycle?.[`${field}Iso`] || rdapValue,
-      whois: whois[`${field}Iso`] || whois.lifecycle?.[`${field}Iso`] || whoisValue,
+      rdap: rdapLifecycle[`${field}Iso`] || rdapValue,
+      whois: whois[`${field}Iso`] || whoisLifecycle[`${field}Iso`] || whoisValue,
     });
   };
   const fields = [
@@ -291,13 +300,13 @@ type RdapPublicationStatus = typeof RDAP_PUBLICATION_STATUS[keyof typeof RDAP_PU
 // classification because different identifiers and disclosure policies are
 // expected at each layer.
 export function compareRdapPublications(
-  registryParsed: LooseRecord | null | undefined,
-  registrarParsed: LooseRecord | null | undefined,
+  registryParsed: unknown,
+  registrarParsed: unknown,
   options: RdapPublicationComparisonOptions = {},
 ) {
-  const registry = registryParsed || {};
-  const registrar = registrarParsed || {};
-  const registrarLifecycle = registrar.lifecycle || {};
+  const registry = record(registryParsed);
+  const registrar = record(registrarParsed);
+  const registrarLifecycle = record(registrar.lifecycle);
   const comparison = compareRegistrySources(
     { ...registry, handle: null },
     {

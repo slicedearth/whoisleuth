@@ -265,8 +265,9 @@ The test pyramid is designed to avoid dependence on public services:
 1. Node tests exercise pure normalization, parsing, security boundaries,
    migrations, scoring, comparison, storage budgets, and injected transport
    behavior with deterministic fixtures.
-2. TypeScript checks cover native backend contracts, frontend analysis helpers,
-   and Playwright specifications; Svelte checks validate route components.
+2. Strict TypeScript checks cover native backend contracts, tools, the CLI,
+   Node tests, frontend analysis helpers, Playwright specifications, and the
+   pre-render theme bootstrap; Svelte checks validate route components.
 3. The production Svelte build proves every prerendered page can be emitted.
 4. Chromium Playwright tests cover authentication, responsive and accessible
    workflows, browser storage and downloads, API isolation, and the public

@@ -5,7 +5,8 @@ import {
   normalizeCaseStore,
   parseStoreVersion,
   serializeCaseStore,
-} from './analysis/case-model.js';
+} from './analysis/case-model.ts';
+import type { CaseRecord } from './analysis/case-model.ts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
   MAX_CAMPAIGNS,
@@ -13,7 +14,8 @@ import {
   campaignStoreVersion,
   normalizeCampaignStore,
   serializeCampaignStore,
-} from './analysis/campaign-model.js';
+} from './analysis/campaign-model.ts';
+import type { CampaignRecord } from './analysis/campaign-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
@@ -21,7 +23,8 @@ import {
   brandProfileStoreVersion,
   normalizeBrandProfileStore,
   serializeBrandProfileStore,
-} from './analysis/brand-profile-model.js';
+} from './analysis/brand-profile-model.ts';
+import type { BrandProfile } from './analysis/brand-profile-model.ts';
 import {
   MAX_WATCHLISTS,
   MAX_WATCHLIST_STORE_BYTES,
@@ -29,7 +32,8 @@ import {
   normalizeWatchlistStore,
   serializeWatchlistStore,
   watchlistStoreVersion,
-} from './analysis/watchlist-store.js';
+} from './analysis/watchlist-store.ts';
+import type { WatchlistCollection, WatchlistEntry } from './analysis/watchlist-store.ts';
 import {
   MAX_SHORTLIST_ENTRIES,
   MAX_SHORTLIST_STORE_BYTES,
@@ -37,7 +41,8 @@ import {
   normalizeShortlistStore,
   serializeShortlistStore,
   shortlistStoreVersion,
-} from './analysis/shortlist-model.js';
+} from './analysis/shortlist-model.ts';
+import type { ShortlistRecord } from './analysis/shortlist-model.ts';
 import {
   CT_HISTORY_SCHEMA_VERSION,
   MAX_CT_HISTORY_SEARCHES,
@@ -46,7 +51,8 @@ import {
   emptyCtHistoryStore,
   enforceCtHistoryBudget,
   normalizeCtHistoryStore,
-} from './analysis/ct-history.js';
+} from './analysis/ct-history.ts';
+import type { CtHistoryEntry, CtHistoryStore } from './analysis/ct-history.ts';
 import {
   DETECTION_RULE_SCHEMA_VERSION,
   MAX_DETECTION_RULES,
@@ -54,7 +60,8 @@ import {
   detectionRuleStoreVersion,
   normalizeDetectionRuleStore,
   serializeDetectionRuleStore,
-} from './analysis/detection-rule-model.js';
+} from './analysis/detection-rule-model.ts';
+import type { DetectionRule } from './analysis/detection-rule-model.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
   MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
@@ -64,7 +71,35 @@ import {
   relationshipObservationStoreVersion,
   serializeRelationshipObservationStore,
 } from './analysis/relationship-observation-model.ts';
-import type { LocalDataCollectionDefinition, LocalDataRecord } from './browser-local-data.js';
+import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
+import {
+  BrowserLocalDataError,
+  plaintextJsonCodec,
+} from './browser-local-data.ts';
+import type {
+  AnyLocalDataCollectionDefinition,
+  BrowserLocalCollectionManifest,
+  BrowserLocalStoredRecord,
+  LocalDataCollectionDefinition,
+  LocalDataRecord,
+} from './browser-local-data.ts';
+
+export type BrowserLocalCollectionValueMap = Readonly<{
+  cases: CaseRecord;
+  campaigns: CampaignRecord;
+  brand_profiles: BrandProfile;
+  watchlists: WatchlistEntry;
+  shortlist: ShortlistRecord;
+  ct_history: CtHistoryEntry;
+  detection_rules: DetectionRule;
+  relationship_observations: RelationshipObservation;
+}>;
+
+export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
+export type BrowserLocalDecodedCollectionRecord<Collection extends BrowserLocalCollectionId> = Readonly<{
+  id: string;
+  value: BrowserLocalCollectionValueMap[Collection];
+}>;
 
 export const LEGACY_CASES_KEY = 'whois-rdap-cases-v1';
 export const LEGACY_CAMPAIGNS_KEY = 'whoisleuth-campaigns-v1';
@@ -75,7 +110,7 @@ export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
 export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
 export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
 
-function recordsFromArray(values: readonly unknown[], key: (value: any) => unknown): LocalDataRecord[] {
+function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
 }
 
@@ -83,7 +118,7 @@ function arrayFromRecords(records: readonly LocalDataRecord[]): unknown[] {
   return records.map((record) => record.value);
 }
 
-export const CASES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Object.freeze({
   id: 'cases',
   label: 'Cases',
   legacyKey: LEGACY_CASES_KEY,
@@ -98,7 +133,7 @@ export const CASES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.fre
   join: (records, schemaVersion) => ({ version: schemaVersion, cases: arrayFromRecords(records) }),
 });
 
-export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<CampaignRecord[]> = Object.freeze({
   id: 'campaigns',
   label: 'Campaigns',
   legacyKey: LEGACY_CAMPAIGNS_KEY,
@@ -113,7 +148,7 @@ export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<any[]> = Object
   join: (records, schemaVersion) => ({ version: schemaVersion, campaigns: arrayFromRecords(records) }),
 });
 
-export const PROFILES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const PROFILES_COLLECTION: LocalDataCollectionDefinition<BrandProfile[]> = Object.freeze({
   id: 'brand_profiles',
   label: 'Brand Profiles',
   legacyKey: LEGACY_PROFILES_KEY,
@@ -128,7 +163,7 @@ export const PROFILES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.
   join: (records, schemaVersion) => ({ version: schemaVersion, profiles: arrayFromRecords(records) }),
 });
 
-export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<Record<string, any>> = Object.freeze({
+export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistCollection> = Object.freeze({
   id: 'watchlists',
   label: 'Watchlists',
   legacyKey: LEGACY_WATCHLIST_KEY,
@@ -147,7 +182,7 @@ export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<Record<string,
   }),
 });
 
-export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord[]> = Object.freeze({
   id: 'shortlist',
   label: 'Shortlist',
   legacyKey: LEGACY_SHORTLIST_KEY,
@@ -162,7 +197,7 @@ export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<any[]> = Object
   join: (records, schemaVersion) => ({ schema: 'whoisleuth.shortlist', version: schemaVersion, entries: arrayFromRecords(records) }),
 });
 
-export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<any> = Object.freeze({
+export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<CtHistoryStore> = Object.freeze({
   id: 'ct_history',
   label: 'Certificate Transparency history',
   legacyKey: LEGACY_CT_HISTORY_KEY,
@@ -177,7 +212,7 @@ export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<any> = Object.
   join: (records, schemaVersion) => ({ version: schemaVersion, entries: arrayFromRecords(records) }),
 });
 
-export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<DetectionRule[]> = Object.freeze({
   id: 'detection_rules',
   label: 'Custom rules',
   legacyKey: LEGACY_DETECTION_RULES_KEY,
@@ -192,7 +227,7 @@ export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<any[]> = 
   join: (records, schemaVersion) => ({ version: schemaVersion, rules: arrayFromRecords(records) }),
 });
 
-export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition<any[]> = Object.freeze({
+export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition<RelationshipObservation[]> = Object.freeze({
   id: 'relationship_observations',
   label: 'Retained relationship observations',
   legacyKey: LEGACY_RELATIONSHIP_OBSERVATIONS_KEY,
@@ -221,3 +256,63 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   DETECTION_RULES_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
 ]);
+
+function browserLocalCollectionDefinition(
+  collection: BrowserLocalCollectionId,
+): AnyLocalDataCollectionDefinition {
+  const definition = BROWSER_LOCAL_COLLECTIONS.find((candidate) => candidate.id === collection);
+  if (!definition) {
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `The ${collection} collection is unavailable.`);
+  }
+  return definition;
+}
+
+/**
+ * Decode one stored record through the configured codec and its owning
+ * collection normalizer. The final type association is asserted only after the
+ * authoritative model accepts the record and preserves its identifier.
+ */
+export async function decodeBrowserLocalCollectionRecord<Collection extends BrowserLocalCollectionId>(
+  collection: Collection,
+  record: BrowserLocalStoredRecord,
+  manifest: BrowserLocalCollectionManifest,
+): Promise<BrowserLocalDecodedCollectionRecord<Collection>> {
+  const definition = browserLocalCollectionDefinition(collection);
+  if (record.collection !== collection
+    || manifest.collection !== collection
+    || record.codec !== manifest.codec
+    || record.codec !== plaintextJsonCodec.id) {
+    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `The ${collection} record metadata is inconsistent.`);
+  }
+  const payloadBytes = new TextEncoder().encode(record.payload).byteLength;
+  if (record.payloadBytes !== payloadBytes
+    || payloadBytes > definition.maximumBytes
+    || !Number.isSafeInteger(record.ordinal)
+    || record.ordinal < 0
+    || record.ordinal >= definition.maximumRecords
+    || !Number.isSafeInteger(manifest.schemaVersion)
+    || manifest.schemaVersion < 1
+    || manifest.schemaVersion > definition.schemaVersion) {
+    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `The ${collection} record bounds are inconsistent.`);
+  }
+  const decoded = await plaintextJsonCodec.decode({
+    collection,
+    lookupKey: record.lookupKey,
+    payload: record.payload,
+  });
+  const normalizedDocument = definition.normalize(definition.join(
+    [{ id: decoded.id, value: decoded.value }],
+    manifest.schemaVersion,
+  ));
+  const normalizedRecords = definition.split(normalizedDocument);
+  const normalized = normalizedRecords.length === 1 && normalizedRecords[0]?.id === decoded.id
+    ? normalizedRecords[0]
+    : null;
+  if (!normalized) {
+    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `The ${collection} record failed model validation.`);
+  }
+  return {
+    id: normalized.id,
+    value: normalized.value as BrowserLocalCollectionValueMap[Collection],
+  };
+}

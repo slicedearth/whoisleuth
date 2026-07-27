@@ -4,28 +4,28 @@ import { fileURLToPath } from 'node:url';
 
 import {
   MAX_PROFILE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/brand-profile-model.js';
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   MAX_CAMPAIGN_STORE_BYTES,
-} from '../frontend/src/lib/analysis/campaign-model.js';
+} from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   MAX_CASE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/case-model.js';
+} from '../frontend/src/lib/analysis/case-model.ts';
 import {
   MAX_CT_HISTORY_STORE_BYTES,
-} from '../frontend/src/lib/analysis/ct-history.js';
+} from '../frontend/src/lib/analysis/ct-history.ts';
 import {
   MAX_RULE_STORE_BYTES,
-} from '../frontend/src/lib/analysis/detection-rule-model.js';
+} from '../frontend/src/lib/analysis/detection-rule-model.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
 } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import {
   MAX_SHORTLIST_STORE_BYTES,
-} from '../frontend/src/lib/analysis/shortlist-model.js';
+} from '../frontend/src/lib/analysis/shortlist-model.ts';
 import {
   MAX_WATCHLIST_STORE_BYTES,
-} from '../frontend/src/lib/analysis/watchlist-store.js';
+} from '../frontend/src/lib/analysis/watchlist-store.ts';
 
 type WritableLike = { write(value: string): unknown };
 type MainOptions = Readonly<{
@@ -214,7 +214,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   const stderr = options.stderr || process.stderr;
   try {
     const parsed = parseArguments(args);
-    const report = buildLocalDataPlatformEvaluation({ now: options.now });
+    const report = buildLocalDataPlatformEvaluation(options.now ? { now: options.now } : {});
     stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : formatLocalDataPlatformEvaluation(report)}\n`);
     return 0;
   } catch (error) {

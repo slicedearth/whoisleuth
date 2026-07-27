@@ -2,7 +2,7 @@
   import type {
     LookupTiming,
     LookupTimingSource,
-  } from '$lib/analysis/lookup-response.js';
+  } from '$lib/analysis/lookup-response.ts';
 
   let { timing }: { timing: LookupTiming } = $props();
 

@@ -408,6 +408,14 @@ function emptyIndex(
   };
 }
 
+export function unavailableInvestigationSearchIndex(limitation: string): InvestigationSearchIndex {
+  return emptyIndex(
+    'invalid',
+    null,
+    boundedText(limitation) || 'Saved-work search is unavailable.',
+  );
+}
+
 /**
  * Builds one bounded in-memory index from projection v1. Runtime validation is
  * deliberate because projections can later cross export or worker boundaries.

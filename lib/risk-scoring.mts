@@ -2,7 +2,23 @@ import { calibrateExternalIntelligenceRisk } from './external-intelligence-risk.
 
 type RiskFactor = { label: string; delta: number };
 type RiskExplanation = { modelVersion: number; score: number; factors: RiskFactor[] };
-type RiskInput = Record<string, any>;
+type RiskInput = {
+  availability?: unknown;
+  state?: unknown;
+  mutationTypes?: unknown;
+  faviconMatch?: unknown;
+  faviconNearMatch?: unknown;
+  reusesOfficialAssets?: unknown;
+  phishingLanguageMatch?: unknown;
+  hasPasswordField?: unknown;
+  threatIntelligence?: unknown;
+  activityStatus?: unknown;
+  hasMx?: unknown;
+  hasSpf?: unknown;
+  hasDmarc?: unknown;
+  privacyProtected?: unknown;
+  domainAgeDays?: unknown;
+};
 
 const RISK_STATES = new Set(['registered', 'for_sale', 'expiring']);
 const STATE_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -55,7 +71,7 @@ export const RISK_MUTATION_TYPES = Object.freeze([
 ]);
 
 export function normalizeRiskModelVersion(value: unknown): number | null {
-  return Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= 1000 ? value as number : null;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 1000 ? value : null;
 }
 
 function formatAge(days: number): string {
@@ -83,9 +99,9 @@ function mutationContext(mutationTypes: unknown): RiskFactor | null {
 // It is a heuristic indicator, never a maliciousness or safety verdict.
 export function explainRiskScore(r: RiskInput): RiskExplanation | null {
   const state = r.availability ?? r.state;
-  if (!RISK_STATES.has(state)) return null;
+  if (typeof state !== 'string' || !RISK_STATES.has(state)) return null;
 
-  const base = RISK_STATE_BASE[state];
+  const base = RISK_STATE_BASE[state] ?? 0;
   const factors: RiskFactor[] = [{ label: `Base score for "${STATE_LABELS[state] || state}"`, delta: base }];
   let score = base;
   const contextualFamilies = new Set<string>();

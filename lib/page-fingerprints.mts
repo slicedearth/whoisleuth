@@ -87,7 +87,8 @@ function parseAttributes(tag: string): { values: Map<string, string>; truncated:
   let match;
   ATTRIBUTE_RE.lastIndex = 0;
   while ((match = ATTRIBUTE_RE.exec(tag.slice(start)))) {
-    const name = match[1].toLowerCase();
+    const name = match[1]?.toLowerCase();
+    if (!name) continue;
     if (values.has(name)) continue;
     if (values.size >= MAX_FINGERPRINT_ATTRIBUTES) {
       truncated = true;
@@ -184,9 +185,9 @@ function normalizedMarkupAndStructure(html: string, baseUrl: string) {
         continue;
       }
       const nameMatch = token.match(TAG_NAME_RE);
-      if (!nameMatch) continue;
+      const name = nameMatch?.[2]?.toLowerCase();
+      if (!nameMatch || !name) continue;
       const closing = Boolean(nameMatch[1]);
-      const name = nameMatch[2].toLowerCase();
       const selfClosing = !closing && (VOID_TAGS.has(name) || /\/\s*>$/.test(token));
       const structure = closing ? `/${name}` : selfClosing ? `${name}/` : name;
       if (structureTokens.length < MAX_FINGERPRINT_TOKENS) structureTokens.push(structure);
@@ -242,10 +243,12 @@ function simHash64(tokens: string[]): { value: string; featureCount: number } | 
   const vector = new Int32Array(64);
   for (const [feature, weight] of features) {
     const hash = createHash('sha256').update(feature).digest().readBigUInt64BE(0);
-    for (let bit = 0; bit < 64; bit += 1) vector[bit] += ((hash >> BigInt(bit)) & 1n) === 1n ? weight : -weight;
+    for (let bit = 0; bit < 64; bit += 1) {
+      vector[bit] = (vector[bit] ?? 0) + (((hash >> BigInt(bit)) & 1n) === 1n ? weight : -weight);
+    }
   }
   let result = 0n;
-  for (let bit = 0; bit < 64; bit += 1) if (vector[bit] > 0) result |= 1n << BigInt(bit);
+  for (let bit = 0; bit < 64; bit += 1) if ((vector[bit] ?? 0) > 0) result |= 1n << BigInt(bit);
   return { value: result.toString(16).padStart(16, '0'), featureCount: features.size };
 }
 
@@ -286,9 +289,9 @@ function formStructureFingerprint(markup: string, baseUrl: string) {
     const token = match[0];
     if (!token.startsWith('<') || token.length > MAX_FINGERPRINT_TAG_LENGTH) continue;
     const nameMatch = token.match(TAG_NAME_RE);
-    if (!nameMatch) continue;
+    const name = nameMatch?.[2]?.toLowerCase();
+    if (!nameMatch || !name) continue;
     const closing = Boolean(nameMatch[1]);
-    const name = nameMatch[2].toLowerCase();
     if (name === 'form') {
       if (closing) {
         if (current) forms.push(current);

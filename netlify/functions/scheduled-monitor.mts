@@ -19,16 +19,34 @@ type ScheduledDeployContext = {
   context?: unknown;
   published?: unknown;
 };
-type ScheduledMonitorCycleResult = {
+type ScheduledMonitorLogInput = {
   status: unknown;
   stopReason: unknown;
   processedDeliveries: unknown;
   lookupDeliveries: unknown;
   deferredDeliveries: unknown;
+  [key: string]: unknown;
+};
+type ScheduledMonitorInvocationResult = {
+  status: string;
+  stopReason: string;
+  processedDeliveries: number;
+  lookupDeliveries: number;
+  deferredDeliveries: number;
+};
+type ScheduledMonitorLogRecord = {
+  schema: typeof SCHEDULED_MONITOR_LOG_SCHEMA;
+  version: typeof SCHEDULED_MONITOR_LOG_VERSION;
+  status: string | null;
+  stopReason: string | null;
+  processedDeliveries: number | null;
+  lookupDeliveries: number | null;
+  deferredDeliveries: number | null;
+  deployContext: string | null;
+  published: boolean | null;
 };
 type ScheduledFunctionOptions = Omit<RuntimeOptions, 'blobStore'> & {
   blobStoreFactory?: BlobStoreFactory;
-  deploy?: ScheduledDeployContext | null;
 };
 
 const SCHEDULED_MONITOR_CRON = '*/5 * * * *';
@@ -54,9 +72,9 @@ function boundedLogCount(value: unknown): number | null {
 }
 
 function scheduledMonitorLogRecord(
-  result: ScheduledMonitorCycleResult,
+  result: ScheduledMonitorLogInput,
   deploy: ScheduledDeployContext | null | undefined,
-) {
+): ScheduledMonitorLogRecord {
   return {
     schema: SCHEDULED_MONITOR_LOG_SCHEMA,
     version: SCHEDULED_MONITOR_LOG_VERSION,
@@ -70,20 +88,9 @@ function scheduledMonitorLogRecord(
   };
 }
 
-async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {}) {
-  // Scheduled invocations can report `published: false` even when the provider
-  // runs the current production function. The provider-controlled deploy
-  // context is the stable boundary: previews and branch deploys use distinct
-  // context values, while direct unit/runtime composition omits `deploy`.
-  if (Object.hasOwn(options, 'deploy') && options.deploy?.context !== 'production') {
-    return {
-      status: 'skipped',
-      stopReason: 'non_production_deploy',
-      processedDeliveries: 0,
-      lookupDeliveries: 0,
-      deferredDeliveries: 0,
-    };
-  }
+async function runScheduledMonitorFunction(
+  options: ScheduledFunctionOptions = {},
+): Promise<ScheduledMonitorInvocationResult> {
   const env = options.env === undefined ? process.env : options.env;
   const configuration = scheduledMonitorRuntimeConfiguration(env);
   const runtimeOptions: RuntimeOptions = {
@@ -99,20 +106,47 @@ async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {
   return createScheduledMonitorRuntime(runtimeOptions).run();
 }
 
+async function runScheduledMonitorInvocation(
+  context: { deploy?: ScheduledDeployContext } = {},
+  options: ScheduledFunctionOptions = {},
+): Promise<ScheduledMonitorInvocationResult> {
+  // Scheduled invocations can report `published: false` even when the provider
+  // runs the current production function. The provider-controlled deploy
+  // context is the stable boundary: previews and branch deploys use distinct
+  // context values. Missing or malformed provenance fails closed here, before
+  // the private runtime can construct the site-wide Blob store.
+  if (context.deploy?.context !== 'production') {
+    return {
+      status: 'skipped',
+      stopReason: 'non_production_deploy',
+      processedDeliveries: 0,
+      lookupDeliveries: 0,
+      deferredDeliveries: 0,
+    };
+  }
+  return runScheduledMonitorFunction(options);
+}
+
 export default async function scheduledMonitorHandler(
   _request: Request,
   context: { deploy?: ScheduledDeployContext } = {},
 ): Promise<void> {
-  const result = await runScheduledMonitorFunction({ deploy: context.deploy });
+  const result = await runScheduledMonitorInvocation(context);
   console.info(JSON.stringify(scheduledMonitorLogRecord(result, context.deploy)));
 }
 
 export {
-  runScheduledMonitorFunction,
+  runScheduledMonitorInvocation,
   scheduledMonitorLogRecord,
   SCHEDULED_MONITOR_CRON,
   SCHEDULED_MONITOR_LOG_SCHEMA,
   SCHEDULED_MONITOR_LOG_VERSION,
   SCHEDULED_MONITOR_STORE_NAME,
 };
-export type { BlobStoreFactory, ScheduledDeployContext, ScheduledFunctionOptions };
+export type {
+  BlobStoreFactory,
+  ScheduledDeployContext,
+  ScheduledFunctionOptions,
+  ScheduledMonitorInvocationResult,
+  ScheduledMonitorLogRecord,
+};

@@ -163,7 +163,8 @@ function normalizeOperationBudgetTarget(target: unknown): OperationBudgetTarget 
   const record = target as Record<string, unknown>;
   const operationClass = record.operationClass;
   const operationFeature = record.operationFeature;
-  if (!Object.prototype.hasOwnProperty.call(OPERATION_FEATURE_CLASSES, operationFeature)
+  if (typeof operationFeature !== 'string'
+    || !Object.prototype.hasOwnProperty.call(OPERATION_FEATURE_CLASSES, operationFeature)
     || OPERATION_FEATURE_CLASSES[operationFeature as OperationFeature] !== operationClass) {
     throw new TypeError('Operation feature and concurrency class do not match');
   }
@@ -396,6 +397,7 @@ function operationBudgetError(denial: unknown) {
     ? value.scope as OperationDenialScope
     : 'runtime';
   const operationFeature = value
+    && typeof value.operationFeature === 'string'
     && Object.prototype.hasOwnProperty.call(OPERATION_FEATURE_CLASSES, value.operationFeature)
     ? value.operationFeature as OperationFeature
     : null;

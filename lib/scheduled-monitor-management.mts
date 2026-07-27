@@ -17,7 +17,8 @@ import {
   normalizeScheduledMonitorState,
   normalizeScheduledWatchlistName,
   scheduledMonitorPublicState,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+  type ScheduledWatchlist,
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 type ScheduledMonitorState = ReturnType<typeof normalizeScheduledMonitorState>;
 type ScheduledMonitorPublicState = ReturnType<typeof scheduledMonitorPublicState>;
@@ -41,6 +42,10 @@ type ScheduledMonitorManagerOptions = {
   randomUUID?: () => string;
 };
 type ScheduledMonitorCommand = Record<string, unknown>;
+type ScheduledMonitorCommandResult = {
+  action: 'created' | 'updated' | 'deleted' | 'unchanged';
+  id: string;
+};
 type CapacityReport = {
   version: 1;
   triggerIntervalMinutes: number;
@@ -201,7 +206,7 @@ function assertUniqueName(
   }
 }
 
-function publicResult(state: ScheduledMonitorState, result: Record<string, unknown>) {
+function publicResult(state: ScheduledMonitorState, result: ScheduledMonitorCommandResult) {
   return {
     ...result,
     state: scheduledMonitorPublicState(state),
@@ -247,7 +252,7 @@ function applyCreate(
   command: ScheduledMonitorCommand,
   timestamp: string,
   id: string,
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   if (state.watchlists.length >= MAX_SCHEDULED_WATCHLISTS) {
     managementError(
       MANAGEMENT_ERROR_CODES.LIMIT_REACHED,
@@ -288,7 +293,7 @@ function applyUpdate(
   state: ScheduledMonitorState,
   command: ScheduledMonitorCommand,
   timestamp: string,
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   if (!isScheduledMonitorId(command.id)) {
     managementError(MANAGEMENT_ERROR_CODES.INVALID_REQUEST, 'Scheduled watchlist identifier is invalid.');
   }
@@ -297,6 +302,9 @@ function applyUpdate(
     managementError(MANAGEMENT_ERROR_CODES.NOT_FOUND, 'The scheduled watchlist was not found.');
   }
   const current = state.watchlists[index];
+  if (!current) {
+    managementError(MANAGEMENT_ERROR_CODES.NOT_FOUND, 'The scheduled watchlist was not found.');
+  }
   const name = Object.hasOwn(command, 'name')
     ? normalizeScheduledWatchlistName(command.name)
     : current.name;
@@ -310,7 +318,7 @@ function applyUpdate(
   const intervalHours = Object.hasOwn(command, 'intervalHours')
     ? command.intervalHours
     : current.intervalHours;
-  if (!INTERVALS.has(intervalHours)) {
+  if (typeof intervalHours !== 'number' || !INTERVALS.has(intervalHours)) {
     managementError(MANAGEMENT_ERROR_CODES.INVALID_REQUEST, 'Unsupported scheduled scan interval.');
   }
   const enabled = Object.hasOwn(command, 'enabled') ? command.enabled : current.enabled;
@@ -335,7 +343,7 @@ function applyUpdate(
     return { state, result: { action: 'unchanged', id: current.id }, changed: false };
   }
 
-  const nextWatchlist = {
+  const nextWatchlist: ScheduledWatchlist = {
     ...current,
     name,
     enabled,
@@ -367,7 +375,7 @@ function applyUpdate(
 function applyDelete(
   state: ScheduledMonitorState,
   command: ScheduledMonitorCommand,
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   if (!isScheduledMonitorId(command.id)) {
     managementError(MANAGEMENT_ERROR_CODES.INVALID_REQUEST, 'Scheduled watchlist identifier is invalid.');
   }
@@ -389,7 +397,7 @@ function applyScheduledMonitorCommand(
   value: unknown,
   commandInput: unknown,
   options: { now: () => number; randomUUID: () => string },
-): RepositoryUpdate<Record<string, unknown>> {
+): RepositoryUpdate<ScheduledMonitorCommandResult> {
   const state = normalizeScheduledMonitorState(value);
   const command = normalizeCommand(commandInput);
   if (command.action === 'delete') return applyDelete(state, command);

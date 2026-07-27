@@ -5,11 +5,14 @@
     mergeLocalWorkspaceArchive,
     previewLocalWorkspaceArchive,
   } from '$lib/workspace-archive';
+  import type { WorkspaceImportSummary } from '$lib/workspace-archive';
   import { restoreLegacyBrowserData } from '$lib/browser-local-data-service';
+
+  type WorkspacePreview = Awaited<ReturnType<typeof previewLocalWorkspaceArchive>>;
 
   let { onimport }:{onimport?:()=>void}=$props();
   let archiveValue=$state<unknown>(null);
-  let preview=$state<any>(null);
+  let preview=$state<WorkspacePreview|null>(null);
   let selectedIds=$state<string[]>([]);
   let message=$state('');
   let busy=$state(false);
@@ -38,7 +41,7 @@
       const value=JSON.parse(await file.text());
       const result=await previewLocalWorkspaceArchive(value);
       archiveValue=value;preview=result;
-      selectedIds=result.sections.filter((section:any)=>section.status==='ready').map((section:any)=>section.id);
+      selectedIds=result.sections.filter((section)=>section.status==='ready').map((section)=>section.id);
       message=`Reviewed ${result.sections.length} backup sections. Check existing matches and skipped records before merging.`;
     }catch(cause){message=cause instanceof Error?cause.message:'Could not preview the workspace archive.';}
     finally{busy=false;input.value='';}
@@ -49,7 +52,15 @@
     busy=true;message='';
     try{
       const result=await mergeLocalWorkspaceArchive(archiveValue,selectedIds);
-      const totals=result.results.reduce((sum:any,item:any)=>({added:sum.added+item.added,updated:sum.updated+item.updated,skipped:sum.skipped+item.skipped,pruned:sum.pruned+item.pruned}),{added:0,updated:0,skipped:0,pruned:0});
+      const totals=result.results.reduce(
+        (sum:Omit<WorkspaceImportSummary,'id'>,item)=>({
+          added:sum.added+item.added,
+          updated:sum.updated+item.updated,
+          skipped:sum.skipped+item.skipped,
+          pruned:sum.pruned+item.pruned,
+        }),
+        {added:0,updated:0,skipped:0,pruned:0},
+      );
       message=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
       archiveValue=null;preview=null;selectedIds=[];onimport?.();
     }catch(cause){message=cause instanceof Error?cause.message:'Workspace archive import failed.';}

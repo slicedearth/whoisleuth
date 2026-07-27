@@ -140,7 +140,9 @@ async function runBulkStep(
 
 async function retainCases(page: import('@playwright/test').Page, label: string, domains: string[]) {
   await currentAction(page).getByRole('link', { name: 'Open Monitor' }).click();
-  await expect(page).toHaveURL(new RegExp(`/monitor\\?view=cases&investigation=1&domain=${domains[0].replaceAll('.', '\\.')}`));
+  const firstDomain = domains[0];
+  if (!firstDomain) throw new Error('Case retention requires at least one domain.');
+  await expect(page).toHaveURL(new RegExp(`/monitor\\?view=cases&investigation=1&domain=${firstDomain.replaceAll('.', '\\.')}`));
   const queue = page.locator('#case-review-queue');
   await expect(queue).toBeFocused();
   await expect(queue.locator('li')).toHaveCount(domains.length);
@@ -369,19 +371,19 @@ test('shows retained evidence without treating it as workflow completion', async
 test('legacy progress migrates while future and oversized current records stay untouched', async ({ page }) => {
   await page.goto('/dashboard');
   const legacy = JSON.stringify({ version: 1, domain: 'example.test', createdAt: '2026-07-18T00:00:00.000Z', updatedAt: '2026-07-18T00:05:00.000Z', visitedStages: ['lookup'] });
-  await page.evaluate(([key, value]) => sessionStorage.setItem(key, value), [LEGACY_GUIDE_KEY, legacy]);
+  await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: LEGACY_GUIDE_KEY, value: legacy });
   await page.reload();
   await expect(page.locator('.guide')).toContainText('New-domain triage: example.test');
   expect(await page.evaluate((key) => sessionStorage.getItem(key), LEGACY_GUIDE_KEY)).toBe(legacy);
 
   const future = JSON.stringify({ version: 3, recipeId: 'new_domain_triage' });
-  await page.evaluate(([key, value]) => sessionStorage.setItem(key, value), [GUIDE_KEY, future]);
+  await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: GUIDE_KEY, value: future });
   await page.reload();
   await expect(page.locator('.guide')).toHaveCount(0);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBe(future);
 
   const oversized = 'x'.repeat(12_289);
-  await page.evaluate(([key, value]) => sessionStorage.setItem(key, value), [GUIDE_KEY, oversized]);
+  await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: GUIDE_KEY, value: oversized });
   await page.reload();
   await expect(page.locator('.guide')).toHaveCount(0);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBe(oversized);
@@ -414,5 +416,8 @@ test('ending a recipe removes current and legacy tab records only', async ({ pag
   await page.getByText('Guide options', { exact: true }).click();
   await page.getByRole('button', { name: 'End guide' }).click();
   await expect(page.locator('.guide')).toHaveCount(0);
-  expect(await page.evaluate(([current, legacy]) => [sessionStorage.getItem(current), sessionStorage.getItem(legacy)], [GUIDE_KEY, LEGACY_GUIDE_KEY])).toEqual([null, null]);
+  expect(await page.evaluate(
+    ({ current, legacy }) => [sessionStorage.getItem(current), sessionStorage.getItem(legacy)],
+    { current: GUIDE_KEY, legacy: LEGACY_GUIDE_KEY },
+  )).toEqual([null, null]);
 });

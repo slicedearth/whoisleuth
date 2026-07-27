@@ -18,7 +18,10 @@ const handleLookup: NetlifyFunctionHandler = async (event) => {
   try {
     classified = classifyQuery(q);
   } catch (err) {
-    return json(400, { error: err.message, errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
+    return json(400, {
+      error: err instanceof Error ? err.message : 'Invalid query',
+      errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY,
+    });
   }
 
   const fast = params.fast === '1' || params.fast === 'true';

@@ -1,5 +1,5 @@
-import type { BulkSortDirection, BulkSortKey } from './analysis/bulk-sort.js';
-import type { LookupHttpResponse } from './analysis/lookup-response.js';
+import type { BulkSortDirection, BulkSortKey } from './analysis/bulk-sort.ts';
+import type { LookupHttpResponse } from './analysis/lookup-response.ts';
 
 export type LookupMode = 'fast' | 'deep';
 

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, readBrowserLocalCollection } from './helpers';
+import { expectNoHorizontalOverflow, readBrowserLocalCollection, requiredValue } from './helpers';
 import type { Page, Route } from '@playwright/test';
 
 const NOW = '2026-07-16T12:00:00.000Z';
@@ -134,7 +134,9 @@ async function installManagementMock(page: Page, initial: HostedItem[] = []) {
         name: String(command.name),
         intervalHours: Number(command.intervalHours),
       })];
-      id = watchlists[0].id;
+      const created = watchlists[0];
+      if (!created) throw new Error('The hosted watchlist mock did not create a record.');
+      id = created.id;
     } else if (command.action === 'update') {
       watchlists = watchlists.map((item) => item.id === command.id ? {
         ...item,
@@ -197,8 +199,10 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   const item = hosted.getByRole('article').filter({ hasText: 'Priority domains' });
   await expect(item).toContainText('Every 12 hours');
   await expect(item).toContainText('Idle');
-  expect(mock.commands[0].action).toBe('create');
-  expect(mock.commands[0].intervalHours).toBe(12);
+  const createCommand = mock.commands[0];
+  if (!createCommand) throw new Error('The hosted monitor did not receive a create command.');
+  expect(createCommand.action).toBe('create');
+  expect(createCommand.intervalHours).toBe(12);
 
   await item.getByRole('button', { name: 'Pause' }).click();
   await expect(item).toContainText('Paused');
@@ -214,13 +218,15 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
 
   await item.getByRole('button', { name: 'Restore to browser' }).click();
   const restored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1, minimumRevision: 3 });
-  expect(restored.records[0].value.results[0].domain).toBe('alpha.invalid');
+  const restoredWatchlist = requiredValue(restored.records[0], 'The restored watchlist fixture is missing.').value;
+  expect(requiredValue(restoredWatchlist.results[0], 'The restored watchlist result is missing.').domain).toBe('alpha.invalid');
 
   await item.getByRole('button', { name: 'Delete hosted copy' }).click();
   await expect(hosted).toContainText('No watchlists are scheduled');
   expect(mock.watchlists()).toEqual([]);
   const retained = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1, minimumRevision: 3 });
-  expect(retained.records[0].value.results[0].domain).toBe('alpha.invalid');
+  const retainedWatchlist = requiredValue(retained.records[0], 'The retained watchlist fixture is missing.').value;
+  expect(requiredValue(retainedWatchlist.results[0], 'The retained watchlist result is missing.').domain).toBe('alpha.invalid');
 });
 
 test('hosted controls stay usable without horizontal overflow on a narrow mobile viewport', async ({ page }) => {

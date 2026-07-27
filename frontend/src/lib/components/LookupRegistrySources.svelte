@@ -1,7 +1,7 @@
 <script lang="ts">
   import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
 
-  type JsonRecord = Record<string, any>;
+  type JsonRecord = Record<string, unknown>;
   type DisplayRow = { label: string; value: string; datetime?: string };
   type ComparisonRow = {
     label: string;

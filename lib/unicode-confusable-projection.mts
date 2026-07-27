@@ -199,15 +199,16 @@ export function generateConfusableProjectionWithPolicy(
       rejectedMalformedLines += 1;
       continue;
     }
-    const data = line.split('#', 1)[0].trim();
+    const data = (line.split('#', 1)[0] ?? '').trim();
     if (!data) continue;
     const fields = data.split(';').map((value) => value.trim());
-    if (fields.length !== 3 || fields[2] !== 'MA' || !HEX_SEQUENCE_RE.test(fields[0]) || !HEX_SEQUENCE_RE.test(fields[1])) {
+    const [sourceField, targetField, mappingType] = fields;
+    if (!sourceField || !targetField || mappingType !== 'MA' || !HEX_SEQUENCE_RE.test(sourceField) || !HEX_SEQUENCE_RE.test(targetField)) {
       rejectedMalformedLines += 1;
       continue;
     }
-    const sourcePoints = codePoints(fields[0]);
-    const targetPoints = codePoints(fields[1]);
+    const sourcePoints = codePoints(sourceField);
+    const targetPoints = codePoints(targetField);
     if (
       sourcePoints.some((point) => !Number.isInteger(point) || point < 0 || point > 0x10ffff)
       || targetPoints.some((point) => !Number.isInteger(point) || point < 0 || point > 0x10ffff)
@@ -217,8 +218,8 @@ export function generateConfusableProjectionWithPolicy(
       rejectedOutsidePolicy += 1;
       continue;
     }
-    const source = decodeSequence(fields[0]);
-    const target = decodeSequence(fields[1]);
+    const source = decodeSequence(sourceField);
+    const target = decodeSequence(targetField);
     officialMappings.set(source, target);
     parsedMappings += 1;
   }

@@ -47,6 +47,7 @@ export function normalizeSemanticVersion(value: unknown): string {
   const buildParts = value.split('+');
   if (buildParts.length > 2) throw new TypeError('Release version contains more than one build-metadata separator.');
   const [precedence, buildMetadata] = buildParts;
+  if (!precedence) throw new TypeError('Release version must include numeric precedence.');
   const prereleaseSeparator = precedence.indexOf('-');
   const core = prereleaseSeparator === -1 ? precedence : precedence.slice(0, prereleaseSeparator);
   const prerelease = prereleaseSeparator === -1 ? undefined : precedence.slice(prereleaseSeparator + 1);

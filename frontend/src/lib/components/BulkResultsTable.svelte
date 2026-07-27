@@ -1,6 +1,6 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
-  import type { BulkSortKey as SortKey } from '$lib/analysis/bulk-sort.js';
+  import type { BulkSortKey as SortKey } from '$lib/analysis/bulk-sort.ts';
 
   type CaseOption = { value: string; label: string };
   type DraftAction = { mailto: string; body: string };

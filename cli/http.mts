@@ -1,8 +1,4 @@
-type HttpProbeInput = Readonly<{
-  status?: unknown;
-  detail?: unknown;
-  http?: unknown;
-}>;
+type HttpProbeInput = unknown;
 
 type HttpProbeResult = {
   domain: string;
@@ -25,18 +21,21 @@ function boundedDetail(value: unknown): string | null {
 
 function buildHttpProbeResult(
   domain: string,
-  probe: HttpProbeInput | null | undefined,
+  probe: HttpProbeInput,
 ): HttpProbeResult {
-  const status = typeof probe?.status === 'string' && PROBE_STATUSES.has(probe.status as HttpProbeResult['probeStatus'])
-    ? probe.status as HttpProbeResult['probeStatus']
+  const input = probe && typeof probe === 'object' && !Array.isArray(probe)
+    ? probe as Record<string, unknown>
+    : {};
+  const status = typeof input.status === 'string' && PROBE_STATUSES.has(input.status as HttpProbeResult['probeStatus'])
+    ? input.status as HttpProbeResult['probeStatus']
     : 'inconclusive';
   return {
     domain,
     probeStatus: status,
     activityStatus: status === 'fetched' || status === 'responded' ? 'active' : 'unreachable',
-    detail: boundedDetail(probe?.detail),
-    http: probe?.http && typeof probe.http === 'object' && !Array.isArray(probe.http)
-      ? probe.http as Record<string, unknown>
+    detail: boundedDetail(input.detail),
+    http: input.http && typeof input.http === 'object' && !Array.isArray(input.http)
+      ? input.http as Record<string, unknown>
       : null,
   };
 }

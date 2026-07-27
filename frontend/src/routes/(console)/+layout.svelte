@@ -205,8 +205,8 @@
     if(focusables.length===0){event.preventDefault();return;}
     const first=focusables[0];
     const last=focusables[focusables.length-1];
-    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
-    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
   }
   function runtimeLabel(){return capabilities?.runtime==='netlify'?'Netlify':capabilities?.runtime==='express'?'Express':'Hosted';}
   function capabilityStatus(){return capabilitiesChecked?(capabilities?`Backend · ${runtimeLabel()}`:'Backend unavailable'):'Checking backend…';}

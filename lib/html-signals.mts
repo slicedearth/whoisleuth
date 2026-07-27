@@ -113,10 +113,13 @@ function extractExternalAssetHosts(html: string, ownDomain: string): string[] {
   let match;
   ASSET_TAG_RE.lastIndex = 0;
   while ((match = ASSET_TAG_RE.exec(html))) {
-    const hostMatch = match[1].match(ABSOLUTE_URL_HOST_RE);
+    const resourceUrl = match[1];
+    if (!resourceUrl) continue;
+    const hostMatch = resourceUrl.match(ABSOLUTE_URL_HOST_RE);
     if (!hostMatch) continue;
-    if (HAS_CONTROL_CHARACTER_RE.test(hostMatch[1])) continue;
-    const host = stripWwwPrefix(hostMatch[1]);
+    const matchedHost = hostMatch[1];
+    if (!matchedHost || HAS_CONTROL_CHARACTER_RE.test(matchedHost)) continue;
+    const host = stripWwwPrefix(matchedHost);
     if (host && host !== ownHost) hosts.add(host);
     if (hosts.size >= MAX_EXTERNAL_ASSET_HOSTS) break;
   }
@@ -136,7 +139,8 @@ function parseAttributes(tag: string): Map<string, string> {
   ATTRIBUTE_RE.lastIndex = 0;
   let match;
   while ((match = ATTRIBUTE_RE.exec(tag.slice(start)))) {
-    const name = match[1].toLowerCase();
+    const name = (match[1] ?? '').toLowerCase();
+    if (!name) continue;
     if (!attributes.has(name)) attributes.set(name, match[2] ?? match[3] ?? match[4] ?? '');
   }
   return attributes;
@@ -209,7 +213,7 @@ function mailtoDomains(value: unknown): { domains: string[]; truncated: boolean 
   if (typeof value !== 'string' || value.length > MAX_URL_INPUT_LENGTH || HAS_CONTROL_CHARACTER_RE.test(value) || !/^mailto:/i.test(value)) {
     return { domains: [], truncated: false };
   }
-  const recipients = value.slice(7).split('?', 1)[0].split(',');
+  const recipients = (value.slice(7).split('?', 1)[0] ?? '').split(',');
   const truncated = recipients.length > MAX_URLS_PER_TAG;
   const domains = new Set<string>();
   for (const recipient of recipients.slice(0, MAX_URLS_PER_TAG)) {
@@ -232,37 +236,44 @@ function srcsetUrls(value: unknown): { urls: string[]; truncated: boolean } {
   if (/(?:^|,)\s*data:/i.test(value)) return { urls: [], truncated: true };
   const candidates = value.split(',');
   return {
-    urls: candidates.slice(0, MAX_URLS_PER_TAG).map((candidate) => candidate.trim().split(/\s+/, 1)[0]).filter(Boolean),
+    urls: candidates
+      .slice(0, MAX_URLS_PER_TAG)
+      .map((candidate) => candidate.trim().split(/\s+/, 1)[0] ?? '')
+      .filter(Boolean),
     truncated: candidates.length > MAX_URLS_PER_TAG,
   };
 }
 
 function resourceReferences(tagName: string, attributes: Map<string, string>): { references: ResourceReference[]; truncated: boolean } {
   const references: ResourceReference[] = [];
+  const pushAttribute = (type: ResourceReference['type'], name: string) => {
+    const value = attributes.get(name);
+    if (value !== undefined) references.push({ type, value });
+  };
   if (tagName === 'img') {
-    if (attributes.has('src')) references.push({ type: 'image', value: attributes.get('src')! });
+    pushAttribute('image', 'src');
     const srcset = srcsetUrls(attributes.get('srcset'));
     references.push(...srcset.urls.map((value): ResourceReference => ({ type: 'image', value })));
     return { references, truncated: srcset.truncated };
   }
-  if (tagName === 'script' && attributes.has('src')) references.push({ type: 'script', value: attributes.get('src')! });
+  if (tagName === 'script') pushAttribute('script', 'src');
   if (tagName === 'link') {
     const rels = String(attributes.get('rel') || '').toLowerCase().split(/\s+/).filter(Boolean);
-    if (rels.some((rel) => RESOURCE_LINK_RELS.has(rel)) && attributes.has('href')) {
-      references.push({ type: rels.includes('stylesheet') ? 'stylesheet' : 'link', value: attributes.get('href')! });
+    if (rels.some((rel) => RESOURCE_LINK_RELS.has(rel))) {
+      pushAttribute(rels.includes('stylesheet') ? 'stylesheet' : 'link', 'href');
     }
   }
-  if (['iframe', 'frame'].includes(tagName) && attributes.has('src')) references.push({ type: 'frame', value: attributes.get('src')! });
+  if (['iframe', 'frame'].includes(tagName)) pushAttribute('frame', 'src');
   if (tagName === 'source') {
-    if (attributes.has('src')) references.push({ type: 'media', value: attributes.get('src')! });
+    pushAttribute('media', 'src');
     const srcset = srcsetUrls(attributes.get('srcset'));
     references.push(...srcset.urls.map((value): ResourceReference => ({ type: 'media', value })));
     return { references, truncated: srcset.truncated };
   }
-  if (['video', 'audio'].includes(tagName) && attributes.has('src')) references.push({ type: 'media', value: attributes.get('src')! });
-  if (tagName === 'video' && attributes.has('poster')) references.push({ type: 'image', value: attributes.get('poster')! });
-  if (tagName === 'object' && attributes.has('data')) references.push({ type: 'object', value: attributes.get('data')! });
-  if (tagName === 'embed' && attributes.has('src')) references.push({ type: 'object', value: attributes.get('src')! });
+  if (['video', 'audio'].includes(tagName)) pushAttribute('media', 'src');
+  if (tagName === 'video') pushAttribute('image', 'poster');
+  if (tagName === 'object') pushAttribute('object', 'data');
+  if (tagName === 'embed') pushAttribute('object', 'src');
   return { references, truncated: false };
 }
 
@@ -270,7 +281,7 @@ function downloadExtension(url: string): string | null {
   try {
     const filename = new URL(url).pathname.split('/').pop() || '';
     const match = filename.toLowerCase().match(/\.([a-z0-9]{1,8})$/);
-    return match ? match[1] : null;
+    return match?.[1] ?? null;
   } catch {
     return null;
   }
@@ -290,7 +301,8 @@ function trackingIdentifiers(html: string): { values: TrackingIdentifier[]; trun
     pattern.regex.lastIndex = 0;
     let match;
     while ((match = pattern.regex.exec(html))) {
-      const value = match[1].toUpperCase();
+      const value = (match[1] ?? '').toUpperCase();
+      if (!value) continue;
       const key = `${pattern.type}:${value}`;
       if (!identifiers.has(key)) {
         if (identifiers.size >= MAX_TRACKING_IDENTIFIERS) {
@@ -338,7 +350,8 @@ function extractPageRelationships(html: string, domain: string, options: HtmlSig
       break;
     }
     tagsExamined += 1;
-    const tagName = match[1].toLowerCase();
+    const tagName = (match[1] ?? '').toLowerCase();
+    if (!tagName) continue;
     const attributes = parseAttributes(match[0]);
 
     if (tagName === 'a') {
@@ -468,7 +481,8 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
       break;
     }
     tagsExamined += 1;
-    const tagName = match[1].toLowerCase();
+    const tagName = (match[1] ?? '').toLowerCase();
+    if (!tagName) continue;
     const attributes = parseAttributes(match[0]);
 
     if (tagName === 'html' && documentLanguage === null) {

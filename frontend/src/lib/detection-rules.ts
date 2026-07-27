@@ -9,9 +9,15 @@ import {
   RULE_FIELD_DEFINITIONS,
   serializeDetectionRuleStore,
   updateDetectionRule as updateRule,
-} from './analysis/detection-rule-model.js';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { DETECTION_RULES_COLLECTION, LEGACY_DETECTION_RULES_KEY } from './browser-local-data-definitions.js';
+} from './analysis/detection-rule-model.ts';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { DETECTION_RULES_COLLECTION, LEGACY_DETECTION_RULES_KEY } from './browser-local-data-definitions.ts';
+import type { CaseRecord } from './cases.ts';
+import type {
+  DetectionRule,
+  DetectionRuleEvaluation,
+  RuleCondition as DetectionRuleCondition,
+} from './analysis/detection-rule-model.ts';
 
 export {
   MAX_RULE_IMPORT_BYTES,
@@ -21,14 +27,16 @@ export {
   MAX_RULE_TAG_LENGTH,
   operatorsForRuleField,
   RULE_FIELD_DEFINITIONS,
-} from './analysis/detection-rule-model.js';
+} from './analysis/detection-rule-model.ts';
 
 export const DETECTION_RULES_KEY = LEGACY_DETECTION_RULES_KEY;
 
-export interface DetectionRuleCondition { field: string; operator: string; value: string | number | boolean }
-export interface DetectionRule { id: string; name: string; enabled: boolean; match: 'all' | 'any'; conditions: DetectionRuleCondition[]; riskDelta: number; tag: string }
-export interface DetectionRuleMatch { id: string; name: string; riskDelta: number; appliedDelta: number; tag: string }
-export interface DetectionRuleEvaluation { caseId: string; domain: string; builtInRiskScore: number | null; customRiskDelta: number; contextualRiskScore: number | null; matchedRules: DetectionRuleMatch[]; suggestedTags: string[] }
+export type {
+  DetectionRule,
+  DetectionRuleEvaluation,
+  DetectionRuleMatch,
+  RuleCondition as DetectionRuleCondition,
+} from './analysis/detection-rule-model.ts';
 
 export async function loadDetectionRules(): Promise<DetectionRule[]> {
   return (await browserLocalDataProvider()).read(DETECTION_RULES_COLLECTION) as Promise<DetectionRule[]>;
@@ -40,21 +48,21 @@ function boundedRules(rules: DetectionRule[]): DetectionRule[] {
 
 export async function createDetectionRule(input: Omit<DetectionRule, 'id'>): Promise<DetectionRule[]> {
   return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
-    const rules = boundedRules(createRule(current, input).rules as DetectionRule[]);
+    const rules = boundedRules(createRule(current, input).rules);
     return { document: rules, result: rules };
   });
 }
 
 export async function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>): Promise<DetectionRule[]> {
   return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
-    const rules = boundedRules(updateRule(current, id, patch) as DetectionRule[]);
+    const rules = boundedRules(updateRule(current, id, patch));
     return { document: rules, result: rules };
   });
 }
 
 export async function deleteDetectionRule(id: string): Promise<DetectionRule[]> {
   return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
-    const rules = boundedRules((current as DetectionRule[]).filter((rule) => rule.id !== id));
+    const rules = boundedRules(current.filter((rule) => rule.id !== id));
     return { document: rules, result: rules };
   });
 }
@@ -62,7 +70,7 @@ export async function deleteDetectionRule(id: string): Promise<DetectionRule[]> 
 export async function importDetectionRules(raw: unknown): Promise<{ rules: DetectionRule[]; added: number; updated: number; skipped: number }> {
   return (await browserLocalDataProvider()).update(DETECTION_RULES_COLLECTION, (current) => {
     const result = mergeDetectionRules(current, raw);
-    const rules = boundedRules(result.rules as DetectionRule[]);
+    const rules = boundedRules(result.rules);
     return { document: rules, result: { rules, added: result.added, updated: result.updated, skipped: result.skipped } };
   });
 }
@@ -77,12 +85,12 @@ export async function exportDetectionRules(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-export function evaluateCaseRules(record: unknown, rules: DetectionRule[] = []): DetectionRuleEvaluation {
-  return evaluateDetectionRules(record, rules) as DetectionRuleEvaluation;
+export function evaluateCaseRules(record: CaseRecord, rules: DetectionRule[] = []): DetectionRuleEvaluation {
+  return evaluateDetectionRules(record, rules);
 }
 
-export function evaluateCasesAgainstRules(records: unknown[], rules: DetectionRule[] = []): DetectionRuleEvaluation[] {
-  return evaluateRuleSet(records, rules) as DetectionRuleEvaluation[];
+export function evaluateCasesAgainstRules(records: CaseRecord[], rules: DetectionRule[] = []): DetectionRuleEvaluation[] {
+  return evaluateRuleSet(records, rules);
 }
 
 export function ruleFieldDefinition(field: string) {

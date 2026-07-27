@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { riskTone, scoreTone } from '$lib/analysis/scoring.js';
+  import { riskTone, scoreTone } from '$lib/analysis/scoring.ts';
 
   type ScoreExplanation = {
     score: number;

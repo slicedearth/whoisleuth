@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, migrateLegacyBrowserData } from './helpers';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -110,4 +110,15 @@ test('dashboard local search remains usable without horizontal overflow on narro
   await expectNoHorizontalOverflow(page);
   await page.getByRole('link', { name: 'Open case', exact: true }).focus();
   await expect(page.getByRole('link', { name: 'Open case', exact: true })).toBeFocused();
+});
+
+test('dashboard local search reports an unavailable store without remaining in a loading state', async ({ page }) => {
+  await page.goto('/bulk');
+  await expect(page.locator('#domains')).toBeEditable();
+  await failBrowserLocalReads(page);
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+
+  await expect(page.locator('.summary-error')).toContainText('Saved-work counts and local search could not be refreshed.');
+  await expect(page.getByRole('alert')).toContainText('Saved-work counts and local search could not be refreshed.');
+  await expect(page.getByText('Preparing saved-work search.')).toHaveCount(0);
 });

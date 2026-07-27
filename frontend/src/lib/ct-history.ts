@@ -3,9 +3,9 @@ import {
   emptyCtHistoryStore,
   enforceCtHistoryBudget,
   recordCtHistorySearch,
-} from './analysis/ct-history.js';
-import { browserLocalDataProvider } from './browser-local-data-service.js';
-import { CT_HISTORY_COLLECTION, LEGACY_CT_HISTORY_KEY } from './browser-local-data-definitions.js';
+} from './analysis/ct-history.ts';
+import { browserLocalDataProvider } from './browser-local-data-service.ts';
+import { CT_HISTORY_COLLECTION, LEGACY_CT_HISTORY_KEY } from './browser-local-data-definitions.ts';
 
 export const CT_HISTORY_KEY = LEGACY_CT_HISTORY_KEY;
 

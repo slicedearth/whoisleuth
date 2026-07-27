@@ -13,7 +13,11 @@
     startInvestigationGuide,
     type InvestigationRecipeId,
   } from '$lib/investigation-guide';
-  import type { InvestigationSearchIndex } from '$lib/analysis/investigation-search.ts';
+  import {
+    unavailableInvestigationSearchIndex,
+    type InvestigationSearchIndex,
+  } from '$lib/analysis/investigation-search.ts';
+  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
 
   const quickActions: Array<{ href: string; label: string; detail: string; icon: IntelligenceIconName }> = [
     { href: '/lookup', label: 'Check one target', detail: 'Review a domain, IP address, or ASN across separately identified sources.', icon: 'lookup' },
@@ -23,25 +27,33 @@
 
   let counts = $state({ cases: 0, openCases: 0, watchlists: 0, profiles: 0 });
   let investigationIndex = $state<InvestigationSearchIndex | null>(null);
+  let summaryError = $state('');
   let guideDomain = $state('');
   let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
   let guideError = $state('');
   const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
 
   async function refreshLocalSummary() {
-    const [cases, watchlists, profiles, searchIndex] = await Promise.all([
-      loadCases(),
-      loadWatchlists(),
-      loadProfiles(),
-      loadLocalInvestigationSearchIndex(),
-    ]);
-    counts = {
-      cases: cases.length,
-      openCases: cases.filter((record) => record.status !== 'resolved').length,
-      watchlists: Object.keys(watchlists).length,
-      profiles: profiles.length,
-    };
-    investigationIndex = searchIndex;
+    summaryError = '';
+    try {
+      const [cases, watchlists, profiles, searchIndex] = await Promise.all([
+        loadCases(),
+        loadWatchlists(),
+        loadProfiles(),
+        loadLocalInvestigationSearchIndex(),
+      ]);
+      counts = {
+        cases: cases.length,
+        openCases: cases.filter((record) => record.status !== 'resolved').length,
+        watchlists: Object.keys(watchlists).length,
+        profiles: profiles.length,
+      };
+      investigationIndex = searchIndex;
+    } catch (cause) {
+      summaryError = 'Saved-work counts and local search could not be refreshed. Reload the Dashboard to try again.';
+      investigationIndex ??= unavailableInvestigationSearchIndex(summaryError);
+      if (!isExpectedBrowserLocalDataFailure(cause)) throw cause;
+    }
   }
 
   onMount(()=>{void refreshLocalSummary();});
@@ -101,6 +113,7 @@
       <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="brand" size={19} /></span><span class="summary-label">Brand profiles</span><strong>{counts.profiles}</strong><p>Saved analysis profile{counts.profiles === 1 ? '' : 's'}</p>
     </a>
   </div>
+  <p class="summary-error" role="status">{summaryError}</p>
 </section>
 
 <InvestigationSearch index={investigationIndex} />
@@ -122,8 +135,8 @@
         <option value={recipe.id}>{recipe.label}</option>
       {/each}
     </select>
-    <p class="recipe-detail">{selectedRecipe.summary}</p>
-    <label for="guide-domain">{selectedRecipe.targetLabel}</label>
+    <p class="recipe-detail">{selectedRecipe?.summary ?? ''}</p>
+    <label for="guide-domain">{selectedRecipe?.targetLabel ?? 'Domain'}</label>
     <div class="guide-input">
       <input id="guide-domain" bind:value={guideDomain} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="example.test">
       <button class="primary" type="submit">Start guide</button>
@@ -136,6 +149,8 @@
 <WorkspaceArchive onimport={refreshLocalSummary} />
 
 <style>
+  .summary-error{margin:14px 0 0;color:var(--warning);font-size:var(--text-sm)}
+  .summary-error:empty{display:none}
   .guide-launcher{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:24px;margin-top:28px;padding:21px}
   .guide-launcher h2{margin:4px 0 7px;font:700 var(--text-lg) var(--mono)}
   .guide-launcher>div>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}

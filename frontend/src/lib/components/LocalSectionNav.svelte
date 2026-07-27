@@ -63,7 +63,7 @@
           .filter((entry): entry is { link: (typeof links)[number]; element: HTMLElement } => Boolean(entry.element));
         if (sections.length === 0) return;
         const threshold = window.innerWidth <= 900 ? 138 : 112;
-        let current = sections[0].link.href;
+        let current = sections[0]?.link.href ?? '';
         for (const section of sections) {
           if (section.element.getBoundingClientRect().top <= threshold) current = section.link.href;
         }

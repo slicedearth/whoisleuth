@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -14,34 +13,35 @@ import { runUnifiedLookup } from '../lib/lookup.mts';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import {
   CASE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/case-model.js';
+} from '../frontend/src/lib/analysis/case-model.ts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/brand-profile-model.js';
+} from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   CAMPAIGN_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/campaign-model.js';
+} from '../frontend/src/lib/analysis/campaign-model.ts';
 import {
   evaluateRuleSet,
-} from '../frontend/src/lib/analysis/detection-rule-model.js';
+} from '../frontend/src/lib/analysis/detection-rule-model.ts';
 import {
   buildInvestigationProjection,
 } from '../frontend/src/lib/analysis/investigation-projection.ts';
 import {
   buildCaseRelationships,
   buildInvestigationCaseRelationships,
-} from '../frontend/src/lib/analysis/case-relationships.js';
+} from '../frontend/src/lib/analysis/case-relationships.ts';
 import {
   buildCaseRelationshipGraph,
   MAX_RELATIONSHIP_GRAPH_CASES,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
   projectCaseRelationshipGraph,
-} from '../frontend/src/lib/analysis/case-relationship-graph.js';
+} from '../frontend/src/lib/analysis/case-relationship-graph.ts';
 import {
   buildWorkspaceArchive,
   readWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
-} from '../frontend/src/lib/analysis/workspace-archive.js';
+} from '../frontend/src/lib/analysis/workspace-archive.ts';
+import WHOIS_FIXTURES from '../fixtures/whois-registry-fixtures.mts';
 
 type WritableLike = { write(value: string): unknown };
 type BenchmarkStatus = 'pass' | 'fail';
@@ -77,8 +77,6 @@ export const MAX_SPECIALIST_WORKFLOW_FAILURES = 12;
 export const MAX_SPECIALIST_WORKFLOW_DETAIL_LENGTH = 320;
 export const MAX_SPECIALIST_WORKFLOW_REGISTRY_FIXTURES = 500;
 
-const require = createRequire(import.meta.url);
-const WHOIS_FIXTURES = require('../fixtures/whois-registry-fixtures.js') as WhoisFixture[];
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const EARLIER = '2026-07-19T00:00:00.000Z';
 const RULES = Object.freeze([Object.freeze({

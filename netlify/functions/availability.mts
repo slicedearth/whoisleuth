@@ -16,7 +16,7 @@ const handleAvailability: NetlifyFunctionHandler = async (event) => {
   try {
     classified = classifyQuery(q);
   } catch (err) {
-    return json(400, { error: err.message });
+    return json(400, { error: err instanceof Error ? err.message : 'Invalid query' });
   }
   if (classified.type !== 'domain') {
     return json(200, { applicable: false, type: classified.type });

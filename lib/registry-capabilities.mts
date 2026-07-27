@@ -242,7 +242,7 @@ const DEFAULT_CAPABILITY = freezeCapability({
   rdapAccessProfile: 'iana-bootstrap',
   coverageState: 'discovery_only',
   fixtureScenarios: ['registered', 'not_found', 'rate_limited'],
-  verificationFiles: ['fixtures/whois-registry-fixtures.js'],
+  verificationFiles: ['fixtures/whois-registry-fixtures.mts'],
   documentationUrls: [],
   limitation: DISCOVERY_LIMITATION,
 });
@@ -731,7 +731,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     id: 'gt-registry-web', suffixes: ['gt'], registryClass: 'country-code',
     whoisParserProfile: 'generic-colon', fallbackProfile: 'gt-registry-web',
     fixtureScenarios: ['registered', 'not_found', 'unavailable'],
-    verificationFiles: ['test/whois-gt-fallback.test.js'],
+    verificationFiles: ['test/whois-gt-fallback.test.mts'],
   },
   {
     id: 'carnet-icann-colon', suffixes: ['hr'], registryClass: 'country-code',
@@ -1259,7 +1259,7 @@ const EXPLICIT_CAPABILITIES = EXPLICIT_CAPABILITY_SEEDS.map((entry) => {
     whoisAccessProfile: entry.whoisAccessProfile || 'iana-referral',
     rdapAccessProfile,
     coverageState: entry.coverageState || 'fixture_verified',
-    verificationFiles: entry.verificationFiles || ['fixtures/whois-registry-fixtures.js'],
+    verificationFiles: entry.verificationFiles || ['fixtures/whois-registry-fixtures.mts'],
     documentationUrls: entry.documentationUrls || [],
     limitation: entry.limitation || (rdapAccessProfile === 'no-iana-service'
       ? WHOIS_ONLY_FIXTURE_LIMITATION
@@ -1364,7 +1364,7 @@ function registryCompatibilityMatrix(): RegistryCompatibilityRow[] {
       ...cloneCapability(capability, { suffixes: [suffix] }),
       explicitSuffixProfile: true,
     })))
-    .sort((a, b) => a.suffixes[0].localeCompare(b.suffixes[0]));
+    .sort((a, b) => (a.suffixes[0] ?? '').localeCompare(b.suffixes[0] ?? ''));
 }
 
 export {

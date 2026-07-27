@@ -5,6 +5,7 @@
 import { promises as dns } from 'node:dns';
 
 import { fetchRdapRecord } from './rdap.mts';
+import { nonEmptyErrorMessage } from './error-detail.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { classifyMxRecords } from './dns-mx.mts';
 import type { MxRecord } from './dns-mx.mts';
@@ -65,6 +66,12 @@ type PostureInput = {
   dkim: DkimQuery[];
 };
 
+function errorRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 function asMxRecords(records: unknown[]): MxRecord[] {
   return records as MxRecord[];
 }
@@ -117,8 +124,9 @@ async function resolveDns(label: string, factory: () => Promise<unknown[]>): Pro
   try {
     return { records: await withTimeout(factory(), label), error: null };
   } catch (err) {
-    if (MISSING_DNS_CODES.has(err && err.code)) return { records: [], error: null };
-    return { records: [], error: err && err.message ? err.message : String(err) };
+    const error = errorRecord(err);
+    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return { records: [], error: null };
+    return { records: [], error: nonEmptyErrorMessage(err, String(err)) };
   }
 }
 
@@ -456,7 +464,13 @@ async function fetchMtaStsPolicy(domain: string): Promise<MtaStsPolicyFetch> {
     if (body.truncated) return { text: '', contentType: res.headers.get('content-type'), error: `Policy exceeds ${MAX_POLICY_BYTES} bytes.` };
     return { text: body.text, contentType: res.headers.get('content-type'), error: null };
   } catch (err) {
-    return { text: '', contentType: null, error: err && err.name === 'AbortError' ? 'Policy fetch timed out.' : (err.message || String(err)) };
+    return {
+      text: '',
+      contentType: null,
+      error: errorRecord(err).name === 'AbortError'
+        ? 'Policy fetch timed out.'
+        : nonEmptyErrorMessage(err, String(err)),
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -479,14 +493,21 @@ async function checkDomainPosture(domain: string, { dkimSelectors = [] }: { dkim
       selector,
       ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dns.resolveTxt(`${selector}._domainkey.${domain}`)),
     }))),
-    fetchRdapRecord('domain', domain).catch((err) => ({ error: err.message || String(err) })),
+    fetchRdapRecord('domain', domain).catch((err: unknown) => ({
+      error: nonEmptyErrorMessage(err, String(err)),
+    })),
   ]);
 
   const parsedMtaDns = mtaStsDns.error ? null : parseMtaStsDnsRecords(mtaStsDns.records);
   const mtaStsPolicy = parsedMtaDns?.valid ? await fetchMtaStsPolicy(domain) : null;
-  const dnssec = rdap?.error
-    ? { value: null, error: rdap.error }
-    : { value: rdap?.parsed?.dnssec || null, error: null };
+  const dnssec = !rdap
+    ? { value: null, error: 'RDAP did not return a domain record.' }
+    : 'error' in rdap
+      ? { value: null, error: rdap.error }
+    : {
+        value: rdap.parsed && 'dnssec' in rdap.parsed ? rdap.parsed.dnssec : null,
+        error: null,
+      };
   const report = buildPostureReport(domain, { spf, dmarc, mx, caa, mtaStsDns, mtaStsPolicy, tlsRpt, bimi, dkim, dnssec });
   return { ...report, checkedAt: new Date().toISOString(), dkimSelectors: selectors };
 }

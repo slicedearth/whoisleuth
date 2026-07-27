@@ -1,5 +1,14 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
+import type {
+  BrowserLocalCollectionManifest,
+  BrowserLocalStoredRecord,
+} from '../frontend/src/lib/browser-local-data';
+import { decodeBrowserLocalCollectionRecord } from '../frontend/src/lib/browser-local-data-definitions';
+import type {
+  BrowserLocalDecodedCollectionRecord,
+  BrowserLocalCollectionId,
+} from '../frontend/src/lib/browser-local-data-definitions';
 
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
@@ -8,9 +17,14 @@ const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 
 type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
-type BrowserLocalCollectionSnapshot = {
-  manifest: any;
-  records: any[];
+type BrowserLocalCollectionSnapshot<Collection extends BrowserLocalCollectionId> = {
+  manifest: BrowserLocalCollectionManifest;
+  records: BrowserLocalDecodedCollectionRecord<Collection>[];
+};
+
+type RawBrowserLocalCollectionSnapshot = {
+  manifest: BrowserLocalCollectionManifest;
+  records: BrowserLocalStoredRecord[];
 };
 
 type BrowserLocalCollectionReadOptions = Readonly<{
@@ -39,11 +53,22 @@ export async function boundingBox(locator: Locator) {
   return box!;
 }
 
-async function tryReadBrowserLocalCollection(
+export function requiredValue<Value>(
+  value: Value | null | undefined,
+  message: string,
+): Value {
+  if (value === null || value === undefined) throw new Error(message);
+  return value;
+}
+
+async function tryReadBrowserLocalCollection<Collection extends BrowserLocalCollectionId>(
   page: Page,
-  collection: string,
-): Promise<BrowserLocalCollectionSnapshot | null> {
-  return page.evaluate(async ({ databaseName, collectionId }) => {
+  collection: Collection,
+): Promise<BrowserLocalCollectionSnapshot<Collection> | null> {
+  const snapshot = await page.evaluate(async ({
+    databaseName,
+    collectionId,
+  }): Promise<RawBrowserLocalCollectionSnapshot | null> => {
     if (typeof indexedDB.databases !== 'function') {
       throw new Error('The browser does not support non-creating IndexedDB discovery.');
     }
@@ -60,14 +85,16 @@ async function tryReadBrowserLocalCollection(
         || !database.objectStoreNames.contains('manifests')) return null;
 
       const transaction = database.transaction(['records', 'manifests'], 'readonly');
-      const manifestRequest = transaction.objectStore('manifests').get(collectionId);
-      const recordRequest = transaction.objectStore('records').index('collection').getAll(collectionId);
+      const manifestRequest = transaction.objectStore('manifests').get(collectionId) as
+        IDBRequest<BrowserLocalCollectionManifest | undefined>;
+      const recordRequest = transaction.objectStore('records').index('collection').getAll(collectionId) as
+        IDBRequest<BrowserLocalStoredRecord[]>;
       const [manifest, records] = await Promise.all([
-        new Promise<any>((resolve, reject) => {
+        new Promise<BrowserLocalCollectionManifest | undefined>((resolve, reject) => {
           manifestRequest.onsuccess = () => resolve(manifestRequest.result);
           manifestRequest.onerror = () => reject(manifestRequest.error);
         }),
-        new Promise<any[]>((resolve, reject) => {
+        new Promise<BrowserLocalStoredRecord[]>((resolve, reject) => {
           recordRequest.onsuccess = () => resolve(recordRequest.result);
           recordRequest.onerror = () => reject(recordRequest.error);
         }),
@@ -80,24 +107,29 @@ async function tryReadBrowserLocalCollection(
       if (!manifest) return null;
       return {
         manifest,
-        records: records
-          .sort((left, right) => left.ordinal - right.ordinal)
-          .map((record) => JSON.parse(record.payload)),
+        records: records.sort((left, right) => left.ordinal - right.ordinal),
       };
     } finally {
       database.close();
     }
   }, { databaseName: LOCAL_DATA_DATABASE_NAME, collectionId: collection });
+  if (!snapshot) return null;
+  return {
+    manifest: snapshot.manifest,
+    records: await Promise.all(snapshot.records.map((record) => (
+      decodeBrowserLocalCollectionRecord(collection, record, snapshot.manifest)
+    ))),
+  };
 }
 
-export async function readBrowserLocalCollection(
+export async function readBrowserLocalCollection<Collection extends BrowserLocalCollectionId>(
   page: Page,
-  collection: string,
+  collection: Collection,
   options: BrowserLocalCollectionReadOptions = {},
-) {
+): Promise<BrowserLocalCollectionSnapshot<Collection>> {
   const minimumRecords = options.minimumRecords ?? 0;
   const minimumRevision = options.minimumRevision ?? 1;
-  let snapshot: BrowserLocalCollectionSnapshot | null = null;
+  let snapshot: BrowserLocalCollectionSnapshot<Collection> | null = null;
 
   await expect.poll(async () => {
     snapshot = await tryReadBrowserLocalCollection(page, collection);
@@ -157,6 +189,18 @@ export async function failBrowserLocalManifestWrites(page: Page, collection: str
       return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
     };
   }, collection);
+}
+
+export async function failBrowserLocalReads(page: Page) {
+  await page.evaluate(() => {
+    const originalGet = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function get(query: IDBValidKey | IDBKeyRange) {
+      if (this.name === 'manifests') {
+        throw new DOMException('Browser-local reads are unavailable', 'InvalidStateError');
+      }
+      return originalGet.call(this, query);
+    };
+  });
 }
 
 // Computed content of a pseudo-element - used to check the CSS-only

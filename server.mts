@@ -1,4 +1,5 @@
 import express from 'express';
+import type { IncomingHttpHeaders } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,12 +40,12 @@ import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorRespons
 
 type RequestLike = {
   protocol: string;
-  headers: Record<string, string | undefined>;
-  socket?: { remoteAddress?: string | null };
+  headers: IncomingHttpHeaders;
+  socket?: { remoteAddress?: string | null | undefined } | undefined;
   body?: unknown;
   query: Record<string, unknown>;
   path: string;
-  networkFeaturePolicy?: NetworkFeaturePolicy;
+  networkFeaturePolicy?: NetworkFeaturePolicy | undefined;
 };
 
 type ResponseLike = {
@@ -241,7 +242,7 @@ app.get('/api/lookup', apiRateLimit, requireAuth, requireFeature('lookup'), asyn
         malwareHostIntelligence,
         malwareIocIntelligence,
         securityTxt,
-        featurePolicy: req.networkFeaturePolicy,
+        ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
       });
       res.json(createLookupHttpResponse(q, classified, result));
     } catch (err) {
@@ -328,7 +329,7 @@ app.get('/api/availability', apiRateLimit, requireAuth, requireFeature('availabi
     try {
       const result = await checkDomainAvailability(classified.value, {
         fast,
-        featurePolicy: req.networkFeaturePolicy,
+        ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
       });
       // domain is the registrable domain actually looked up; inputHostname
       // preserves what the user typed so the UI can note when a subdomain query

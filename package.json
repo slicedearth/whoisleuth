@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "1.19.0",
+  "version": "1.19.1",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
@@ -24,7 +24,7 @@
   "scripts": {
     "start": "npm run build && node server.mts",
     "test": "node --test",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
+    "typecheck": "npm run sync --workspace=frontend && tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "dev": "npm run dev --workspace=frontend",
     "build": "npm run build --workspace=frontend",
     "check": "npm run check --workspace=frontend",
@@ -57,6 +57,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
+    "@types/express": "^5.0.6",
     "@types/node": "^26.1.0",
     "fast-check": "^4.9.0",
     "retire": "^5.4.3",
