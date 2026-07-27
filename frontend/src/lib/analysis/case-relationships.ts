@@ -4,6 +4,7 @@
 // request, aggregate score, or new persisted record is produced here.
 
 import {
+  type CaseEvidenceSnapshot,
   MAX_CASES,
   MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
   normalizeDomain,
@@ -73,13 +74,127 @@ const PROJECTION_FILTER_COMPLETENESS = new Set(['all', 'complete', 'partial', 'u
 const PERIOD_MILLISECONDS = new Map([['7d', 7 * 86400000], ['30d', 30 * 86400000], ['365d', 365 * 86400000]]);
 const PROJECTION_SCHEMA_VERSION_FIELDS = ['case', 'riskModel', 'httpSummary', 'brandProfile', 'pageBaseline', 'pageIdentity', 'pageFingerprint', 'campaign', 'relationshipEvidence', 'relationshipObservation'];
 
-/** @param {unknown} value */
-function safeCaseId(value) {
+export interface CaseRelationshipMember {
+  id: string;
+  domain: string;
+  entityId?: string;
+}
+
+export interface CaseRelationshipCampaign {
+  id: string;
+  label: string;
+  entityId: string;
+}
+
+export interface CaseRelationshipObservation {
+  id: string;
+  source: string;
+  store: string;
+  observedAt: string;
+  firstObservedAt: string;
+  scanDepth: string;
+  status: string;
+  complete: boolean | null;
+  truncated: boolean | null;
+  schemaVersions: Record<string, number>;
+  limitations: string[];
+}
+
+export interface CaseRelationshipGroup {
+  type: string;
+  label: string;
+  method: string;
+  value: string;
+  cases: CaseRelationshipMember[];
+  description: string;
+  methods?: string[];
+  classifications?: string[];
+  campaigns?: CaseRelationshipCampaign[];
+  sources?: string[];
+  scanDepths?: string[];
+  firstObservedAt?: string;
+  lastObservedAt?: string;
+  complete?: boolean | null;
+  truncated?: boolean;
+  observations?: CaseRelationshipObservation[];
+  omittedObservations?: number;
+  limitations?: string[];
+}
+
+export interface CaseRelationshipScopeOption {
+  value: string;
+  kind: 'case' | 'campaign';
+  label: string;
+}
+
+export interface CaseRelationshipSummary {
+  version: number;
+  groups: CaseRelationshipGroup[];
+  truncated: boolean;
+  limitations: string[];
+  projectionVersion?: number | null;
+  state?: string;
+  generatedAt?: string;
+  sources?: string[];
+  scopeOptions?: CaseRelationshipScopeOption[];
+  filterOptionsTruncated?: boolean;
+}
+
+export interface CaseRelationshipFilterOptions {
+  type?: unknown;
+  source?: unknown;
+  period?: unknown;
+  completeness?: unknown;
+  scope?: unknown;
+  [key: string]: unknown;
+}
+
+interface ProjectionDefinition {
+  type: string;
+  label: string;
+  description: string;
+}
+
+interface ProjectionEntity {
+  id: string;
+  type: string;
+  canonical: unknown;
+  label: unknown;
+  properties: Record<string, unknown>;
+}
+
+interface ProjectionCaseMember extends CaseRelationshipMember {
+  entityId: string;
+}
+
+interface ProjectionBucket {
+  type: string;
+  label: string;
+  value: string;
+  description: string;
+  cases: Map<string, ProjectionCaseMember>;
+  campaigns: Map<string, CaseRelationshipCampaign>;
+  methods: Set<string>;
+  classifications: Set<string>;
+  observations: Map<string, CaseRelationshipObservation>;
+  limitations: unknown[];
+  firstObservedAt: string;
+  lastObservedAt: string;
+  complete: boolean | null;
+  truncated: boolean;
+}
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function safeCaseId(value: unknown): string {
   return typeof value === 'string' && SAFE_CASE_ID_RE.test(value) ? value : '';
 }
 
-/** @param {unknown} value */
-function normalizedOrigin(value) {
+function normalizedOrigin(value: unknown): string {
   if (typeof value !== 'string' || value.length > 300 || /[\x00-\x1f\x7f]/.test(value)) return '';
   try {
     const parsed = new URL(value);
@@ -91,10 +206,9 @@ function normalizedOrigin(value) {
   }
 }
 
-/** @param {unknown} value */
-function latestNormalizedSnapshot(value) {
+function latestNormalizedSnapshot(value: unknown): CaseEvidenceSnapshot | null {
   if (!Array.isArray(value)) return null;
-  let latest = null;
+  let latest: CaseEvidenceSnapshot | null = null;
   for (const candidate of value.slice(0, MAX_EVIDENCE_SNAPSHOTS_PER_CASE)) {
     const snapshot = normalizeSnapshot(candidate);
     if (!snapshot) continue;
@@ -103,8 +217,12 @@ function latestNormalizedSnapshot(value) {
   return latest;
 }
 
-/** @param {Map<string, Map<string, string>>} buckets @param {string} value @param {string} id @param {string} domain */
-function addBucket(buckets, value, id, domain) {
+function addBucket(
+  buckets: Map<string, Map<string, string>>,
+  value: string,
+  id: string,
+  domain: string,
+): void {
   if (!value) return;
   if (!buckets.has(value)) buckets.set(value, new Map());
   buckets.get(value)?.set(id, domain);
@@ -118,7 +236,14 @@ function addBucket(buckets, value, id, domain) {
  * @param {Array<{id:string,domain:string}>} cases
  * @param {string} description
  */
-function group(type, label, method, value, cases, description) {
+function group(
+  type: string,
+  label: string,
+  method: string,
+  value: string,
+  cases: CaseRelationshipMember[],
+  description: string,
+): CaseRelationshipGroup {
   return { type, label, method, value, cases, description };
 }
 
@@ -128,28 +253,29 @@ function group(type, label, method, value, cases, description) {
  * final-origin comparison requires a deep HTTP observation.
  * @param {unknown} rawCases
  */
-export function buildCaseRelationships(rawCases) {
+export function buildCaseRelationships(rawCases: unknown): CaseRelationshipSummary {
   const input = Array.isArray(rawCases) ? rawCases : [];
   let truncated = input.length > MAX_RELATIONSHIP_CASES;
-  const nameserverSets = new Map();
-  const finalOrigins = new Map();
-  const seenIds = new Set();
-  const seenDomains = new Set();
+  const nameserverSets = new Map<string, Map<string, string>>();
+  const finalOrigins = new Map<string, Map<string, string>>();
+  const seenIds = new Set<string>();
+  const seenDomains = new Set<string>();
 
   for (const raw of input.slice(0, MAX_RELATIONSHIP_CASES)) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-    const id = safeCaseId(raw.id);
-    const domain = normalizeDomain(raw.domain);
+    const item = plainRecord(raw);
+    if (!item) continue;
+    const id = safeCaseId(item.id);
+    const domain = normalizeDomain(item.domain);
     if (!id || !domain || seenIds.has(id) || seenDomains.has(domain)) {
       if (id && domain) truncated = true;
       continue;
     }
-    if (!Array.isArray(raw.evidenceHistory)
-      || raw.evidenceHistory.length > MAX_EVIDENCE_SNAPSHOTS_PER_CASE) {
-      if (Array.isArray(raw.evidenceHistory)) truncated = true;
+    if (!Array.isArray(item.evidenceHistory)
+      || item.evidenceHistory.length > MAX_EVIDENCE_SNAPSHOTS_PER_CASE) {
+      if (Array.isArray(item.evidenceHistory)) truncated = true;
       continue;
     }
-    const snapshot = latestNormalizedSnapshot(raw.evidenceHistory);
+    const snapshot = latestNormalizedSnapshot(item.evidenceHistory);
     if (!snapshot) continue;
     seenIds.add(id);
     seenDomains.add(domain);
@@ -163,7 +289,7 @@ export function buildCaseRelationships(rawCases) {
     }
   }
 
-  const output = [];
+  const output: CaseRelationshipGroup[] = [];
   for (const [value, records] of nameserverSets) {
     if (records.size < 2) continue;
     output.push(group(
@@ -187,7 +313,7 @@ export function buildCaseRelationships(rawCases) {
     ));
   }
 
-  const order = new Map([
+  const order = new Map<string, number>([
     'nameserver_set',
     'http_final_origin',
     'ip_address',
@@ -218,26 +344,26 @@ export function buildCaseRelationships(rawCases) {
   };
 }
 
-function safeProjectionText(value, maximum = 300) {
+function safeProjectionText(value: unknown, maximum = 300): string {
   if (typeof value !== 'string' || value.length > maximum * 4 || /[\x00-\x1f\x7f]/.test(value)) return '';
   return value.replace(/\s+/g, ' ').trim().slice(0, maximum).trim();
 }
 
-function safeProjectionTimestamp(value) {
+function safeProjectionTimestamp(value: unknown): string {
   if (typeof value !== 'string' || value.length > 64 || /[\x00-\x1f\x7f]/.test(value)) return '';
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
 }
 
-function mergeProjectionComplete(left, right) {
+function mergeProjectionComplete(left: unknown, right: unknown): boolean | null {
   if (left === false || right === false) return false;
   if (left === true && right === true) return true;
   return null;
 }
 
-function projectionLimitations(values) {
-  const output = [];
-  const seen = new Set();
+function projectionLimitations(values: unknown): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
   for (const value of Array.isArray(values) ? values.slice(0, MAX_PROJECTION_LIMITATIONS * 4) : []) {
     const normalized = safeProjectionText(value, 300);
     if (!normalized || seen.has(normalized)) continue;
@@ -248,16 +374,20 @@ function projectionLimitations(values) {
   return output;
 }
 
-function projectionSchemaVersions(value) {
+function projectionSchemaVersions(value: unknown): Record<string, number> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const record = /** @type {Record<string, unknown>} */ (value);
-  return Object.fromEntries(PROJECTION_SCHEMA_VERSION_FIELDS.flatMap((field) => {
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(PROJECTION_SCHEMA_VERSION_FIELDS.flatMap<[string, number]>((field) => {
     const version = record[field];
-    return Number.isSafeInteger(version) && Number(version) > 0 ? [[field, version]] : [];
+    return Number.isSafeInteger(version) && Number(version) > 0 ? [[field, Number(version)]] : [];
   }));
 }
 
-function emptyProjectionRelationships(state, version = null, limitations = []) {
+function emptyProjectionRelationships(
+  state: string,
+  version: number | null = null,
+  limitations: unknown[] = [],
+): CaseRelationshipSummary {
   return {
     version: INVESTIGATION_CASE_RELATIONSHIP_VERSION,
     projectionVersion: version,
@@ -281,13 +411,13 @@ function emptyProjectionRelationships(state, version = null, limitations = []) {
  * nameserver-set and comparable HTTP-origin relationships shared by cases.
  * @param {unknown} rawProjection
  */
-export function buildInvestigationCaseRelationships(rawProjection) {
-  if (!rawProjection || typeof rawProjection !== 'object' || Array.isArray(rawProjection)) {
+export function buildInvestigationCaseRelationships(rawProjection: unknown): CaseRelationshipSummary {
+  const projection = plainRecord(rawProjection);
+  if (!projection) {
     return emptyProjectionRelationships('absent');
   }
-  const projection = /** @type {Record<string, any>} */ (rawProjection);
-  const projectionVersion = Number.isSafeInteger(projection.version) && projection.version > 0
-    ? projection.version
+  const projectionVersion = Number.isSafeInteger(projection.version) && Number(projection.version) > 0
+    ? Number(projection.version)
     : null;
   if (projection.schema !== INVESTIGATION_PROJECTION_SCHEMA || projectionVersion === null) {
     return emptyProjectionRelationships('invalid', projectionVersion, ['The local investigation projection was malformed and was not interpreted.']);
@@ -302,57 +432,70 @@ export function buildInvestigationCaseRelationships(rawProjection) {
     return emptyProjectionRelationships('invalid', projectionVersion, ['The local investigation projection did not match the current relationship contract.']);
   }
 
-  const entities = new Map();
+  const entities = new Map<string, ProjectionEntity>();
   for (const value of projection.entities.slice(0, MAX_PROJECTION_ENTITIES)) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-    const id = safeProjectionText(value.id, 100);
-    const type = safeProjectionText(value.type, 40);
+    const item = plainRecord(value);
+    if (!item) continue;
+    const id = safeProjectionText(item.id, 100);
+    const type = safeProjectionText(item.type, 40);
     if (!id || !type || entities.has(id)) continue;
-    entities.set(id, value);
+    entities.set(id, {
+      id,
+      type,
+      canonical: item.canonical,
+      label: item.label,
+      properties: plainRecord(item.properties) || {},
+    });
   }
-  const observations = new Map();
+  const observations = new Map<string, Record<string, unknown>>();
   for (const value of projection.observations.slice(0, MAX_PROJECTION_OBSERVATIONS)) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-    const id = safeProjectionText(value.id, 100);
-    if (id && !observations.has(id)) observations.set(id, value);
+    const item = plainRecord(value);
+    if (!item) continue;
+    const id = safeProjectionText(item.id, 100);
+    if (id && !observations.has(id)) observations.set(id, item);
   }
 
   const relationships = projection.relationships.slice(0, MAX_PROJECTION_RELATIONSHIPS)
-    .filter((value) => value && typeof value === 'object' && !Array.isArray(value));
-  const casesByDomain = new Map();
-  const campaignsByDomain = new Map();
+    .map(plainRecord)
+    .filter((value): value is Record<string, unknown> => value !== null);
+  const casesByDomain = new Map<string, Map<string, ProjectionCaseMember>>();
+  const campaignsByDomain = new Map<string, Map<string, CaseRelationshipCampaign>>();
   for (const relationship of relationships) {
-    const from = entities.get(relationship.from);
-    const to = entities.get(relationship.to);
+    const fromId = safeProjectionText(relationship.from, 100);
+    const toId = safeProjectionText(relationship.to, 100);
+    const from = entities.get(fromId);
+    const to = entities.get(toId);
     if (!from || !to) continue;
     if (relationship.type === 'case_documents_domain' && from.type === 'case' && to.type === 'domain') {
       const id = safeCaseId(from.properties?.caseId || from.canonical);
       const domain = normalizeDomain(from.properties?.domain || to.properties?.domain || to.canonical);
       if (!id || !domain) continue;
       if (!casesByDomain.has(to.id)) casesByDomain.set(to.id, new Map());
-      casesByDomain.get(to.id).set(id, { id, domain, entityId: from.id });
+      casesByDomain.get(to.id)?.set(id, { id, domain, entityId: from.id });
     }
     if (relationship.type === 'campaign_contains_domain' && from.type === 'campaign' && to.type === 'domain') {
       const id = safeCaseId(from.properties?.campaignId || from.canonical);
       const label = safeProjectionText(from.properties?.name || from.label, 100);
       if (!id || !label) continue;
       if (!campaignsByDomain.has(to.id)) campaignsByDomain.set(to.id, new Map());
-      campaignsByDomain.get(to.id).set(id, { id, label, entityId: from.id });
+      campaignsByDomain.get(to.id)?.set(id, { id, label, entityId: from.id });
     }
   }
 
-  const buckets = new Map();
+  const buckets = new Map<string, ProjectionBucket>();
   let truncated = projection.truncated === true
     || projection.entities.length > MAX_PROJECTION_ENTITIES
     || projection.observations.length > MAX_PROJECTION_OBSERVATIONS
     || projection.relationships.length > relationships.length;
   for (const relationship of relationships) {
-    const definition = PROJECTION_RELATIONSHIP_TYPES.get(relationship.type);
+    const relationshipType = safeProjectionText(relationship.type, 80);
+    const definition = PROJECTION_RELATIONSHIP_TYPES.get(relationshipType) as ProjectionDefinition | undefined;
     if (!definition) continue;
-    const domainEntity = entities.get(relationship.from);
-    const targetEntity = entities.get(relationship.to);
-    const caseMap = casesByDomain.get(domainEntity?.id);
-    if (!domainEntity || domainEntity.type !== 'domain' || !targetEntity || !caseMap?.size) continue;
+    const domainEntity = entities.get(safeProjectionText(relationship.from, 100));
+    const targetEntity = entities.get(safeProjectionText(relationship.to, 100));
+    if (!domainEntity || domainEntity.type !== 'domain' || !targetEntity) continue;
+    const caseMap = casesByDomain.get(domainEntity.id);
+    if (!caseMap?.size) continue;
     const value = safeProjectionText(targetEntity.label || targetEntity.canonical, 300);
     if (!value) continue;
     const key = `${definition.type}\u0000${targetEntity.id}`;
@@ -362,11 +505,11 @@ export function buildInvestigationCaseRelationships(rawProjection) {
         label: definition.label,
         value,
         description: definition.description,
-        cases: new Map(),
-        campaigns: new Map(),
-        methods: new Set(),
-        classifications: new Set(),
-        observations: new Map(),
+        cases: new Map<string, ProjectionCaseMember>(),
+        campaigns: new Map<string, CaseRelationshipCampaign>(),
+        methods: new Set<string>(),
+        classifications: new Set<string>(),
+        observations: new Map<string, CaseRelationshipObservation>(),
         limitations: [],
         firstObservedAt: '',
         lastObservedAt: '',
@@ -375,6 +518,7 @@ export function buildInvestigationCaseRelationships(rawProjection) {
       });
     }
     const bucket = buckets.get(key);
+    if (!bucket) continue;
     for (const [id, item] of caseMap) bucket.cases.set(id, item);
     for (const [id, item] of (campaignsByDomain.get(domainEntity.id) || new Map())) bucket.campaigns.set(id, item);
     const method = safeProjectionText(relationship.method, 200);
@@ -392,7 +536,8 @@ export function buildInvestigationCaseRelationships(rawProjection) {
       : []));
     const sourceObservationIds = Array.isArray(relationship.sourceObservationIds) ? relationship.sourceObservationIds : [];
     if (sourceObservationIds.length > MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS * 2) bucket.truncated = true;
-    for (const id of sourceObservationIds.slice(0, MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS * 2)) {
+    for (const rawId of sourceObservationIds.slice(0, MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS * 2)) {
+      const id = safeProjectionText(rawId, 100);
       const observation = observations.get(id);
       if (!observation) {
         bucket.truncated = true;
@@ -418,7 +563,7 @@ export function buildInvestigationCaseRelationships(rawProjection) {
     }
   }
 
-  const order = new Map([
+  const order = new Map<string, number>([
     'nameserver_set',
     'http_final_origin',
     'ip_address',
@@ -473,9 +618,9 @@ export function buildInvestigationCaseRelationships(rawProjection) {
   const sourceOptionsTruncated = sourceValues.length < allSourceValues.length;
   const cases = new Map(groups.flatMap((group) => group.cases.map((item) => [item.id, item])));
   const campaigns = new Map(groups.flatMap((group) => group.campaigns.map((item) => [item.id, item])));
-  const scopeOptions = [
-    ...[...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain)).map((item) => ({ value: `case:${item.id}`, kind: 'case', label: item.domain })),
-    ...[...campaigns.values()].sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id)).map((item) => ({ value: `campaign:${item.id}`, kind: 'campaign', label: item.label })),
+  const scopeOptions: CaseRelationshipScopeOption[] = [
+    ...[...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain)).map((item) => ({ value: `case:${item.id}`, kind: 'case' as const, label: item.domain })),
+    ...[...campaigns.values()].sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id)).map((item) => ({ value: `campaign:${item.id}`, kind: 'campaign' as const, label: item.label })),
   ].slice(0, MAX_RELATIONSHIP_SCOPE_OPTIONS);
   const scopeOptionsTruncated = cases.size + campaigns.size > scopeOptions.length;
   const filterOptionsTruncated = sourceOptionsTruncated || scopeOptionsTruncated;
@@ -498,12 +643,15 @@ export function buildInvestigationCaseRelationships(rawProjection) {
   };
 }
 
-function projectionFilterOption(value, allowed, fallback = 'all') {
+function projectionFilterOption(value: unknown, allowed: Set<string>, fallback = 'all'): string {
   return typeof value === 'string' && allowed.has(value) ? value : fallback;
 }
 
 /** Applies shared bounded provenance filters to a projection-backed summary. */
-export function filterInvestigationCaseRelationships(summary, rawOptions = {}) {
+export function filterInvestigationCaseRelationships(
+  summary: CaseRelationshipSummary,
+  rawOptions: CaseRelationshipFilterOptions = {},
+) {
   const groups = Array.isArray(summary?.groups) ? summary.groups : [];
   const type = projectionFilterOption(rawOptions.type, PROJECTION_FILTER_TYPES);
   const source = projectionFilterOption(rawOptions.source, new Set(['all', ...(Array.isArray(summary?.sources) ? summary.sources : [])]));
@@ -514,13 +662,13 @@ export function filterInvestigationCaseRelationships(summary, rawOptions = {}) {
   const cutoff = period === 'all' || !generatedAt ? null : Date.parse(generatedAt) - Number(PERIOD_MILLISECONDS.get(period));
   const filtered = groups.filter((group) => {
     if (type !== 'all' && group.type !== type) return false;
-    if (source !== 'all' && !group.sources.includes(source)) return false;
-    if (cutoff !== null && Date.parse(group.lastObservedAt) < cutoff) return false;
+    if (source !== 'all' && !(group.sources || []).includes(source)) return false;
+    if (cutoff !== null && Date.parse(group.lastObservedAt || '') < cutoff) return false;
     if (completeness === 'complete' && !(group.complete === true && group.truncated !== true)) return false;
     if (completeness === 'partial' && !(group.complete === false || group.truncated === true)) return false;
     if (completeness === 'unknown' && !(group.complete === null && group.truncated !== true)) return false;
     if (scope.startsWith('case:') && !group.cases.some((item) => `case:${item.id}` === scope)) return false;
-    if (scope.startsWith('campaign:') && !group.campaigns.some((item) => `campaign:${item.id}` === scope)) return false;
+    if (scope.startsWith('campaign:') && !(group.campaigns || []).some((item) => `campaign:${item.id}` === scope)) return false;
     return true;
   });
   return {

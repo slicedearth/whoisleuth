@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
-  import { projectCaseRelationshipTable } from '$lib/analysis/case-relationship-table.js';
+  import { projectCaseRelationshipTable } from '$lib/analysis/case-relationship-table.ts';
   import Pagination from '$lib/components/Pagination.svelte';
 
   let { records, summary, onselect }:{records:CaseRecord[];summary:any;onselect?:(record:CaseRecord)=>void}=$props();

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-const evidence = await import('../frontend/src/lib/analysis/relationship-evidence.js');
+const evidence = await import('../frontend/src/lib/analysis/relationship-evidence.ts');
 
 function availability(overrides = {}) {
   return {

@@ -20,7 +20,7 @@
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
   import { computeOpportunityScore, explainRiskScore, formatActivityCell } from '$lib/analysis/scoring.ts';
   import { entityDisplayName, parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
-  import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.js';
+  import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
   import { loadRelationshipObservations, retainRelationshipObservation } from '$lib/relationship-observations';
   import { ctCsvFields } from '$lib/analysis/bulk-export.ts';

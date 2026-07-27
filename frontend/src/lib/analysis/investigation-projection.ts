@@ -22,7 +22,7 @@ import {
   MAX_NAMESERVERS_PER_ROW,
   MAX_RELATIONSHIP_ROWS,
   RELATIONSHIP_EVIDENCE_VERSION,
-} from './relationship-evidence.js';
+} from './relationship-evidence.ts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,

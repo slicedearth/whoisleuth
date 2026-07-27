@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
-  import { buildCaseRelationships } from '$lib/analysis/case-relationships.js';
+  import { buildCaseRelationships } from '$lib/analysis/case-relationships.ts';
 
   let { record, records, onselect }:{record:CaseRecord;records:CaseRecord[];onselect?:(record:CaseRecord)=>void}=$props();
   const summary=$derived(buildCaseRelationships(records));

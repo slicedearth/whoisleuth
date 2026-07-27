@@ -8,13 +8,13 @@ import {
   MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP,
   RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
   RELATIONSHIP_GRAPH_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/case-relationship-graph-export.js';
+} from '../frontend/src/lib/analysis/case-relationship-graph-export.ts';
 import {
   CASE_RELATIONSHIP_GRAPH_VERSION,
   MAX_RELATIONSHIP_GRAPH_CASES,
   MAX_RELATIONSHIP_GRAPH_EDGES,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
-} from '../frontend/src/lib/analysis/case-relationship-graph.js';
+} from '../frontend/src/lib/analysis/case-relationship-graph.ts';
 import { MISP_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/misp-indicator-export.ts';
 import { STIX_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
 

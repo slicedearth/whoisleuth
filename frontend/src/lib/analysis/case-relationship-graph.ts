@@ -5,7 +5,14 @@
 import {
   buildCaseRelationships,
   filterInvestigationCaseRelationships,
-} from './case-relationships.js';
+  type CaseRelationshipCampaign,
+  type CaseRelationshipFilterOptions,
+  type CaseRelationshipGroup,
+  type CaseRelationshipMember,
+  type CaseRelationshipObservation,
+  type CaseRelationshipScopeOption,
+  type CaseRelationshipSummary,
+} from './case-relationships.ts';
 
 export const CASE_RELATIONSHIP_GRAPH_VERSION = 2;
 export const MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS = 12;
@@ -33,25 +40,130 @@ const RELATIONSHIP_TYPES = new Set([
   'official_asset',
 ]);
 
-function label(value, maxLength = 40) {
+export interface CaseRelationshipGraphOptions extends CaseRelationshipFilterOptions {
+  hiddenIds?: unknown;
+  pinnedIds?: unknown;
+  groupCaseIds?: unknown;
+  focusId?: unknown;
+  oneHop?: unknown;
+}
+
+export interface CaseRelationshipGraphCaseNode {
+  id: string;
+  kind: 'case';
+  caseId: string;
+  label: string;
+  displayLabel: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CaseRelationshipGraphRelationshipNode {
+  id: string;
+  kind: 'relationship';
+  relationshipIndex: number;
+  type: string;
+  label: string;
+  displayLabel: string;
+  value: string;
+  method: string;
+  description: string;
+  cases: CaseRelationshipMember[];
+  campaigns: CaseRelationshipCampaign[];
+  sources: string[];
+  scanDepths: string[];
+  classifications: string[];
+  firstObservedAt: string;
+  lastObservedAt: string;
+  complete: boolean | null;
+  truncated: boolean;
+  observations: CaseRelationshipObservation[];
+  omittedObservations: number;
+  limitations: string[];
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type CaseRelationshipGraphNode =
+  | CaseRelationshipGraphCaseNode
+  | CaseRelationshipGraphRelationshipNode;
+
+export interface CaseRelationshipGraphEdge {
+  id: string;
+  caseId: string;
+  relationshipId: string;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+}
+
+export interface CaseRelationshipGraphView {
+  version: typeof CASE_RELATIONSHIP_GRAPH_VIEW_VERSION;
+  focusId: string;
+  oneHop: boolean;
+  pinnedIds: string[];
+  hiddenIds: string[];
+  groupCaseIds: string[];
+  truncated: boolean;
+}
+
+export interface CaseRelationshipGraph {
+  version: typeof CASE_RELATIONSHIP_GRAPH_VERSION;
+  width: number;
+  height: number;
+  nodes: CaseRelationshipGraphNode[];
+  caseNodes: CaseRelationshipGraphCaseNode[];
+  relationshipNodes: CaseRelationshipGraphRelationshipNode[];
+  edges: CaseRelationshipGraphEdge[];
+  comparisonCaseNodes: CaseRelationshipGraphCaseNode[];
+  sharedRelationshipNodes: CaseRelationshipGraphRelationshipNode[];
+  view: CaseRelationshipGraphView;
+  allNodeCount: number;
+  totalRelationships: number;
+  matchingRelationships: number;
+  filters: Record<string, string>;
+  state: string;
+  sources: string[];
+  scopeOptions: CaseRelationshipScopeOption[];
+  filterOptionsTruncated: boolean;
+  truncated: boolean;
+  limitations: string[];
+}
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function label(value: unknown, maxLength = 40): string {
   const normalized = String(value || '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();
   return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`;
 }
 
-function yPosition(index, count) {
+function yPosition(index: number, count: number): number {
   if (count <= 1) return (VIEWBOX_HEIGHT - NODE_HEIGHT) / 2;
   const top = 24;
   const available = VIEWBOX_HEIGHT - (top * 2) - NODE_HEIGHT;
   return top + (available * index / (count - 1));
 }
 
-function relationshipNodeId(group) {
+function relationshipNodeId(group: CaseRelationshipGroup): string {
   return `relationship:${group.type}:${group.value}`;
 }
 
-function boundedNodeIds(values, allowed, limit) {
-  const output = [];
-  const seen = new Set();
+function boundedNodeIds(
+  values: unknown,
+  allowed: Set<string>,
+  limit: number,
+): { ids: string[]; truncated: boolean } {
+  const output: string[] = [];
+  const seen = new Set<string>();
   if (!Array.isArray(values)) return { ids: output, truncated: false };
   for (const value of values) {
     if (typeof value !== 'string' || !allowed.has(value) || seen.has(value)) continue;
@@ -61,7 +173,11 @@ function boundedNodeIds(values, allowed, limit) {
   return { ids: output, truncated: seen.size > output.length };
 }
 
-function positionGraph(caseNodes, relationshipNodes, edges) {
+function positionGraph(
+  caseNodes: CaseRelationshipGraphCaseNode[],
+  relationshipNodes: CaseRelationshipGraphRelationshipNode[],
+  edges: CaseRelationshipGraphEdge[],
+) {
   const positionedCases = caseNodes.map((node, index) => ({
     ...node,
     x: CASE_X,
@@ -94,7 +210,12 @@ function positionGraph(caseNodes, relationshipNodes, edges) {
   };
 }
 
-function applyGraphView(caseNodes, relationshipNodes, edges, rawOptions) {
+function applyGraphView(
+  caseNodes: CaseRelationshipGraphCaseNode[],
+  relationshipNodes: CaseRelationshipGraphRelationshipNode[],
+  edges: CaseRelationshipGraphEdge[],
+  rawOptions: CaseRelationshipGraphOptions,
+) {
   const allNodes = [...caseNodes, ...relationshipNodes];
   const allNodeIds = new Set(allNodes.map((node) => node.id));
   const caseNodeIds = new Set(caseNodes.map((node) => node.id));
@@ -137,7 +258,7 @@ function applyGraphView(caseNodes, relationshipNodes, edges, rawOptions) {
     comparisonCaseNodes: caseNodes.filter((node) => groupedIds.has(node.id)),
     sharedRelationshipNodes,
     view: {
-      version: CASE_RELATIONSHIP_GRAPH_VIEW_VERSION,
+      version: CASE_RELATIONSHIP_GRAPH_VIEW_VERSION as typeof CASE_RELATIONSHIP_GRAPH_VIEW_VERSION,
       focusId,
       oneHop,
       pinnedIds: pins.ids,
@@ -150,7 +271,7 @@ function applyGraphView(caseNodes, relationshipNodes, edges, rawOptions) {
 }
 
 /** @param {unknown} rawCases */
-export function buildCaseRelationshipGraph(rawCases) {
+export function buildCaseRelationshipGraph(rawCases: unknown): CaseRelationshipGraph {
   return projectCaseRelationshipGraph(buildCaseRelationships(rawCases));
 }
 
@@ -160,10 +281,11 @@ export function buildCaseRelationshipGraph(rawCases) {
  * where possible so one large group cannot consume the complete case budget.
  * @param {ReturnType<typeof buildCaseRelationships>} summary
  */
-export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
-  const options = /** @type {Record<string, any>} */ (
-    rawOptions && typeof rawOptions === 'object' && !Array.isArray(rawOptions) ? rawOptions : {}
-  );
+export function projectCaseRelationshipGraph(
+  summary: CaseRelationshipSummary,
+  rawOptions: unknown = {},
+): CaseRelationshipGraph {
+  const options = (plainRecord(rawOptions) || {}) as CaseRelationshipGraphOptions;
   const allGroups = Array.isArray(summary?.groups) ? summary.groups : [];
   const projectionBacked = summary?.state === 'ready';
   const filtered = projectionBacked
@@ -174,7 +296,7 @@ export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
     : 'all');
   const sourceGroups = filtered?.groups || (type === 'all' ? allGroups : allGroups.filter((group) => group.type === type));
   const groups = sourceGroups.slice(0, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS);
-  const cases = new Map();
+  const cases = new Map<string, CaseRelationshipMember>();
 
   for (const group of groups) {
     for (const member of group.cases.slice(0, 2)) {
@@ -191,7 +313,7 @@ export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
 
   const caseItems = [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain));
   const caseIds = new Set(caseItems.map((item) => item.id));
-  const candidateEdges = [];
+  const candidateEdges: CaseRelationshipGraphEdge[] = [];
   for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
     const relationshipId = relationshipNodeId(groups[groupIndex]);
     for (const member of groups[groupIndex].cases) {
@@ -209,9 +331,9 @@ export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
     .filter(({ group }) => connectedRelationships.has(relationshipNodeId(group)));
   const retainedCases = caseItems.filter((item) => connectedCases.has(`case:${item.id}`));
 
-  const caseNodes = retainedCases.map((item) => ({
+  const caseNodes: CaseRelationshipGraphCaseNode[] = retainedCases.map((item) => ({
     id: `case:${item.id}`,
-    kind: 'case',
+    kind: 'case' as const,
     caseId: item.id,
     label: item.domain,
     displayLabel: label(item.domain),
@@ -220,9 +342,9 @@ export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
   }));
-  const relationshipNodes = retainedGroups.map(({ group, index }) => ({
+  const relationshipNodes: CaseRelationshipGraphRelationshipNode[] = retainedGroups.map(({ group, index }) => ({
     id: relationshipNodeId(group),
-    kind: 'relationship',
+    kind: 'relationship' as const,
     relationshipIndex: index,
     type: group.type,
     label: group.label,
@@ -240,7 +362,7 @@ export function projectCaseRelationshipGraph(summary, rawOptions = {}) {
     complete: typeof group.complete === 'boolean' ? group.complete : null,
     truncated: group.truncated === true,
     observations: Array.isArray(group.observations) ? group.observations : [],
-    omittedObservations: Number.isSafeInteger(group.omittedObservations) ? group.omittedObservations : 0,
+    omittedObservations: Number.isSafeInteger(group.omittedObservations) ? Number(group.omittedObservations) : 0,
     limitations: Array.isArray(group.limitations) ? group.limitations : [],
     x: 0,
     y: 0,

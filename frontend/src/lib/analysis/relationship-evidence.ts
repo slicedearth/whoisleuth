@@ -24,29 +24,65 @@ const FAVICON_SHA_RE = /^[a-f0-9]{64}$/i;
 const FAVICON_PHASH_RE = /^[a-f0-9]{16}$/i;
 const CERTIFICATE_SHA_RE = /^[a-f0-9]{64}$/i;
 
-/** @param {unknown} value */
-function record(value) {
+export interface RelationshipObservation {
+  version: typeof RELATIONSHIP_EVIDENCE_VERSION;
+  nameservers: string[];
+  ipAddresses: string[];
+  trackingIdentifiers: string[];
+  officialAssetHosts: string[];
+  faviconHash: string | null;
+  faviconPHash: string | null;
+  certificateFingerprint: string | null;
+  truncated: boolean;
+}
+
+export interface ScanRelationshipGroup {
+  type: string;
+  label: string;
+  method: string;
+  value: string;
+  normalizedValue: string;
+  domains: string[];
+  description: string;
+}
+
+export interface ScanRelationshipSummary {
+  version: typeof RELATIONSHIP_EVIDENCE_VERSION;
+  groups: ScanRelationshipGroup[];
+  truncated: boolean;
+  limitations: string[];
+}
+
+interface RelationshipRow {
+  domain?: unknown;
+  trusted?: unknown;
+  relationship?: unknown;
+}
+
+interface NormalizedRelationshipRow {
+  domain: string;
+  observation: Record<string, unknown>;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? /** @type {Record<string, any>} */ (value)
+    ? value as Record<string, unknown>
     : null;
 }
 
-/** @param {unknown} value */
-function hostname(value) {
+function hostname(value: unknown): string {
   if (typeof value !== 'string' || value.length > 253 || CONTROL_RE.test(value)) return '';
   return normalizeDomain(value.replace(/\.$/, ''));
 }
 
-/** @param {unknown} value */
-function ipv4(value) {
+function ipv4(value: unknown): string {
   if (typeof value !== 'string' || value.length > 15 || CONTROL_RE.test(value)) return '';
   const parts = value.split('.');
   if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return '';
   return parts.map((part) => String(Number(part))).join('.');
 }
 
-/** @param {unknown} value */
-function ipv6(value) {
+function ipv6(value: unknown): string {
   if (typeof value !== 'string' || value.length > 45 || CONTROL_RE.test(value)
     || !value.includes(':') || !/^[0-9a-f:.]+$/i.test(value)) return '';
   try {
@@ -57,14 +93,16 @@ function ipv6(value) {
   }
 }
 
-/** @param {unknown} value */
-function ipAddress(value) {
+function ipAddress(value: unknown): string {
   return ipv4(value) || ipv6(value);
 }
 
-/** @param {Array<unknown>} values @param {(value:unknown)=>string} normalize @param {number} limit */
-function boundedSet(values, normalize, limit) {
-  const output = new Set();
+function boundedSet(
+  values: unknown[],
+  normalize: (value: unknown) => string,
+  limit: number,
+): { values: string[]; truncated: boolean } {
+  const output = new Set<string>();
   let truncated = values.length > limit * 4;
   for (const candidate of values.slice(0, limit * 4)) {
     const normalized = normalize(candidate);
@@ -75,16 +113,14 @@ function boundedSet(values, normalize, limit) {
   return { values: [...output].sort(), truncated };
 }
 
-/** @param {unknown} value */
-function identifier(value) {
+function identifier(value: unknown): string {
   const item = record(value);
   if (!item || typeof item.type !== 'string' || typeof item.value !== 'string') return '';
   if (!/^[a-z-]{1,40}$/.test(item.type) || !/^[A-Z0-9-]{1,64}$/.test(item.value)) return '';
   return `${item.type}:${item.value}`;
 }
 
-/** @param {Record<string, any>} availability */
-function trackingCandidates(availability) {
+function trackingCandidates(availability: Record<string, unknown>): unknown[] {
   const identity = record(availability.pageIdentity);
   const fingerprints = record(identity?.fingerprints);
   const identifiers = record(fingerprints?.identifiers);
@@ -92,19 +128,18 @@ function trackingCandidates(availability) {
   return Array.isArray(identity?.trackingIdentifiers) ? identity.trackingIdentifiers : [];
 }
 
-/** @param {Record<string, any>} availability */
-function dnsRecords(availability) {
+function dnsRecords(availability: Record<string, unknown>): Record<string, unknown> {
   const dns = record(availability.dns);
   return record(dns?.records) || {};
 }
 
-/** @param {Record<string, any>} availability */
-function tlsCertificateFingerprint(availability) {
+function tlsCertificateFingerprint(availability: Record<string, unknown>): string | null {
   const tls = record(availability.tls);
   const certificate = record(tls?.certificate);
   const fingerprint = certificate?.fingerprintSha256;
+  const status = tls?.status;
   if (tls?.source !== 'tls' || tls?.profileVersion !== TLS_RELATIONSHIP_PROFILE_VERSION
-    || !['success', 'partial'].includes(tls?.status) || typeof fingerprint !== 'string'
+    || typeof status !== 'string' || !['success', 'partial'].includes(status) || typeof fingerprint !== 'string'
     || fingerprint.length !== 64 || !CERTIFICATE_SHA_RE.test(fingerprint)) return null;
   return fingerprint.toLowerCase();
 }
@@ -117,7 +152,10 @@ function tlsCertificateFingerprint(availability) {
  * @param {unknown} rawAvailability
  * @param {unknown} rawOfficialDomains
  */
-export function relationshipObservation(rawAvailability, rawOfficialDomains = []) {
+export function relationshipObservation(
+  rawAvailability: unknown,
+  rawOfficialDomains: unknown = [],
+): RelationshipObservation {
   const availability = record(rawAvailability) || {};
   const records = dnsRecords(availability);
   const nameserverSource = [
@@ -132,13 +170,20 @@ export function relationshipObservation(rawAvailability, rawOfficialDomains = []
   const ipAddresses = boundedSet(addressSource, ipAddress, MAX_IPS_PER_ROW);
   const trackingIdentifiers = boundedSet(trackingCandidates(availability), identifier, MAX_TRACKING_IDS_PER_ROW);
   const officialDomainSource = Array.isArray(rawOfficialDomains) ? rawOfficialDomains : [];
-  const officialDomains = new Set(officialDomainSource.slice(0, MAX_OFFICIAL_DOMAINS).map(normalizeDomain).filter(Boolean));
+  const officialDomains = new Set(
+    officialDomainSource
+      .slice(0, MAX_OFFICIAL_DOMAINS)
+      .map(normalizeDomain)
+      .filter((domain): domain is string => Boolean(domain)),
+  );
   const assets = boundedSet(
     Array.isArray(availability.externalAssetHosts) ? availability.externalAssetHosts : [],
     hostname,
     MAX_OFFICIAL_ASSET_HOSTS_PER_ROW,
   );
-  const officialAssetHosts = assets.values.filter((host) => [...officialDomains].some((domain) => host === domain || host.endsWith(`.${domain}`)));
+  const officialAssetHosts = assets.values.filter(
+    (host) => [...officialDomains].some((domain) => host === domain || host.endsWith(`.${domain}`)),
+  );
   const faviconHash = typeof availability.faviconHash === 'string' && FAVICON_SHA_RE.test(availability.faviconHash)
     ? availability.faviconHash.toLowerCase() : null;
   const faviconPHash = typeof availability.faviconPHash === 'string' && FAVICON_PHASH_RE.test(availability.faviconPHash)
@@ -157,25 +202,31 @@ export function relationshipObservation(rawAvailability, rawOfficialDomains = []
   };
 }
 
-/** @param {Map<string, Set<string>>} buckets @param {string} value @param {string} domain */
-function addBucket(buckets, value, domain) {
+function addBucket(buckets: Map<string, Set<string>>, value: string, domain: string): void {
   if (!value) return;
   if (!buckets.has(value)) buckets.set(value, new Set());
   buckets.get(value)?.add(domain);
 }
 
-/** @param {string} type @param {string} label @param {string} method @param {string} value @param {Array<string>} domains @param {string} description @param {string} [normalizedValue] */
-function group(type, label, method, value, domains, description, normalizedValue = value) {
+function group(
+  type: string,
+  label: string,
+  method: string,
+  value: string,
+  domains: string[],
+  description: string,
+  normalizedValue = value,
+): ScanRelationshipGroup {
   return { type, label, method, value, normalizedValue, domains, description };
 }
 
 /**
  * @param {Array<{domain?:unknown,trusted?:unknown,relationship?:unknown}>} rawRows
  */
-export function buildScanRelationships(rawRows) {
+export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelationshipSummary {
   const input = Array.isArray(rawRows) ? rawRows : [];
   let truncated = input.length > MAX_RELATIONSHIP_ROWS;
-  const rows = [];
+  const rows: NormalizedRelationshipRow[] = [];
   for (const raw of input.slice(0, MAX_RELATIONSHIP_ROWS)) {
     const domain = normalizeDomain(raw?.domain);
     const observation = record(raw?.relationship);
@@ -184,11 +235,11 @@ export function buildScanRelationships(rawRows) {
     if (observation.truncated === true) truncated = true;
   }
 
-  const nameserverSets = new Map();
-  const addresses = new Map();
-  const identifiers = new Map();
-  const certificates = new Map();
-  const officialAssets = new Map();
+  const nameserverSets = new Map<string, Set<string>>();
+  const addresses = new Map<string, Set<string>>();
+  const identifiers = new Map<string, Set<string>>();
+  const certificates = new Map<string, Set<string>>();
+  const officialAssets = new Map<string, Set<string>>();
   for (const { domain, observation } of rows) {
     const nameserverSource = Array.isArray(observation.nameservers) ? observation.nameservers : [];
     const addressSource = Array.isArray(observation.ipAddresses) ? observation.ipAddresses : [];
@@ -200,7 +251,9 @@ export function buildScanRelationships(rawRows) {
     if (nameservers.length) addBucket(nameserverSets, [...new Set(nameservers)].sort().join(' · '), domain);
     for (const value of addressSource.slice(0, MAX_IPS_PER_ROW)) addBucket(addresses, ipAddress(value), domain);
     for (const value of identifierSource.slice(0, MAX_TRACKING_IDS_PER_ROW)) {
-      if (/^[a-z-]{1,40}:[A-Z0-9-]{1,64}$/.test(value)) addBucket(identifiers, value, domain);
+      if (typeof value === 'string' && /^[a-z-]{1,40}:[A-Z0-9-]{1,64}$/.test(value)) {
+        addBucket(identifiers, value, domain);
+      }
     }
     const certificateFingerprint = typeof observation.certificateFingerprint === 'string'
       && observation.certificateFingerprint.length === 64
@@ -211,7 +264,7 @@ export function buildScanRelationships(rawRows) {
     for (const value of assetSource.slice(0, MAX_OFFICIAL_ASSET_HOSTS_PER_ROW)) addBucket(officialAssets, hostname(value), domain);
   }
 
-  const output = [];
+  const output: ScanRelationshipGroup[] = [];
   for (const [value, domains] of nameserverSets) if (domains.size >= 2) output.push(group('nameserver_set', 'Shared nameserver set', 'Exact normalized set', value, [...domains].sort(), 'These domains reported the same normalized nameserver set retained by this scan.'));
   for (const [value, domains] of addresses) if (domains.size >= 2) output.push(group('ip_address', 'Shared IP address', 'Exact normalized address', value, [...domains].sort(), 'These domains resolved to the same IP address in this scan. Shared hosting and CDNs are common.'));
   for (const [value, domains] of certificates) if (domains.size >= 2) output.push(group('certificate', 'Shared TLS certificate', 'Exact leaf-certificate SHA-256', value, [...domains].sort(), 'These domains presented the same leaf certificate in this scan. Multi-domain certificates, shared hosting, CDNs, and managed platforms are common.'));
@@ -249,7 +302,10 @@ export function buildScanRelationships(rawRows) {
   }
   for (const [value, domains] of officialAssets) output.push(group('official_asset', 'Official asset relationship', 'Configured-domain host match', value, [...domains].sort(), 'One or more pages loaded an asset from this configured official domain or its subdomain.'));
 
-  const order = new Map(['nameserver_set', 'ip_address', 'certificate', 'tracking_identifier', 'favicon', 'official_asset'].map((value, index) => [value, index]));
+  const order = new Map<string, number>(
+    ['nameserver_set', 'ip_address', 'certificate', 'tracking_identifier', 'favicon', 'official_asset']
+      .map((value, index) => [value, index]),
+  );
   output.sort((left, right) => (Number(order.get(left.type)) - Number(order.get(right.type))) || left.value.localeCompare(right.value) || left.domains.join('|').localeCompare(right.domains.join('|')));
   if (output.length > MAX_RELATIONSHIP_GROUPS) truncated = true;
   const groups = output.slice(0, MAX_RELATIONSHIP_GROUPS).map((item) => {

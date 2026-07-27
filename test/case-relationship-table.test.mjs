@@ -8,8 +8,8 @@ import {
   MAX_RELATIONSHIP_TABLE_QUERY_LENGTH,
   MAX_RELATIONSHIP_TABLE_ROWS,
   projectCaseRelationshipTable,
-} from '../frontend/src/lib/analysis/case-relationship-table.js';
-import { buildCaseRelationships } from '../frontend/src/lib/analysis/case-relationships.js';
+} from '../frontend/src/lib/analysis/case-relationship-table.ts';
+import { buildCaseRelationships } from '../frontend/src/lib/analysis/case-relationships.ts';
 
 const CAPTURED = '2026-07-14T00:00:00.000Z';
 

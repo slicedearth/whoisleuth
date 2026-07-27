@@ -15,7 +15,7 @@ import {
   MAX_NAMESERVERS_PER_ROW,
   MAX_RELATIONSHIP_ROWS,
   RELATIONSHIP_EVIDENCE_VERSION,
-} from '../frontend/src/lib/analysis/relationship-evidence.js';
+} from '../frontend/src/lib/analysis/relationship-evidence.ts';
 import {
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
   createRelationshipObservation,

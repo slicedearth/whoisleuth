@@ -2,7 +2,13 @@
 // serialized from one canonical document so provenance and limitations cannot
 // drift between JSON and XML representations.
 
-import { CASE_RELATIONSHIP_GRAPH_VERSION, projectCaseRelationshipGraph } from './case-relationship-graph.js';
+import {
+  CASE_RELATIONSHIP_GRAPH_VERSION,
+  projectCaseRelationshipGraph,
+  type CaseRelationshipGraph,
+  type CaseRelationshipGraphRelationshipNode,
+} from './case-relationship-graph.ts';
+import type { CaseRelationshipSummary } from './case-relationships.ts';
 
 export const RELATIONSHIP_GRAPH_EXPORT_SCHEMA = 'whoisleuth.relationship-graph';
 export const RELATIONSHIP_GRAPH_EXPORT_VERSION = 1;
@@ -11,39 +17,102 @@ export const MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP = 8;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS = 12;
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
-const FORMATS = new Set(['json', 'graphml', 'gexf']);
-const FILTER_KEYS = ['type', 'source', 'period', 'completeness', 'scope'];
+type RelationshipGraphFormat = 'json' | 'graphml' | 'gexf';
 
-function record(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+interface RelationshipGraphExportOptions {
+  format?: unknown;
+  generatedAt?: unknown;
+  type?: unknown;
+  source?: unknown;
+  period?: unknown;
+  completeness?: unknown;
+  scope?: unknown;
 }
 
-function text(value, maximum = 300) {
+interface RelationshipGraphExportObservation {
+  id: string;
+  source: string;
+  store: string;
+  observedAt: string | null;
+  firstObservedAt: string | null;
+  scanDepth: string;
+  status: string;
+  complete: boolean | null;
+  truncated: boolean | null;
+  schemaVersions: Record<string, number>;
+  limitations: string[];
+}
+
+type RelationshipGraphExportNode = Record<string, unknown> & {
+  id: string;
+  kind: 'case' | 'relationship';
+  label: string;
+  canonical: string;
+  truncated?: boolean;
+};
+
+type RelationshipGraphExportEdge = Record<string, unknown> & {
+  id: string;
+  source: string;
+  target: string;
+  kind: 'case_has_relationship';
+};
+
+export interface RelationshipGraphDocument {
+  schema: typeof RELATIONSHIP_GRAPH_EXPORT_SCHEMA;
+  version: typeof RELATIONSHIP_GRAPH_EXPORT_VERSION;
+  generatedAt: string;
+  source: {
+    projectionVersion: number | null;
+    relationshipVersion: number | null;
+    graphVersion: typeof CASE_RELATIONSHIP_GRAPH_VERSION;
+    state: string;
+    filters: Record<string, string>;
+  };
+  graph: {
+    directed: false;
+    nodes: RelationshipGraphExportNode[];
+    edges: RelationshipGraphExportEdge[];
+    truncated: boolean;
+  };
+  limitations: string[];
+}
+
+const FORMATS = new Set<RelationshipGraphFormat>(['json', 'graphml', 'gexf']);
+const FILTER_KEYS = ['type', 'source', 'period', 'completeness', 'scope'] as const;
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function text(value: unknown, maximum = 300): string {
   if (typeof value !== 'string' || value.length > maximum * 8 || CONTROL_RE.test(value)) return '';
   return value.replace(/\s+/g, ' ').trim().slice(0, maximum).trim();
 }
 
-function timestamp(value) {
+function timestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function version(value) {
-  return Number.isSafeInteger(value) && value > 0 && value <= 1000 ? value : null;
+function version(value: unknown): number | null {
+  return Number.isSafeInteger(value) && Number(value) > 0 && Number(value) <= 1000 ? Number(value) : null;
 }
 
-function booleanOrNull(value) {
+function booleanOrNull(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
-function integer(value, maximum = 1_000_000) {
-  return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, maximum) : 0;
+function integer(value: unknown, maximum = 1_000_000): number {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Math.min(Number(value), maximum) : 0;
 }
 
-function strings(values, maximumItems = 20, maximumLength = 300) {
-  const output = [];
-  const seen = new Set();
+function strings(values: unknown, maximumItems = 20, maximumLength = 300): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
   for (const value of Array.isArray(values) ? values.slice(0, maximumItems * 4) : []) {
     const normalized = text(value, maximumLength);
     if (!normalized || seen.has(normalized)) continue;
@@ -54,28 +123,32 @@ function strings(values, maximumItems = 20, maximumLength = 300) {
   return output;
 }
 
-function schemaVersions(value) {
-  return Object.fromEntries(Object.entries(record(value))
-    .filter(([key, item]) => /^[a-z][a-zA-Z0-9]{0,39}Version$/.test(key) && version(item) !== null)
+function schemaVersions(value: unknown): Record<string, number> {
+  const output: Record<string, number> = {};
+  for (const [key, item] of Object.entries(record(value))
+    .filter(([name]) => /^[a-z][a-zA-Z0-9]{0,39}Version$/.test(name))
     .sort(([left], [right]) => left.localeCompare(right))
-    .slice(0, 20)
-    .map(([key, item]) => [key, version(item)]));
+    .slice(0, 20)) {
+    const normalized = version(item);
+    if (normalized !== null) output[key] = normalized;
+  }
+  return output;
 }
 
-function filters(options) {
+function filters(options: unknown): Record<string, string> {
   return Object.fromEntries(FILTER_KEYS.flatMap((key) => {
     const value = text(record(options)[key], 100);
     return value ? [[key, value]] : [];
   }));
 }
 
-function isoNow(value) {
+function isoNow(value: unknown): string {
   return timestamp(value) || new Date().toISOString();
 }
 
 // FNV-1a 64-bit produces stable XML-safe identifiers without exposing internal
 // browser-store identifiers. Collision checks still fail closed below.
-function digest(value) {
+function digest(value: string): string {
   let hash = 0xcbf29ce484222325n;
   for (const byte of new TextEncoder().encode(value)) {
     hash ^= BigInt(byte);
@@ -84,7 +157,7 @@ function digest(value) {
   return hash.toString(16).padStart(16, '0');
 }
 
-function stableId(kind, semanticValue, seen) {
+function stableId(kind: string, semanticValue: string, seen: Map<string, string>): string {
   const id = `${kind}-${digest(`${kind}\u0000${semanticValue}`)}`;
   const previous = seen.get(id);
   if (previous && previous !== semanticValue) {
@@ -94,7 +167,7 @@ function stableId(kind, semanticValue, seen) {
   return id;
 }
 
-function observation(value) {
+function observation(value: unknown): RelationshipGraphExportObservation {
   const item = record(value);
   return {
     id: text(item.id, 100),
@@ -111,7 +184,7 @@ function observation(value) {
   };
 }
 
-function relationshipMetadata(node) {
+function relationshipMetadata(node: CaseRelationshipGraphRelationshipNode) {
   const retained = Array.isArray(node.observations)
     ? node.observations.slice(0, MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP).map(observation)
     : [];
@@ -137,7 +210,7 @@ function relationshipMetadata(node) {
   };
 }
 
-function outputFilters(graph) {
+function outputFilters(graph: CaseRelationshipGraph): Record<string, string> {
   return Object.fromEntries(FILTER_KEYS.map((key) => [key, text(graph.filters?.[key], 100) || 'all']));
 }
 
@@ -146,12 +219,15 @@ function outputFilters(graph) {
  * Transient focus, pin, hide, and comparison-group options are deliberately
  * ignored; only the normalized evidence filters select export content.
  */
-export function buildRelationshipGraphDocument(summary, options = {}) {
+export function buildRelationshipGraphDocument(
+  summary: CaseRelationshipSummary,
+  options: RelationshipGraphExportOptions = {},
+): RelationshipGraphDocument {
   const generatedAt = isoNow(record(options).generatedAt);
   const graph = projectCaseRelationshipGraph(summary, filters(options));
-  const seenIds = new Map();
-  const sourceToExportId = new Map();
-  const nodes = [];
+  const seenIds = new Map<string, string>();
+  const sourceToExportId = new Map<string, string>();
+  const nodes: RelationshipGraphExportNode[] = [];
 
   for (const node of graph.caseNodes) {
     const canonical = text(node.label, 253);
@@ -177,7 +253,7 @@ export function buildRelationshipGraphDocument(summary, options = {}) {
   }
 
   const relationshipBySourceId = new Map(graph.relationshipNodes.map((node) => [node.id, node]));
-  const edges = [];
+  const edges: RelationshipGraphExportEdge[] = [];
   for (const edge of graph.edges) {
     const source = sourceToExportId.get(edge.caseId);
     const target = sourceToExportId.get(edge.relationshipId);
@@ -228,7 +304,7 @@ export function buildRelationshipGraphDocument(summary, options = {}) {
   };
 }
 
-function validXmlText(value) {
+function validXmlText(value: unknown): string {
   let output = '';
   for (const character of String(value ?? '')) {
     const point = character.codePointAt(0) ?? 0xfffd;
@@ -241,7 +317,7 @@ function validXmlText(value) {
   return output;
 }
 
-function xml(value) {
+function xml(value: unknown): string {
   return validXmlText(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -250,13 +326,13 @@ function xml(value) {
     .replaceAll("'", '&apos;');
 }
 
-function scalar(value) {
+function scalar(value: unknown): string {
   if (Array.isArray(value) || (value && typeof value === 'object')) return JSON.stringify(value);
   if (value === null || value === undefined) return '';
   return String(value);
 }
 
-const NODE_FIELDS = [
+const NODE_FIELDS: ReadonlyArray<readonly [string, string]> = [
   ['kind', 'Kind'], ['canonical', 'Canonical value'], ['label', 'Label'],
   ['relationshipType', 'Relationship type'], ['value', 'Relationship value'], ['description', 'Description'],
   ['method', 'Comparison method'], ['certaintyClasses', 'Certainty classes'],
@@ -267,13 +343,13 @@ const NODE_FIELDS = [
   ['limitations', 'Limitations'],
 ];
 
-const EDGE_FIELDS = [
+const EDGE_FIELDS: ReadonlyArray<readonly [string, string]> = [
   ['kind', 'Kind'], ['method', 'Comparison method'], ['certaintyClasses', 'Certainty classes'],
   ['sources', 'Sources'], ['firstObservedAt', 'First observed'], ['lastObservedAt', 'Last observed'],
   ['complete', 'Complete'], ['truncated', 'Truncated'], ['limitations', 'Limitations'],
 ];
 
-function graphml(document) {
+function graphml(document: RelationshipGraphDocument): string {
   const graphData = {
     schema: document.schema,
     version: document.version,
@@ -308,7 +384,7 @@ function graphml(document) {
   return lines.join('\n');
 }
 
-function gexf(document) {
+function gexf(document: RelationshipGraphDocument): string {
   const metadata = JSON.stringify({
     schema: document.schema,
     version: document.version,
@@ -349,34 +425,40 @@ function gexf(document) {
   return lines.join('\n');
 }
 
-function byteLength(value) {
+function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
 /** Builds one deliberate local download contract for JSON, GraphML, or GEXF. */
-export function buildRelationshipGraphExport(summary, options = {}) {
+export function buildRelationshipGraphExport(
+  summary: CaseRelationshipSummary,
+  options: RelationshipGraphExportOptions = {},
+) {
   const rawFormat = record(options).format;
   const format = rawFormat === undefined || rawFormat === null ? 'json' : text(rawFormat, 20).toLowerCase();
-  if (!FORMATS.has(format)) throw new Error('Relationship graph export format must be JSON, GraphML, or GEXF.');
+  if (!FORMATS.has(format as RelationshipGraphFormat)) {
+    throw new Error('Relationship graph export format must be JSON, GraphML, or GEXF.');
+  }
+  const normalizedFormat = format as RelationshipGraphFormat;
   const document = buildRelationshipGraphDocument(summary, options);
-  const content = format === 'json'
+  const content = normalizedFormat === 'json'
     ? `${JSON.stringify(document, null, 2)}\n`
-    : format === 'graphml'
+    : normalizedFormat === 'graphml'
       ? graphml(document)
       : gexf(document);
   const bytes = byteLength(content);
   if (bytes > MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES) {
     throw new Error('The bounded relationship graph export exceeded its 512 KiB serialized limit. Narrow the graph filters and try again.');
   }
-  const suffix = format === 'json' ? 'json' : format;
-  const mimeType = format === 'json'
+  const suffix = normalizedFormat;
+  const mimeType = normalizedFormat === 'json'
     ? 'application/json;charset=utf-8'
-    : format === 'graphml'
+    : normalizedFormat === 'graphml'
       ? 'application/graphml+xml;charset=utf-8'
       : 'application/gexf+xml;charset=utf-8';
   return {
     version: RELATIONSHIP_GRAPH_EXPORT_VERSION,
-    format,
+    format: normalizedFormat,
     generatedAt: document.generatedAt,
     filename: `whoisleuth-relationship-graph-${document.generatedAt.slice(0, 10)}.${suffix}`,
     mimeType,

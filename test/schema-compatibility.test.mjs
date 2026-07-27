@@ -29,7 +29,7 @@ import {
   MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
   RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
   RELATIONSHIP_GRAPH_EXPORT_VERSION,
-} from '../frontend/src/lib/analysis/case-relationship-graph-export.js';
+} from '../frontend/src/lib/analysis/case-relationship-graph-export.ts';
 import {
   RELATIONSHIP_OBSERVATION_SCHEMA,
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,

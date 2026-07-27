@@ -12,8 +12,8 @@ import {
   MAX_RELATIONSHIP_GRAPH_PINS,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
   projectCaseRelationshipGraph,
-} from '../frontend/src/lib/analysis/case-relationship-graph.js';
-import { buildCaseRelationships } from '../frontend/src/lib/analysis/case-relationships.js';
+} from '../frontend/src/lib/analysis/case-relationship-graph.ts';
+import { buildCaseRelationships } from '../frontend/src/lib/analysis/case-relationships.ts';
 
 const CAPTURED = '2026-07-14T00:00:00.000Z';
 const snapshot = (overrides = {}) => ({ capturedAt: CAPTURED, scanDepth: 'deep', availability: 'registered', nameservers: [], ...overrides });

@@ -6,8 +6,8 @@
     MAX_RELATIONSHIP_GRAPH_HIDDEN,
     MAX_RELATIONSHIP_GRAPH_PINS,
     projectCaseRelationshipGraph,
-  } from '$lib/analysis/case-relationship-graph.js';
-  import { buildRelationshipGraphExport } from '$lib/analysis/case-relationship-graph-export.js';
+  } from '$lib/analysis/case-relationship-graph.ts';
+  import { buildRelationshipGraphExport } from '$lib/analysis/case-relationship-graph-export.ts';
   import { horizontalConnectionPath } from '$lib/analysis/evidence-topology.ts';
 
   let { records, summary, onselect }:{records:CaseRecord[];summary:any;onselect?:(record:CaseRecord)=>void}=$props();

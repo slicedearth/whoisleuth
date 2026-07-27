@@ -30,13 +30,13 @@ import {
 import {
   buildCaseRelationships,
   buildInvestigationCaseRelationships,
-} from '../frontend/src/lib/analysis/case-relationships.js';
+} from '../frontend/src/lib/analysis/case-relationships.ts';
 import {
   buildCaseRelationshipGraph,
   MAX_RELATIONSHIP_GRAPH_CASES,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
   projectCaseRelationshipGraph,
-} from '../frontend/src/lib/analysis/case-relationship-graph.js';
+} from '../frontend/src/lib/analysis/case-relationship-graph.ts';
 import {
   buildWorkspaceArchive,
   readWorkspaceArchive,

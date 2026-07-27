@@ -1,12 +1,15 @@
 // Pure presentation projection for the Monitor relationship table. The source
-// comparison remains case-relationships.js; this layer only applies bounded
+// comparison remains case-relationships.ts; this layer only applies bounded
 // filtering, sorting, pagination, and per-row member caps for an accessible
 // table.
 
 import {
   buildCaseRelationships,
   filterInvestigationCaseRelationships,
-} from './case-relationships.js';
+  type CaseRelationshipFilterOptions,
+  type CaseRelationshipGroup,
+  type CaseRelationshipSummary,
+} from './case-relationships.ts';
 
 export const CASE_RELATIONSHIP_TABLE_VERSION = 1;
 export const MAX_RELATIONSHIP_TABLE_ROWS = 50;
@@ -35,7 +38,20 @@ const TYPE_ORDER = new Map([
   'official_asset',
 ].map((value, index) => [value, index]));
 
-function normalizeQuery(value) {
+export interface CaseRelationshipTableOptions extends CaseRelationshipFilterOptions {
+  query?: unknown;
+  sort?: unknown;
+  direction?: unknown;
+  page?: unknown;
+}
+
+interface CaseRelationshipTableRow extends CaseRelationshipGroup {
+  caseCount: number;
+  omittedCases: number;
+  omittedObservations: number;
+}
+
+function normalizeQuery(value: unknown): string {
   return String(value == null ? '' : value)
     .replace(/[\x00-\x1f\x7f]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -44,15 +60,15 @@ function normalizeQuery(value) {
     .toLowerCase();
 }
 
-function normalizeOption(value, allowed, fallback) {
+function normalizeOption(value: unknown, allowed: Set<string>, fallback: string): string {
   return typeof value === 'string' && allowed.has(value) ? value : fallback;
 }
 
-function normalizePage(value) {
-  return Number.isSafeInteger(value) && value > 0 ? value : 1;
+function normalizePage(value: unknown): number {
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : 1;
 }
 
-function searchable(group) {
+function searchable(group: CaseRelationshipGroup): string {
   return [
     group.label,
     group.method,
@@ -65,7 +81,11 @@ function searchable(group) {
     .toLowerCase();
 }
 
-function compareRows(left, right, sort) {
+function compareRows(
+  left: CaseRelationshipGroup & { caseCount: number },
+  right: CaseRelationshipGroup & { caseCount: number },
+  sort: string,
+): number {
   let result = 0;
   if (sort === 'value') result = left.value.localeCompare(right.value);
   else if (sort === 'member_count') result = left.caseCount - right.caseCount;
@@ -80,7 +100,10 @@ function compareRows(left, right, sort) {
  * @param {unknown} rawCases
  * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,source?:unknown,period?:unknown,completeness?:unknown,scope?:unknown,page?:unknown}} [rawOptions]
  */
-export function buildCaseRelationshipTable(rawCases, rawOptions = {}) {
+export function buildCaseRelationshipTable(
+  rawCases: unknown,
+  rawOptions: CaseRelationshipTableOptions = {},
+) {
   return projectCaseRelationshipTable(buildCaseRelationships(rawCases), rawOptions);
 }
 
@@ -91,7 +114,10 @@ export function buildCaseRelationshipTable(rawCases, rawOptions = {}) {
  * @param {ReturnType<typeof buildCaseRelationships>} summary
  * @param {{type?:unknown,query?:unknown,sort?:unknown,direction?:unknown,source?:unknown,period?:unknown,completeness?:unknown,scope?:unknown,page?:unknown}} [rawOptions]
  */
-export function projectCaseRelationshipTable(summary, rawOptions = {}) {
+export function projectCaseRelationshipTable(
+  summary: CaseRelationshipSummary,
+  rawOptions: CaseRelationshipTableOptions = {},
+) {
   const projectionBacked = summary?.state === 'ready';
   const provenanceFiltered = projectionBacked
     ? filterInvestigationCaseRelationships(summary, rawOptions)
@@ -117,12 +143,13 @@ export function projectCaseRelationshipTable(summary, rawOptions = {}) {
   const currentPage = Math.min(requestedPage, pageCount);
   const pageStart = (currentPage - 1) * MAX_RELATIONSHIP_TABLE_ROWS;
   let truncated = summary.truncated;
-  const rows = sorted.slice(pageStart, pageStart + MAX_RELATIONSHIP_TABLE_ROWS).map((row) => {
+  const rows: CaseRelationshipTableRow[] = sorted.slice(pageStart, pageStart + MAX_RELATIONSHIP_TABLE_ROWS).map((row) => {
     const omittedCases = Math.max(0, row.cases.length - MAX_RELATIONSHIP_TABLE_MEMBERS);
     if (omittedCases) truncated = true;
     return {
       ...row,
       cases: row.cases.slice(0, MAX_RELATIONSHIP_TABLE_MEMBERS),
+      omittedObservations: row.omittedObservations ?? 0,
       omittedCases,
     };
   });

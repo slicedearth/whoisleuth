@@ -9,7 +9,7 @@ import {
   MAX_CASES_PER_RELATIONSHIP,
   MAX_RELATIONSHIP_CASES,
   filterInvestigationCaseRelationships,
-} from '../frontend/src/lib/analysis/case-relationships.js';
+} from '../frontend/src/lib/analysis/case-relationships.ts';
 import {
   buildInvestigationProjection,
   INVESTIGATION_PROJECTION_SCHEMA,
