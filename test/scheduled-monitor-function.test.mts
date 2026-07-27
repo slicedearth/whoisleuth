@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   runScheduledMonitorFunction,
+  runScheduledMonitorInvocation,
   scheduledMonitorLogRecord,
   SCHEDULED_MONITOR_CRON,
   SCHEDULED_MONITOR_LOG_SCHEMA,
@@ -185,6 +186,31 @@ test('a manual invocation from a non-production deploy cannot touch the site-wid
     blobStoreFactory: () => {
       storeConstructions += 1;
       throw new Error('A preview invocation must not construct the site-wide Blob store.');
+    },
+    lookup: async () => {
+      lookups += 1;
+      return {};
+    },
+  });
+  assert.deepEqual(result, {
+    status: 'skipped',
+    stopReason: 'non_production_deploy',
+    processedDeliveries: 0,
+    lookupDeliveries: 0,
+    deferredDeliveries: 0,
+  });
+  assert.equal(storeConstructions, 0);
+  assert.equal(lookups, 0);
+});
+
+test('an invocation without provider deploy metadata fails closed before storage', async () => {
+  let storeConstructions = 0;
+  let lookups = 0;
+  const result = await runScheduledMonitorInvocation({}, {
+    env: readyEnv(),
+    blobStoreFactory: () => {
+      storeConstructions += 1;
+      throw new Error('Missing deploy provenance must not construct the site-wide Blob store.');
     },
     lookup: async () => {
       lookups += 1;

@@ -100,16 +100,27 @@ async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {
   return createScheduledMonitorRuntime(runtimeOptions).run();
 }
 
+async function runScheduledMonitorInvocation(
+  context: { deploy?: ScheduledDeployContext } = {},
+  options: Omit<ScheduledFunctionOptions, 'deploy'> = {},
+) {
+  return runScheduledMonitorFunction({
+    ...options,
+    deploy: context.deploy ?? null,
+  });
+}
+
 export default async function scheduledMonitorHandler(
   _request: Request,
   context: { deploy?: ScheduledDeployContext } = {},
 ): Promise<void> {
-  const result = await runScheduledMonitorFunction(context.deploy ? { deploy: context.deploy } : {});
+  const result = await runScheduledMonitorInvocation(context);
   console.info(JSON.stringify(scheduledMonitorLogRecord(result, context.deploy)));
 }
 
 export {
   runScheduledMonitorFunction,
+  runScheduledMonitorInvocation,
   scheduledMonitorLogRecord,
   SCHEDULED_MONITOR_CRON,
   SCHEDULED_MONITOR_LOG_SCHEMA,
