@@ -134,7 +134,9 @@ async function installManagementMock(page: Page, initial: HostedItem[] = []) {
         name: String(command.name),
         intervalHours: Number(command.intervalHours),
       })];
-      id = watchlists[0].id;
+      const created = watchlists[0];
+      if (!created) throw new Error('The hosted watchlist mock did not create a record.');
+      id = created.id;
     } else if (command.action === 'update') {
       watchlists = watchlists.map((item) => item.id === command.id ? {
         ...item,
@@ -197,8 +199,10 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   const item = hosted.getByRole('article').filter({ hasText: 'Priority domains' });
   await expect(item).toContainText('Every 12 hours');
   await expect(item).toContainText('Idle');
-  expect(mock.commands[0].action).toBe('create');
-  expect(mock.commands[0].intervalHours).toBe(12);
+  const createCommand = mock.commands[0];
+  if (!createCommand) throw new Error('The hosted monitor did not receive a create command.');
+  expect(createCommand.action).toBe('create');
+  expect(createCommand.intervalHours).toBe(12);
 
   await item.getByRole('button', { name: 'Pause' }).click();
   await expect(item).toContainText('Paused');

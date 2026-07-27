@@ -660,7 +660,7 @@ test('console and policy pages expose one consistent primary heading', async ({ 
     ['/brands', 'Brands', 'Protect'],
     ['/registry-support', 'Registry support', 'Reference'],
     ['/privacy', 'Privacy policy', 'Policy'],
-  ]) {
+  ] as const) {
     await page.goto(path);
     const heading = page.locator('.heading');
     await expect(heading).toHaveCount(1);
