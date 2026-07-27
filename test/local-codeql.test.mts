@@ -23,15 +23,24 @@ import {
   runLocalCodeql,
   runProcessBounded,
 } from '../tools/local-codeql.mts';
+import type { KnownCodeqlFinding, LocalCodeqlOptions } from '../tools/local-codeql.mts';
 
-function sarif(results = []) {
+type SarifFixtureFinding = ReturnType<typeof finding>;
+type RunProcess = NonNullable<LocalCodeqlOptions['runProcess']>;
+type ProcessCall = Readonly<{
+  command: string;
+  args: readonly string[];
+  options: Parameters<RunProcess>[2];
+}>;
+
+function sarif(results: readonly SarifFixtureFinding[] = []) {
   return JSON.stringify({
     version: '2.1.0',
     runs: [{ tool: { driver: { name: 'CodeQL' } }, results }],
   });
 }
 
-function finding(overrides = {}) {
+function finding(overrides: Record<string, unknown> = {}) {
   return {
     ruleId: 'js/example-rule',
     level: 'warning',
@@ -140,7 +149,7 @@ describe('local CodeQL SARIF parsing', () => {
 
   test('matches reviewed findings by exact SARIF fingerprint and detects baseline drift', () => {
     const parsed = parseCodeqlSarif(sarif([finding()]));
-    const baseline = [{
+    const baseline: KnownCodeqlFinding[] = [{
       ruleId: 'js/example-rule',
       file: 'lib/example.mts',
       primaryLocationLineHash: 'fixture-line-hash:1',
@@ -169,7 +178,7 @@ describe('local CodeQL SARIF parsing', () => {
       primaryLocationLineHash: 'different-line:1',
       primaryLocationStartColumnFingerprint: '4',
       reason: 'false_positive',
-    }]);
+    } satisfies KnownCodeqlFinding]);
     assert.equal(classified.new, 1);
     assert.equal(classified.displayed.length, 1);
     assert.equal(classified.staleBaseline.length, 1);
@@ -208,15 +217,17 @@ describe('bounded CodeQL process execution', () => {
 });
 
 describe('local CodeQL orchestration', () => {
-  async function runFixture(results) {
+  async function runFixture(results: readonly SarifFixtureFinding[]) {
     const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-test-'));
-    const calls = [];
+    const calls: ProcessCall[] = [];
     let removed = false;
-    const runProcess = async (command, args, options) => {
+    const runProcess: RunProcess = async (command, args, options) => {
       calls.push({ command, args, options });
       if (args[0] === 'version') return { exitCode: 0, stdout: '{"version":"2.23.4"}', stderr: '' };
       if (args[0] === 'database' && args[1] === 'analyze') {
-        const output = args.find((arg) => arg.startsWith('--output=')).slice('--output='.length);
+        const outputArgument = args.find((arg) => arg.startsWith('--output='));
+        assert.ok(outputArgument);
+        const output = outputArgument.slice('--output='.length);
         await writeFile(output, sarif(results), 'utf8');
       }
       return { exitCode: 0, stdout: '', stderr: '' };
@@ -247,12 +258,16 @@ describe('local CodeQL orchestration', () => {
       ['database', 'create'],
       ['database', 'analyze'],
     ]);
-    assert.ok(calls[1].args.includes('--language=javascript-typescript'));
-    assert.ok(calls[1].args.some((arg) => arg.startsWith('--source-root=')));
-    assert.ok(calls[2].args.includes('javascript-code-scanning.qls'));
-    assert.ok(calls[2].args.includes('--format=sarif-latest'));
-    assert.ok(calls[2].args.includes(`--threads=${CODEQL_THREADS}`));
-    assert.ok(calls[2].args.some((arg) => arg.startsWith('--ram=')));
+    const createCall = calls[1];
+    const analyzeCall = calls[2];
+    assert.ok(createCall);
+    assert.ok(analyzeCall);
+    assert.ok(createCall.args.includes('--language=javascript-typescript'));
+    assert.ok(createCall.args.some((arg) => arg.startsWith('--source-root=')));
+    assert.ok(analyzeCall.args.includes('javascript-code-scanning.qls'));
+    assert.ok(analyzeCall.args.includes('--format=sarif-latest'));
+    assert.ok(analyzeCall.args.includes(`--threads=${CODEQL_THREADS}`));
+    assert.ok(analyzeCall.args.some((arg) => arg.startsWith('--ram=')));
     assert.equal(calls.flatMap((call) => call.args).includes('upload-results'), false);
     assert.equal(calls.flatMap((call) => call.args).includes('--command'), false);
   });

@@ -10,6 +10,7 @@ import {
   parseArguments,
   runDeploymentSelfCheck,
 } from '../tools/deployment-self-check.mts';
+import type { FetchOnce, SelfCheckResult } from '../tools/deployment-self-check.mts';
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -19,23 +20,26 @@ const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000',
 };
 
-function json(status, body, headers = {}) {
+type FixtureRoute = (init: RequestInit) => Response;
+type FixtureCall = Readonly<{ url: string; init: RequestInit }>;
+
+function json(status: number, body: unknown, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
   });
 }
 
-function html(status, body, headers = {}) {
+function html(status: number, body: string, headers: Record<string, string> = {}) {
   return new Response(body, {
     status,
     headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/html; charset=utf-8', ...headers },
   });
 }
 
-function healthyFetch(overrides = {}) {
-  const calls = [];
-  const responses = {
+function healthyFetch(overrides: Record<string, FixtureRoute> = {}) {
+  const calls: FixtureCall[] = [];
+  const responses: Record<string, FixtureRoute> = {
     '/': () => html(200, '<!doctype html><title>WHOISleuth</title><main>WHOISleuth</main>'),
     '/api/session': () => json(200, { authenticated: false }),
     '/monitor': () => html(200, '<meta name="robots" content="noindex, nofollow"><p>Opening console</p>'),
@@ -47,14 +51,20 @@ function healthyFetch(overrides = {}) {
   };
   return {
     calls,
-    fetchOnce: async (url, init) => {
+    fetchOnce: (async (url, init) => {
       const parsed = new URL(url);
       calls.push({ url, init });
       const response = responses[parsed.pathname];
       if (!response) throw new Error('Unexpected fixture request');
       return response(init);
-    },
+    }) satisfies FetchOnce,
   };
+}
+
+function checkById(checks: readonly SelfCheckResult[], id: SelfCheckResult['id']): SelfCheckResult {
+  const result = checks.find((item) => item.id === id);
+  assert.ok(result);
+  return result;
 }
 
 describe('deployment origin validation', () => {
@@ -105,10 +115,11 @@ describe('deployment boundary report', () => {
     assert.ok(fixture.calls.every((call) => new URL(call.url).origin === 'https://console.example'));
 
     const login = fixture.calls.find((call) => new URL(call.url).pathname === '/api/login');
-    assert.equal(login.init.headers.Origin, 'https://console.example');
-    assert.equal(JSON.parse(login.init.body).password, null);
-    assert.equal(report.checks.find((item) => item.id === 'scheduled_monitor_posture').status, 'unsupported');
-    assert.equal(report.checks.find((item) => item.id === 'protected_workspace_redirect').status, 'inconclusive');
+    assert.ok(login);
+    assert.equal(new Headers(login.init.headers).get('origin'), 'https://console.example');
+    assert.equal(typeof login.init.body === 'string' ? JSON.parse(login.init.body).password : undefined, null);
+    assert.equal(checkById(report.checks, 'scheduled_monitor_posture').status, 'unsupported');
+    assert.equal(checkById(report.checks, 'protected_workspace_redirect').status, 'inconclusive');
     assert.equal(JSON.stringify(report).includes('"password":'), false);
     assert.equal(JSON.stringify(report).includes('/api/login'), false);
   });
@@ -142,9 +153,9 @@ describe('deployment boundary report', () => {
       '/monitor': () => html(302, '', { Location: 'https://other.example/login' }),
     });
     const report = await runDeploymentSelfCheck('https://console.example', { fetchOnce: fixture.fetchOnce });
-    assert.equal(report.checks.find((item) => item.id === 'public_homepage').status, 'inconclusive');
-    assert.equal(report.checks.find((item) => item.id === 'anonymous_session').status, 'inconclusive');
-    assert.equal(report.checks.find((item) => item.id === 'protected_workspace_redirect').status, 'inconclusive');
+    assert.equal(checkById(report.checks, 'public_homepage').status, 'inconclusive');
+    assert.equal(checkById(report.checks, 'anonymous_session').status, 'inconclusive');
+    assert.equal(checkById(report.checks, 'protected_workspace_redirect').status, 'inconclusive');
     assert.ok(report.checks.every((item) => item.detail.length <= 320));
     assert.equal(JSON.stringify(report).includes('x'.repeat(321)), false);
   });
@@ -155,7 +166,7 @@ describe('deployment boundary report', () => {
       '/overview': () => html(200, '<title>WHOISleuth</title>'),
     });
     const report = await runDeploymentSelfCheck('https://console.example', { fetchOnce: fixture.fetchOnce });
-    assert.equal(report.checks.find((item) => item.id === 'public_homepage').status, 'pass');
+    assert.equal(checkById(report.checks, 'public_homepage').status, 'pass');
     assert.equal(report.bounds.requestCount, 8);
     assert.equal(fixture.calls.filter((call) => call.init.method === 'POST').length, 1);
   });
@@ -165,7 +176,7 @@ describe('deployment boundary report', () => {
       '/': () => html(302, '', { Location: '/overview?source=redirect' }),
     });
     const report = await runDeploymentSelfCheck('https://console.example', { fetchOnce: fixture.fetchOnce });
-    const homepage = report.checks.find((item) => item.id === 'public_homepage');
+    const homepage = checkById(report.checks, 'public_homepage');
     assert.equal(homepage.status, 'inconclusive');
     assert.equal(fixture.calls.some((call) => new URL(call.url).search), false);
   });
