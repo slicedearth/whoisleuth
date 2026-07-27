@@ -465,10 +465,10 @@ describe('Markdown escaping', () => {
     const rec = caseRecord({ tags: ['https://evil.example', 'www.evil.example'] });
     const { markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
-    assert.equal(markdown.includes('https://evil.example'), false);
-    assert.equal(markdown.includes('www.evil.example'), false);
-    assert.ok(markdown.includes('https\\://evil.example'));
-    assert.ok(markdown.includes('www\\.evil.example'));
+    assert.doesNotMatch(markdown, /https:\/\/evil\.example/);
+    assert.doesNotMatch(markdown, /www\.evil\.example/);
+    assert.match(markdown, /https\\:\/\/evil\.example/);
+    assert.match(markdown, /www\\\.evil\.example/);
   });
 
   test('flattens line breaks in inline stored values', () => {
@@ -488,10 +488,10 @@ describe('caseReportFilename', () => {
   test('produces safe filename with domain and timestamp', () => {
     const name = caseReport.caseReportFilename('example.com', 'json', '2026-01-01T00-00-00-000Z');
 
-    assert.ok(name.startsWith('whoisleuth-case-'));
-    assert.ok(name.includes('example.com'));
-    assert.ok(name.endsWith('.json'));
-    assert.equal(name.includes('/'), false);
+    assert.equal(
+      name,
+      'whoisleuth-case-example.com-2026-01-01T00-00-00-000Z.json',
+    );
   });
 
   test('produces .md extension', () => {

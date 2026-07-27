@@ -49,14 +49,18 @@ describe('legacy domains', () => {
       row({ name_value: 'login.example.co.uk', common_name: '' }),
       row({ name_value: 'example.co.uk', common_name: '' }),
     ]);
-    assert.ok(result.domains.includes('co.uk'), 'legacy domains should include co.uk');
-    assert.ok(result.domains.includes('login.example.co.uk'));
-    assert.ok(result.domains.includes('example.co.uk'));
+    assert.deepStrictEqual(result.domains, [
+      'co.uk',
+      'example.co.uk',
+      'login.example.co.uk',
+    ]);
     // Structured matches: co.uk has no registrable domain → absent.
     const matchDomains = result.matches.map((m) => m.domain);
-    assert.ok(!matchDomains.includes('co.uk'), 'co.uk should not appear in structured matches');
-    assert.ok(matchDomains.includes('example.co.uk'));
-    assert.ok(result.matches.some((m) => m.domain === 'example.co.uk' && m.hostnames.includes('login.example.co.uk')));
+    assert.deepStrictEqual(matchDomains, ['example.co.uk']);
+    assert.deepStrictEqual(requiredValue(result.matches[0]).hostnames, [
+      'example.co.uk',
+      'login.example.co.uk',
+    ]);
   });
 
   test('legacy truncation sets truncated', () => {
@@ -305,7 +309,7 @@ describe('registrable-domain grouping', () => {
     ]);
     assert.deepStrictEqual(result.matches, []);
     // But still in legacy.
-    assert.ok(result.domains.includes('co.uk'));
+    assert.deepStrictEqual(result.domains, ['co.uk']);
   });
 
   test('invalid hostnames and IP literals excluded from structured matches', () => {
