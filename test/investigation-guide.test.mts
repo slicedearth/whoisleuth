@@ -56,6 +56,7 @@ test('defines three fixed bounded recipes with complete stage guidance', () => {
 
 test('creates a versioned recipe for one canonical domain without starting or completing a stage', () => {
   const guide = createInvestigationGuide('Portal.Example.Test.', 'infrastructure_pivot', STARTED_AT);
+  assert.ok(guide);
   assert.equal(guide.version, INVESTIGATION_GUIDE_VERSION);
   assert.equal(guide.recipeId, 'infrastructure_pivot');
   assert.equal(guide.domain, 'portal.example.test');
@@ -94,6 +95,7 @@ test('normalizes deployed version 1 navigation into new-domain triage version 2'
     rawEvidence: 'must not escape',
   };
   const parsed = parseInvestigationGuide(legacy);
+  assert.ok(parsed);
   assert.equal(parsed.version, 2);
   assert.equal(parsed.recipeId, 'new_domain_triage');
   assert.equal(parsed.domain, 'example.test');
@@ -119,6 +121,7 @@ test('parses current records through fixed stage and field allowlists', () => {
     ],
     rawEvidence: 'drop',
   });
+  assert.ok(parsed);
   assert.equal(parsed.status, 'active');
   assert.equal(parsed.stages.length, 5);
   assert.deepEqual(parsed.stages.find((stage) => stage.id === 'discover'), {
@@ -129,7 +132,9 @@ test('parses current records through fixed stage and field allowlists', () => {
     updatedAt: COMPLETED_AT,
   });
   assert.equal('rawEvidence' in parsed, false);
-  assert.equal('raw' in parsed.stages.find((stage) => stage.id === 'discover'), false);
+  const discover = parsed.stages.find((stage) => stage.id === 'discover');
+  assert.ok(discover);
+  assert.equal('raw' in discover, false);
 });
 
 test('rejects malformed and future records without treating them as an empty recipe', () => {
@@ -162,6 +167,8 @@ test('maps recipe stages to existing tool routes with safe target handoff', () =
 test('stores one bounded analyst-selected focus domain without changing the official target', () => {
   const original = createInvestigationGuide('portal.example.test', 'brand_sweep', STARTED_AT);
   const focused = setInvestigationGuideFocusDomain(original, 'Candidate.Example.', OPENED_AT);
+  assert.ok(original);
+  assert.ok(focused);
   assert.equal(original.focusDomain, null);
   assert.equal(focused.domain, 'portal.example.test');
   assert.equal(focused.focusDomain, 'candidate.example');
@@ -180,6 +187,8 @@ test('carries a bounded canonical peer set for non-brand review without mutating
     'bad domain',
   ];
   const updated = setInvestigationGuideReviewDomains(original, values, OPENED_AT);
+  assert.ok(original);
+  assert.ok(updated);
   assert.equal(original.reviewDomains.length, 1);
   assert.equal(updated.domain, 'portal.example.test');
   assert.equal(updated.reviewDomains[0], 'portal.example.test');
@@ -194,9 +203,11 @@ test('carries a bounded canonical peer set for non-brand review without mutating
 
 test('records opened stages separately from outcomes and does not mutate source state', () => {
   const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
+  assert.ok(original);
   assert.deepEqual(visitInvestigationGuide(original, '/lookup', OPENED_AT), original);
   const approved = approveInvestigationGuideStage(original, 'lookup', APPROVED_AT);
   const visited = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
+  assert.ok(visited);
   assert.equal(original.stages[0].openedAt, null);
   assert.equal(visited.stages[0].openedAt, OPENED_AT);
   assert.equal(visited.stages[0].outcome, 'pending');
@@ -207,7 +218,9 @@ test('records opened stages separately from outcomes and does not mutate source 
 test('requires explicit collection approval but approval never opens or completes a stage', () => {
   const original = createInvestigationGuide('example.test', 'brand_sweep', STARTED_AT);
   const approved = approveInvestigationGuideStage(original, 'discover', APPROVED_AT);
+  assert.ok(approved);
   const discover = approved.stages.find((stage) => stage.id === 'discover');
+  assert.ok(discover);
   assert.equal(discover.approvedAt, APPROVED_AT);
   assert.equal(discover.openedAt, null);
   assert.equal(discover.outcome, 'pending');
@@ -217,24 +230,33 @@ test('requires explicit collection approval but approval never opens or complete
 
 test('complete and partial outcomes require an opened stage while skipped remains explicit', () => {
   const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
+  assert.ok(original);
   assert.deepEqual(setInvestigationGuideStageOutcome(original, 'lookup', 'complete', COMPLETED_AT), original);
   const skipped = setInvestigationGuideStageOutcome(original, 'bulk', 'skipped', COMPLETED_AT);
-  assert.equal(skipped.stages.find((stage) => stage.id === 'bulk').outcome, 'skipped');
+  assert.ok(skipped);
+  const skippedStage = skipped.stages.find((stage) => stage.id === 'bulk');
+  assert.ok(skippedStage);
+  assert.equal(skippedStage.outcome, 'skipped');
   const approved = approveInvestigationGuideStage(original, 'lookup', APPROVED_AT);
   const opened = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
   const partial = setInvestigationGuideStageOutcome(opened, 'lookup', 'partial', COMPLETED_AT);
-  assert.equal(partial.stages.find((stage) => stage.id === 'lookup').outcome, 'partial');
+  assert.ok(partial);
+  const partialStage = partial.stages.find((stage) => stage.id === 'lookup');
+  assert.ok(partialStage);
+  assert.equal(partialStage.outcome, 'partial');
   assert.equal(partial.updatedAt, COMPLETED_AT);
 });
 
 test('pause blocks stage mutation until the recipe is resumed', () => {
   const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
   const paused = setInvestigationGuideStatus(original, 'paused', APPROVED_AT);
+  assert.ok(paused);
   assert.equal(paused.status, 'paused');
   assert.deepEqual(visitInvestigationGuide(paused, '/lookup', OPENED_AT), paused);
   assert.deepEqual(approveInvestigationGuideStage(paused, 'lookup', OPENED_AT), paused);
   assert.deepEqual(setInvestigationGuideStageOutcome(paused, 'bulk', 'skipped', OPENED_AT), paused);
   const resumed = setInvestigationGuideStatus(paused, 'active', COMPLETED_AT);
+  assert.ok(resumed);
   assert.equal(resumed.status, 'active');
 });
 
@@ -243,6 +265,7 @@ test('restart preserves the recipe and target but clears all progress', () => {
   const opened = visitInvestigationGuide(original, '/lookup', OPENED_AT);
   const approved = approveInvestigationGuideStage(opened, 'bulk', APPROVED_AT);
   const restarted = restartInvestigationGuide(approved, COMPLETED_AT);
+  assert.ok(restarted);
   assert.equal(restarted.recipeId, 'infrastructure_pivot');
   assert.equal(restarted.domain, 'example.test');
   assert.equal(restarted.createdAt, COMPLETED_AT);
@@ -255,6 +278,7 @@ test('builds a deterministic compact summary without evidence or analyst-owned c
   const opened = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
   const completed = setInvestigationGuideStageOutcome(opened, 'lookup', 'complete', COMPLETED_AT);
   const summary = buildInvestigationGuideSummary(completed, '2026-07-20T02:00:00.000Z');
+  assert.ok(summary);
   assert.equal(summary.schema, INVESTIGATION_GUIDE_EXPORT_SCHEMA);
   assert.equal(summary.version, INVESTIGATION_GUIDE_EXPORT_VERSION);
   assert.deepEqual(summary.target, { type: 'domain', value: 'example.test' });
@@ -266,7 +290,7 @@ test('builds a deterministic compact summary without evidence or analyst-owned c
     opened: true,
     updatedAt: COMPLETED_AT,
   });
-  const keys = [];
+  const keys: string[] = [];
   JSON.stringify(summary, (key, value) => {
     if (key) keys.push(key);
     return value;
