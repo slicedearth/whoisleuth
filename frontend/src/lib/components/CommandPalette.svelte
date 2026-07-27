@@ -31,9 +31,10 @@
       return queryTerms.every((term) => searchableText.includes(term));
     })
     .slice(0, 12));
-  const activeOptionId = $derived(filteredCommands[selectedIndex] ? `command-option-${selectedIndex}` : undefined);
-  const selectedAnnouncement = $derived(filteredCommands[selectedIndex]
-    ? `${filteredCommands[selectedIndex].label}, ${filteredCommands[selectedIndex].group}${filteredCommands[selectedIndex].href === page.url.pathname ? ', current page' : ''}.`
+  const selectedCommand = $derived(filteredCommands[selectedIndex]);
+  const activeOptionId = $derived(selectedCommand ? `command-option-${selectedIndex}` : undefined);
+  const selectedAnnouncement = $derived(selectedCommand
+    ? `${selectedCommand.label}, ${selectedCommand.group}${selectedCommand.href === page.url.pathname ? ', current page' : ''}.`
     : 'No matching destination.');
 
   onMount(() => {
@@ -110,7 +111,7 @@
       last?.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault();
-      first.focus();
+      first?.focus();
     }
   }
 </script>

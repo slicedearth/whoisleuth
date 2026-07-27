@@ -112,7 +112,7 @@
   const entries=$derived(parsedInput.entries);
   const securityTxtEligible=$derived.by(()=>{
     if(entries.length!==1)return false;
-    try{const value=entries[0];const url=new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)?value:`https://${value}`);const host=url.hostname;return host.includes('.')&&!host.includes(':')&&!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);}catch{return false;}
+    try{const value=entries[0];if(!value)return false;const url=new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)?value:`https://${value}`);const host=url.hostname;return host.includes('.')&&!host.includes(':')&&!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);}catch{return false;}
   });
   const lookupView=$derived(createLookupViewModel(result));
   const availability=$derived(lookupView.availability as JsonRecord);
@@ -275,6 +275,7 @@
   function updated(){const rdapLifecycle=rec(rdapParsed.lifecycle);const whoisLifecycle=rec(whoisParsed.lifecycle);return firstText(rdapLifecycle.updatedDateIso,rdapLifecycle.updatedDate,eventDate('last changed'),whoisParsed.updatedDateIso,whoisLifecycle.updatedDateIso,whoisParsed.updatedDate);}
   function formatDate(value:unknown){if(!value)return'—';const parsed=new Date(String(value));return Number.isNaN(parsed.getTime())?String(value):parsed.toLocaleString();}
   function dateTimeAttribute(value:unknown){if(!value)return undefined;const parsed=new Date(String(value));return Number.isNaN(parsed.getTime())?undefined:parsed.toISOString();}
+  function datedRow(label:string,value:unknown){const datetime=dateTimeAttribute(value);return{label,value:formatDate(value),...(datetime?{datetime}:{})};}
   function statusLabel(value:string){return value.replaceAll('_',' ');}
   function trackingIdentifierLabel(value:unknown){return({
     'advertising-property':'Advertising property',
@@ -378,7 +379,7 @@
     {label:'Address range',value:[boundedTechnologyText(observedNetwork.startAddress,64),boundedTechnologyText(observedNetwork.endAddress,64)].filter(Boolean).join(' to ')||'—'},
     {label:'Country',value:show(observedNetwork.country)},
     {label:'Network type',value:show(observedNetwork.networkType)},
-    {label:'RDAP database updated',value:formatDate(observedNetwork.databaseUpdatedAt),datetime:dateTimeAttribute(observedNetwork.databaseUpdatedAt)},
+    datedRow('RDAP database updated',observedNetwork.databaseUpdatedAt),
   ]:[];}
   function observedNetworkLimitations(){return stringList(observedNetworkContext.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
   function boundedPostureCount(value:unknown){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,20):0;}
@@ -448,8 +449,8 @@
     {label:'Country',value:show(rdapParsed.country)},
     {label:'Type',value:show(rdapParsed.networkType)},
     {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
-    {label:'Registered',value:formatDate(rec(rdapParsed.lifecycle).createdDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).createdDate)},
-    {label:'Updated',value:formatDate(rec(rdapParsed.lifecycle).updatedDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).updatedDate)},
+    datedRow('Registered',rec(rdapParsed.lifecycle).createdDate),
+    datedRow('Updated',rec(rdapParsed.lifecycle).updatedDate),
   );else if(result?.type==='asn')rows.push(
     {label:'Handle',value:show(rdapParsed.handle)},
     {label:'Name',value:show(rdapParsed.name)},
@@ -457,8 +458,8 @@
     {label:'Country',value:show(rdapParsed.country)},
     {label:'Type',value:show(rdapParsed.autnumType)},
     {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
-    {label:'Registered',value:formatDate(rec(rdapParsed.lifecycle).createdDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).createdDate)},
-    {label:'Updated',value:formatDate(rec(rdapParsed.lifecycle).updatedDate),datetime:dateTimeAttribute(rec(rdapParsed.lifecycle).updatedDate)},
+    datedRow('Registered',rec(rdapParsed.lifecycle).createdDate),
+    datedRow('Updated',rec(rdapParsed.lifecycle).updatedDate),
   );rows.push(
     {label:'Object class',value:show(rdapParsed.objectClassName)},
     {label:'Language',value:show(rdapParsed.language)},
@@ -517,12 +518,7 @@
   function dnsValues(name:string){const values=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return values.map((value)=>{if(typeof value==='string')return value;const record=rec(value);return name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:name==='soa'?`${record.nsname} · hostmaster ${record.hostmaster} · serial ${record.serial} · refresh ${record.refresh}s · retry ${record.retry}s · expire ${record.expire}s · minimum TTL ${record.minttl}s`:name==='https'?httpsServiceBindingValue(record):String(value);}).filter(Boolean).join(' | ');}
   function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}
   function dnsQueryFailures(){return Object.entries(rec(dnsEvidence.diagnostics)).filter(([,item])=>rec(item).status==='error').map(([name,item])=>`${name.toUpperCase()}: ${rec(item).error||'query failed'}`).join(' · ');}
-  function dnsEvidenceRows(){return[
-    {label:'DNSSEC',value:show(availability.dnssec)},
-    ...[['A','a'],['AAAA','aaaa'],['CNAME','cname'],['Nameservers','ns'],['MX','mx'],['SPF','spf'],['DMARC','dmarc'],['CAA','caa']].map(([label,name])=>({label,value:dnsDisplay(name)})),
-    ...(Array.isArray(dnsRecords.soa)||rec(dnsEvidence.diagnostics).soa?[{label:'SOA',value:dnsDisplay('soa')}]:[]),
-    ...(Array.isArray(dnsRecords.https)||rec(dnsEvidence.diagnostics).https?[{label:'HTTPS service binding',value:dnsDisplay('https')}]:[]),
-  ];}
+  function dnsEvidenceRows(){const rows:Array<{label:string;value:string}>=[{label:'DNSSEC',value:show(availability.dnssec)}];for(const[label,name]of[['A','a'],['AAAA','aaaa'],['CNAME','cname'],['Nameservers','ns'],['MX','mx'],['SPF','spf'],['DMARC','dmarc'],['CAA','caa']]as const)rows.push({label,value:dnsDisplay(name)});if(Array.isArray(dnsRecords.soa)||rec(dnsEvidence.diagnostics).soa)rows.push({label:'SOA',value:dnsDisplay('soa')});if(Array.isArray(dnsRecords.https)||rec(dnsEvidence.diagnostics).https)rows.push({label:'HTTPS service binding',value:dnsDisplay('https')});return rows;}
   function reverseDnsRows(){const records=Array.isArray(reverseDnsRecords.ptr)?reverseDnsRecords.ptr.map(String):[];return[{label:'PTR names',value:records.join(' · ')||'Not observed'}];}
   function reverseDnsFailure(){const diagnostic=rec(rec(reverseDns.diagnostics).ptr);return diagnostic.status==='error'?String(diagnostic.error||'query failed'):'';}
   function formatBytes(value:unknown){const bytes=Number(value);if(!Number.isFinite(bytes)||bytes<0)return'—';return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(bytes<10240?1:0)} KiB`;}
@@ -570,7 +566,7 @@
     ...(tlsAuthorization.error?[{label:'Authorization',value:String(tlsAuthorization.error)}]:[]),
     ...(tlsHostname.error?[{label:'Hostname',value:String(tlsHostname.error)}]:[]),
   ];}
-  function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField===true)values.push({label:'Password field',tone:'warn'});const phishingLanguage=typeof availability.phishingLanguageMatch==='string'?availability.phishingLanguageMatch:undefined;if(phishingLanguage)values.push({label:'Phishing language',tone:'danger',detail:phishingLanguage});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const domainAgeDays=typeof availability.domainAgeDays==='number'?availability.domainAgeDays:null;const age=fmtAge(domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiresInDays=typeof availability.expiresInDays==='number'?availability.expiresInDays:null;const expiry=fmtExpiresIn(expiresInDays);if(expiry&&expiresInDays!==null)values.push({label:expiry,tone:expiresInDays<=60?'warn':'neutral'});const privacyProtected=typeof availability.privacyProtected==='boolean'?availability.privacyProtected:null;if(privacyProtected!==null)values.push({label:formatPrivacyCell(privacyProtected),tone:privacyProtected?'warn':'good'});const activityStatus=typeof availability.activityStatus==='string'?availability.activityStatus:null;if(activityStatus)values.push({label:formatActivityCell(activityStatus,availability.hasMx===true,availability.hasSpf===true,availability.hasDmarc===true),tone:activityStatus==='active'?'good':activityStatus==='parked'?'warn':'neutral',detail:textOrNull(availability.websiteProbeDetail)??undefined});return values;}
+  function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField===true)values.push({label:'Password field',tone:'warn'});const phishingLanguage=typeof availability.phishingLanguageMatch==='string'?availability.phishingLanguageMatch:undefined;if(phishingLanguage)values.push({label:'Phishing language',tone:'danger',detail:phishingLanguage});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const domainAgeDays=typeof availability.domainAgeDays==='number'?availability.domainAgeDays:null;const age=fmtAge(domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiresInDays=typeof availability.expiresInDays==='number'?availability.expiresInDays:null;const expiry=fmtExpiresIn(expiresInDays);if(expiry&&expiresInDays!==null)values.push({label:expiry,tone:expiresInDays<=60?'warn':'neutral'});const privacyProtected=typeof availability.privacyProtected==='boolean'?availability.privacyProtected:null;if(privacyProtected!==null)values.push({label:formatPrivacyCell(privacyProtected),tone:privacyProtected?'warn':'good'});const activityStatus=typeof availability.activityStatus==='string'?availability.activityStatus:null;if(activityStatus){const detail=textOrNull(availability.websiteProbeDetail);values.push({label:formatActivityCell(activityStatus,availability.hasMx===true,availability.hasSpf===true,availability.hasDmarc===true),tone:activityStatus==='active'?'good':activityStatus==='parked'?'warn':'neutral',...(detail?{detail}:{})});}return values;}
   function overviewFacts(){return[
     {label:'Registration',value:show(availability.state||whoisParsed.registrationStatus),detail:`${show(availability.confidence)} confidence`},
     {label:'Registrar',value:show(availability.registrar||rdapParsed.registrar||whoisParsed.registrar),detail:show(whoisParsed.registrarUrl)},
@@ -709,7 +705,8 @@
     }
 
     loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';
-    const params=new URLSearchParams({q:entries[0]});
+    const target=entries[0];if(!target)return;
+    const params=new URLSearchParams({q:target});
     if(lookupMode==='fast')params.set('fast','1');
     if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');
     if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');

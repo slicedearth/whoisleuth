@@ -32,6 +32,8 @@
   const graph=$derived(projectCaseRelationshipGraph(summary,{type,source,period,completeness,scope,focusId:selectedId,oneHop,pinnedIds,hiddenIds,groupCaseIds}));
   const selectedNode=$derived(graph.nodes.find((node)=>node.id===selectedId)||graph.relationshipNodes[0]||graph.caseNodes[0]||null);
   const actionableSelection=$derived(Boolean(selectedId&&graph.nodes.some((node)=>node.id===selectedId)));
+  const selectedPinned=$derived(Boolean(actionableSelection&&selectedNode&&graph.view.pinnedIds.includes(selectedNode.id)));
+  const selectedPinAtCapacity=$derived(Boolean(selectedNode&&pinnedIds.length>=MAX_RELATIONSHIP_GRAPH_PINS&&!pinnedIds.includes(selectedNode.id)));
   const viewChanged=$derived(graph.view.oneHop||pinnedIds.length>0||hiddenIds.length>0||groupCaseIds.length>0);
 
   function select(id:string){selectedId=id;}
@@ -98,7 +100,7 @@
   {#if graph.allNodeCount}
     <div class="view-controls" role="group" aria-label="Relationship graph view controls">
       <button type="button" class="btn small" aria-pressed={graph.view.oneHop} disabled={!actionableSelection} onclick={toggleOneHop}>{graph.view.oneHop?'Show overview':'Focus one hop'}</button>
-      <button type="button" class="btn small" aria-pressed={actionableSelection&&graph.view.pinnedIds.includes(selectedNode.id)} disabled={!actionableSelection||(pinnedIds.length>=MAX_RELATIONSHIP_GRAPH_PINS&&!pinnedIds.includes(selectedNode?.id))} onclick={togglePin}>{actionableSelection&&graph.view.pinnedIds.includes(selectedNode.id)?'Unpin selected':'Pin selected'}</button>
+      <button type="button" class="btn small" aria-pressed={selectedPinned} disabled={!actionableSelection||selectedPinAtCapacity} onclick={togglePin}>{selectedPinned?'Unpin selected':'Pin selected'}</button>
       <button type="button" class="btn small" disabled={!actionableSelection||hiddenIds.length>=MAX_RELATIONSHIP_GRAPH_HIDDEN} onclick={hideSelected}>Hide selected</button>
       <button type="button" class="btn small" disabled={!viewChanged} onclick={resetView}>Reset view</button>
       <span role="status" aria-live="polite">{graph.nodes.length} of {graph.allNodeCount} nodes visible · {graph.view.pinnedIds.length} pinned · {graph.view.hiddenIds.length} hidden</span>

@@ -217,7 +217,7 @@
               <td data-label="WHOIS behavior"><strong>{registrySupportLabel(row.whoisQueryProfile)}</strong><span>{registrySupportLabel(row.whoisParserProfile)}</span>{#if row.fallbackProfile}<small>Fallback: {registrySupportLabel(row.fallbackProfile)}</small>{/if}</td>
               <td data-label="Profile details">
                 <details>
-                  <summary>Review {row.suffixes[0].toUpperCase()} profile</summary>
+                  <summary>Review {(row.suffixes[0] ?? 'unknown').toUpperCase()} profile</summary>
                   <div class="profile-detail">
                     <dl>
                       <div><dt>Profile ID</dt><dd><code>{row.id}</code></dd></div>

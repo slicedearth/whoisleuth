@@ -135,8 +135,8 @@
         <option value={recipe.id}>{recipe.label}</option>
       {/each}
     </select>
-    <p class="recipe-detail">{selectedRecipe.summary}</p>
-    <label for="guide-domain">{selectedRecipe.targetLabel}</label>
+    <p class="recipe-detail">{selectedRecipe?.summary ?? ''}</p>
+    <label for="guide-domain">{selectedRecipe?.targetLabel ?? 'Domain'}</label>
     <div class="guide-input">
       <input id="guide-domain" bind:value={guideDomain} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="example.test">
       <button class="primary" type="submit">Start guide</button>

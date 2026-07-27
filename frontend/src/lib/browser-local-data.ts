@@ -331,18 +331,41 @@ export class BrowserLocalDataProvider {
     for (const definition of definitions) await this.#requireDefinition(definition);
     for (let attempt = 1; attempt <= MAX_LOCAL_DATA_UPDATE_ATTEMPTS; attempt++) {
       const snapshots = await Promise.all(definitions.map((definition) => this.#readSnapshot(definition)));
-      const current = new Map(definitions.map((definition, index) => [definition.id, snapshots[index].document]));
+      const current = new Map<string, unknown>();
+      for (let index = 0; index < definitions.length; index++) {
+        const definition = definitions[index];
+        const snapshot = snapshots[index];
+        if (!definition || !snapshot) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local batch snapshot is incomplete.');
+        }
+        current.set(definition.id, snapshot.document);
+      }
       const updated = updater(current);
       const prepared: PreparedCollection<any>[] = [];
       for (let index = 0; index < definitions.length; index++) {
         const definition = definitions[index];
+        const snapshot = snapshots[index];
+        if (!definition || !snapshot) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local batch snapshot is incomplete.');
+        }
         if (!updated.documents.has(definition.id)) {
           throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', `The ${definition.label} batch update did not return a document.`);
         }
-        prepared.push(await this.#prepare(definition, updated.documents.get(definition.id), 'application', snapshots[index].manifest.legacyDigest));
+        prepared.push(await this.#prepare(definition, updated.documents.get(definition.id), 'application', snapshot.manifest.legacyDigest));
       }
-      const revisions = new Map(definitions.map((definition, index) => [definition.id, snapshots[index].manifest.revision]));
-      const changed = prepared.filter((item, index) => !collectionContentMatches(item, snapshots[index].manifest, this.codec.id));
+      const revisions = new Map<string, number>();
+      for (let index = 0; index < definitions.length; index++) {
+        const definition = definitions[index];
+        const snapshot = snapshots[index];
+        if (!definition || !snapshot) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local batch snapshot is incomplete.');
+        }
+        revisions.set(definition.id, snapshot.manifest.revision);
+      }
+      const changed = prepared.filter((item, index) => {
+        const snapshot = snapshots[index];
+        return !snapshot || !collectionContentMatches(item, snapshot.manifest, this.codec.id);
+      });
       if (!changed.length) return updated.result;
       try {
         await this.#commit(changed, revisions);
@@ -507,11 +530,15 @@ export class BrowserLocalDataProvider {
     const storedRecords: StoredRecord[] = [];
     let encodedBytes = 0;
     for (let ordinal = 0; ordinal < records.length; ordinal++) {
-      const id = boundedIdentifier(records[ordinal].id, `${definition.label} record identifier`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
+      const record = records[ordinal];
+      if (!record) {
+        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an incomplete record.`);
+      }
+      const id = boundedIdentifier(record.id, `${definition.label} record identifier`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
       if (seen.has(id)) throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} contains a duplicate record identifier.`);
       seen.add(id);
       let encoded: EncodedLocalDataRecord;
-      try { encoded = await this.codec.encode({ collection: definition.id, id, value: records[ordinal].value }); }
+      try { encoded = await this.codec.encode({ collection: definition.id, id, value: record.value }); }
       catch (cause) {
         throw new BrowserLocalDataError('LOCAL_DATA_ENCODING_FAILED', `${definition.label} could not be encoded for browser storage.`, { cause });
       }
@@ -668,6 +695,7 @@ export class BrowserLocalDataProvider {
       )));
       for (let index = 0; index < prepared.length; index++) {
         const item = prepared[index];
+        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
         const currentRevision = current[index]?.revision || 0;
         if (currentRevision !== expectedRevisions.get(item.definition.id)) {
           transaction.abort();
@@ -677,6 +705,7 @@ export class BrowserLocalDataProvider {
       }
       for (let index = 0; index < prepared.length; index++) {
         const item = prepared[index];
+        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
         const currentRevision = current[index]?.revision || 0;
         records.delete(IDBKeyRange.bound([item.definition.id], [item.definition.id, []]));
         for (const record of item.records) records.put(record);

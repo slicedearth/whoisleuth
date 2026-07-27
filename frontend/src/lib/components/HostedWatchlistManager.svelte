@@ -182,7 +182,7 @@
       <label>Browser-local watchlist
         <select bind:value={selectedLocal} disabled={busy || !localNames.length}>
           <option value="">Choose a watchlist</option>
-          {#each localNames as name}<option value={name}>{name} ({localWatchlists[name].results.length})</option>{/each}
+          {#each localNames as name}<option value={name}>{name} ({localWatchlists[name]?.results.length ?? 0})</option>{/each}
         </select>
       </label>
       <label>Interval

@@ -268,7 +268,7 @@
   const effectiveMutationFamilies = $derived(
     generationPreset === 'custom'
       ? customMutationFamilies
-      : [...GENERATION_PRESETS[generationPreset].mutationTypes],
+      : [...(GENERATION_PRESETS[generationPreset]?.mutationTypes ?? [])],
   );
   const keyboardLayoutRelevant = $derived(
     effectiveMutationFamilies.includes('keyboard_substitution')
@@ -351,7 +351,7 @@
   }
 
   function selectMode(next:Mode){cancelCtSearch();mode=next;candidates=[];generatedContext=[];selected=new Set();candidateMetadata=new Map();status='';error='';ctResultKind=null;resetCandidateView();resetCtComparison();}
-  function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;event.preventDefault();selectMode(order[index]);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
+  function tabKeydown(event:KeyboardEvent){const order:Mode[]=['typosquat','keyword','certificate-transparency'];const current=order.indexOf(mode);let index=-1;if(event.key==='ArrowRight')index=(current+1)%order.length;else if(event.key==='ArrowLeft')index=(current+order.length-1)%order.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=order.length-1;if(index<0)return;const nextMode=order[index];if(!nextMode)return;event.preventDefault();selectMode(nextMode);requestAnimationFrame(()=>document.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
 
   function generate() {
     cancelCtSearch(); ctResultKind = null; resetCtComparison();

@@ -100,7 +100,7 @@ export function projectLifecycleEvents(rawEvents: LifecycleEventInput[]) {
   const events = accepted.map((event, index) => ({
     ...event,
     x: x(event.id) ?? 450,
-    labelY: laneY[index % laneY.length],
+    labelY: laneY[index % laneY.length] ?? 102,
     anchor: index === 0 ? 'start' : index === accepted.length - 1 ? 'end' : 'middle',
   }));
   return {
