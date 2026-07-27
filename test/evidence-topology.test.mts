@@ -8,10 +8,11 @@ import {
   normalizeEvidenceTopologyStatus,
   projectEvidenceTopology,
 } from '../frontend/src/lib/analysis/evidence-topology.ts';
+import type { EvidenceTopologyInput } from '../frontend/src/lib/analysis/evidence-topology.ts';
 
 describe('evidence topology projection', () => {
   test('uses bounded deterministic D3 geometry without changing source attribution', () => {
-    const nodes = [
+    const nodes: EvidenceTopologyInput[] = [
       { id: 'registry-rdap', label: 'Registry RDAP', detail: 'Authoritative registry publication', status: 'success', href: '#evidence-registry', side: 'left', glyph: 'R', family: 'registry' },
       { id: 'dns', label: 'DNS', detail: 'One record family was unavailable', status: 'partial', href: '#evidence-dns', side: 'right', glyph: 'D', family: 'network' },
       { id: 'technology', label: 'Technology', detail: 'Derived from bounded website evidence', status: 'observed', href: '#evidence-technology', side: 'right', provenance: 'derived', glyph: 'T' },
@@ -32,13 +33,13 @@ describe('evidence topology projection', () => {
   });
 
   test('caps nodes and strings, deduplicates ids, and rejects unsafe anchors', () => {
-    const nodes = Array.from({ length: MAX_EVIDENCE_TOPOLOGY_NODES + 4 }, (_, index) => ({
+    const nodes: EvidenceTopologyInput[] = Array.from({ length: MAX_EVIDENCE_TOPOLOGY_NODES + 4 }, (_, index) => ({
       id: index === 1 ? 'source-0' : `source-${index}`,
       label: `Source ${index} ${'x'.repeat(80)}`,
       detail: 'y'.repeat(300),
       status: 'success',
       href: index === 0 ? 'https://outside.invalid/' : index === 2 ? '#valid-anchor' : '#bad?anchor',
-      side: index % 2 ? 'left' : 'right',
+      side: index % 2 ? 'left' as const : 'right' as const,
     }));
     const graph = projectEvidenceTopology({ label: 'z'.repeat(200) }, nodes);
 

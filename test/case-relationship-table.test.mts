@@ -9,15 +9,19 @@ import {
   MAX_RELATIONSHIP_TABLE_ROWS,
   projectCaseRelationshipTable,
 } from '../frontend/src/lib/analysis/case-relationship-table.ts';
-import { buildCaseRelationships } from '../frontend/src/lib/analysis/case-relationships.ts';
+import {
+  CASE_RELATIONSHIP_VERSION,
+  buildCaseRelationships,
+  type CaseRelationshipGroup,
+} from '../frontend/src/lib/analysis/case-relationships.ts';
 
 const CAPTURED = '2026-07-14T00:00:00.000Z';
 
-function snapshot(overrides = {}) {
+function snapshot(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return { capturedAt: CAPTURED, scanDepth: 'deep', availability: 'registered', nameservers: [], ...overrides };
 }
 
-function caseRecord(id, domain, evidence = snapshot()) {
+function caseRecord(id: string, domain: string, evidence: Record<string, unknown> = snapshot()) {
   return { id, domain, evidenceHistory: [evidence] };
 }
 
@@ -179,13 +183,13 @@ describe('case relationship table projection', () => {
   });
 
   test('filters projection-backed rows without dropping their retained provenance', () => {
-    const group = {
+    const group: CaseRelationshipGroup = {
       type: 'nameserver_set',
       label: 'Shared nameserver set',
       method: 'Exact retained set',
       value: 'ns.shared.invalid',
       cases: [{ id: 'alpha', domain: 'alpha.invalid' }, { id: 'bravo', domain: 'bravo.invalid' }],
-      campaigns: [{ id: 'campaign-one', label: 'Review' }],
+      campaigns: [{ id: 'campaign-one', label: 'Review', entityId: 'campaign:campaign-one' }],
       description: 'Retained pivot.',
       sources: ['monitor'],
       scanDepths: ['deep'],
@@ -194,11 +198,24 @@ describe('case relationship table projection', () => {
       lastObservedAt: CAPTURED,
       complete: null,
       truncated: false,
-      observations: [{ id: 'obs-1', source: 'monitor', store: 'cases', observedAt: CAPTURED }],
+      observations: [{
+        id: 'obs-1',
+        source: 'monitor',
+        store: 'cases',
+        observedAt: CAPTURED,
+        firstObservedAt: CAPTURED,
+        scanDepth: 'deep',
+        status: 'success',
+        complete: null,
+        truncated: false,
+        schemaVersions: {},
+        limitations: [],
+      }],
       omittedObservations: 0,
       limitations: [],
     };
     const result = projectCaseRelationshipTable({
+      version: CASE_RELATIONSHIP_VERSION,
       state: 'ready',
       generatedAt: CAPTURED,
       groups: [group],

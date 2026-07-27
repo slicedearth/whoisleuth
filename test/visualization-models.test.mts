@@ -11,10 +11,11 @@ import {
   projectTriagePoints,
   projectWatchlistActivity,
 } from '../frontend/src/lib/analysis/visualization-models.ts';
+import type { LifecycleEventInput } from '../frontend/src/lib/analysis/visualization-models.ts';
 
 describe('bounded visualization models', () => {
   test('orders and caps valid lifecycle events without treating spacing as duration', () => {
-    const events = [
+    const events: LifecycleEventInput[] = [
       { id: 'later', label: 'Later', date: '2030-01-01T00:00:00Z', kind: 'certificate' },
       { id: 'invalid', label: 'Invalid', date: 'not-a-date' },
       ...Array.from({ length: 10 }, (_, index) => ({

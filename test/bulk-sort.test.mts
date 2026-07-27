@@ -5,6 +5,7 @@ import {
   defaultBulkSortDirection,
   sortBulkResults,
 } from '../frontend/src/lib/analysis/bulk-sort.ts';
+import type { BulkSortKey } from '../frontend/src/lib/analysis/bulk-sort.ts';
 
 const rows = Object.freeze([
   Object.freeze({
@@ -25,7 +26,8 @@ test('defines intuitive initial directions for every Bulk sort key', () => {
   assert.equal(defaultBulkSortDirection('risk'), -1);
   assert.equal(defaultBulkSortDirection('opportunity'), -1);
   assert.equal(defaultBulkSortDirection('confidence'), -1);
-  for (const key of ['domain', 'availability', 'activity', 'registrar', 'mutation']) {
+  const ascendingKeys: BulkSortKey[] = ['domain', 'availability', 'activity', 'registrar', 'mutation'];
+  for (const key of ascendingKeys) {
     assert.equal(defaultBulkSortDirection(key), 1);
   }
 });

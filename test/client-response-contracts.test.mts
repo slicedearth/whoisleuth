@@ -77,7 +77,7 @@ describe('official-site capture response contract', () => {
   });
 
   test('rejects malformed, unrelated, oversized, and future-shaped results', () => {
-    const oversized = availability();
+    const oversized: Record<string, unknown> = availability();
     for (let index = 0; Object.keys(oversized).length <= MAX_AVAILABILITY_KEYS; index += 1) {
       oversized[`extra${index}`] = index;
     }

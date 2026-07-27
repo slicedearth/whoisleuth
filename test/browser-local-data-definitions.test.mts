@@ -6,10 +6,11 @@ import {
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
 } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import type { AnyLocalDataCollectionDefinition } from '../frontend/src/lib/browser-local-data.ts';
 
 const NOW = '2026-07-22T01:00:00.000Z';
 
-function roundTrip(definition, document) {
+function roundTrip(definition: AnyLocalDataCollectionDefinition, document: unknown) {
   const normalized = definition.normalize(document);
   const before = definition.serialize(normalized);
   const joined = definition.normalize(definition.join(definition.split(normalized), definition.schemaVersion));
@@ -47,7 +48,7 @@ describe('browser-local collection definitions', () => {
   });
 
   test('watchlist names remain independent record identifiers', () => {
-    const watchlist = (domain) => ({
+    const watchlist = (domain: string) => ({
       updatedAt: NOW,
       results: [{ domain, availability: 'registered', scanDepth: 'fast' }],
       baseline: [],

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-const evidence = await import('../frontend/src/lib/analysis/relationship-evidence.ts');
+import * as evidence from '../frontend/src/lib/analysis/relationship-evidence.ts';
 
-function availability(overrides = {}) {
+function availability(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     nameservers: ['NS2.EXAMPLE.', 'ns1.example'],
     dns: { records: { ns: ['ns1.example.'], a: ['203.0.113.8'], aaaa: ['2001:db8::8'] } },
@@ -28,7 +28,7 @@ function availability(overrides = {}) {
   };
 }
 
-function row(domain, relationship, overrides = {}) {
+function row(domain: string, relationship: unknown, overrides: Record<string, unknown> = {}) {
   return { domain, trusted: null, relationship, ...overrides };
 }
 
@@ -176,8 +176,8 @@ describe('buildScanRelationships', () => {
   it('does not invent certificate relationships from CT counts or hostnames', () => {
     const observation = evidence.relationshipObservation({});
     const result = evidence.buildScanRelationships([
-      { ...row('one.example', observation), ct: { certificateCount: 4, hostnames: ['shared.example'] } },
-      { ...row('two.example', observation), ct: { certificateCount: 4, hostnames: ['shared.example'] } },
+      row('one.example', observation, { ct: { certificateCount: 4, hostnames: ['shared.example'] } }),
+      row('two.example', observation, { ct: { certificateCount: 4, hostnames: ['shared.example'] } }),
     ]);
     assert.deepEqual(result.groups, []);
   });
@@ -203,7 +203,7 @@ describe('buildScanRelationships', () => {
   });
 
   it('does not group different certificates or a certificate observed only on a trusted row', () => {
-    const observation = (fingerprint) => evidence.relationshipObservation({
+    const observation = (fingerprint: string) => evidence.relationshipObservation({
       tls: { source: 'tls', profileVersion: 1, status: 'success', certificate: { fingerprintSha256: fingerprint } },
     });
     const result = evidence.buildScanRelationships([

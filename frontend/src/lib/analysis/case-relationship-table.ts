@@ -142,6 +142,7 @@ export function projectCaseRelationshipTable(
   const pageCount = Math.max(1, Math.ceil(sorted.length / MAX_RELATIONSHIP_TABLE_ROWS));
   const currentPage = Math.min(requestedPage, pageCount);
   const pageStart = (currentPage - 1) * MAX_RELATIONSHIP_TABLE_ROWS;
+  const projectedFilters: CaseRelationshipFilterOptions = provenanceFiltered?.filters ?? { type };
   let truncated = summary.truncated;
   const rows: CaseRelationshipTableRow[] = sorted.slice(pageStart, pageStart + MAX_RELATIONSHIP_TABLE_ROWS).map((row) => {
     const omittedCases = Math.max(0, row.cases.length - MAX_RELATIONSHIP_TABLE_MEMBERS);
@@ -166,7 +167,7 @@ export function projectCaseRelationshipTable(
     rangeEnd: pageStart + rows.length,
     truncated,
     filters: {
-      ...(provenanceFiltered?.filters || { type }),
+      ...projectedFilters,
       query,
       sort,
       direction,

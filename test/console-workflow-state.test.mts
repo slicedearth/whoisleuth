@@ -20,9 +20,22 @@ const bulkState = Object.freeze({
   status: 'Complete', indicatorFormat: 'domains', watchlistName: '',
 });
 
+function setWindow(value: unknown): void {
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
+function removeWindow(): void {
+  Reflect.deleteProperty(globalThis, 'window');
+}
+
 test('keeps console workflow state in the browser runtime and clears both tools together', () => {
   const previousWindow = globalThis.window;
-  globalThis.window = {};
+  const hadWindow = 'window' in globalThis;
+  setWindow({});
   try {
     writeLookupWorkflowState(lookupState);
     writeBulkWorkflowState(bulkState);
@@ -34,14 +47,15 @@ test('keeps console workflow state in the browser runtime and clears both tools 
     assert.equal(readBulkWorkflowState(), null);
   } finally {
     clearConsoleWorkflowState();
-    if (previousWindow === undefined) delete globalThis.window;
-    else globalThis.window = previousWindow;
+    if (hadWindow) setWindow(previousWindow);
+    else removeWindow();
   }
 });
 
 test('does not expose or write workflow state during server rendering', () => {
   const previousWindow = globalThis.window;
-  delete globalThis.window;
+  const hadWindow = 'window' in globalThis;
+  removeWindow();
   try {
     writeLookupWorkflowState(lookupState);
     writeBulkWorkflowState(bulkState);
@@ -49,6 +63,6 @@ test('does not expose or write workflow state during server rendering', () => {
     assert.equal(readBulkWorkflowState(), null);
   } finally {
     clearConsoleWorkflowState();
-    if (previousWindow !== undefined) globalThis.window = previousWindow;
+    if (hadWindow) setWindow(previousWindow);
   }
 });

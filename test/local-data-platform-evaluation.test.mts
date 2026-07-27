@@ -19,7 +19,7 @@ const DECLARED_BROWSER_STORE_BYTES = 11_010_048;
 
 function capture() {
   let value = '';
-  return { stream: { write(chunk) { value += String(chunk); } }, value: () => value };
+  return { stream: { write(chunk: unknown) { value += String(chunk); } }, value: () => value };
 }
 
 describe('local data platform evaluation', () => {
