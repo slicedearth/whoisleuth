@@ -17,7 +17,8 @@ import {
   normalizeScheduledMonitorState,
   normalizeScheduledWatchlistName,
   scheduledMonitorPublicState,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+  type ScheduledWatchlist,
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 type ScheduledMonitorState = ReturnType<typeof normalizeScheduledMonitorState>;
 type ScheduledMonitorPublicState = ReturnType<typeof scheduledMonitorPublicState>;
@@ -310,7 +311,7 @@ function applyUpdate(
   const intervalHours = Object.hasOwn(command, 'intervalHours')
     ? command.intervalHours
     : current.intervalHours;
-  if (!INTERVALS.has(intervalHours)) {
+  if (typeof intervalHours !== 'number' || !INTERVALS.has(intervalHours)) {
     managementError(MANAGEMENT_ERROR_CODES.INVALID_REQUEST, 'Unsupported scheduled scan interval.');
   }
   const enabled = Object.hasOwn(command, 'enabled') ? command.enabled : current.enabled;
@@ -335,7 +336,7 @@ function applyUpdate(
     return { state, result: { action: 'unchanged', id: current.id }, changed: false };
   }
 
-  const nextWatchlist = {
+  const nextWatchlist: ScheduledWatchlist = {
     ...current,
     name,
     enabled,

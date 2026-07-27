@@ -18,7 +18,7 @@ import { runScheduledMonitorCycle } from './scheduled-monitor-cycle.mts';
 import {
   emptyScheduledMonitorState,
   normalizeScheduledMonitorState,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 import type { NetlifyBlobStore } from './scheduled-monitor-netlify-store.mts';
 import type {
   EnvironmentInput,

@@ -2,7 +2,7 @@
 // and downloads; this module owns schema migration, record normalization,
 // import merging, and exact serialized-byte accounting.
 
-import { compactWatchlistResults } from './watchlist-history.js';
+import { compactWatchlistResults } from './watchlist-history.ts';
 import { normalizeRiskModelVersion } from './scoring.ts';
 
 export const SHORTLIST_SCHEMA = 'whoisleuth.shortlist';

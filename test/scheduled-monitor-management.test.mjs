@@ -14,7 +14,7 @@ import {
   emptyScheduledMonitorState,
   MAX_SCHEDULED_WATCHLISTS,
   normalizeScheduledMonitorState,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 const NOW_MS = Date.parse('2026-07-16T12:00:00.000Z');
 const NOW = new Date(NOW_MS).toISOString();

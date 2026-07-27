@@ -2,7 +2,7 @@
 // evidence shape and diff semantics; this module owns collection names, schema
 // migration, import merging, and exact serialized-byte accounting.
 
-import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry } from './watchlist-history.js';
+import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry } from './watchlist-history.ts';
 
 export const WATCHLIST_SCHEMA_VERSION = 2;
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';

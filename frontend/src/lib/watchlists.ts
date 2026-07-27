@@ -3,7 +3,7 @@ import {
   MAX_WATCHLIST_DOMAINS,
   projectWatchlistDomainHistory as projectDomainHistory,
   watchlistHistoryDomains as historyDomains,
-} from './analysis/watchlist-history.js';
+} from './analysis/watchlist-history.ts';
 import { httpSecurityHeaderLabel } from './analysis/http-summary.ts';
 import {
   buildWatchlistExport,

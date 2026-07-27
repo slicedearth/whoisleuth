@@ -12,14 +12,14 @@ import {
   SCHEDULED_MONITOR_DELIVERY_VERSION,
   SCHEDULED_MONITOR_LEASE_MS,
   SCHEDULED_MONITOR_STALE_RUN_MS,
-} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts';
 import {
   createScheduledWatchlist,
   emptyScheduledMonitorState,
   MAX_SCHEDULED_MONITOR_STATIC_BYTES,
   MAX_SCHEDULED_MONITOR_STORE_BYTES,
   normalizeScheduledMonitorState,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 import { ScheduledMonitorRepository } from '../lib/scheduled-monitor-repository.mts';
 
 const START = Date.parse('2026-07-16T08:00:00.000Z');

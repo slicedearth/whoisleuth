@@ -15,7 +15,7 @@ import {
   createScheduledWatchlist,
   emptyScheduledMonitorState,
   normalizeScheduledMonitorState,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 const START = Date.parse('2026-07-16T12:00:00.000Z');
 const key = randomBytes(32).toString('base64');

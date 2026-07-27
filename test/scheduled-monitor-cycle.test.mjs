@@ -12,7 +12,7 @@ import {
   createScheduledWatchlist,
   emptyScheduledMonitorState,
   normalizeScheduledMonitorState,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 const START = Date.parse('2026-07-16T10:00:00.000Z');
 

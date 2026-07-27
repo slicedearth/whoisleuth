@@ -7,8 +7,8 @@ import {
   SCHEDULED_MONITOR_SCHEMA,
   SCHEDULED_MONITOR_SCHEMA_VERSION,
   SCHEDULED_WATCHLIST_STATUSES,
-} from './analysis/scheduled-monitor-model.js';
-import { normalizeWatchlistEntry } from './analysis/watchlist-history.js';
+} from './analysis/scheduled-monitor-model.ts';
+import { normalizeWatchlistEntry } from './analysis/watchlist-history.ts';
 import type { WatchlistEntry } from './watchlists';
 
 export type ScheduledWatchlistStatus = typeof SCHEDULED_WATCHLIST_STATUSES[number];

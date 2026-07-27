@@ -7,7 +7,8 @@ import {
   normalizeScheduledMonitorDelivery,
   ScheduledMonitorDispatcher,
   scheduledMonitorTickDelivery,
-} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.js';
+  type ScheduledMonitorDelivery,
+} from '../frontend/src/lib/analysis/scheduled-monitor-dispatcher.ts';
 
 type ScheduledMonitorCycleOptions = {
   repository: unknown;
@@ -17,7 +18,7 @@ type ScheduledMonitorCycleOptions = {
 };
 
 type QueuedDelivery = {
-  delivery: Record<string, unknown>;
+  delivery: ScheduledMonitorDelivery;
   deduplicationKey: string;
 };
 

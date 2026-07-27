@@ -5,13 +5,17 @@
 import {
   appendWatchlistScan,
   compactWatchlistResults,
-} from './watchlist-history.js';
+  type CompactWatchlistRecord,
+} from './watchlist-history.ts';
 import {
   assertScheduledMonitorStaticBudget,
   isScheduledMonitorId,
   nextScheduledMonitorRevision,
   pruneScheduledMonitorHistoryToStaticBudget,
-} from './scheduled-monitor-model.js';
+  type ScheduledMonitorState,
+  type ScheduledRunSource,
+  type ScheduledWatchlist,
+} from './scheduled-monitor-model.ts';
 
 export const SCHEDULED_MONITOR_DELIVERY_SCHEMA = 'whoisleuth.scheduled-monitor-delivery';
 export const SCHEDULED_MONITOR_DELIVERY_VERSION = 1;
@@ -25,19 +29,79 @@ const AVAILABILITY_STATES = new Set([...CONCLUSIVE_AVAILABILITY, 'unknown', 'err
 const TICK_KEYS = new Set(['schema', 'version', 'kind']);
 const CONTINUE_KEYS = new Set(['schema', 'version', 'kind', 'runId', 'cursor']);
 
-function plainRecord(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+export interface ScheduledMonitorTickDelivery {
+  schema: typeof SCHEDULED_MONITOR_DELIVERY_SCHEMA;
+  version: typeof SCHEDULED_MONITOR_DELIVERY_VERSION;
+  kind: 'tick';
 }
 
-function hasOnlyKeys(value, allowed) {
+export interface ScheduledMonitorContinueDelivery {
+  schema: typeof SCHEDULED_MONITOR_DELIVERY_SCHEMA;
+  version: typeof SCHEDULED_MONITOR_DELIVERY_VERSION;
+  kind: 'continue';
+  runId: string;
+  cursor: number;
+}
+
+export type ScheduledMonitorDelivery =
+  | ScheduledMonitorTickDelivery
+  | ScheduledMonitorContinueDelivery;
+
+interface ScheduledMonitorUpdate<Result> {
+  state: ScheduledMonitorState;
+  result: Result;
+  changed?: boolean;
+}
+
+type ScheduledMonitorClaimResult =
+  | { status: 'ignored' | 'busy' | 'superseded' }
+  | { status: 'resumed'; cursor: number }
+  | { status: 'claimed'; source: ScheduledRunSource };
+
+type ScheduledMonitorCompletionResult =
+  | { status: 'superseded' }
+  | { status: 'continue'; cursor: number }
+  | {
+      status: 'complete' | 'partial';
+      changes: number;
+      prunedHistoryEvents: number;
+    };
+
+export interface ScheduledMonitorRepositoryContract {
+  read: () => Promise<ScheduledMonitorState>;
+  update: <Result>(
+    mutator: (
+      state: ScheduledMonitorState,
+    ) => ScheduledMonitorUpdate<Result> | Promise<ScheduledMonitorUpdate<Result>>,
+  ) => Promise<{ state: ScheduledMonitorState; result: Result }>;
+}
+
+export interface ScheduledMonitorDispatcherOptions {
+  repository: unknown;
+  lookup: (domain: string, options: { fast: true; compact: true }) => Promise<unknown>;
+  enqueue: (
+    delivery: ScheduledMonitorDelivery,
+    options: { deduplicationKey: string },
+  ) => Promise<unknown>;
+  now?: () => number;
+  randomUUID: () => string;
+}
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: Set<string>): boolean {
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
-function byteLength(value) {
+function byteLength(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
-function entityName(value) {
+function entityName(value: unknown): string | null {
   if (typeof value === 'string') return value;
   const record = plainRecord(value);
   if (!record) return null;
@@ -47,7 +111,7 @@ function entityName(value) {
   return null;
 }
 
-function failedLookupResult(source) {
+function failedLookupResult(source: ScheduledRunSource): CompactWatchlistRecord {
   const result = compactWatchlistResults([{
     domain: source.domain,
     scanDepth: 'fast',
@@ -58,12 +122,18 @@ function failedLookupResult(source) {
   return result;
 }
 
-export function scheduledLookupResult(source, response) {
-  const availability = plainRecord(response)?.availability;
+export function scheduledLookupResult(
+  source: ScheduledRunSource,
+  response: unknown,
+): CompactWatchlistRecord {
+  const availability = plainRecord(plainRecord(response)?.availability);
+  const availabilityState = availability?.state;
   const result = compactWatchlistResults([{
     domain: source.domain,
     scanDepth: 'fast',
-    availability: AVAILABILITY_STATES.has(availability?.state) ? availability.state : 'unknown',
+    availability: typeof availabilityState === 'string' && AVAILABILITY_STATES.has(availabilityState)
+      ? availabilityState
+      : 'unknown',
     registrarName: entityName(availability?.registrar),
     nameservers: availability?.nameservers,
     createdDate: availability?.createdDate,
@@ -74,7 +144,7 @@ export function scheduledLookupResult(source, response) {
   return byteLength(result) <= MAX_SCHEDULED_RESULT_BYTES ? result : failedLookupResult(source);
 }
 
-export function normalizeScheduledMonitorDelivery(value) {
+export function normalizeScheduledMonitorDelivery(value: unknown): ScheduledMonitorDelivery | null {
   const record = plainRecord(value);
   if (!record
     || record.schema !== SCHEDULED_MONITOR_DELIVERY_SCHEMA
@@ -90,20 +160,20 @@ export function normalizeScheduledMonitorDelivery(value) {
     && hasOnlyKeys(record, CONTINUE_KEYS)
     && isScheduledMonitorId(record.runId)
     && Number.isSafeInteger(record.cursor)
-    && record.cursor >= 0
-    && record.cursor <= 100) {
+    && Number(record.cursor) >= 0
+    && Number(record.cursor) <= 100) {
     return {
       schema: SCHEDULED_MONITOR_DELIVERY_SCHEMA,
       version: SCHEDULED_MONITOR_DELIVERY_VERSION,
       kind: 'continue',
       runId: record.runId,
-      cursor: record.cursor,
+      cursor: Number(record.cursor),
     };
   }
   return null;
 }
 
-export function scheduledMonitorTickDelivery() {
+export function scheduledMonitorTickDelivery(): ScheduledMonitorTickDelivery {
   return {
     schema: SCHEDULED_MONITOR_DELIVERY_SCHEMA,
     version: SCHEDULED_MONITOR_DELIVERY_VERSION,
@@ -111,30 +181,46 @@ export function scheduledMonitorTickDelivery() {
   };
 }
 
-export function scheduledMonitorContinueDelivery(runId, cursor) {
-  return normalizeScheduledMonitorDelivery({
+export function scheduledMonitorContinueDelivery(
+  runId: unknown,
+  cursor: unknown,
+): ScheduledMonitorContinueDelivery | null {
+  const delivery = normalizeScheduledMonitorDelivery({
     schema: SCHEDULED_MONITOR_DELIVERY_SCHEMA,
     version: SCHEDULED_MONITOR_DELIVERY_VERSION,
     kind: 'continue',
     runId,
     cursor,
   });
+  return delivery?.kind === 'continue' ? delivery : null;
 }
 
-function dueTime(record) {
+function dueTime(record: ScheduledWatchlist): number {
   const parsed = Date.parse(record.nextRunAt || record.createdAt);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function repositoryContract(value) {
-  return value
-    && typeof value === 'object'
-    && typeof value.read === 'function'
-    && typeof value.update === 'function';
+function repositoryContract(value: unknown): value is ScheduledMonitorRepositoryContract {
+  const record = plainRecord(value);
+  return Boolean(record
+    && typeof record.read === 'function'
+    && typeof record.update === 'function');
 }
 
 export class ScheduledMonitorDispatcher {
-  constructor({ repository, lookup, enqueue, now = () => Date.now(), randomUUID }) {
+  repository: ScheduledMonitorRepositoryContract;
+  lookup: ScheduledMonitorDispatcherOptions['lookup'];
+  enqueue: ScheduledMonitorDispatcherOptions['enqueue'];
+  now: () => number;
+  randomUUID: () => string;
+
+  constructor({
+    repository,
+    lookup,
+    enqueue,
+    now = () => Date.now(),
+    randomUUID,
+  }: ScheduledMonitorDispatcherOptions) {
     if (!repositoryContract(repository)) throw new Error('A scheduled monitoring repository is required.');
     if (typeof lookup !== 'function') throw new Error('A scheduled monitoring lookup function is required.');
     if (typeof enqueue !== 'function') throw new Error('A scheduled monitoring queue function is required.');
@@ -148,20 +234,19 @@ export class ScheduledMonitorDispatcher {
     this.randomUUID = randomUUID;
   }
 
-  nowMs() {
+  nowMs(): number {
     const value = this.now();
     if (!Number.isFinite(value)) throw new Error('Scheduled monitoring clock returned an invalid time.');
     return Math.trunc(value);
   }
 
-  newId() {
+  newId(): string {
     const value = this.randomUUID();
     if (!isScheduledMonitorId(value)) throw new Error('Scheduled monitoring identifier source returned an invalid value.');
     return value;
   }
 
-  /** @param {object} delivery @param {string | null} [deduplicationKey] */
-  async publish(delivery, deduplicationKey = null) {
+  async publish(delivery: unknown, deduplicationKey: string | null = null): Promise<void> {
     const normalized = normalizeScheduledMonitorDelivery(delivery);
     if (!normalized) throw new Error('Scheduled monitoring attempted to publish an invalid delivery.');
     const key = deduplicationKey || (normalized.kind === 'tick'
@@ -170,7 +255,7 @@ export class ScheduledMonitorDispatcher {
     await this.enqueue(normalized, { deduplicationKey: key });
   }
 
-  async tick() {
+  async tick(): Promise<string> {
     const nowMs = this.nowMs();
     const timestamp = new Date(nowMs).toISOString();
     const outcome = await this.repository.update((state) => {
@@ -248,13 +333,13 @@ export class ScheduledMonitorDispatcher {
     return outcome.result.status;
   }
 
-  async continue(delivery) {
+  async continue(delivery: unknown): Promise<string> {
     const message = normalizeScheduledMonitorDelivery(delivery);
     if (!message || message.kind !== 'continue') return 'ignored';
     const nowMs = this.nowMs();
     const timestamp = new Date(nowMs).toISOString();
     const token = this.newId();
-    const claim = await this.repository.update((state) => {
+    const claim = await this.repository.update<ScheduledMonitorClaimResult>((state) => {
       const run = state.activeRun;
       if (!run || run.id !== message.runId || message.cursor > run.cursor) {
         return { state, result: { status: 'ignored' }, changed: false };
@@ -292,10 +377,11 @@ export class ScheduledMonitorDispatcher {
     } catch {
       result = failedLookupResult(claim.result.source);
     }
-    const inconclusive = !CONCLUSIVE_AVAILABILITY.has(result.availability);
+    const inconclusive = typeof result.availability !== 'string'
+      || !CONCLUSIVE_AVAILABILITY.has(result.availability);
     const completedMs = this.nowMs();
     const completedAt = new Date(completedMs).toISOString();
-    const completion = await this.repository.update((state) => {
+    const completion = await this.repository.update<ScheduledMonitorCompletionResult>((state) => {
       const run = state.activeRun;
       if (!run
         || run.id !== message.runId
@@ -359,7 +445,7 @@ export class ScheduledMonitorDispatcher {
     return completion.result.status;
   }
 
-  async process(value) {
+  async process(value: unknown): Promise<string> {
     const delivery = normalizeScheduledMonitorDelivery(value);
     if (!delivery) return 'ignored';
     return delivery.kind === 'tick' ? this.tick() : this.continue(delivery);

@@ -21,6 +21,69 @@ const MAX_MUTATION_TYPE_LENGTH = 60;
 const MAX_TIMESTAMP_LENGTH = 64;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 
+export type WatchlistScanDepth = 'fast' | 'deep';
+export type WatchlistScanMode = WatchlistScanDepth | 'saved';
+
+export interface WatchlistComparableRecord extends Record<string, unknown> {
+  domain: string;
+  scanDepth: WatchlistScanDepth;
+  riskModelVersion?: number | null;
+  riskScore?: number | null;
+}
+
+export interface CompactWatchlistRecord extends WatchlistComparableRecord {
+  availability: string | null;
+  registrarName: string | null;
+  nameservers: string[];
+  mutationTypes: string[];
+  riskModelVersion: number | null;
+  riskScore: number | null;
+}
+
+export interface WatchlistChange {
+  domain: string;
+  field: string;
+  before: unknown;
+  after: unknown;
+  kind: string;
+  tone: string;
+}
+
+export interface WatchlistHistoryEvent {
+  checkedAt: string;
+  mode: WatchlistScanMode;
+  resultCount: number;
+  conclusiveCount: number;
+  changeCount: number;
+  omittedChanges: number;
+  changes: WatchlistChange[];
+}
+
+export interface WatchlistEntry {
+  updatedAt: string;
+  results: CompactWatchlistRecord[];
+  baseline: WatchlistComparableRecord[];
+  history: WatchlistHistoryEvent[];
+}
+
+export interface AppendWatchlistScanOptions {
+  checkedAt?: unknown;
+  mode?: unknown;
+  ignoredDomains?: Set<string>;
+}
+
+export interface WatchlistHistoryGroup {
+  key: string;
+  label: string;
+  changes: WatchlistChange[];
+}
+
+export interface WatchlistDomainHistoryEvent {
+  checkedAt: string;
+  mode: WatchlistScanMode;
+  groups: WatchlistHistoryGroup[];
+}
+
 const CONCLUSIVE_AVAILABILITY = new Set(['available', 'registered', 'for_sale', 'expiring']);
 const DEEP_FIELDS = new Set([
   'hasMx',
@@ -48,7 +111,7 @@ const DEEP_FIELDS = new Set([
   'riskScore',
 ]);
 
-const FIELD_LABELS = {
+const FIELD_LABELS: Record<string, string> = {
   availability: 'Availability',
   registrarName: 'Registrar',
   nameservers: 'Nameservers',
@@ -78,7 +141,7 @@ const FIELD_LABELS = {
   riskScore: 'Risk score',
 };
 
-const HISTORY_CATEGORY_FIELDS = {
+const HISTORY_CATEGORY_FIELDS: Record<string, Set<string>> = {
   registration: new Set(['availability', 'registrarName', 'createdDate', 'expiryDate', 'privacyProtected']),
   delegation: new Set(['nameservers']),
   mail: new Set(['hasMx', 'hasSpf', 'hasDmarc']),
@@ -122,7 +185,7 @@ const MAX_CHANGE_COUNT = MAX_WATCHLIST_DOMAINS * Object.keys(FIELD_LABELS).lengt
 // an analyst-facing observation and must never generate a history event.
 const BASELINE_FIELDS = ['httpSummaryVersion', 'riskModelVersion', ...Object.keys(FIELD_LABELS)];
 
-const AVAILABILITY_LABELS = {
+const AVAILABILITY_LABELS: Record<string, string> = {
   available: 'Available',
   registered: 'Registered',
   for_sale: 'For sale',
@@ -131,7 +194,7 @@ const AVAILABILITY_LABELS = {
   error: 'Lookup failed',
 };
 
-const ACTIVITY_LABELS = {
+const ACTIVITY_LABELS: Record<string, string> = {
   active: 'Active site',
   parked: 'Parked',
   unreachable: 'Website check inconclusive',
@@ -143,30 +206,46 @@ const ACTIVITY_VALUES = new Set(Object.keys(ACTIVITY_LABELS));
 const CHANGE_KINDS = new Set(['new_registration', 'released', 'availability_changed', 'risk_signal_added', 'mail_activated', 'high_risk', 'infrastructure_changed', 'field_changed']);
 const HTTP_HEADER_VALUES = new Set(HTTP_SECURITY_HEADER_TOKENS);
 
-function boundedText(value, maximum = MAX_TEXT_LENGTH, allowNull = true) {
+function hasString(set: Set<string>, value: unknown): value is string {
+  return typeof value === 'string' && set.has(value);
+}
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function boundedText(
+  value: unknown,
+  maximum = MAX_TEXT_LENGTH,
+  allowNull = true,
+): string | null {
   if (value == null && allowNull) return null;
   if (typeof value !== 'string' || CONTROL_RE.test(value)) return allowNull ? null : '';
   const normalized = value.slice(0, maximum * 4).replace(/\s+/g, ' ').trim().slice(0, maximum).trim();
   return normalized || (allowNull ? null : '');
 }
 
-function isoTimestamp(value, fallback = new Date(0).toISOString()) {
+function isoTimestamp(value: unknown, fallback = new Date(0).toISOString()): string {
   if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return fallback;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
 }
 
-function boundedInteger(value, maximum, fallback = 0) {
-  return Number.isSafeInteger(value) && value >= 0 && value <= maximum ? value : fallback;
+function boundedInteger(value: unknown, maximum: number, fallback = 0): number {
+  return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum
+    ? Number(value)
+    : fallback;
 }
 
-function normalizeDateValue(value) {
+function normalizeDateValue(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : null;
 }
 
-function inferredScanDepth(record) {
+function inferredScanDepth(record: Record<string, unknown>): WatchlistScanDepth {
   if (record.scanDepth === 'deep' || record.scanDepth === 'fast') return record.scanDepth;
   return ['hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'faviconHash', 'pageTitle', 'httpResponseStatus']
     .some((key) => record[key] !== null && record[key] !== undefined)
@@ -174,9 +253,9 @@ function inferredScanDepth(record) {
     : 'fast';
 }
 
-function normalizeNameservers(value) {
+function normalizeNameservers(value: unknown): string[] {
   const values = Array.isArray(value) ? value : String(value || '').slice(0, 4096).split(';');
-  const normalized = new Set();
+  const normalized = new Set<string>();
   for (const item of values.slice(0, MAX_WATCHLIST_NAMESERVERS * 4)) {
     const nameserver = normalizeDomain(item);
     if (nameserver) normalized.add(nameserver);
@@ -185,17 +264,17 @@ function normalizeNameservers(value) {
   return [...normalized].sort();
 }
 
-function normalizeRegistrar(value) {
+function normalizeRegistrar(value: unknown): string {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function normalizeDate(value) {
+function normalizeDate(value: unknown): string | null {
   return normalizeDateValue(value);
 }
 
-function normalizeMutationTypes(value) {
+function normalizeMutationTypes(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  const types = new Set();
+  const types = new Set<string>();
   for (const item of value.slice(0, MAX_WATCHLIST_MUTATION_TYPES * 4)) {
     const type = (boundedText(item, MAX_MUTATION_TYPE_LENGTH, false) || '').toLowerCase();
     if (type) types.add(type);
@@ -204,8 +283,9 @@ function normalizeMutationTypes(value) {
   return [...types].sort();
 }
 
-function compactRecord(record) {
-  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+function compactRecord(value: unknown): CompactWatchlistRecord | null {
+  const record = plainRecord(value);
+  if (!record) return null;
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const scanDepth = inferredScanDepth(record);
@@ -223,7 +303,7 @@ function compactRecord(record) {
   return {
     domain,
     scanDepth,
-    availability: AVAILABILITY_VALUES.has(record.availability) ? record.availability : null,
+    availability: hasString(AVAILABILITY_VALUES, record.availability) ? record.availability : null,
     registrarName: boundedText(record.registrarName),
     nameservers: normalizeNameservers(record.nameservers),
     createdDate: normalizeDateValue(record.createdDate),
@@ -232,7 +312,7 @@ function compactRecord(record) {
     hasMx: typeof record.hasMx === 'boolean' ? record.hasMx : null,
     hasSpf: typeof record.hasSpf === 'boolean' ? record.hasSpf : null,
     hasDmarc: typeof record.hasDmarc === 'boolean' ? record.hasDmarc : null,
-    activityStatus: ACTIVITY_VALUES.has(record.activityStatus) ? record.activityStatus : null,
+    activityStatus: hasString(ACTIVITY_VALUES, record.activityStatus) ? record.activityStatus : null,
     pageTitle: boundedText(record.pageTitle, MAX_TITLE_LENGTH),
     ...httpSummary,
     faviconHash: boundedText(record.faviconHash, 128),
@@ -248,9 +328,9 @@ function compactRecord(record) {
 }
 
 /** @param {object[]} results */
-export function compactWatchlistResults(results) {
+export function compactWatchlistResults(results: unknown): CompactWatchlistRecord[] {
   if (!Array.isArray(results)) return [];
-  const byDomain = new Map();
+  const byDomain = new Map<string, CompactWatchlistRecord>();
   for (const item of results.slice(0, MAX_WATCHLIST_INPUT_RECORDS)) {
     const record = compactRecord(item);
     if (!record || byDomain.has(record.domain)) continue;
@@ -260,9 +340,9 @@ export function compactWatchlistResults(results) {
   return [...byDomain.values()];
 }
 
-function isComparable(field, value, record) {
+function isComparable(field: string, value: unknown, record: WatchlistComparableRecord): boolean {
   if (DEEP_FIELDS.has(field) && record.scanDepth !== 'deep') return false;
-  if (field === 'availability') return CONCLUSIVE_AVAILABILITY.has(value);
+  if (field === 'availability') return hasString(CONCLUSIVE_AVAILABILITY, value);
   if (field === 'nameservers') return Array.isArray(value) && value.length > 0;
   if (field === 'httpSecurityHeaders') return Array.isArray(value);
   if (['httpSummaryVersion', 'riskModelVersion', 'httpResponseStatus', 'httpRedirectCount'].includes(field)) return Number.isInteger(value);
@@ -272,7 +352,7 @@ function isComparable(field, value, record) {
   return typeof value === 'boolean';
 }
 
-function valuesEqual(field, before, after) {
+function valuesEqual(field: string, before: unknown, after: unknown): boolean {
   if (field === 'registrarName') return normalizeRegistrar(before) === normalizeRegistrar(after);
   if (field === 'nameservers') return JSON.stringify(normalizeNameservers(before)) === JSON.stringify(normalizeNameservers(after));
   if (field === 'httpSecurityHeaders') return JSON.stringify(before) === JSON.stringify(after);
@@ -280,12 +360,16 @@ function valuesEqual(field, before, after) {
   return before === after;
 }
 
-function classifyChange(field, before, after) {
+function classifyChange(
+  field: string,
+  before: unknown,
+  after: unknown,
+): Pick<WatchlistChange, 'kind' | 'tone'> {
   if (field === 'availability') {
-    if (before === 'available' && ['registered', 'for_sale', 'expiring'].includes(after)) {
+    if (before === 'available' && typeof after === 'string' && ['registered', 'for_sale', 'expiring'].includes(after)) {
       return { kind: 'new_registration', tone: 'danger' };
     }
-    if (['registered', 'for_sale', 'expiring'].includes(before) && after === 'available') {
+    if (typeof before === 'string' && ['registered', 'for_sale', 'expiring'].includes(before) && after === 'available') {
       return { kind: 'released', tone: 'good' };
     }
     return { kind: 'availability_changed', tone: 'warn' };
@@ -295,7 +379,8 @@ function classifyChange(field, before, after) {
   }
   if (field === 'phishingLanguageMatch' && !before && after) return { kind: 'risk_signal_added', tone: 'danger' };
   if (field === 'hasMx' && before === false && after === true) return { kind: 'mail_activated', tone: 'warn' };
-  if (field === 'riskScore' && before < 70 && after >= 70) return { kind: 'high_risk', tone: 'danger' };
+  if (field === 'riskScore' && typeof before === 'number' && typeof after === 'number'
+    && before < 70 && after >= 70) return { kind: 'high_risk', tone: 'danger' };
   if (field === 'httpHttpsDowngrade' && before === false && after === true) return { kind: 'risk_signal_added', tone: 'danger' };
   if (field === 'httpCrossOriginRedirect' && before === false && after === true) return { kind: 'field_changed', tone: 'warn' };
   if (field === 'httpTransportSecurity' && before === 'https' && after === 'http') return { kind: 'risk_signal_added', tone: 'danger' };
@@ -309,9 +394,15 @@ function classifyChange(field, before, after) {
  * @param {object[]} current
  * @param {Set<string>} [ignoredDomains]
  */
-export function diffWatchlistBaseline(baseline, current, ignoredDomains = new Set()) {
-  const previousByDomain = new Map(baseline.map((record) => [record.domain, record]));
-  const changes = [];
+export function diffWatchlistBaseline(
+  baseline: WatchlistComparableRecord[],
+  current: WatchlistComparableRecord[],
+  ignoredDomains: Set<string> = new Set(),
+): WatchlistChange[] {
+  const previousByDomain = new Map<string, WatchlistComparableRecord>(
+    baseline.map((record) => [record.domain, record]),
+  );
+  const changes: WatchlistChange[] = [];
   for (const next of current) {
     const previous = previousByDomain.get(next.domain);
     if (!previous || ignoredDomains.has(next.domain)) continue;
@@ -337,13 +428,21 @@ export function diffWatchlistBaseline(baseline, current, ignoredDomains = new Se
 // reusing a watchlist name with a changing candidate set would grow the
 // baseline without bound and compare reintroduced domains against stale state.
 /** @param {object[]} baseline @param {object[]} current */
-export function mergeWatchlistBaseline(baseline, current) {
-  const previousByDomain = new Map(baseline.map((record) => [record.domain, record]));
+export function mergeWatchlistBaseline(
+  baseline: WatchlistComparableRecord[],
+  current: WatchlistComparableRecord[],
+): WatchlistComparableRecord[] {
+  const previousByDomain = new Map<string, WatchlistComparableRecord>(
+    baseline.map((record) => [record.domain, record]),
+  );
   return current.map((next) => {
-    const previous = previousByDomain.get(next.domain) || {};
-    const updated = { ...previous, domain: next.domain };
-    updated.scanDepth = previous.scanDepth === 'deep' || next.scanDepth === 'deep' ? 'deep' : 'fast';
-  for (const field of BASELINE_FIELDS) {
+    const previous = previousByDomain.get(next.domain);
+    const updated: WatchlistComparableRecord = {
+      ...(previous || {}),
+      domain: next.domain,
+      scanDepth: previous?.scanDepth === 'deep' || next.scanDepth === 'deep' ? 'deep' : 'fast',
+    };
+    for (const field of BASELINE_FIELDS) {
       if (isComparable(field, next[field], next)) updated[field] = next[field];
     }
     // Preserve an explicit null beside legacy scores. Absence and null both
@@ -357,8 +456,9 @@ export function mergeWatchlistBaseline(baseline, current) {
   });
 }
 
-function sanitizeStoredChange(change) {
-  if (!change || typeof change !== 'object' || Array.isArray(change) || !FIELD_LABELS[change.field]) return null;
+function sanitizeStoredChange(value: unknown): WatchlistChange | null {
+  const change = plainRecord(value);
+  if (!change || typeof change.field !== 'string' || !FIELD_LABELS[change.field]) return null;
   const domain = normalizeDomain(change.domain);
   if (!domain) return null;
   const before = normalizeStoredFieldValue(change.field, change.before);
@@ -369,12 +469,14 @@ function sanitizeStoredChange(change) {
     field: change.field,
     before,
     after,
-    kind: CHANGE_KINDS.has(change.kind) ? change.kind : 'field_changed',
-    tone: ['danger', 'warn', 'good', 'neutral'].includes(change.tone) ? change.tone : 'neutral',
+    kind: typeof change.kind === 'string' && CHANGE_KINDS.has(change.kind) ? change.kind : 'field_changed',
+    tone: typeof change.tone === 'string' && ['danger', 'warn', 'good', 'neutral'].includes(change.tone)
+      ? change.tone
+      : 'neutral',
   };
 }
 
-function normalizedOrigin(value) {
+function normalizedOrigin(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length > 4096 || CONTROL_RE.test(value)) return undefined;
   try {
     const url = new URL(value);
@@ -384,18 +486,20 @@ function normalizedOrigin(value) {
   } catch { return undefined; }
 }
 
-function normalizeStoredFieldValue(field, value) {
-  if (field === 'availability') return AVAILABILITY_VALUES.has(value) ? value : undefined;
+function normalizeStoredFieldValue(field: string, value: unknown): unknown {
+  if (field === 'availability') return hasString(AVAILABILITY_VALUES, value) ? value : undefined;
   if (field === 'nameservers') return Array.isArray(value) ? normalizeNameservers(value) : undefined;
   if (field === 'httpSecurityHeaders') {
-    return Array.isArray(value) ? [...new Set(value.slice(0, 20).filter((item) => HTTP_HEADER_VALUES.has(item)))].sort() : undefined;
+    return Array.isArray(value)
+      ? [...new Set(value.slice(0, 20).filter((item): item is string => hasString(HTTP_HEADER_VALUES, item)))].sort()
+      : undefined;
   }
   if (field === 'createdDate' || field === 'expiryDate') return normalizeDateValue(value) ?? undefined;
-  if (field === 'activityStatus') return ACTIVITY_VALUES.has(value) ? value : undefined;
+  if (field === 'activityStatus') return hasString(ACTIVITY_VALUES, value) ? value : undefined;
   if (field === 'httpEvidenceStatus') return value === 'success' || value === 'partial' ? value : undefined;
   if (field === 'httpFinalOrigin') return normalizedOrigin(value);
-  if (field === 'httpResponseStatus') return Number.isInteger(value) && value >= 100 && value <= 599 ? value : undefined;
-  if (field === 'httpRedirectCount') return Number.isInteger(value) && value >= 0 && value <= 5 ? value : undefined;
+  if (field === 'httpResponseStatus') return Number.isInteger(value) && Number(value) >= 100 && Number(value) <= 599 ? value : undefined;
+  if (field === 'httpRedirectCount') return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 5 ? value : undefined;
   if (field === 'riskScore') return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 ? Math.round(value) : undefined;
   if (field === 'httpTransportSecurity') return value === 'http' || value === 'https' ? value : undefined;
   if (field === 'httpContentType') {
@@ -410,12 +514,15 @@ function normalizeStoredFieldValue(field, value) {
   return typeof value === 'boolean' ? value : undefined;
 }
 
-function initialHistoryEvent(entry, baseline) {
+function initialHistoryEvent(
+  entry: Pick<WatchlistEntry, 'updatedAt' | 'results'>,
+  baseline: WatchlistComparableRecord[],
+): WatchlistHistoryEvent {
   return {
     checkedAt: entry.updatedAt || new Date(0).toISOString(),
     mode: 'saved',
     resultCount: Array.isArray(entry.results) ? entry.results.length : baseline.length,
-    conclusiveCount: baseline.filter((record) => CONCLUSIVE_AVAILABILITY.has(record.availability)).length,
+    conclusiveCount: baseline.filter((record) => hasString(CONCLUSIVE_AVAILABILITY, record.availability)).length,
     changeCount: 0,
     omittedChanges: 0,
     changes: [],
@@ -423,30 +530,38 @@ function initialHistoryEvent(entry, baseline) {
 }
 
 /** @param {object} entry */
-export function normalizeWatchlistEntry(entry) {
-  const rawResults = Array.isArray(entry?.results) ? entry.results : [];
+export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
+  const input = plainRecord(entry) || {};
+  const rawResults = Array.isArray(input.results) ? input.results : [];
   const results = compactWatchlistResults(rawResults);
   const compactResults = results;
-  const importedBaseline = Array.isArray(entry?.baseline) ? compactWatchlistResults(entry.baseline) : [];
+  const importedBaseline = Array.isArray(input.baseline) ? compactWatchlistResults(input.baseline) : [];
   const baseline = mergeWatchlistBaseline(importedBaseline, compactResults);
-  const history = Array.isArray(entry?.history)
-    ? entry.history.slice(-MAX_WATCHLIST_HISTORY_EVENTS * 4).map((event) => {
-      const changes = Array.isArray(event?.changes)
-        ? event.changes.slice(0, MAX_WATCHLIST_CHANGES_PER_EVENT * 4).map(sanitizeStoredChange).filter(Boolean).slice(0, MAX_WATCHLIST_CHANGES_PER_EVENT)
+  const history: WatchlistHistoryEvent[] = Array.isArray(input.history)
+    ? input.history.slice(-MAX_WATCHLIST_HISTORY_EVENTS * 4).map((value) => {
+      const event = plainRecord(value) || {};
+      const changes = Array.isArray(event.changes)
+        ? event.changes.slice(0, MAX_WATCHLIST_CHANGES_PER_EVENT * 4)
+          .map(sanitizeStoredChange)
+          .filter((change): change is WatchlistChange => change !== null)
+          .slice(0, MAX_WATCHLIST_CHANGES_PER_EVENT)
         : [];
+      const rawMode = event.mode;
       return {
-        checkedAt: isoTimestamp(event?.checkedAt),
-        mode: ['fast', 'deep', 'saved'].includes(event?.mode) ? event.mode : 'saved',
-        resultCount: boundedInteger(event?.resultCount, MAX_WATCHLIST_DOMAINS, results.length),
-        conclusiveCount: boundedInteger(event?.conclusiveCount, MAX_WATCHLIST_DOMAINS),
-        changeCount: boundedInteger(event?.changeCount, MAX_CHANGE_COUNT, changes.length),
-        omittedChanges: boundedInteger(event?.omittedChanges, MAX_CHANGE_COUNT),
+        checkedAt: isoTimestamp(event.checkedAt),
+        mode: typeof rawMode === 'string' && ['fast', 'deep', 'saved'].includes(rawMode)
+          ? rawMode as WatchlistScanMode
+          : 'saved',
+        resultCount: boundedInteger(event.resultCount, MAX_WATCHLIST_DOMAINS, results.length),
+        conclusiveCount: boundedInteger(event.conclusiveCount, MAX_WATCHLIST_DOMAINS),
+        changeCount: boundedInteger(event.changeCount, MAX_CHANGE_COUNT, changes.length),
+        omittedChanges: boundedInteger(event.omittedChanges, MAX_CHANGE_COUNT),
         changes,
       };
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
   const normalized = {
-    updatedAt: isoTimestamp(entry?.updatedAt),
+    updatedAt: isoTimestamp(input.updatedAt),
     results,
     baseline,
     history,
@@ -460,10 +575,14 @@ export function normalizeWatchlistEntry(entry) {
  * @param {object[]} results
  * @param {{ checkedAt?: string, mode?: string, ignoredDomains?: Set<string> }} [options]
  */
-export function appendWatchlistScan(existingEntry, results, options = {}) {
+export function appendWatchlistScan(
+  existingEntry: unknown,
+  results: unknown,
+  options: AppendWatchlistScanOptions = {},
+) {
   const checkedAt = isoTimestamp(options.checkedAt, new Date().toISOString());
-  const mode = typeof options.mode === 'string' && ['fast', 'deep', 'saved'].includes(options.mode)
-    ? options.mode
+  const mode: WatchlistScanMode = typeof options.mode === 'string' && ['fast', 'deep', 'saved'].includes(options.mode)
+    ? options.mode as WatchlistScanMode
     : 'saved';
   const previous = existingEntry ? normalizeWatchlistEntry(existingEntry) : null;
   const current = compactWatchlistResults(results);
@@ -475,7 +594,7 @@ export function appendWatchlistScan(existingEntry, results, options = {}) {
     checkedAt,
     mode,
     resultCount: current.length,
-    conclusiveCount: current.filter((record) => CONCLUSIVE_AVAILABILITY.has(record.availability)).length,
+    conclusiveCount: current.filter((record) => hasString(CONCLUSIVE_AVAILABILITY, record.availability)).length,
     changeCount: changes.length,
     omittedChanges: Math.max(0, changes.length - storedChanges.length),
     changes: storedChanges,
@@ -492,13 +611,13 @@ export function appendWatchlistScan(existingEntry, results, options = {}) {
   };
 }
 
-export function watchlistFieldLabel(field) {
+export function watchlistFieldLabel(field: string): string {
   return FIELD_LABELS[field] || field;
 }
 
-export function formatWatchlistValue(field, value) {
-  if (field === 'availability') return AVAILABILITY_LABELS[value] || String(value ?? 'None');
-  if (field === 'activityStatus') return ACTIVITY_LABELS[value] || String(value ?? 'None');
+export function formatWatchlistValue(field: string, value: unknown): string {
+  if (field === 'availability') return (typeof value === 'string' ? AVAILABILITY_LABELS[value] : '') || String(value ?? 'None');
+  if (field === 'activityStatus') return (typeof value === 'string' ? ACTIVITY_LABELS[value] : '') || String(value ?? 'None');
   if (field === 'nameservers') return Array.isArray(value) && value.length ? value.join(', ') : 'None';
   if (field === 'faviconHash') return value ? `${String(value).slice(0, 12)}…` : 'None';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -506,7 +625,7 @@ export function formatWatchlistValue(field, value) {
   return String(value);
 }
 
-export function watchlistHistoryCategory(field) {
+export function watchlistHistoryCategory(field: string): string | null {
   for (const category of WATCHLIST_HISTORY_CATEGORIES) {
     if (HISTORY_CATEGORY_FIELDS[category.key].has(field)) return category.key;
   }
@@ -520,10 +639,10 @@ export function watchlistHistoryCategory(field) {
  *
  * @param {object | null | undefined} entry
  */
-export function watchlistHistoryDomains(entry) {
+export function watchlistHistoryDomains(entry: unknown) {
   const normalized = normalizeWatchlistEntry(entry || {});
-  const current = new Set();
-  const historical = new Set();
+  const current = new Set<string>();
+  const historical = new Set<string>();
   for (const record of [...normalized.results, ...normalized.baseline]) {
     if (record?.domain) current.add(record.domain);
   }
@@ -547,11 +666,11 @@ export function watchlistHistoryDomains(entry) {
  * @param {object | null | undefined} entry
  * @param {unknown} domain
  */
-export function projectWatchlistDomainHistory(entry, domain) {
+export function projectWatchlistDomainHistory(entry: unknown, domain: unknown) {
   const normalizedDomain = normalizeDomain(domain);
   if (!normalizedDomain) return null;
   const normalized = normalizeWatchlistEntry(entry || {});
-  const events = [];
+  const events: WatchlistDomainHistoryEvent[] = [];
   let materialChangeCount = 0;
   let omittedChanges = 0;
 
@@ -560,7 +679,7 @@ export function projectWatchlistDomainHistory(entry, domain) {
     const matching = event.changes.filter((change) => change.domain === normalizedDomain);
     if (!matching.length) continue;
     materialChangeCount += matching.length;
-    const groups = [];
+    const groups: WatchlistHistoryGroup[] = [];
     for (const category of WATCHLIST_HISTORY_CATEGORIES) {
       const changes = matching.filter((change) => watchlistHistoryCategory(change.field) === category.key);
       if (changes.length) groups.push({ ...category, changes });

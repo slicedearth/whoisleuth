@@ -18,7 +18,7 @@ import {
   scheduledMonitorPublicState,
   SCHEDULED_MONITOR_SCHEMA,
   SCHEDULED_MONITOR_SCHEMA_VERSION,
-} from '../frontend/src/lib/analysis/scheduled-monitor-model.js';
+} from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
 
 const NOW = '2026-07-16T08:00:00.000Z';
 const WATCHLIST_ID = 'watchlist-00000001';
