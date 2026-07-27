@@ -10,7 +10,7 @@
 // The actual functions can't be pointed at a local test server here - they
 // go through lib/safe-fetch.mts's SSRF guard, which correctly refuses to
 // connect to 127.0.0.1 (that guard has its own test coverage in
-// safe-fetch.test.js). This tests the timeout-covers-the-read pattern
+// safe-fetch.test.mts). This tests the timeout-covers-the-read pattern
 // itself, in isolation, against a real local server that sends headers and
 // then never finishes the body - the same failure mode a malicious domain
 // could produce.

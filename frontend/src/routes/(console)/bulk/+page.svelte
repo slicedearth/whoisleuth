@@ -67,6 +67,7 @@
   let shortlist=$state<ShortlistRecord[]>([]);let shortlistStatus=$state('');let draftStatus=$state('');
   let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');
   let retainedRelationshipIds=$state<Set<string>>(new Set());let relationshipRetentionStatus=$state('');
+  let localContextStatus=$state('');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
@@ -86,6 +87,19 @@
   $effect(()=>{if(routePage.url.searchParams.has('investigation')&&!running&&results.length)selectInvestigationGuideReviewDomains(results.map((row)=>row.domain));});
   const coverage=$derived.by(()=>{if(!handoff||!['typosquat','keyword'].includes(handoff.source))return null;const generated=handoff.generatedCandidates||handoff.candidates;const trusted=new Set(generated.filter(candidate=>isDomainAllowlisted(candidate.domain,profile)).map(candidate=>candidate.domain));return buildCoverageReport(results.map(row=>({...row.saved,domain:row.domain,availability:row.availability,mutationTypes:row.mutationTypes})),generated,trusted,mutationLabels);});
 
+  async function initializeLocalContext(handoffNavigation:boolean,investigationTarget:string,restored:ReturnType<typeof readBulkWorkflowState<ScanResult>>){
+    handoff=loadCandidateHandoff();
+    if(handoffNavigation&&handoff)input=handoff.candidates.map(c=>c.domain).join('\n');
+    else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}
+    try{
+      let retained;
+      [profile,shortlist,cases,retained]=await Promise.all([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations()]);
+      retainedRelationshipIds=new Set(retained.map((item)=>item.id));
+    }catch{
+      localContextStatus='Some browser-local profile, shortlist, case, or relationship context could not be loaded. Scan results and restored queue state remain available; reload to retry the saved context.';
+    }
+  }
+
   onMount(()=>{
     const handoffNavigation=routePage.url.searchParams.has('source');
     const investigationTarget=parseDomainInput(routePage.url.searchParams.get('investigation')||'').entries[0]||'';
@@ -94,7 +108,7 @@
     const candidateState=handoffNavigation?null:readBulkWorkflowState<ScanResult>();
     const restored=candidateState&&(!investigationTarget||candidateState.guideContext===guideContext)?candidateState:null;
     if(restored){input=restored.input;mode=restored.mode;completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;watchlistName=restored.watchlistName;}
-    void (async()=>{let retained;[profile,shortlist,cases,retained]=await Promise.all([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations()]);retainedRelationshipIds=new Set(retained.map((item)=>item.id));handoff=loadCandidateHandoff();if(handoffNavigation&&handoff)input=handoff.candidates.map(c=>c.domain).join('\n');else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}})();
+    void initializeLocalContext(handoffNavigation,investigationTarget,restored);
     return()=>{
       resume();
       controller?.abort();
@@ -208,6 +222,8 @@
   {status}
 />
 
+{#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
+
 {#if results.length}
   <section id="results" class="triage card" tabindex="-1">
     <BulkTriageControls
@@ -287,6 +303,7 @@
 <BulkShortlist domains={shortlist.map((item)=>item.domain)} status={shortlistStatus} {loadShortlisted} {downloadShortlist} {importShortlistFile} {removeAllShortlisted} />
 
 <style>
+  .local-context-status{margin:12px 0 0;color:var(--warning);font-size:var(--text-sm)}
   .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
   .triage :global(#bulk-triage-plot){margin:16px 0}

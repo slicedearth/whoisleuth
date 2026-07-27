@@ -191,9 +191,10 @@ than a final release activity.
 - Browser tests actively block off-origin requests and use fixtures, reserved
   domains, or locally rejected input instead of depending on public registry,
   DNS, CT, or website services.
-- TypeScript checks cover native backend contracts, framework-neutral frontend analysis,
-  and browser specifications; Svelte checks and a production build cover the
-  UI boundary.
+- Strict TypeScript checks cover native backend contracts, maintenance tools,
+  the CLI, the complete Node test suite, framework-neutral frontend analysis,
+  browser specifications, and the pre-render theme bootstrap. Svelte checks
+  and a production build cover the component and generated-asset boundaries.
 - CI runs the locked install, production dependency audit, and complete
   verification pyramid on every push and pull request, retaining Playwright
   artifacts only when a run fails.

@@ -83,7 +83,8 @@ npm audit --omit=dev
 The commands cover:
 
 - Node unit and integration tests;
-- TypeScript checks for the backend, frontend analysis modules, and E2E tests;
+- strict TypeScript checks for the backend, tools, CLI, Node tests, frontend
+  analysis modules, E2E tests, and the pre-render theme bootstrap;
 - Svelte diagnostics;
 - the production static build;
 - Chromium browser workflows; and
