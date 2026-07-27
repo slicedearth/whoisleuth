@@ -17,11 +17,15 @@ import {
 } from '../frontend/src/lib/analysis/case-relationship-graph.ts';
 import { MISP_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/misp-indicator-export.ts';
 import { STIX_INDICATOR_EXPORT_VERSION } from '../frontend/src/lib/analysis/stix-indicator-export.ts';
+import {
+  type CaseRelationshipObservation,
+  type CaseRelationshipSummary,
+} from '../frontend/src/lib/analysis/case-relationships.ts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
-function summary(overrides = {}) {
-  const observations = Array.from({ length: 10 }, (_, index) => ({
+function summary(overrides: Partial<CaseRelationshipSummary> = {}): CaseRelationshipSummary {
+  const observations: CaseRelationshipObservation[] = Array.from({ length: 10 }, (_, index) => ({
     id: `observation-${index}`,
     source: index % 2 ? 'lookup' : 'monitor',
     store: 'cases',
@@ -84,6 +88,8 @@ describe('relationship graph interchange export', () => {
     assert.ok(document.graph.edges.every((edge) => /^edge-[0-9a-f]{16}$/.test(edge.id)));
 
     const relationship = document.graph.nodes.find((node) => node.kind === 'relationship');
+    assert.ok(relationship);
+    assert.ok(Array.isArray(relationship.observations));
     assert.equal(relationship.method, 'Exact retained normalized set');
     assert.deepEqual(relationship.certaintyClasses, ['normalized']);
     assert.deepEqual(relationship.sources, ['lookup', 'monitor']);
@@ -94,9 +100,13 @@ describe('relationship graph interchange export', () => {
     assert.equal(relationship.observationCount, 12);
     assert.equal(relationship.exportedObservationCount, MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP);
     assert.equal(relationship.omittedObservationCount, 4);
-    assert.deepEqual(relationship.observations[0].schemaVersions, { caseVersion: 2 });
+    const firstObservation = relationship.observations[0] as Record<string, unknown> | undefined;
+    assert.ok(firstObservation);
+    assert.deepEqual(firstObservation.schemaVersions, { caseVersion: 2 });
     assert.equal(document.graph.truncated, true);
-    assert.match(document.limitations.at(-1), /Transient focus, pin, hide/);
+    const finalLimitation = document.limitations.at(-1);
+    assert.ok(finalLimitation);
+    assert.match(finalLimitation, /Transient focus, pin, hide/);
   });
 
   test('is deterministic for equivalent case order and excludes transient view state', () => {
@@ -123,7 +133,7 @@ describe('relationship graph interchange export', () => {
     const json = buildRelationshipGraphExport(summary(), { ...options, format: 'json' });
     const graphml = buildRelationshipGraphExport(summary(), { ...options, format: 'graphml' });
     const gexf = buildRelationshipGraphExport(summary(), { ...options, format: 'gexf' });
-    const document = JSON.parse(json.content);
+    const document = JSON.parse(json.content) as ReturnType<typeof buildRelationshipGraphDocument>;
 
     assert.equal(json.filename, 'whoisleuth-relationship-graph-2026-07-19.json');
     assert.equal(graphml.filename, 'whoisleuth-relationship-graph-2026-07-19.graphml');
@@ -159,9 +169,11 @@ describe('relationship graph interchange export', () => {
       rawWhois: 'raw-upstream-marker',
       registrarContact: 'contact-marker',
     }));
-    fixture.groups[0].observations[0].authorization = 'credential-marker';
+    const firstObservation = fixture.groups[0].observations?.[0];
+    assert.ok(firstObservation);
+    Reflect.set(firstObservation, 'authorization', 'credential-marker');
     const output = buildRelationshipGraphExport(fixture, { generatedAt: NOW });
-    const document = JSON.parse(output.content);
+    const document = JSON.parse(output.content) as ReturnType<typeof buildRelationshipGraphDocument>;
     const relationshipNodes = document.graph.nodes.filter((node) => node.kind === 'relationship');
     const caseNodes = document.graph.nodes.filter((node) => node.kind === 'case');
     assert.equal(relationshipNodes.length, MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS);
@@ -176,7 +188,9 @@ describe('relationship graph interchange export', () => {
     const fixture = summary();
     fixture.groups[0].method = 'Exact & reviewed <method> "quoted" \ud800';
     fixture.groups[0].limitations = ['Treat <shared> & "quoted" values cautiously.'];
-    fixture.groups[0].observations[0].limitations = ['Invalid surrogate \ud800 replaced.'];
+    const firstObservation = fixture.groups[0].observations?.[0];
+    assert.ok(firstObservation);
+    firstObservation.limitations = ['Invalid surrogate \ud800 replaced.'];
     const graphml = buildRelationshipGraphExport(fixture, { generatedAt: NOW, format: 'graphml' }).content;
     const gexf = buildRelationshipGraphExport(fixture, { generatedAt: NOW, format: 'gexf' }).content;
     for (const content of [graphml, gexf]) {
@@ -191,7 +205,7 @@ describe('relationship graph interchange export', () => {
   test('returns an explicit empty document for invalid input without mutating it', () => {
     const input = { malformed: true };
     const before = structuredClone(input);
-    const output = buildRelationshipGraphExport(input, { generatedAt: NOW });
+    const output = buildRelationshipGraphExport(input as unknown as CaseRelationshipSummary, { generatedAt: NOW });
     const document = JSON.parse(output.content);
     assert.equal(document.source.state, 'legacy');
     assert.deepEqual(document.graph.nodes, []);

@@ -13,11 +13,20 @@ import {
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
   projectCaseRelationshipGraph,
 } from '../frontend/src/lib/analysis/case-relationship-graph.ts';
-import { buildCaseRelationships } from '../frontend/src/lib/analysis/case-relationships.ts';
+import {
+  buildCaseRelationships,
+  CASE_RELATIONSHIP_VERSION,
+  type CaseRelationshipGroup,
+  type CaseRelationshipSummary,
+} from '../frontend/src/lib/analysis/case-relationships.ts';
 
 const CAPTURED = '2026-07-14T00:00:00.000Z';
-const snapshot = (overrides = {}) => ({ capturedAt: CAPTURED, scanDepth: 'deep', availability: 'registered', nameservers: [], ...overrides });
-const caseRecord = (id, domain, evidence) => ({ id, domain, evidenceHistory: [evidence] });
+const snapshot = (overrides: Record<string, unknown> = {}): Record<string, unknown> => (
+  { capturedAt: CAPTURED, scanDepth: 'deep', availability: 'registered', nameservers: [], ...overrides }
+);
+const caseRecord = (id: string, domain: string, evidence: Record<string, unknown>) => (
+  { id, domain, evidenceHistory: [evidence] }
+);
 
 function fixture() {
   const http = { httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpFinalOrigin: 'https://shared.invalid', httpResponseStatus: 200 };
@@ -80,6 +89,10 @@ describe('case relationship graph projection', () => {
       assert.ok(node.y + node.height <= graph.height);
     }
     for (const edge of graph.edges) {
+      assert.ok(typeof edge.x1 === 'number');
+      assert.ok(typeof edge.x2 === 'number');
+      assert.ok(typeof edge.y1 === 'number');
+      assert.ok(typeof edge.y2 === 'number');
       assert.ok(edge.x1 >= 0 && edge.x1 <= graph.width);
       assert.ok(edge.x2 >= 0 && edge.x2 <= graph.width);
       assert.ok(edge.y1 >= 0 && edge.y1 <= graph.height);
@@ -104,12 +117,16 @@ describe('case relationship graph projection', () => {
 
   test('caps dense edges and discloses the partial overview', () => {
     const members = Array.from({ length: MAX_RELATIONSHIP_GRAPH_CASES }, (_, index) => ({ id: `case-${index}`, domain: `case-${index}.invalid` }));
-    const group = (type, value) => ({ type, label: type, method: 'Exact fixture', value, cases: members, description: 'Fixture relationship.' });
-    const graph = projectCaseRelationshipGraph({
+    const group = (type: string, value: string): CaseRelationshipGroup => (
+      { type, label: type, method: 'Exact fixture', value, cases: members, description: 'Fixture relationship.' }
+    );
+    const summary: CaseRelationshipSummary = {
+      version: CASE_RELATIONSHIP_VERSION,
       groups: [group('one', 'one'), group('two', 'two'), group('three', 'three')],
       truncated: false,
       limitations: [],
-    });
+    };
+    const graph = projectCaseRelationshipGraph(summary);
     assert.equal(graph.edges.length, MAX_RELATIONSHIP_GRAPH_EDGES);
     assert.equal(graph.truncated, true);
   });
@@ -144,8 +161,9 @@ describe('case relationship graph projection', () => {
       observations: [observation],
       omittedObservations: 0,
       limitations: ['Compact evidence is partial.'],
-    };
-    const graph = projectCaseRelationshipGraph({
+    } as unknown as CaseRelationshipGroup;
+    const summary: CaseRelationshipSummary = {
+      version: CASE_RELATIONSHIP_VERSION,
       state: 'ready',
       generatedAt: CAPTURED,
       groups: [group],
@@ -153,7 +171,12 @@ describe('case relationship graph projection', () => {
       scopeOptions: [{ value: 'campaign:campaign-one', kind: 'campaign', label: 'Review' }],
       truncated: false,
       limitations: [],
-    }, { source: 'monitor', scope: 'campaign:campaign-one', completeness: 'unknown' });
+    };
+    const graph = projectCaseRelationshipGraph(summary, {
+      source: 'monitor',
+      scope: 'campaign:campaign-one',
+      completeness: 'unknown',
+    });
     assert.equal(graph.relationshipNodes.length, 1);
     assert.deepEqual(graph.relationshipNodes[0].observations, [observation]);
     assert.deepEqual(graph.relationshipNodes[0].campaigns, [{ id: 'campaign-one', label: 'Review' }]);
@@ -173,6 +196,8 @@ describe('case relationship graph projection', () => {
     const full = projectCaseRelationshipGraph(summary);
     const alpha = full.caseNodes.find((node) => node.caseId === 'alpha');
     const nameserver = full.relationshipNodes.find((node) => node.type === 'nameserver_set');
+    assert.ok(alpha);
+    assert.ok(nameserver);
     assert.equal(nameserver.id, 'relationship:nameserver_set:ns.shared.invalid');
 
     const focused = projectCaseRelationshipGraph(summary, { focusId: alpha.id, oneHop: true });
@@ -233,7 +258,9 @@ describe('case relationship graph projection', () => {
     const summary = buildCaseRelationships(fixture());
     const before = structuredClone(summary);
     const full = projectCaseRelationshipGraph(summary);
-    const hiddenId = full.relationshipNodes.find((node) => node.type === 'nameserver_set').id;
+    const hiddenNode = full.relationshipNodes.find((node) => node.type === 'nameserver_set');
+    assert.ok(hiddenNode);
+    const hiddenId = hiddenNode.id;
     const viewed = projectCaseRelationshipGraph(summary, { hiddenIds: [hiddenId] });
     assert.equal(viewed.relationshipNodes.some((node) => node.id === hiddenId), false);
     assert.equal(viewed.totalRelationships, full.totalRelationships);

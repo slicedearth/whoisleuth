@@ -27,6 +27,7 @@ interface RelationshipGraphExportOptions {
   period?: unknown;
   completeness?: unknown;
   scope?: unknown;
+  [key: string]: unknown;
 }
 
 interface RelationshipGraphExportObservation {
