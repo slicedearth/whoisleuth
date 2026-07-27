@@ -1,7 +1,16 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import type { WorkspaceArchiveDocument } from '../frontend/src/lib/analysis/workspace-archive';
 
 const NOW = '2026-07-14T08:00:00.000Z';
+
+type DownloadedWorkspaceSections = {
+  cases: { cases: Array<{ notes: Array<{ body: string }> }> };
+  relationshipObservations: { observations: Array<{ normalizedValue: string }> };
+  settings: { activeProfileId: string; theme: string };
+};
+
+type DownloadedWorkspaceArchive = WorkspaceArchiveDocument<DownloadedWorkspaceSections>;
 
 function caseRecord(id: string, domain: string, status: string) {
   return {
@@ -195,17 +204,21 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
 
   const { download, content } = await downloadWorkspaceArchive(page);
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-\d{4}-\d{2}-\d{2}\.json$/);
-  const archive = JSON.parse(content);
+  const archive = JSON.parse(content) as DownloadedWorkspaceArchive;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
   expect(archive.version).toBe(1);
   expect(archive.manifest.sectionCount).toBe(8);
-  expect(archive.manifest.sections.map((section: any) => section.id)).toEqual([
+  expect(archive.manifest.sections.map((section) => section.id)).toEqual([
     'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'settings',
   ]);
-  expect(archive.manifest.sections.every((section: any) => /^sha256:[a-f0-9]{64}$/.test(section.checksum))).toBe(true);
-  expect(archive.sections.cases.cases[0].notes[0].body).toBe('Analyst archive note');
+  expect(archive.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum))).toBe(true);
+  const archivedCase = requiredValue(archive.sections.cases.cases[0], 'The exported case fixture is missing.');
+  expect(requiredValue(archivedCase.notes[0], 'The exported case note fixture is missing.').body).toBe('Analyst archive note');
   expect(archive.sections.relationshipObservations.observations).toHaveLength(1);
-  expect(archive.sections.relationshipObservations.observations[0].normalizedValue).toBe('192.0.2.20');
+  expect(requiredValue(
+    archive.sections.relationshipObservations.observations[0],
+    'The exported relationship fixture is missing.',
+  ).normalizedValue).toBe('192.0.2.20');
   expect(archive.sections.settings).toMatchObject({ activeProfileId: 'archive-profile', theme: 'light' });
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
@@ -246,7 +259,7 @@ test('workspace archive import previews conflicts before a non-destructive mobil
     theme: localStorage.getItem('whoisleuth:theme:v1'),
     })),
   ]);
-  expect(cases.records.map((record: any) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'local-only.invalid']);
+  expect(cases.records.map((record) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'local-only.invalid']);
   expect(campaigns.records).toHaveLength(1);
   expect(profiles.records).toHaveLength(1);
   expect(relationshipObservations.records).toHaveLength(1);
@@ -258,8 +271,10 @@ test('workspace archive import reports future sections and rolls back an interru
   await page.goto('/dashboard');
   await seedArchiveWorkspace(page);
   const { content } = await downloadWorkspaceArchive(page);
-  const future = JSON.parse(content);
-  future.manifest.sections.find((section: any) => section.id === 'watchlists').version = 999;
+  const future = JSON.parse(content) as DownloadedWorkspaceArchive;
+  const futureWatchlistManifest = future.manifest.sections.find((section) => section.id === 'watchlists');
+  if (!futureWatchlistManifest) throw new Error('The workspace fixture is missing its watchlists manifest.');
+  futureWatchlistManifest.version = 999;
   await page.getByLabel('Review backup file').setInputFiles({ name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
   const futureWatchlists = page.locator('.preview li', { hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
@@ -282,6 +297,6 @@ test('workspace archive import reports future sections and rolls back an interru
   await failBrowserLocalManifestWrites(page, 'campaigns');
   await preview.getByRole('button', { name: 'Add selected data' }).click();
   await expect(page.getByRole('status')).toContainText('No archive changes were kept');
-  const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record: any) => record.value.domain);
+  const domains = (await readBrowserLocalCollection(page, 'cases')).records.map((record) => record.value.domain);
   expect(domains).toEqual(['rollback.invalid']);
 });

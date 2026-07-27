@@ -1,6 +1,10 @@
 import { expect, test } from './fixtures';
 import { runIndexedDbFeasibilityProbe } from '../frontend/src/lib/local-data-platform-probe';
 import { readBrowserLocalCollection } from './helpers';
+import type {
+  BrowserLocalCollectionManifest,
+  BrowserLocalStoredRecord,
+} from '../frontend/src/lib/browser-local-data';
 
 const SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 
@@ -115,14 +119,19 @@ test('a tampered IndexedDB record stops the console instead of presenting an emp
     });
     const transaction = database.transaction('records', 'readwrite');
     const store = transaction.objectStore('records');
-    const recordRequest = store.get(['shortlist', 'priority.invalid']);
-    const record = await new Promise<any>((resolve, reject) => {
+    const recordRequest = store.get(['shortlist', 'priority.invalid']) as
+      IDBRequest<BrowserLocalStoredRecord | undefined>;
+    const record = await new Promise<BrowserLocalStoredRecord | undefined>((resolve, reject) => {
       recordRequest.onsuccess = () => resolve(recordRequest.result);
       recordRequest.onerror = () => reject(recordRequest.error);
     });
-    record.payload = record.payload.replace('priority.invalid', 'tampered.invalid');
-    record.payloadBytes = new TextEncoder().encode(record.payload).byteLength;
-    store.put(record);
+    if (!record) throw new Error('The shortlist test record is missing.');
+    const payload = record.payload.replace('priority.invalid', 'tampered.invalid');
+    store.put({
+      ...record,
+      payload,
+      payloadBytes: new TextEncoder().encode(payload).byteLength,
+    } satisfies BrowserLocalStoredRecord);
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
       transaction.onabort = () => reject(transaction.error);
@@ -152,13 +161,14 @@ test('an older IndexedDB collection schema is normalized and recommitted at the 
     });
     const transaction = database.transaction('manifests', 'readwrite');
     const store = transaction.objectStore('manifests');
-    const manifestRequest = store.get('shortlist');
-    const manifest = await new Promise<any>((resolve, reject) => {
+    const manifestRequest = store.get('shortlist') as
+      IDBRequest<BrowserLocalCollectionManifest | undefined>;
+    const manifest = await new Promise<BrowserLocalCollectionManifest | undefined>((resolve, reject) => {
       manifestRequest.onsuccess = () => resolve(manifestRequest.result);
       manifestRequest.onerror = () => reject(manifestRequest.error);
     });
-    manifest.schemaVersion = 1;
-    store.put(manifest);
+    if (!manifest) throw new Error('The shortlist test manifest is missing.');
+    store.put({ ...manifest, schemaVersion: 1 } satisfies BrowserLocalCollectionManifest);
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
       transaction.onabort = () => reject(transaction.error);

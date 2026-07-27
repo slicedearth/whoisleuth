@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { failBrowserLocalManifestWrites, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -100,7 +100,10 @@ test('captures and persists only a bounded official-site baseline after profile 
 
   await expect(page.getByText('Page baseline', { exact: true })).toBeVisible();
   await expect(page.getByText(/example\.com · Complete/)).toBeVisible();
-  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0].value;
+  const persisted = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The saved brand-profile fixture is missing.',
+  ).value;
   expect(persisted.pageBaseline).toMatchObject({
     baselineVersion: 1,
     domain: 'example.com',
@@ -113,8 +116,9 @@ test('captures and persists only a bounded official-site baseline after profile 
     complete: true,
     truncated: false,
   });
-  expect(persisted.pageBaseline.resourceHosts.values).toEqual(['cdn.example.net']);
-  expect(persisted.pageBaseline.trackingIdentifiers.values).toEqual([{ type: 'google-analytics', value: 'G-ABC123' }]);
+  const pageBaseline = requiredValue(persisted.pageBaseline, 'The saved page baseline is missing.');
+  expect(pageBaseline.resourceHosts.values).toEqual(['cdn.example.net']);
+  expect(pageBaseline.trackingIdentifiers.values).toEqual([{ type: 'google-analytics', value: 'G-ABC123' }]);
   const serialized = JSON.stringify(persisted);
   expect(serialized).not.toMatch(/rawHtml|must-not-persist|private\/path|token=|diagnostics|limitations|"exact"/);
 });
@@ -131,7 +135,10 @@ test('a baseline is discarded when it no longer belongs to an official domain', 
   await page.getByLabel('Official domains').fill('different.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
-  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0].value;
+  const persisted = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The saved brand-profile fixture is missing.',
+  ).value;
   expect(persisted.officialDomains).toEqual(['different.example']);
   expect(persisted.pageBaseline).toBeNull();
 });
@@ -174,7 +181,10 @@ test('a malformed successful capture cannot populate or persist identity evidenc
   await expect(page.getByLabel('Official favicon hash')).toHaveValue('');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
-  const persisted = (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0].value;
+  const persisted = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The saved brand-profile fixture is missing.',
+  ).value;
   expect(persisted.officialFaviconHash).toBe('');
   expect(persisted.pageBaseline).toBeNull();
 });

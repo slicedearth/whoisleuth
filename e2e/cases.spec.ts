@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, runBulkScan } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -200,7 +200,14 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   await expect(result).toContainText('Custom +15');
   await expect(result).toContainText('Context 80');
   await expect(result).toContainText('Suggested: manual-review');
-  const storedScore = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0].value.evidenceHistory[0].riskScore;
+  const storedCase = requiredValue(
+    (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0],
+    'The saved case fixture is missing.',
+  ).value;
+  const storedScore = requiredValue(
+    storedCase.evidenceHistory[0],
+    'The saved case evidence fixture is missing.',
+  ).riskScore;
   expect(storedScore).toBe(65);
 });
 

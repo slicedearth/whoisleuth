@@ -1,5 +1,13 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
+import type {
+  BrowserLocalCollectionManifest,
+  BrowserLocalStoredRecord,
+} from '../frontend/src/lib/browser-local-data';
+import type {
+  BrowserLocalCollectionId,
+  BrowserLocalCollectionValueMap,
+} from '../frontend/src/lib/browser-local-data-definitions';
 
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
@@ -8,9 +16,14 @@ const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 
 type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
-type BrowserLocalCollectionSnapshot = {
-  manifest: any;
-  records: any[];
+type BrowserLocalDecodedRecord<Collection extends BrowserLocalCollectionId> = {
+  id: string;
+  value: BrowserLocalCollectionValueMap[Collection];
+};
+
+type BrowserLocalCollectionSnapshot<Collection extends BrowserLocalCollectionId> = {
+  manifest: BrowserLocalCollectionManifest;
+  records: BrowserLocalDecodedRecord<Collection>[];
 };
 
 type BrowserLocalCollectionReadOptions = Readonly<{
@@ -39,11 +52,22 @@ export async function boundingBox(locator: Locator) {
   return box!;
 }
 
-async function tryReadBrowserLocalCollection(
+export function requiredValue<Value>(
+  value: Value | null | undefined,
+  message: string,
+): Value {
+  if (value === null || value === undefined) throw new Error(message);
+  return value;
+}
+
+async function tryReadBrowserLocalCollection<Collection extends BrowserLocalCollectionId>(
   page: Page,
-  collection: string,
-): Promise<BrowserLocalCollectionSnapshot | null> {
-  return page.evaluate(async ({ databaseName, collectionId }) => {
+  collection: Collection,
+): Promise<BrowserLocalCollectionSnapshot<Collection> | null> {
+  return page.evaluate(async ({
+    databaseName,
+    collectionId,
+  }): Promise<BrowserLocalCollectionSnapshot<Collection> | null> => {
     if (typeof indexedDB.databases !== 'function') {
       throw new Error('The browser does not support non-creating IndexedDB discovery.');
     }
@@ -60,14 +84,16 @@ async function tryReadBrowserLocalCollection(
         || !database.objectStoreNames.contains('manifests')) return null;
 
       const transaction = database.transaction(['records', 'manifests'], 'readonly');
-      const manifestRequest = transaction.objectStore('manifests').get(collectionId);
-      const recordRequest = transaction.objectStore('records').index('collection').getAll(collectionId);
+      const manifestRequest = transaction.objectStore('manifests').get(collectionId) as
+        IDBRequest<BrowserLocalCollectionManifest | undefined>;
+      const recordRequest = transaction.objectStore('records').index('collection').getAll(collectionId) as
+        IDBRequest<BrowserLocalStoredRecord[]>;
       const [manifest, records] = await Promise.all([
-        new Promise<any>((resolve, reject) => {
+        new Promise<BrowserLocalCollectionManifest | undefined>((resolve, reject) => {
           manifestRequest.onsuccess = () => resolve(manifestRequest.result);
           manifestRequest.onerror = () => reject(manifestRequest.error);
         }),
-        new Promise<any[]>((resolve, reject) => {
+        new Promise<BrowserLocalStoredRecord[]>((resolve, reject) => {
           recordRequest.onsuccess = () => resolve(recordRequest.result);
           recordRequest.onerror = () => reject(recordRequest.error);
         }),
@@ -82,7 +108,16 @@ async function tryReadBrowserLocalCollection(
         manifest,
         records: records
           .sort((left, right) => left.ordinal - right.ordinal)
-          .map((record) => JSON.parse(record.payload)),
+          .map((record) => {
+            const parsed = JSON.parse(record.payload) as { id?: unknown; value?: unknown };
+            if (typeof parsed.id !== 'string' || !Object.hasOwn(parsed, 'value')) {
+              throw new Error(`The ${collectionId} test record payload is malformed.`);
+            }
+            return {
+              id: parsed.id,
+              value: parsed.value as BrowserLocalCollectionValueMap[Collection],
+            };
+          }),
       };
     } finally {
       database.close();
@@ -90,14 +125,14 @@ async function tryReadBrowserLocalCollection(
   }, { databaseName: LOCAL_DATA_DATABASE_NAME, collectionId: collection });
 }
 
-export async function readBrowserLocalCollection(
+export async function readBrowserLocalCollection<Collection extends BrowserLocalCollectionId>(
   page: Page,
-  collection: string,
+  collection: Collection,
   options: BrowserLocalCollectionReadOptions = {},
-) {
+): Promise<BrowserLocalCollectionSnapshot<Collection>> {
   const minimumRecords = options.minimumRecords ?? 0;
   const minimumRevision = options.minimumRevision ?? 1;
-  let snapshot: BrowserLocalCollectionSnapshot | null = null;
+  let snapshot: BrowserLocalCollectionSnapshot<Collection> | null = null;
 
   await expect.poll(async () => {
     snapshot = await tryReadBrowserLocalCollection(page, collection);

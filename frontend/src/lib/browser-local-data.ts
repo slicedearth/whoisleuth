@@ -76,7 +76,7 @@ export interface BrowserLocalDataCodec {
   decode(input: Readonly<{ collection: string; lookupKey: string; payload: string }>): Promise<DecodedLocalDataRecord>;
 }
 
-type StoredRecord = Readonly<{
+export type BrowserLocalStoredRecord = Readonly<{
   key: [string, string];
   collection: string;
   lookupKey: string;
@@ -86,7 +86,7 @@ type StoredRecord = Readonly<{
   payloadBytes: number;
 }>;
 
-type CollectionManifest = Readonly<{
+export type BrowserLocalCollectionManifest = Readonly<{
   collection: string;
   schemaVersion: number;
   codec: string;
@@ -102,19 +102,23 @@ type CollectionManifest = Readonly<{
 
 type PreparedCollection = Readonly<{
   definition: AnyLocalDataCollectionDefinition;
-  records: StoredRecord[];
+  records: BrowserLocalStoredRecord[];
   serializedBytes: number;
   digest: string;
-  source: CollectionManifest['source'];
+  source: BrowserLocalCollectionManifest['source'];
   legacyDigest: string | null;
 }>;
 
 type CollectionSnapshot<T> = Readonly<{
   document: T;
-  manifest: CollectionManifest;
+  manifest: BrowserLocalCollectionManifest;
 }>;
 
-function collectionContentMatches(prepared: PreparedCollection, manifest: CollectionManifest, codec: string): boolean {
+function collectionContentMatches(
+  prepared: PreparedCollection,
+  manifest: BrowserLocalCollectionManifest,
+  codec: string,
+): boolean {
   return manifest.schemaVersion === prepared.definition.schemaVersion
     && manifest.codec === codec
     && manifest.recordCount === prepared.records.length
@@ -167,7 +171,7 @@ function isDigest(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/u.test(value);
 }
 
-function canonicalRecordContent(records: readonly StoredRecord[]): string {
+function canonicalRecordContent(records: readonly BrowserLocalStoredRecord[]): string {
   return JSON.stringify(records.map((record) => [
     record.lookupKey,
     record.ordinal,
@@ -455,7 +459,7 @@ export class BrowserLocalDataProvider {
     const done = transactionComplete(transaction, 'Reading local-data manifests', this.timeoutMs);
     const manifestStore = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
     const manifests = await Promise.all(definitions.map((definition) => requestResult(
-      manifestStore.get(definition.id) as IDBRequest<CollectionManifest | undefined>,
+      manifestStore.get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
       `Reading the ${definition.label} manifest`,
       this.timeoutMs,
     )));
@@ -528,7 +532,7 @@ export class BrowserLocalDataProvider {
   async #prepare<T>(
     definition: LocalDataCollectionDefinition<T>,
     input: unknown,
-    source: CollectionManifest['source'],
+    source: BrowserLocalCollectionManifest['source'],
     legacyDigest: string | null,
   ): Promise<PreparedCollection> {
     let document: T;
@@ -543,7 +547,7 @@ export class BrowserLocalDataProvider {
       throw new BrowserLocalDataError('LOCAL_DATA_RECORD_LIMIT', `${definition.label} exceeds its record limit.`);
     }
     const seen = new Set<string>();
-    const storedRecords: StoredRecord[] = [];
+    const storedRecords: BrowserLocalStoredRecord[] = [];
     let encodedBytes = 0;
     for (let ordinal = 0; ordinal < records.length; ordinal++) {
       const record = records[ordinal];
@@ -592,12 +596,12 @@ export class BrowserLocalDataProvider {
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readonly');
     const done = transactionComplete(transaction, `Reading ${definition.label}`, this.timeoutMs);
     const manifest = await requestResult(
-      transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<CollectionManifest | undefined>,
+      transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
       `Reading the ${definition.label} manifest`,
       this.timeoutMs,
     );
     const records = await requestResult(
-      transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(definition.id) as IDBRequest<StoredRecord[]>,
+      transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(definition.id) as IDBRequest<BrowserLocalStoredRecord[]>,
       `Reading ${definition.label}`,
       this.timeoutMs,
     );
@@ -662,7 +666,10 @@ export class BrowserLocalDataProvider {
     return Object.freeze({ document, manifest });
   }
 
-  #assertManifest<T>(definition: LocalDataCollectionDefinition<T>, manifest: CollectionManifest): void {
+  #assertManifest<T>(
+    definition: LocalDataCollectionDefinition<T>,
+    manifest: BrowserLocalCollectionManifest,
+  ): void {
     if (!manifest || typeof manifest !== 'object'
       || manifest.collection !== definition.id
       || !Number.isSafeInteger(manifest.schemaVersion)
@@ -704,7 +711,7 @@ export class BrowserLocalDataProvider {
 
     try {
       const current = await Promise.all(prepared.map((item) => requestResult(
-        manifests.get(item.definition.id) as IDBRequest<CollectionManifest | undefined>,
+        manifests.get(item.definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
         `Checking the ${item.definition.label} revision`,
         this.timeoutMs,
       )));
@@ -736,7 +743,7 @@ export class BrowserLocalDataProvider {
           updatedAt,
           legacyKey: item.definition.legacyKey,
           legacyDigest: item.legacyDigest,
-        }) satisfies CollectionManifest);
+        }) satisfies BrowserLocalCollectionManifest);
       }
       await done;
     } catch (cause) {

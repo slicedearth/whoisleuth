@@ -3,7 +3,6 @@ import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
-  runScheduledMonitorFunction,
   runScheduledMonitorInvocation,
   scheduledMonitorLogRecord,
   SCHEDULED_MONITOR_CRON,
@@ -155,7 +154,9 @@ test('the deployment config registers the worker with a directly analyzable cron
 test('the disabled worker performs no Blob construction, storage, or lookup work', async () => {
   let storeConstructions = 0;
   let lookups = 0;
-  const result = await runScheduledMonitorFunction({
+  const result = await runScheduledMonitorInvocation({
+    deploy: { context: 'production' },
+  }, {
     env: {},
     blobStoreFactory: () => {
       storeConstructions += 1;
@@ -180,9 +181,10 @@ test('the disabled worker performs no Blob construction, storage, or lookup work
 test('a manual invocation from a non-production deploy cannot touch the site-wide store', async () => {
   let storeConstructions = 0;
   let lookups = 0;
-  const result = await runScheduledMonitorFunction({
-    env: readyEnv(),
+  const result = await runScheduledMonitorInvocation({
     deploy: { context: 'deploy-preview', published: false },
+  }, {
+    env: readyEnv(),
     blobStoreFactory: () => {
       storeConstructions += 1;
       throw new Error('A preview invocation must not construct the site-wide Blob store.');
@@ -231,9 +233,10 @@ test('an invocation without provider deploy metadata fails closed before storage
 test('the scheduled production context runs even when published provenance is false', async () => {
   const blobs = new FakeBlobStore();
   const names: string[] = [];
-  const result = await runScheduledMonitorFunction({
-    env: readyEnv(),
+  const result = await runScheduledMonitorInvocation({
     deploy: { context: 'production', published: false },
+  }, {
+    env: readyEnv(),
     blobStoreFactory: (name) => {
       names.push(name);
       return blobs;
@@ -256,9 +259,10 @@ test('the scheduled production context runs even when published provenance is fa
 
 test('an explicitly supplied malformed deploy context fails closed before storage', async () => {
   let storeConstructions = 0;
-  const result = await runScheduledMonitorFunction({
-    env: readyEnv(),
+  const result = await runScheduledMonitorInvocation({
     deploy: { published: true },
+  }, {
+    env: readyEnv(),
     blobStoreFactory: () => {
       storeConstructions += 1;
       throw new Error('Malformed deploy provenance must not construct the site-wide store.');
@@ -277,7 +281,9 @@ test('an explicitly supplied malformed deploy context fails closed before storag
 test('malformed enabled configuration fails before Blob construction or lookup work', async () => {
   let storeConstructions = 0;
   let lookups = 0;
-  await assert.rejects(runScheduledMonitorFunction({
+  await assert.rejects(runScheduledMonitorInvocation({
+    deploy: { context: 'production' },
+  }, {
     env: { [ENABLE_ENV]: '1' },
     blobStoreFactory: () => {
       storeConstructions += 1;
@@ -299,7 +305,9 @@ test('malformed enabled configuration fails before Blob construction or lookup w
 test('a ready worker constructs the one named store and runs an idle bounded cycle', async () => {
   const blobs = new FakeBlobStore();
   const names: string[] = [];
-  const result = await runScheduledMonitorFunction({
+  const result = await runScheduledMonitorInvocation({
+    deploy: { context: 'production' },
+  }, {
     env: readyEnv(),
     blobStoreFactory: (name) => {
       names.push(name);
@@ -323,7 +331,9 @@ test('a ready worker constructs the one named store and runs an idle bounded cyc
 
 test('Blob provider construction failures remain explicit and do not start lookups', async () => {
   let lookups = 0;
-  await assert.rejects(runScheduledMonitorFunction({
+  await assert.rejects(runScheduledMonitorInvocation({
+    deploy: { context: 'production' },
+  }, {
     env: readyEnv(),
     blobStoreFactory: () => {
       throw new Error('fixture Blob provider unavailable');

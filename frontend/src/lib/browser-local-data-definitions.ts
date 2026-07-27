@@ -33,7 +33,7 @@ import {
   serializeWatchlistStore,
   watchlistStoreVersion,
 } from './analysis/watchlist-store.ts';
-import type { WatchlistCollection } from './analysis/watchlist-store.ts';
+import type { WatchlistCollection, WatchlistEntry } from './analysis/watchlist-store.ts';
 import {
   MAX_SHORTLIST_ENTRIES,
   MAX_SHORTLIST_STORE_BYTES,
@@ -52,7 +52,7 @@ import {
   enforceCtHistoryBudget,
   normalizeCtHistoryStore,
 } from './analysis/ct-history.ts';
-import type { CtHistoryStore } from './analysis/ct-history.ts';
+import type { CtHistoryEntry, CtHistoryStore } from './analysis/ct-history.ts';
 import {
   DETECTION_RULE_SCHEMA_VERSION,
   MAX_DETECTION_RULES,
@@ -73,6 +73,19 @@ import {
 } from './analysis/relationship-observation-model.ts';
 import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
 import type { LocalDataCollectionDefinition, LocalDataRecord } from './browser-local-data.ts';
+
+export type BrowserLocalCollectionValueMap = Readonly<{
+  cases: CaseRecord;
+  campaigns: CampaignRecord;
+  brand_profiles: BrandProfile;
+  watchlists: WatchlistEntry;
+  shortlist: ShortlistRecord;
+  ct_history: CtHistoryEntry;
+  detection_rules: DetectionRule;
+  relationship_observations: RelationshipObservation;
+}>;
+
+export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
 
 export const LEGACY_CASES_KEY = 'whois-rdap-cases-v1';
 export const LEGACY_CAMPAIGNS_KEY = 'whoisleuth-campaigns-v1';

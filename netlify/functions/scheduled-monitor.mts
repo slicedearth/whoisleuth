@@ -29,7 +29,6 @@ type ScheduledMonitorCycleResult = {
 };
 type ScheduledFunctionOptions = Omit<RuntimeOptions, 'blobStore'> & {
   blobStoreFactory?: BlobStoreFactory;
-  deploy?: ScheduledDeployContext | null;
 };
 
 const SCHEDULED_MONITOR_CRON = '*/5 * * * *';
@@ -72,19 +71,6 @@ function scheduledMonitorLogRecord(
 }
 
 async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {}) {
-  // Scheduled invocations can report `published: false` even when the provider
-  // runs the current production function. The provider-controlled deploy
-  // context is the stable boundary: previews and branch deploys use distinct
-  // context values, while direct unit/runtime composition omits `deploy`.
-  if (Object.hasOwn(options, 'deploy') && options.deploy?.context !== 'production') {
-    return {
-      status: 'skipped',
-      stopReason: 'non_production_deploy',
-      processedDeliveries: 0,
-      lookupDeliveries: 0,
-      deferredDeliveries: 0,
-    };
-  }
   const env = options.env === undefined ? process.env : options.env;
   const configuration = scheduledMonitorRuntimeConfiguration(env);
   const runtimeOptions: RuntimeOptions = {
@@ -102,12 +88,23 @@ async function runScheduledMonitorFunction(options: ScheduledFunctionOptions = {
 
 async function runScheduledMonitorInvocation(
   context: { deploy?: ScheduledDeployContext } = {},
-  options: Omit<ScheduledFunctionOptions, 'deploy'> = {},
+  options: ScheduledFunctionOptions = {},
 ) {
-  return runScheduledMonitorFunction({
-    ...options,
-    deploy: context.deploy ?? null,
-  });
+  // Scheduled invocations can report `published: false` even when the provider
+  // runs the current production function. The provider-controlled deploy
+  // context is the stable boundary: previews and branch deploys use distinct
+  // context values. Missing or malformed provenance fails closed here, before
+  // the private runtime can construct the site-wide Blob store.
+  if (context.deploy?.context !== 'production') {
+    return {
+      status: 'skipped',
+      stopReason: 'non_production_deploy',
+      processedDeliveries: 0,
+      lookupDeliveries: 0,
+      deferredDeliveries: 0,
+    };
+  }
+  return runScheduledMonitorFunction(options);
 }
 
 export default async function scheduledMonitorHandler(
@@ -119,7 +116,6 @@ export default async function scheduledMonitorHandler(
 }
 
 export {
-  runScheduledMonitorFunction,
   runScheduledMonitorInvocation,
   scheduledMonitorLogRecord,
   SCHEDULED_MONITOR_CRON,

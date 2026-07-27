@@ -50,10 +50,10 @@ function importSummary(
 ): WorkspaceImportSummary {
   return {
     id,
-    added: result.added || 0,
-    updated: result.updated || 0,
-    skipped: result.skipped || 0,
-    pruned: result.pruned || 0,
+    added: result.added ?? 0,
+    updated: result.updated ?? 0,
+    skipped: result.skipped ?? 0,
+    pruned: result.pruned ?? 0,
   };
 }
 
@@ -207,7 +207,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     const settingsSection = sections.find((section) => section.id === 'settings');
     if (settingsSection) {
       const result = await applySettings(settingsSection);
-      results.push({ id: settingsSection.id, added: result.added || 0, updated: result.updated || 0, skipped: result.skipped || 0, pruned: result.pruned || 0 });
+      results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0 });
     }
   } catch (cause) {
     try {

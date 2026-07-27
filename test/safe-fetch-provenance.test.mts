@@ -11,7 +11,10 @@ import {
 const PUBLIC_ADDRESSES = [{ address: '8.8.8.8', family: 4 }];
 
 type SafeFetchDependencies = NonNullable<Parameters<typeof safeFetchDetailed>[2]>;
-type FixtureRequest = { url: string; options: RequestInit & { dispatcher?: unknown } };
+type FixtureRequest = {
+  url: string;
+  options: Parameters<NonNullable<SafeFetchDependencies['fetch']>>[1];
+};
 
 function fixtureDependencies(responses: Response[], overrides: Partial<SafeFetchDependencies> = {}) {
   const requests: FixtureRequest[] = [];

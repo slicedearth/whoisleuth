@@ -25,11 +25,12 @@ import * as crypto from 'node:crypto';
 import { Agent } from 'undici';
 
 type PublicAddressRecord = { address: string; family: number };
-type CloseableDispatcher = { close?: () => Promise<unknown> | unknown };
-type SafeFetchRequest = (url: string, options: RequestInit & { dispatcher?: unknown }) => Promise<Response>;
+type SafeFetchDispatcher = { close?: () => Promise<unknown> | unknown };
+type SafeFetchRequestOptions = RequestInit & { dispatcher?: SafeFetchDispatcher };
+type SafeFetchRequest = (url: string, options: SafeFetchRequestOptions) => Promise<Response>;
 type SafeFetchDependencies = {
   resolvePublicAddresses?: (hostname: string) => Promise<PublicAddressRecord[]>;
-  pinnedDispatcher?: (records: PublicAddressRecord[]) => CloseableDispatcher;
+  pinnedDispatcher?: (records: PublicAddressRecord[]) => SafeFetchDispatcher;
   fetch?: SafeFetchRequest;
   now?: () => number;
   maxRedirects?: number;
@@ -258,7 +259,7 @@ function boundedDuration(value: unknown): number {
   return Math.max(0, Math.min(120_000, Math.round(Number(value) || 0)));
 }
 
-async function closeDispatcher(dispatcher: CloseableDispatcher | null | undefined): Promise<void> {
+async function closeDispatcher(dispatcher: SafeFetchDispatcher | null | undefined): Promise<void> {
   if (!dispatcher || typeof dispatcher.close !== 'function') return;
   try {
     await dispatcher.close();
@@ -299,7 +300,7 @@ async function safeFetchDetailed(
 
     // `dispatcher` is a supported undici extension used to pin the connection.
     // Keep the non-standard property local to this request boundary.
-    const fetchOptions: RequestInit & { dispatcher?: unknown } = { ...options, redirect: 'manual', dispatcher };
+    const fetchOptions: SafeFetchRequestOptions = { ...options, redirect: 'manual', dispatcher };
     let response: Response;
     try {
       response = await request(currentUrl, fetchOptions);

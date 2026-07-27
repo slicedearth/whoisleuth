@@ -183,8 +183,10 @@ describe('portable workspace archive', () => {
   });
 
   test('rejects a future archive envelope before inspecting sections', async () => {
-    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    archive.version = WORKSPACE_ARCHIVE_VERSION + 1;
+    const archive = {
+      ...await buildWorkspaceArchive(input(), { generatedAt: NOW }),
+      version: WORKSPACE_ARCHIVE_VERSION + 1,
+    };
     await assert.rejects(readWorkspaceArchive(archive), /newer schema 2/);
   });
 

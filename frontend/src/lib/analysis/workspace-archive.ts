@@ -95,6 +95,24 @@ export interface WorkspaceArchiveManifestEntry {
   checksum: string;
 }
 
+export interface WorkspaceArchiveManifest {
+  sectionCount: number;
+  totalRecords: number;
+  sections: WorkspaceArchiveManifestEntry[];
+}
+
+export interface WorkspaceArchiveDocument<
+  Sections extends Partial<Record<WorkspaceArchiveSectionId, unknown>> =
+    Partial<Record<WorkspaceArchiveSectionId, unknown>>,
+> {
+  schema: typeof WORKSPACE_ARCHIVE_SCHEMA;
+  version: typeof WORKSPACE_ARCHIVE_VERSION;
+  generatedAt: string;
+  manifest: WorkspaceArchiveManifest;
+  sections: Sections;
+  limitations: string[];
+}
+
 export interface WorkspaceArchiveSection extends WorkspaceArchiveManifestEntry {
   label: string;
   status: WorkspaceArchiveSectionStatus;
@@ -372,7 +390,7 @@ export async function buildWorkspaceArchive(input: unknown, options: WorkspaceAr
     totalRecords += recordCount;
   }
 
-  const archive = {
+  const archive: WorkspaceArchiveDocument = {
     schema: WORKSPACE_ARCHIVE_SCHEMA,
     version: WORKSPACE_ARCHIVE_VERSION,
     generatedAt: now,
@@ -522,9 +540,9 @@ export async function previewWorkspaceArchive(raw: unknown, localInput: unknown,
         ...section,
         status: 'ready',
         reason: '',
-        added: result.added || 0,
-        updated: result.updated || 0,
-        skipped: result.skipped || 0,
+        added: result.added ?? 0,
+        updated: result.updated ?? 0,
+        skipped: result.skipped ?? 0,
         pruned: result.pruned ?? 0,
         selected: true,
         normalizedSettings: result.settings || null,
