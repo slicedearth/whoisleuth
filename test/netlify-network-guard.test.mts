@@ -21,7 +21,7 @@ import { requiredValue } from './value-assertions.mts';
 
 let cookie = '';
 before(() => {
-  cookie = buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0];
+  cookie = requiredValue(buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0]);
 });
 after(() => {
   if (previousPassword === undefined) delete process.env.SITE_PASSWORD;

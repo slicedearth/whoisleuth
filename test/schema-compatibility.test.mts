@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -161,17 +162,17 @@ describe('schema compatibility inventory', () => {
 
   test('returns a fresh non-mutating document for each report build', () => {
     const first = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    first.entries[0].supportedVersions.push(999);
-    first.entries[0].note = 'changed';
+    requiredValue(first.entries[0]).supportedVersions.push(999);
+    requiredValue(first.entries[0]).note = 'changed';
     const second = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    assert.ok(!second.entries[0].supportedVersions.includes(999));
-    assert.notEqual(second.entries[0].note, 'changed');
+    assert.ok(!requiredValue(second.entries[0]).supportedVersions.includes(999));
+    assert.notEqual(requiredValue(second.entries[0]).note, 'changed');
   });
 
   test('fails closed when a version changes without a supported-version decision', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     const entries = structuredClone(inventory.entries);
-    entries[0].currentVersion += 1;
+    requiredValue(entries[0]).currentVersion += 1;
     assert.throws(
       () => validateSchemaCompatibilityEntries(entries),
       /must explicitly end its supported-version list at current version/i,
@@ -181,31 +182,31 @@ describe('schema compatibility inventory', () => {
   test('rejects duplicate ids, unsorted versions, invalid schemas, paths, and budgets', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
     const duplicate = structuredClone(inventory.entries);
-    duplicate[1].id = duplicate[0].id;
+    requiredValue(duplicate[1]).id = requiredValue(duplicate[0]).id;
     assert.throws(() => validateSchemaCompatibilityEntries(duplicate), /invalid or duplicated/i);
 
     const unsorted = structuredClone(inventory.entries);
-    unsorted[0].supportedVersions = [2, 1, unsorted[0].currentVersion];
+    requiredValue(unsorted[0]).supportedVersions = [2, 1, requiredValue(unsorted[0]).currentVersion];
     assert.throws(() => validateSchemaCompatibilityEntries(unsorted), /supported-version list/i);
 
     const schema = structuredClone(inventory.entries);
-    schema[0].schema = 'bad schema';
+    requiredValue(schema[0]).schema = 'bad schema';
     assert.throws(() => validateSchemaCompatibilityEntries(schema), /schema identifier/i);
 
     const owner = structuredClone(inventory.entries);
-    owner[0].owner = '/private/source.mts';
+    requiredValue(owner[0]).owner = '/private/source.mts';
     assert.throws(() => validateSchemaCompatibilityEntries(owner), /owner path/i);
 
     const budget = structuredClone(inventory.entries);
-    budget[0].byteBudget = -1;
+    requiredValue(budget[0]).byteBudget = -1;
     assert.throws(() => validateSchemaCompatibilityEntries(budget), /byte budget/i);
 
     const metadata = structuredClone(inventory.entries);
-    Reflect.set(metadata[0], 'futureVersionBehavior', 'guess');
+    Reflect.set(requiredValue(metadata[0]), 'futureVersionBehavior', 'guess');
     assert.throws(() => validateSchemaCompatibilityEntries(metadata), /compatibility metadata/i);
 
     const writeSemantics = structuredClone(inventory.entries);
-    Reflect.set(writeSemantics[0], 'writeSemantics', 'silent_overwrite');
+    Reflect.set(requiredValue(writeSemantics[0]), 'writeSemantics', 'silent_overwrite');
     assert.throws(() => validateSchemaCompatibilityEntries(writeSemantics), /compatibility metadata/i);
   });
 
@@ -302,7 +303,7 @@ describe('schema compatibility inventory', () => {
 
   test('escapes every Markdown table and code delimiter after existing backslashes', () => {
     const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    inventory.entries[0].note = 'Literal \\| and ` marker';
+    requiredValue(inventory.entries[0]).note = 'Literal \\| and ` marker';
     inventory.limitations = ['Literal \\| and ` marker'];
     const report = formatSchemaCompatibilityInventory(inventory);
     const slash = '\\';

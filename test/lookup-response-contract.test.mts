@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -248,7 +249,7 @@ describe('Lookup HTTP response contract', () => {
 
     const view = createLookupViewModel(parsed.value);
     assert.equal(view.threatIntelligenceProviders.length, MAX_THREAT_INTELLIGENCE_PROVIDERS);
-    assert.equal(view.threatIntelligenceProviders[0].id, 'provider-0');
+    assert.equal(requiredValue(view.threatIntelligenceProviders[0]).id, 'provider-0');
     assert.equal(view.threatIntelligenceProviders.at(-1)?.id, 'provider-9');
     assert.equal(threatIntelligence.providers.length, MAX_THREAT_INTELLIGENCE_PROVIDERS + 6);
   });

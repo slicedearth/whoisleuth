@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildWhoisChainUncached } from '../lib/whois.mts';
@@ -19,8 +20,8 @@ test('the WHOIS referral chain shares one total deadline across hops', async () 
   });
 
   assert.equal(optionsSeen.length, 2);
-  assert.equal(optionsSeen[0].totalDeadlineMs, 12000);
-  assert.equal(optionsSeen[1].totalDeadlineMs, 3000);
+  assert.equal(requiredValue(optionsSeen[0]).totalDeadlineMs, 12000);
+  assert.equal(requiredValue(optionsSeen[1]).totalDeadlineMs, 3000);
   const finalHop = chain[2];
   assert.ok(finalHop);
   assert.equal(finalHop.server, 'whois.registrar.example');

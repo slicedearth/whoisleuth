@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as filters from '../frontend/src/lib/analysis/bulk-filters.ts';
@@ -29,9 +30,9 @@ describe('bulk triage filters', () => {
       mutation: 'dictionary',
       signals: new Set(['favicon', 'password']),
     };
-    assert.equal(filters.matchesBulkTriage(records[1], selected), true);
-    assert.equal(filters.matchesBulkTriage(records[0], selected), false);
-    assert.equal(filters.matchesBulkTriage(records[2], selected), false);
+    assert.equal(filters.matchesBulkTriage(requiredValue(records[1]), selected), true);
+    assert.equal(filters.matchesBulkTriage(requiredValue(records[0]), selected), false);
+    assert.equal(filters.matchesBulkTriage(requiredValue(records[2]), selected), false);
   });
 
   test('produces labelled mutation options only for present candidates', () => {

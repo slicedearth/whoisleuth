@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -74,7 +75,7 @@ test('bounds names and free-text values without retaining controls', () => {
   }));
   assert.ok(result);
   assert.equal(result.name.length, MAX_PROFILE_NAME_LENGTH);
-  assert.equal(result.productNames[0].length, MAX_PROFILE_TEXT_LENGTH);
+  assert.equal(requiredValue(result.productNames[0]).length, MAX_PROFILE_TEXT_LENGTH);
   assert.equal(result.trademarkOwner, '');
   assert.equal(result.trademarkRegistration.length, MAX_PROFILE_TEXT_LENGTH);
 });
@@ -174,7 +175,7 @@ test('duplicate ids retain the most recently updated bounded record', () => {
     profile({ name: 'Newer', updatedAt: '2026-07-02T00:00:00.000Z' }),
   ]);
   assert.equal(result.profiles.length, 1);
-  assert.equal(result.profiles[0].name, 'Newer');
+  assert.equal(requiredValue(result.profiles[0]).name, 'Newer');
 });
 
 test('structured imports merge by case-insensitive profile name', () => {
@@ -182,8 +183,8 @@ test('structured imports merge by case-insensitive profile name', () => {
   const imported = profile({ id: 'imported', name: 'example brand', productNames: ['Updated'] });
   const result = mergeBrandProfiles([local], { schema: 'whoisleuth.brand-profiles', version: 2, profiles: [imported] }, { nowIso: NOW, makeId: () => 'new-id' });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 1, skipped: 0 });
-  assert.equal(result.profiles[0].id, 'local');
-  assert.deepEqual(result.profiles[0].productNames, ['Updated']);
+  assert.equal(requiredValue(result.profiles[0]).id, 'local');
+  assert.deepEqual(requiredValue(result.profiles[0]).productNames, ['Updated']);
 });
 
 test('imports report malformed records as skipped', () => {
@@ -228,5 +229,5 @@ test('portable exports carry schema identity and only normalized profiles', () =
   assert.equal(result.schema, 'whoisleuth.brand-profiles');
   assert.equal(result.version, BRAND_PROFILE_SCHEMA_VERSION);
   assert.equal(result.exportedAt, NOW);
-  assert.equal(Reflect.get(result.profiles[0], 'private'), undefined);
+  assert.equal(Reflect.get(requiredValue(result.profiles[0]), 'private'), undefined);
 });

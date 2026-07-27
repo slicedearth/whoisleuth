@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -25,7 +26,7 @@ describe('continuous integration workflow', () => {
       'actions/setup-node',
       'actions/upload-artifact',
     ]);
-    for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
+    for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
     for (const command of [
       'npm run release:check',
       'npm run licenses:check',

@@ -13,6 +13,7 @@ import { MANAGEMENT_ERROR_CODES } from '../lib/scheduled-monitor-management.mts'
 import { SCHEDULED_MONITOR_UNAVAILABLE_CODE } from '../lib/scheduled-monitor-runtime.mts';
 import { readRequestTextCapped } from '../lib/http.mts';
 import scheduledMonitorManagementHandler, * as scheduledMonitorManagementModule from '../netlify/functions/scheduled-monitor-management.mts';
+import { requiredValue } from './value-assertions.mts';
 import {
   MAX_SCHEDULED_MONITOR_MANAGEMENT_BODY_BYTES,
   runScheduledMonitorManagementFunction,
@@ -45,7 +46,7 @@ function readyEnv(): EnvironmentInput {
 }
 
 function authenticatedHeaders(overrides: Record<string, string> = {}): Record<string, string> {
-  const cookie = buildSessionCookie(createSessionToken()).split(';')[0];
+  const cookie = requiredValue(buildSessionCookie(createSessionToken()).split(';')[0]);
   return {
     cookie,
     origin: 'https://console.example',

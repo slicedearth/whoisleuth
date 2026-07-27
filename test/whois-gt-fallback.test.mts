@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildWhoisChainUncached, fetchGtRegistryWhois } from '../lib/whois.mts';
@@ -13,8 +14,8 @@ test('registry HTML fallback uses the injected safe request boundary', async () 
 
   assert.deepEqual(result, { registered: false });
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, 'https://www.gt/sitio/whois.php?dn=example.gt.&lang=en');
-  assert.ok(calls[0].options.signal instanceof AbortSignal);
+  assert.equal(requiredValue(calls[0]).url, 'https://www.gt/sitio/whois.php?dn=example.gt.&lang=en');
+  assert.ok(requiredValue(calls[0]).options.signal instanceof AbortSignal);
 });
 
 test('registry HTML fallback degrades safely when the request boundary rejects a redirect', async () => {

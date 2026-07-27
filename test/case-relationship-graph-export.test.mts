@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -112,7 +113,7 @@ describe('relationship graph interchange export', () => {
   test('is deterministic for equivalent case order and excludes transient view state', () => {
     const original = summary();
     const reordered = structuredClone(original);
-    reordered.groups[0].cases.reverse();
+    requiredValue(reordered.groups[0]).cases.reverse();
     const first = buildRelationshipGraphDocument(original, {
       generatedAt: NOW,
       hiddenIds: ['case:case-a'],
@@ -159,8 +160,9 @@ describe('relationship graph interchange export', () => {
 
   test('inherits graph caps, discloses truncation, and excludes unrelated raw or analyst fields', () => {
     const fixture = summary();
+    const groupTemplate = requiredValue(fixture.groups[0]);
     fixture.groups = Array.from({ length: MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS + 1 }, (_, index) => ({
-      ...structuredClone(fixture.groups[0]),
+      ...structuredClone(groupTemplate),
       value: `ns-${index}.bounded.invalid`,
       cases: [
         { id: `case-a-${index}`, domain: `a-${index}.invalid`, notes: ['analyst-note-marker'] },
@@ -169,7 +171,7 @@ describe('relationship graph interchange export', () => {
       rawWhois: 'raw-upstream-marker',
       registrarContact: 'contact-marker',
     }));
-    const firstObservation = fixture.groups[0].observations?.[0];
+    const firstObservation = requiredValue(fixture.groups[0]).observations?.[0];
     assert.ok(firstObservation);
     Reflect.set(firstObservation, 'authorization', 'credential-marker');
     const output = buildRelationshipGraphExport(fixture, { generatedAt: NOW });
@@ -186,9 +188,9 @@ describe('relationship graph interchange export', () => {
 
   test('escapes XML metadata and replaces XML-invalid characters', () => {
     const fixture = summary();
-    fixture.groups[0].method = 'Exact & reviewed <method> "quoted" \ud800';
-    fixture.groups[0].limitations = ['Treat <shared> & "quoted" values cautiously.'];
-    const firstObservation = fixture.groups[0].observations?.[0];
+    requiredValue(fixture.groups[0]).method = 'Exact & reviewed <method> "quoted" \ud800';
+    requiredValue(fixture.groups[0]).limitations = ['Treat <shared> & "quoted" values cautiously.'];
+    const firstObservation = requiredValue(fixture.groups[0]).observations?.[0];
     assert.ok(firstObservation);
     firstObservation.limitations = ['Invalid surrogate \ud800 replaced.'];
     const graphml = buildRelationshipGraphExport(fixture, { generatedAt: NOW, format: 'graphml' }).content;

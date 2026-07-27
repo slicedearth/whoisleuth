@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -143,7 +144,7 @@ test('store recovery drops invalid, duplicate and excess records', () => {
   const result = normalizeDetectionRuleStore({ version: 99, rules: input });
   assert.equal(result.version, DETECTION_RULE_SCHEMA_VERSION);
   assert.equal(result.rules.length, MAX_DETECTION_RULES);
-  assert.equal(result.rules[0].name, 'Login impersonation');
+  assert.equal(requiredValue(result.rules[0]).name, 'Login impersonation');
 });
 
 test('import validates schema and version and merges by stable id', () => {

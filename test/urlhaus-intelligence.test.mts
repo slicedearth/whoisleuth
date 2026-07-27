@@ -154,10 +154,10 @@ describe('malware-host lookup', () => {
     assert.equal(result.state, 'success');
     assert.deepEqual(result.target, { type: 'domain', value: 'example.com', exposure: 'registrable_domain' });
     assert.equal(result.findings.length, 1);
-    assert.equal(result.findings[0].category, 'malware');
-    assert.equal(result.findings[0].severity, 'unknown');
-    assert.equal(result.findings[0].referenceUrl, 'https://urlhaus.abuse.ch/url/123456/');
-    assert.equal(result.findings[0].lastObservedAt, '2026-07-14T01:02:03.000Z');
+    assert.equal(requiredValue(result.findings[0]).category, 'malware');
+    assert.equal(requiredValue(result.findings[0]).severity, 'unknown');
+    assert.equal(requiredValue(result.findings[0]).referenceUrl, 'https://urlhaus.abuse.ch/url/123456/');
+    assert.equal(requiredValue(result.findings[0]).lastObservedAt, '2026-07-14T01:02:03.000Z');
     assert.equal(JSON.stringify(result).includes('private/payload'), false);
     assert.equal(JSON.stringify(result).includes('token=secret'), false);
     assert.equal(JSON.stringify(result).includes('fixture-auth-key'), false);

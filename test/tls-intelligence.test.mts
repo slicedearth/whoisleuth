@@ -154,8 +154,8 @@ describe('certificate profile normalization', () => {
     assert.equal(normalizedCertificate.fingerprintSha256, 'a'.repeat(64));
     assert.equal(requiredValue(normalizedCertificate.publicKey).bits, 2048);
     assert.equal(result.chain.length, 2);
-    assert.equal(result.chain[1].isCertificateAuthority, true);
-    assert.equal(result.findings[0].id, 'wildcard_certificate');
+    assert.equal(requiredValue(result.chain[1]).isCertificateAuthority, true);
+    assert.equal(requiredValue(result.findings[0]).id, 'wildcard_certificate');
     assert.equal(result.diagnostics.connectionAttempts, 1);
     assert.equal(result.diagnostics.resolvedAddressCount, 2);
     assert.match(result.limitations.join(' '), /one validated public address/i);
@@ -230,8 +230,10 @@ describe('certificate profile normalization', () => {
       serialNumber: String(index + 1).padStart(2, '0'),
       fingerprint256: `${(index + 1).toString(16).padStart(2, '0')}:`.repeat(31) + (index + 1).toString(16).padStart(2, '0'),
     }));
-    certificates.forEach((item, index) => { item.issuerCertificate = certificates[index + 1]; });
-    const result = buildTlsObservation(handshake({ peerCertificate: certificates[0] }), { now: NOW });
+    for (let index = 0; index < certificates.length - 1; index += 1) {
+      requiredValue(certificates[index]).issuerCertificate = requiredValue(certificates[index + 1]);
+    }
+    const result = buildTlsObservation(handshake({ peerCertificate: requiredValue(certificates[0]) }), { now: NOW });
     assert.equal(result.chain.length, MAX_CHAIN_CERTIFICATES);
     assert.equal(result.chainTruncated, true);
     assert.equal(result.status, 'partial');
@@ -300,8 +302,8 @@ describe('one-connection TLS collection', () => {
     assert.equal(result.sniHost, 'login.example.test');
     assert.equal(diagnostics.connectionAttempts, 1);
     assert.equal(scheduledDeadlines.length, 2);
-    assert.equal(scheduledDeadlines[0].ms, 5000);
-    assert.ok(scheduledDeadlines[1].ms > 0 && scheduledDeadlines[1].ms <= 5000);
+    assert.equal(requiredValue(scheduledDeadlines[0]).ms, 5000);
+    assert.ok(requiredValue(scheduledDeadlines[1]).ms > 0 && requiredValue(scheduledDeadlines[1]).ms <= 5000);
     assert.deepEqual(clearedDeadlines, ['deadline-1', 'deadline-2']);
     assert.equal(socket.destroyedByCollector, true);
   });

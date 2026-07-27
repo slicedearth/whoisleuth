@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -67,8 +68,10 @@ test('imports add, replace, and skip malformed or over-limit records determinist
     },
   });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 1, skipped: 1 });
-  assert.equal(result.watchlists.Local.results[0].domain, 'updated.invalid');
-  assert.equal(result.watchlists.Added.results[0].domain, 'added.invalid');
+  const updated = requiredValue(result.watchlists.Local);
+  const added = requiredValue(result.watchlists.Added);
+  assert.equal(requiredValue(updated.results[0]).domain, 'updated.invalid');
+  assert.equal(requiredValue(added.results[0]).domain, 'added.invalid');
 });
 
 test('imports reject unrelated, malformed, and future schemas', () => {
@@ -103,5 +106,6 @@ test('portable exports carry schema identity and normalized watchlists', () => {
   assert.equal(result.schema, 'whoisleuth.watchlists');
   assert.equal(result.version, WATCHLIST_SCHEMA_VERSION);
   assert.equal(result.exportedAt, NOW);
-  assert.equal(result.watchlists.Priority.results[0].domain, 'example.invalid');
+  const priority = requiredValue(result.watchlists.Priority);
+  assert.equal(requiredValue(priority.results[0]).domain, 'example.invalid');
 });

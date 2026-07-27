@@ -158,7 +158,7 @@ describe('official-site page baseline', () => {
 
   test('bounds, deduplicates, and sorts recognized tracking identifiers', () => {
     const values = Array.from({ length: baseline.MAX_BASELINE_IDENTIFIERS + 5 }, (_, index) => ({ type: 'google-analytics', value: `G-ID${String(index).padStart(3, '0')}` })).reverse();
-    values.push(values[0], { type: 'invalid_type', value: 'secret/value' });
+    values.push(requiredValue(values[0]), { type: 'invalid_type', value: 'secret/value' });
     const result = requiredValue(baseline.createPageBaseline('example.com', availability({
       pageIdentity: pageIdentity({
         fingerprints: {

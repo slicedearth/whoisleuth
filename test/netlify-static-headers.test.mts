@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -6,7 +7,7 @@ function headerRules(source: string): string[] {
   return source
     .split('[[headers]]')
     .slice(1)
-    .map((block: string) => block.split(/\n\[\[/, 1)[0]);
+    .map((block: string) => requiredValue(block.split(/\n\[\[/, 1)[0]));
 }
 
 test('prerendered responses resist edge script injection without weakening immutable assets', async () => {
@@ -18,8 +19,8 @@ test('prerendered responses resist edge script injection without weakening immut
   assert.notEqual(immutableIndex, -1);
   assert.notEqual(fallbackIndex, -1);
   assert.ok(immutableIndex < fallbackIndex, 'the immutable rule must precede the fallback rule');
-  assert.match(rules[immutableIndex], /Cache-Control = "public, max-age=31536000, immutable"/);
-  assert.doesNotMatch(rules[immutableIndex], /no-transform/);
+  assert.match(requiredValue(rules[immutableIndex]), /Cache-Control = "public, max-age=31536000, immutable"/);
+  assert.doesNotMatch(requiredValue(rules[immutableIndex]), /no-transform/);
   for (const header of [
     'X-Content-Type-Options = "nosniff"',
     'X-Frame-Options = "DENY"',
@@ -27,10 +28,10 @@ test('prerendered responses resist edge script injection without weakening immut
     'Permissions-Policy = "camera=(), microphone=(), geolocation=()"',
     'Strict-Transport-Security = "max-age=31536000"',
   ]) {
-    assert.ok(rules[immutableIndex].includes(header), `expected immutable response header: ${header}`);
+    assert.ok(requiredValue(rules[immutableIndex]).includes(header), `expected immutable response header: ${header}`);
   }
   assert.match(
-    rules[fallbackIndex],
+    requiredValue(rules[fallbackIndex]),
     /Cache-Control = "public, max-age=0, must-revalidate, no-transform"/,
   );
 });

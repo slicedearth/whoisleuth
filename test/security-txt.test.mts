@@ -124,7 +124,7 @@ describe('parseSecurityTxt', () => {
     const result = parseSecurityTxt(signed, { now });
     assert.equal(result.state, 'present');
     assert.equal(result.signed, true);
-    assert.match(result.limitations[0], /not cryptographically verified/u);
+    assert.match(requiredValue(result.limitations[0]), /not cryptographically verified/u);
   });
 });
 

@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -70,14 +71,14 @@ describe('case relationship table projection', () => {
   test('filters by exact relationship family', () => {
     const result = buildCaseRelationshipTable(relationshipFixture(), { type: 'http_final_origin' });
     assert.equal(result.matchingRelationships, 1);
-    assert.equal(result.rows[0].type, 'http_final_origin');
+    assert.equal(requiredValue(result.rows[0]).type, 'http_final_origin');
   });
 
   test('search matches values, methods, labels, and member domains case-insensitively', () => {
     assert.equal(buildCaseRelationshipTable(relationshipFixture(), { query: 'SHARED.INVALID' }).matchingRelationships, 2);
-    assert.equal(buildCaseRelationshipTable(relationshipFixture(), { query: 'normalized set' }).rows[0].type, 'nameserver_set');
-    assert.equal(buildCaseRelationshipTable(relationshipFixture(), { query: 'final website' }).rows[0].type, 'http_final_origin');
-    assert.equal(buildCaseRelationshipTable(relationshipFixture(), { query: 'bravo.invalid' }).rows[0].type, 'nameserver_set');
+    assert.equal(requiredValue(buildCaseRelationshipTable(relationshipFixture(), { query: 'normalized set' }).rows[0]).type, 'nameserver_set');
+    assert.equal(requiredValue(buildCaseRelationshipTable(relationshipFixture(), { query: 'final website' }).rows[0]).type, 'http_final_origin');
+    assert.equal(requiredValue(buildCaseRelationshipTable(relationshipFixture(), { query: 'bravo.invalid' }).rows[0]).type, 'nameserver_set');
   });
 
   test('normalizes and bounds hostile query text', () => {
@@ -100,7 +101,7 @@ describe('case relationship table projection', () => {
     ];
     const result = buildCaseRelationshipTable(cases, { sort: 'member_count', direction: 'desc' });
     assert.deepEqual(result.rows.map((row) => row.caseCount), [3, 2]);
-    assert.deepEqual(result.rows[0].cases.map((item) => item.domain), ['alpha.invalid', 'bravo.invalid', 'echo.invalid']);
+    assert.deepEqual(requiredValue(result.rows[0]).cases.map((item) => item.domain), ['alpha.invalid', 'bravo.invalid', 'echo.invalid']);
   });
 
   test('invalid option values fall back to documented defaults', () => {
@@ -113,9 +114,9 @@ describe('case relationship table projection', () => {
       caseRecord(`shared-${index}`, `shared-${index}.invalid`, snapshot({ nameservers: ['ns.large.invalid'] }))
     ));
     const result = buildCaseRelationshipTable(cases);
-    assert.equal(result.rows[0].caseCount, MAX_RELATIONSHIP_TABLE_MEMBERS + 3);
-    assert.equal(result.rows[0].cases.length, MAX_RELATIONSHIP_TABLE_MEMBERS);
-    assert.equal(result.rows[0].omittedCases, 3);
+    assert.equal(requiredValue(result.rows[0]).caseCount, MAX_RELATIONSHIP_TABLE_MEMBERS + 3);
+    assert.equal(requiredValue(result.rows[0]).cases.length, MAX_RELATIONSHIP_TABLE_MEMBERS);
+    assert.equal(requiredValue(result.rows[0]).omittedCases, 3);
     assert.equal(result.truncated, true);
   });
 
@@ -161,7 +162,7 @@ describe('case relationship table projection', () => {
     const result = buildCaseRelationshipTable(cases, { query: 'ns-51.invalid' });
     assert.equal(result.matchingRelationships, 1);
     assert.equal(result.rows.length, 1);
-    assert.equal(result.rows[0].value, 'ns-51.invalid');
+    assert.equal(requiredValue(result.rows[0]).value, 'ns-51.invalid');
   });
 
   test('preserves source truncation from the underlying comparison boundary', () => {
@@ -225,8 +226,8 @@ describe('case relationship table projection', () => {
       limitations: [],
     }, { source: 'monitor', scope: 'campaign:campaign-one', completeness: 'unknown', query: 'review' });
     assert.equal(result.rows.length, 1);
-    assert.deepEqual(result.rows[0].observations, group.observations);
-    assert.deepEqual(result.rows[0].campaigns, group.campaigns);
+    assert.deepEqual(requiredValue(result.rows[0]).observations, group.observations);
+    assert.deepEqual(requiredValue(result.rows[0]).campaigns, group.campaigns);
     assert.equal(result.filters.source, 'monitor');
     assert.equal(result.filters.scope, 'campaign:campaign-one');
   });

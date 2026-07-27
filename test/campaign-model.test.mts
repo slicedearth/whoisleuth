@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -88,7 +89,7 @@ test('normalizes a store by recency and caps campaign count', () => {
   const result = normalizeCampaignStore({ version: 1, campaigns: records });
   assert.equal(result.version, CAMPAIGN_SCHEMA_VERSION);
   assert.equal(result.campaigns.length, MAX_CAMPAIGNS);
-  assert.equal(result.campaigns[0].id, `campaign-${MAX_CAMPAIGNS + 3}`);
+  assert.equal(requiredValue(result.campaigns[0]).id, `campaign-${MAX_CAMPAIGNS + 3}`);
   const oldest = result.campaigns.at(-1);
   assert.ok(oldest);
   assert.equal(oldest.id, 'campaign-4');
@@ -100,7 +101,7 @@ test('duplicate ids recover to the newest record', () => {
     campaign({ name: 'Newer', updatedAt: '2026-07-03T00:00:00.000Z' }),
   ]);
   assert.equal(result.campaigns.length, 1);
-  assert.equal(result.campaigns[0].name, 'Newer');
+  assert.equal(requiredValue(result.campaigns[0]).name, 'Newer');
 });
 
 test('equal-time duplicate recovery and store ordering are input-order independent', () => {
@@ -151,7 +152,7 @@ test('adds a normalized domain once and removes it without mutation', () => {
   const added = addCampaignDomain(source, 'campaign-1', 'HTTPS://NEW.INVALID/path', NOW);
   assert.equal(added.added, true);
   assert.deepEqual(added.record.domains, ['new.invalid']);
-  assert.deepEqual(source[0].domains, []);
+  assert.deepEqual(requiredValue(source[0]).domains, []);
   const duplicate = addCampaignDomain(added.campaigns, 'campaign-1', 'new.invalid', NOW);
   assert.equal(duplicate.added, false);
   const removed = removeCampaignDomain(added.campaigns, 'campaign-1', 'new.invalid', NOW);
@@ -170,18 +171,18 @@ test('merges matching ids additively while newer metadata wins', () => {
   const result = mergeCampaigns([local], { version: 1, campaigns: [imported] });
   assert.equal(result.added, 0);
   assert.equal(result.updated, 1);
-  assert.equal(result.campaigns[0].name, 'Imported');
-  assert.deepEqual(result.campaigns[0].domains, ['imported.invalid', 'local.invalid']);
-  assert.equal(result.campaigns[0].createdAt, '2026-06-01T00:00:00.000Z');
+  assert.equal(requiredValue(result.campaigns[0]).name, 'Imported');
+  assert.deepEqual(requiredValue(result.campaigns[0]).domains, ['imported.invalid', 'local.invalid']);
+  assert.equal(requiredValue(result.campaigns[0]).createdAt, '2026-06-01T00:00:00.000Z');
 });
 
 test('an older import cannot overwrite local metadata', () => {
   const local = campaign({ name: 'Local', description: 'Keep me', updatedAt: '2026-07-04T00:00:00.000Z' });
   const imported = campaign({ name: 'Old import', description: 'Old', domains: ['extra.invalid'], updatedAt: '2026-07-03T00:00:00.000Z' });
   const result = mergeCampaigns([local], { version: 1, campaigns: [imported] });
-  assert.equal(result.campaigns[0].name, 'Local');
-  assert.equal(result.campaigns[0].description, 'Keep me');
-  assert.ok(result.campaigns[0].domains.includes('extra.invalid'));
+  assert.equal(requiredValue(result.campaigns[0]).name, 'Local');
+  assert.equal(requiredValue(result.campaigns[0]).description, 'Keep me');
+  assert.ok(requiredValue(result.campaigns[0]).domains.includes('extra.invalid'));
 });
 
 test('imports new records, skips malformed records and is idempotent', () => {
@@ -247,8 +248,8 @@ test('builds a deterministic portable export without case evidence or notes', ()
   assert.equal(result.schema, 'whoisleuth.campaigns');
   assert.equal(result.version, 1);
   assert.equal(result.exportedAt, NOW);
-  assert.equal(Reflect.get(result.campaigns[0], 'evidence'), undefined);
-  assert.equal(Reflect.get(result.campaigns[0], 'notes'), undefined);
+  assert.equal(Reflect.get(requiredValue(result.campaigns[0]), 'evidence'), undefined);
+  assert.equal(Reflect.get(requiredValue(result.campaigns[0]), 'notes'), undefined);
   assert.match(result.limitations, /do not prove/);
 });
 

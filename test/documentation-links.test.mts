@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -26,10 +27,10 @@ function sourceLinesOutsideFences(markdown: string): Array<{ line: string; lineN
   let fence: string | null = null;
 
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
+    const line = requiredValue(lines[index]);
     const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
     if (fenceMatch) {
-      const marker = fenceMatch[1][0];
+      const marker = requiredValue(fenceMatch[1]).charAt(0);
       if (fence === null) fence = marker;
       else if (fence === marker) fence = null;
       continue;
@@ -56,7 +57,7 @@ function markdownHeadingAnchors(file: string): Set<string> {
   for (const { line } of sourceLinesOutsideFences(readFileSync(file, 'utf8'))) {
     const match = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
     if (!match) continue;
-    const base = githubHeadingSlug(match[1]);
+    const base = githubHeadingSlug(requiredValue(match[1]));
     if (!base) continue;
     const count = counts.get(base) || 0;
     anchors.add(count === 0 ? base : `${base}-${count}`);
@@ -72,7 +73,7 @@ function localMarkdownLinks(file: string): Array<{ lineNumber: number; target: s
 
   for (const { line, lineNumber } of sourceLinesOutsideFences(readFileSync(file, 'utf8'))) {
     for (const match of line.matchAll(linkPattern)) {
-      const target = match[1];
+      const target = requiredValue(match[1]);
       if (/^(?:https?:|mailto:)/i.test(target) || target.startsWith('/')) continue;
       links.push({ lineNumber, target });
     }

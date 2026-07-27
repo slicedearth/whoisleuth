@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -693,11 +694,11 @@ describe('registry capability metadata', () => {
   test('returns defensive copies rather than mutable shared metadata', () => {
     const expected = listRegistryCapabilities()[0];
     const first = listRegistryCapabilities();
-    first[0].suffixes.push('invalid');
-    first[0].fixtureScenarios.push('invented');
-    first[0].verificationFiles.push('invented');
-    first[0].documentationUrls.push('https://invalid.example');
-    first[0].limitation = 'changed';
+    requiredValue(first[0]).suffixes.push('invalid');
+    requiredValue(first[0]).fixtureScenarios.push('invented');
+    requiredValue(first[0]).verificationFiles.push('invented');
+    requiredValue(first[0]).documentationUrls.push('https://invalid.example');
+    requiredValue(first[0]).limitation = 'changed';
 
     const second = listRegistryCapabilities();
     assert.deepEqual(second[0], expected);

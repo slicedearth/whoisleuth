@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -111,12 +112,12 @@ describe('safe fetch redirect provenance', () => {
     const httpsFixture = fixtureDependencies([new Response('ok', { status: 200 })]);
     const httpsResult = await safeFetchDetailed('https://example.com:443/', {}, httpsFixture.dependencies);
     assert.equal(httpsResult.requestedUrl, 'https://example.com/');
-    assert.equal(httpsFixture.requests[0].url, 'https://example.com/');
+    assert.equal(requiredValue(httpsFixture.requests[0]).url, 'https://example.com/');
 
     const httpFixture = fixtureDependencies([new Response('ok', { status: 200 })]);
     const httpResult = await safeFetchDetailed('http://example.com:80/', {}, httpFixture.dependencies);
     assert.equal(httpResult.requestedUrl, 'http://example.com/');
-    assert.equal(httpFixture.requests[0].url, 'http://example.com/');
+    assert.equal(requiredValue(httpFixture.requests[0]).url, 'http://example.com/');
   });
 
   test('rejects an unsafe redirect target and does not request it', async () => {

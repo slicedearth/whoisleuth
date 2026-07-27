@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -105,9 +106,9 @@ describe('cross-case relationships', () => {
       caseRecord('case-b', 'b.invalid', [snapshot({ nameservers: ['NS1.SHARED.INVALID.', 'ns2.shared.invalid.'] })]),
     ]);
     assert.equal(result.groups.length, 1);
-    assert.equal(result.groups[0].type, 'nameserver_set');
-    assert.equal(result.groups[0].value, 'ns1.shared.invalid · ns2.shared.invalid');
-    assert.deepEqual(result.groups[0].cases.map((item) => item.domain), ['a.invalid', 'b.invalid']);
+    assert.equal(requiredValue(result.groups[0]).type, 'nameserver_set');
+    assert.equal(requiredValue(result.groups[0]).value, 'ns1.shared.invalid · ns2.shared.invalid');
+    assert.deepEqual(requiredValue(result.groups[0]).cases.map((item) => item.domain), ['a.invalid', 'b.invalid']);
   });
 
   test('does not group partial or merely overlapping nameserver sets', () => {
@@ -131,8 +132,8 @@ describe('cross-case relationships', () => {
       caseRecord('case-c', 'c.invalid', [snapshot({ ...shared, scanDepth: 'fast' })]),
     ]);
     assert.equal(result.groups.length, 1);
-    assert.equal(result.groups[0].type, 'http_final_origin');
-    assert.deepEqual(result.groups[0].cases.map((item) => item.domain), ['a.invalid', 'b.invalid']);
+    assert.equal(requiredValue(result.groups[0]).type, 'http_final_origin');
+    assert.deepEqual(requiredValue(result.groups[0]).cases.map((item) => item.domain), ['a.invalid', 'b.invalid']);
   });
 
   test('rejects failed, credentialed, and malformed final origins', () => {
@@ -159,7 +160,7 @@ describe('cross-case relationships', () => {
       caseRecord('case-a', 'a.invalid', [evidence]),
       caseRecord('case-b', 'b.invalid', [evidence]),
     ]);
-    assert.equal(result.groups[0].value, 'https://landing.invalid');
+    assert.equal(requiredValue(result.groups[0]).value, 'https://landing.invalid');
   });
 
   test('uses the newest valid snapshot instead of array position', () => {
@@ -169,7 +170,7 @@ describe('cross-case relationships', () => {
       caseRecord('case-a', 'a.invalid', [newer, older]),
       caseRecord('case-b', 'b.invalid', [snapshot({ nameservers: ['ns.new.invalid'] })]),
     ]);
-    assert.equal(result.groups[0].value, 'ns.new.invalid');
+    assert.equal(requiredValue(result.groups[0]).value, 'ns.new.invalid');
   });
 
   test('revalidates malformed case ids, domains, and snapshots at the comparison boundary', () => {
@@ -227,7 +228,7 @@ describe('cross-case relationships', () => {
     ));
     const result = buildCaseRelationships(cases);
     assert.equal(result.truncated, true);
-    assert.equal(result.groups[0].cases.length, MAX_CASES_PER_RELATIONSHIP);
+    assert.equal(requiredValue(result.groups[0]).cases.length, MAX_CASES_PER_RELATIONSHIP);
   });
 
   test('caps relationship groups after deterministic sorting', () => {
@@ -297,7 +298,7 @@ describe('projection-backed cross-case relationships', () => {
       version: INVESTIGATION_PROJECTION_VERSION + 1,
     });
     assert.equal(future.state, 'unsupported');
-    assert.match(future.limitations[0], /newer than supported/);
+    assert.match(requiredValue(future.limitations[0]), /newer than supported/);
   });
 
   test('does not treat a historical pivot as current when it falls outside the requested period', () => {

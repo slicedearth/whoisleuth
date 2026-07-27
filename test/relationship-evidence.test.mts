@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
@@ -121,7 +122,7 @@ describe('buildScanRelationships', () => {
       row('a.example', other),
     ]);
     assert.deepEqual(result.groups.map((item) => item.type), ['nameserver_set', 'ip_address', 'certificate', 'tracking_identifier', 'tracking_identifier', 'favicon', 'official_asset']);
-    assert.deepEqual(result.groups[0].domains, ['a.example', 'z.example']);
+    assert.deepEqual(requiredValue(result.groups[0]).domains, ['a.example', 'z.example']);
     assert.match(result.limitations.join(' '), /not proof of common ownership/);
     assert.match(result.limitations.join(' '), /exact native TLS leaf-certificate SHA-256/i);
     assert.equal('score' in result, false);
@@ -267,7 +268,7 @@ describe('buildScanRelationships', () => {
 
     const shared = evidence.relationshipObservation({ nameservers: ['ns.example'] });
     const manyDomains = evidence.buildScanRelationships(Array.from({ length: evidence.MAX_RELATIONSHIP_DOMAINS + 1 }, (_, index) => row(`shared-${index}.example`, shared)));
-    assert.equal(manyDomains.groups[0].domains.length, evidence.MAX_RELATIONSHIP_DOMAINS);
+    assert.equal(requiredValue(manyDomains.groups[0]).domains.length, evidence.MAX_RELATIONSHIP_DOMAINS);
     assert.equal(manyDomains.truncated, true);
   });
 });

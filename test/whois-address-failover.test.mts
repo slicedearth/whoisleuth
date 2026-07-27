@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { buildWhoisChainUncached, whoisQuery } from '../lib/whois.mts';
@@ -30,8 +31,8 @@ describe('WHOIS address failover', () => {
 
     assert.equal(response, 'Domain Name: EXAMPLE.COM');
     assert.deepEqual(calls.map((call) => call.address), ['192.0.2.1', '2001:db8::1']);
-    assert.equal(calls[0].options.totalDeadlineMs, 1000);
-    assert.equal(calls[1].options.totalDeadlineMs, 900);
+    assert.equal(requiredValue(calls[0]).options.totalDeadlineMs, 1000);
+    assert.equal(requiredValue(calls[1]).options.totalDeadlineMs, 900);
     assert.equal(selected, '2001:db8::1');
   });
 
@@ -84,6 +85,6 @@ describe('WHOIS address failover', () => {
         return 'No match for domain';
       },
     });
-    assert.equal(chain[0].address, '192.0.2.10');
+    assert.equal(requiredValue(chain[0]).address, '192.0.2.10');
   });
 });

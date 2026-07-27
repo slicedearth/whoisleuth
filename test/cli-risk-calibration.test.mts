@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable, Writable } from 'node:stream';
@@ -92,7 +93,7 @@ describe('risk calibration dataset projection', () => {
     const before = structuredClone(input);
     const parsed = parseRiskCalibrationDataset(JSON.stringify(input));
     assert.deepEqual(input, before);
-    assert.deepEqual(parsed.records[0].evidence, {
+    assert.deepEqual(requiredValue(parsed.records[0]).evidence, {
       availability: 'registered', mutationTypes: ['dictionary'], domainAgeDays: 30,
     });
     assert.doesNotMatch(JSON.stringify(parsed), /unknownRecord|unknownEvidence|discard me/);
@@ -103,7 +104,7 @@ describe('risk calibration dataset projection', () => {
       record({ id: 'one', domain: 'LOGIN.EXAMPLE.TEST.' }),
       record({ id: 'two', domain: 'mail.example.test' }),
     ])));
-    assert.equal(parsed.records[0].domain, 'login.example.test');
+    assert.equal(requiredValue(parsed.records[0]).domain, 'login.example.test');
     assert.throws(() => parseRiskCalibrationDataset(JSON.stringify(dataset([
       record({ id: 'same' }), record({ id: 'same', domain: 'other.example.test' }),
     ]))), /must be unique/);
@@ -192,8 +193,8 @@ describe('offline Risk calibration report', () => {
       specificity: 1,
       falsePositiveRate: 0,
     });
-    assert.equal(report.records[2].exclusionReason, 'contextual_disposition');
-    assert.equal(report.records[3].exclusionReason, 'not_scored');
+    assert.equal(requiredValue(report.records[2]).exclusionReason, 'contextual_disposition');
+    assert.equal(requiredValue(report.records[3]).exclusionReason, 'not_scored');
     assert.equal(report.interpretation.automaticTuning, false);
     assert.equal(report.interpretation.networkRequests, false);
     assert.match(report.interpretation.statement, /does not.*prove maliciousness or safety/i);
@@ -206,9 +207,9 @@ describe('offline Risk calibration report', () => {
     const report = buildRiskCalibrationReport(parsed, explainRiskScore, {
       modelVersion: RISK_MODEL_VERSION, reviewThreshold: RISK_REVIEW_THRESHOLD,
     });
-    assert.equal(report.thresholds[0].precision, null);
-    assert.equal(report.thresholds[0].recall, null);
-    assert.equal(report.thresholds[0].specificity, null);
+    assert.equal(requiredValue(report.thresholds[0]).precision, null);
+    assert.equal(requiredValue(report.thresholds[0]).recall, null);
+    assert.equal(requiredValue(report.thresholds[0]).specificity, null);
   });
 
   test('terminal output stays bounded and points to complete JSON', () => {

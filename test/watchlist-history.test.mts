@@ -68,7 +68,7 @@ describe('watchlist history', () => {
       hasMx: null, pageTitle: null, hasPasswordField: null,
     }], { mode: 'fast' });
     assert.equal(fast.changes.length, 0);
-    assert.equal(fast.entry.baseline[0].pageTitle, 'Original title');
+    assert.equal(requiredValue(fast.entry.baseline[0]).pageTitle, 'Original title');
 
     const nextDeep = history.appendWatchlistScan(fast.entry, [{
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep',
@@ -84,15 +84,15 @@ describe('watchlist history', () => {
     const legacy = history.appendWatchlistScan(null, [{
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskScore: 95,
     }], { mode: 'deep' }).entry;
-    assert.equal(legacy.baseline[0].riskScore, 95);
-    assert.equal(legacy.baseline[0].riskModelVersion, null);
+    assert.equal(requiredValue(legacy.baseline[0]).riskScore, 95);
+    assert.equal(requiredValue(legacy.baseline[0]).riskModelVersion, null);
 
     const current = history.appendWatchlistScan(legacy, [{
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskModelVersion: 1, riskScore: 42,
     }], { mode: 'deep' });
     assert.equal(current.changes.some((change) => change.field === 'riskScore'), false);
-    assert.equal(current.entry.baseline[0].riskModelVersion, 1);
-    assert.equal(current.entry.baseline[0].riskScore, 42);
+    assert.equal(requiredValue(current.entry.baseline[0]).riskModelVersion, 1);
+    assert.equal(requiredValue(current.entry.baseline[0]).riskScore, 42);
 
     const comparable = history.appendWatchlistScan(current.entry, [{
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskModelVersion: 1, riskScore: 80,
@@ -112,9 +112,9 @@ describe('watchlist history', () => {
       rawHeaders: { server: 'secret' }, redirects: [{ to: 'https://brand.example/private/path' }],
     }], { mode: 'deep' }).entry;
 
-    assert.equal(first.baseline[0].httpFinalOrigin, 'https://brand.example');
-    assert.equal('rawHeaders' in first.baseline[0], false);
-    assert.equal('redirects' in first.baseline[0], false);
+    assert.equal(requiredValue(first.baseline[0]).httpFinalOrigin, 'https://brand.example');
+    assert.equal('rawHeaders' in requiredValue(first.baseline[0]), false);
+    assert.equal('redirects' in requiredValue(first.baseline[0]), false);
 
     const second = history.appendWatchlistScan(first, [{
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep',
@@ -133,7 +133,7 @@ describe('watchlist history', () => {
       domain: 'brand.example', availability: 'registered', scanDepth: 'fast',
     }], { mode: 'fast' });
     assert.equal(fast.changes.some((change) => change.field.startsWith('http')), false);
-    assert.equal(fast.entry.baseline[0].httpFinalOrigin, 'http://other.example');
+    assert.equal(requiredValue(fast.entry.baseline[0]).httpFinalOrigin, 'http://other.example');
   });
 
   test('prunes domains absent from a replacement snapshot (no unbounded baseline growth)', () => {
@@ -239,9 +239,9 @@ describe('watchlist history', () => {
   test('append stores the compact snapshot rather than caller-owned raw objects', () => {
     const raw = [{ domain: 'brand.example', availability: 'registered', mutationTypes: ['omission'], rawHtml: '<secret>' }];
     const result = history.appendWatchlistScan(null, raw, { checkedAt: '2026-07-14T00:00:00.000Z', mode: 'fast' });
-    assert.equal(result.entry.results[0].rawHtml, undefined);
-    assert.deepEqual(result.entry.results[0].mutationTypes, ['omission']);
-    assert.equal(raw[0].rawHtml, '<secret>');
+    assert.equal(requiredValue(result.entry.results[0]).rawHtml, undefined);
+    assert.deepEqual(requiredValue(result.entry.results[0]).mutationTypes, ['omission']);
+    assert.equal(requiredValue(raw[0]).rawHtml, '<secret>');
   });
 
   test('groups retained fields into stable domain-history categories', () => {
@@ -287,8 +287,8 @@ describe('watchlist history', () => {
     assert.equal(projected.materialChangeCount, 3);
     assert.equal(projected.omittedChanges, 4);
     assert.equal(projected.events.length, 2);
-    assert.deepEqual(projected.events[0].groups.map((group) => group.key), ['delegation']);
-    assert.deepEqual(projected.events[1].groups.map((group) => group.key), ['mail', 'risk']);
+    assert.deepEqual(requiredValue(projected.events[0]).groups.map((group) => group.key), ['delegation']);
+    assert.deepEqual(requiredValue(projected.events[1]).groups.map((group) => group.key), ['mail', 'risk']);
     assert.equal(projected.events.some((event) => event.groups.some((group) => group.changes.some((change) => change.domain === 'other.example'))), false);
     assert.deepEqual(entry, before);
   });

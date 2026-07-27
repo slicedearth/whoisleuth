@@ -1,7 +1,7 @@
 import type { Server } from 'node:http';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { recordValue, stringValue } from './value-assertions.mts';
+import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
@@ -75,7 +75,7 @@ describe('Express API request-body errors', () => {
 
 describe('Express API response parity', () => {
   test('preserves success and expected validation responses', async () => {
-    const session = buildSessionCookie(createSessionToken(), { secure: false }).split(';')[0];
+    const session = requiredValue(buildSessionCookie(createSessionToken(), { secure: false }).split(';')[0]);
     const success = await fetch(`${origin}/api/session`, {
       headers: { Cookie: session },
     });

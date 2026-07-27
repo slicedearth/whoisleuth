@@ -149,7 +149,7 @@ describe('groupBySimilarFavicon', () => {
       { domain: 'c.example', faviconPHash: far },
     ], 6);
     assert.equal(groups.length, 1);
-    assert.deepEqual(groups[0].sort(), ['a.example', 'b.example']);
+    assert.deepEqual(requiredValue(groups[0]).sort(), ['a.example', 'b.example']);
   });
 
   test('groups byte-identical icons even when perceptually undecodable (null phash)', () => {
@@ -159,7 +159,7 @@ describe('groupBySimilarFavicon', () => {
       { domain: 'c.example', faviconHash: 'sha-gif-2', faviconPHash: null },
     ], 6);
     assert.equal(groups.length, 1);
-    assert.deepEqual(groups[0].sort(), ['a.example', 'b.example']);
+    assert.deepEqual(requiredValue(groups[0]).sort(), ['a.example', 'b.example']);
   });
 
   test('unions transitively across exact and perceptual links', () => {
@@ -170,7 +170,7 @@ describe('groupBySimilarFavicon', () => {
       { domain: 'c.example', faviconHash: 'h1' },
     ], 6);
     assert.equal(groups.length, 1);
-    assert.deepEqual(groups[0].sort(), ['a.example', 'b.example', 'c.example']);
+    assert.deepEqual(requiredValue(groups[0]).sort(), ['a.example', 'b.example', 'c.example']);
   });
 
   test('drops singletons and ignores records with no favicon at all', () => {

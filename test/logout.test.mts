@@ -33,7 +33,7 @@ const { handler } = await import('../netlify/functions/logout.mts');
 
 let cookie = '';
 before(() => {
-  cookie = buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0];
+  cookie = requiredValue(buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0]);
 });
 
 const SAME_ORIGIN_HEADERS = () => ({ origin: 'https://example.com', host: 'example.com', cookie });

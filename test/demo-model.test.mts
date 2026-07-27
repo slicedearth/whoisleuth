@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -75,10 +76,10 @@ describe('synthetic demo state', () => {
     const complete = syntheticDemoTimeline('credential-lure', true);
     assert.equal(baseline.length, 1);
     assert.equal(complete.length, 2);
-    assert.equal(complete[0].repeated, true);
-    assert.ok(complete[1].changes.some((change) => change.field === 'Risk score'));
-    complete[1].changes[0].field = 'Changed copy';
-    assert.equal(SYNTHETIC_DEMO_CANDIDATES[0].observations[2].riskScore, 86);
+    assert.equal(requiredValue(complete[0]).repeated, true);
+    assert.ok(requiredValue(complete[1]).changes.some((change) => change.field === 'Risk score'));
+    requiredValue(requiredValue(complete[1]).changes[0]).field = 'Changed copy';
+    assert.equal(requiredValue(requiredValue(SYNTHETIC_DEMO_CANDIDATES[0]).observations[2]).riskScore, 86);
     assert.deepEqual(syntheticDemoTimeline('unknown', true), []);
   });
 
@@ -91,8 +92,8 @@ describe('synthetic demo state', () => {
       [lookup.dns.status, lookup.http.status, lookup.securityPosture.status, lookup.technology.status, lookup.network.status, lookup.tls.status],
       ['Success', 'Success', 'Success', 'Success', 'Success', 'Success'],
     );
-    assert.equal(lookup.dns.rows[0].label, 'Nameservers');
-    assert.equal(lookup.http.attempts[0].detail, 'Synthetic fixture; no connection was attempted');
+    assert.equal(requiredValue(lookup.dns.rows[0]).label, 'Nameservers');
+    assert.equal(requiredValue(lookup.http.attempts[0]).detail, 'Synthetic fixture; no connection was attempted');
     assert.equal(lookup.securityTxt.state, 'present');
     assert.equal(lookup.credentialSurface.classifiedCount, 3);
     assert.equal(lookup.credentialSurface.categories.password, 1);
@@ -104,13 +105,13 @@ describe('synthetic demo state', () => {
 
     const relationships = syntheticDemoRelationshipGroups();
     assert.equal(relationships.length, 1);
-    assert.deepEqual(relationships[0].domains, ['northstar-login.example', 'northstarr.example']);
+    assert.deepEqual(requiredValue(relationships[0]).domains, ['northstar-login.example', 'northstarr.example']);
 
     const record = syntheticDemoCaseRecord(completeState());
     assert.ok(record);
     assert.equal(record.domain, 'northstar-login.example');
     assert.equal(record.evidenceHistory.length, 2);
-    assert.notEqual(record.evidenceHistory[0].firstCapturedAt, record.evidenceHistory[0].capturedAt);
+    assert.notEqual(requiredValue(record.evidenceHistory[0]).firstCapturedAt, requiredValue(record.evidenceHistory[0]).capturedAt);
     assert.equal(syntheticDemoCaseRecord(createSyntheticDemoState()), null);
   });
 });
@@ -127,7 +128,7 @@ describe('synthetic demo export', () => {
     assert.equal(payload.provenance.source, 'Certificate Transparency');
     assert.equal(payload.evidence.securityTxt.state, 'present');
     assert.equal(payload.evidence.credentialSurface.categories.password, 1);
-    assert.equal(payload.evidence.structuredIdentity.entities[0].name, 'Northstar account service');
+    assert.equal(requiredValue(payload.evidence.structuredIdentity.entities[0]).name, 'Northstar account service');
     assert.deepEqual(payload.evidence.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(payload.evidence.observedNetwork.address, '203.0.113.44');
     assert.match(payload.warning, /Synthetic demonstration data only/);
@@ -141,11 +142,11 @@ describe('synthetic demo export', () => {
     payload.assessment.signals.push('Changed export');
     payload.evidence.dns.nameservers.push('changed.invalid');
     payload.evidence.securityTxt.contacts.push('mailto:changed@invalid.example');
-    payload.timeline[1].changes[0].field = 'Changed timeline';
+    requiredValue(requiredValue(payload.timeline[1]).changes[0]).field = 'Changed timeline';
     assert.deepEqual(state, before);
-    assert.equal(SYNTHETIC_DEMO_CANDIDATES[0].signals.includes('Changed export'), false);
-    assert.equal(SYNTHETIC_DEMO_CANDIDATES[0].evidence.dns.nameservers.includes('changed.invalid'), false);
-    assert.equal(SYNTHETIC_DEMO_CANDIDATES[0].observations[2].riskScore, 86);
+    assert.equal(requiredValue(SYNTHETIC_DEMO_CANDIDATES[0]).signals.includes('Changed export'), false);
+    assert.equal(requiredValue(SYNTHETIC_DEMO_CANDIDATES[0]).evidence.dns.nameservers.includes('changed.invalid'), false);
+    assert.equal(requiredValue(requiredValue(SYNTHETIC_DEMO_CANDIDATES[0]).observations[2]).riskScore, 86);
   });
 
   test('refuses incomplete state and malformed timestamps', () => {

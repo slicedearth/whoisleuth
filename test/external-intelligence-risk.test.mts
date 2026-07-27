@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -91,9 +92,9 @@ test('the exact freshness boundary is recent and one day beyond it is stale', ()
   const beyondBoundary = provider('urlscan_search', {
     findings: [{ category: 'phishing', lastObservedAt: '2026-04-15T00:00:00.000Z' }],
   });
-  assert.equal(calibrateExternalIntelligenceRisk({ providers: [atBoundary] }).sources[0].ageDays, EXTERNAL_INTELLIGENCE_RECENT_DAYS);
-  assert.equal(calibrateExternalIntelligenceRisk({ providers: [atBoundary] }).sources[0].recent, true);
-  assert.equal(calibrateExternalIntelligenceRisk({ providers: [beyondBoundary] }).sources[0].recent, false);
+  assert.equal(requiredValue(calibrateExternalIntelligenceRisk({ providers: [atBoundary] }).sources[0]).ageDays, EXTERNAL_INTELLIGENCE_RECENT_DAYS);
+  assert.equal(requiredValue(calibrateExternalIntelligenceRisk({ providers: [atBoundary] }).sources[0]).recent, true);
+  assert.equal(requiredValue(calibrateExternalIntelligenceRisk({ providers: [beyondBoundary] }).sources[0]).recent, false);
 });
 
 test('only allowlisted providers, positive states, and phishing or malware findings qualify', () => {
@@ -139,8 +140,8 @@ test('future, invalid, and overlong timestamps cannot be treated as recent', () 
     { category: 'malware', lastObservedAt: 'x'.repeat(65) },
   ];
   const result = calibrateExternalIntelligenceRisk({ providers: [provider('urlscan_search', { findings })] });
-  assert.equal(result.sources[0].ageDays, null);
-  assert.equal(result.sources[0].recent, false);
+  assert.equal(requiredValue(result.sources[0]).ageDays, null);
+  assert.equal(requiredValue(result.sources[0]).recent, false);
   assert.equal(result.unknownAgeProviderCount, 1);
 });
 

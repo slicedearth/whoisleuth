@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -40,22 +41,22 @@ function capture() {
 describe('bounded Unicode confusable source projection', () => {
   test('parses a deterministic fixture with explicit source policy and bounds', async () => {
     const source = await readFile(FIXTURE_PATH, 'utf8');
-    const projection = generateConfusableProjectionWithPolicy(source, {
+    const projection = requiredValue(generateConfusableProjectionWithPolicy(source, {
       unicodeVersion: '17.0.0',
       url: 'https://unicode.example/security/confusables.txt',
       sha256: FIXTURE_SHA256,
       license: 'Unicode-3.0',
       mappingVersion: 'fixture-bounded-v1',
-    });
+    }));
 
     assert.equal(projection.mappingVersion, 'fixture-bounded-v1');
     assert.equal(projection.stats.sourceBytes, Buffer.byteLength(source));
     assert.equal(projection.stats.parsedMappings, 11);
     assert.equal(projection.stats.rejectedMalformedLines, 1);
-    assert.ok(projection.skeletonGroups.f.includes('ꬵ'));
-    assert.ok(projection.skeletonGroups.f.includes('ք'));
-    assert.ok(projection.generationGroups.g.includes('ց'));
-    assert.ok(projection.generationGroups.s.includes('𐑈'));
+    assert.ok(requiredValue(projection.skeletonGroups.f).includes('ꬵ'));
+    assert.ok(requiredValue(projection.skeletonGroups.f).includes('ք'));
+    assert.ok(requiredValue(projection.generationGroups.g).includes('ց'));
+    assert.ok(requiredValue(projection.generationGroups.s).includes('𐑈'));
     assert.ok(projection.stats.projectedMappings <= MAX_PROJECTED_CONFUSABLES);
   });
 
@@ -119,7 +120,7 @@ describe('checked-in Unicode confusable calibration', () => {
     }
     for (const [ascii, values] of Object.entries(GENERATED_GENERATION_CONFUSABLE_GROUPS)) {
       assert.ok([...values].length <= MAX_GENERATION_CONFUSABLES_PER_ASCII, ascii);
-      for (const value of values) assert.ok(GENERATED_CONFUSABLE_GROUPS[ascii].includes(value), `${ascii}: ${value}`);
+      for (const value of values) assert.ok(requiredValue(GENERATED_CONFUSABLE_GROUPS[ascii]).includes(value), `${ascii}: ${value}`);
     }
   });
 

@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -180,7 +181,7 @@ describe('typed local investigation projection', () => {
     assert.equal(observation.complete, null);
     assert.equal(observation.truncated, null);
     assert.deepEqual(observation.schemaVersions, { case: CASE_SCHEMA_VERSION, riskModel: 5, httpSummary: 1 });
-    assert.match(observation.limitations[0], /source-health/);
+    assert.match(requiredValue(observation.limitations[0]), /source-health/);
   });
 
   test('does not create deep-only origin edges from fast or depth-unknown evidence', () => {
@@ -357,7 +358,7 @@ describe('typed local investigation projection', () => {
         },
       }],
     }), { generatedAt: LATE });
-    const observation = result.observations[0];
+    const observation = requiredValue(result.observations[0]);
     assert.equal(observation.status, 'partial');
     assert.equal(observation.truncated, true);
     const nameservers = entity(result, 'nameserver_set').properties.nameservers;

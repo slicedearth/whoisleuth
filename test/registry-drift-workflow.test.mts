@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
@@ -23,7 +24,7 @@ describe('official registry drift workflow', () => {
       'actions/setup-node',
       'actions/upload-artifact',
     ]);
-    for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
+    for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
   });
 
   test('runs the existing bounded command and retains only reviewable reports', () => {

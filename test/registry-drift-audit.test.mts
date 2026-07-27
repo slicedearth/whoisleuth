@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
@@ -212,11 +213,11 @@ describe('official registry drift report', () => {
     assert.deepEqual(report.summary, { current: 0, drift: 0, inconclusive: 9 });
     assert.equal(report.observed.rootZone, null);
     assert.equal(report.observed.rdapBootstrap, null);
-    assert.equal(report.sources[0].status, 503);
-    assert.ok(report.sources[0].error);
-    assert.ok(report.sources[1].error);
-    assert.match(report.sources[0].error, /HTTP 503/);
-    assert.match(report.sources[1].error, /valid JSON/i);
+    assert.equal(requiredValue(report.sources[0]).status, 503);
+    assert.ok(requiredValue(report.sources[0]).error);
+    assert.ok(requiredValue(report.sources[1]).error);
+    assert.match(requiredValue(requiredValue(report.sources[0]).error), /HTTP 503/);
+    assert.match(requiredValue(requiredValue(report.sources[1]).error), /valid JSON/i);
   });
 
   test('treats a capped response as inconclusive and clamps configured deadlines', async () => {
@@ -230,8 +231,8 @@ describe('official registry drift report', () => {
     assert.equal(report.bounds.requestTimeoutMs, 7000);
     assert.equal(report.bounds.totalTimeoutMs, 15_000);
     assert.equal(report.summary.inconclusive, 5);
-    assert.ok(report.sources[0].error);
-    assert.match(report.sources[0].error, /exceeded/);
+    assert.ok(requiredValue(report.sources[0]).error);
+    assert.match(requiredValue(requiredValue(report.sources[0]).error), /exceeded/);
   });
 
   test('does not mutate injected snapshot or capability records', async () => {
@@ -245,7 +246,7 @@ describe('official registry drift report', () => {
   test('rejects an unexpectedly large internal capability catalogue before fetching', async () => {
     let calls = 0;
     await assert.rejects(runRegistryDriftAudit(options({
-      capabilities: Array.from({ length: MAX_CAPABILITY_ROWS + 1 }, () => CAPABILITIES[0]),
+      capabilities: Array.from({ length: MAX_CAPABILITY_ROWS + 1 }, () => requiredValue(CAPABILITIES[0])),
       fetchSource: async () => { calls += 1; return new Response('', { status: 200 }); },
     })), /capability catalogue exceeded/i);
     assert.equal(calls, 0);

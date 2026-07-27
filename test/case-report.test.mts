@@ -104,7 +104,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.evidenceTimeline.length, 1);
-    const entry = json.evidenceTimeline[0];
+    const entry = requiredValue(json.evidenceTimeline[0]);
     assert.equal(entry.isBaseline, true);
     assert.equal(entry.changes, null);
     assert.equal(entry.hasIncomparableChange, false);
@@ -121,13 +121,13 @@ describe('buildCaseReport JSON', () => {
 
     assert.equal(json.evidenceTimeline.length, 2);
     // Chronological: older first.
-    assert.equal(json.evidenceTimeline[0].snapshot.id, 'ev-old');
-    assert.equal(json.evidenceTimeline[0].isBaseline, true);
-    assert.equal(json.evidenceTimeline[1].snapshot.id, 'ev-new');
-    assert.equal(json.evidenceTimeline[1].isBaseline, false);
+    assert.equal(requiredValue(json.evidenceTimeline[0]).snapshot.id, 'ev-old');
+    assert.equal(requiredValue(json.evidenceTimeline[0]).isBaseline, true);
+    assert.equal(requiredValue(json.evidenceTimeline[1]).snapshot.id, 'ev-new');
+    assert.equal(requiredValue(json.evidenceTimeline[1]).isBaseline, false);
     // Changes detected via compareCaseEvidence.
-    assert.ok(Array.isArray(json.evidenceTimeline[1].changes));
-    assert.ok(json.evidenceTimeline[1].changes.length > 0);
+    assert.ok(Array.isArray(requiredValue(json.evidenceTimeline[1]).changes));
+    assert.ok(requiredValue(requiredValue(json.evidenceTimeline[1]).changes).length > 0);
     // Current assessment is the latest.
     assert.equal(requiredValue(json.currentAssessment).id, 'ev-new');
     assert.equal(requiredValue(json.currentAssessment).riskScore, 85);
@@ -147,7 +147,7 @@ describe('buildCaseReport JSON', () => {
     });
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
-    const entry = json.evidenceTimeline[0];
+    const entry = requiredValue(json.evidenceTimeline[0]);
     assert.equal(entry.hasRepeatedObservation, true);
     assert.equal(entry.snapshot.firstCapturedAt, ISO);
     assert.equal(entry.snapshot.capturedAt, LATEST);
@@ -167,7 +167,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.evidenceTimeline.length, 2);
-    const fastEntry = json.evidenceTimeline[1];
+    const fastEntry = requiredValue(json.evidenceTimeline[1]);
     assert.equal(fastEntry.hasIncomparableChange, true);
     assert.deepEqual(fastEntry.incomparableReasons, ['scan-depth']);
     assert.equal(fastEntry.changes, null);
@@ -177,7 +177,7 @@ describe('buildCaseReport JSON', () => {
     const legacy = snapshot({ id: 'legacy', fingerprint: 'legacy', capturedAt: ISO, riskModelVersion: null, riskScore: 95 });
     const current = snapshot({ id: 'current', fingerprint: 'current', capturedAt: LATER, riskModelVersion: 1, riskScore: 42, registrar: 'Changed Registrar' });
     const { json, markdown } = caseReport.buildCaseReport(caseRecord({ evidenceHistory: [legacy, current] }), { generatedAt: LATER });
-    const entry = json.evidenceTimeline[1];
+    const entry = requiredValue(json.evidenceTimeline[1]);
     assert.deepEqual(entry.incomparableReasons, ['risk-model']);
     assert.equal(requiredValue(entry.changes).some((change) => change.field === 'riskScore'), false);
     assert.equal(requiredValue(entry.changes).some((change) => change.field === 'registrar'), true);
@@ -199,7 +199,7 @@ describe('buildCaseReport JSON', () => {
     });
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
-    const snap = json.evidenceTimeline[0].snapshot;
+    const snap = requiredValue(json.evidenceTimeline[0]).snapshot;
     assert.deepStrictEqual(snap.nameservers, ['ns1.example.com', 'ns2.example.com']);
     assert.deepStrictEqual(snap.riskFactors, [{ label: 'Newly registered', points: 15 }]);
     assert.deepStrictEqual(snap.mutationTypes, ['omission', 'hyphenation']);
@@ -224,7 +224,7 @@ describe('buildCaseReport JSON', () => {
     assert.equal(json.case.notesIncluded, true);
     assert.ok(Array.isArray(json.case.notes));
     assert.equal(json.case.notes.length, 1);
-    assert.equal(json.case.notes[0].body, 'Sensitive note content.');
+    assert.equal(requiredValue(json.case.notes[0]).body, 'Sensitive note content.');
   });
 
   test('notes require a strict boolean opt-in', () => {
@@ -253,7 +253,7 @@ describe('buildCaseReport JSON', () => {
     assert.strictEqual(rec.evidenceHistory, originalHistory);
     assert.strictEqual(rec.notes, originalNotes);
     // Report has copies.
-    assert.notStrictEqual(json.evidenceTimeline[0].snapshot, originalHistory[0]);
+    assert.notStrictEqual(requiredValue(json.evidenceTimeline[0]).snapshot, originalHistory[0]);
     assert.notStrictEqual(json.case.notes, originalNotes);
   });
 
@@ -272,7 +272,7 @@ describe('buildCaseReport JSON', () => {
 
     const { json } = caseReport.buildCaseReport(recWithExtra, { generatedAt: ISO });
 
-    const snap = json.evidenceTimeline[0].snapshot;
+    const snap = requiredValue(json.evidenceTimeline[0]).snapshot;
     assert.equal('_customField' in snap, false);
     assert.equal('anotherUnknown' in snap, false);
     assert.equal(recordValue(json.case)._futureProp, undefined);
@@ -526,7 +526,7 @@ describe('caseReportFilename', () => {
     const name = caseReport.caseReportFilename(longDomain, 'json', '2026-01-01T00-00-00-000Z');
 
     // Domain portion should be at most 80 chars.
-    const domainPart = name.replace('whoisleuth-case-', '').split('-2026')[0];
+    const domainPart = requiredValue(name.replace('whoisleuth-case-', '').split('-2026')[0]);
     assert.ok(domainPart.length <= 80);
   });
 

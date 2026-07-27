@@ -34,7 +34,7 @@ const INVALID_QUERY = 'not a valid domain'; // embedded spaces - fails classifyQ
 
 let cookieHeader = '';
 before(() => {
-  cookieHeader = buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0];
+  cookieHeader = requiredValue(buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0]);
 });
 
 function authedEvent(query: string) {

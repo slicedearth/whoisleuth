@@ -28,7 +28,7 @@ test('capability report is deterministic, provider-neutral, and honest about exe
   assert.equal(report.controls.concurrency.distributed, false);
   assert.equal(report.controls.concurrency.usage.mode, 'disabled');
   assert.ok(report.controls.concurrency.classes.every((entry) => entry.runtimeLimit >= entry.sessionLimit));
-  assert.match(report.limitations[0], /per serverless instance/i);
+  assert.match(requiredValue(report.limitations[0]), /per serverless instance/i);
   assert.deepEqual(capabilityReport('netlify'), report);
 });
 
@@ -36,7 +36,7 @@ test('unknown runtimes fail to a bounded generic report without changing feature
   const report = capabilityReport('unexpected');
   assert.equal(report.runtime, 'unknown');
   assert.equal(report.features.length, capabilityReport('express').features.length);
-  assert.match(report.limitations[0], /runtime instance/i);
+  assert.match(requiredValue(report.limitations[0]), /runtime instance/i);
 });
 
 test('capability reports distinguish configured distributed and unavailable budgets', () => {
@@ -67,7 +67,7 @@ test('capability reports distinguish configured distributed and unavailable budg
     { id: 'lookup_fast', dailyLimit: 50, thirtyDayLimit: 500 },
   ]);
   assert.equal(featureById(enabled, 'distributed_budgets').status, 'supported');
-  assert.match(enabled.limitations[0], /concurrency.*usage allowances.*deployment-wide/i);
+  assert.match(requiredValue(enabled.limitations[0]), /concurrency.*usage allowances.*deployment-wide/i);
 
   const unavailable: OperationBudgetProvider = {
     mode: 'unavailable',
@@ -83,7 +83,7 @@ test('capability reports distinguish configured distributed and unavailable budg
   const disabled = capabilityReport('netlify', {}, unavailable);
   assert.equal(featureById(disabled, 'distributed_budgets').status, 'unavailable');
   assert.equal(disabled.controls.concurrency.usage.mode, 'unavailable');
-  assert.match(disabled.limitations[0], /fail closed/i);
+  assert.match(requiredValue(disabled.limitations[0]), /fail closed/i);
 });
 
 test('emergency switches are reflected by the server-authoritative feature report', () => {

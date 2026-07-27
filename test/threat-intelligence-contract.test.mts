@@ -260,11 +260,11 @@ describe('threat-intelligence result normalization', () => {
     assert.deepEqual(result.provider, { id: 'fixture_feed', label: 'Fixture feed' });
     assert.equal(result.state, 'success');
     assert.equal(result.findings.length, 1);
-    assert.equal(result.findings[0].category, 'phishing');
+    assert.equal(requiredValue(result.findings[0]).category, 'phishing');
     assert.equal(Object.hasOwn(result, 'safe'), false);
     assert.equal(Object.hasOwn(result, 'malicious'), false);
     assert.equal(result.observation.complete, true);
-    assert.match(result.observation.limitations[0], /attributed context/i);
+    assert.match(requiredValue(result.observation.limitations[0]), /attributed context/i);
   });
 
   test('keeps a provider miss neutral and explicit', () => {
@@ -329,7 +329,7 @@ describe('threat-intelligence result normalization', () => {
     });
     assert.equal(result.state, 'partial');
     assert.equal(result.findings.length, MAX_FINDINGS);
-    assert.equal(result.findings[0].tags.length, 20);
+    assert.equal(requiredValue(result.findings[0]).tags.length, 20);
     assert.equal(result.observation.truncated, true);
     assert.match(result.observation.limitations.join(' '), /omitted/);
   });
@@ -354,7 +354,7 @@ describe('threat-intelligence result normalization', () => {
       state: 'success', findings: [newer, older],
     });
     assert.deepEqual(forward.findings, reverse.findings);
-    assert.equal(forward.findings[0].detail, 'Newer detail');
+    assert.equal(requiredValue(forward.findings[0]).detail, 'Newer detail');
   });
 
   test('rejects malformed dates and insecure references without retaining their fields', () => {
@@ -410,7 +410,7 @@ describe('provider capability and terms matrix', () => {
     const second = provider({ id: 'a_feed', label: 'A feed' });
     const matrix = buildThreatIntelligenceProviderMatrix([first, second]);
     assert.deepEqual(matrix.map((item) => item.id), ['a_feed', 'z_feed']);
-    assert.equal(matrix[0].terms.termsUrl, 'https://provider.invalid/terms');
+    assert.equal(requiredValue(matrix[0]).terms.termsUrl, 'https://provider.invalid/terms');
     assert.equal(JSON.stringify(matrix).includes('secret'), false);
     const forged = { ...first, terms: { ...first.terms, apiKey: 'secret' }, limits: { ...first.limits, token: 'secret' } };
     assert.throws(() => buildThreatIntelligenceProviderMatrix([forged]), /unique versioned definitions/);
@@ -548,7 +548,7 @@ describe('curated connector result normalization', () => {
     assert.equal(Object.hasOwn(result, 'malicious'), false);
     assert.equal(result.observation.complete, true);
     assert.equal(result.observation.observedAt, '2026-07-19T01:02:03.000Z');
-    assert.match(result.observation.limitations[0], /investigation pivots/i);
+    assert.match(requiredValue(result.observation.limitations[0]), /investigation pivots/i);
   });
 
   test('keeps misses and all failure states explicit and neutral', () => {
@@ -743,9 +743,9 @@ describe('curated connector capability matrix', () => {
       connector({ id: 'a_connector', label: 'A connector' }),
     ]);
     assert.deepEqual(matrix.map((item) => item.id), ['a_connector', 'z_connector']);
-    assert.equal(matrix[0].enabledByDefault, false);
-    assert.equal(matrix[0].credentials.mode, 'required');
-    assert.deepEqual(matrix[0].credentials.scopes, ['records:read']);
+    assert.equal(requiredValue(matrix[0]).enabledByDefault, false);
+    assert.equal(requiredValue(matrix[0]).credentials.mode, 'required');
+    assert.deepEqual(requiredValue(matrix[0]).credentials.scopes, ['records:read']);
     assert.equal(JSON.stringify(matrix).includes('apiKey'), false);
     assert.equal(JSON.stringify(matrix).includes('token'), false);
   });
@@ -782,7 +782,7 @@ describe('curated connector fixture harness', () => {
     });
     assert.equal(calls, 2);
     assert.equal(result.state, 'success');
-    assert.equal(result.entities[0].canonical, 'example.test');
+    assert.equal(requiredValue(result.entities[0]).canonical, 'example.test');
     assert.equal(result.observation.observedAt, '2026-07-19T00:00:00.000Z');
   });
 

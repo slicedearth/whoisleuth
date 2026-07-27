@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 // The view consumes the shared static catalogue without making network requests.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -50,13 +51,13 @@ test('builds the bounded registry-support catalogue from the shared capability m
 
 test('returns independent catalogue rows rather than exposing shared mutable arrays', () => {
   const first = registrySupportCatalogue();
-  first.rows[0].suffixes[0] = 'changed';
-  first.rows[0].fixtureScenarios.push('changed');
+  requiredValue(first.rows[0]).suffixes[0] = 'changed';
+  requiredValue(first.rows[0]).fixtureScenarios.push('changed');
   first.standardsCoverage.counts.generic = 0;
 
   const second = registrySupportCatalogue();
-  assert.equal(second.rows[0].suffixes[0], 'ac');
-  assert.equal(second.rows[0].fixtureScenarios.includes('changed'), false);
+  assert.equal(requiredValue(second.rows[0]).suffixes[0], 'ac');
+  assert.equal(requiredValue(second.rows[0]).fixtureScenarios.includes('changed'), false);
   assert.equal(second.standardsCoverage.counts.generic, 1110);
 });
 
@@ -156,7 +157,7 @@ test('bounds and sanitizes untrusted filter input without mutating the rows', ()
 });
 
 test('caps injected catalogue rows before filtering', () => {
-  const template = registrySupportCatalogue().rows[0];
+  const template = requiredValue(registrySupportCatalogue().rows[0]);
   const rows = Array.from({ length: MAX_REGISTRY_SUPPORT_ROWS + 5 }, (_, index) => ({
     ...template,
     suffixes: [`suffix-${index}`],
@@ -173,8 +174,8 @@ test('sorts bounded filtered rows deterministically without mutating catalogue o
   assert.deepEqual(REGISTRY_SUPPORT_SORT_KEYS, [
     'suffix', 'coverage', 'registry_class', 'whois_access', 'whois_query',
   ]);
-  assert.equal(sortRegistrySupportRows(rows, 'suffix', 'desc')[0].suffixes[0], 'zw');
-  assert.equal(sortRegistrySupportRows(rows, 'unexpected', 'asc')[0].suffixes[0], 'ac');
+  assert.equal(requiredValue(sortRegistrySupportRows(rows, 'suffix', 'desc')[0]).suffixes[0], 'zw');
+  assert.equal(requiredValue(sortRegistrySupportRows(rows, 'unexpected', 'asc')[0]).suffixes[0], 'ac');
   assert.deepEqual(rows.map((row) => row.id), before);
 
   const byCoverage = sortRegistrySupportRows(rows, 'coverage', 'asc');

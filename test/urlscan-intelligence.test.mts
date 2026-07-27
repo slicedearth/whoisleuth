@@ -145,8 +145,8 @@ describe('URLscan archived-verdict lookup', () => {
     assert.equal(result.state, 'success');
     assert.deepEqual(result.target, { type: 'domain', value: 'example.com', exposure: 'registrable_domain' });
     assert.equal(result.findings.length, 1);
-    assert.equal(result.findings[0].category, 'phishing');
-    assert.equal(result.findings[0].referenceUrl, `https://urlscan.io/result/${UUID_A}/`);
+    assert.equal(requiredValue(result.findings[0]).category, 'phishing');
+    assert.equal(requiredValue(result.findings[0]).referenceUrl, `https://urlscan.io/result/${UUID_A}/`);
     assert.equal(JSON.stringify(result).includes('private=value'), false);
     assert.equal(JSON.stringify(result).includes('fixture-api-key'), false);
   });

@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -171,13 +172,13 @@ describe('portable workspace archive', () => {
 
   test('rejects an incorrect declared byte count', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    archive.manifest.sections[0].bytes += 1;
+    requiredValue(archive.manifest.sections[0]).bytes += 1;
     await assert.rejects(readWorkspaceArchive(archive), /byte-count check/);
   });
 
   test('rejects malformed checksum metadata', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    archive.manifest.sections[0].checksum = 'sha256:nope';
+    requiredValue(archive.manifest.sections[0]).checksum = 'sha256:nope';
     await assert.rejects(readWorkspaceArchive(archive), /invalid, duplicate, or missing section/);
   });
 
@@ -205,7 +206,10 @@ describe('portable workspace archive', () => {
   test('reports a checksummed unknown section rather than applying it', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const index = archive.manifest.sections.findIndex((section) => section.id === 'settings');
-    archive.manifest.sections[index] = { ...archive.manifest.sections[index], id: 'futureSection' };
+    archive.manifest.sections[index] = {
+      ...requiredValue(archive.manifest.sections[index]),
+      id: 'futureSection',
+    };
     Reflect.set(archive.sections, 'futureSection', archive.sections.settings);
     delete archive.sections.settings;
     const parsed = await readWorkspaceArchive(archive);

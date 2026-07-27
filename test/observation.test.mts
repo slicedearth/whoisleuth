@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OBSERVATION_VERSION, createObservation, readObservationEnvelope } from '../lib/observation.mts';
@@ -17,7 +18,7 @@ test('creates a deterministic bounded observation envelope', () => {
   assert.equal(result.observedAt, '2026-07-13T01:02:03.000Z');
   assert.equal(result.durationMs, 13);
   assert.equal(result.limitations.length, 2);
-  assert.equal(result.limitations[1].length, 300);
+  assert.equal(requiredValue(result.limitations[1]).length, 300);
   assert.deepEqual(result.diagnostics.a, 4);
   assert.deepEqual(result.diagnostics.z, { status: 'error', error: 'failed control', discarded: 2 });
   assert.equal(Object.hasOwn(result.diagnostics, 'bad key'), false);

@@ -127,11 +127,11 @@ describe('malware-IOC lookup', () => {
     assert.equal(result.state, 'success');
     assert.deepEqual(result.target, { type: 'domain', value: 'example.com', exposure: 'registrable_domain' });
     assert.equal(result.findings.length, 1);
-    assert.equal(result.findings[0].category, 'malware');
-    assert.equal(result.findings[0].confidence, 'high');
-    assert.equal(result.findings[0].referenceUrl, 'https://threatfox.abuse.ch/ioc/123456/');
-    assert.equal(result.findings[0].firstObservedAt, '2026-07-14T01:02:03.000Z');
-    assert.equal(result.findings[0].lastObservedAt, '2026-07-15T02:03:04.000Z');
+    assert.equal(requiredValue(result.findings[0]).category, 'malware');
+    assert.equal(requiredValue(result.findings[0]).confidence, 'high');
+    assert.equal(requiredValue(result.findings[0]).referenceUrl, 'https://threatfox.abuse.ch/ioc/123456/');
+    assert.equal(requiredValue(result.findings[0]).firstObservedAt, '2026-07-14T01:02:03.000Z');
+    assert.equal(requiredValue(result.findings[0]).lastObservedAt, '2026-07-15T02:03:04.000Z');
     assert.equal(JSON.stringify(result).includes('untrusted-reporter'), false);
     assert.equal(JSON.stringify(result).includes('private?token'), false);
     assert.equal(JSON.stringify(result).includes('fixture-auth-key'), false);

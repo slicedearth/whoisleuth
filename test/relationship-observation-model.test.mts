@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -100,7 +101,7 @@ describe('retained relationship observation model', () => {
 
     assert.equal(result.added, false);
     assert.equal(result.observations.length, 1);
-    assert.equal(result.observations[0].retainedAt, LATE);
+    assert.equal(requiredValue(result.observations[0]).retainedAt, LATE);
     assert.deepEqual(deleteRelationshipObservation(result.observations, refreshed.id), []);
 
     const many = Array.from({ length: MAX_RELATIONSHIP_OBSERVATIONS + 10 }, (_, index) => observation({
@@ -115,8 +116,8 @@ describe('retained relationship observation model', () => {
     const newest = many.at(-1);
     assert.ok(newest);
     assert.equal(bounded.length, MAX_RELATIONSHIP_OBSERVATIONS);
-    assert.equal(bounded[0].retainedAt, newest.retainedAt);
-    assert.equal(bounded.some((item) => item.id === many[0].id), false);
+    assert.equal(requiredValue(bounded[0]).retainedAt, newest.retainedAt);
+    assert.equal(bounded.some((item) => item.id === requiredValue(many[0]).id), false);
   });
 
   test('merges non-destructively and refuses future portable sections', () => {
@@ -160,6 +161,6 @@ describe('retained relationship observation model', () => {
     assert.equal(exported.schema, RELATIONSHIP_OBSERVATION_SCHEMA);
     assert.equal(exported.generatedAt, LATE);
     assert.match(exported.limitations.join(' '), /not proof of ownership/i);
-    assert.equal(Object.hasOwn(exported.observations[0], 'data'), false);
+    assert.equal(Object.hasOwn(requiredValue(exported.observations[0]), 'data'), false);
   });
 });

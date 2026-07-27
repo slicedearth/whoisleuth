@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -90,11 +91,11 @@ test('creates a strict scheduled watchlist from compact authority-aware evidence
 
   assert.deepEqual(source, before);
   assert.equal(result.name, 'Priority domains');
-  assert.equal(result.sources[0].domain, 'alpha.example');
-  assert.deepEqual(result.sources[0].mutationTypes, ['omission']);
-  assert.equal(result.entry.results[0].rawWhois, undefined);
-  assert.equal(result.entry.results[0].unknown, undefined);
-  assert.equal(result.entry.baseline[0].rawRdap, undefined);
+  assert.equal(requiredValue(result.sources[0]).domain, 'alpha.example');
+  assert.deepEqual(requiredValue(result.sources[0]).mutationTypes, ['omission']);
+  assert.equal(requiredValue(result.entry.results[0]).rawWhois, undefined);
+  assert.equal(requiredValue(result.entry.results[0]).unknown, undefined);
+  assert.equal(requiredValue(result.entry.baseline[0]).rawRdap, undefined);
   assert.equal(Object.hasOwn(result.entry, 'privateStoreField'), false);
   assert.deepEqual(Object.keys(result).sort(), [
     'createdAt', 'enabled', 'entry', 'id', 'intervalHours', 'lastError', 'lastRunAt',
@@ -143,8 +144,8 @@ test('bounds collection recovery and removes duplicate identifiers and names', (
   const candidates = Array.from({ length: MAX_SCHEDULED_WATCHLIST_INPUTS + 10 }, (_, index) => ({
     ...watchlist({ name: `List ${index}`, id: `watchlist-${String(index).padStart(8, '0')}` }),
   }));
-  candidates[1] = { ...candidates[1], id: candidates[0].id };
-  candidates[2] = { ...candidates[2], name: candidates[0].name.toUpperCase() };
+  candidates[1] = { ...requiredValue(candidates[1]), id: requiredValue(candidates[0]).id };
+  candidates[2] = { ...requiredValue(candidates[2]), name: requiredValue(candidates[0]).name.toUpperCase() };
   const result = normalizeScheduledMonitorState(state(candidates));
   assert.equal(result.watchlists.length, MAX_SCHEDULED_WATCHLISTS);
   assert.equal(new Set(result.watchlists.map((item) => item.id)).size, MAX_SCHEDULED_WATCHLISTS);

@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -76,8 +77,8 @@ describe('local investigation search index', () => {
     assert.equal(index.projectionVersion, null);
     assert.deepEqual(index.entries, []);
     assert.equal(index.limitations.length, 1);
-    assert.ok(index.limitations[0].length <= 300);
-    assert.match(index.limitations[0], /^Search failed\./);
+    assert.ok(requiredValue(index.limitations[0]).length <= 300);
+    assert.match(requiredValue(index.limitations[0]), /^Search failed\./);
   });
 
   test('builds a versioned empty index from the current projection contract', () => {
@@ -104,9 +105,9 @@ describe('local investigation search index', () => {
     }));
     const response = searchInvestigationIndex(index, 'PORTAL.INVALID');
     assert.equal(response.state, 'results');
-    assert.equal(response.results[0].canonical, 'portal.invalid');
-    assert.equal(response.results[0].matchedField, 'canonical');
-    assert.equal(response.results[0].score, 0);
+    assert.equal(requiredValue(response.results[0]).canonical, 'portal.invalid');
+    assert.equal(requiredValue(response.results[0]).matchedField, 'canonical');
+    assert.equal(requiredValue(response.results[0]).score, 0);
   });
 
   test('searches case domains and pivots to the exact source case without network work', () => {
@@ -179,10 +180,10 @@ describe('local investigation search index', () => {
         },
       }],
     }));
-    assert.equal(searchInvestigationIndex(index, 'ns1.shared.invalid').results[0].matchedField, 'canonical');
-    assert.equal(searchInvestigationIndex(index, 'landing.invalid').results[0].entityType, 'http_origin');
-    assert.equal(searchInvestigationIndex(index, SHA).results[0].entityType, 'favicon');
-    const certificate = searchInvestigationIndex(index, 'b'.repeat(64)).results[0];
+    assert.equal(requiredValue(searchInvestigationIndex(index, 'ns1.shared.invalid').results[0]).matchedField, 'canonical');
+    assert.equal(requiredValue(searchInvestigationIndex(index, 'landing.invalid').results[0]).entityType, 'http_origin');
+    assert.equal(requiredValue(searchInvestigationIndex(index, SHA).results[0]).entityType, 'favicon');
+    const certificate = requiredValue(searchInvestigationIndex(index, 'b'.repeat(64)).results[0]);
     assert.equal(certificate.entityType, 'certificate');
     assert.equal(certificate.href, '/lookup?q=scan.invalid');
   });
@@ -211,7 +212,7 @@ describe('local investigation search index', () => {
         observations: [retained],
       },
     }));
-    const result = searchInvestigationIndex(index, 'GTM-RETAINED').results[0];
+    const result = requiredValue(searchInvestigationIndex(index, 'GTM-RETAINED').results[0]);
 
     assert.equal(result.entityType, 'tracking_identifier');
     assert.equal(result.sourceStore, 'relationshipObservations');
@@ -235,7 +236,7 @@ describe('local investigation search index', () => {
         updatedAt: LATE,
       }] },
     }));
-    assert.equal(searchInvestigationIndex(index, 'reserved review').results[0].entityType, 'campaign');
+    assert.equal(requiredValue(searchInvestigationIndex(index, 'reserved review').results[0]).entityType, 'campaign');
     assert.equal(searchInvestigationIndex(index, 'description must').state, 'no_matches');
   });
 

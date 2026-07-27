@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { buildWhoisChainUncached } from '../lib/whois.mts';
@@ -104,9 +105,9 @@ describe('WHOIS referral query profiles', () => {
       },
     });
 
-    assert.equal(chain[1].server, 'whois.de.invalid');
-    assert.equal(chain[1].queryProfile, 'denic-domain-ace');
-    assert.equal(chain[1].responseEncoding, 'utf-8');
-    assert.equal(chain[1].error, 'synthetic registry failure');
+    assert.equal(requiredValue(chain[1]).server, 'whois.de.invalid');
+    assert.equal(requiredValue(chain[1]).queryProfile, 'denic-domain-ace');
+    assert.equal(requiredValue(chain[1]).responseEncoding, 'utf-8');
+    assert.equal(requiredValue(chain[1]).error, 'synthetic registry failure');
   });
 });

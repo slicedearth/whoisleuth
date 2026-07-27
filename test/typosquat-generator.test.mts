@@ -245,7 +245,7 @@ describe('provenance-aware typosquat generation', () => {
       ['www-acme-shop.net', 'www_prefix'],
     ]) {
       assert.ok(result.candidates.some((candidate) =>
-        candidate.domain === domain && candidate.mutationTypes.includes(mutationType)), domain);
+        candidate.domain === domain && candidate.mutationTypes.includes(requiredValue(mutationType))), requiredValue(domain));
     }
     assert.equal(result.candidates.some((candidate) => candidate.domain.endsWith('.com')), false);
   });
@@ -437,7 +437,7 @@ describe('provenance-aware typosquat generation', () => {
     assert.deepEqual(explicit, implicit);
     assert.ok(generator.MUTATION_FAMILY_IDS.includes('unicode_homoglyph_depth_2'));
     assert.equal(generator.DEFAULT_CUSTOM_MUTATION_FAMILY_IDS.includes('unicode_homoglyph_depth_2'), false);
-    assert.equal(generator.GENERATION_PRESETS.all.mutationTypes.includes('unicode_homoglyph_depth_2'), false);
+    assert.equal(requiredValue(generator.GENERATION_PRESETS.all).mutationTypes.includes('unicode_homoglyph_depth_2'), false);
     assert.equal(implicit.candidates.some((candidate) =>
       candidate.mutationTypes.includes('unicode_homoglyph_depth_2')), false);
   });

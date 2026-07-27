@@ -152,7 +152,7 @@ describe('snapshotFieldGroups', () => {
     const groups = display.snapshotFieldGroups(snap);
     // Only Registration should have a value (availability).
     assert.equal(groups.length, 1);
-    assert.equal(groups[0].name, 'Registration');
+    assert.equal(requiredValue(groups[0]).name, 'Registration');
   });
 
   test('includes boolean false as a present value', () => {
@@ -265,9 +265,9 @@ describe('deriveTimeline', () => {
     const snap = deepSnapshot();
     const timeline = display.deriveTimeline([snap]);
     assert.equal(timeline.length, 1);
-    assert.equal(timeline[0].isBaseline, true);
-    assert.equal(timeline[0].changes, null);
-    assert.equal(timeline[0].displayIndex, 1);
+    assert.equal(requiredValue(timeline[0]).isBaseline, true);
+    assert.equal(requiredValue(timeline[0]).changes, null);
+    assert.equal(requiredValue(timeline[0]).displayIndex, 1);
   });
 
   test('returns newest-first order', () => {
@@ -275,10 +275,10 @@ describe('deriveTimeline', () => {
     const newer = deepSnapshot({ capturedAt: LATER, firstCapturedAt: LATER, riskScore: 85, fingerprint: 'newer' });
     const timeline = display.deriveTimeline([older, newer]);
     assert.equal(timeline.length, 2);
-    assert.equal(timeline[0].snapshot.fingerprint, 'newer');
-    assert.equal(timeline[0].displayIndex, 1);
-    assert.equal(timeline[1].snapshot.fingerprint, 'older');
-    assert.equal(timeline[1].displayIndex, 2);
+    assert.equal(requiredValue(timeline[0]).snapshot.fingerprint, 'newer');
+    assert.equal(requiredValue(timeline[0]).displayIndex, 1);
+    assert.equal(requiredValue(timeline[1]).snapshot.fingerprint, 'older');
+    assert.equal(requiredValue(timeline[1]).displayIndex, 2);
   });
 
   test('marks baseline correctly (first chronological, not first display)', () => {
@@ -286,20 +286,20 @@ describe('deriveTimeline', () => {
     const newer = deepSnapshot({ capturedAt: LATER, riskScore: 85, fingerprint: 'newer' });
     const timeline = display.deriveTimeline([older, newer]);
     // Newest-first: newer is index 1, older is index 2.
-    assert.equal(timeline[0].isBaseline, false); // newer
-    assert.equal(timeline[1].isBaseline, true);  // older (first chronological)
+    assert.equal(requiredValue(timeline[0]).isBaseline, false); // newer
+    assert.equal(requiredValue(timeline[1]).isBaseline, true);  // older (first chronological)
   });
 
   test('detects repeated observation when firstCapturedAt differs from capturedAt', () => {
     const snap = deepSnapshot({ firstCapturedAt: ISO, capturedAt: LATER });
     const timeline = display.deriveTimeline([snap]);
-    assert.equal(timeline[0].hasRepeatedObservation, true);
+    assert.equal(requiredValue(timeline[0]).hasRepeatedObservation, true);
   });
 
   test('does not flag repeated observation when timestamps match', () => {
     const snap = deepSnapshot({ firstCapturedAt: ISO, capturedAt: ISO });
     const timeline = display.deriveTimeline([snap]);
-    assert.equal(timeline[0].hasRepeatedObservation, false);
+    assert.equal(requiredValue(timeline[0]).hasRepeatedObservation, false);
   });
 
   test('reports changes from compareCaseEvidence for subsequent snapshots', () => {
@@ -307,10 +307,10 @@ describe('deriveTimeline', () => {
     const newer = deepSnapshot({ capturedAt: LATER, riskScore: 85, fingerprint: 'newer' });
     const timeline = display.deriveTimeline([older, newer]);
     // newer is first in display order, and it's not the baseline.
-    assert.equal(timeline[0].isBaseline, false);
-    assert.ok(timeline[0].changes);
-    assert.ok(timeline[0].changes.length > 0);
-    const riskChange = timeline[0].changes.find((c) => c.field === 'riskScore');
+    assert.equal(requiredValue(timeline[0]).isBaseline, false);
+    assert.ok(requiredValue(timeline[0]).changes);
+    assert.ok(requiredValue(requiredValue(timeline[0]).changes).length > 0);
+    const riskChange = requiredValue(requiredValue(timeline[0]).changes).find((c) => c.field === 'riskScore');
     assert.ok(riskChange);
     assert.equal(riskChange.before, 40);
     assert.equal(riskChange.after, 85);
@@ -344,22 +344,22 @@ describe('deriveTimeline', () => {
     const timeline = display.deriveTimeline([deep, fast]);
 
     // Fast entry is newest-first (index 0), not baseline.
-    assert.equal(timeline[0].isBaseline, false);
+    assert.equal(requiredValue(timeline[0]).isBaseline, false);
     // Deep-only signal differences across depths produce no field-level changes.
-    assert.equal(timeline[0].changes, null);
+    assert.equal(requiredValue(timeline[0]).changes, null);
     // But snapshots are materially distinct -> incomparable.
-    assert.equal(timeline[0].hasIncomparableChange, true);
-    assert.deepEqual(timeline[0].incomparableReasons, ['scan-depth']);
+    assert.equal(requiredValue(timeline[0]).hasIncomparableChange, true);
+    assert.deepEqual(requiredValue(timeline[0]).incomparableReasons, ['scan-depth']);
     // No false favicon "removal" — changes list is null.
-    assert.equal(timeline[0].changes, null);
+    assert.equal(requiredValue(timeline[0]).changes, null);
     // No risk change reported across different depths.
-    assert.equal(timeline[0].changes, null);
+    assert.equal(requiredValue(timeline[0]).changes, null);
   });
 
   test('identifies score-model incomparability without hiding other material changes', () => {
     const older = deepSnapshot({ capturedAt: ISO, fingerprint: 'legacy', riskModelVersion: null, riskScore: 90, registrar: 'Old Registrar' });
     const newer = deepSnapshot({ capturedAt: LATER, fingerprint: 'current', riskModelVersion: 1, riskScore: 42, registrar: 'New Registrar' });
-    const entry = display.deriveTimeline([older, newer])[0];
+    const entry = requiredValue(display.deriveTimeline([older, newer])[0]);
     assert.equal(entry.hasIncomparableChange, true);
     assert.deepEqual(entry.incomparableReasons, ['risk-model']);
     const changes = requiredValue(entry.changes);
@@ -371,8 +371,8 @@ describe('deriveTimeline', () => {
     const snap1 = deepSnapshot({ capturedAt: ISO, fingerprint: 'same' });
     const snap2 = deepSnapshot({ capturedAt: LATER, fingerprint: 'same' });
     const timeline = display.deriveTimeline([snap1, snap2]);
-    assert.equal(timeline[0].hasIncomparableChange, false);
-    assert.equal(timeline[0].changes, null);
+    assert.equal(requiredValue(timeline[0]).hasIncomparableChange, false);
+    assert.equal(requiredValue(timeline[0]).changes, null);
   });
 });
 

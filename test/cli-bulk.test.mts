@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable, Writable } from 'node:stream';
@@ -184,8 +185,8 @@ describe('bulk lookup execution', () => {
       },
     });
     assert.deepEqual(results.map((item) => item.ok), [true, false, false]);
-    const classificationFailure = results[1];
-    const lookupFailure = results[2];
+    const classificationFailure = requiredValue(results[1]);
+    const lookupFailure = requiredValue(results[2]);
     assert.equal(classificationFailure.ok, false);
     assert.equal(lookupFailure.ok, false);
     assert.ok(classificationFailure.error.length <= 300);

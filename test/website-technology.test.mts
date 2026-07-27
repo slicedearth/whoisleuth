@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -95,7 +96,7 @@ describe('website technology profile', () => {
     const result = analyze({ resourceOrigins: ['https://assets.wixstatic.com'] });
     const item = finding(result, 'wix');
     assert.equal(item.confidence, 'medium');
-    assert.equal(item.evidence[0].source, 'resource origin');
+    assert.equal(requiredValue(item.evidence[0]).source, 'resource origin');
   });
 
   test('recognizes bounded static framework markers case-insensitively', () => {
@@ -140,10 +141,10 @@ describe('website technology profile', () => {
     ];
 
     for (const [generator, id, category] of cases) {
-      const item = finding(analyze({ generator }), id);
-      assert.equal(item.category, category, generator);
-      assert.equal(item.confidence, 'high', generator);
-      assert.equal(item.evidence[0].source, 'generator metadata', generator);
+      const item = finding(analyze({ generator }), requiredValue(id));
+      assert.equal(item.category, category, requiredValue(generator));
+      assert.equal(item.confidence, 'high', requiredValue(generator));
+      assert.equal(requiredValue(item.evidence[0]).source, 'generator metadata', requiredValue(generator));
     }
   });
 

@@ -124,7 +124,7 @@ describe('CT history retention and recovery', () => {
     assert.equal(store.entries.length, 1);
     assert.deepStrictEqual(store.entries[0].domains, ['a.example']);
     assert.deepStrictEqual(Object.keys(store.entries[0]).sort(), ['baselineAt', 'domains', 'history', 'query', 'updatedAt']);
-    assert.deepStrictEqual(Object.keys(store.entries[0].history[0]).sort(), ['certificateCount', 'checkedAt', 'newCount', 'newDomains', 'resultCount', 'truncated']);
+    assert.deepStrictEqual(Object.keys(requiredValue(requiredValue(store.entries[0]).history[0])).sort(), ['certificateCount', 'checkedAt', 'newCount', 'newDomains', 'resultCount', 'truncated']);
   });
 
   test('duplicate query entries resolve to the most recently updated record', () => {

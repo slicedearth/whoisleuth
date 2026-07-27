@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -81,7 +82,7 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
     };
     const store = createNetlifyBlobVersionedTextStore(blobs);
     assert.equal(await store.compareAndSet('state', '"stale"', 'ciphertext'), false);
-    assert.deepEqual(blobs.writes[0].options, { onlyIfMatch: '"stale"' });
+    assert.deepEqual(requiredValue(blobs.writes[0]).options, { onlyIfMatch: '"stale"' });
   });
 
   test('rejects malformed stores, Blob keys, entries, versions, values, and write responses', async () => {

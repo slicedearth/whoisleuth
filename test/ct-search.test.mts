@@ -88,7 +88,7 @@ describe('legacy domains', () => {
     ]);
     assert.deepStrictEqual(result.domains, ['192.168.0.1', 'example.com']);
     assert.equal(result.matches.length, 1);
-    assert.equal(result.matches[0].domain, 'example.com');
+    assert.equal(requiredValue(result.matches[0]).domain, 'example.com');
   });
 });
 
@@ -168,8 +168,8 @@ describe('searchCertificateTransparency', () => {
     assert.equal(result.certCount, 2);
     assert.deepStrictEqual(result.domains, ['a.example.com', 'b.example.com']);
     assert.equal(result.matches.length, 1);
-    assert.equal(result.matches[0].domain, 'example.com');
-    assert.equal(result.matches[0].certificateCount, 1);
+    assert.equal(requiredValue(result.matches[0]).domain, 'example.com');
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 1);
     assert.equal(result.observation.complete, true);
     assert.equal(result.observation.diagnostics.certificateRows, 2);
   });
@@ -263,9 +263,9 @@ describe('registrable-domain grouping', () => {
       row({ id: 1, name_value: 'a.example.com\nb.example.com\nc.example.com', common_name: '' }),
     ]);
     assert.equal(result.matches.length, 1);
-    assert.equal(result.matches[0].domain, 'example.com');
-    assert.deepStrictEqual(result.matches[0].hostnames, ['a.example.com', 'b.example.com', 'c.example.com']);
-    assert.equal(result.matches[0].certificateCount, 1);
+    assert.equal(requiredValue(result.matches[0]).domain, 'example.com');
+    assert.deepStrictEqual(requiredValue(result.matches[0]).hostnames, ['a.example.com', 'b.example.com', 'c.example.com']);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 1);
   });
 
   test('one certificate spanning two registrable domains', () => {
@@ -274,8 +274,8 @@ describe('registrable-domain grouping', () => {
     ]);
     const matchDomains = result.matches.map((m) => m.domain).sort();
     assert.deepStrictEqual(matchDomains, ['example.com', 'other.invalid']);
-    assert.equal(result.matches[0].certificateCount, 1);
-    assert.equal(result.matches[1].certificateCount, 1);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 1);
+    assert.equal(requiredValue(result.matches[1]).certificateCount, 1);
   });
 
   test('subdomains preserved while grouped by registrable domain', () => {
@@ -283,9 +283,9 @@ describe('registrable-domain grouping', () => {
       row({ id: 1, name_value: 'deep.sub.example.com\nlogin.example.com', common_name: 'www.example.com' }),
     ]);
     assert.equal(result.matches.length, 1);
-    assert.equal(result.matches[0].domain, 'example.com');
+    assert.equal(requiredValue(result.matches[0]).domain, 'example.com');
     assert.deepStrictEqual(
-      result.matches[0].hostnames,
+      requiredValue(result.matches[0]).hostnames,
       ['deep.sub.example.com', 'login.example.com', 'www.example.com'],
     );
   });
@@ -295,8 +295,8 @@ describe('registrable-domain grouping', () => {
       row({ id: 1, name_value: 'login.example.co.uk\nwww.example.co.uk\nexample.co.uk', common_name: '' }),
     ]);
     assert.equal(result.matches.length, 1);
-    assert.equal(result.matches[0].domain, 'example.co.uk');
-    assert.deepStrictEqual(result.matches[0].hostnames, ['example.co.uk', 'login.example.co.uk', 'www.example.co.uk']);
+    assert.equal(requiredValue(result.matches[0]).domain, 'example.co.uk');
+    assert.deepStrictEqual(requiredValue(result.matches[0]).hostnames, ['example.co.uk', 'login.example.co.uk', 'www.example.co.uk']);
   });
 
   test('bare public suffix co.uk excluded from structured matches', () => {
@@ -313,7 +313,7 @@ describe('registrable-domain grouping', () => {
       row({ name_value: '192.168.0.1\ninvalid_host\nexample.com', common_name: '' }),
     ]);
     assert.equal(result.matches.length, 1);
-    assert.equal(result.matches[0].domain, 'example.com');
+    assert.equal(requiredValue(result.matches[0]).domain, 'example.com');
   });
 });
 
@@ -328,7 +328,7 @@ describe('certificate identity', () => {
       row({ id: 1, name_value: 'b.example.com', common_name: '' }),
       row({ id: 2, name_value: 'c.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('numeric string id equivalent to number id', () => {
@@ -336,7 +336,7 @@ describe('certificate identity', () => {
       row({ id: 12345, name_value: 'a.example.com', common_name: '' }),
       row({ id: '12345', name_value: 'b.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].certificateCount, 1);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 1);
   });
 
   test('leading zeros canonicalised', () => {
@@ -344,7 +344,7 @@ describe('certificate identity', () => {
       row({ id: '00123', name_value: 'a.example.com', common_name: '' }),
       row({ id: 123, name_value: 'b.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].certificateCount, 1);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 1);
   });
 
   test('ids above MAX_SAFE_INTEGER remain distinct', () => {
@@ -355,7 +355,7 @@ describe('certificate identity', () => {
       row({ id: '9007199254740993', name_value: 'b.example.com', common_name: '' }),
       row({ id: '9007199254740994', name_value: 'c.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].certificateCount, 3);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 3);
   });
 
   test('overlong digit string rejected', () => {
@@ -365,7 +365,7 @@ describe('certificate identity', () => {
       row({ id: overlong, issuer_ca_id: null, serial_number: null, name_value: 'b.example.com', common_name: '' }),
     ]);
     // Both fall through to row-level identity.
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('raw id length is bounded before trimming', () => {
@@ -374,7 +374,7 @@ describe('certificate identity', () => {
       row({ id: padded, issuer_ca_id: null, serial_number: null, name_value: 'a.example.com', common_name: '' }),
       row({ id: padded, issuer_ca_id: null, serial_number: null, name_value: 'b.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('zero and negative ids rejected', () => {
@@ -384,7 +384,7 @@ describe('certificate identity', () => {
       row({ id: -1, issuer_ca_id: null, serial_number: null, name_value: 'c.example.com', common_name: '' }),
     ]);
     // All fall through to row-level identity.
-    assert.equal(result.matches[0].certificateCount, 3);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 3);
   });
 
   test('non-integer number id rejected', () => {
@@ -392,7 +392,7 @@ describe('certificate identity', () => {
       row({ id: 1.5, issuer_ca_id: null, serial_number: null, name_value: 'a.example.com', common_name: '' }),
       row({ id: 1.5, issuer_ca_id: null, serial_number: null, name_value: 'b.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('issuer-serial composite fallback', () => {
@@ -403,7 +403,7 @@ describe('certificate identity', () => {
       row({ id: null, issuer_ca_id: 200, serial_number: 'abc', name_value: 'd.example.com', common_name: '' }),
     ]);
     // First three share same issuer+serial (case-insensitive serial), fourth is different.
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('irrelevant serial_number rejected', () => {
@@ -412,7 +412,7 @@ describe('certificate identity', () => {
       row({ id: null, issuer_ca_id: 100, serial_number: '\x00control', name_value: 'b.example.com', common_name: '' }),
     ]);
     // Control chars → serial rejected → both fall to row identity.
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('malformed hex serial falls through to row identity', () => {
@@ -421,7 +421,7 @@ describe('certificate identity', () => {
       row({ id: null, issuer_ca_id: 100, serial_number: 'not-hex!', name_value: 'b.example.com', common_name: '' }),
     ]);
     // Malformed serial → both fall to row identity → 2 distinct certs.
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('serial with embedded newline rejected before trim', () => {
@@ -430,7 +430,7 @@ describe('certificate identity', () => {
       row({ id: null, issuer_ca_id: 100, serial_number: '\nabc\n', name_value: 'b.example.com', common_name: '' }),
     ]);
     // Control chars in original string → serial rejected → both fall to row identity.
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('raw serial length is bounded before trimming', () => {
@@ -439,7 +439,7 @@ describe('certificate identity', () => {
       row({ id: null, issuer_ca_id: 100, serial_number: padded, name_value: 'a.example.com', common_name: '' }),
       row({ id: null, issuer_ca_id: 100, serial_number: padded, name_value: 'b.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('row fallback identity', () => {
@@ -447,7 +447,7 @@ describe('certificate identity', () => {
       { name_value: 'a.example.com', common_name: '' },
       { name_value: 'b.example.com', common_name: '' },
     ]);
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 
   test('namespace separation prevents collision', () => {
@@ -461,7 +461,7 @@ describe('certificate identity', () => {
       row({ id: 1, name_value: 'a.example.com', common_name: '' }),
       { name_value: 'b.example.com', common_name: '' }, // row index 1 → row:1
     ]);
-    assert.equal(result.matches[0].certificateCount, 2);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 2);
   });
 });
 
@@ -476,8 +476,8 @@ describe('timestamps', () => {
       row({ id: 2, name_value: 'a.example.com', entry_timestamp: '2026-01-01T00:00:00.000Z' }),
       row({ id: 3, name_value: 'a.example.com', entry_timestamp: '2026-06-01T00:00:00.000Z' }),
     ]);
-    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-01-01'));
-    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-06-01'));
+    assert.ok(requiredValue(requiredValue(result.matches[0]).firstObservedAt).includes('2026-01-01'));
+    assert.ok(requiredValue(requiredValue(result.matches[0]).lastObservedAt).includes('2026-06-01'));
   });
 
   test('invalid timestamps ignored', () => {
@@ -489,16 +489,16 @@ describe('timestamps', () => {
       row({ id: 5, name_value: 'a.example.com', entry_timestamp: true }),
     ]);
     // Only the one valid timestamp.
-    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-06-01'));
-    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-06-01'));
+    assert.ok(requiredValue(requiredValue(result.matches[0]).firstObservedAt).includes('2026-06-01'));
+    assert.ok(requiredValue(requiredValue(result.matches[0]).lastObservedAt).includes('2026-06-01'));
   });
 
   test('no valid timestamps → null', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: null }),
     ]);
-    assert.equal(result.matches[0].firstObservedAt, null);
-    assert.equal(result.matches[0].lastObservedAt, null);
+    assert.equal(requiredValue(result.matches[0]).firstObservedAt, null);
+    assert.equal(requiredValue(result.matches[0]).lastObservedAt, null);
   });
 
   test('timestamp aggregation inspects all rows including deduplicated certs', () => {
@@ -508,9 +508,9 @@ describe('timestamps', () => {
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: '2026-12-01T00:00:00.000Z' }),
     ]);
     // certificateCount is 1 (deduplicated), but both timestamps are used.
-    assert.equal(result.matches[0].certificateCount, 1);
-    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-01-01'));
-    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-12-01'));
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 1);
+    assert.ok(requiredValue(requiredValue(result.matches[0]).firstObservedAt).includes('2026-01-01'));
+    assert.ok(requiredValue(requiredValue(result.matches[0]).lastObservedAt).includes('2026-12-01'));
   });
 
   test('timestamp at length boundary accepted', () => {
@@ -521,7 +521,7 @@ describe('timestamps', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: ts }),
     ]);
-    assert.notEqual(result.matches[0].firstObservedAt, null);
+    assert.notEqual(requiredValue(result.matches[0]).firstObservedAt, null);
   });
 
   test('overlong timestamp rejected', () => {
@@ -529,7 +529,7 @@ describe('timestamps', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: ts }),
     ]);
-    assert.equal(result.matches[0].firstObservedAt, null);
+    assert.equal(requiredValue(result.matches[0]).firstObservedAt, null);
   });
 
   test('raw timestamp length is bounded before trimming', () => {
@@ -537,28 +537,28 @@ describe('timestamps', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: ts }),
     ]);
-    assert.equal(result.matches[0].firstObservedAt, null);
+    assert.equal(requiredValue(result.matches[0]).firstObservedAt, null);
   });
 
   test('timestamp with leading newline rejected', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: '\n2026-01-01T00:00:00.000Z' }),
     ]);
-    assert.equal(result.matches[0].firstObservedAt, null);
+    assert.equal(requiredValue(result.matches[0]).firstObservedAt, null);
   });
 
   test('timestamp with trailing tab rejected', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: '2026-01-01T00:00:00.000Z\t' }),
     ]);
-    assert.equal(result.matches[0].firstObservedAt, null);
+    assert.equal(requiredValue(result.matches[0]).firstObservedAt, null);
   });
 
   test('ordinary crt.sh timestamp still accepted', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'a.example.com', entry_timestamp: '2026-01-15T12:00:00.000' }),
     ]);
-    assert.notEqual(result.matches[0].firstObservedAt, null);
+    assert.notEqual(requiredValue(result.matches[0]).firstObservedAt, null);
   });
 });
 
@@ -573,8 +573,8 @@ describe('deterministic ordering', () => {
       row({ id: 2, name_value: 'b.other.org', common_name: '', entry_timestamp: '2026-06-01T00:00:00.000Z' }),
     ]);
     // other.org has newer timestamp → should be first.
-    assert.equal(result.matches[0].domain, 'other.org');
-    assert.equal(result.matches[1].domain, 'example.com');
+    assert.equal(requiredValue(result.matches[0]).domain, 'other.org');
+    assert.equal(requiredValue(result.matches[1]).domain, 'example.com');
   });
 
   test('null timestamps sorted last', () => {
@@ -582,8 +582,8 @@ describe('deterministic ordering', () => {
       row({ id: 1, name_value: 'a.com', common_name: '', entry_timestamp: '2026-01-01T00:00:00.000Z' }),
       row({ id: 2, name_value: 'b.com', common_name: '', entry_timestamp: null }),
     ]);
-    assert.equal(result.matches[0].domain, 'a.com');
-    assert.equal(result.matches[1].domain, 'b.com');
+    assert.equal(requiredValue(result.matches[0]).domain, 'a.com');
+    assert.equal(requiredValue(result.matches[1]).domain, 'b.com');
   });
 
   test('equal timestamps fall back to domain name', () => {
@@ -593,15 +593,15 @@ describe('deterministic ordering', () => {
       row({ id: 2, name_value: 'a.com', common_name: '', entry_timestamp: ts }),
     ]);
     // Both have the same timestamp; tiebreaker is domain name alphabetically.
-    assert.equal(result.matches[0].domain, 'a.com');
-    assert.equal(result.matches[1].domain, 'z.com');
+    assert.equal(requiredValue(result.matches[0]).domain, 'a.com');
+    assert.equal(requiredValue(result.matches[1]).domain, 'z.com');
   });
 
   test('hostnames sorted alphabetically within match', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: 'z.example.com\na.example.com\nm.example.com', common_name: '' }),
     ]);
-    assert.deepStrictEqual(result.matches[0].hostnames, ['a.example.com', 'm.example.com', 'z.example.com']);
+    assert.deepStrictEqual(requiredValue(result.matches[0]).hostnames, ['a.example.com', 'm.example.com', 'z.example.com']);
   });
 });
 
@@ -618,7 +618,7 @@ describe('bounds', () => {
     const result = summarizeCtResults([
       row({ id: 1, name_value: names.join('\n'), common_name: '' }),
     ]);
-    assert.equal(result.matches[0].hostnames.length, 50);
+    assert.equal(requiredValue(result.matches[0]).hostnames.length, 50);
     assert.equal(result.truncated, true);
   });
 
@@ -642,8 +642,8 @@ describe('bounds', () => {
       row({ id: 2, name_value: 'host0.example.com', common_name: '' }),
       row({ id: 3, name_value: 'host0.example.com', common_name: '' }),
     ]);
-    assert.equal(result.matches[0].hostnames.length, 50);
-    assert.equal(result.matches[0].certificateCount, 3);
+    assert.equal(requiredValue(result.matches[0]).hostnames.length, 50);
+    assert.equal(requiredValue(result.matches[0]).certificateCount, 3);
   });
 
   test('hostname truncation does not alter timestamp aggregation', () => {
@@ -655,8 +655,8 @@ describe('bounds', () => {
       row({ id: 1, name_value: names.join('\n'), entry_timestamp: '2026-01-01T00:00:00.000Z' }),
       row({ id: 2, name_value: 'host0.example.com', entry_timestamp: '2026-12-01T00:00:00.000Z' }),
     ]);
-    assert.ok(requiredValue(result.matches[0].firstObservedAt).includes('2026-01-01'));
-    assert.ok(requiredValue(result.matches[0].lastObservedAt).includes('2026-12-01'));
+    assert.ok(requiredValue(requiredValue(result.matches[0]).firstObservedAt).includes('2026-01-01'));
+    assert.ok(requiredValue(requiredValue(result.matches[0]).lastObservedAt).includes('2026-12-01'));
   });
 
   test('no-registrable-domain exclusions do not set truncated', () => {
@@ -692,6 +692,6 @@ describe('invalid structured values do not affect legacy', () => {
     ]);
     assert.deepStrictEqual(result.domains, ['example.com']);
     assert.equal(result.matches.length, 1);
-    assert.equal(result.matches[0].domain, 'example.com');
+    assert.equal(requiredValue(result.matches[0]).domain, 'example.com');
   });
 });

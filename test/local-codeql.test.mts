@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -133,11 +134,11 @@ describe('local CodeQL SARIF parsing', () => {
         },
       }],
     })]));
-    assert.equal(parsed.findings[0].ruleId, 'bad rule');
-    assert.equal(parsed.findings[0].level, 'warning');
-    assert.ok(parsed.findings[0].message.length <= 500);
-    assert.equal(parsed.findings[0].file, 'lib/file.mts');
-    assert.equal(parsed.findings[0].line, null);
+    assert.equal(requiredValue(parsed.findings[0]).ruleId, 'bad rule');
+    assert.equal(requiredValue(parsed.findings[0]).level, 'warning');
+    assert.ok(requiredValue(parsed.findings[0]).message.length <= 500);
+    assert.equal(requiredValue(parsed.findings[0]).file, 'lib/file.mts');
+    assert.equal(requiredValue(parsed.findings[0]).line, null);
   });
 
   test('caps parsed findings while retaining the total count', () => {

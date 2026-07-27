@@ -130,7 +130,7 @@ describe('case creation and updates', () => {
 
   test('updateCase changes fields, appends a note, and bumps updatedAt', () => {
     const { cases } = model.openOrCreateCase([], { domain: 'bad.example' }, ISO);
-    const { record } = model.updateCase(cases, cases[0].id, { status: 'escalated', disposition: 'confirmed_abuse', note: 'escalating' }, LATER);
+    const { record } = model.updateCase(cases, requiredValue(cases[0]).id, { status: 'escalated', disposition: 'confirmed_abuse', note: 'escalating' }, LATER);
     assert.equal(record.status, 'escalated');
     assert.equal(record.disposition, 'confirmed_abuse');
     assert.equal(requiredValue(record.notes.at(-1)).body, 'escalating');
@@ -140,7 +140,7 @@ describe('case creation and updates', () => {
 
   test('updateCase rejects an empty note and a missing case', () => {
     const { cases } = model.openOrCreateCase([], { domain: 'bad.example' }, ISO);
-    assert.throws(() => model.updateCase(cases, cases[0].id, { note: '   ' }), /empty/i);
+    assert.throws(() => model.updateCase(cases, requiredValue(cases[0]).id, { note: '   ' }), /empty/i);
     assert.throws(() => model.updateCase(cases, 'nope', { status: 'resolved' }), /no longer exists/i);
   });
 });
@@ -161,7 +161,7 @@ describe('duplicate-domain handling', () => {
       { domain: 'DUP.example', status: 'resolved', updatedAt: LATER },
     ]);
     assert.equal(store.cases.length, 1);
-    assert.equal(store.cases[0].status, 'resolved');
+    assert.equal(requiredValue(store.cases[0]).status, 'resolved');
   });
 });
 
@@ -181,7 +181,7 @@ describe('case ids are unique, stable, and safe', () => {
       { domain: 'b.example', id: 'dup', updatedAt: ISO },
     ]);
     assert.equal(store.cases.length, 2);
-    assert.notEqual(store.cases[0].id, store.cases[1].id);
+    assert.notEqual(requiredValue(store.cases[0]).id, requiredValue(store.cases[1]).id);
     assert.equal(new Set(store.cases.map((c) => c.id)).size, 2);
   });
 
@@ -212,7 +212,7 @@ describe('case ids are unique, stable, and safe', () => {
 
     const afterDelete = updated.filter((c) => c.id !== other.id);
     assert.equal(afterDelete.length, 1);
-    assert.equal(afterDelete[0].domain, 'b.example');
+    assert.equal(requiredValue(afterDelete[0]).domain, 'b.example');
   });
 });
 
@@ -236,7 +236,7 @@ describe('imports cannot reset local analyst decisions', () => {
 
   test('a minimal import (domain only) cannot reset status, disposition, source, or evidence', () => {
     const result = model.mergeCases(localCase(), caseExport([{ domain: 'shared.example' }]));
-    const merged = result.cases[0];
+    const merged = requiredValue(result.cases[0]);
     assert.equal(merged.status, 'escalated');
     assert.equal(merged.disposition, 'confirmed_abuse');
     assert.equal(merged.source, 'bulk');
@@ -249,7 +249,7 @@ describe('imports cannot reset local analyst decisions', () => {
     const result = model.mergeCases(localCase(), caseExport([
       { domain: 'shared.example', status: 'ARCHIVED', disposition: 'nope', source: 'satellite', evidence: 'garbage' },
     ]));
-    const merged = result.cases[0];
+    const merged = requiredValue(result.cases[0]);
     assert.equal(merged.status, 'escalated');
     assert.equal(merged.disposition, 'confirmed_abuse');
     assert.equal(merged.source, 'bulk');
@@ -261,7 +261,7 @@ describe('imports cannot reset local analyst decisions', () => {
     const result = model.mergeCases(localCase(), caseExport([
       { domain: 'shared.example', disposition: 'false_positive', updatedAt: '2026-07-01T00:00:00.000Z' },
     ]));
-    const merged = result.cases[0];
+    const merged = requiredValue(result.cases[0]);
     assert.equal(merged.status, 'escalated'); // omitted -> unchanged
     assert.equal(merged.disposition, 'false_positive'); // present + newer -> wins
   });
@@ -270,7 +270,7 @@ describe('imports cannot reset local analyst decisions', () => {
     const result = model.mergeCases(localCase(), caseExport([
       { domain: 'shared.example', status: 'resolved', disposition: 'closed_no_action', source: 'monitor', updatedAt: '2026-07-01T00:00:00.000Z' },
     ]));
-    const merged = result.cases[0];
+    const merged = requiredValue(result.cases[0]);
     assert.equal(merged.status, 'resolved');
     assert.equal(merged.disposition, 'closed_no_action');
     assert.equal(merged.source, 'monitor');
@@ -280,7 +280,7 @@ describe('imports cannot reset local analyst decisions', () => {
     const result = model.mergeCases(localCase(), caseExport([
       { domain: 'shared.example', status: 'new', disposition: 'unreviewed', source: 'lookup', updatedAt: ISO },
     ]));
-    const merged = result.cases[0];
+    const merged = requiredValue(result.cases[0]);
     assert.equal(merged.status, 'escalated');
     assert.equal(merged.disposition, 'confirmed_abuse');
     assert.equal(merged.source, 'bulk');
@@ -290,7 +290,7 @@ describe('imports cannot reset local analyst decisions', () => {
     const result = model.mergeCases(localCase(), caseExport([
       { domain: 'shared.example', tags: ['imported'], notes: [{ id: 'imp', body: 'imported note', createdAt: ISO }], updatedAt: ISO },
     ]));
-    const merged = result.cases[0];
+    const merged = requiredValue(result.cases[0]);
     assert.deepEqual(new Set(merged.tags), new Set(['local', 'imported']));
     assert.equal(merged.notes.length, 2);
   });
@@ -313,9 +313,9 @@ describe('note and tag limits', () => {
   test('updateCase refuses to exceed the per-case note bound', () => {
     let cases = model.openOrCreateCase([], { domain: 'bad.example' }, ISO).cases;
     for (let i = 0; i < model.MAX_NOTES_PER_CASE; i++) {
-      cases = model.updateCase(cases, cases[0].id, { note: `note ${i}` }, ISO).cases;
+      cases = model.updateCase(cases, requiredValue(cases[0]).id, { note: `note ${i}` }, ISO).cases;
     }
-    assert.throws(() => model.updateCase(cases, cases[0].id, { note: 'one too many' }, ISO), /limited to/i);
+    assert.throws(() => model.updateCase(cases, requiredValue(cases[0]).id, { note: 'one too many' }, ISO), /limited to/i);
   });
 
   test('store is bounded to MAX_CASES', () => {
@@ -487,14 +487,14 @@ describe('snapshot normalization', () => {
 describe('snapshot deduplication and timeline advance', () => {
   test('re-capturing identical evidence does not append a new entry', () => {
     let cases = model.openOrCreateCase([], { domain: 'dedup.example', source: 'lookup', evidence: deepEvidence() }, ISO).cases;
-    cases = model.updateCase(cases, cases[0].id, { evidence: deepEvidence() }, LATER).cases;
-    assert.equal(cases[0].evidenceHistory.length, 1);
+    cases = model.updateCase(cases, requiredValue(cases[0]).id, { evidence: deepEvidence() }, LATER).cases;
+    assert.equal(requiredValue(cases[0]).evidenceHistory.length, 1);
   });
 
   test('a later identical capture advances capturedAt but keeps firstCapturedAt', () => {
     let cases = model.openOrCreateCase([], { domain: 'dedup.example', source: 'lookup', evidence: deepEvidence() }, ISO).cases;
-    cases = model.updateCase(cases, cases[0].id, { evidence: deepEvidence() }, LATER).cases;
-    const snap = cases[0].evidenceHistory[0];
+    cases = model.updateCase(cases, requiredValue(cases[0]).id, { evidence: deepEvidence() }, LATER).cases;
+    const snap = requiredValue(requiredValue(cases[0]).evidenceHistory[0]);
     assert.equal(snap.firstCapturedAt, ISO);
     assert.equal(snap.capturedAt, LATER);
   });
@@ -508,14 +508,14 @@ describe('snapshot deduplication and timeline advance', () => {
       { source: 'lookup' },
     );
     assert.equal(history.length, 1);
-    assert.equal(history[0].firstCapturedAt, ISO);
-    assert.equal(history[0].capturedAt, LATER);
+    assert.equal(requiredValue(history[0]).firstCapturedAt, ISO);
+    assert.equal(requiredValue(history[0]).capturedAt, LATER);
   });
 
   test('materially different evidence creates a second snapshot', () => {
     let cases = model.openOrCreateCase([], { domain: 'dedup.example', source: 'lookup', evidence: deepEvidence({ riskScore: 40 }) }, ISO).cases;
-    cases = model.updateCase(cases, cases[0].id, { evidence: deepEvidence({ riskScore: 85 }) }, LATER).cases;
-    assert.equal(cases[0].evidenceHistory.length, 2);
+    cases = model.updateCase(cases, requiredValue(cases[0]).id, { evidence: deepEvidence({ riskScore: 85 }) }, LATER).cases;
+    assert.equal(requiredValue(cases[0]).evidenceHistory.length, 2);
   });
 
   test('dedup compares full material, so a near-identical capture stays distinct', () => {
@@ -527,7 +527,7 @@ describe('snapshot deduplication and timeline advance', () => {
       { source: 'lookup' },
     );
     assert.equal(history.length, 2);
-    assert.notEqual(history[0].fingerprint, history[1].fingerprint);
+    assert.notEqual(requiredValue(history[0]).fingerprint, requiredValue(history[1]).fingerprint);
   });
 
   test('a more informative source wins when identical evidence is re-seen', () => {
@@ -539,7 +539,7 @@ describe('snapshot deduplication and timeline advance', () => {
       { source: 'unknown' },
     );
     assert.equal(history.length, 1);
-    assert.equal(history[0].source, 'lookup');
+    assert.equal(requiredValue(history[0]).source, 'lookup');
   });
 
   test('a rank tie resolves deterministically regardless of input order', () => {
@@ -552,9 +552,9 @@ describe('snapshot deduplication and timeline advance', () => {
       [{ ...deepEvidence(), capturedAt: LATER, source: 'lookup' }, { ...deepEvidence(), capturedAt: ISO, source: 'bulk' }],
       { source: 'unknown' },
     );
-    assert.equal(forward[0].source, 'lookup');
-    assert.equal(reversed[0].source, 'lookup');
-    assert.equal(forward[0].source, reversed[0].source);
+    assert.equal(requiredValue(forward[0]).source, 'lookup');
+    assert.equal(requiredValue(reversed[0]).source, 'lookup');
+    assert.equal(requiredValue(forward[0]).source, requiredValue(reversed[0]).source);
   });
 
   test('a rank-and-time tie falls back to a stable lexical source', () => {
@@ -566,8 +566,8 @@ describe('snapshot deduplication and timeline advance', () => {
       [{ ...deepEvidence(), capturedAt: ISO, source: 'bulk' }, { ...deepEvidence(), capturedAt: ISO, source: 'lookup' }],
       { source: 'unknown' },
     );
-    assert.equal(forward[0].source, 'bulk'); // 'bulk' < 'lookup'
-    assert.equal(reversed[0].source, 'bulk');
+    assert.equal(requiredValue(forward[0]).source, 'bulk'); // 'bulk' < 'lookup'
+    assert.equal(requiredValue(reversed[0]).source, 'bulk');
   });
 
   test('identical factor sets in different order deduplicate to one entry', () => {
@@ -611,15 +611,15 @@ describe('evidence history retention', () => {
 describe('importing evidence history', () => {
   test('a current export round-trips its history and re-imports idempotently', () => {
     const source = model.openOrCreateCase([], { domain: 'rt.example', source: 'lookup', evidence: deepEvidence() }, ISO).cases;
-    const withSecond = model.updateCase(source, source[0].id, { evidence: deepEvidence({ riskScore: 90 }) }, LATER).cases;
+    const withSecond = model.updateCase(source, requiredValue(source[0]).id, { evidence: deepEvidence({ riskScore: 90 }) }, LATER).cases;
     const payload = model.buildCaseExport(withSecond, LATEST);
     assert.equal(payload.version, model.CASE_SCHEMA_VERSION);
 
     const first = model.mergeCases([], payload);
-    assert.equal(first.cases[0].evidenceHistory.length, 2);
+    assert.equal(requiredValue(first.cases[0]).evidenceHistory.length, 2);
     const second = model.mergeCases(first.cases, payload);
-    assert.equal(second.cases[0].evidenceHistory.length, 2);
-    assert.deepEqual(second.cases[0].evidenceHistory, first.cases[0].evidenceHistory);
+    assert.equal(requiredValue(second.cases[0]).evidenceHistory.length, 2);
+    assert.deepEqual(requiredValue(second.cases[0]).evidenceHistory, requiredValue(first.cases[0]).evidenceHistory);
   });
 
   test('the same material with a different snapshot id deduplicates on import', () => {
@@ -627,10 +627,10 @@ describe('importing evidence history', () => {
       { domain: 'shared.example', evidenceHistory: [{ ...deepEvidence(), id: 'ev-local', capturedAt: ISO }], updatedAt: ISO },
     ]).cases;
     const imported = caseExport([{ domain: 'shared.example', evidenceHistory: [{ ...deepEvidence(), id: 'ev-imported', capturedAt: LATER }], updatedAt: LATER }]);
-    const merged = model.mergeCases(local, imported).cases[0];
+    const merged = requiredValue(model.mergeCases(local, imported).cases[0]);
     assert.equal(merged.evidenceHistory.length, 1);
-    assert.equal(merged.evidenceHistory[0].firstCapturedAt, ISO);
-    assert.equal(merged.evidenceHistory[0].capturedAt, LATER);
+    assert.equal(requiredValue(merged.evidenceHistory[0]).firstCapturedAt, ISO);
+    assert.equal(requiredValue(merged.evidenceHistory[0]).capturedAt, LATER);
   });
 
   test('distinct imported evidence merges additively', () => {
@@ -638,14 +638,14 @@ describe('importing evidence history', () => {
       { domain: 'shared.example', evidenceHistory: [{ ...deepEvidence({ riskScore: 20 }), capturedAt: ISO }], updatedAt: ISO },
     ]).cases;
     const imported = caseExport([{ domain: 'shared.example', evidenceHistory: [{ ...deepEvidence({ riskScore: 88 }), capturedAt: LATER }], updatedAt: LATER }]);
-    const merged = model.mergeCases(local, imported).cases[0];
+    const merged = requiredValue(model.mergeCases(local, imported).cases[0]);
     assert.equal(merged.evidenceHistory.length, 2);
   });
 
   test('malformed snapshots are skipped and never create empty timeline entries', () => {
     const local = model.normalizeCaseStore([{ domain: 'shared.example', updatedAt: ISO }]).cases;
     const imported = caseExport([{ domain: 'shared.example', evidenceHistory: [null, 'garbage', {}, { availability: 'unknown' }, { rawWhois: 'x' }], updatedAt: LATER }]);
-    const merged = model.mergeCases(local, imported).cases[0];
+    const merged = requiredValue(model.mergeCases(local, imported).cases[0]);
     assert.deepEqual(merged.evidenceHistory, []);
   });
 
@@ -655,7 +655,7 @@ describe('importing evidence history', () => {
     ]).cases;
     // Imported snapshot has no capturedAt; the imported record is older (ISO).
     const imported = caseExport([{ domain: 'shared.example', evidenceHistory: [{ ...deepEvidence({ riskScore: 95 }) }], createdAt: ISO, updatedAt: ISO }]);
-    const merged = model.mergeCases(local, imported).cases[0];
+    const merged = requiredValue(model.mergeCases(local, imported).cases[0]);
     assert.equal(merged.evidenceHistory.length, 2);
     // The local capture (LATEST) is still the latest; the timestamp-less import fell back to ISO.
     assert.equal(requiredValue(model.latestCaseEvidence(merged)).riskScore, 30);
@@ -667,8 +667,8 @@ describe('importing evidence history', () => {
       { domain: 'shared.example', id: 'local-1', evidenceHistory: [{ ...deepEvidence(), capturedAt: ISO }], updatedAt: ISO },
     ]).cases;
     const payload = model.buildCaseExport(local, LATER);
-    const once = model.mergeCases(local, payload).cases[0];
-    const twice = model.mergeCases([once], payload).cases[0];
+    const once = requiredValue(model.mergeCases(local, payload).cases[0]);
+    const twice = requiredValue(model.mergeCases([once], payload).cases[0]);
     assert.equal(once.id, 'local-1');
     assert.equal(twice.id, 'local-1');
     assert.equal(twice.evidenceHistory.length, 1);
@@ -919,8 +919,8 @@ describe('rejects unsupported future-schema imports', () => {
     );
     // Local cases are untouched (nothing merged, nothing reset).
     assert.equal(local.length, 1);
-    assert.equal(local[0].status, 'escalated');
-    assert.equal(local[0].disposition, 'confirmed_abuse');
+    assert.equal(requiredValue(local[0]).status, 'escalated');
+    assert.equal(requiredValue(local[0]).disposition, 'confirmed_abuse');
   });
 
   test('only the current exported envelope is importable', () => {
@@ -937,25 +937,25 @@ describe('imported note normalization is deterministic', () => {
       version: 2,
       cases: [{ domain: 'notes.example', createdAt: ISO, updatedAt: ISO, notes: [{ body: 'a timeless observation' }] }],
     };
-    const once = model.mergeCases([], payload).cases[0];
+    const once = requiredValue(model.mergeCases([], payload).cases[0]);
     assert.equal(once.notes.length, 1);
-    assert.equal(once.notes[0].createdAt, ISO); // record fallback, never the current time
+    assert.equal(requiredValue(once.notes[0]).createdAt, ISO); // record fallback, never the current time
 
     // Re-importing the same payload must not create a duplicate or a newer note.
-    const twice = model.mergeCases([once], payload).cases[0];
+    const twice = requiredValue(model.mergeCases([once], payload).cases[0]);
     assert.equal(twice.notes.length, 1);
     assert.deepEqual(twice.notes, once.notes);
   });
 
   test('an imported note with no placeable timestamp at all is skipped, not stamped', () => {
     const payload = caseExport([{ domain: 'notes.example', notes: [{ body: 'unplaceable' }] }]);
-    const merged = model.mergeCases([], payload).cases[0];
+    const merged = requiredValue(model.mergeCases([], payload).cases[0]);
     assert.deepEqual(merged.notes, []);
   });
 
   test('locally-created notes still use the genuine current time', () => {
     const record = model.createCase({ domain: 'local.example', note: 'fresh note' }, NOW);
-    assert.equal(record.notes[0].createdAt, NOW);
+    assert.equal(requiredValue(record.notes[0]).createdAt, NOW);
   });
 });
 
@@ -988,7 +988,7 @@ describe('store loading and corruption recovery', () => {
       { nope: true },
     ]);
     assert.equal(store.cases.length, 1);
-    assert.equal(store.cases[0].domain, 'good.example');
+    assert.equal(requiredValue(store.cases[0]).domain, 'good.example');
   });
 
   test('malformed timestamps and notes are repaired, not fatal', () => {
@@ -996,9 +996,9 @@ describe('store loading and corruption recovery', () => {
       { domain: 'bad.example', createdAt: 'not-a-date', updatedAt: 12345, notes: [{ body: 'kept' }, { body: '' }, null, 'x'] },
     ]);
     assert.equal(store.cases.length, 1);
-    assert.equal(store.cases[0].notes.length, 1);
-    assert.ok(!Number.isNaN(Date.parse(store.cases[0].createdAt)));
-    assert.ok(!Number.isNaN(Date.parse(store.cases[0].updatedAt)));
+    assert.equal(requiredValue(store.cases[0]).notes.length, 1);
+    assert.ok(!Number.isNaN(Date.parse(requiredValue(store.cases[0]).createdAt)));
+    assert.ok(!Number.isNaN(Date.parse(requiredValue(store.cases[0]).updatedAt)));
   });
 });
 
@@ -1021,7 +1021,7 @@ describe('import merge', () => {
     const local = model.normalizeCaseStore([{ domain: 'shared.example', status: 'escalated', disposition: 'confirmed_abuse', updatedAt: LATER }]).cases;
     const imported = caseExport([{ domain: 'shared.example', status: 'new', disposition: 'unreviewed', updatedAt: ISO }]);
     const result = model.mergeCases(local, imported);
-    const shared = result.cases[0];
+    const shared = requiredValue(result.cases[0]);
     assert.equal(shared.status, 'escalated');
     assert.equal(shared.disposition, 'confirmed_abuse');
   });
@@ -1034,7 +1034,7 @@ describe('import merge', () => {
       { domain: 'shared.example', tags: ['imported'], notes: [{ id: 'n2', body: 'imported note', createdAt: LATER }], updatedAt: LATER },
     ]);
     const result = model.mergeCases(local, imported);
-    const shared = result.cases[0];
+    const shared = requiredValue(result.cases[0]);
     assert.deepEqual(new Set(shared.tags), new Set(['local', 'imported']));
     assert.equal(shared.notes.length, 2);
   });
@@ -1045,7 +1045,7 @@ describe('import merge', () => {
     const once = model.mergeCases(local, imported).cases;
     const twice = model.mergeCases(once, imported).cases;
     assert.equal(twice.length, 1);
-    assert.deepEqual(twice[0].tags, once[0].tags);
+    assert.deepEqual(requiredValue(twice[0]).tags, requiredValue(once[0]).tags);
   });
 
   test('skips imported cases that would exceed the store bound', () => {
@@ -1066,7 +1066,7 @@ describe('export shape', () => {
     assert.equal(payload.version, model.CASE_SCHEMA_VERSION);
     assert.equal(payload.exportedAt, LATER);
     assert.equal(payload.cases.length, 1);
-    assert.equal(payload.cases[0].domain, 'bad.example');
+    assert.equal(requiredValue(payload.cases[0]).domain, 'bad.example');
   });
 
   test('an exported payload re-imports to an equivalent store', () => {
@@ -1074,8 +1074,8 @@ describe('export shape', () => {
     const payload = model.buildCaseExport(original, ISO);
     const reimported = model.mergeCases([], payload).cases;
     assert.equal(reimported.length, 1);
-    assert.equal(reimported[0].domain, 'roundtrip.example');
-    assert.equal(reimported[0].status, 'monitoring');
-    assert.equal(reimported[0].notes.length, 1);
+    assert.equal(requiredValue(reimported[0]).domain, 'roundtrip.example');
+    assert.equal(requiredValue(reimported[0]).status, 'monitoring');
+    assert.equal(requiredValue(reimported[0]).notes.length, 1);
   });
 });

@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -50,15 +51,15 @@ test('normalizes known shortlist evidence and discards arbitrary imported fields
   assert.ok(typeof registrarName === 'string');
   assert.equal(registrarName.length, 300);
   assert.equal(normalized.riskFactors.length, 1);
-  assert.equal(normalized.riskFactors[0].label.length, 200);
-  assert.equal(normalized.riskFactors[0].points, 100);
+  assert.equal(requiredValue(normalized.riskFactors[0]).label.length, 200);
+  assert.equal(requiredValue(normalized.riskFactors[0]).points, 100);
   assert.equal(normalized.rawWhois, undefined);
 });
 
 test('internal record collections normalize into the current envelope', () => {
   const store = normalizeShortlistStore([record()]);
   assert.equal(store.version, SHORTLIST_SCHEMA_VERSION);
-  assert.equal(store.entries[0].domain, 'example.invalid');
+  assert.equal(requiredValue(store.entries[0]).domain, 'example.invalid');
 });
 
 test('versioned stores normalize, deduplicate, and retain the last bounded record', () => {
@@ -70,7 +71,7 @@ test('versioned stores normalize, deduplicate, and retain the last bounded recor
   const store = normalizeShortlistStore(source);
   assert.equal(shortlistStoreVersion(source), SHORTLIST_SCHEMA_VERSION);
   assert.equal(store.entries.length, 1);
-  assert.equal(store.entries[0].riskScore, 80);
+  assert.equal(requiredValue(store.entries[0]).riskScore, 80);
 });
 
 test('store normalization bounds traversal and retained entries', () => {
@@ -102,8 +103,8 @@ test('imports the current portable envelope without treating export metadata as 
   const portable = buildShortlistExport([record('portable.invalid')], NOW);
   const result = mergeShortlistStores([], portable);
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 0, skipped: 0 });
-  assert.equal(result.entries[0].domain, 'portable.invalid');
-  assert.equal(result.entries[0].exportedAt, undefined);
+  assert.equal(requiredValue(result.entries[0]).domain, 'portable.invalid');
+  assert.equal(requiredValue(result.entries[0]).exportedAt, undefined);
 });
 
 test('imports reject malformed and future structured exports', () => {
@@ -140,5 +141,5 @@ test('portable exports carry schema identity and a deterministic timestamp', () 
   assert.equal(result.schema, SHORTLIST_SCHEMA);
   assert.equal(result.version, SHORTLIST_SCHEMA_VERSION);
   assert.equal(result.exportedAt, NOW);
-  assert.equal(result.entries[0].domain, 'example.invalid');
+  assert.equal(requiredValue(result.entries[0]).domain, 'example.invalid');
 });

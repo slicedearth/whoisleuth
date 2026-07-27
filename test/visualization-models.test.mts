@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -28,7 +29,7 @@ describe('bounded visualization models', () => {
 
     assert.equal(projected.events.length, MAX_LIFECYCLE_EVENTS);
     assert.equal(projected.truncated, true);
-    assert.equal(projected.events[0].id, 'event-0');
+    assert.equal(requiredValue(projected.events[0]).id, 'event-0');
     assert.ok(projected.events.every((event) => Number.isFinite(event.x)));
   });
 
@@ -43,8 +44,8 @@ describe('bounded visualization models', () => {
 
     assert.equal(projected.nodes.length, MAX_REDIRECT_NODES);
     assert.equal(projected.truncated, true);
-    assert.equal(projected.nodes[0].label, 'source-0.example/path');
-    assert.equal(projected.nodes[1].queryOmitted, true);
+    assert.equal(requiredValue(projected.nodes[0]).label, 'source-0.example/path');
+    assert.equal(requiredValue(projected.nodes[1]).queryOmitted, true);
     assert.ok(projected.edges.every((edge) => edge.toX > edge.fromX));
   });
 

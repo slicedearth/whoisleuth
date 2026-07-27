@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -33,8 +34,8 @@ describe('bounded browser-library profile', () => {
       apparentVersion: '1.12.4',
       detectionMethods: ['script URL'],
     }]);
-    assert.ok(profile.findings[0].advisoryCount > 0);
-    assert.ok(profile.findings[0].advisoryIdentifiers.includes('CVE-2020-11022'));
+    assert.ok(requiredValue(profile.findings[0]).advisoryCount > 0);
+    assert.ok(requiredValue(profile.findings[0]).advisoryIdentifiers.includes('CVE-2020-11022'));
     assert.doesNotMatch(JSON.stringify(profile), /cdn\.example|private-marker|jquery\.min\.js/);
   });
 
@@ -56,7 +57,7 @@ describe('bounded browser-library profile', () => {
       { id: 'angularjs', apparentVersion: '1.7.0', detectionMethods: ['script filename'] },
       { id: 'jquery', apparentVersion: '3.7.1', detectionMethods: ['inline signature'] },
     ]);
-    assert.equal(profile.findings[1].advisoryCount, 0);
+    assert.equal(requiredValue(profile.findings[1]).advisoryCount, 0);
   });
 
   test('keeps an unmatched page neutral rather than claiming no libraries exist', () => {

@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -208,9 +209,9 @@ test('records opened stages separately from outcomes and does not mutate source 
   const approved = approveInvestigationGuideStage(original, 'lookup', APPROVED_AT);
   const visited = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
   assert.ok(visited);
-  assert.equal(original.stages[0].openedAt, null);
-  assert.equal(visited.stages[0].openedAt, OPENED_AT);
-  assert.equal(visited.stages[0].outcome, 'pending');
+  assert.equal(requiredValue(original.stages[0]).openedAt, null);
+  assert.equal(requiredValue(visited.stages[0]).openedAt, OPENED_AT);
+  assert.equal(requiredValue(visited.stages[0]).outcome, 'pending');
   assert.deepEqual(visitInvestigationGuide(visited, '/lookup', COMPLETED_AT), visited);
   assert.deepEqual(visitInvestigationGuide(visited, '/discover', COMPLETED_AT), visited);
 });

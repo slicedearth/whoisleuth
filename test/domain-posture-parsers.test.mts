@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
@@ -44,7 +45,7 @@ describe('SPF', () => {
   test('rejects multiple SPF records', () => {
     const parsed = parseSpfRecords(['v=spf1 -all', 'v=spf1 include:example.net -all']);
     assert.equal(parsed.valid, false);
-    assert.match(parsed.issues[0], /Multiple SPF/);
+    assert.match(requiredValue(parsed.issues[0]), /Multiple SPF/);
   });
 
   test('flags deprecated ptr and unreachable terms after all', () => {

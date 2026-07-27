@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { fetchRdapFromBases, uniqueBases } from '../lib/rdap.mts';
@@ -82,8 +83,8 @@ describe('RDAP endpoint failover', () => {
     assert.equal(calls, 1);
     assert.equal(record.upstreamStatus, 404);
     assert.equal(record.parsed, null);
-    assert.equal(record.attempts[0].outcome, 'not_found');
-    assert.equal(record.attempts[0].selected, true);
+    assert.equal(requiredValue(record.attempts[0]).outcome, 'not_found');
+    assert.equal(requiredValue(record.attempts[0]).selected, true);
   });
 
   test('treats authoritative no-object responses consistently across query types', async () => {
@@ -92,7 +93,7 @@ describe('RDAP endpoint failover', () => {
       ['ipv4', '192.0.2.1'],
       ['ipv6', '2001:db8::1'],
       ['asn', 'AS64496'],
-    ]) {
+    ] as const) {
       let calls = 0;
       const record = await fetchFixture(type, value, [
         'https://first.example/rdap', 'https://second.example/rdap',
@@ -103,7 +104,7 @@ describe('RDAP endpoint failover', () => {
       assert.equal(calls, 1, type);
       assert.equal(record.upstreamStatus, 404, type);
       assert.equal(record.parsed, null, type);
-      assert.equal(record.attempts[0].outcome, 'not_found', type);
+      assert.equal(requiredValue(record.attempts[0]).outcome, 'not_found', type);
     }
   });
 
@@ -131,9 +132,9 @@ describe('RDAP endpoint failover', () => {
     });
 
     assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['server_error', 'success']);
-    assert.equal(record.attempts[0].status, 503);
-    assert.ok(record.attempts[0].detail);
-    assert.match(record.attempts[0].detail, /HTTP 503/);
+    assert.equal(requiredValue(record.attempts[0]).status, 503);
+    assert.ok(requiredValue(record.attempts[0]).detail);
+    assert.match(requiredValue(requiredValue(record.attempts[0]).detail), /HTTP 503/);
   });
 
   test('fails over when a successful response is not valid RDAP JSON', async () => {
@@ -169,8 +170,8 @@ describe('RDAP endpoint failover', () => {
 
     assert.equal(calls, 2);
     assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), ['invalid_response', 'success']);
-    assert.ok(record.attempts[0].detail);
-    assert.match(record.attempts[0].detail, /usable RDAP object|did not match/i);
+    assert.ok(requiredValue(record.attempts[0]).detail);
+    assert.match(requiredValue(requiredValue(record.attempts[0]).detail), /usable RDAP object|did not match/i);
   });
 
   test('rejects a wrong-domain or incompatible object-class response', async () => {
@@ -192,10 +193,10 @@ describe('RDAP endpoint failover', () => {
     assert.deepEqual(record.attempts.map((attempt) => attempt.outcome), [
       'invalid_response', 'invalid_response', 'success',
     ]);
-    assert.ok(record.attempts[0].detail);
-    assert.ok(record.attempts[1].detail);
-    assert.match(record.attempts[0].detail, /domain did not match/i);
-    assert.match(record.attempts[1].detail, /object class/i);
+    assert.ok(requiredValue(record.attempts[0]).detail);
+    assert.ok(requiredValue(record.attempts[1]).detail);
+    assert.match(requiredValue(requiredValue(record.attempts[0]).detail), /domain did not match/i);
+    assert.match(requiredValue(requiredValue(record.attempts[1]).detail), /object class/i);
   });
 
   test('accepts an equivalent Unicode domain identity', async () => {
@@ -209,7 +210,7 @@ describe('RDAP endpoint failover', () => {
 
     assert.ok(record.parsed);
     assert.equal(record.parsed.domain, 'bücher.example');
-    assert.equal(record.attempts[0].outcome, 'success');
+    assert.equal(requiredValue(record.attempts[0]).outcome, 'success');
   });
 
   test('requires IPv4 and IPv6 ranges to cover the requested address', async () => {
@@ -234,7 +235,7 @@ describe('RDAP endpoint failover', () => {
     }));
 
     assert.deepEqual(ipv4.attempts.map((attempt) => attempt.outcome), ['invalid_response', 'success']);
-    assert.equal(ipv6.attempts[0].outcome, 'success');
+    assert.equal(requiredValue(ipv6.attempts[0]).outcome, 'success');
   });
 
   test('requires an autnum range to cover the requested ASN', async () => {

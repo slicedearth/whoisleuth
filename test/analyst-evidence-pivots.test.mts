@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -21,12 +22,12 @@ describe('analyst-controlled evidence pivots', () => {
       'safe-browsing-status',
       'ripestat-resource',
     ]);
-    assert.equal(pivots[0].href, 'https://lookup.icann.org/en/lookup?name=example.com');
-    assert.equal(pivots[1].href, 'https://www.iana.org/domains/root/db/com.html');
-    assert.equal(pivots[2].href, 'https://crt.sh/?q=example.com');
-    assert.equal(pivots[3].href, 'https://web.archive.org/web/*/example.com/');
-    assert.equal(pivots[4].href, 'https://transparencyreport.google.com/safe-browsing/search?url=example.com');
-    assert.equal(pivots[5].href, 'https://stat.ripe.net/app/launchpad/45.67.88.0%2F23');
+    assert.equal(requiredValue(pivots[0]).href, 'https://lookup.icann.org/en/lookup?name=example.com');
+    assert.equal(requiredValue(pivots[1]).href, 'https://www.iana.org/domains/root/db/com.html');
+    assert.equal(requiredValue(pivots[2]).href, 'https://crt.sh/?q=example.com');
+    assert.equal(requiredValue(pivots[3]).href, 'https://web.archive.org/web/*/example.com/');
+    assert.equal(requiredValue(pivots[4]).href, 'https://transparencyreport.google.com/safe-browsing/search?url=example.com');
+    assert.equal(requiredValue(pivots[5]).href, 'https://stat.ripe.net/app/launchpad/45.67.88.0%2F23');
     assert.ok(pivots.every((item) => item.disclosure.includes(item.sharedValue)));
   });
 
@@ -37,9 +38,9 @@ describe('analyst-controlled evidence pivots', () => {
       registrableDomain: 'bücher.example',
     });
 
-    assert.equal(pivots[0].sharedValue, 'xn--bcher-kva.example');
-    assert.match(pivots[0].href, /name=xn--bcher-kva\.example$/u);
-    assert.equal(pivots[1].sharedValue, '.example');
+    assert.equal(requiredValue(pivots[0]).sharedValue, 'xn--bcher-kva.example');
+    assert.match(requiredValue(pivots[0]).href, /name=xn--bcher-kva\.example$/u);
+    assert.equal(requiredValue(pivots[1]).sharedValue, '.example');
   });
 
   test('offers RIPEstat and PeeringDB only for a public, non-reserved ASN', () => {
@@ -51,9 +52,9 @@ describe('analyst-controlled evidence pivots', () => {
     });
 
     assert.deepEqual(pivots.map((item) => item.id), ['ripestat-resource', 'peeringdb-asn']);
-    assert.equal(pivots[0].href, 'https://stat.ripe.net/app/launchpad/AS398101');
-    assert.equal(pivots[1].href, 'https://www.peeringdb.com/net?asn=398101');
-    assert.equal(pivots[1].sharedValue, 'AS398101');
+    assert.equal(requiredValue(pivots[0]).href, 'https://stat.ripe.net/app/launchpad/AS398101');
+    assert.equal(requiredValue(pivots[1]).href, 'https://www.peeringdb.com/net?asn=398101');
+    assert.equal(requiredValue(pivots[1]).sharedValue, 'AS398101');
   });
 
   test('offers a network pivot for a validated public IP address', () => {
@@ -63,8 +64,8 @@ describe('analyst-controlled evidence pivots', () => {
     });
 
     assert.equal(pivots.length, 1);
-    assert.equal(pivots[0].id, 'ripestat-resource');
-    assert.equal(pivots[0].sharedValue, '45.67.89.10');
+    assert.equal(requiredValue(pivots[0]).id, 'ripestat-resource');
+    assert.equal(requiredValue(pivots[0]).sharedValue, '45.67.89.10');
   });
 
   test('rejects malformed, private, documentation, and reserved targets', () => {

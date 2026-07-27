@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
@@ -218,7 +219,7 @@ describe('registrar RDAP fetching', () => {
       ['redirect-http-registrar.example', 'http://registrar.test/domain/redirect-http-registrar.example'],
       ['redirect-path-registrar.example', 'https://registrar.test/rdap'],
       ['redirect-name-registrar.example', 'https://registrar.test/domain/other.example'],
-    ]) {
+    ] as const) {
       const record = registryRecord(domain, [link(`https://registrar.test/domain/${domain}`)]);
       await assert.rejects(
         fetchRegistrarRdapRecord(domain, record, { fetchUpstream: async () => ({

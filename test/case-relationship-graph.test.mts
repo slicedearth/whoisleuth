@@ -1,3 +1,4 @@
+import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -65,7 +66,7 @@ describe('case relationship graph projection', () => {
     assert.equal(graph.totalRelationships, 2);
     assert.equal(graph.matchingRelationships, 1);
     assert.equal(graph.relationshipNodes.length, 1);
-    assert.equal(graph.relationshipNodes[0].type, 'http_final_origin');
+    assert.equal(requiredValue(graph.relationshipNodes[0]).type, 'http_final_origin');
     assert.equal(graph.truncated, false);
     assert.deepEqual(graph.filters, { type: 'http_final_origin' });
   });
@@ -133,8 +134,8 @@ describe('case relationship graph projection', () => {
 
   test('bounds labels without altering full inspector values and does not mutate input', () => {
     const cases = fixture();
-    cases[0].domain = `${'a'.repeat(60)}.invalid`;
-    cases[1].domain = `${'b'.repeat(60)}.invalid`;
+    requiredValue(cases[0]).domain = `${'a'.repeat(60)}.invalid`;
+    requiredValue(cases[1]).domain = `${'b'.repeat(60)}.invalid`;
     const before = structuredClone(cases);
     const graph = buildCaseRelationshipGraph(cases);
     assert.ok(graph.caseNodes.every((node) => node.displayLabel.endsWith('…')));
@@ -178,9 +179,9 @@ describe('case relationship graph projection', () => {
       completeness: 'unknown',
     });
     assert.equal(graph.relationshipNodes.length, 1);
-    assert.deepEqual(graph.relationshipNodes[0].observations, [observation]);
-    assert.deepEqual(graph.relationshipNodes[0].campaigns, [{ id: 'campaign-one', label: 'Review' }]);
-    assert.equal(graph.relationshipNodes[0].complete, null);
+    assert.deepEqual(requiredValue(graph.relationshipNodes[0]).observations, [observation]);
+    assert.deepEqual(requiredValue(graph.relationshipNodes[0]).campaigns, [{ id: 'campaign-one', label: 'Review' }]);
+    assert.equal(requiredValue(graph.relationshipNodes[0]).complete, null);
     assert.equal(graph.filters.source, 'monitor');
     assert.equal(graph.filters.scope, 'campaign:campaign-one');
   });
