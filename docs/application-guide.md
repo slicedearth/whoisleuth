@@ -436,16 +436,24 @@ Dashboard can coordinate three standard recipes:
 - infrastructure pivot; and
 - new-domain triage.
 
-The guide shows one current action, concrete instructions, request implications,
-and reviewed, partial, or skipped outcomes. It can carry one canonical target,
-an explicitly selected candidate, and a bounded set of reviewed Bulk domains
-between tools. Tool links focus the relevant input, and a return control keeps
-the current guide step reachable beside long results.
+The guide shows one current action, concrete instructions, expected evidence,
+completion criteria, request implications, and reviewed, partial, or skipped
+outcomes. A partial or skipped outcome requires a short reason so deferred,
+unavailable, or inapplicable work is visible in the full plan and compact
+export. It can carry one canonical target, an explicitly selected candidate,
+and a bounded set of reviewed Bulk domains between tools. Tool links focus the
+relevant input, and a return control keeps the current guide step reachable
+beside long results.
 
 The guide stores only compact progress in the current tab's `sessionStorage`.
 It does not decide when evidence is sufficient, create a case automatically,
 or infer a finding from navigation. Analysts remain responsible for starting
-each collection action and marking its outcome.
+each collection action and marking its outcome. At a case stage and after all
+steps have an outcome, a read-only handoff checklist summarizes whether the
+current browser-local case has a reviewed disposition, a typed analyst
+decision, supporting evidence pins, and explicit unresolved unknowns or
+contradictions. This checklist measures workflow structure only. It does not
+validate an analyst conclusion or make a claim about the target.
 
 Dashboard also provides a browser-local template manager. A custom template
 must start from one of the three standard guides. It can rename instructions,

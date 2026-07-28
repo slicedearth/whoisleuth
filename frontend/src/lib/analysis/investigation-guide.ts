@@ -2,13 +2,14 @@ import { normalizeDomain } from './case-model.ts';
 import { parse } from 'tldts';
 
 export const INVESTIGATION_GUIDE_SCHEMA = 'whoisleuth.investigation-recipe';
-export const INVESTIGATION_GUIDE_VERSION = 3;
+export const INVESTIGATION_GUIDE_VERSION = 4;
 export const INVESTIGATION_GUIDE_LEGACY_VERSION = 1;
-export const INVESTIGATION_GUIDE_PREVIOUS_VERSION = 2;
+export const INVESTIGATION_GUIDE_EXPORT_VERSION = 3;
+export const INVESTIGATION_GUIDE_SUPPORTED_VERSIONS = [2, 3, INVESTIGATION_GUIDE_VERSION] as const;
 export const INVESTIGATION_GUIDE_EXPORT_SCHEMA = 'whoisleuth.investigation-recipe-summary';
-export const INVESTIGATION_GUIDE_EXPORT_VERSION = 2;
 export const MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH = 253;
 export const MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS = 25;
+export const MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH = 500;
 export const MAX_INVESTIGATION_GUIDE_TIMESTAMP_LENGTH = 64;
 export const MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES = 12_288;
 export const MAX_INVESTIGATION_GUIDE_EXPORT_BYTES = 16_384;
@@ -53,6 +54,7 @@ export interface InvestigationGuideStageProgress {
   outcome: InvestigationGuideOutcome;
   approvedAt: string | null;
   openedAt: string | null;
+  reviewNote: string | null;
   updatedAt: string;
 }
 
@@ -95,6 +97,7 @@ export interface InvestigationGuideSummary {
     outcome: InvestigationGuideOutcome;
     approved: boolean;
     opened: boolean;
+    reviewNote: string | null;
     updatedAt: string;
   }>;
   limitations: string[];
@@ -213,6 +216,12 @@ function nullableTimestamp(value: unknown): string | null {
 function boundedTemplateText(value: unknown, maximum: number, fallback = ''): string {
   if (typeof value !== 'string' || value.length > maximum * 4 || CONTROL_RE.test(value)) return fallback;
   return value.replace(/\s+/gu, ' ').trim().slice(0, maximum).trim() || fallback;
+}
+
+function boundedReviewNote(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH * 4) return null;
+  const normalized = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim();
+  return normalized ? normalized.slice(0, MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH).trim() || null : null;
 }
 
 function templateInstructions(value: unknown, fallback: readonly string[]): readonly string[] {
@@ -349,7 +358,7 @@ export function investigationGuideHref(
 }
 
 function createStageProgress(stageDefinition: InvestigationRecipeStage, now: string): InvestigationGuideStageProgress {
-  return { id: stageDefinition.id, outcome: 'pending', approvedAt: null, openedAt: null, updatedAt: now };
+  return { id: stageDefinition.id, outcome: 'pending', approvedAt: null, openedAt: null, reviewNote: null, updatedAt: now };
 }
 
 export function createInvestigationGuide(
@@ -415,17 +424,17 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
   const input = record(value);
   if (!input) return null;
   if (input.version === INVESTIGATION_GUIDE_LEGACY_VERSION) return parseLegacyGuide(input);
-  if (input.version !== INVESTIGATION_GUIDE_PREVIOUS_VERSION
-    && input.version !== INVESTIGATION_GUIDE_VERSION) return null;
+  if (!INVESTIGATION_GUIDE_SUPPORTED_VERSIONS.includes(input.version as 2 | 3 | 4)) return null;
   const recipe = investigationGuideRecipe(input.recipeId);
   const domain = normalizeInvestigationGuideDomain(input.domain);
   const createdAt = timestamp(input.createdAt);
   const updatedAt = timestamp(input.updatedAt);
   if (!recipe || !domain || !createdAt || !updatedAt) return null;
-  const template = input.version === INVESTIGATION_GUIDE_VERSION && input.template !== null && input.template !== undefined
+  const supportsTemplate = input.version === 3 || input.version === INVESTIGATION_GUIDE_VERSION;
+  const template = supportsTemplate && input.template !== null && input.template !== undefined
     ? normalizeInvestigationGuideTemplateSnapshot(input.template, recipe.id)
     : null;
-  if (input.version === INVESTIGATION_GUIDE_VERSION && input.template !== null && input.template !== undefined && !template) return null;
+  if (supportsTemplate && input.template !== null && input.template !== undefined && !template) return null;
   const stageDefinitions = template?.stages || recipe.stages;
   const normalizedReview = normalizeReviewDomains(input.reviewDomains);
   const reviewDomains = normalizedReview.domains.length
@@ -456,6 +465,7 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
         outcome: guideOutcome(item?.outcome),
         approvedAt: nullableTimestamp(item?.approvedAt),
         openedAt: nullableTimestamp(item?.openedAt),
+        reviewNote: input.version === INVESTIGATION_GUIDE_VERSION ? boundedReviewNote(item?.reviewNote) : null,
         updatedAt: timestamp(item?.updatedAt) || updatedAt,
       };
     }),
@@ -534,15 +544,24 @@ export function setInvestigationGuideStageOutcome(
   stageId: unknown,
   outcome: unknown,
   now: unknown = new Date().toISOString(),
+  reviewNote: unknown = null,
 ): InvestigationGuide | null {
   const guide = parseInvestigationGuide(value);
   const normalizedOutcome = guideOutcome(outcome);
+  const normalizedReviewNote = boundedReviewNote(reviewNote);
   const stageDefinition = investigationGuideStageForGuide(guide, stageId);
   if (!guide || guide.status === 'paused' || !stageDefinition) return guide;
   const progress = guide.stages.find((item) => item.id === stageDefinition.id);
   if (!progress || ((normalizedOutcome === 'complete' || normalizedOutcome === 'partial') && !progress.openedAt)) return guide;
-  if (progress.outcome === normalizedOutcome) return guide;
-  return updateStage(guide, stageDefinition.id, now, (current, updatedAt) => ({ ...current, outcome: normalizedOutcome, updatedAt }));
+  if ((normalizedOutcome === 'partial' || normalizedOutcome === 'skipped') && !normalizedReviewNote) return guide;
+  const nextReviewNote = normalizedOutcome === 'pending' ? null : normalizedReviewNote;
+  if (progress.outcome === normalizedOutcome && progress.reviewNote === nextReviewNote) return guide;
+  return updateStage(guide, stageDefinition.id, now, (current, updatedAt) => ({
+    ...current,
+    outcome: normalizedOutcome,
+    reviewNote: nextReviewNote,
+    updatedAt,
+  }));
 }
 
 export function setInvestigationGuideStatus(
@@ -580,6 +599,7 @@ export function buildInvestigationGuideSummary(
       outcome: progress.outcome,
       approved: progress.approvedAt !== null,
       opened: progress.openedAt !== null,
+      reviewNote: progress.reviewNote,
       updatedAt: progress.updatedAt,
     });
   }
@@ -595,7 +615,7 @@ export function buildInvestigationGuideSummary(
     updatedAt: guide.updatedAt,
     stages,
     limitations: [
-      'This compact summary records analyst-controlled recipe progress only. It contains no raw evidence, notes, credentials, provider responses, or scan results.',
+      'This compact summary records analyst-controlled recipe progress and bounded stage-review notes only. It contains no raw evidence, case notes, credentials, provider responses, or scan results.',
       'Opened, approved, complete, partial, and skipped states are analyst workflow markers, not findings or claims about the target.',
       'The recipe never starts collection, submits a target, exports evidence, or changes a case disposition automatically.',
     ],

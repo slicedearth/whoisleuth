@@ -207,13 +207,14 @@ default (see the README), so many lookups return no personal data at all.
   brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
   domain, or a bounded analyst-authored template derived from one of those
   guides. The versioned storage contract calls the selected guide a recipe;
-  schema version 3 keeps only that recipe identifier, an optional compact
+  schema version 4 keeps only that recipe identifier, an optional compact
   template snapshot, official or starting
   domain, an optional analyst-selected candidate domain, up to 25 canonical
   domains carried from a guided Bulk comparison, an explicit truncation marker,
   creation/update timestamps, active or paused state, and bounded stage
-  approval, opened, and outcome markers in the current tab's `sessionStorage`
-  under `whoisleuth:investigation-guide:v3`. Deployed version 1 and 2 records
+  approval, opened, and outcome markers. Partial and skipped stages also retain
+  a required review reason of up to 500 characters in the current tab's `sessionStorage`
+  under `whoisleuth:investigation-guide:v4`. Deployed version 1, 2, and 3 records
   can normalize without inventing a custom template when no current record
   exists; future records remain untouched. A saved template can customise
   bounded guidance, omit allowlisted steps, and add approval gates. It cannot
@@ -229,10 +230,13 @@ default (see the README), so many lookups return no personal data at all.
   an explicit approval marker before navigation, but opening that tool still
   never starts a lookup, search, scan, submission, export, or Monitor action.
   **Export summary** requires confirmation and deliberately downloads only a
-  versioned compact progress record without raw evidence, notes, credentials,
-  provider responses, or scan results. A read-only local checkpoint derives
-  retained observation and relationship counts from the typed investigation
-  projection without deciding stage completion. **End guide** removes both
+  versioned compact progress record, including bounded stage-review reasons,
+  without raw evidence, case notes, credentials, provider responses, or scan
+  results. A read-only local checkpoint derives retained observation and
+  relationship counts from the typed investigation projection. A separate
+  case-handoff checklist summarizes browser-local disposition, decision,
+  evidence-pin, and open-question structure. Neither view decides stage
+  completion or makes a finding about the target. **End guide** removes both
   current and migrated legacy tab records,
   and closing the tab session removes them with the rest of that tab's session
   storage.

@@ -14,6 +14,7 @@ import {
   investigationGuideStagesForGuide,
   investigationGuideStagesForRecipe,
   investigationGuideSummaryFilename,
+  MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH,
   MAX_INVESTIGATION_GUIDE_EXPORT_BYTES,
   MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES,
   parseInvestigationGuide,
@@ -33,6 +34,7 @@ import {
   INVESTIGATION_GUIDE_KEY,
   LEGACY_INVESTIGATION_GUIDE_KEY,
   ORIGINAL_INVESTIGATION_GUIDE_KEY,
+  PREVIOUS_INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
 
 export {
@@ -40,6 +42,7 @@ export {
   INVESTIGATION_GUIDE_KEY,
   LEGACY_INVESTIGATION_GUIDE_KEY,
   ORIGINAL_INVESTIGATION_GUIDE_KEY,
+  PREVIOUS_INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
 
 export type {
@@ -109,7 +112,8 @@ export function loadInvestigationGuide(): InvestigationGuide | null {
   const current = readStoredGuide(INVESTIGATION_GUIDE_KEY);
   if (current.state !== 'absent') return current.guide;
 
-  const legacy = readStoredGuide(LEGACY_INVESTIGATION_GUIDE_KEY);
+  const previous = readStoredGuide(PREVIOUS_INVESTIGATION_GUIDE_KEY);
+  const legacy = previous.guide ? previous : readStoredGuide(LEGACY_INVESTIGATION_GUIDE_KEY);
   const original = legacy.guide ? legacy : readStoredGuide(ORIGINAL_INVESTIGATION_GUIDE_KEY);
   if (!original.guide) return null;
   try {
@@ -142,9 +146,9 @@ export function approveInvestigationGuideCollection(stageId: string): Investigat
   return updateStoredGuide(approveInvestigationGuideStage(current, stageId), current);
 }
 
-export function updateInvestigationGuideOutcome(stageId: string, outcome: InvestigationGuideOutcome): InvestigationGuide | null {
+export function updateInvestigationGuideOutcome(stageId: string, outcome: InvestigationGuideOutcome, reviewNote: string | null = null): InvestigationGuide | null {
   const current = loadInvestigationGuide();
-  return updateStoredGuide(setInvestigationGuideStageOutcome(current, stageId, outcome), current);
+  return updateStoredGuide(setInvestigationGuideStageOutcome(current, stageId, outcome, new Date().toISOString(), reviewNote), current);
 }
 
 export function selectInvestigationGuideFocusDomain(domain: string): InvestigationGuide | null {
@@ -192,6 +196,7 @@ export function downloadInvestigationGuideSummary(): void {
 export function clearInvestigationGuide() {
   try {
     sessionStorage.removeItem(INVESTIGATION_GUIDE_KEY);
+    sessionStorage.removeItem(PREVIOUS_INVESTIGATION_GUIDE_KEY);
     sessionStorage.removeItem(LEGACY_INVESTIGATION_GUIDE_KEY);
     sessionStorage.removeItem(ORIGINAL_INVESTIGATION_GUIDE_KEY);
   } catch {
@@ -205,6 +210,7 @@ export {
   INVESTIGATION_GUIDE_EXPORT_VERSION,
   INVESTIGATION_GUIDE_SCHEMA,
   INVESTIGATION_GUIDE_VERSION,
+  MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH,
   investigationGuideHref,
   investigationGuideRecipe,
   investigationGuideStageForGuidePath,
