@@ -58,6 +58,9 @@ Deep domain Lookup can combine:
 - IANA-bootstrap RDAP and bounded WHOIS referral-chain evidence;
 - separately attributed registrar RDAP when the registry publishes an eligible
   HTTPS link;
+- bounded lifecycle, registration-lock, contact-disclosure,
+  publication-quality, source-reconciliation, and published abuse-route
+  interpretation derived from those already-collected registration sources;
 - authority-aware availability analysis;
 - DNS, including deep-only SOA zone context and HTTPS service-binding
   publication, plus HTTP, favicon,
@@ -88,7 +91,8 @@ no incomplete response is retained or rendered.
 After a domain result arrives, **Download report** creates a bounded readable
 Markdown summary entirely in the browser. It records registry, registrar, and
 WHOIS source health and collection time alongside normalized findings, the
-explainable Risk assessment, and interpretation limits. It does not include raw
+registry lifecycle and disclosure interpretation, explainable Risk assessment,
+and interpretation limits. It does not include raw
 RDAP or WHOIS responses, expanded contacts, provider payloads, scripts, or
 remote assets. The separate JSON evidence export remains the full-fidelity
 option and can contain public registration contacts. IP and ASN reports remain

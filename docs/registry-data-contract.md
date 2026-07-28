@@ -587,10 +587,14 @@ web-service activity when its body is unavailable for HTML inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `20`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `21`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 20 replaces selected security-policy values in
+registry comparison. Version 21 adds bounded registry lifecycle, contact
+disclosure, publication-quality, reconciliation, and abuse-routing
+interpretation derived from the already-collected registry sources. It
+preserves the raw source statuses and does not infer that partial or unavailable
+contact data is absent. Version 20 replaces selected security-policy values in
 HTTP evidence with presence-only markers and can add fixed, bounded
 response-policy findings to the version-2 passive posture profile. Version 19
 adds the bounded credential-surface projection

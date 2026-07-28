@@ -499,6 +499,62 @@ export function syntheticDemoLookupView(id: string) {
       ] : [],
       whoisContactRoles: [],
       whoisTruncatedFields: [],
+      insights: {
+        version: 1,
+        contactDisclosure: {
+          registryRdap: {
+            source: 'registry_rdap',
+            state: conclusive ? 'redacted' : 'unavailable',
+            detail: conclusive
+              ? 'The synthetic publication explicitly marks the registrant fields as redacted.'
+              : 'The synthetic source is inconclusive.',
+          },
+          whois: {
+            source: 'whois',
+            state: conclusive ? 'redacted' : 'unavailable',
+            detail: conclusive
+              ? 'The synthetic publication explicitly marks the registrant fields as redacted.'
+              : 'The synthetic source is inconclusive.',
+          },
+          limitation: 'Synthetic disclosure states demonstrate interpretation only and do not describe a live registrant.',
+        },
+        lifecycle: {
+          stage: conclusive ? 'registered' : 'unavailable',
+          label: conclusive ? 'Registered' : 'Unavailable',
+          rawStatuses: conclusive ? ['clientTransferProhibited'] : [],
+          redemption: false,
+          pendingDelete: false,
+          pendingTransfer: false,
+          hold: { client: false, server: false },
+          locks: {
+            client: conclusive,
+            server: false,
+            clientStatuses: conclusive ? ['clienttransferprohibited'] : [],
+            serverStatuses: [],
+          },
+          acquisitionPath: conclusive
+            ? ['Continue monitoring registry status and expiry.']
+            : ['Repeat collection before interpreting lifecycle state.'],
+          limitation: 'The fixed status does not promise deletion, release timing, eligibility, price, or acquisition success.',
+        },
+        reconciliation: {
+          state: conclusive ? 'consistent' : 'partial',
+          conflictCount: 0,
+          equivalentCount: conclusive ? 4 : 0,
+          sourceOnlyCount: 0,
+          redactedCount: conclusive ? 2 : 0,
+          unavailableCount: conclusive ? 0 : 2,
+          summary: conclusive
+            ? 'The comparable synthetic fields are normalized as equivalent.'
+            : 'The synthetic comparison is partial because its registry sources are inconclusive.',
+        },
+        publications: [
+          { source: 'registry_rdap', state: conclusive ? 'complete' : 'unavailable', observedAt, conformance: ['rdap_level_0'], redactionCount: conclusive ? 1 : 0, issueCount: conclusive ? 0 : 1, issues: conclusive ? [] : ['No usable synthetic publication was available.'] },
+          { source: 'whois', state: conclusive ? 'complete' : 'unavailable', observedAt, conformance: [], redactionCount: 0, issueCount: conclusive ? 0 : 1, issues: conclusive ? [] : ['No usable synthetic publication was available.'] },
+          { source: 'registrar_rdap', state: 'unavailable', observedAt: null, conformance: [], redactionCount: 0, issueCount: 1, issues: ['No registrar publication is included in this fixture.'] },
+        ],
+        abuseRouting: [],
+      },
       registrar: { visible: false, label: '', endpoint: '', detail: '', stateDetail: '', error: false, success: false, parsed: {} },
     },
     dns: {

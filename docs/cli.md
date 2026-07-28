@@ -107,6 +107,12 @@ fast mode reports the existing skipped state. IP, ASN, and lookup responses
 without registrar diagnostics remain unchanged. These source states are
 provenance only and do not decide availability or imply safety.
 
+When a deep domain response includes registry interpretation version 1, the
+terminal summary also shows the lifecycle label, separately attributed RDAP and
+WHOIS disclosure states, reconciliation state, and complete, partial, and
+unavailable publication counts. It does not print published contact routes.
+The JSON document retains the bounded interpretation and its limitations.
+
 A deep domain lookup can also show the status, selected public address, and
 registered network name from the bounded observed network context. It uses the
 same address and IP RDAP source represented in the JSON document. This is
@@ -386,9 +392,12 @@ The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
 The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
-and the shared registry-source comparison. Registrar RDAP raw data, contacts,
-entities, links, notices, and source-specific handles remain excluded. Schema
-version 20 replaces selected security-policy values in retained HTTP evidence
+and the shared registry-source comparison. Version 21 adds the bounded registry
+lifecycle, disclosure, publication-quality, reconciliation, and abuse-routing
+interpretation derived from the already-collected sources. Registrar RDAP raw
+data, contacts, entities, links, notices, and source-specific handles remain
+excluded. Schema version 20 replaces selected security-policy values in
+retained HTTP evidence
 with presence-only markers and can include fixed response-policy findings from
 an already-represented deep lookup. Version 19 additionally retains the bounded credential-surface projection
 when the saved deep lookup represents it. Version 18 retains the bounded structured identity projection

@@ -69,7 +69,7 @@ test('navigation, tool guide, and reference guide use one canonical product voca
 });
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {
-  assert.equal(glossaryTerms.length, 47);
+  assert.equal(glossaryTerms.length, 49);
   assert.equal(guideFaqs.length, 18);
   assert.equal(resultStates.length, 9);
   assert.equal(commonMistakes.length, 5);
@@ -81,6 +81,8 @@ test('glossary, FAQ, state, and mistake content is bounded and deterministic', (
   assert.match(glossaryTerms.find((item) => item.term === 'SOA')?.definition || '', /primary nameserver/i);
   assert.match(glossaryTerms.find((item) => item.term === 'HTTPS service binding')?.definition || '', /does not follow/i);
   assert.match(glossaryTerms.find((item) => item.term === 'Browser-library advisory match')?.definition || '', /not proof/i);
+  assert.match(glossaryTerms.find((item) => item.term === 'EPP status')?.definition || '', /does not guarantee/i);
+  assert.match(glossaryTerms.find((item) => item.term === 'Registration disclosure')?.definition || '', /unavailable/i);
   assert.match(glossaryTerms.find((item) => item.term === 'Structured identity metadata')?.definition || '', /not verified/i);
   assert.match(glossaryTerms.find((item) => item.term === 'Credential collection surface')?.definition || '', /not a vulnerability or phishing finding/i);
   assert.doesNotMatch(guideFaqs.find((item) => item.question === 'How do I export or delete saved work?')?.answer || '', /local-storage controls/iu);

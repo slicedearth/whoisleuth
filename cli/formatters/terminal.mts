@@ -86,6 +86,26 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
   }
   lines.push(`WHOIS          ${titleCase(whoisDiagnostics.status)}`);
+  const registryInsights = terminalRecord(document.registryInsights);
+  if (registryInsights.version === 1) {
+    const lifecycle = terminalRecord(registryInsights.lifecycle);
+    const disclosure = terminalRecord(registryInsights.contactDisclosure);
+    const registryDisclosure = terminalRecord(disclosure.registryRdap);
+    const whoisDisclosure = terminalRecord(disclosure.whois);
+    const reconciliation = terminalRecord(registryInsights.reconciliation);
+    const publications = Array.isArray(registryInsights.publications)
+      ? registryInsights.publications.map(terminalRecord)
+      : [];
+    const publicationCounts = {
+      complete: publications.filter((item) => item.state === 'complete').length,
+      partial: publications.filter((item) => item.state === 'partial').length,
+      unavailable: publications.filter((item) => item.state === 'unavailable').length,
+    };
+    lines.push(`Lifecycle      ${titleCase(lifecycle.label)}`);
+    lines.push(`Disclosure     RDAP ${titleCase(registryDisclosure.state)} · WHOIS ${titleCase(whoisDisclosure.state)}`);
+    lines.push(`Reconciliation ${titleCase(reconciliation.state)}`);
+    lines.push(`Publications   ${publicationCounts.complete} complete · ${publicationCounts.partial} partial · ${publicationCounts.unavailable} unavailable`);
+  }
   if (document.mode === 'deep' && document.type === 'domain') {
     const dns = terminalRecord(availability.dns);
     const http = terminalRecord(availability.http);

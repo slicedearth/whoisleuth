@@ -18,6 +18,7 @@ type LookupEvidenceReport = {
   query: ReportField[];
   assessment: ReportField[];
   registryGroups: ReportGroup[];
+  registryInterpretation: ReportField[];
   comparison: { health: ReportField[]; fields: ComparisonField[]; omitted: number };
   registrarComparison: { health: ReportField[]; fields: PublicationComparisonField[]; omitted: number };
   networkGroups: ReportGroup[];
@@ -135,6 +136,16 @@ function buildLookupEvidenceReport(
   const analysis = objectOrEmpty(report.analysis);
   const availability = objectOrEmpty(analysis.availability);
   const comparison = objectOrEmpty(analysis.registryComparison);
+  const registryInsights = objectOrEmpty(analysis.registryInsights);
+  const registryLifecycle = objectOrEmpty(registryInsights.lifecycle);
+  const registryLocks = objectOrEmpty(registryLifecycle.locks);
+  const contactDisclosure = objectOrEmpty(registryInsights.contactDisclosure);
+  const registryDisclosure = objectOrEmpty(contactDisclosure.registryRdap);
+  const whoisDisclosure = objectOrEmpty(contactDisclosure.whois);
+  const registryReconciliation = objectOrEmpty(registryInsights.reconciliation);
+  const registryPublications = Array.isArray(registryInsights.publications)
+    ? registryInsights.publications.map(objectOrEmpty)
+    : [];
   const comparisonHealth = objectOrEmpty(comparison.sourceHealth);
   const rdapComparisonHealth = objectOrEmpty(comparisonHealth.rdap);
   const whoisComparisonHealth = objectOrEmpty(comparisonHealth.whois);
@@ -348,6 +359,21 @@ function buildLookupEvidenceReport(
       ...(Object.keys(registrarRdap).length ? [groups.registrarRdap] : []),
       groups.whois,
     ],
+    registryInterpretation: registryInsights.version === 1 ? [
+      reportField('Lifecycle', displayLabel(registryLifecycle.label)),
+      reportField('Raw lifecycle statuses', listText(registryLifecycle.rawStatuses)),
+      reportField('Client registration lock observed', yesNoUnknown(registryLocks.client)),
+      reportField('Server registration lock observed', yesNoUnknown(registryLocks.server)),
+      reportField('Registry RDAP disclosure', displayLabel(registryDisclosure.state)),
+      reportField('WHOIS disclosure', displayLabel(whoisDisclosure.state)),
+      reportField('Reconciliation', displayLabel(registryReconciliation.state)),
+      reportField('Reconciliation summary', registryReconciliation.summary),
+      reportField('Complete publications', registryPublications.filter((item) => item.state === 'complete').length),
+      reportField('Partial publications', registryPublications.filter((item) => item.state === 'partial').length),
+      reportField('Unavailable publications', registryPublications.filter((item) => item.state === 'unavailable').length),
+      reportField('Published escalation routes', Array.isArray(registryInsights.abuseRouting) ? registryInsights.abuseRouting.length : 0),
+      reportField('Interpretation limit', contactDisclosure.limitation),
+    ] : [],
     comparison: {
       health: [
         reportField('RDAP health', displayLabel(rdapComparisonHealth.status)),

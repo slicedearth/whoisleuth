@@ -126,6 +126,7 @@
   const diagnostics=$derived(lookupView.diagnostics as JsonRecord);
   const lookupTiming=$derived(lookupView.timing);
   const registryAccess=$derived(lookupView.registryAccess as JsonRecord);
+  const registryInsights=$derived(lookupView.registryInsights as JsonRecord);
   const reverseDns=$derived(lookupView.reverseDns as JsonRecord);
   const reverseDnsRecords=$derived(lookupView.reverseDnsRecords as JsonRecord);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext as JsonRecord);
@@ -981,6 +982,7 @@
         whoisRows={whoisSourceRows()}
         whoisContactRoles={whoisContactRoleRows()}
         whoisTruncatedFields={stringList(whoisParsed.fieldsTruncated)}
+        insights={registryInsights}
         registrar={registrarRdapDisplay()}
       /></div>
 

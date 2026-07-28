@@ -50,6 +50,10 @@ function formatLookupEvidenceMarkdown(
   appendFields(lines, report.assessment);
   lines.push('', '## Registry sources');
   appendGroups(lines, report.registryGroups);
+  if (report.registryInterpretation.length) {
+    lines.push('', '## Registry interpretation');
+    appendFields(lines, report.registryInterpretation);
+  }
   lines.push('', '## Registry-source comparison');
   appendFields(lines, report.comparison.health);
   if (!report.comparison.fields.length) {

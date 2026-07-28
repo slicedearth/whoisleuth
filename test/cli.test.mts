@@ -191,6 +191,34 @@ test('terminal lookup separately attributes represented registrar RDAP diagnosti
   assert.doesNotMatch(terminal, /raw-registrar-payload|private-contact-marker/);
 });
 
+test('terminal lookup summarizes bounded registry interpretation without publishing contacts', () => {
+  const result = lookupResult({
+    registryInsights: {
+      version: 1,
+      lifecycle: { label: 'Redemption period' },
+      contactDisclosure: {
+        registryRdap: { state: 'privacy_proxy' },
+        whois: { state: 'redacted' },
+      },
+      reconciliation: { state: 'source_specific' },
+      publications: [
+        { state: 'complete' },
+        { state: 'partial' },
+        { state: 'unavailable' },
+      ],
+      abuseRouting: [{ contact: 'private-routing-value@example.test' }],
+    },
+  });
+  const document = buildCliLookupDocument('example.com', classifiedDomain('example.com'), result, '2026-07-14T00:00:00.000Z', 'deep');
+  const terminal = formatTerminalLookup(document);
+
+  assert.match(terminal, /Lifecycle\s+Redemption period/);
+  assert.match(terminal, /Disclosure\s+RDAP Privacy proxy · WHOIS Redacted/);
+  assert.match(terminal, /Reconciliation\s+Source specific/);
+  assert.match(terminal, /Publications\s+1 complete · 1 partial · 1 unavailable/);
+  assert.doesNotMatch(terminal, /private-routing-value/);
+});
+
 test('terminal lookup preserves registrar skip states and omits absent diagnostics', () => {
   const skipped = lookupResult({
     diagnostics: {
