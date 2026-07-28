@@ -157,7 +157,11 @@ function sectionedLookupFixture(domain: string) {
     },
     rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } } },
     whois: { parsed: {}, chain: [] },
-    diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+    diagnostics: {
+      rdap: { status: 'success', endpoint: 'https://rdap.example.test' },
+      whois: { status: 'partial' },
+      availability: { status: 'complete' },
+    },
     registryInsights: {
       version: 1,
       lifecycle: {
@@ -523,6 +527,17 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
   await expect(coverage).toContainText('Limited, unavailable, skipped, unsupported, unknown, and not-found states remain distinct');
+
+  const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
+  await registrationFact.getByText('Inspect evidence').click();
+  await expect(registrationFact).toContainText('Registry RDAP');
+  await expect(registrationFact).toContainText('Authority-aware registration evidence');
+  await expect(registrationFact).toContainText('does not recalculate or override');
+
+  const rdapDiagnostic = page.locator('.diagnostics article').filter({ hasText: 'rdap' }).first();
+  await rdapDiagnostic.getByText('Inspect source route').click();
+  await expect(rdapDiagnostic).toContainText('IANA RDAP bootstrap discovery');
+  await expect(rdapDiagnostic).toContainText('Selected endpoint');
 
   // Detailed registry and raw unified records stay collapsed and subordinate.
   await expect(page.locator('.sources > details').first()).not.toHaveAttribute('open', '');
