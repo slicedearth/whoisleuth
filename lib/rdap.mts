@@ -5,8 +5,13 @@ import net from 'node:net';
 import { domainToASCII } from 'node:url';
 
 import { cached } from './lookup-cache.mts';
-import { safeFetch, safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
 import { registryDateIso } from './registry-dates.mts';
+import {
+  fetchRdapDetailedWithTimeout,
+  fetchRdapWithTimeout,
+  type RdapFetch,
+  type RdapFetchResult,
+} from './rdap-transport.mts';
 
 type LooseRecord = Record<string, unknown>;
 type BootstrapData = { services: Array<[string[], string[]]> };
@@ -14,13 +19,6 @@ type BootstrapOptions = {
   now?: () => number;
   fetchUpstream?: RdapFetch;
 };
-type RdapFetchResult = {
-  status: number;
-  ok: boolean;
-  text: string;
-  finalUrl?: string;
-};
-type RdapFetch = (url: string, options: RequestInit, timeoutMs: number) => Promise<RdapFetchResult>;
 type RdapAttempt = {
   endpoint: string;
   transportSecurity: 'https' | 'http';
@@ -227,10 +225,6 @@ const REGISTRAR_RDAP_TIMEOUT_MS = 7000;
 const MAX_RDAP_ENDPOINTS = 3;
 const MAX_RDAP_ENDPOINT_LENGTH = 2048;
 const MAX_RDAP_ATTEMPT_DETAIL_LENGTH = 240;
-// RDAP responses can legitimately run large (many nameservers/statuses/
-// entities on one record) but still need a bound - unlike a domain's own
-// homepage this isn't attacker-authored content, so this cap is generous.
-const MAX_RDAP_BYTES = 2000000;
 const MAX_RDAP_ENTITIES = 100;
 const MAX_RDAP_ENTITY_DEPTH = 6;
 const MAX_ENTITIES_PER_ROLE = 5;
@@ -257,45 +251,6 @@ const RDAP_CONTACT_ROLES = new Set([
   'registrar', 'registrant', 'administrative', 'technical', 'billing', 'abuse', 'noc',
   'reseller', 'sponsor', 'proxy', 'notifications',
 ]);
-
-// Uses safeFetch (not plain fetch) for the same reason every other outbound
-// request in this project does: it validates every redirect hop lands on a
-// public address instead of just following an upstream registry's
-// redirects blindly, and pins the connection against DNS rebinding. The
-// timeout stays armed through the capped body read (cleared in `finally`,
-// not right after headers arrive) - a slow/malicious upstream could
-// otherwise send headers immediately and then stall or trickle the body
-// forever with no deadline protecting the read.
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<RdapFetchResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await safeFetch(url, { ...options, signal: controller.signal });
-    const { text, truncated } = await readTextCapped(res, MAX_RDAP_BYTES);
-    if (truncated) throw new Error(`Response from ${url} exceeded ${MAX_RDAP_BYTES} bytes`);
-    return { status: res.status, ok: res.ok, text };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function fetchRegistrarWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<RdapFetchResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const result = await safeFetchDetailed(url, { ...options, signal: controller.signal });
-    const { text, truncated } = await readTextCapped(result.response, MAX_RDAP_BYTES);
-    if (truncated) throw new Error(`Response from ${url} exceeded ${MAX_RDAP_BYTES} bytes`);
-    return {
-      status: result.response.status,
-      ok: result.response.ok,
-      text,
-      finalUrl: result.finalUrl,
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // CIDR helpers (for matching an IP against RDAP bootstrap ranges)
@@ -367,7 +322,7 @@ function validBootstrap(data: unknown): data is BootstrapData {
 async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Promise<BootstrapData> {
   if (!BOOTSTRAP_KINDS.has(kind)) throw new Error(`Unsupported RDAP bootstrap kind: ${kind}`);
   const now = typeof options.now === 'function' ? options.now : Date.now;
-  const fetchUpstream = options.fetchUpstream || fetchRegistrarWithTimeout;
+  const fetchUpstream = options.fetchUpstream || fetchRdapDetailedWithTimeout;
   const cached = bootstrapCache.get(kind);
   if (cached && now() - cached.fetchedAt < BOOTSTRAP_TTL_MS) return cached.data;
   const inflight = bootstrapInflight.get(kind);
@@ -692,7 +647,7 @@ async function fetchRegistrarRdapRecord(
 ) {
   const canonical = canonicalDomain(domain);
   if (!canonical) throw new Error('A valid domain is required for registrar RDAP.');
-  const fetchUpstream = options.fetchUpstream || fetchWithTimeout;
+  const fetchUpstream = options.fetchUpstream || fetchRdapWithTimeout;
 
   return cached(`rdap-registrar:domain:${canonical}`, async () => {
     const registryParsed = recordOrNull(registryRecord?.parsed);
@@ -824,7 +779,7 @@ async function fetchRdapFromBases<const T extends string>(
   type: T,
   value: string,
   bases: unknown,
-  fetchUpstream: RdapFetch = fetchWithTimeout,
+  fetchUpstream: RdapFetch = fetchRdapWithTimeout,
 ): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
   const candidates = uniqueBases(bases).slice(0, MAX_RDAP_ENDPOINTS);
   if (candidates.length === 0) return null;
