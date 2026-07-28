@@ -86,6 +86,15 @@ Deep domain Lookup can combine:
 - a collapsed set of analyst-controlled links to relevant public registration,
   certificate, routing, interconnection, history, and site-status tools.
 
+After reviewing a completed Deep Lookup, an analyst can explicitly save a
+compact website-profile snapshot. The browser-local record contains curated
+technology identifiers, passive posture states, identity digests, source
+health, timestamps, and completeness markers. It excludes raw lookup payloads,
+captured HTML, headers, contacts, and provider findings. Comparing two
+snapshots identifies added, removed, changed, unavailable, or incomparable
+fields as review leads; it does not infer compromise, ownership, intent, or
+maliciousness and never starts a lookup automatically.
+
 While a deep Lookup is pending, the Console shows elapsed time, the eligible
 source branches still awaiting the final response, a 40-second browser
 deadline, and a cancel action. It does not invent per-source completion.
@@ -142,7 +151,8 @@ accessible lists, tables, or source records.
   network targets.
 - **Local-first investigation state.** Cases, evidence pins, analyst decisions,
   response actions, profiles, watchlists, campaigns, shortlist entries, saved
-  Bulk sessions, and rules use bounded IndexedDB stores in the current browser.
+  Bulk sessions, explicit website-profile snapshots, and rules use bounded
+  IndexedDB stores in the current browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
 - **Supplementary visuals.** Charts summarize bounded data already present in

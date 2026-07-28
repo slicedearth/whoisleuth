@@ -84,6 +84,16 @@ import {
 } from './analysis/bulk-session-model.ts';
 import type { BulkSession } from './analysis/bulk-session-model.ts';
 import {
+  MAX_WEBSITE_SNAPSHOTS,
+  MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
+  WEBSITE_SNAPSHOT_SCHEMA,
+  WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+  normalizeWebsiteSnapshotStore,
+  serializeWebsiteSnapshotStore,
+  websiteSnapshotStoreVersion,
+} from './analysis/website-snapshot-model.ts';
+import type { WebsiteProfileSnapshot } from './analysis/website-snapshot-model.ts';
+import {
   BrowserLocalDataError,
   plaintextJsonCodec,
 } from './browser-local-data.ts';
@@ -105,6 +115,7 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   detection_rules: DetectionRule;
   relationship_observations: RelationshipObservation;
   bulk_sessions: BulkSession;
+  website_snapshots: WebsiteProfileSnapshot;
 }>;
 
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
@@ -122,6 +133,7 @@ export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
 export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
 export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
 export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
+export const LEGACY_WEBSITE_SNAPSHOTS_KEY = 'whoisleuth-website-snapshots-v1';
 
 function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
@@ -278,6 +290,25 @@ export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession
   }),
 });
 
+export const WEBSITE_SNAPSHOTS_COLLECTION: LocalDataCollectionDefinition<WebsiteProfileSnapshot[]> = Object.freeze({
+  id: 'website_snapshots',
+  label: 'Website profile snapshots',
+  legacyKey: LEGACY_WEBSITE_SNAPSHOTS_KEY,
+  schemaVersion: WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+  maximumBytes: MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
+  maximumRecords: MAX_WEBSITE_SNAPSHOTS,
+  empty: () => [],
+  normalize: (raw) => normalizeWebsiteSnapshotStore(raw).snapshots,
+  version: websiteSnapshotStoreVersion,
+  serialize: serializeWebsiteSnapshotStore,
+  split: (snapshots) => recordsFromArray(snapshots, (record) => record.id),
+  join: (records, schemaVersion) => ({
+    schema: WEBSITE_SNAPSHOT_SCHEMA,
+    version: schemaVersion,
+    snapshots: arrayFromRecords(records),
+  }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
@@ -288,6 +319,7 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   DETECTION_RULES_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   BULK_SESSIONS_COLLECTION,
+  WEBSITE_SNAPSHOTS_COLLECTION,
 ]);
 
 function browserLocalCollectionDefinition(

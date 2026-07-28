@@ -334,6 +334,16 @@ A browser-library advisory match is a lead for review, not proof that the
 component is loaded, reachable, vulnerable in context, or exploitable. A
 non-match does not establish that no vulnerable component exists.
 
+After a completed Deep Lookup, **Save current snapshot** creates one bounded
+browser-local website profile only when the analyst chooses it. The snapshot
+keeps curated technology identifiers, posture states, page-identity digests,
+source health, collection completeness, and timestamps. It excludes raw RDAP,
+WHOIS, HTTP, HTML, contact, and provider payloads. Select an earlier and later
+snapshot of the same domain to review added, removed, changed, unavailable, or
+incomparable fields. Differences are leads for review, not evidence of
+compromise, ownership, intent, or maliciousness. Saving, comparing, deleting,
+exporting, and importing snapshots make no network request.
+
 Response-policy checks use the same selected homepage response and make no
 extra request. They retain fixed finding identifiers and bounded counts rather
 than complete policies or cookies. A finding is a response-scoped review lead,

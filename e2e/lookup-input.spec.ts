@@ -662,7 +662,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(20);
+  expect(exported.schemaVersion).toBe(21);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -1346,6 +1346,25 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/does not combine these observations into a page-similarity score or use them to change the Risk score/i)).toBeVisible();
+
+  const snapshots = page.locator('.snapshot-manager');
+  await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
+  await expect(snapshots.getByText(/A change is a review lead, not evidence of compromise/)).toBeVisible();
+  await snapshots.getByRole('button', { name: 'Save current snapshot' }).click();
+  await expect(snapshots.getByRole('status')).toContainText('Saved a compact website-profile snapshot');
+  const retainedSnapshots = await readBrowserLocalCollection(page, 'website_snapshots', { minimumRecords: 1 });
+  expect(retainedSnapshots.records).toHaveLength(1);
+  expect(retainedSnapshots.records[0]?.value).toMatchObject({
+    domain: 'http-evidence.test',
+    complete: false,
+    truncated: true,
+  });
+  expect(JSON.stringify(retainedSnapshots.records[0]?.value)).not.toContain('secret');
+  await snapshots.getByText(/Manage 1 saved snapshot/).click();
+  page.once('dialog', (dialog) => dialog.accept());
+  await snapshots.getByRole('button', { name: 'Delete' }).click();
+  await expect(snapshots.getByRole('status')).toContainText('Deleted the selected website-profile snapshot');
+  await expect(snapshots.getByText('No website-profile snapshot is retained for this domain.')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

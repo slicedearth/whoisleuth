@@ -23,6 +23,7 @@
   import LookupStructuredDataIdentity from '$lib/components/LookupStructuredDataIdentity.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
+  import WebsiteSnapshotManager from '$lib/components/WebsiteSnapshotManager.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
@@ -395,6 +396,32 @@
     evidence:stringList(finding.evidence).slice(0,4).map((item)=>boundedTechnologyText(item,120)).filter(Boolean),
   }));}
   function securityPostureLimitations(){return stringList(securityPosture.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
+  function websiteSnapshotInput(){
+    const now=new Date().toISOString();
+    const observedAt=typeof result?.fetchedAt==='string'?result.fetchedAt:now;
+    const baseline=observedPageBaseline;
+    const sourceNames=['rdap','whois','availability','dns','http','tls'];
+    return{
+      id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      domain:caseDomain,
+      observedAt,
+      savedAt:now,
+      complete:lookupEvidenceDepth==='deep'&&technologyProfile.complete===true&&securityPosture.complete===true&&Boolean(baseline?.complete),
+      truncated:Boolean(technologyProfile.truncated||securityPosture.truncated||baseline?.truncated),
+      technologies:technologyFindingRows().map(({id,name,category,confidence})=>({id,name,category,confidence})),
+      posture:securityPostureFindingRows().map(({id,state})=>({id,state})),
+      identity:{
+        normalizedHtml:baseline?.normalizedHtml.value??null,
+        visibleText:baseline?.visibleText?.value??null,
+        domStructure:baseline?.domStructure.value??null,
+        formStructure:baseline?.formStructure?.value??null,
+        resourceHosts:baseline?.resourceHosts.value??null,
+        trackingIdentifiers:baseline?.trackingIdentifiers.value??null,
+        faviconHash:baseline?.faviconHash??null,
+      },
+      sources:sourceNames.flatMap((source)=>{const state=boundedTechnologyText(rec(diagnostics[source]).status,40);return state?[{source,state}]:[];}),
+    };
+  }
   function pageFingerprintRows(){const exact=rec(pageFingerprints.exact);const normalizedHtml=rec(pageFingerprints.normalizedHtml);const visibleText=rec(pageFingerprints.visibleText);const domStructure=rec(pageFingerprints.domStructure);const formStructure=rec(pageFingerprints.formStructure);const resourceHosts=rec(pageFingerprints.resourceHosts);const identifiers=rec(pageFingerprints.identifiers);const resourceHostValues=Array.isArray(resourceHosts.values)?resourceHosts.values:[];const identifierValues=Array.isArray(identifiers.values)?identifiers.values:[];return[
     {label:'Exact captured body',value:exact.value,detail:exact.scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
     {label:'Normalized HTML',value:normalizedHtml.value,detail:`${show(normalizedHtml.tokenCount)} tokens`},
@@ -840,6 +867,13 @@
     {#if hasWebEvidence}
     <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
       <h3 id="web-evidence-title">{result.type==='domain'?'Web and DNS evidence':'DNS evidence'}</h3>
+      {#if result.type==='domain'}
+        <WebsiteSnapshotManager
+          domain={caseDomain}
+          canSave={!loading&&lookupEvidenceDepth==='deep'&&Boolean(caseDomain)&&technologyProfile.source==='derived'&&securityPosture.source==='derived'}
+          buildSnapshot={websiteSnapshotInput}
+        />
+      {/if}
 
       {#if reverseDns.source==='reverse_dns'}
         <div class="evidence-component" id="evidence-reverse-dns"><LookupDnsEvidence

@@ -94,7 +94,7 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
 test('dashboard local search exposes future-store limitations without indexing future values', async ({ page }) => {
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: 3, cases: [caseRecord('future-case', 'future.invalid')] },
+    'whois-rdap-cases-v1': { version: 99, cases: [caseRecord('future-case', 'future.invalid')] },
   });
 
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();

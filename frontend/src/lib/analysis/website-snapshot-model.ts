@@ -1,0 +1,231 @@
+import { normalizeDomain } from './case-model.ts';
+
+export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
+export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 1;
+export const MAX_WEBSITE_SNAPSHOTS = 60;
+export const MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN = 12;
+export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
+export const MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES = 768 * 1024;
+
+export type WebsiteSnapshotTechnology = Readonly<{
+  id: string;
+  name: string;
+  category: string;
+  confidence: string;
+}>;
+export type WebsiteSnapshotPosture = Readonly<{ id: string; state: string }>;
+export type WebsiteSnapshotSource = Readonly<{ source: string; state: string }>;
+export type WebsiteIdentityDigests = Readonly<{
+  normalizedHtml: string | null;
+  visibleText: string | null;
+  domStructure: string | null;
+  formStructure: string | null;
+  resourceHosts: string | null;
+  trackingIdentifiers: string | null;
+  faviconHash: string | null;
+}>;
+export type WebsiteProfileSnapshot = Readonly<{
+  id: string;
+  domain: string;
+  observedAt: string;
+  savedAt: string;
+  complete: boolean;
+  truncated: boolean;
+  technologies: WebsiteSnapshotTechnology[];
+  posture: WebsiteSnapshotPosture[];
+  identity: WebsiteIdentityDigests;
+  sources: WebsiteSnapshotSource[];
+}>;
+export type WebsiteSnapshotChange = Readonly<{
+  field: string;
+  state: 'added' | 'removed' | 'changed' | 'unavailable' | 'incomparable';
+  before: string | null;
+  after: string | null;
+}>;
+
+type UnknownRecord = Record<string, unknown>;
+const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const DIGEST_RE = /^[a-f0-9]{16,128}$/iu;
+
+function record(value: unknown): UnknownRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
+}
+function text(value: unknown, maximum: number): string {
+  return typeof value === 'string' && value.length <= maximum && !CONTROL_RE.test(value)
+    ? value.trim()
+    : '';
+}
+function timestamp(value: unknown): string {
+  const candidate = text(value, 64);
+  const parsed = Date.parse(candidate);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+}
+function digest(value: unknown): string | null {
+  const candidate = text(value, 128).toLowerCase();
+  return DIGEST_RE.test(candidate) ? candidate : null;
+}
+function values(raw: unknown, limit: number, normalize: (value: unknown) => unknown | null): unknown[] {
+  if (!Array.isArray(raw)) return [];
+  const output: unknown[] = [];
+  const seen = new Set<string>();
+  for (const value of raw.slice(0, limit * 4)) {
+    const normalized = normalize(value);
+    if (!normalized) continue;
+    const key = JSON.stringify(normalized);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(normalized);
+    if (output.length >= limit) break;
+  }
+  return output;
+}
+
+function technology(value: unknown): WebsiteSnapshotTechnology | null {
+  const item = record(value);
+  const id = text(item?.id, 80);
+  const name = text(item?.name, 120);
+  if (!id || !name) return null;
+  return { id, name, category: text(item?.category, 80) || 'technology', confidence: text(item?.confidence, 40) || 'unknown' };
+}
+function posture(value: unknown): WebsiteSnapshotPosture | null {
+  const item = record(value);
+  const id = text(item?.id, 80);
+  const state = text(item?.state, 40);
+  return id && state ? { id, state } : null;
+}
+function source(value: unknown): WebsiteSnapshotSource | null {
+  const item = record(value);
+  const sourceName = text(item?.source, 40);
+  const state = text(item?.state, 40);
+  return sourceName && state ? { source: sourceName, state } : null;
+}
+function identity(value: unknown): WebsiteIdentityDigests {
+  const item = record(value);
+  return {
+    normalizedHtml: digest(item?.normalizedHtml),
+    visibleText: digest(item?.visibleText),
+    domStructure: digest(item?.domStructure),
+    formStructure: digest(item?.formStructure),
+    resourceHosts: digest(item?.resourceHosts),
+    trackingIdentifiers: digest(item?.trackingIdentifiers),
+    faviconHash: digest(item?.faviconHash),
+  };
+}
+
+export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSnapshot | null {
+  const value = record(raw);
+  const domain = normalizeDomain(value?.domain);
+  const observedAt = timestamp(value?.observedAt);
+  const savedAt = timestamp(value?.savedAt);
+  const id = text(value?.id, 128);
+  if (!domain || !observedAt || !savedAt || !id) return null;
+  return {
+    id,
+    domain,
+    observedAt,
+    savedAt,
+    complete: value?.complete === true,
+    truncated: value?.truncated === true,
+    technologies: values(value?.technologies, 40, technology) as WebsiteSnapshotTechnology[],
+    posture: values(value?.posture, 40, posture) as WebsiteSnapshotPosture[],
+    identity: identity(value?.identity),
+    sources: values(value?.sources, 16, source) as WebsiteSnapshotSource[],
+  };
+}
+
+export function normalizeWebsiteSnapshotStore(raw: unknown) {
+  const value = record(raw);
+  if (value?.schema === WEBSITE_SNAPSHOT_SCHEMA
+    && Number(value?.version) > WEBSITE_SNAPSHOT_SCHEMA_VERSION) {
+    throw new Error('This website-snapshot collection uses a newer schema and cannot be read safely.');
+  }
+  const sourceValues = Array.isArray(raw) ? raw : Array.isArray(value?.snapshots) ? value.snapshots : [];
+  const snapshots = values(sourceValues, MAX_WEBSITE_SNAPSHOTS * 2, normalizeWebsiteProfileSnapshot) as WebsiteProfileSnapshot[];
+  const perDomain = new Map<string, number>();
+  const retained: WebsiteProfileSnapshot[] = [];
+  for (const snapshot of snapshots.sort((left, right) => right.savedAt.localeCompare(left.savedAt))) {
+    const count = perDomain.get(snapshot.domain) ?? 0;
+    if (count >= MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN || retained.length >= MAX_WEBSITE_SNAPSHOTS) continue;
+    perDomain.set(snapshot.domain, count + 1);
+    retained.push(snapshot);
+  }
+  return { schema: WEBSITE_SNAPSHOT_SCHEMA, version: WEBSITE_SNAPSHOT_SCHEMA_VERSION, snapshots: retained };
+}
+export function websiteSnapshotStoreVersion(raw: unknown): number {
+  const value = record(raw);
+  return Number.isSafeInteger(value?.version) ? Number(value?.version) : WEBSITE_SNAPSHOT_SCHEMA_VERSION;
+}
+export function serializeWebsiteSnapshotStore(raw: unknown): string {
+  const store = normalizeWebsiteSnapshotStore(raw);
+  const serialized = JSON.stringify(store);
+  if (new TextEncoder().encode(serialized).byteLength > MAX_WEBSITE_SNAPSHOT_STORE_BYTES) {
+    throw new Error('Website snapshots exceed the 512 KiB browser-local limit.');
+  }
+  return serialized;
+}
+export function saveWebsiteSnapshot(localRaw: unknown, candidateRaw: unknown) {
+  const candidate = normalizeWebsiteProfileSnapshot(candidateRaw);
+  if (!candidate) throw new Error('The website snapshot is incomplete or invalid.');
+  const current = normalizeWebsiteSnapshotStore(localRaw).snapshots;
+  const snapshots = current.filter((item) => item.id !== candidate.id);
+  snapshots.unshift(candidate);
+  return normalizeWebsiteSnapshotStore(snapshots).snapshots;
+}
+export function deleteWebsiteSnapshot(localRaw: unknown, id: string) {
+  return normalizeWebsiteSnapshotStore(localRaw).snapshots.filter((item) => item.id !== id);
+}
+export function buildWebsiteSnapshotExport(raw: unknown, generatedAt = new Date().toISOString()) {
+  const store = normalizeWebsiteSnapshotStore(raw);
+  return { ...store, generatedAt: timestamp(generatedAt) || new Date().toISOString() };
+}
+export function mergeWebsiteSnapshots(localRaw: unknown, incomingRaw: unknown) {
+  const local = normalizeWebsiteSnapshotStore(localRaw).snapshots;
+  const incoming = normalizeWebsiteSnapshotStore(incomingRaw).snapshots;
+  const byId = new Map(local.map((item) => [item.id, item]));
+  let added = 0;
+  let updated = 0;
+  for (const item of incoming) {
+    if (byId.has(item.id)) updated += 1;
+    else added += 1;
+    byId.set(item.id, item);
+  }
+  const snapshots = normalizeWebsiteSnapshotStore([...byId.values()]).snapshots;
+  return { snapshots, added, updated, skipped: Math.max(0, incoming.length - added - updated) };
+}
+
+function compareMap(
+  field: string,
+  before: ReadonlyMap<string, string>,
+  after: ReadonlyMap<string, string>,
+): WebsiteSnapshotChange[] {
+  const changes: WebsiteSnapshotChange[] = [];
+  for (const key of [...new Set([...before.keys(), ...after.keys()])].sort()) {
+    const left = before.get(key) ?? null;
+    const right = after.get(key) ?? null;
+    if (left === right) continue;
+    changes.push({ field: `${field}.${key}`, state: left === null ? 'added' : right === null ? 'removed' : 'changed', before: left, after: right });
+  }
+  return changes;
+}
+export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
+  const before = normalizeWebsiteProfileSnapshot(beforeRaw);
+  const after = normalizeWebsiteProfileSnapshot(afterRaw);
+  if (!before || !after || before.domain !== after.domain) {
+    return { compatible: false, changes: [{ field: 'snapshot', state: 'incomparable', before: before?.domain ?? null, after: after?.domain ?? null }] as WebsiteSnapshotChange[] };
+  }
+  const changes = [
+    ...compareMap('technology', new Map(before.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}`])), new Map(after.technologies.map((item) => [item.id, `${item.name}|${item.category}|${item.confidence}`]))),
+    ...compareMap('posture', new Map(before.posture.map((item) => [item.id, item.state])), new Map(after.posture.map((item) => [item.id, item.state]))),
+    ...compareMap('source', new Map(before.sources.map((item) => [item.source, item.state])), new Map(after.sources.map((item) => [item.source, item.state]))),
+  ];
+  for (const key of Object.keys(before.identity) as Array<keyof WebsiteIdentityDigests>) {
+    const left = before.identity[key];
+    const right = after.identity[key];
+    if (left === right) continue;
+    changes.push({ field: `identity.${key}`, state: left === null || right === null ? 'unavailable' : 'changed', before: left, after: right });
+  }
+  if (before.complete !== after.complete || before.truncated !== after.truncated) {
+    changes.push({ field: 'completeness', state: 'incomparable', before: `${before.complete}/${before.truncated}`, after: `${after.complete}/${after.truncated}` });
+  }
+  return { compatible: true, changes };
+}

@@ -19,12 +19,14 @@ import { assertShortlistStoreBudget, mergeShortlistStores } from './analysis/sho
 import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.ts';
 import { mergeRelationshipObservations } from './analysis/relationship-observation-model.ts';
 import { enforceBulkSessionStoreBudget, mergeBulkSessions } from './analysis/bulk-session-model.ts';
+import { mergeWebsiteSnapshots } from './analysis/website-snapshot-model.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { loadCampaigns } from './campaigns';
 import { loadCases } from './cases';
 import { loadDetectionRules } from './detection-rules';
 import { loadRelationshipObservations } from './relationship-observations';
 import { loadBulkSessions } from './bulk-sessions';
+import { loadWebsiteSnapshots } from './website-snapshots';
 import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import { loadWatchlists } from './watchlists';
@@ -38,6 +40,7 @@ import {
   WATCHLISTS_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   BULK_SESSIONS_COLLECTION,
+  WEBSITE_SNAPSHOTS_COLLECTION,
 } from './browser-local-data-definitions.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 
@@ -76,7 +79,7 @@ const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
 const profileId = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 async function localInput() {
-  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions] = await Promise.all([
+  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots] = await Promise.all([
     loadCases(),
     loadCampaigns(),
     loadProfiles(),
@@ -85,6 +88,7 @@ async function localInput() {
     loadDetectionRules(),
     loadRelationshipObservations(),
     loadBulkSessions(),
+    loadWebsiteSnapshots(),
   ]);
   return {
     cases,
@@ -95,6 +99,7 @@ async function localInput() {
     detectionRules,
     relationshipObservations,
     bulkSessions,
+    websiteSnapshots,
     settings: {
       activeProfileId: activeProfileId(),
       theme: readThemePreference(),
@@ -195,6 +200,7 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     ['detectionRules', DETECTION_RULES_COLLECTION],
     ['relationshipObservations', RELATIONSHIP_OBSERVATIONS_COLLECTION],
     ['bulkSessions', BULK_SESSIONS_COLLECTION],
+    ['websiteSnapshots', WEBSITE_SNAPSHOTS_COLLECTION],
   ]);
   const definitions = dataSections
     .map((section) => definitionBySection.get(section.id))
@@ -243,6 +249,10 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
           } else if (section.id === 'bulkSessions') {
             const result = mergeBulkSessions(documents.get('bulk_sessions'), section.data);
             next.set('bulk_sessions', enforceBulkSessionStoreBudget(result.sessions).store.sessions);
+            summaries.push(importSummary(section.id, result));
+          } else if (section.id === 'websiteSnapshots') {
+            const result = mergeWebsiteSnapshots(documents.get('website_snapshots'), section.data);
+            next.set('website_snapshots', result.snapshots);
             summaries.push(importSummary(section.id, result));
           } else continue;
         }

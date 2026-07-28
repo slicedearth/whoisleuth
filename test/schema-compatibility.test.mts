@@ -39,6 +39,11 @@ import {
   buildRelationshipObservationExport,
 } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import {
+  MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
+  WEBSITE_SNAPSHOT_SCHEMA,
+  WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+} from '../frontend/src/lib/analysis/website-snapshot-model.ts';
+import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
   WORKSPACE_ARCHIVE_SCHEMA,
   WORKSPACE_ARCHIVE_VERSION,
@@ -129,7 +134,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 55);
+    assert.equal(inventory.entries.length, 56);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -144,6 +149,9 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.relationship-graph').byteBudget, MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES);
     assert.equal(byId(inventory, 'browser.relationship-observations').schema, RELATIONSHIP_OBSERVATION_SCHEMA);
     assert.equal(byId(inventory, 'browser.relationship-observations').currentVersion, RELATIONSHIP_OBSERVATION_SCHEMA_VERSION);
+    assert.equal(byId(inventory, 'browser.website-snapshots').schema, WEBSITE_SNAPSHOT_SCHEMA);
+    assert.equal(byId(inventory, 'browser.website-snapshots').currentVersion, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
+    assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
     assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);

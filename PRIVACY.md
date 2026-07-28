@@ -372,6 +372,15 @@ default (see the README), so many lookups return no personal data at all.
   registrant and abuse contacts, and Certificate Transparency rows. Saving and
   loading make no network request; an explicit resume sends only domains that
   had no settled row through the selected Bulk mode.
+  Website profile snapshots are retained only after an analyst explicitly
+  saves a completed Deep Lookup. Each bounded record contains the canonical
+  domain, observation and save times, collection completeness and truncation,
+  curated technology identifiers, passive posture states, selected
+  page-identity digests, and source-health states. It excludes raw RDAP,
+  WHOIS, HTTP, HTML, contact, credential, and provider payloads. Snapshot
+  comparison, deletion, import, and export happen locally and make no request.
+  A changed or unavailable field is a review lead, not evidence of compromise,
+  ownership, intent, safety, or maliciousness.
   Bulk filters and group summaries are derived locally from the compact rows
   already in memory. Explicit batch selection is stored in the same bounded
   shortlist and does not make a request. A selected deep rescan sends only the
@@ -444,7 +453,7 @@ default (see the README), so many lookups return no personal data at all.
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
   detection rules, retained relationship observations, compact saved Bulk
-  sessions, active-profile
+  sessions, website profile snapshots, active-profile
   selection, and theme preference. It uses a versioned manifest with
   per-section SHA-256
   checksums, previews conflicts before a non-destructive merge, and excludes
