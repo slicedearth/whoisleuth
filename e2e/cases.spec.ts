@@ -504,6 +504,58 @@ test('external findings require a validated preview before creating local eviden
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 decisions');
 });
 
+test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'intelligence-case.invalid');
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const payload = JSON.stringify({
+    type: 'bundle',
+    id: 'bundle--00000000-0000-4000-8000-000000000101',
+    objects: [
+      {
+        type: 'identity',
+        spec_version: '2.1',
+        id: 'identity--00000000-0000-4000-8000-000000000102',
+        name: 'External review source',
+      },
+      {
+        type: 'indicator',
+        spec_version: '2.1',
+        id: 'indicator--00000000-0000-4000-8000-000000000103',
+        created_by_ref: 'identity--00000000-0000-4000-8000-000000000102',
+        pattern_type: 'stix',
+        pattern: "[domain-name:value = 'reported.invalid']",
+        valid_from: '2026-07-28T01:00:00.000Z',
+        labels: ['analyst-review'],
+        confidence: 60,
+      },
+    ],
+  });
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'external-review.stix.json',
+    mimeType: 'application/stix+json',
+    buffer: Buffer.from(payload),
+  });
+
+  await expect(externalImport.getByRole('heading', { name: /bundle--/ })).toBeVisible();
+  await expect(externalImport).toContainText('1 accepted');
+  await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
+  await externalImport.getByLabel('Merge into existing case').selectOption({ label: 'intelligence-case.invalid' });
+  await externalImport.getByRole('button', { name: 'Merge assertions into case' }).click();
+  await expect(page.getByRole('status')).toContainText('Merged 1 external assertion');
+
+  const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
+  if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
+  const response = page.locator('.response-workspace');
+  await expect(response).toContainText('0 pins · 0 decisions · 1 assertion');
+  await response.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
+  await expect(response).toContainText('external import · open');
+  await expect(response).toContainText('External review source');
+  await expect(response).toContainText('File SHA-256');
+  await expect(response).toContainText('WHOISleuth did not collect or independently verify this claim');
+});
+
 test('deleting a case removes it after confirmation', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'delete-me.invalid');

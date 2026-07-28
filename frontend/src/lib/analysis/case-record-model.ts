@@ -32,8 +32,8 @@ import {
 //   - An IMPORT file that declares a greater version is never INTERPRETED at
 //     all: mergeCases rejects it up front so we don't merge data from a schema
 //     we don't understand.
-export const CASE_SCHEMA_VERSION = 6;
-export const CASE_IMPORT_VERSIONS = [3, 4, 5, CASE_SCHEMA_VERSION] as const;
+export const CASE_SCHEMA_VERSION = 7;
+export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, CASE_SCHEMA_VERSION] as const;
 
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;

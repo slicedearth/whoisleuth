@@ -558,6 +558,13 @@ default (see the README), so many lookups return no personal data at all.
   record, and keeps observation time separate from storage time. It does not
   duplicate raw payloads, pin values, relationship values, analyst notes, or
   page content, and does not start collection.
+- **External intelligence import**: a selected local STIX 2.1 or MISP JSON file
+  is decoded, hashed with SHA-256, normalized, previewed, and merged entirely in
+  the browser. Only the bounded supported entity claim and provenance metadata
+  are retained on an explicitly selected existing case. Unsupported attribute
+  values, raw files, descriptions, MISP comments, and provider payloads are not
+  stored. The importer makes no network request, does not create a case, and
+  does not start collection, scoring, publication, correlation, or reporting.
 - **Reviewed response and defensive-control exports**: a case response packet
   is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
   UTC observation time, and separately attributed registrar, registry,

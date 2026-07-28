@@ -18,6 +18,8 @@ export const MAX_RESPONSE_LIMITATIONS = 8;
 export const MAX_RESPONSE_LIMITATION_LENGTH = 240;
 export const MAX_DECISION_PIN_REFERENCES = 20;
 export const MAX_TRAIL_TARGET_LENGTH = 500;
+export const MAX_ASSERTION_PROVENANCE_LABELS = 20;
+export const MAX_ASSERTION_PROVENANCE_MARKINGS = 12;
 
 export const CASE_PIN_COMPLETENESS = ['complete', 'partial', 'inconclusive', 'unknown'] as const;
 export type CasePinCompleteness = typeof CASE_PIN_COMPLETENESS[number];
@@ -56,6 +58,37 @@ export type CaseAssertionKind = typeof CASE_ASSERTION_KINDS[number];
 
 export const CASE_ASSERTION_STATES = ['open', 'resolved'] as const;
 export type CaseAssertionState = typeof CASE_ASSERTION_STATES[number];
+
+export const CASE_ASSERTION_EXTERNAL_FORMATS = ['stix', 'misp'] as const;
+export type CaseAssertionExternalFormat = typeof CASE_ASSERTION_EXTERNAL_FORMATS[number];
+
+export const CASE_ASSERTION_EXTERNAL_ENTITY_TYPES = [
+  'asn',
+  'certificate',
+  'domain',
+  'hostname',
+  'ipv4',
+  'ipv6',
+  'url',
+] as const;
+export type CaseAssertionExternalEntityType = typeof CASE_ASSERTION_EXTERNAL_ENTITY_TYPES[number];
+
+export type CaseAssertionExternalProvenance = {
+  origin: 'external_import';
+  format: CaseAssertionExternalFormat;
+  sourceName: string;
+  sourceDigestSha256: string;
+  publisher: string | null;
+  externalId: string | null;
+  entityType: CaseAssertionExternalEntityType;
+  entityValue: string;
+  observedAt: string | null;
+  createdAt: string | null;
+  modifiedAt: string | null;
+  confidence: number | null;
+  labels: string[];
+  markings: string[];
+};
 
 export const CASE_MANUAL_TRAIL_KINDS = ['pivot', 'review', 'handoff'] as const;
 export type CaseManualTrailKind = typeof CASE_MANUAL_TRAIL_KINDS[number];
@@ -115,6 +148,7 @@ export type CaseAssertionRecord = {
   state: CaseAssertionState;
   createdAt: string;
   updatedAt: string;
+  provenance?: CaseAssertionExternalProvenance;
 };
 
 export type CaseManualTrailEvent = {
@@ -161,6 +195,8 @@ const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
 const ASSERTION_KINDS = new Set<string>(CASE_ASSERTION_KINDS);
 const ASSERTION_STATES = new Set<string>(CASE_ASSERTION_STATES);
+const ASSERTION_EXTERNAL_FORMATS = new Set<string>(CASE_ASSERTION_EXTERNAL_FORMATS);
+const ASSERTION_EXTERNAL_ENTITY_TYPES = new Set<string>(CASE_ASSERTION_EXTERNAL_ENTITY_TYPES);
 const TRAIL_KINDS = new Set<string>(CASE_MANUAL_TRAIL_KINDS);
 
 function record(value: unknown): Record<string, unknown> {
@@ -493,6 +529,58 @@ export function mergeCaseActions(
   return normalizeCaseActions([...local, ...imported], fallback);
 }
 
+function assertionProvenanceList(value: unknown, maximum: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const output = new Set<string>();
+  for (const item of value.slice(0, maximum * 2)) {
+    const normalized = text(item, MAX_RESPONSE_LIMITATION_LENGTH);
+    if (normalized) output.add(normalized);
+    if (output.size >= maximum) break;
+  }
+  return [...output];
+}
+
+function normalizeAssertionProvenance(value: unknown): CaseAssertionExternalProvenance | null {
+  const item = record(value);
+  const sourceName = text(item.sourceName, 120);
+  const sourceDigestSha256 = text(item.sourceDigestSha256, 64).toLowerCase();
+  const entityValue = text(item.entityValue, MAX_RESPONSE_VALUE_LENGTH);
+  if (
+    item.origin !== 'external_import'
+    || typeof item.format !== 'string'
+    || !ASSERTION_EXTERNAL_FORMATS.has(item.format)
+    || typeof item.entityType !== 'string'
+    || !ASSERTION_EXTERNAL_ENTITY_TYPES.has(item.entityType)
+    || !sourceName
+    || !/^[0-9a-f]{64}$/u.test(sourceDigestSha256)
+    || !entityValue
+  ) {
+    return null;
+  }
+  const confidence = typeof item.confidence === 'number'
+    && Number.isInteger(item.confidence)
+    && item.confidence >= 0
+    && item.confidence <= 100
+    ? item.confidence
+    : null;
+  return {
+    origin: 'external_import',
+    format: item.format as CaseAssertionExternalFormat,
+    sourceName,
+    sourceDigestSha256,
+    publisher: text(item.publisher, 160) || null,
+    externalId: text(item.externalId, 200) || null,
+    entityType: item.entityType as CaseAssertionExternalEntityType,
+    entityValue,
+    observedAt: optionalIso(item.observedAt),
+    createdAt: optionalIso(item.createdAt),
+    modifiedAt: optionalIso(item.modifiedAt),
+    confidence,
+    labels: assertionProvenanceList(item.labels, MAX_ASSERTION_PROVENANCE_LABELS),
+    markings: assertionProvenanceList(item.markings, MAX_ASSERTION_PROVENANCE_MARKINGS),
+  };
+}
+
 function normalizeAssertion(
   raw: unknown,
   fallback: string,
@@ -502,6 +590,7 @@ function normalizeAssertion(
   const statement = text(item.statement, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!statement) return null;
   const createdAt = iso(item.createdAt, fallback);
+  const provenance = normalizeAssertionProvenance(item.provenance);
   return {
     id: safeId(item.id, 'assertion', { statement, createdAt }),
     kind: typeof item.kind === 'string' && ASSERTION_KINDS.has(item.kind)
@@ -515,6 +604,7 @@ function normalizeAssertion(
       : 'open',
     createdAt,
     updatedAt: iso(item.updatedAt, createdAt),
+    ...(provenance ? { provenance } : {}),
   };
 }
 

@@ -287,7 +287,17 @@ export function buildCaseReport(
       evidencePins: caseRecord.evidencePins.map((item) => ({ ...item, limitations: [...item.limitations] })),
       decisions: caseRecord.decisions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
       actions: caseRecord.actions.map((item) => ({ ...item, contactLimitations: [...item.contactLimitations] })),
-      assertions: caseRecord.assertions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
+      assertions: caseRecord.assertions.map((item) => ({
+        ...item,
+        evidencePinIds: [...item.evidencePinIds],
+        ...(item.provenance ? {
+          provenance: {
+            ...item.provenance,
+            labels: [...item.provenance.labels],
+            markings: [...item.provenance.markings],
+          },
+        } : {}),
+      })),
       manualTrail: caseRecord.manualTrail.map((item) => ({ ...item })),
     },
     limitations: LIMITATIONS_TEXT,
@@ -484,6 +494,14 @@ function buildMarkdown(report: CaseReportJson): string {
       for (const assertion of assertions) {
         lines.push(`- **${escapeMarkdownInline(assertion.state)}:** ${escapeMarkdownInline(assertion.statement)}`);
         if (assertion.rationale) lines.push(`  ${escapeMarkdownInline(assertion.rationale)}`);
+        if (assertion.provenance) {
+          lines.push(`  External provenance: ${escapeMarkdownInline(assertion.provenance.format.toUpperCase())}; source ${escapeMarkdownInline(assertion.provenance.sourceName)}; file SHA-256 ${escapeMarkdownInline(assertion.provenance.sourceDigestSha256)}.`);
+          if (assertion.provenance.publisher) lines.push(`  Publisher: ${escapeMarkdownInline(assertion.provenance.publisher)}`);
+          if (assertion.provenance.externalId) lines.push(`  External ID: ${escapeMarkdownInline(assertion.provenance.externalId)}`);
+          if (assertion.provenance.observedAt) lines.push(`  Externally reported observation time: ${escapeMarkdownInline(assertion.provenance.observedAt)}`);
+          if (assertion.provenance.labels.length) lines.push(`  Labels: ${escapeMarkdownInline(assertion.provenance.labels.join(', '))}`);
+          if (assertion.provenance.markings.length) lines.push(`  Markings: ${escapeMarkdownInline(assertion.provenance.markings.join(', '))}`);
+        }
         if (assertion.evidencePinIds.length) lines.push(`  Evidence pins: ${escapeMarkdownInline(assertion.evidencePinIds.join(', '))}`);
       }
       lines.push('');

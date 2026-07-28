@@ -545,6 +545,16 @@ completeness, truncation, derivation, and source state, and links back to its
 owning record. The projection does not copy raw payloads, pin values, analyst
 notes, or relationship values, and it never starts collection.
 
+The Cases view also accepts the strict WHOISleuth external-findings schema and
+bounded STIX 2.1 or MISP event JSON. Every file is validated and previewed
+locally before a merge. STIX and MISP previews separate accepted claims,
+duplicates, conflicting identifiers, and exclusions, then require an existing
+case to be selected. Merged claims become external `unknown` assertions with
+their source-file SHA-256 digest, publisher, external identifier, timestamps,
+confidence, labels, and markings. They do not become collected evidence and do
+not create cases, start collection, change scores, publish events, or enable
+correlation. See [External findings and intelligence import](external-findings-import.md).
+
 ## Browser-local storage and archives
 
 Cases, campaigns, Brand Profiles, watchlists, shortlist entries, Certificate

@@ -11,6 +11,7 @@ export const RETAINED_TIMELINE_KINDS = [
   'case_snapshot',
   'evidence_pin',
   'evidence_checkpoint',
+  'external_assertion',
   'website_snapshot',
   'watchlist_check',
   'relationship',
@@ -150,6 +151,33 @@ function caseTimelineItems(records: readonly CaseRecord[]): RetainedTimelineItem
         truncated: pin.truncated === true,
         derived: false,
         limitations: limitations(pin.limitations, 'An analyst-selected pin is a retained fact, not an independent verification or conclusion.'),
+      });
+    }
+    for (const assertion of record.assertions.slice(-40)) {
+      const provenance = assertion.provenance;
+      if (!provenance) continue;
+      const observedAt = timestamp(provenance.observedAt ?? provenance.createdAt ?? assertion.createdAt);
+      const storedAt = timestamp(assertion.createdAt);
+      if (!observedAt || !storedAt) continue;
+      items.push({
+        id: `external-assertion:${record.id}:${assertion.id}`,
+        kind: 'external_assertion',
+        eventType: 'evidence',
+        title: `External ${provenance.format.toUpperCase()} claim retained`,
+        detail: `A bounded external ${provenance.entityType} claim was merged into this case as an assertion. Its value remains in the owning case.`,
+        entities: [record.domain],
+        caseId: record.id,
+        caseLabel: record.domain,
+        owner: `Case · ${record.domain}`,
+        href: `${caseHref}#case-response-${encodeURIComponent(record.id)}`,
+        source: provenance.sourceName,
+        sourceState: 'external assertion',
+        observedAt,
+        storedAt,
+        completeness: 'unknown',
+        truncated: false,
+        derived: false,
+        limitations: ['WHOISleuth did not collect or independently verify this imported claim. Review the source digest, markings, publisher, and external identifier in the owning case.'],
       });
     }
   }
