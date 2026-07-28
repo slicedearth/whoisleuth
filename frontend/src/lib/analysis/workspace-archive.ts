@@ -73,6 +73,7 @@ import {
 
 export const WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.workspace-archive';
 export const WORKSPACE_ARCHIVE_VERSION = 4;
+export const SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS = [1, 2, 3, WORKSPACE_ARCHIVE_VERSION] as const;
 export const WORKSPACE_SETTINGS_SCHEMA = 'whoisleuth.workspace-settings';
 export const WORKSPACE_SETTINGS_VERSION = 1;
 export const MAX_WORKSPACE_ARCHIVE_BYTES = 10 * 1024 * 1024;
@@ -92,6 +93,12 @@ export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'investigationTemplates',
   'settings',
 ] as const;
+
+export function isSupportedWorkspaceArchiveVersion(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.some((version) => version === value);
+}
 
 export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
 export type WorkspaceArchiveSectionStatus = 'ready' | 'unsupported';
@@ -514,9 +521,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     throw new Error('This file is not a WHOISleuth workspace archive.');
   }
   if (
-    typeof value.version !== 'number'
-    || !Number.isSafeInteger(value.version)
-    || ![1, 2, 3, WORKSPACE_ARCHIVE_VERSION].includes(value.version)
+    !isSupportedWorkspaceArchiveVersion(value.version)
   ) {
     if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
       throw new Error(`This workspace archive uses newer schema ${value.version}. Update the app before importing it.`);

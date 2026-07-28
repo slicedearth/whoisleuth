@@ -470,7 +470,7 @@ function bimiCheck(query: DnsQuery, dmarcQuery: DnsQuery): PostureCheck {
 
 function dkimCheck(selectorQueries: DkimQuery[]): PostureCheck {
   selectorQueries = selectorQueries.filter((query) => query.retired !== true);
-  if (!Array.isArray(selectorQueries) || selectorQueries.length === 0) {
+  if (selectorQueries.length === 0) {
     return check('dkim', 'DKIM', 'info', 'Not checked: no selectors configured', {
       detail: 'DKIM selectors cannot be discovered reliably from DNS; configure the selectors used by each legitimate sending platform in the Brand Profile.',
     });

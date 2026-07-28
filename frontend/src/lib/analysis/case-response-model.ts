@@ -74,6 +74,7 @@ export type CaseActionRecord = {
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const COMPLETENESS = new Set<string>(CASE_PIN_COMPLETENESS);
 const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
@@ -86,7 +87,7 @@ function record(value: unknown): Record<string, unknown> {
 
 function text(value: unknown, maximum: number): string {
   if (typeof value !== 'string') return '';
-  return value.replace(CONTROL_RE, ' ').trim().slice(0, maximum);
+  return value.replace(CONTROL_REPLACE_RE, ' ').trim().slice(0, maximum);
 }
 
 function iso(value: unknown, fallback: string): string {

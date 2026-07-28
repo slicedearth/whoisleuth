@@ -84,6 +84,43 @@ describe('case response record normalization', () => {
     assert.equal(normalizeCaseDecisions([...decisions, null, {}], NOW).length, MAX_CASE_DECISIONS);
     assert.equal(normalizeCaseActions([...actions, null, {}], NOW).length, MAX_CASE_ACTIONS);
   });
+
+  test('removes every control character from normalized analyst records', () => {
+    const control = /[\u0000-\u001f\u007f]/u;
+    const pin = requiredValue(appendCaseEvidencePin([], {
+      label: 'Observed\rform\n\u0007',
+      value: 'Credential\trequest\u007fdetected',
+      source: 'deep\rlookup\n',
+      limitations: ['Rendered\rcontent\nwas\u0007not evaluated.'],
+    }, NOW)[0]);
+    const decision = requiredValue(appendCaseDecision([], {
+      summary: 'Escalate\rfor\nreview',
+      rationale: 'Selected\tevidence\u007frequires review.',
+    }, NOW)[0]);
+    const action = requiredValue(appendCaseAction([], {
+      recipient: 'abuse@example.test\r\n\u0007',
+      contactSource: 'registrar\tRDAP\u007f',
+      contactLimitations: ['Monitoring\rstatus\nis\u0007unknown.'],
+      reference: 'CASE\r123\n\u0007',
+      outcome: 'Pending\tprovider\u007freview.',
+    }, NOW)[0]);
+
+    for (const value of [
+      pin.label,
+      pin.value,
+      pin.source,
+      ...pin.limitations,
+      decision.summary,
+      decision.rationale,
+      action.recipient,
+      action.contactSource,
+      ...action.contactLimitations,
+      action.reference ?? '',
+      action.outcome ?? '',
+    ]) {
+      assert.doesNotMatch(value, control);
+    }
+  });
 });
 
 describe('case store integration', () => {

@@ -90,6 +90,39 @@ describe('case response packet', () => {
     assert.equal(result.json.contacts.length, 1);
   });
 
+  test('removes every control character from packet fields and rendered drafts', () => {
+    const result = buildCaseResponsePacket(reviewedCase(), {
+      category: 'Credential\rphishing\nreview\u0007',
+      affectedParty: 'Example\tservice\u007fteam',
+      abusiveUrls: ['https://report.example/sign-in'],
+      observedHarm: 'A credential\rform\nwas\u0007observed.',
+      observedAt: NOW,
+      contacts: [{
+        kind: 'registrar',
+        contact: 'abuse@example.test\r\n\u0007',
+        source: 'registrar\tRDAP\u007f',
+        limitations: ['Monitoring\rstatus\nis\u0007unknown.'],
+      }],
+    }, NOW);
+    const control = /[\u0000-\u001f\u007f]/u;
+    const renderedControl = /[\u0000-\u0009\u000b-\u001f\u007f]/u;
+    const contact = result.json.contacts[0];
+
+    for (const value of [
+      result.json.incident.category,
+      result.json.incident.affectedParty,
+      result.json.incident.observedHarm,
+      contact?.contact ?? '',
+      contact?.source ?? '',
+      ...(contact?.limitations ?? []),
+    ]) {
+      assert.doesNotMatch(value, control);
+    }
+    assert.doesNotMatch(result.markdown, renderedControl);
+    assert.doesNotMatch(result.email, renderedControl);
+    assert.match(result.email, /^Subject: Reviewed Credential phishing review report for report\.example$/mu);
+  });
+
   test('uses bounded path-safe filenames', () => {
     const filename = caseResponsePacketFilename('../REPORT.example', 'json', NOW);
     assert.equal(filename, 'whoisleuth-response-..-report.example-2026-07-28.json');

@@ -72,10 +72,11 @@ export type CaseResponsePacket = {
 
 const CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 
 function text(value: unknown, maximum: number): string {
   if (typeof value !== 'string') return '';
-  return value.replace(CONTROL_RE, ' ').trim().slice(0, maximum);
+  return value.replace(CONTROL_REPLACE_RE, ' ').trim().slice(0, maximum);
 }
 
 function timestamp(value: unknown): string | null {

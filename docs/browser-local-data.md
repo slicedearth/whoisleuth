@@ -153,7 +153,7 @@ The threat model is deliberately narrow:
 - it does not protect the active plaintext IndexedDB workspace, an unlocked
   Console, a compromised same-origin page, a malicious browser extension,
   device malware, a keylogger, or a weak or reused passphrase; and
-- unencrypted version 1 and 2 archives remain importable, without inventing
+- unencrypted archive versions 1 through 3 remain importable, without inventing
   sections that those formats did not contain, and an unencrypted current
   archive can still be downloaded through a separately labelled compatibility
   action.

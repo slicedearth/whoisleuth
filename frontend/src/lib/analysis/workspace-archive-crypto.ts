@@ -6,6 +6,7 @@ import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
   WORKSPACE_ARCHIVE_SCHEMA,
   WORKSPACE_ARCHIVE_VERSION,
+  isSupportedWorkspaceArchiveVersion,
   readWorkspaceArchive,
 } from './workspace-archive.ts';
 
@@ -169,9 +170,7 @@ function validateEnvelope(raw: unknown): {
     !content
     || !hasExactKeys(content, ['schema', 'version'])
     || content.schema !== WORKSPACE_ARCHIVE_SCHEMA
-    || typeof content.version !== 'number'
-    || !Number.isSafeInteger(content.version)
-    || ![1, WORKSPACE_ARCHIVE_VERSION].includes(content.version)
+    || !isSupportedWorkspaceArchiveVersion(content.version)
   ) {
     throw new Error('The encrypted workspace archive declares an unsupported content contract.');
   }
@@ -293,7 +292,7 @@ export async function encryptWorkspaceArchive(
 ): Promise<EncryptedWorkspaceArchiveEnvelope> {
   await readWorkspaceArchive(archive);
   const archiveVersion = record(archive)?.version;
-  if (archiveVersion !== 1 && archiveVersion !== WORKSPACE_ARCHIVE_VERSION) {
+  if (!isSupportedWorkspaceArchiveVersion(archiveVersion)) {
     throw new Error('The workspace archive declares an unsupported content contract.');
   }
   const plaintext = JSON.stringify(archive);

@@ -311,6 +311,10 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
   const whoisParsed = whois && !whois.error ? recordOrNull(whois.parsed) : null;
   const registrarRdap = recordOrNull(rdap?.registrarRdap);
   const registrarRdapParsed = recordOrNull(registrarRdap?.parsed);
+  // Rebuild the pure interpretation from bounded source fields instead of
+  // trusting a supplied derived object. This adds no collection or network
+  // work and lets saved or fast responses carry current source-health-aware
+  // interpretation in a deliberate analyst-created export.
   const registryInsights = buildRegistryInsights({
     rdapParsed,
     rdapStatus: rdapDiagnostics?.status,

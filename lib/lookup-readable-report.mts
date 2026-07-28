@@ -232,6 +232,9 @@ function projectedLookup(response: LookupHttpResponse): Record<string, unknown> 
   const rdapDiagnostics = isJsonObject(view.diagnostics.rdap) ? view.diagnostics.rdap : {};
   const whoisDiagnostics = isJsonObject(view.diagnostics.whois) ? view.diagnostics.whois : {};
   const registrarDiagnostics = isJsonObject(rdapDiagnostics.registrar) ? rdapDiagnostics.registrar : {};
+  // The readable report deliberately derives current interpretation from the
+  // already-collected bounded fields. It performs no collection and preserves
+  // the limitations and source-health states of incomplete or fast results.
   const registryInsights = buildRegistryInsights({
     rdapParsed: view.rdapParsed,
     rdapStatus: rdapDiagnostics.status,

@@ -78,15 +78,17 @@ describe('encrypted portable workspace archives', () => {
     assert.notEqual(first.ciphertext, second.ciphertext);
   });
 
-  test('preserves the declared content version when locking a readable legacy archive', async () => {
-    const legacy = structuredClone(await workspaceArchive());
-    Reflect.set(legacy, 'version', 1);
-    const encrypted = await encryptWorkspaceArchive(legacy, PASSPHRASE);
+  test('preserves every readable legacy content version when locking an archive', async () => {
+    for (const version of [1, 2, 3]) {
+      const legacy = structuredClone(await workspaceArchive());
+      Reflect.set(legacy, 'version', version);
+      const encrypted = await encryptWorkspaceArchive(legacy, PASSPHRASE);
 
-    assert.equal(encrypted.content.version, 1);
-    const decrypted = await decryptWorkspaceArchive(encrypted, PASSPHRASE);
-    const parsed = await readWorkspaceArchive(decrypted);
-    assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+      assert.equal(encrypted.content.version, version);
+      const decrypted = await decryptWorkspaceArchive(encrypted, PASSPHRASE);
+      const parsed = await readWorkspaceArchive(decrypted);
+      assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    }
   });
 
   test('reports one generic failure for a wrong passphrase or authenticated-data tampering', async () => {
