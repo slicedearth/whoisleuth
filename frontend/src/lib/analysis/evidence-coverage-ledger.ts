@@ -45,6 +45,8 @@ export type LookupEvidenceCoverageInput = Readonly<{
   httpResponse?: unknown;
   observedNetworkContext?: unknown;
   pageIdentity?: unknown;
+  pageRoleProfile?: unknown;
+  clientBehaviorProfile?: unknown;
   rdapParsed?: unknown;
   registrarRdap?: unknown;
   reverseDns?: unknown;
@@ -220,6 +222,8 @@ export function buildLookupEvidenceCoverageLedger(
   const httpResponse = record(input.httpResponse);
   const tlsEvidence = record(input.tlsEvidence);
   const pageIdentity = record(input.pageIdentity);
+  const pageRoleProfile = record(input.pageRoleProfile);
+  const clientBehaviorProfile = record(input.clientBehaviorProfile);
   const technologyProfile = record(input.technologyProfile);
   const securityPosture = record(input.securityPosture);
   const securityTxt = record(input.securityTxt);
@@ -328,6 +332,24 @@ export function buildLookupEvidenceCoverageLedger(
         complete: technologyProfile.complete,
         truncated: technologyProfile.truncated,
         limitations: stringList(technologyProfile.limitations),
+      },
+      {
+        id: 'page-role',
+        label: 'Page role classification',
+        category: 'analysis',
+        status: pageRoleProfile.status,
+        complete: pageRoleProfile.complete,
+        truncated: pageRoleProfile.truncated,
+        limitations: stringList(pageRoleProfile.limitations),
+      },
+      {
+        id: 'client-behavior',
+        label: 'Client-side behaviour indicators',
+        category: 'analysis',
+        status: clientBehaviorProfile.status,
+        complete: clientBehaviorProfile.complete,
+        truncated: clientBehaviorProfile.truncated,
+        limitations: stringList(clientBehaviorProfile.limitations),
       },
       {
         id: 'security-posture',

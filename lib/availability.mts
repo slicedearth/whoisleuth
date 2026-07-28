@@ -672,6 +672,8 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     credentialSurfaceProfile: null,
     structuredDataIdentity: null,
     technologyProfile: null,
+    pageRoleProfile: null,
+    clientBehaviorProfile: null,
   };
 
   if (homepage.status === 'fetched') {
@@ -691,6 +693,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
         exactBodyHash: homepage.http?.response?.bodyHash,
         httpServer: homepage.http?.response?.server,
+        activityStatus,
         includePageIdentity: pageIdentityEligible,
         ...(options.includeCredentialSurfaceProfile !== undefined
           ? { includeCredentialSurfaceProfile: options.includeCredentialSurfaceProfile }

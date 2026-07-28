@@ -20,6 +20,7 @@
   import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
   import LookupPageComparison from '$lib/components/LookupPageComparison.svelte';
   import LookupPageIdentity from '$lib/components/LookupPageIdentity.svelte';
+  import LookupPageRoleBehavior from '$lib/components/LookupPageRoleBehavior.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
@@ -187,6 +188,8 @@
   const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile);
   const structuredDataIdentity=$derived(lookupView.structuredDataIdentity);
   const technologyProfile=$derived(lookupView.technologyProfile);
+  const pageRoleProfile=$derived(lookupView.pageRoleProfile);
+  const clientBehaviorProfile=$derived(lookupView.clientBehaviorProfile);
   const browserLibraryProfile=$derived(rec(technologyProfile.browserLibraryProfile));
   const securityPosture=$derived(lookupView.securityPosture);
   const securityPostureSummary=$derived(lookupView.securityPostureSummary);
@@ -266,6 +269,8 @@
     structuredDataIdentity,
     technologyProfile,
     browserLibraryProfile,
+    pageRoleProfile,
+    clientBehaviorProfile,
     observedNetworkContext,
     observedNetworkEndpoint,
     observedNetwork,
@@ -281,7 +286,7 @@
     hasPasswordField:availability.hasPasswordField,
     phishingLanguageMatch:availability.phishingLanguageMatch,
   }));
-  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||pageRoleProfile.source==='derived'||clientBehaviorProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||abuseRecipientResolution.recipients.length>0);
   const evidenceTopologyNodes=$derived(buildLookupEvidenceTopologyNodes({
     targetType:result?.type,
@@ -354,6 +359,8 @@
     httpResponse,
     tlsEvidence,
     pageIdentity,
+    pageRoleProfile,
+    clientBehaviorProfile,
     technologyProfile,
     securityPosture,
     securityTxt,
@@ -738,6 +745,21 @@
           libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}
           libraries={pageDisplay.browserLibraries}
           libraryLimitations={pageDisplay.browserLibraryLimitations}
+        /></div>
+      {/if}
+
+      {#if pageRoleProfile.source==='derived' && clientBehaviorProfile.source==='derived'}
+        <div class="evidence-component" id="evidence-page-role"><LookupPageRoleBehavior
+          roleStatus={statusLabel(show(pageRoleProfile.status))}
+          roleComplete={Boolean(pageRoleProfile.complete)}
+          primaryRole={pageDisplay.primaryPageRole}
+          roles={pageDisplay.pageRoles}
+          roleLimitations={pageDisplay.pageRoleLimitations}
+          behaviorStatus={statusLabel(show(clientBehaviorProfile.status))}
+          behaviorComplete={Boolean(clientBehaviorProfile.complete)}
+          scripts={pageDisplay.clientScriptSummary}
+          indicators={pageDisplay.clientBehaviorIndicators}
+          behaviorLimitations={pageDisplay.clientBehaviorLimitations}
         /></div>
       {/if}
 

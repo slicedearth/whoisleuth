@@ -158,4 +158,28 @@ describe('buildPostureReport', () => {
     assert.equal(byId(report, 'registration_lock').status, 'pass');
     assert.equal(byId(report, 'nameservers').status, 'warning');
   });
+
+  test('keeps DNSSEC delegation and retained DS consistency source-aware', () => {
+    const input = strongInput();
+    input.registry = {
+      statuses: [],
+      nameservers: [],
+      dsRecordCount: 1,
+      error: null,
+    };
+    assert.equal(byId(buildPostureReport('example.test', input), 'dnssec_delegation_consistency').status, 'pass');
+
+    input.registry.dsRecordCount = 0;
+    const missingDs = byId(buildPostureReport('example.test', input), 'dnssec_delegation_consistency');
+    assert.equal(missingDs.status, 'warning');
+    assert.match(missingDs.detail, /publication differences|incomplete upstream/iu);
+
+    input.registry.dsDataTruncated = true;
+    assert.equal(byId(buildPostureReport('example.test', input), 'dnssec_delegation_consistency').status, 'info');
+
+    input.dnssec.value = 'Unsigned';
+    input.registry.dsDataTruncated = false;
+    input.registry.dsRecordCount = 1;
+    assert.equal(byId(buildPostureReport('example.test', input), 'dnssec_delegation_consistency').status, 'warning');
+  });
 });

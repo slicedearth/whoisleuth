@@ -82,6 +82,9 @@ Deep domain Lookup can combine:
   security-posture indicators, including bounded policy-quality checks,
   derived from the captured response without fetching referenced scripts or
   performing vulnerability testing;
+- heuristic page-role labels and fixed static client-side behaviour indicators
+  from the same capped HTML parse, without executing code or retaining matched
+  page or script contents;
 - a privacy-minimized credential collection surface with fixed semantic input,
   form-method, and action-relationship counts from the captured static HTML;
 - one observed public endpoint mapped to its IP RDAP network registration;

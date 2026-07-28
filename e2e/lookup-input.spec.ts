@@ -1329,6 +1329,31 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             }],
           },
         },
+        pageRoleProfile: {
+          pageRoleProfileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
+          limitations: ['Fixture roles are heuristic review labels.'],
+          diagnostics: { rolesObserved: 2, formsObserved: 2, tagsExamined: 20 },
+          primaryRole: 'authentication',
+          findings: [
+            { role: 'authentication', label: 'Authentication', confidence: 'high', evidence: ['Password-purpose input observed'] },
+            { role: 'support_contact', label: 'Support or contact', confidence: 'low', evidence: ['Static support or contact marker observed'] },
+          ],
+        },
+        clientBehaviorProfile: {
+          clientBehaviorProfileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
+          limitations: ['Referenced scripts were not fetched or executed.'],
+          diagnostics: { indicatorsObserved: 1, scriptElementsExamined: 2, inlineCharactersExamined: 120 },
+          scriptSummary: { elementsObserved: 2, referencedScripts: 1, inlineScripts: 1, moduleScripts: 1 },
+          indicators: [{
+            id: 'browser_storage',
+            label: 'Browser storage access',
+            evidenceClass: 'inline_script',
+            occurrences: 2,
+            explanation: 'Inline script references a browser-local storage API.',
+          }],
+        },
         securityPosture: {
           postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
@@ -1399,6 +1424,15 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
   await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
+
+  const roleBehaviorCard = page.locator('details').filter({ has: page.getByRole('heading', { name: 'Page role and client behaviour' }) });
+  await expect(roleBehaviorCard).not.toHaveAttribute('open', '');
+  await expect(roleBehaviorCard.locator(':scope > summary')).toContainText('Authentication · 1 static behaviour indicator');
+  await roleBehaviorCard.locator(':scope > summary').click();
+  await expect(roleBehaviorCard.getByText('Password-purpose input observed', { exact: true })).toBeVisible();
+  await expect(roleBehaviorCard.getByText('Browser storage access', { exact: true })).toBeVisible();
+  await expect(roleBehaviorCard.getByText('Inline script references a browser-local storage API.', { exact: true })).toBeVisible();
+  await expect(roleBehaviorCard).not.toContainText('private');
 
   const structuredCard = page.locator('.structured-card');
   await expect(structuredCard).not.toHaveAttribute('open', '');

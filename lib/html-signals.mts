@@ -8,8 +8,10 @@ import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
 import { analyzeCredentialSurfaceProfile } from './credential-surface-profile.mts';
+import { analyzeClientBehavior } from './client-behavior-profile.mts';
 import { createObservation } from './observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
+import { analyzePageRole } from './page-role-profile.mts';
 import { analyzeStaticHtml } from './static-html-analysis.mts';
 import { analyzeStructuredDataIdentity } from './structured-data-identity.mts';
 import { analyzeWebsiteTechnology } from './website-technology.mts';
@@ -26,6 +28,7 @@ type HtmlSignalOptions = {
   includeCredentialSurfaceProfile?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
+  activityStatus?: unknown;
 };
 type ResourceType = 'image' | 'script' | 'stylesheet' | 'link' | 'frame' | 'media' | 'object';
 type ResourceReference = { type: ResourceType; value: string };
@@ -611,8 +614,9 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
   const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
   const includeStructuredDataIdentity = pageIdentity && options.includeStructuredDataIdentity !== false;
   const includeTechnologyProfile = pageIdentity && options.includeTechnologyProfile !== false;
+  const includeDerivedPageProfiles = Boolean(pageIdentity);
   const baseUrl = resolvedBaseUrl(domain, options.baseUrl);
-  const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile
+  const htmlAnalysis = includeCredentialSurfaceProfile || includeStructuredDataIdentity || includeTechnologyProfile || includeDerivedPageProfiles
     ? analyzeStaticHtml(html, { baseUrl })
     : null;
   return {
@@ -637,6 +641,18 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
       generator: pageIdentity.generator,
       httpServer: options.httpServer,
       resourceOrigins: pageIdentity.resources.externalOrigins,
+      observedAt: options.observedAt,
+      sourceTruncated: options.sourceTruncated,
+    }) : null,
+    pageRoleProfile: includeDerivedPageProfiles && htmlAnalysis ? analyzePageRole({
+      htmlAnalysis,
+      pageTitle: extractPageTitle(html),
+      activityStatus: options.activityStatus,
+      observedAt: options.observedAt,
+      sourceTruncated: options.sourceTruncated,
+    }) : null,
+    clientBehaviorProfile: includeDerivedPageProfiles && htmlAnalysis ? analyzeClientBehavior({
+      htmlAnalysis,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,

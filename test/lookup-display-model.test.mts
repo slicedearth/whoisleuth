@@ -67,6 +67,31 @@ test('bounds page, technology, and posture presentation models', () => {
       })),
       limitations: ['static response only'],
     },
+    pageRoleProfile: {
+      findings: [{
+        role: 'authentication',
+        label: 'Authentication',
+        confidence: 'high',
+        evidence: ['Password-purpose input observed'],
+      }],
+      limitations: ['Static role limitation.'],
+    },
+    clientBehaviorProfile: {
+      scriptSummary: {
+        elementsObserved: 3,
+        referencedScripts: 2,
+        inlineScripts: 1,
+        moduleScripts: 1,
+      },
+      indicators: [{
+        id: 'browser_storage',
+        label: 'Browser storage access',
+        evidenceClass: 'inline_script',
+        occurrences: 2,
+        explanation: 'Inline script references a browser-local storage API.',
+      }],
+      limitations: ['Static behaviour limitation.'],
+    },
     browserLibraryProfile: { findings: [] },
     observedNetworkContext: {},
     observedNetworkEndpoint: { selectedFrom: 'dns_a' },
@@ -79,6 +104,9 @@ test('bounds page, technology, and posture presentation models', () => {
   });
 
   assert.equal(page.technologyFindings.length, 24);
+  assert.equal(page.pageRoles[0]?.role, 'authentication');
+  assert.equal(page.clientBehaviorIndicators[0]?.id, 'browser_storage');
+  assert.equal(page.clientScriptSummary.moduleScripts, 1);
   assert.equal(page.credentialSurface.formCount, 50);
   assert.equal(page.credentialSurface.inputCount, 500);
   assert.equal(page.securityPostureSummary.observed, 20);

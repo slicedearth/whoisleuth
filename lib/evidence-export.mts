@@ -2,7 +2,7 @@ import { compareRdapPublications, compareRegistrySources } from './registry-comp
 import { buildRegistryInsights } from './registry-insights.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 21;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 22;
 
 type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };

@@ -550,6 +550,8 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
       credentialSurfaceProfile: _credentialSurfaceProfile,
       structuredDataIdentity: _structuredDataIdentity,
       technologyProfile: _technologyProfile,
+      pageRoleProfile: _pageRoleProfile,
+      clientBehaviorProfile: _clientBehaviorProfile,
       securityPosture: _securityPosture,
       ...compactAvailability
     } = availability;

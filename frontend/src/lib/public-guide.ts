@@ -119,6 +119,7 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
   Object.freeze({ term: 'Opportunity score', definition: 'An explainable prioritisation aid for apparently available generated candidates. It is not a valuation or purchase recommendation.' }),
   Object.freeze({ term: 'Page identity', definition: 'Bounded static page characteristics such as titles, forms, resource hosts, tracking identifiers, and fingerprints used for comparison.' }),
   Object.freeze({ term: 'Passive security posture', definition: 'Review signals derived from already-collected HTTP, page, TLS, DNSSEC, and CAA evidence. They are not confirmed vulnerabilities.' }),
+  Object.freeze({ term: 'Page role and behaviour profile', definition: 'Fixed heuristic role labels and static client-side behaviour indicators derived from an already-captured page. Referenced scripts are not fetched or executed, and the profile does not prove purpose, vulnerability, tracking, or maliciousness.' }),
   Object.freeze({ term: 'Provenance', definition: 'The source, collection time, method, completeness, and limitations attached to an observation or derived finding.' }),
   Object.freeze({ term: 'PTR', definition: 'A reverse-DNS record that can publish a hostname for an IP address. It is operator-provided routing context, not proof of hosting control or ownership.' }),
   Object.freeze({ term: 'RDAP', definition: 'A structured registration-data protocol used by registries and some registrars.' }),

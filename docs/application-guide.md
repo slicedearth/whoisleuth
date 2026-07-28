@@ -391,6 +391,9 @@ Deep single Lookup can derive several views from one bounded homepage response:
 - fixed semantic input-purpose, form-method, and action-relationship counts
   that describe a credential collection surface without retaining field
   metadata or complete form destinations;
+- explainable page-role labels and fixed client-side behaviour indicators
+  derived from capped static HTML and inline-script prefixes, without fetching
+  referenced scripts, executing code, or retaining matched source;
 - curated technology indicators for common content, commerce, site-building,
   framework, server, and delivery products;
 - apparent browser-library versions and bounded advisory references inferred
@@ -412,6 +415,12 @@ does not fetch referenced scripts.
 A browser-library advisory match is a lead for review, not proof that the
 component is loaded, reachable, vulnerable in context, or exploitable. A
 non-match does not establish that no vulnerable component exists.
+
+Page-role and client-behaviour profiles are similarly review aids. A role is a
+bounded heuristic, and an observed browser API can be normal application
+behaviour. Neither profile establishes page purpose, legitimacy, tracking,
+credential theft, vulnerability, execution, ownership, intent, safety, or
+maliciousness.
 
 After a completed Deep Lookup, **Save current snapshot** creates one bounded
 browser-local website profile only when the analyst chooses it. The snapshot

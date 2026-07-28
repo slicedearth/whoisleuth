@@ -361,6 +361,21 @@ default (see the README), so many lookups return no personal data at all.
   copied into compact browser-local cases, watchlists, profiles, or Bulk
   results. An unmatched signature is not evidence that a technology or
   browser library is absent.
+- **Page role and client-side behaviour**: a requested deep Lookup can derive
+  fixed, explainable page-role labels and client-side behaviour indicators from
+  the same capped static HTML tokenizer pass. Role evidence uses only fixed
+  descriptions derived from semantic form declarations, selected static
+  markers, the bounded page title, and existing parked-page classification.
+  Behaviour evidence uses only fixed indicators and bounded counts for inline
+  handlers and selected browser APIs in retained inline-script prefixes.
+  Referenced scripts are not fetched, code is not executed, and no script
+  contents, references, paths, queries, hashes, page text, arbitrary
+  attributes, or matched source fragments are retained. These heuristic
+  profiles do not establish purpose, legitimacy, tracking, credential theft,
+  vulnerability, reachability, execution, ownership, intent, safety, or
+  maliciousness. They are excluded from compact Bulk results and ordinary
+  browser-local case, watchlist, and profile records, but can appear in a
+  deliberate full Lookup evidence export.
 - **Passive security posture**: a requested deep Lookup can interpret the
   existing HTTP response, bounded static form and resource summaries, one TLS
   handshake, DNSSEC publication, and CAA query as a separate versioned posture

@@ -70,7 +70,8 @@ raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
 downloaded into Bulk or copied into watchlists and analyst cases. Deep compact
 collection still runs the bounded WHOIS, DNS, website, TLS, and mail checks
 used by triage, but omits the single-domain registrar-RDAP follow-up, observed
-network RDAP, credential-surface profile, structured-data identity, technology profile, passive
+network RDAP, credential-surface profile, structured-data identity,
+technology profile, page-role profile, client-behaviour profile, passive
 security-posture detail,
 `security.txt`, and optional external-intelligence providers.
 
@@ -96,6 +97,14 @@ offline version-1 technology benchmark requires positive and negative fixture
 coverage for every signature and reports overlap, collision, missed-match, and
 false-positive metrics by category. Neither the profile nor its benchmark
 changes availability, Risk, or compact evidence.
+
+The version-1 page-role and client-behaviour profiles share the existing
+bounded static-HTML tokenization pass. They retain fixed labels, fixed evidence
+descriptions, bounded counts, completeness, and limitations only. They do not
+retain matched markup, page text, script contents, script references, URLs, or
+arbitrary attributes; they do not fetch referenced scripts or execute code.
+Their classifications are review aids rather than proof of purpose,
+legitimacy, vulnerability, tracking, intent, safety, or maliciousness.
 
 The browser waits for this single final response. It shows elapsed time and
 eligible branches as pending, without polling, streaming, or claiming that a
@@ -692,7 +701,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17, 18, 19, and 20 can also retain the bounded normalized security.txt source
+Schema versions 17 through 22 can also retain the bounded normalized security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorization, availability, or Risk signal.
 
