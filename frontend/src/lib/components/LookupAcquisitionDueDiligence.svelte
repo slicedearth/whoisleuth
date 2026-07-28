@@ -34,6 +34,32 @@
         </article>
       {/each}
     </div>
+    <section class="transition-section" aria-labelledby="acquisition-transition-title">
+      <h5 id="acquisition-transition-title">Transition dependency map</h5>
+      <p>Plan continuity from the services observed in this capture. Unavailable evidence remains an open question.</p>
+      <div class="review-grid">
+        {#each review.transitionDependencies as item}
+          <article class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
+            <header><span>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
+            <p>{item.detail}</p>
+            <small>{item.provenance}</small>
+          </article>
+        {/each}
+      </div>
+    </section>
+    <section class="transition-section" aria-labelledby="acquisition-policy-title">
+      <h5 id="acquisition-policy-title">Registry and registrar policy checks</h5>
+      <p>These are manual confirmation prompts, not policy claims derived by WHOISleuth.</p>
+      <div class="review-grid">
+        {#each review.policyChecks as item}
+          <article class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
+            <header><span>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
+            <p>{item.detail}</p>
+            <small>{item.provenance}</small>
+          </article>
+        {/each}
+      </div>
+    </section>
     <section class="next-steps" aria-labelledby="acquisition-next-steps-title">
       <h5 id="acquisition-next-steps-title">Manual decision checklist</h5>
       <ol>{#each review.nextSteps as step}<li>{step}</li>{/each}</ol>
@@ -64,8 +90,10 @@
   article p{margin:6px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   article small{display:block;margin-top:7px;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .next-steps{padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
-  .next-steps h5{margin:0;font:700 var(--text-xs) var(--mono)}
+  .next-steps h5,.transition-section h5{margin:0;font:700 var(--text-xs) var(--mono)}
   .next-steps ol,.limits ul{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .transition-section{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .transition-section>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .limits>summary{color:var(--muted);font:650 var(--text-2xs) var(--mono);cursor:pointer}
   @media(max-width:760px){
     .acquisition>summary{align-items:flex-start}

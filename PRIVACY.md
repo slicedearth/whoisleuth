@@ -286,8 +286,21 @@ default (see the README), so many lookups return no personal data at all.
   browser. Normalized HTML, visible text, DOM/form structure, resource hosts,
   and tracking identifiers remain separate comparison components; there is no
   combined similarity score and the comparison does not affect Risk scoring.
+  A transient brand-mimicry review can organize those comparison components
+  with existing favicon, official-asset, password-field, and bounded
+  review-language observations. It adds no collection, combined score, or
+  persistence, and it does not infer copying, ownership, control, intent, or
+  maliciousness.
   The derived comparison itself is transient and is not added to cases,
   watchlists, profiles, or evidence exports.
+- **Service and transition review**: a deep Lookup can organize already
+  collected DNS aliases, nameservers, web routing, mail publication, TLS
+  source health, lifecycle statuses, and transfer locks into transient manual
+  review prompts. Alias targets are not followed, provider accounts are not
+  queried, and claimability is not tested. The derived views are not persisted
+  or exported and do not label a dependency dangling, vulnerable, safe, or
+  controlled. Registry and registrar policy entries are prompts for external
+  confirmation, not inferred policy facts.
 - **Structured identity metadata**: a requested deep Lookup can examine
   JSON-LD already present in the captured homepage response. It retains only
   curated schema types, bounded labels, declared HTTP(S) origins, and

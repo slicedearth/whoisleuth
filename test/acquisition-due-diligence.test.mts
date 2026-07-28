@@ -18,10 +18,71 @@ describe('acquisition due-diligence projection', () => {
     });
 
     assert.equal(review.state, 'unregistered_observation');
+    assert.equal(review.version, 2);
     assert.equal(review.items[0]?.state, 'authoritative');
     assert.match(review.items[0]?.detail ?? '', /at collection time/u);
     assert.match(review.nextSteps[0] ?? '', /eligibility, price, and contractual terms/u);
     assert.match(review.limitations[0] ?? '', /does not value a domain/u);
+  });
+
+  test('maps observed transition dependencies and keeps registry policy as manual review', () => {
+    const review = buildAcquisitionDueDiligence({
+      availability: {
+        domain: 'candidate.example',
+        state: 'registered',
+        confidence: 'high',
+        source: 'rdap',
+      },
+      registryInsights: {
+        lifecycle: {
+          rawStatuses: ['client transfer prohibited'],
+          locks: { client: true, server: false },
+        },
+        publications: [{ state: 'complete' }],
+      },
+      activationContext: {
+        web: { state: 'response_observed' },
+        mail: { state: 'authenticated_mail' },
+      },
+      dnsEvidence: { source: 'dns', complete: true },
+      dnsRecords: {
+        a: ['192.0.2.10'],
+        aaaa: [],
+        cname: [],
+        ns: ['ns1.example'],
+        mx: [{ priority: 10, exchange: 'mail.example' }],
+        spf: ['v=spf1 -all'],
+        dmarc: ['v=DMARC1; p=reject'],
+      },
+      tlsEvidence: { source: 'tls', status: 'success', complete: true },
+    });
+
+    assert.deepEqual(
+      review.transitionDependencies.map((item) => item.id),
+      ['nameservers', 'web', 'mail', 'tls'],
+    );
+    assert.ok(review.transitionDependencies.every((item) => item.state === 'observed'));
+    assert.equal(review.policyChecks.length, 3);
+    assert.equal(review.policyChecks[0]?.state, 'review');
+    assert.match(review.policyChecks[0]?.label ?? '', /\.example eligibility/u);
+    assert.match(review.policyChecks[2]?.detail ?? '', /lock evidence was observed/u);
+  });
+
+  test('keeps incomplete transition sources unavailable', () => {
+    const review = buildAcquisitionDueDiligence({
+      availability: { domain: 'candidate.example', state: 'unknown' },
+      registryInsights: { publications: [{ state: 'unavailable' }] },
+      dnsEvidence: { source: 'dns', complete: false },
+      dnsRecords: {},
+      tlsEvidence: { source: 'tls', status: 'error', complete: false },
+    });
+
+    assert.equal(review.transitionDependencies[0]?.state, 'unavailable');
+    assert.equal(review.transitionDependencies[1]?.state, 'unavailable');
+    assert.equal(review.transitionDependencies[2]?.state, 'unavailable');
+    assert.equal(review.transitionDependencies[3]?.state, 'unavailable');
+    assert.equal(review.policyChecks[1]?.state, 'unavailable');
+    assert.match(review.policyChecks[1]?.detail ?? '', /No usable registry publication/u);
   });
 
   test('organizes lifecycle, transfer, service, and contact observations without predicting release', () => {

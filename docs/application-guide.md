@@ -231,6 +231,21 @@ data without keeping page HTML, URL paths, query strings, credentials, or
 complete email addresses. Comparison results remain contextual evidence and do
 not prove common ownership or intent.
 
+When an active Brand Profile is available, **Brand mimicry review** organizes
+exact or perceptual favicon relationships, official-domain asset references,
+independent page-component comparisons, credential-surface context, and
+bounded review-language matches. Each cue retains its own method and
+provenance. WHOISleuth does not combine them into a mimicry or maliciousness
+score, and common infrastructure, templates, libraries, or analytics can
+produce legitimate relationships.
+
+**Service dependency review** reuses current DNS evidence to surface CNAME and
+HTTPS alias-mode targets. External targets are manual review leads. WHOISleuth
+does not follow them, query provider accounts, test claimability, or label a
+service dangling or vulnerable. Complete current DNS evidence with no alias is
+reported only as a point-in-time non-observation; incomplete DNS remains
+unavailable.
+
 ### Monitor
 
 Monitor contains Cases, Campaigns, Relationships, and Watchlists.
@@ -298,10 +313,13 @@ A collapsed **Acquisition due diligence** workspace reuses the evidence already
 present in a Deep result. It organizes the authority and confidence behind the
 registration decision, published lifecycle dates and EPP statuses, interpreted
 transfer constraints, current web and mail dependencies, and separately
-attributed contact routes. It then offers a bounded manual checklist. The
-workspace makes no extra request and does not determine valuation, legal rights,
-registry eligibility, registrar terms, price, release timing, or acquisition
-success. Unavailable and partial source states remain visible rather than being
+attributed contact routes. It then maps the observed nameserver, web, mail, and
+TLS dependencies that may need continuity during a transition. Registry
+eligibility, lifecycle, and transfer-policy entries remain manual confirmation
+prompts rather than locally inferred policy claims. The workspace makes no
+extra request and does not determine valuation, legal rights, registry
+eligibility, registrar terms, price, release timing, or acquisition success.
+Unavailable and partial source states remain visible rather than being
 converted into a clean finding.
 
 A missing delegation, failed provider, absent website, or unavailable registrar

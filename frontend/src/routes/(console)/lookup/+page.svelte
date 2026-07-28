@@ -8,6 +8,7 @@
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
   import LookupActivationContext from '$lib/components/LookupActivationContext.svelte';
+  import LookupBrandMimicryReview from '$lib/components/LookupBrandMimicryReview.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupEvidenceCoverage from '$lib/components/LookupEvidenceCoverage.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
@@ -23,6 +24,7 @@
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
+  import LookupServiceDependencyReview from '$lib/components/LookupServiceDependencyReview.svelte';
   import LookupStructuredDataIdentity from '$lib/components/LookupStructuredDataIdentity.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
@@ -39,6 +41,7 @@
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { buildActivationContext } from '$lib/analysis/activation-context.ts';
   import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
+  import { buildBrandMimicryReview } from '$lib/analysis/brand-mimicry-review.ts';
   import {
     resolveAbuseRecipients,
     type ResolvedAbuseRecipient,
@@ -65,6 +68,7 @@
   import { buildLookupSummaryModel } from '$lib/analysis/lookup-summary-model.ts';
   import { createPageBaseline } from '$lib/analysis/page-baseline.ts';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.ts';
+  import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.ts';
   import { entityDisplayName, parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
@@ -208,6 +212,14 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
+  const brandMimicryReview=$derived(buildBrandMimicryReview({
+    hasActiveProfile:Boolean(profile),
+    trustedDomainKind:profileSignals.trusted,
+    profileSignals,
+    pageComparison,
+    hasPasswordField:availability.hasPasswordField,
+    phishingLanguageMatch:availability.phishingLanguageMatch,
+  }));
   const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||abuseRecipientResolution.recipients.length>0);
   const evidenceTopologyNodes=$derived(buildLookupEvidenceTopologyNodes({
@@ -260,6 +272,14 @@
     availability,
     registryInsights,
     activationContext,
+    dnsEvidence,
+    dnsRecords,
+    tlsEvidence,
+  }));
+  const serviceDependencyReview=$derived(buildServiceDependencyReview({
+    domain:caseDomain,
+    dnsEvidence,
+    dnsRecords,
   }));
   const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
     targetType:result?.type,
@@ -880,6 +900,9 @@
           truncated={Boolean(dnsEvidence.truncated)}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
         /></div>
+        {#if serviceDependencyReview}
+          <div class="evidence-component"><LookupServiceDependencyReview review={serviceDependencyReview} /></div>
+        {/if}
       {/if}
 
       {#if httpEvidence.source==='http'}
@@ -975,6 +998,9 @@
 
       {#if pageComparison || (profile?.pageBaseline && result.type==='domain')}
         <div class="evidence-component"><LookupPageComparison comparison={pageComparisonDisplay()} unavailable={Boolean(!pageComparison&&profile?.pageBaseline&&result.type==='domain')} /></div>
+      {/if}
+      {#if brandMimicryReview}
+        <div class="evidence-component"><LookupBrandMimicryReview review={brandMimicryReview} /></div>
       {/if}
     </section>
     {/if}

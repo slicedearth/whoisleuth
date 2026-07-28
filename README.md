@@ -129,8 +129,16 @@ evidence, provenance, and limitations that matter to the investigation. A
 collapsed acquisition workspace organizes the current authority-aware
 registration decision, lifecycle timing, transfer constraints, observed
 service dependencies, and published contact routes into a manual checklist. It
-does not value a domain or establish eligibility, release timing, price,
-ownership, or acquisition success. A
+also maps observed nameserver, web, mail, and TLS transition dependencies and
+prompts the analyst to confirm current registry and registrar policy rather
+than presenting policy assumptions as facts. It does not value a domain or
+establish eligibility, release timing, price, ownership, or acquisition
+success. An independent brand-mimicry review organizes official favicon,
+official-asset, page-component, credential-surface, and review-language cues
+without producing a combined mimicry or maliciousness score. A conservative
+service-dependency review surfaces observed CNAME and HTTPS alias targets for
+manual verification; it never follows a target or labels a dependency
+dangling, vulnerable, claimable, safe, or controlled. A
 bounded source map uses locally rendered D3 geometry to connect the target to
 separately attributed evidence and provide direct links to each visible source.
 Registry, network, web, derived, and analyst evidence retain consistent visual
