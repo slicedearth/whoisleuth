@@ -5,6 +5,7 @@
   import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
+  import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
@@ -26,6 +27,7 @@
     syntheticDemoCandidate, syntheticDemoCaseRecord, syntheticDemoLookupView,
     syntheticDemoRelationshipGroups, syntheticDemoStage, syntheticDemoTimeline,
   } from '$lib/analysis/demo-model.ts';
+  import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
 
   type View='dashboard'|'brands'|'discover'|'bulk'|'lookup'|'monitor';
   type CandidateFilter='all'|'high'|'related';
@@ -58,6 +60,18 @@
     {id:'certificate-first-observed',label:'Certificate observed',date:selected.provenance.firstObservedAt,detail:selected.evidence.certificate.source,kind:'certificate' as const},
     {id:'latest-observation',label:'Latest observation',date:selected.provenance.lastObservedAt,detail:selected.provenance.source,kind:'observation' as const},
   ]:[]);
+  const lookupAcquisitionReview=$derived(selected&&lookupView?buildAcquisitionDueDiligence({
+    availability:{
+      state:selected.availability.toLowerCase().replaceAll(' ','_'),
+      confidence:selected.availability==='Unknown'?'low':'high',
+      source:selected.availability==='Unknown'?null:'rdap',
+    },
+    registryInsights:lookupView.registry.insights,
+    activationContext:{
+      web:{state:lookupView.http.status==='success'?'response_observed':'inconclusive',label:lookupView.http.status==='success'?'Web response observed':'Web state inconclusive'},
+      mail:{state:'inconclusive',label:'Mail state inconclusive'},
+    },
+  }):null);
   const monitorActivity=$derived(selected?syntheticDemoTimeline(selected.id,demoState.followUpReady).map((entry:{capturedAt:string;changes:unknown[]})=>({
     checkedAt:entry.capturedAt,
     changeCount:entry.changes.length,
@@ -193,7 +207,7 @@
 {:else if view==='lookup'&&selected&&lookupView}
   <section class="demo-panel" aria-labelledby="lookup-heading">
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
-    <p>The production Lookup components render the synthetic view model below, including its bounded source map and dated lifecycle summary. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety. Long source records and secondary Deep evidence start collapsed with their headings, states, and summaries still visible. Live Lookup can also show analyst-controlled external evidence links; they are omitted here so the public demo cannot send even a fictional target to another site.</p>
+    <p>The production Lookup components render the synthetic view model below, including its bounded source map, dated lifecycle summary, and manual acquisition review. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety. Long source records and secondary Deep evidence start collapsed with their headings, states, and summaries still visible. Live Lookup can also show analyst-controlled external evidence links; they are omitted here so the public demo cannot send even a fictional target to another site.</p>
     <div class="shared-evidence" id="demo-assessment"><LookupAssessment {...lookupView.assessment} /></div>
     <div class="shared-evidence visual-summary">
       <EvidenceTopology
@@ -205,6 +219,7 @@
       />
     </div>
     <div class="shared-evidence visual-summary"><LookupLifecycle events={lookupLifecycleEvents} /></div>
+    {#if lookupAcquisitionReview}<div class="shared-evidence"><LookupAcquisitionDueDiligence review={lookupAcquisitionReview} /></div>{/if}
     <div class="shared-evidence" id="demo-evidence-registry"><LookupRegistrySources {...lookupView.registry} /></div>
     <div class="shared-evidence" id="demo-evidence-dns"><LookupDnsEvidence {...lookupView.dns} /></div>
     <div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidence {...lookupView.http} /></div>

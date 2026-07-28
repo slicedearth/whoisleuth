@@ -132,6 +132,7 @@ function sectionedLookupFixture(domain: string) {
     query: domain, type: 'domain', registrableDomain: domain,
     availability: {
       state: 'registered', confidence: 'high', domain,
+      source: 'rdap', domainAgeDays: 2_385, expiresInDays: 158,
       createdDateIso: '2020-01-02T00:00:00.000Z',
       expiryDateIso: '2027-01-02T00:00:00.000Z',
       registrar: { name: 'Fixture Registrar LLC' },
@@ -157,6 +158,24 @@ function sectionedLookupFixture(domain: string) {
     rdap: { upstreamStatus: 200, parsed: { domain, entitiesByRole: {}, lifecycle: { updatedDateIso: '2026-06-10T00:00:00.000Z' } } },
     whois: { parsed: {}, chain: [] },
     diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+    registryInsights: {
+      version: 1,
+      lifecycle: {
+        stage: 'registered',
+        label: 'Registered',
+        rawStatuses: ['active', 'client transfer prohibited'],
+        locks: { client: true, server: false },
+      },
+      publications: [
+        { source: 'registry_rdap', state: 'complete' },
+        { source: 'whois', state: 'partial' },
+      ],
+      contactDisclosure: {
+        registryRdap: { state: 'redacted' },
+        whois: { state: 'unavailable' },
+      },
+      abuseRouting: [{ channel: 'email', contact: 'abuse@example.test' }],
+    },
   };
 }
 
@@ -485,6 +504,15 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(activationContext).toContainText('Web response observed');
   await expect(activationContext).toContainText('Mail state inconclusive');
   await expect(activationContext).toContainText('Cross-layer timing inconclusive');
+
+  const acquisitionReview = page.locator('details.acquisition');
+  await expect(acquisitionReview).toContainText('Acquisition due diligence');
+  await expect(acquisitionReview).not.toHaveAttribute('open', '');
+  await acquisitionReview.locator(':scope > summary').click();
+  await expect(acquisitionReview).toContainText('Registration observed');
+  await expect(acquisitionReview).toContainText('Transfer or update constraints observed');
+  await expect(acquisitionReview).toContainText(/published escalation route/iu);
+  await expect(acquisitionReview).toContainText('does not value a domain');
 
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();

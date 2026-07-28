@@ -6,6 +6,7 @@
   import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
+  import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
   import LookupActivationContext from '$lib/components/LookupActivationContext.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupEvidenceCoverage from '$lib/components/LookupEvidenceCoverage.svelte';
@@ -37,6 +38,7 @@
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { buildActivationContext } from '$lib/analysis/activation-context.ts';
+  import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildEvidenceCoverageLedger, type EvidenceCoverageInput } from '$lib/analysis/evidence-coverage-ledger.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
@@ -230,6 +232,11 @@
     httpStatus:httpResponse.status,
     pageObserved:pageIdentity.source==='html',
     tlsObserved:tlsEvidence.source==='tls'&&tlsEvidence.status!=='skipped',
+  }));
+  const acquisitionDueDiligence=$derived(buildAcquisitionDueDiligence({
+    availability,
+    registryInsights,
+    activationContext,
   }));
   const evidenceCoverage=$derived(buildEvidenceCoverageLedger(evidenceCoverageInputs()));
   const evidenceTopologyTarget=$derived({
@@ -891,6 +898,7 @@
 
       {#if result.type==='domain'}
         <LookupActivationContext context={activationContext} />
+        <LookupAcquisitionDueDiligence review={acquisitionDueDiligence} />
       {/if}
 
       <LookupEvidenceCoverage ledger={evidenceCoverage} />

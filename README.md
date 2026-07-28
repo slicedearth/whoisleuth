@@ -126,6 +126,11 @@ will share only after the analyst opens it.
 Long source records and secondary Deep evidence start collapsed. Their status
 and summary remain visible so the page can be scanned before opening the
 evidence, provenance, and limitations that matter to the investigation. A
+collapsed acquisition workspace organizes the current authority-aware
+registration decision, lifecycle timing, transfer constraints, observed
+service dependencies, and published contact routes into a manual checklist. It
+does not value a domain or establish eligibility, release timing, price,
+ownership, or acquisition success. A
 bounded source map uses locally rendered D3 geometry to connect the target to
 separately attributed evidence and provide direct links to each visible source.
 Registry, network, web, derived, and analyst evidence retain consistent visual

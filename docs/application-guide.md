@@ -294,6 +294,16 @@ positive registry observation from contradictory or failed later referrals.
 Registrar RDAP, when available in a Deep single Lookup, remains a separate
 source and cannot decide registration availability.
 
+A collapsed **Acquisition due diligence** workspace reuses the evidence already
+present in a Deep result. It organizes the authority and confidence behind the
+registration decision, published lifecycle dates and EPP statuses, interpreted
+transfer constraints, current web and mail dependencies, and separately
+attributed contact routes. It then offers a bounded manual checklist. The
+workspace makes no extra request and does not determine valuation, legal rights,
+registry eligibility, registrar terms, price, release timing, or acquisition
+success. Unavailable and partial source states remain visible rather than being
+converted into a clean finding.
+
 A missing delegation, failed provider, absent website, or unavailable registrar
 source never means that a domain is available. Registry compatibility metadata
 also remains descriptive. Use the [registry compatibility catalogue](registry-compatibility.md)
