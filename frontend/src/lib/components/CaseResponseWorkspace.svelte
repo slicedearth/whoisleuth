@@ -80,6 +80,7 @@
     network_hosting: '',
     security_txt: '',
   });
+  let packetBusy = $state(false);
 
   function isoFromLocal(value: string): string | null {
     if (!value) return null;
@@ -97,6 +98,10 @@
 
   function list(value: string): string[] {
     return value.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean);
+  }
+
+  function countLabel(count: number, singular: string): string {
+    return `${count} ${singular}${count === 1 ? '' : 's'}`;
   }
 
   async function persist(patch: Parameters<typeof editCase>[1], success: string) {
@@ -236,7 +241,7 @@
       : []);
   }
 
-  function packet() {
+  function packet(generatedAt: string = new Date().toISOString()) {
     return buildCaseResponsePacket(record, {
       category: packetCategory,
       affectedParty: packetAffectedParty,
@@ -244,13 +249,15 @@
       observedHarm: packetHarm,
       observedAt: isoFromLocal(packetObservedAt),
       contacts: packetContactsInput(),
-    });
+    }, generatedAt);
   }
 
-  function downloadPacket(format: 'json' | 'md' | 'txt') {
+  async function downloadPacket(format: 'json' | 'md' | 'txt') {
+    if (packetBusy) return;
+    packetBusy = true;
     try {
       const generatedAt = new Date().toISOString();
-      const built = packet();
+      const built = await packet(generatedAt);
       const content = format === 'json'
         ? JSON.stringify(built.json, null, 2)
         : format === 'md'
@@ -267,15 +274,21 @@
       onmessage(`Exported a ${format === 'txt' ? 'plain-text email draft' : format.toUpperCase()} response packet for review. Nothing was submitted.`);
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not prepare the response packet.');
+    } finally {
+      packetBusy = false;
     }
   }
 
   async function copyEmail() {
+    if (packetBusy) return;
+    packetBusy = true;
     try {
-      await navigator.clipboard.writeText(packet().email);
+      await navigator.clipboard.writeText((await packet()).email);
       onmessage('Copied the response email draft. Nothing was submitted.');
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Clipboard access was unavailable.');
+    } finally {
+      packetBusy = false;
     }
   }
 </script>
@@ -283,7 +296,7 @@
 <section class="response-workspace" aria-labelledby={`response-title-${record.id}`}>
   <header>
     <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
-    <span>{record.evidencePins.length} pins · {record.assertions.length} assertions · {record.actions.length} actions</span>
+    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
   </header>
 
   <details>
@@ -380,7 +393,7 @@
   <details>
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
-      <p class="notice">This prepares local JSON, Markdown, or plain-text drafts only. WHOISleuth does not send reports.</p>
+      <p class="notice">This prepares local JSON, Markdown, or plain-text drafts only. WHOISleuth does not send reports. JSON and Markdown include observation-age context, reviewed action history, and a canonical SHA-256 digest for later integrity checks.</p>
       <div class="two-columns">
         <label class="field">Abuse category<input bind:value={packetCategory} maxlength="80" required placeholder="Credential phishing"></label>
         <label class="field">Affected party<input bind:value={packetAffectedParty} maxlength="200" required></label>
@@ -398,7 +411,7 @@
           </div>
         {/each}
       </fieldset>
-      <div class="actions"><button class="btn" type="button" onclick={() => downloadPacket('json')}>Export JSON</button><button class="btn" type="button" onclick={() => downloadPacket('md')}>Export Markdown</button><button class="btn" type="button" onclick={() => downloadPacket('txt')}>Export email draft</button><button class="btn" type="button" onclick={copyEmail}>Copy email draft</button></div>
+      <div class="actions"><button class="btn" type="button" onclick={() => void downloadPacket('json')} disabled={packetBusy}>Export JSON</button><button class="btn" type="button" onclick={() => void downloadPacket('md')} disabled={packetBusy}>Export Markdown</button><button class="btn" type="button" onclick={() => void downloadPacket('txt')} disabled={packetBusy}>Export email draft</button><button class="btn" type="button" onclick={() => void copyEmail()} disabled={packetBusy}>Copy email draft</button></div>
     </form>
   </details>
 </section>

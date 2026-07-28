@@ -6,6 +6,7 @@ import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
   MAX_ABUSIVE_URLS,
+  verifyCaseResponsePacketIntegrity,
 } from '../frontend/src/lib/analysis/case-response-packet.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
 
@@ -18,15 +19,25 @@ function reviewedCase() {
     disposition: 'confirmed_abuse',
     evidence: { availability: 'registered', capturedAt: NOW },
   }, NOW);
-  return updateCase([created], created.id, {
+  const reasoned = updateCase([created], created.id, {
     evidencePin: { label: 'Observed path', value: 'A credential form was observed.', observedAt: NOW },
     decision: { summary: 'Escalate', rationale: 'The selected evidence requires external review.' },
+  }, NOW).record;
+  return updateCase([reasoned], reasoned.id, {
+    action: {
+      type: 'registrar_report',
+      recipient: 'Registrar abuse desk',
+      contactSource: 'RDAP entity role',
+      state: 'submitted',
+      reference: 'CASE-123',
+      outcome: 'Acknowledgement pending.',
+    },
   }, NOW).record;
 }
 
 describe('case response packet', () => {
-  test('builds reviewable JSON, Markdown, and email without a submission action', () => {
-    const result = buildCaseResponsePacket(reviewedCase(), {
+  test('builds reviewable JSON, Markdown, and email without a submission action', async () => {
+    const result = await buildCaseResponsePacket(reviewedCase(), {
       category: 'Credential phishing',
       affectedParty: 'Example service',
       abusiveUrls: ['https://report.example/sign-in?campaign=one'],
@@ -53,28 +64,34 @@ describe('case response packet', () => {
     assert.equal(result.json.contacts.length, 2);
     assert.equal(result.json.provenance.evidencePinCount, 1);
     assert.equal(result.json.provenance.decisionCount, 1);
+    assert.equal(result.json.provenance.observationAge.band, 'under_24_hours');
+    assert.equal(result.json.escalationHistory.length, 1);
+    assert.equal(result.json.escalationHistory[0]?.reference, 'CASE-123');
+    assert.match(result.json.integrity.digestSha256, /^[a-f0-9]{64}$/u);
+    assert.equal(await verifyCaseResponsePacketIntegrity(result.json), true);
     assert.match(result.markdown, /Separately routed|Escalation contacts/u);
     assert.match(result.markdown, /registrar RDAP/u);
+    assert.match(result.markdown, /Canonical packet SHA-256/u);
     assert.match(result.email, /was not submitted automatically/u);
     assert.doesNotMatch(result.email, /mailto:/u);
   });
 
-  test('requires all incident facts and at least one exact safe URL', () => {
+  test('requires all incident facts and at least one exact safe URL', async () => {
     const base = {
       category: 'Phishing',
       affectedParty: 'Example service',
       observedHarm: 'A credential request was observed.',
       observedAt: NOW,
     };
-    assert.throws(() => buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: [] }, NOW), /required/u);
-    assert.throws(() => buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: ['javascript:alert(1)'] }, NOW), /required/u);
-    assert.throws(() => buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: ['https://user:secret@report.example/'] }, NOW), /required/u);
+    await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: [] }, NOW), /required/u);
+    await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: ['javascript:alert(1)'] }, NOW), /required/u);
+    await assert.rejects(buildCaseResponsePacket(reviewedCase(), { ...base, abusiveUrls: ['https://user:secret@report.example/'] }, NOW), /required/u);
   });
 
-  test('bounds and deduplicates URLs and contact routes', () => {
+  test('bounds and deduplicates URLs and contact routes', async () => {
     const urls = Array.from({ length: MAX_ABUSIVE_URLS + 5 }, (_, index) => `https://report.example/path-${index}`);
     urls.push(urls[0] ?? '');
-    const result = buildCaseResponsePacket(reviewedCase(), {
+    const result = await buildCaseResponsePacket(reviewedCase(), {
       category: 'Phishing',
       affectedParty: 'Example service',
       abusiveUrls: urls,
@@ -90,8 +107,8 @@ describe('case response packet', () => {
     assert.equal(result.json.contacts.length, 1);
   });
 
-  test('removes every control character from packet fields and rendered drafts', () => {
-    const result = buildCaseResponsePacket(reviewedCase(), {
+  test('removes every control character from packet fields and rendered drafts', async () => {
+    const result = await buildCaseResponsePacket(reviewedCase(), {
       category: 'Credential\rphishing\nreview\u0007',
       affectedParty: 'Example\tservice\u007fteam',
       abusiveUrls: ['https://report.example/sign-in'],
@@ -121,6 +138,22 @@ describe('case response packet', () => {
     assert.doesNotMatch(result.markdown, renderedControl);
     assert.doesNotMatch(result.email, renderedControl);
     assert.match(result.email, /^Subject: Reviewed Credential phishing review report for report\.example$/mu);
+  });
+
+  test('marks old evidence for refresh and detects packet changes', async () => {
+    const result = await buildCaseResponsePacket(reviewedCase(), {
+      category: 'Phishing',
+      affectedParty: 'Example service',
+      abusiveUrls: ['https://report.example/sign-in'],
+      observedHarm: 'A credential request was observed.',
+      observedAt: '2026-07-01T00:00:00.000Z',
+    }, NOW);
+    assert.equal(result.json.provenance.observationAge.band, 'over_seven_days');
+    assert.equal(result.json.provenance.observationAge.refreshRecommended, true);
+    assert.match(result.markdown, /Refresh evidence before submission/u);
+
+    result.json.incident.observedHarm = 'Changed after export';
+    assert.equal(await verifyCaseResponsePacketIntegrity(result.json), false);
   });
 
   test('uses bounded path-safe filenames', () => {

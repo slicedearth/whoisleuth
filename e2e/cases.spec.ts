@@ -320,13 +320,24 @@ test('reviewed response records persist and produce a local non-submitted packet
       abusiveUrls: ['https://response.invalid/sign-in'],
     },
     provenance: { evidencePinCount: 1, decisionCount: 1 },
+    escalationHistory: [{
+      type: 'registrar_report',
+      recipient: 'Registrar abuse desk',
+      state: 'planned',
+    }],
+    integrity: {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v1',
+      scope: 'packet excluding integrity',
+    },
   });
+  expect(exported.integrity.digestSha256).toMatch(/^[a-f0-9]{64}$/u);
   await expect(page.getByRole('status')).toContainText('Nothing was submitted');
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: 'response.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 1 action');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 0 assertions · 1 action');
 });
 
 test('deleting a case removes it after confirmation', async ({ page }) => {
