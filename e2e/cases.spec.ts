@@ -219,8 +219,10 @@ test('custom rules persist, can be disabled, and export a versioned safe schema'
   await page.getByRole('button', { name: 'Create custom rule' }).click();
   await expect(page.getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
 
-  await page.reload();
-  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const customRulesTab = page.getByRole('tab', { name: /Custom rules/ });
+  await expect(customRulesTab).toBeVisible();
+  await customRulesTab.click();
   const rule = page.getByRole('article').filter({ hasText: 'Registered domains' });
   await expect(rule).toBeVisible();
   await rule.getByRole('button', { name: 'Enabled' }).click();

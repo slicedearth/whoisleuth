@@ -62,7 +62,11 @@ export async function installNetworkGuard(context: BrowserContext, allowedOrigin
 
   return {
     offOriginRequests,
-    dispose: () => context.unroute('**/*', handler),
+    // A timed-out page navigation can leave route callbacks in flight. Remove
+    // every test-context route without waiting for those callbacks so fixture
+    // teardown does not obscure the original failure or consume another full
+    // test timeout after the browser has already begun closing.
+    dispose: () => context.unrouteAll({ behavior: 'ignoreErrors' }),
   };
 }
 
