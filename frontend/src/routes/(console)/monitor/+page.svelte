@@ -3,6 +3,7 @@
   import { getContext, onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import PageHeading from '$lib/components/PageHeading.svelte';
+  import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
   import GuidedCaseQueue from '$lib/components/GuidedCaseQueue.svelte';
@@ -34,10 +35,13 @@
   } from '$lib/relationship-observations';
   import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
+  import { loadBulkSessions } from '$lib/bulk-sessions';
+  import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
+  import { buildAnalystReviewInbox } from '$lib/analysis/analyst-review-inbox.ts';
 
-  type View = 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
+  type View = 'inbox' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   const CASE_PAGE_SIZE=25;
-  let view=$state<View>('watchlists');
+  let view=$state<View>('inbox');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const scheduledCapability=$derived(featureCapability(capabilityReport?.()||null,'scheduled_monitoring'));
 
@@ -61,6 +65,8 @@
 
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
+  let bulkSessions=$state<BulkSession[]>([]);
+  const reviewInbox=$derived(buildAnalystReviewInbox({cases,watchlists,bulkSessions}));
   let casePage=$state(1);
   let campaignCount=$state(0);
   let investigationProjection=$state<unknown>(null);
@@ -137,9 +143,10 @@
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=await importCases(JSON.parse(await file.text()));await refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{void (async()=>{
-    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships()]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
+    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships(),loadBulkSessions().then((records)=>{bulkSessions=records;})]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';const target=cases.find(record=>record.id===focus);if(target){showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');}}
+    else if(page.url.searchParams.get('view')==='inbox')view='inbox';
     else if(page.url.searchParams.get('view')==='watchlists')view='watchlists';
     else if(page.url.searchParams.get('view')==='cases')view='cases';
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
@@ -165,9 +172,15 @@
 </script>
 
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Track findings" title="Monitor" description="Organize cases, review relationships, test local detection rules, and compare watchlist changes over time." />
+<PageHeading eyebrow="Track findings" title="Monitor" description="Review retained work, organize cases, inspect relationships, and compare watchlist changes over time." />
 
-<MonitorViewTabs {view} counts={{cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
+<MonitorViewTabs {view} counts={{inbox:reviewInbox.counts.all,cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
+
+{#if view==='inbox'}
+<div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
+  <AnalystReviewInbox inbox={reviewInbox} />
+</div>
+{/if}
 
 {#if view==='campaigns'}
 <div id="panel-campaigns" role="tabpanel" aria-labelledby="tab-campaigns">
