@@ -656,6 +656,51 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-evidence-sectioned-result\.invalid-.+\.json$/);
 });
 
+test('Lookup task and density controls change presentation without changing evidence', async ({ page }) => {
+  const domain = 'presentation-options.invalid';
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(sectionedLookupFixture(domain)),
+  }));
+  await page.goto('/lookup');
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  const controls = page.getByRole('region', { name: 'Evidence view' });
+  const task = controls.getByLabel('Task');
+  const density = controls.getByLabel('Density');
+  const localNav = page.getByRole('navigation', { name: 'Result sections' });
+  await expect(task).toHaveValue('general');
+  await expect(density).toHaveValue('standard');
+  await expect(page.getByRole('heading', { name: 'Raw evidence' })).toBeVisible();
+  await expect(page.locator('#raw-data details')).toBeHidden();
+
+  await density.selectOption('full');
+  await expect(page.locator('#raw-data details')).toBeVisible();
+  await task.selectOption('acquisition');
+  await expect(localNav.getByRole('link').evaluateAll((links) => links.map((link) => link.textContent?.trim()))).resolves.toEqual([
+    'Overview',
+    'Registry',
+    'Web & DNS',
+    'Case & response',
+    'Raw data',
+  ]);
+
+  await density.selectOption('summary');
+  await expect(page.getByRole('heading', { name: 'Registry sources' })).toBeVisible();
+  await expect(page.locator('#evidence-registry')).toBeHidden();
+  await expect(page.getByRole('region', { name: 'Evidence coverage' })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+
+  await page.reload();
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('region', { name: 'Evidence view' }).getByLabel('Task')).toHaveValue('acquisition');
+  await expect(page.getByRole('region', { name: 'Evidence view' }).getByLabel('Density')).toHaveValue('summary');
+});
+
 test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/brands');

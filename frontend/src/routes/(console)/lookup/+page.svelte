@@ -23,6 +23,7 @@
   import LookupPageRoleBehavior from '$lib/components/LookupPageRoleBehavior.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
+  import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
   import LookupServiceDependencyReview from '$lib/components/LookupServiceDependencyReview.svelte';
@@ -82,6 +83,13 @@
     buildLookupSectionLinks,
   } from '$lib/analysis/lookup-page-actions.ts';
   import {
+    normalizeLookupEvidenceDensity,
+    normalizeLookupTaskView,
+    prioritizeLookupSectionLinks,
+    type LookupEvidenceDensity,
+    type LookupTaskView,
+  } from '$lib/analysis/lookup-presentation.ts';
+  import {
     buildLookupReadableReport,
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.ts';
@@ -116,7 +124,10 @@
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let evidenceDensity=$state<LookupEvidenceDensity>('standard');
+  let taskView=$state<LookupTaskView>('general');
   let pageActive=false;
+  const LOOKUP_PRESENTATION_KEY='whoisleuth:lookup-presentation:v1';
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -445,8 +456,41 @@
     caseStatus=next.status;
   }
   function cancelLookup(){lookupRequestController.cancel();}
+  function retainPresentation(){
+    try{
+      localStorage.setItem(LOOKUP_PRESENTATION_KEY,JSON.stringify({
+        version:1,
+        density:evidenceDensity,
+        task:taskView,
+      }));
+    }catch{
+      // Presentation preferences remain valid for the current page when storage is unavailable.
+    }
+  }
+  function setEvidenceDensity(value:LookupEvidenceDensity){
+    evidenceDensity=normalizeLookupEvidenceDensity(value);
+    retainPresentation();
+  }
+  function setTaskView(value:LookupTaskView){
+    taskView=normalizeLookupTaskView(value);
+    retainPresentation();
+  }
   onMount(()=>{
     pageActive=true;
+    try{
+      const stored=JSON.parse(localStorage.getItem(LOOKUP_PRESENTATION_KEY)||'null') as {
+        version?:unknown;
+        density?:unknown;
+        task?:unknown;
+      }|null;
+      if(stored?.version===1){
+        evidenceDensity=normalizeLookupEvidenceDensity(stored.density);
+        taskView=normalizeLookupTaskView(stored.task);
+      }
+    }catch{
+      evidenceDensity='standard';
+      taskView='general';
+    }
     const restored=readLookupWorkflowState();
     if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
     const q=page.url.searchParams.get('q');
@@ -493,12 +537,15 @@
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
-  function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return buildLookupSectionLinks({
-    hasWebEvidence,
-    domainResult:result?.type==='domain',
-    hasExternalIntelligence:threatIntelligenceProviders.length>0,
-    hasCaseSection,
-  });}
+  function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return prioritizeLookupSectionLinks(
+    buildLookupSectionLinks({
+      hasWebEvidence,
+      domainResult:result?.type==='domain',
+      hasExternalIntelligence:threatIntelligenceProviders.length>0,
+      hasCaseSection,
+    }),
+    taskView,
+  );}
   async function submit(event:SubmitEvent){
     event.preventDefault();
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
@@ -575,8 +622,11 @@
   <section class="result-root" id="result">
     <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} />
 
+    <LookupPresentationControls density={evidenceDensity} task={taskView} setDensity={setEvidenceDensity} setTask={setTaskView} />
+
     <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 
+    <div class="evidence-density density-{evidenceDensity}">
     <section class="result-section family-overview" id="overview" aria-labelledby="overview-title">
       <h3 id="overview-title">Overview</h3>
 
@@ -833,11 +883,19 @@
       <h3 id="raw-data-title">Raw evidence</h3>
       <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
     </section>
+    </div>
   </section>
 {/if}
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
+  .evidence-density{display:contents}
+  .density-standard .family-raw>:not(h3){display:none}
+  .density-standard .family-raw{min-height:34px;margin-top:14px}
+  .density-standard .family-raw>h3{margin-bottom:0}
+  .density-summary>.result-section:not(.family-overview)>:not(h3){display:none}
+  .density-summary>.result-section:not(.family-overview){min-height:34px;margin-top:14px}
+  .density-summary>.result-section:not(.family-overview)>h3{margin-bottom:0}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
   .result-section.family-web{--section-accent:var(--amber)}
   .result-section.family-registry{--section-accent:var(--accent2)}

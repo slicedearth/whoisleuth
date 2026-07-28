@@ -93,6 +93,13 @@ Deep domain Lookup can combine:
 - a collapsed set of analyst-controlled links to relevant public registration,
   certificate, routing, interconnection, history, and site-status tools.
 
+The completed result also offers task and density controls. Task selection
+reprioritises the section navigation for a general, acquisition, brand,
+incident, or owned-domain review. Summary, Standard, and Full density change
+only how much settled evidence is shown in the reading path. They do not start
+requests, omit evidence from exports, change source states, alter Risk or
+availability, or modify saved evidence.
+
 After reviewing a completed Deep Lookup, an analyst can explicitly save a
 compact website-profile snapshot. The browser-local record contains curated
 technology identifiers, passive posture states, identity digests, source
