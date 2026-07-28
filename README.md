@@ -40,11 +40,11 @@ navigation without shortening the policy.
 
 | Area | Purpose | Important boundary |
 | --- | --- | --- |
-| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. |
+| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. Published response routes are resolved only from the collected result and must be deliberately recorded in a case. |
 | **Discover** | Generate bounded typo, Unicode-confusable, keyboard, plural, separator, word-order, WWW-style, TLD, and dictionary candidates, including analyst-controlled token replacements and an opt-in two-character Unicode family, with optional Certificate Transparency discovery. Presets or an exact family selection control the local generator. | Candidate generation and optional custom dictionary input stay local. The advanced Unicode family is never preset-enabled. Confusability is a review lead, while certificate-log observations do not prove site activity or maliciousness. |
 | **Bulk** | Compare multiple domains with source-aware filters, observed-value grouping, explicit batch selection, score explanations, selected or complete CSV export, scan-local relationship evidence, and resumable saved sessions. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. Filters and groups use only fields already observed in that compact result; missing provider, ASN, or hosting evidence is never inferred. Batch rescans, case creation, dispositions, Monitor saves, and exports act only on the analyst's explicit selection. |
 | **Brands** | Save official domains, product names, allowlists, mail-posture settings, expiring protection attestations, and optional page-identity baselines. Audit bounded registration, delegation, mail-authentication, and external-dependency evidence. | Profiles and analyst attestations stay in the current browser unless deliberately exported. Public evidence and analyst statements remain separate and neither is a security guarantee. |
-| **Monitor** | Manage cases, evidence pins, analyst decisions, reviewed response actions, campaigns, relationship observations, watchlists, timelines, and reports. | Ordinary investigation and response state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
+| **Monitor** | Manage cases, evidence pins, analyst decisions, reviewed response actions and outcomes, response preflight, campaigns, relationship observations, watchlists, timelines, and reports. | Ordinary investigation and response state is browser-local. Preflight blocks incomplete incident facts and exposes cautions; it never sends a report. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
 | **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
 
 Dashboard can download the bounded workspace as an encrypted portable backup.
@@ -169,7 +169,9 @@ accessible lists, tables, or source records.
   surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
-  Case response packets and defensive-control exports require explicit review;
+  Case response packets expose required facts, evidence freshness, open
+  contradictions, recipient provenance, case disposition, and action tracking
+  before export. Defensive-control exports also require explicit review;
   the latter include a provenance manifest, expiry, exclusions, and rollback
   instructions. Wildcard blocking remains opt-in.
 

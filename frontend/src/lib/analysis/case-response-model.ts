@@ -117,6 +117,25 @@ export type CaseInvestigationTrailItem = {
   createdAt: string;
 };
 
+export type CaseActionOutcomeSummary = Readonly<{
+  total: number;
+  active: number;
+  submitted: number;
+  acknowledged: number;
+  resolved: number;
+  closed: number;
+  overdue: number;
+  followUpDue: number;
+  withOutcome: number;
+  latestOutcomes: readonly Readonly<{
+    actionId: string;
+    recipient: string;
+    state: CaseActionState;
+    outcome: string;
+    updatedAt: string;
+  }>[];
+}>;
+
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
@@ -353,6 +372,39 @@ export function updateCaseAction(
   const updated = normalizeAction({ ...existing, ...patch, id, createdAt: existing.createdAt, updatedAt: now }, now);
   if (!updated) throw new Error('An action requires a recipient or internal owner.');
   return normalizeCaseActions(current.map((item) => item.id === id ? updated : item), now);
+}
+
+export function buildCaseActionOutcomeSummary(
+  actions: readonly CaseActionRecord[],
+  nowRaw: unknown = new Date().toISOString(),
+): CaseActionOutcomeSummary {
+  const now = optionalIso(nowRaw) ?? new Date().toISOString();
+  const nowTime = Date.parse(now);
+  const terminal = new Set<CaseActionState>(['closed', 'resolved']);
+  const active = actions.filter((item) => !terminal.has(item.state));
+  const latestOutcomes = actions
+    .filter((item) => Boolean(item.outcome))
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .slice(0, 5)
+    .map((item) => ({
+      actionId: item.id,
+      recipient: item.recipient,
+      state: item.state,
+      outcome: item.outcome ?? '',
+      updatedAt: item.updatedAt,
+    }));
+  return {
+    total: actions.length,
+    active: active.length,
+    submitted: actions.filter((item) => item.state === 'submitted').length,
+    acknowledged: actions.filter((item) => item.state === 'acknowledged').length,
+    resolved: actions.filter((item) => item.state === 'resolved').length,
+    closed: actions.filter((item) => item.state === 'closed').length,
+    overdue: active.filter((item) => item.dueAt && Date.parse(item.dueAt) < nowTime).length,
+    followUpDue: active.filter((item) => item.followUpAt && Date.parse(item.followUpAt) <= nowTime).length,
+    withOutcome: actions.filter((item) => Boolean(item.outcome)).length,
+    latestOutcomes,
+  };
 }
 
 export function mergeCaseEvidencePins(

@@ -6,6 +6,7 @@ import {
   appendCaseDecision,
   appendCaseEvidencePin,
   appendCaseManualTrailEvent,
+  buildCaseActionOutcomeSummary,
   buildCaseInvestigationTrail,
   MAX_CASE_ACTIONS,
   MAX_CASE_DECISIONS,
@@ -67,6 +68,53 @@ describe('case response record normalization', () => {
     assert.equal(requiredValue(updated[0]).state, 'acknowledged');
     assert.equal(requiredValue(updated[0]).reference, 'CASE-123');
     assert.equal(requiredValue(updated[0]).updatedAt, LATER);
+  });
+
+  test('action summaries separate active, overdue, follow-up, and recorded outcomes', () => {
+    const actions = normalizeCaseActions([
+      {
+        id: 'submitted',
+        type: 'registrar_report',
+        recipient: 'Registrar response desk',
+        state: 'submitted',
+        dueAt: '2026-07-27T01:00:00.000Z',
+        followUpAt: NOW,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+      {
+        id: 'resolved',
+        type: 'registry_report',
+        recipient: 'Registry response desk',
+        state: 'resolved',
+        outcome: 'The reported path was removed.',
+        createdAt: NOW,
+        updatedAt: LATER,
+      },
+    ], NOW);
+    const summary = buildCaseActionOutcomeSummary(actions, LATER);
+    assert.deepEqual({
+      total: summary.total,
+      active: summary.active,
+      submitted: summary.submitted,
+      acknowledged: summary.acknowledged,
+      resolved: summary.resolved,
+      closed: summary.closed,
+      overdue: summary.overdue,
+      followUpDue: summary.followUpDue,
+      withOutcome: summary.withOutcome,
+    }, {
+      total: 2,
+      active: 1,
+      submitted: 1,
+      acknowledged: 0,
+      resolved: 1,
+      closed: 0,
+      overdue: 1,
+      followUpDue: 1,
+      withOutcome: 1,
+    });
+    assert.equal(summary.latestOutcomes[0]?.outcome, 'The reported path was removed.');
   });
 
   test('keeps analyst assertions distinct from evidence and derives an explicit trail', () => {

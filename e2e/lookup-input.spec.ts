@@ -292,7 +292,7 @@ test('does not show a saved Fast result after a same-domain Deep handoff', async
   await page.getByLabel('Scan mode').selectOption('deep');
   await page.getByRole('button', { name: 'Scan 1 domain' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Inspect' }).click();
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click();
 
   await expect(page.locator('#query')).toHaveValue(domain);
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
@@ -924,6 +924,60 @@ test('a Lookup case stores the registrar name rather than stringifying its entit
 
   const registrar = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value?.evidenceHistory?.[0]?.registrar;
   expect(registrar).toBe('Example Registrar LLC');
+});
+
+test('published response routes can be recorded in a local case with their provenance', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'response-route.invalid',
+      type: 'domain',
+      registrableDomain: 'response-route.invalid',
+      availability: {
+        state: 'registered',
+        confidence: 'high',
+        domain: 'response-route.invalid',
+        deepScanComplete: true,
+      },
+      rdap: { parsed: {} },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        rdap: { status: 'success' },
+        whois: { status: 'success' },
+        availability: { status: 'complete' },
+      },
+      registryInsights: {
+        version: 1,
+        abuseRouting: [{
+          kind: 'registrar',
+          channel: 'email',
+          contact: 'abuse@example.test',
+          source: 'registrar RDAP entity',
+          limitations: ['Mailbox monitoring is not verified.'],
+        }],
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('response-route.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const response = page.locator('section.response');
+  await expect(response.getByRole('heading', { name: 'Published routes and reviewed drafts' })).toBeVisible();
+  await expect(response).toContainText('abuse@example.test');
+  await page.getByRole('button', { name: 'Create case' }).click();
+  await response.getByRole('button', { name: 'Record in case' }).click();
+  await expect(page.locator('.case-status')).toContainText('Recorded the registrar route');
+
+  const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
+  expect(stored?.actions).toEqual([
+    expect.objectContaining({
+      type: 'registrar_report',
+      recipient: 'abuse@example.test',
+      contactSource: 'registrar RDAP entity',
+      state: 'planned',
+    }),
+  ]);
 });
 
 test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async ({ page }) => {

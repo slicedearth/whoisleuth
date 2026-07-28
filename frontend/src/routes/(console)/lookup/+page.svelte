@@ -32,13 +32,17 @@
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
-  import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
+  import { addCaseNote, dispositionLabel as caseDispositionLabel, editCase, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { outreachAction, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { buildActivationContext } from '$lib/analysis/activation-context.ts';
   import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
+  import {
+    resolveAbuseRecipients,
+    type ResolvedAbuseRecipient,
+  } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
@@ -193,8 +197,11 @@
   const opportunity=$derived(explainOpportunityScore(scoredAvailability) as ScoreExplanation);
   const risk=$derived(explainRiskScore(scoredAvailability) as ScoreExplanation);
   const outreach=$derived(outreachAction(String(availability.domain||result?.registrableDomain||''),(availability.registrant||null) as Contact|null));
-  const abuseContact=$derived(rec(availability.abuse));
-  const abuseContactEmail=$derived(profileSignals.trusted?'':boundedTechnologyText(abuseContact.email,320));
+  const abuseRecipientResolution=$derived(resolveAbuseRecipients({
+    registryInsights,
+    availabilityAbuse:availability.abuse,
+    securityTxt,
+  }));
   const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only);
   const redactedComparisonCount=$derived(comparison.counts.rdap_redacted+comparison.counts.whois_redacted);
   const limitedComparisonCount=$derived(comparison.counts.rdap_unavailable+comparison.counts.whois_unavailable+comparison.counts.rdap_incomplete+comparison.counts.whois_incomplete);
@@ -202,7 +209,7 @@
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
   const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
-  const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuseContactEmail));
+  const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||abuseRecipientResolution.recipients.length>0);
   const evidenceTopologyNodes=$derived(buildLookupEvidenceTopologyNodes({
     targetType:result?.type,
     availability,
@@ -320,6 +327,22 @@
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=await openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:lookupEvidenceDepth}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{const{record,pruned}=await addCaseNote(caseRecord.id,body);caseRecord=record;caseNote='';caseStatus=`Added a note to the case.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
+  async function recordAbuseRecipient(route:ResolvedAbuseRecipient){
+    if(!caseRecord){caseStatus='Create or open the analyst case before recording a response route.';return;}
+    const alreadyRecorded=caseRecord.actions.some((action)=>action.type===route.actionType&&action.recipient.toLowerCase()===route.contact.toLowerCase());
+    if(alreadyRecorded){caseStatus='That response route is already recorded in this case.';return;}
+    try{
+      const{record,pruned}=await editCase(caseRecord.id,{action:{
+        type:route.actionType,
+        recipient:route.contact,
+        contactSource:route.source,
+        contactLimitations:[...route.limitations],
+        state:'planned',
+      }});
+      caseRecord=record;
+      caseStatus=`Recorded the ${route.kind.replaceAll('_',' ')} route as a planned, human-reviewed action.${prunedNote(pruned)}`;
+    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not record the response route.';}
+  }
   function cancelLookup(){lookupRequestController.cancel();}
   onMount(()=>{
     pageActive=true;
@@ -1006,7 +1029,7 @@
       <section class="result-section family-analyst" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
 
-        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuseContactEmail} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
+        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
       </section>
     {/if}
 

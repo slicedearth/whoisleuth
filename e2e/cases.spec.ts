@@ -303,6 +303,9 @@ test('reviewed response records persist and produce a local non-submitted packet
   await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
   await packet.getByLabel(/Exact abusive HTTP/).fill('https://response.invalid/sign-in');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name.');
+  await expect(packet).toContainText('review cautions');
+  await packet.getByRole('button', { name: 'Use recorded case routes' }).click();
+  await expect(packet.getByLabel(/registrar contact/i)).toHaveValue('Registrar abuse desk');
 
   const downloadPromise = page.waitForEvent('download');
   await packet.getByRole('button', { name: 'Export JSON' }).click();
@@ -314,6 +317,7 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
+    schemaVersion: 4,
     incident: {
       category: 'Credential phishing',
       affectedParty: 'Example service',
@@ -325,6 +329,14 @@ test('reviewed response records persist and produce a local non-submitted packet
       recipient: 'Registrar abuse desk',
       state: 'planned',
     }],
+    preflight: {
+      status: 'review_cautions',
+      canExport: true,
+      actionSummary: {
+        total: 1,
+        active: 1,
+      },
+    },
     integrity: {
       algorithm: 'SHA-256',
       canonicalization: 'sorted-json-v1',

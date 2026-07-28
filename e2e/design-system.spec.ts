@@ -178,7 +178,12 @@ function sectionedLookupFixture(domain: string) {
         registryRdap: { state: 'redacted' },
         whois: { state: 'unavailable' },
       },
-      abuseRouting: [{ channel: 'email', contact: 'abuse@example.test' }],
+      abuseRouting: [{
+        kind: 'registrar',
+        channel: 'email',
+        contact: 'abuse@example.test',
+        source: 'registrar fixture publication',
+      }],
     },
   };
 }

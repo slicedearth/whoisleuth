@@ -1,19 +1,24 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
+  import type {
+    AbuseRecipientResolution,
+    ResolvedAbuseRecipient,
+  } from '$lib/analysis/abuse-recipient-resolver.ts';
 
   type DraftAction = { email: string; body: string; mailto: string };
 
-  let { domain, record, note, caseStatus, draftStatus, outreach, abuseContactEmail, setNote, createCase, addNote, copyDraft, statusLabel, dispositionLabel }: {
+  let { domain, record, note, caseStatus, draftStatus, outreach, recipientResolution, setNote, createCase, addNote, recordRecipient, copyDraft, statusLabel, dispositionLabel }: {
     domain: string;
     record: CaseRecord | null;
     note: string;
     caseStatus: string;
     draftStatus: string;
     outreach: DraftAction | null;
-    abuseContactEmail: string;
+    recipientResolution: AbuseRecipientResolution;
     setNote: (value: string) => void;
     createCase: () => void;
     addNote: () => void;
+    recordRecipient: (route: ResolvedAbuseRecipient) => void | Promise<void>;
     copyDraft: (text: string, label: string) => void | Promise<void>;
     statusLabel: (value: CaseRecord['status']) => string;
     dispositionLabel: (value: CaseRecord['disposition']) => string;
@@ -39,14 +44,34 @@
   </section>
 {/if}
 
-{#if outreach || abuseContactEmail}
+{#if outreach || recipientResolution.recipients.length}
   <section class="response evidence-card card">
-    <div class="section-head"><div><p class="eyebrow">Respond</p><h4>Human-reviewed drafts</h4></div></div>
-    <p class="card-note">Nothing is sent automatically. Review and edit every message before sending it.</p>
+    <div class="section-head"><div><p class="eyebrow">Respond</p><h4>Published routes and reviewed drafts</h4></div></div>
+    <p class="card-note">Nothing is sent automatically. A published contact does not prove responsibility or that a report should be sent. Record the selected route in a case, then review the exact evidence and message.</p>
     <div class="response-actions">
       {#if outreach}<article><strong>Acquisition outreach</strong><span>{outreach.email}</span><div><a class="btn small" href={outreach.mailto}>Open email draft</a><button class="btn small" onclick={() => copyDraft(outreach.body, 'outreach draft')}>Copy text</button></div></article>{/if}
-      {#if abuseContactEmail}<article><strong>Registrar abuse contact</strong><span>{abuseContactEmail}</span><p>Contact availability is not evidence of abuse. Create or open the case, then prepare a reviewed packet with the exact URLs, harm, timestamps, and selected evidence.</p>{#if record}<div><a class="btn small" href={`/monitor?case=${encodeURIComponent(record.id)}`}>Prepare reviewed packet</a></div>{/if}</article>{/if}
+      {#each recipientResolution.recipients as route}
+        <article>
+          <strong>{route.kind.replaceAll('_', ' ')} route</strong>
+          <span>{route.contact}</span>
+          <p><b>{route.channel}</b> · source: {route.source}</p>
+          {#if route.limitations.length}<ul>{#each route.limitations.slice(0, 3) as limitation}<li>{limitation}</li>{/each}</ul>{/if}
+          <div>
+            <button class="btn small" type="button" onclick={() => void recordRecipient(route)} disabled={!record}>Record in case</button>
+            {#if record}<a class="btn small" href={`/monitor?case=${encodeURIComponent(record.id)}`}>Review response packet</a>{/if}
+          </div>
+        </article>
+      {/each}
     </div>
+    <details class="coverage">
+      <summary>Response-route coverage</summary>
+      <ul>
+        {#each recipientResolution.coverage as item}
+          <li><strong>{item.kind.replaceAll('_', ' ')}</strong><span class={`coverage-state state-${item.state}`}>{item.state.replaceAll('_', ' ')}</span><p>{item.detail}</p></li>
+        {/each}
+      </ul>
+      {#each recipientResolution.limitations as limitation}<p>{limitation}</p>{/each}
+    </details>
     {#if draftStatus}<p class="draft-status" aria-live="polite">{draftStatus}</p>{/if}
   </section>
 {/if}
@@ -72,5 +97,17 @@
   .response-actions span{margin-top:5px;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
   .response-actions article>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
   .response-actions p{margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .response-actions b{color:var(--text);font-weight:600;text-transform:capitalize}
+  .response-actions ul{display:grid;gap:4px;margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .coverage{margin-top:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .coverage summary{padding:10px 12px;cursor:pointer;font:650 var(--text-xs) var(--mono)}
+  .coverage>ul{display:grid;gap:6px;margin:0;padding:0 12px 10px;list-style:none}
+  .coverage li{display:grid;grid-template-columns:minmax(110px,.3fr) auto minmax(0,1fr);gap:8px;align-items:center;padding:7px;border-top:1px solid var(--border)}
+  .coverage li>strong{font-size:var(--text-xs);text-transform:capitalize}
+  .coverage li>p,.coverage>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .coverage>p{padding:0 12px 8px}
+  .coverage-state{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
+  .coverage-state.state-found{color:var(--accent);border-color:rgb(var(--accent-rgb) / .4)}
   .draft-status{margin:10px 0 0;font-size:var(--text-xs)}
+  @media(max-width:700px){.coverage li{grid-template-columns:1fr auto}.coverage li>p{grid-column:1/-1}}
 </style>

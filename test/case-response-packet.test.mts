@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   buildCaseResponsePacket,
+  buildCaseResponsePreflight,
   caseResponsePacketFilename,
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
@@ -67,6 +68,9 @@ describe('case response packet', () => {
     assert.equal(result.json.provenance.observationAge.band, 'under_24_hours');
     assert.equal(result.json.escalationHistory.length, 1);
     assert.equal(result.json.escalationHistory[0]?.reference, 'CASE-123');
+    assert.equal(result.json.preflight.canExport, true);
+    assert.equal(result.json.preflight.status, 'ready_for_review');
+    assert.equal(result.json.preflight.actionSummary.submitted, 1);
     assert.match(result.json.integrity.digestSha256, /^[a-f0-9]{64}$/u);
     assert.equal(await verifyCaseResponsePacketIntegrity(result.json), true);
     assert.match(result.markdown, /Separately routed|Escalation contacts/u);
@@ -150,10 +154,30 @@ describe('case response packet', () => {
     }, NOW);
     assert.equal(result.json.provenance.observationAge.band, 'over_seven_days');
     assert.equal(result.json.provenance.observationAge.refreshRecommended, true);
+    assert.equal(result.json.preflight.status, 'review_cautions');
+    assert.equal(
+      result.json.preflight.checks.find((item) => item.id === 'evidence_freshness')?.state,
+      'caution',
+    );
     assert.match(result.markdown, /Refresh evidence before submission/u);
 
     result.json.incident.observedHarm = 'Changed after export';
     assert.equal(await verifyCaseResponsePacketIntegrity(result.json), false);
+  });
+
+  test('preflight blocks missing incident facts and keeps review gaps explicit', () => {
+    const preflight = buildCaseResponsePreflight(reviewedCase(), {
+      category: '',
+      affectedParty: '',
+      abusiveUrls: [],
+      observedHarm: '',
+      observedAt: null,
+      contacts: [],
+    }, NOW);
+    assert.equal(preflight.canExport, false);
+    assert.equal(preflight.status, 'needs_input');
+    assert.equal(preflight.counts.block, 1);
+    assert.equal(preflight.checks.find((item) => item.id === 'recipient_route')?.state, 'caution');
   });
 
   test('uses bounded path-safe filenames', () => {

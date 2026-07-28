@@ -2,9 +2,10 @@
 // no network requests, mailto links, submissions, or provider side effects.
 
 import type { CaseRecord } from './case-model.ts';
+import { buildCaseActionOutcomeSummary } from './case-response-model.ts';
 
 export const CASE_RESPONSE_PACKET_SCHEMA = 'whoisleuth.case-response-packet';
-export const CASE_RESPONSE_PACKET_VERSION = 3;
+export const CASE_RESPONSE_PACKET_VERSION = 4;
 export const MAX_ABUSIVE_URLS = 20;
 export const MAX_RESPONSE_CONTACTS = 12;
 export const MAX_RESPONSE_ACTION_HISTORY = 20;
@@ -37,6 +38,22 @@ export type CaseResponsePacketInput = {
   contacts?: unknown;
 };
 
+export type CaseResponsePreflightCheck = Readonly<{
+  id: string;
+  label: string;
+  state: 'block' | 'caution' | 'pass';
+  detail: string;
+}>;
+
+export type CaseResponsePreflight = Readonly<{
+  version: 1;
+  status: 'needs_input' | 'ready_for_review' | 'review_cautions';
+  canExport: boolean;
+  counts: Readonly<{ block: number; caution: number; pass: number }>;
+  checks: readonly CaseResponsePreflightCheck[];
+  actionSummary: ReturnType<typeof buildCaseActionOutcomeSummary>;
+}>;
+
 export type CaseResponsePacket = {
   schema: typeof CASE_RESPONSE_PACKET_SCHEMA;
   schemaVersion: typeof CASE_RESPONSE_PACKET_VERSION;
@@ -63,6 +80,7 @@ export type CaseResponsePacket = {
     source: string;
     limitations: string[];
   }>;
+  preflight: CaseResponsePreflight;
   escalationHistory: Array<{
     type: string;
     recipient: string;
@@ -176,6 +194,111 @@ function normalizeContacts(value: unknown): CaseResponsePacket['contacts'] {
   return contacts;
 }
 
+export function buildCaseResponsePreflight(
+  caseRecord: CaseRecord,
+  input: CaseResponsePacketInput,
+  generatedAt: string = new Date().toISOString(),
+): CaseResponsePreflight {
+  const latestEvidence = caseRecord.evidenceHistory.at(-1) ?? null;
+  const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
+  const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
+  const contacts = normalizeContacts(input.contacts);
+  const urls = normalizeUrls(input.abusiveUrls);
+  const requiredComplete = Boolean(
+    text(input.category, MAX_ABUSE_CATEGORY_LENGTH)
+    && text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH)
+    && urls.length
+    && text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH)
+    && observedAt,
+  );
+  const age = observedAt ? observationAge(observedAt, normalizedGeneratedAt) : null;
+  const openContradictions = caseRecord.assertions
+    .filter((item) => item.kind === 'contradiction' && item.state === 'open')
+    .length;
+  const actionSummary = buildCaseActionOutcomeSummary(caseRecord.actions, normalizedGeneratedAt);
+  const checks: CaseResponsePreflightCheck[] = [
+    {
+      id: 'required_incident_fields',
+      label: 'Incident facts',
+      state: requiredComplete ? 'pass' : 'block',
+      detail: requiredComplete
+        ? `${urls.length} exact HTTP(S) URL${urls.length === 1 ? '' : 's'} and the required incident context are present.`
+        : 'Category, affected party, an exact HTTP(S) URL, observed harm, and observation time are required.',
+    },
+    {
+      id: 'evidence_pins',
+      label: 'Selected evidence',
+      state: caseRecord.evidencePins.length ? 'pass' : 'caution',
+      detail: caseRecord.evidencePins.length
+        ? `${caseRecord.evidencePins.length} analyst-selected evidence pin${caseRecord.evidencePins.length === 1 ? '' : 's'} will remain separately attributable.`
+        : 'No precise evidence pin is recorded; the packet can be drafted, but its support is less reviewable.',
+    },
+    {
+      id: 'analyst_decision',
+      label: 'Analyst decision',
+      state: caseRecord.decisions.length ? 'pass' : 'caution',
+      detail: caseRecord.decisions.length
+        ? `${caseRecord.decisions.length} analyst decision${caseRecord.decisions.length === 1 ? '' : 's'} record the escalation rationale.`
+        : 'No explicit analyst decision explains why external reporting is appropriate.',
+    },
+    {
+      id: 'recipient_route',
+      label: 'Recipient route',
+      state: contacts.length ? 'pass' : 'caution',
+      detail: contacts.length
+        ? `${contacts.length} separately attributed contact route${contacts.length === 1 ? ' is' : 's are'} included.`
+        : 'No contact route is included; identify and review the intended recipient before sending.',
+    },
+    {
+      id: 'case_disposition',
+      label: 'Case disposition',
+      state: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition) ? 'pass' : 'caution',
+      detail: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition)
+        ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}.`
+        : `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}; confirm it before external use.`,
+    },
+    {
+      id: 'evidence_freshness',
+      label: 'Evidence freshness',
+      state: age?.refreshRecommended ? 'caution' : observedAt ? 'pass' : 'block',
+      detail: age
+        ? age.refreshRecommended
+          ? `The selected observation is ${age.band.replaceAll('_', ' ')} and should be refreshed before submission.`
+          : `The selected observation is ${age.band.replaceAll('_', ' ')}.`
+        : 'A valid observation time is required.',
+    },
+    {
+      id: 'contradictory_evidence',
+      label: 'Contradictory evidence',
+      state: openContradictions ? 'caution' : 'pass',
+      detail: openContradictions
+        ? `${openContradictions} open contradiction${openContradictions === 1 ? '' : 's'} should be addressed or disclosed.`
+        : 'No open contradictory-evidence assertion is recorded.',
+    },
+    {
+      id: 'action_tracking',
+      label: 'Action tracking',
+      state: actionSummary.total ? 'pass' : 'caution',
+      detail: actionSummary.total
+        ? `${actionSummary.total} reviewed action${actionSummary.total === 1 ? ' is' : 's are'} tracked; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} due for follow-up.`
+        : 'No reviewed case action is recorded for ownership, submission, or follow-up.',
+    },
+  ];
+  const counts = {
+    block: checks.filter((item) => item.state === 'block').length,
+    caution: checks.filter((item) => item.state === 'caution').length,
+    pass: checks.filter((item) => item.state === 'pass').length,
+  };
+  return {
+    version: 1,
+    status: counts.block ? 'needs_input' : counts.caution ? 'review_cautions' : 'ready_for_review',
+    canExport: counts.block === 0,
+    counts,
+    checks,
+    actionSummary,
+  };
+}
+
 function normalizeActionHistory(caseRecord: CaseRecord): CaseResponsePacket['escalationHistory'] {
   return caseRecord.actions
     .slice(-MAX_RESPONSE_ACTION_HISTORY)
@@ -259,6 +382,7 @@ export async function buildCaseResponsePacket(
   const contacts = normalizeContacts(input.contacts);
   const escalationHistory = normalizeActionHistory(caseRecord);
   const age = observationAge(observedAt, normalizedGeneratedAt);
+  const preflight = buildCaseResponsePreflight(caseRecord, input, normalizedGeneratedAt);
   const limitations = [
     'This packet contains analyst-selected facts and must be reviewed before submission.',
     'WHOISleuth did not submit this packet or verify that any listed contact is monitored.',
@@ -286,6 +410,7 @@ export async function buildCaseResponsePacket(
       observedAt,
     },
     contacts,
+    preflight,
     escalationHistory,
     provenance: {
       latestEvidenceCapturedAt: latestEvidence?.capturedAt ?? null,
@@ -348,6 +473,8 @@ export async function buildCaseResponsePacket(
     '',
     '## Review and provenance',
     '',
+    `- Preflight: ${preflight.status.replaceAll('_', ' ')} (${preflight.counts.pass} pass, ${preflight.counts.caution} caution, ${preflight.counts.block} block)`,
+    ...preflight.checks.map((check) => `- ${escapeMarkdown(check.label)} [${check.state}]: ${escapeMarkdown(check.detail)}`),
     ...limitations.map((limitation) => `- ${escapeMarkdown(limitation)}`),
     `- Case evidence pins: ${caseRecord.evidencePins.length}`,
     `- Case decision records: ${caseRecord.decisions.length}`,

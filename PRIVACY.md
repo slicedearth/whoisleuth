@@ -411,7 +411,12 @@ default (see the README), so many lookups return no personal data at all.
   disposition, and deriving or editing them makes no network request.
   Cases can additionally retain bounded analyst-selected evidence pins,
   decision rationales, contact routes, reviewed response actions, follow-up
-  dates, references, and outcomes. These analyst-authored records remain
+  dates, references, and outcomes. Lookup can derive a bounded local list of
+  published registrar, registry, and security.txt response routes only from the
+  completed response already in memory. It performs no contact discovery or
+  reachability check and records a route only after an analyst selects it.
+  Network or hosting coverage remains not collected unless an attributable
+  route is actually available. These analyst-authored records remain
   separate from collected evidence snapshots and can contain sensitive
   investigation context. A deliberately imported, strictly validated external
   finding is stored as a separately attributed evidence pin with its stated
@@ -491,8 +496,12 @@ default (see the README), so many lookups return no personal data at all.
 - **Reviewed response and defensive-control exports**: a case response packet
   is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
   UTC observation time, and separately attributed registrar, registry,
-  network/hosting, or security.txt contacts. JSON, Markdown, and email-text
-  outputs state that review is required and that no submission occurred.
+  network/hosting, or security.txt contacts. Its local preflight blocks export
+  when required incident facts are incomplete and identifies review cautions
+  for missing pins, decisions, recipient routes, disposition, stale evidence,
+  contradictions, or action tracking. JSON, Markdown, and email-text outputs
+  include the bounded preflight and action-outcome summary, state that review
+  is required, and state that no submission occurred.
   Defensive domain exports require an explicit reviewed selection and eligible
   analyst disposition. They exclude configured official, allowlisted, and
   common-infrastructure domains, include an expiry and provenance manifest,
