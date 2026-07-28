@@ -223,6 +223,7 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Registry data contract](docs/registry-data-contract.md) | Normalized RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
 | [Registry compatibility](docs/registry-compatibility.md) | Fixture-backed parser support and separately documented access context. |
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
+| [External findings import](docs/external-findings-import.md) | Strict local JSON schema, evidence provenance, validation bounds, and case-merge behavior. |
 | [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
 | [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, and evidence exports. |
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |

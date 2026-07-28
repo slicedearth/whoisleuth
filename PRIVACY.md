@@ -413,7 +413,12 @@ default (see the README), so many lookups return no personal data at all.
   decision rationales, contact routes, reviewed response actions, follow-up
   dates, references, and outcomes. These analyst-authored records remain
   separate from collected evidence snapshots and can contain sensitive
-  investigation context. Creating or editing them makes no network request.
+  investigation context. A deliberately imported, strictly validated external
+  finding is stored as a separately attributed evidence pin with its stated
+  source, observation time, completeness, and limitations. Import preview and
+  application make no network request, do not fetch references, and do not
+  change analyst status or disposition. Creating or editing these records makes
+  no network request.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword

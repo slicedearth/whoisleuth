@@ -340,6 +340,43 @@ test('reviewed response records persist and produce a local non-submitted packet
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 0 assertions · 1 action');
 });
 
+test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
+  await openCasesView(page);
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const payload = JSON.stringify({
+    schema: 'whoisleuth.external-findings',
+    schemaVersion: 1,
+    source: { name: 'Local analyst export', reference: 'offline review' },
+    findings: [{
+      domain: 'external-review.invalid',
+      category: 'page',
+      summary: 'A credential form was reported in a retained external observation.',
+      observedAt: '2026-07-28T01:00:00.000Z',
+      completeness: 'partial',
+      limitations: ['Rendered behavior was not retained.'],
+      reference: 'finding-17',
+    }],
+  });
+  const file = { name: 'external-findings.json', mimeType: 'application/json', buffer: Buffer.from(payload) };
+
+  await externalImport.locator('input[type="file"]').setInputFiles(file);
+  await expect(externalImport.getByRole('heading', { name: 'Local analyst export' })).toBeVisible();
+  await expect(externalImport).toContainText('1 finding · 1 domain');
+  await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toHaveCount(0);
+
+  await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toBeVisible();
+  await page.locator('.case-head', { hasText: 'external-review.invalid' }).click();
+  await expect(page.locator('.response-workspace')).toContainText('External page finding');
+  await expect(page.locator('.response-workspace')).toContainText('WHOISleuth did not collect or independently verify this finding');
+
+  await externalImport.locator('input[type="file"]').setInputFiles(file);
+  await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 decisions');
+});
+
 test('deleting a case removes it after confirmation', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'delete-me.invalid');
