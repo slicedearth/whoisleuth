@@ -160,7 +160,13 @@ default (see the README), so many lookups return no personal data at all.
   tokens. Monitor can derive a capped relationship graph and table from the
   typed projection of bounded final-origin and nameserver-set observations
   already retained in browser-local case histories. That automatic projection
-  makes no request and saves no separate relationship record. A deliberate
+  makes no request and saves no separate relationship record. A bounded
+  connected-cluster view can be labelled, split, merged, or dismissed in the
+  current browser view without changing any case or source observation. Its
+  deliberate JSON export contains the reviewed cluster projection, exact
+  contributing relationship values, case domains, provenance, completeness,
+  and limitations, but excludes case notes, contacts, raw upstream responses,
+  credentials, and unrelated case fields. A deliberate
   local graph download can
   include the filtered case domains, exact retained relationship values,
   method, classification, source, observation time, completeness, truncation,
@@ -550,7 +556,11 @@ default (see the README), so many lookups return no personal data at all.
   later Lookup compares the same fields while keeping changed, missing,
   unavailable, conflicting, and not-recorded states distinct. Domain, IP, and
   ASN readable Markdown reports are generated locally from bounded known fields
-  and keep partial source states explicit.
+  and keep partial source states explicit. A checkpoint can additionally retain
+  one analyst-declared transition expectation per selected fact: preserve,
+  change, or manual review. Post-transition comparison remains local and treats
+  unavailable, conflicting, missing, or uncollected evidence as indeterminate.
+  It does not establish ownership, acquisition completion, or service health.
 - **Official-domain posture audits**: handled per request and discarded. The
   server queries public DNS, the domain registry's RDAP service for status,
   nameserver, DS, and DNSSEC delegation evidence, and (only when advertised)

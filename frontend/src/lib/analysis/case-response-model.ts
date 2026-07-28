@@ -22,6 +22,9 @@ export const MAX_TRAIL_TARGET_LENGTH = 500;
 export const CASE_PIN_COMPLETENESS = ['complete', 'partial', 'inconclusive', 'unknown'] as const;
 export type CasePinCompleteness = typeof CASE_PIN_COMPLETENESS[number];
 
+export const CASE_TRANSITION_EXPECTATIONS = ['preserve', 'change', 'review'] as const;
+export type CaseTransitionExpectation = typeof CASE_TRANSITION_EXPECTATIONS[number];
+
 export const CASE_ACTION_TYPES = [
   'registrar_report',
   'registry_report',
@@ -75,6 +78,7 @@ export type CaseEvidencePin = {
   collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: CasePinCompleteness;
   truncated: boolean | null;
+  transitionExpectation: CaseTransitionExpectation | null;
   limitations: string[];
   createdAt: string;
 };
@@ -152,6 +156,7 @@ const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const COMPLETENESS = new Set<string>(CASE_PIN_COMPLETENESS);
+const TRANSITION_EXPECTATIONS = new Set<string>(CASE_TRANSITION_EXPECTATIONS);
 const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
 const ASSERTION_KINDS = new Set<string>(CASE_ASSERTION_KINDS);
@@ -268,6 +273,10 @@ function normalizePin(raw: unknown, fallback: string): CaseEvidencePin | null {
       ? item.completeness as CasePinCompleteness
       : 'unknown',
     truncated: typeof item.truncated === 'boolean' ? item.truncated : null,
+    transitionExpectation: typeof item.transitionExpectation === 'string'
+      && TRANSITION_EXPECTATIONS.has(item.transitionExpectation)
+      ? item.transitionExpectation as CaseTransitionExpectation
+      : null,
     limitations: limitations(item.limitations),
     createdAt,
   };

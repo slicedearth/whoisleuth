@@ -35,7 +35,7 @@
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
-  import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
+  import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { outreachAction, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
@@ -432,8 +432,8 @@
     caseRecord=next.record;
     caseStatus=next.status;
   }
-  async function saveEvidenceCheckpoint(selectedFields:string[]){
-    const next=await lookupCaseController.recordCheckpoint(caseRecord,checkpointFacts,selectedFields);
+  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){
+    const next=await lookupCaseController.recordCheckpoint(caseRecord,checkpointFacts,selectedFields,transitionExpectations);
     caseRecord=next.record;
     caseStatus=next.status;
   }

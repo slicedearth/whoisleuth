@@ -56,6 +56,7 @@ export type {
   CaseDecisionRecord,
   CaseEvidencePin,
   CaseManualTrailEvent,
+  CaseTransitionExpectation,
 } from './analysis/case-response-model.ts';
 export type {
   CaseEvidenceSnapshot,

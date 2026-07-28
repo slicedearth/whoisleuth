@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 
 import {
   buildLookupCheckpointFacts,
+  compareAcquisitionTransitionPins,
   checkpointPinInputs,
   compareCheckpointPins,
 } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
@@ -174,5 +175,44 @@ describe('case evidence checkpoints', () => {
   test('does not offer domain checkpoints for IP or ASN lookups', () => {
     assert.deepEqual(buildLookupCheckpointFacts(response({ type: 'ipv4', query: '192.0.2.10' })), []);
     assert.deepEqual(buildLookupCheckpointFacts(response({ type: 'asn', query: 'AS64496' })), []);
+  });
+
+  test('verifies declared acquisition transition expectations without treating unavailable data as a change', () => {
+    const sourceFacts = buildLookupCheckpointFacts(response(), {
+      collectionDepth: 'deep',
+      generatedAt: OBSERVED_AT,
+    });
+    const inputs = checkpointPinInputs(sourceFacts, [
+      'dns.nameservers',
+      'dns.mx',
+      'tls.protocol',
+      'http.final_origin',
+    ], {
+      checkpointId: 'transition-one',
+      transitionExpectations: {
+        'dns.nameservers': 'preserve',
+        'dns.mx': 'change',
+        'tls.protocol': 'review',
+        'http.final_origin': 'preserve',
+      },
+    });
+    const pins = normalizeCaseEvidencePins(inputs.map((item, index) => ({
+      ...item,
+      id: `transition-pin-${index}`,
+      createdAt: OBSERVED_AT,
+    })), OBSERVED_AT);
+    const current = sourceFacts.map((fact) => {
+      if (fact.field === 'dns.mx') return { ...fact, value: 'mx.changed.example' };
+      if (fact.field === 'http.final_origin') return { ...fact, sourceState: 'unavailable', value: null };
+      return fact;
+    });
+    const states = Object.fromEntries(compareAcquisitionTransitionPins(pins, current)
+      .map((item) => [item.field, item.transitionState]));
+
+    assert.equal(states['dns.nameservers'], 'verified_preserved');
+    assert.equal(states['dns.mx'], 'verified_change');
+    assert.equal(states['tls.protocol'], 'manual_review');
+    assert.equal(states['http.final_origin'], 'indeterminate');
+    assert.ok(pins.every((pin) => pin.transitionExpectation !== null));
   });
 });

@@ -122,7 +122,11 @@ field-level checkpoint. Each bounded fact keeps its source, observed time,
 collection depth, source state, completeness, truncation, schema version, and
 limitations. A later Lookup compares the same fields as equal, changed,
 missing, unavailable, conflicting, or not recorded; incomplete collection
-never overwrites the earlier checkpoint.
+never overwrites the earlier checkpoint. The analyst can optionally declare
+each selected fact as preserve, change, or manual review before an acquisition
+transition. A later Lookup classifies only the observable comparison as
+verified, unexpected, not yet observed, or indeterminate; it does not claim
+that an acquisition or operational cutover succeeded.
 
 The external evidence pivots are ordinary links, not integrations. WHOISleuth
 does not prefetch them, call their APIs, cache or store their results, or use

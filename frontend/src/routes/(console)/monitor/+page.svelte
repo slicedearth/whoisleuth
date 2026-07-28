@@ -17,9 +17,11 @@
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
+  import CaseRelationshipClusters from '$lib/components/CaseRelationshipClusters.svelte';
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
   import RetainedRelationshipObservations from '$lib/components/RetainedRelationshipObservations.svelte';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.ts';
+  import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
@@ -74,6 +76,7 @@
   let retainedRelationships=$state<RelationshipObservation[]>([]);
   let customRuleCount=$state(0);
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
+  const relationshipClusters=$derived(buildCaseRelationshipClusters(relationshipSummary));
   const relationshipCount=$derived(relationshipSummary.groups.length+retainedRelationships.length);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
@@ -196,6 +199,7 @@
     focusId={page.url.searchParams.get('observation')||''}
     ondelete={removeRetainedRelationship}
   />
+  <CaseRelationshipClusters summary={relationshipClusters} />
   <CaseRelationshipGraph records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
   <CaseRelationshipTable records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
 </div>

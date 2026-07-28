@@ -285,7 +285,11 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   or implying attribution.
 - **Relationships** review analyst-selected Bulk observations and project
   typed, provenance-backed links across those records, stored case evidence,
-  and campaign membership without another network request.
+  and campaign membership without another network request. The Evidence
+  clusters review layer groups connected cases, keeps every contributing
+  relationship inspectable, and qualifies common shared infrastructure.
+  Split, merge, label, and dismiss controls alter only the current review view;
+  export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
   deliberately.
 
@@ -305,6 +309,14 @@ submits a report or treats a planned action as completed.
 The complete evidence timeline remains depth-aware. A Fast observation does
 not erase last-known Deep-only evidence, and score changes are compared only
 when their explicit model versions match.
+
+An open domain case can also turn a selected Lookup checkpoint into a reviewed
+acquisition-transition plan. Mark each fact as expected to stay the same,
+expected to change, or requiring manual review. After a later Lookup, the
+comparison keeps unavailable, conflicting, missing, and uncollected evidence
+indeterminate instead of presenting it as successful change. The plan verifies
+only the selected observable facts and does not establish acquisition,
+ownership, service health, or cutover completion.
 
 ## Fast and Deep collection
 

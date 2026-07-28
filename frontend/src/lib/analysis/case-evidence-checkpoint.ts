@@ -9,7 +9,10 @@ import {
   type JsonObject,
   type LookupHttpResponse,
 } from './lookup-response.ts';
-import type { CaseEvidencePin } from './case-response-model.ts';
+import type {
+  CaseEvidencePin,
+  CaseTransitionExpectation,
+} from './case-response-model.ts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
 export const MAX_CHECKPOINT_FACTS = 20;
@@ -53,6 +56,19 @@ export type CheckpointComparison = Readonly<{
   source: string;
   observedAt: string;
   limitations: string[];
+}>;
+
+export type AcquisitionTransitionState =
+  | 'change_not_observed'
+  | 'indeterminate'
+  | 'manual_review'
+  | 'unexpected_change'
+  | 'verified_change'
+  | 'verified_preserved';
+
+export type AcquisitionTransitionComparison = CheckpointComparison & Readonly<{
+  expectation: CaseTransitionExpectation;
+  transitionState: AcquisitionTransitionState;
 }>;
 
 const UNAVAILABLE_STATES = new Set([
@@ -225,7 +241,10 @@ function checkpointId(): string {
 export function checkpointPinInputs(
   facts: readonly CheckpointFact[],
   selectedFields: readonly string[],
-  options: Readonly<{ checkpointId?: string }> = {},
+  options: Readonly<{
+    checkpointId?: string;
+    transitionExpectations?: Readonly<Record<string, CaseTransitionExpectation>>;
+  }> = {},
 ): Array<Omit<CaseEvidencePin, 'createdAt' | 'id'>> {
   const selected = new Set(selectedFields.slice(0, MAX_CHECKPOINT_FACTS));
   const id = options.checkpointId && /^[A-Za-z0-9_-]{1,64}$/u.test(options.checkpointId)
@@ -247,8 +266,42 @@ export function checkpointPinInputs(
       collectionDepth: fact.collectionDepth,
       completeness: fact.completeness,
       truncated: fact.truncated,
+      transitionExpectation: options.transitionExpectations?.[fact.field] ?? null,
       limitations: [...fact.limitations],
     }));
+}
+
+export function compareAcquisitionTransitionPins(
+  pins: readonly CaseEvidencePin[],
+  currentFacts: readonly CheckpointFact[],
+): AcquisitionTransitionComparison[] {
+  const comparisons = new Map(compareCheckpointPins(pins, currentFacts).map((item) => [item.field, item]));
+  return pins
+    .filter((pin): pin is CaseEvidencePin & { transitionExpectation: CaseTransitionExpectation } =>
+      Boolean(pin.field && pin.transitionExpectation))
+    .slice(-MAX_CHECKPOINT_FACTS)
+    .flatMap((pin) => {
+      const comparison = comparisons.get(pin.field ?? '');
+      if (!comparison) return [];
+      let transitionState: AcquisitionTransitionState = 'indeterminate';
+      if (comparison.state === 'unavailable'
+        || comparison.state === 'conflicting'
+        || comparison.state === 'missing'
+        || comparison.state === 'not_recorded') {
+        transitionState = 'indeterminate';
+      } else if (pin.transitionExpectation === 'review') {
+        transitionState = 'manual_review';
+      } else if (pin.transitionExpectation === 'preserve') {
+        transitionState = comparison.state === 'equal' ? 'verified_preserved' : 'unexpected_change';
+      } else {
+        transitionState = comparison.state === 'changed' ? 'verified_change' : 'change_not_observed';
+      }
+      return [{
+        ...comparison,
+        expectation: pin.transitionExpectation,
+        transitionState,
+      }];
+    });
 }
 
 export function compareCheckpointPins(

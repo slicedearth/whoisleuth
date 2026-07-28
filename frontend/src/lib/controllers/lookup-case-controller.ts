@@ -10,6 +10,7 @@ import {
   checkpointPinInputs,
   type CheckpointFact,
 } from '../analysis/case-evidence-checkpoint.ts';
+import type { CaseTransitionExpectation } from '../analysis/case-response-model.ts';
 
 type CaseEvidenceInput = Record<string, unknown>;
 
@@ -167,6 +168,7 @@ export class LookupCaseController {
     record: CaseRecord | null,
     facts: readonly CheckpointFact[],
     selectedFields: readonly string[],
+    transitionExpectations: Readonly<Record<string, CaseTransitionExpectation>> = {},
   ): Promise<LookupCaseActionResult> {
     if (!record) {
       return {
@@ -174,7 +176,7 @@ export class LookupCaseController {
         status: 'Create or open the analyst case before saving an evidence checkpoint.',
       };
     }
-    const evidencePins = checkpointPinInputs(facts, selectedFields);
+    const evidencePins = checkpointPinInputs(facts, selectedFields, { transitionExpectations });
     if (!evidencePins.length) {
       return {
         record,
@@ -185,7 +187,7 @@ export class LookupCaseController {
       const updated = await this.#api.edit(record.id, { evidencePins });
       return {
         record: updated.record,
-        status: `Saved ${evidencePins.length} analyst-selected checkpoint fact${evidencePins.length === 1 ? '' : 's'}.${pruneSuffix(updated.pruned)}`,
+        status: `Saved ${evidencePins.length} analyst-selected checkpoint fact${evidencePins.length === 1 ? '' : 's'}${evidencePins.some((pin) => pin.transitionExpectation) ? ' with a reviewed transition plan' : ''}.${pruneSuffix(updated.pruned)}`,
       };
     } catch (cause) {
       return {

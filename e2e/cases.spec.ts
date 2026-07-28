@@ -1463,6 +1463,30 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(rows.nth(1)).toContainText('3 cases');
   });
 
+  test('reviews connected evidence clusters without changing source relationships', async ({ page }) => {
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'cluster-a', domain: 'cluster-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-a.invalid'] })] }),
+      caseRecord({ id: 'cluster-b', domain: 'cluster-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-a.invalid'] })] }),
+      caseRecord({ id: 'cluster-c', domain: 'cluster-c.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-b.invalid'] })] }),
+      caseRecord({ id: 'cluster-d', domain: 'cluster-d.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-b.invalid'] })] }),
+    ]);
+
+    const workspace = page.getByRole('region', { name: 'Evidence clusters' });
+    await expect(workspace).toBeVisible();
+    await expect(workspace.locator('article')).toHaveCount(2);
+    await workspace.getByLabel('Analyst label').first().fill('Related review set');
+    await workspace.getByLabel('Select cluster').nth(0).check();
+    await workspace.getByLabel('Select cluster').nth(1).check();
+    await workspace.getByRole('button', { name: 'Merge selected' }).click();
+    await expect(workspace.locator('article')).toHaveCount(1);
+    await expect(workspace).toContainText('4');
+    await workspace.getByRole('button', { name: 'Split cluster-a.invalid from this review cluster' }).click();
+    await expect(workspace.locator('.cases')).not.toContainText('cluster-a.invalid');
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toContainText('cluster-a.invalid');
+    await workspace.getByRole('button', { name: 'Reset' }).click();
+    await expect(workspace.locator('article')).toHaveCount(2);
+  });
+
   test('keeps long observed values readable beside long case pivots on desktop', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await openRelationshipTable(page, Array.from({ length: 23 }, (_, index) => caseRecord({
