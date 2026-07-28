@@ -21,8 +21,11 @@ The owning browser-store models declare these independent serialized ceilings:
 | Certificate Transparency history | IndexedDB | 1 MiB |
 | Detection rules | IndexedDB | 0.25 MiB |
 | Retained relationship observations | IndexedDB | 0.75 MiB |
+| Saved Bulk sessions | IndexedDB | 4 MiB |
+| Website profile snapshots | IndexedDB | 0.5 MiB |
+| Investigation templates | IndexedDB | 0.25 MiB |
 
-The combined declared ceiling is 10.5 MiB. These are safety limits rather than
+The combined declared ceiling is 15.25 MiB. These are safety limits rather than
 expected usage, and a browser may enforce a different origin quota. However,
 the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
@@ -32,6 +35,14 @@ Investigation search still builds a disposable bounded projection from cases,
 campaigns, Brand Profiles, and analyst-selected relationship observations.
 Individual records are stored under stable collection keys, and workspace
 imports can update several collections in one IndexedDB transaction.
+Website-profile snapshots retain at most 60 explicit analyst saves and 12 per
+canonical domain. They contain curated technology identifiers, posture states,
+identity digests, source health, timestamps, and completeness markers rather
+than raw lookup responses.
+Investigation templates retain at most 20 analyst-authored variants of the
+three built-in guides. They can customise bounded guidance, omit allowlisted
+steps, and add approval gates, but cannot introduce arbitrary actions, run
+code, start collection, submit evidence, or remove a mandatory request gate.
 
 Run the deterministic evaluation without reading browser data:
 
@@ -142,8 +153,10 @@ The threat model is deliberately narrow:
 - it does not protect the active plaintext IndexedDB workspace, an unlocked
   Console, a compromised same-origin page, a malicious browser extension,
   device malware, a keylogger, or a weak or reused passphrase; and
-- unencrypted version 1 archives remain importable and can still be downloaded
-  through a separately labelled compatibility action.
+- unencrypted archive versions 1 through 3 remain importable, without inventing
+  sections that those formats did not contain, and an unencrypted current
+  archive can still be downloaded through a separately labelled compatibility
+  action.
 
 ## Separate decisions
 

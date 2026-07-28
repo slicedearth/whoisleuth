@@ -2,10 +2,11 @@ import { normalizeDomain } from './case-model.ts';
 import { parse } from 'tldts';
 
 export const INVESTIGATION_GUIDE_SCHEMA = 'whoisleuth.investigation-recipe';
-export const INVESTIGATION_GUIDE_VERSION = 2;
+export const INVESTIGATION_GUIDE_VERSION = 3;
 export const INVESTIGATION_GUIDE_LEGACY_VERSION = 1;
+export const INVESTIGATION_GUIDE_PREVIOUS_VERSION = 2;
 export const INVESTIGATION_GUIDE_EXPORT_SCHEMA = 'whoisleuth.investigation-recipe-summary';
-export const INVESTIGATION_GUIDE_EXPORT_VERSION = 1;
+export const INVESTIGATION_GUIDE_EXPORT_VERSION = 2;
 export const MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH = 253;
 export const MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS = 25;
 export const MAX_INVESTIGATION_GUIDE_TIMESTAMP_LENGTH = 64;
@@ -39,6 +40,14 @@ export interface InvestigationRecipe {
   stages: readonly InvestigationRecipeStage[];
 }
 
+export interface InvestigationGuideTemplateSnapshot {
+  id: string;
+  label: string;
+  summary: string;
+  recipeId: InvestigationRecipeId;
+  stages: InvestigationRecipeStage[];
+}
+
 export interface InvestigationGuideStageProgress {
   id: string;
   outcome: InvestigationGuideOutcome;
@@ -50,6 +59,7 @@ export interface InvestigationGuideStageProgress {
 export interface InvestigationGuide {
   version: typeof INVESTIGATION_GUIDE_VERSION;
   recipeId: InvestigationRecipeId;
+  template: InvestigationGuideTemplateSnapshot | null;
   domain: string;
   focusDomain: string | null;
   reviewDomains: string[];
@@ -68,6 +78,10 @@ export interface InvestigationGuideSummary {
     id: InvestigationRecipeId;
     label: string;
   };
+  template: {
+    id: string;
+    label: string;
+  } | null;
   target: {
     type: 'domain';
     value: string;
@@ -89,6 +103,7 @@ export interface InvestigationGuideSummary {
 type UnknownRecord = Record<string, unknown>;
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/u;
+const SAFE_TEMPLATE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/u;
 const GUIDE_STATUSES = new Set<InvestigationGuideStatus>(['active', 'paused']);
 const GUIDE_OUTCOMES = new Set<InvestigationGuideOutcome>(['pending', 'complete', 'partial', 'skipped']);
 
@@ -195,6 +210,76 @@ function nullableTimestamp(value: unknown): string | null {
   return timestamp(value) || null;
 }
 
+function boundedTemplateText(value: unknown, maximum: number, fallback = ''): string {
+  if (typeof value !== 'string' || value.length > maximum * 4 || CONTROL_RE.test(value)) return fallback;
+  return value.replace(/\s+/gu, ' ').trim().slice(0, maximum).trim() || fallback;
+}
+
+function templateInstructions(value: unknown, fallback: readonly string[]): readonly string[] {
+  if (!Array.isArray(value)) return fallback;
+  const instructions = value
+    .slice(0, 6)
+    .map((item) => boundedTemplateText(item, 240))
+    .filter(Boolean);
+  return instructions.length ? instructions : fallback;
+}
+
+export function normalizeInvestigationGuideTemplateSnapshot(
+  value: unknown,
+  requiredRecipeId: InvestigationRecipeId | null = null,
+): InvestigationGuideTemplateSnapshot | null {
+  const input = record(value);
+  const id = typeof input?.id === 'string' && SAFE_TEMPLATE_ID_RE.test(input.id) ? input.id : '';
+  const recipe = investigationGuideRecipe(input?.recipeId);
+  const label = boundedTemplateText(input?.label, 80);
+  if (!id || !recipe || !label || (requiredRecipeId && recipe.id !== requiredRecipeId)) return null;
+  const supplied = new Map<string, UnknownRecord>();
+  for (const candidate of (Array.isArray(input?.stages) ? input.stages : []).slice(0, recipe.stages.length * 2)) {
+    const item = record(candidate);
+    if (item && typeof item.id === 'string' && !supplied.has(item.id)) supplied.set(item.id, item);
+  }
+  const stages = recipe.stages.flatMap((base) => {
+    const item = supplied.get(base.id);
+    if (!item || item.enabled === false) return [];
+    return [{
+      ...base,
+      label: boundedTemplateText(item.label, 100, base.label),
+      detail: boundedTemplateText(item.detail, 400, base.detail),
+      expectedEvidence: boundedTemplateText(item.expectedEvidence, 500, base.expectedEvidence),
+      completionCriteria: boundedTemplateText(item.completionCriteria, 500, base.completionCriteria),
+      instructions: templateInstructions(item.instructions, base.instructions),
+      requiresApproval: base.requiresApproval || item.requiresApproval === true,
+    }];
+  });
+  if (!stages.length) return null;
+  return {
+    id,
+    label,
+    summary: boundedTemplateText(input?.summary, 400, recipe.summary),
+    recipeId: recipe.id,
+    stages,
+  };
+}
+
+export function investigationGuideStagesForGuide(value: unknown): readonly InvestigationRecipeStage[] {
+  const guide = record(value);
+  const recipe = investigationGuideRecipe(guide?.recipeId);
+  if (!recipe) return [];
+  return normalizeInvestigationGuideTemplateSnapshot(guide?.template, recipe.id)?.stages || recipe.stages;
+}
+
+function investigationGuideStageForGuide(value: unknown, stageId: unknown): InvestigationRecipeStage | null {
+  return typeof stageId === 'string'
+    ? investigationGuideStagesForGuide(value).find((candidate) => candidate.id === stageId) || null
+    : null;
+}
+
+export function investigationGuideStageForGuidePath(value: unknown, pathname: unknown): InvestigationRecipeStage | null {
+  if (typeof pathname !== 'string') return null;
+  return investigationGuideStagesForGuide(value)
+    .find((candidate) => pathname === candidate.path || pathname.startsWith(`${candidate.path}/`)) || null;
+}
+
 function guideStatus(value: unknown): InvestigationGuideStatus {
   return typeof value === 'string' && GUIDE_STATUSES.has(value as InvestigationGuideStatus)
     ? value as InvestigationGuideStatus
@@ -271,14 +356,21 @@ export function createInvestigationGuide(
   domain: unknown,
   recipeId: unknown = 'new_domain_triage',
   now: unknown = new Date().toISOString(),
+  templateValue: unknown = null,
 ): InvestigationGuide | null {
   const normalized = normalizeInvestigationGuideDomain(domain);
   const recipe = investigationGuideRecipe(recipeId);
   const createdAt = timestamp(now);
   if (!normalized || !recipe || !createdAt) return null;
+  const template = templateValue === null || templateValue === undefined
+    ? null
+    : normalizeInvestigationGuideTemplateSnapshot(templateValue, recipe.id);
+  if (templateValue !== null && templateValue !== undefined && !template) return null;
+  const stages = template?.stages || recipe.stages;
   return {
     version: INVESTIGATION_GUIDE_VERSION,
     recipeId: recipe.id,
+    template,
     domain: normalized,
     focusDomain: null,
     reviewDomains: recipe.id === 'brand_sweep' ? [] : [normalized],
@@ -286,7 +378,7 @@ export function createInvestigationGuide(
     status: 'active',
     createdAt,
     updatedAt: createdAt,
-    stages: recipe.stages.map((stageDefinition) => createStageProgress(stageDefinition, createdAt)),
+    stages: stages.map((stageDefinition) => createStageProgress(stageDefinition, createdAt)),
   };
 }
 
@@ -304,6 +396,7 @@ function parseLegacyGuide(input: UnknownRecord): InvestigationGuide | null {
   return {
     version: INVESTIGATION_GUIDE_VERSION,
     recipeId: recipe.id,
+    template: null,
     domain,
     focusDomain: null,
     reviewDomains: [domain],
@@ -322,19 +415,25 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
   const input = record(value);
   if (!input) return null;
   if (input.version === INVESTIGATION_GUIDE_LEGACY_VERSION) return parseLegacyGuide(input);
-  if (input.version !== INVESTIGATION_GUIDE_VERSION) return null;
+  if (input.version !== INVESTIGATION_GUIDE_PREVIOUS_VERSION
+    && input.version !== INVESTIGATION_GUIDE_VERSION) return null;
   const recipe = investigationGuideRecipe(input.recipeId);
   const domain = normalizeInvestigationGuideDomain(input.domain);
   const createdAt = timestamp(input.createdAt);
   const updatedAt = timestamp(input.updatedAt);
   if (!recipe || !domain || !createdAt || !updatedAt) return null;
+  const template = input.version === INVESTIGATION_GUIDE_VERSION && input.template !== null && input.template !== undefined
+    ? normalizeInvestigationGuideTemplateSnapshot(input.template, recipe.id)
+    : null;
+  if (input.version === INVESTIGATION_GUIDE_VERSION && input.template !== null && input.template !== undefined && !template) return null;
+  const stageDefinitions = template?.stages || recipe.stages;
   const normalizedReview = normalizeReviewDomains(input.reviewDomains);
   const reviewDomains = normalizedReview.domains.length
     ? normalizedReview.domains
     : recipe.id === 'brand_sweep' ? [] : [domain];
 
   const supplied = new Map<string, UnknownRecord>();
-  for (const candidate of (Array.isArray(input.stages) ? input.stages : []).slice(0, recipe.stages.length * 2)) {
+  for (const candidate of (Array.isArray(input.stages) ? input.stages : []).slice(0, stageDefinitions.length * 2)) {
     const item = record(candidate);
     if (item && typeof item.id === 'string' && !supplied.has(item.id)) supplied.set(item.id, item);
   }
@@ -342,6 +441,7 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
   return {
     version: INVESTIGATION_GUIDE_VERSION,
     recipeId: recipe.id,
+    template,
     domain,
     focusDomain: recipe.id === 'brand_sweep' ? normalizeInvestigationGuideDomain(input.focusDomain) || null : null,
     reviewDomains,
@@ -349,7 +449,7 @@ export function parseInvestigationGuide(value: unknown): InvestigationGuide | nu
     status: guideStatus(input.status),
     createdAt,
     updatedAt,
-    stages: recipe.stages.map((stageDefinition) => {
+    stages: stageDefinitions.map((stageDefinition) => {
       const item = supplied.get(stageDefinition.id);
       return {
         id: stageDefinition.id,
@@ -401,7 +501,7 @@ function updateStage(
 ): InvestigationGuide | null {
   const guide = parseInvestigationGuide(value);
   const updatedAt = timestamp(now);
-  const stageDefinition = investigationGuideStage(stageId, guide?.recipeId);
+  const stageDefinition = investigationGuideStageForGuide(guide, stageId);
   if (!guide || !updatedAt || !stageDefinition) return guide;
   return {
     ...guide,
@@ -412,7 +512,7 @@ function updateStage(
 
 export function visitInvestigationGuide(value: unknown, pathname: unknown, now: unknown = new Date().toISOString()): InvestigationGuide | null {
   const guide = parseInvestigationGuide(value);
-  const stageDefinition = investigationGuideStageForPath(pathname, guide?.recipeId);
+  const stageDefinition = investigationGuideStageForGuidePath(guide, pathname);
   if (!guide || guide.status === 'paused' || !stageDefinition) return guide;
   const progress = guide.stages.find((item) => item.id === stageDefinition.id);
   if (stageDefinition.requiresApproval && !progress?.approvedAt) return guide;
@@ -422,7 +522,7 @@ export function visitInvestigationGuide(value: unknown, pathname: unknown, now: 
 
 export function approveInvestigationGuideStage(value: unknown, stageId: unknown, now: unknown = new Date().toISOString()): InvestigationGuide | null {
   const guide = parseInvestigationGuide(value);
-  const stageDefinition = investigationGuideStage(stageId, guide?.recipeId);
+  const stageDefinition = investigationGuideStageForGuide(guide, stageId);
   if (!guide || guide.status === 'paused' || !stageDefinition?.requiresApproval) return guide;
   const progress = guide.stages.find((item) => item.id === stageDefinition.id);
   if (progress?.approvedAt) return guide;
@@ -437,7 +537,7 @@ export function setInvestigationGuideStageOutcome(
 ): InvestigationGuide | null {
   const guide = parseInvestigationGuide(value);
   const normalizedOutcome = guideOutcome(outcome);
-  const stageDefinition = investigationGuideStage(stageId, guide?.recipeId);
+  const stageDefinition = investigationGuideStageForGuide(guide, stageId);
   if (!guide || guide.status === 'paused' || !stageDefinition) return guide;
   const progress = guide.stages.find((item) => item.id === stageDefinition.id);
   if (!progress || ((normalizedOutcome === 'complete' || normalizedOutcome === 'partial') && !progress.openedAt)) return guide;
@@ -459,7 +559,7 @@ export function setInvestigationGuideStatus(
 
 export function restartInvestigationGuide(value: unknown, now: unknown = new Date().toISOString()): InvestigationGuide | null {
   const guide = parseInvestigationGuide(value);
-  return guide ? createInvestigationGuide(guide.domain, guide.recipeId, now) : null;
+  return guide ? createInvestigationGuide(guide.domain, guide.recipeId, now, guide.template) : null;
 }
 
 export function buildInvestigationGuideSummary(
@@ -471,7 +571,7 @@ export function buildInvestigationGuideSummary(
   const normalizedGeneratedAt = timestamp(generatedAt);
   if (!guide || !recipe || !normalizedGeneratedAt) return null;
   const stages: InvestigationGuideSummary['stages'] = [];
-  for (const stageDefinition of recipe.stages) {
+  for (const stageDefinition of investigationGuideStagesForGuide(guide)) {
     const progress = guide.stages.find((candidate) => candidate.id === stageDefinition.id);
     if (!progress) return null;
     stages.push({
@@ -488,6 +588,7 @@ export function buildInvestigationGuideSummary(
     version: INVESTIGATION_GUIDE_EXPORT_VERSION,
     generatedAt: normalizedGeneratedAt,
     recipe: { id: recipe.id, label: recipe.label },
+    template: guide.template ? { id: guide.template.id, label: guide.template.label } : null,
     target: { type: 'domain', value: guide.domain },
     status: guide.status,
     createdAt: guide.createdAt,

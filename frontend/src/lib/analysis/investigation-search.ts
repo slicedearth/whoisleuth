@@ -3,14 +3,12 @@
 // absence from a missing result. It indexes only known projection fields.
 
 import {
-  INVESTIGATION_PROJECTION_SCHEMA,
-  INVESTIGATION_PROJECTION_VERSION,
-  MAX_PROJECTION_OBSERVATIONS,
   type InvestigationEntityType,
   type InvestigationObservationKind,
   type InvestigationSourceState,
   type InvestigationStoreName,
 } from './investigation-projection.ts';
+import { readBoundedInvestigationProjection } from './investigation-projection-reader.ts';
 
 export const INVESTIGATION_SEARCH_SCHEMA = 'whoisleuth.investigation-search-index';
 export const INVESTIGATION_SEARCH_VERSION = 1;
@@ -421,23 +419,19 @@ export function unavailableInvestigationSearchIndex(limitation: string): Investi
  * deliberate because projections can later cross export or worker boundaries.
  */
 export function buildInvestigationSearchIndex(rawProjection: unknown): InvestigationSearchIndex {
-  const projection = record(rawProjection);
-  const projectionVersion = positiveInteger(projection?.version);
-  if (!projection || projection.schema !== INVESTIGATION_PROJECTION_SCHEMA || projectionVersion === null) {
-    return emptyIndex('invalid', projectionVersion, 'The investigation projection was malformed and was not indexed.');
-  }
-  if (projectionVersion > INVESTIGATION_PROJECTION_VERSION) {
-    return emptyIndex('unsupported', projectionVersion, `Investigation projection schema ${projectionVersion} is newer than supported schema ${INVESTIGATION_PROJECTION_VERSION}; it was not indexed.`);
-  }
-  if (!Array.isArray(projection.entities) || !Array.isArray(projection.observations)) {
-    return emptyIndex('invalid', projectionVersion, 'The investigation projection did not contain valid entity and observation collections.');
+  const projection = readBoundedInvestigationProjection(rawProjection);
+  const projectionVersion = projection.version;
+  if (projection.state !== 'ready') {
+    const limitation = projection.state === 'unsupported'
+      ? projection.detail.replace('was not interpreted', 'was not indexed')
+      : 'The investigation projection was malformed and was not indexed.';
+    return emptyIndex(projection.state === 'unsupported' ? 'unsupported' : 'invalid', projectionVersion, limitation);
   }
 
   const sources = normalizeSources(projection.sources);
   const observations = new Map<string, IndexedObservation>();
-  let truncated = projection.truncated === true || projection.entities.length > MAX_INVESTIGATION_SEARCH_ENTITIES
-    || projection.observations.length > MAX_PROJECTION_OBSERVATIONS;
-  for (const rawObservation of projection.observations.slice(0, MAX_PROJECTION_OBSERVATIONS)) {
+  let truncated = projection.truncated || projection.entities.length > MAX_INVESTIGATION_SEARCH_ENTITIES;
+  for (const rawObservation of projection.observations) {
     const observation = normalizeObservation(rawObservation);
     if (observation && !observations.has(observation.id)) observations.set(observation.id, observation);
   }

@@ -51,14 +51,34 @@ import {
   RELATIONSHIP_OBSERVATION_SCHEMA,
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
 } from './relationship-observation-model.ts';
+import {
+  BULK_SESSION_SCHEMA,
+  BULK_SESSION_SCHEMA_VERSION,
+  buildBulkSessionExport,
+  enforceBulkSessionStoreBudget,
+  mergeBulkSessions,
+} from './bulk-session-model.ts';
+import {
+  WEBSITE_SNAPSHOT_SCHEMA,
+  WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+  buildWebsiteSnapshotExport,
+  mergeWebsiteSnapshots,
+} from './website-snapshot-model.ts';
+import {
+  INVESTIGATION_TEMPLATE_SCHEMA,
+  INVESTIGATION_TEMPLATE_VERSION,
+  buildInvestigationTemplateExport,
+  mergeInvestigationTemplates,
+} from './investigation-template-model.ts';
 
 export const WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.workspace-archive';
-export const WORKSPACE_ARCHIVE_VERSION = 1;
+export const WORKSPACE_ARCHIVE_VERSION = 4;
+export const SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS = [1, 2, 3, WORKSPACE_ARCHIVE_VERSION] as const;
 export const WORKSPACE_SETTINGS_SCHEMA = 'whoisleuth.workspace-settings';
 export const WORKSPACE_SETTINGS_VERSION = 1;
 export const MAX_WORKSPACE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_WORKSPACE_ARCHIVE_SECTION_BYTES = 5 * 1024 * 1024;
-export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 8;
+export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 11;
 
 export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'cases',
@@ -68,8 +88,17 @@ export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'shortlist',
   'detectionRules',
   'relationshipObservations',
+  'bulkSessions',
+  'websiteSnapshots',
+  'investigationTemplates',
   'settings',
 ] as const;
+
+export function isSupportedWorkspaceArchiveVersion(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.some((version) => version === value);
+}
 
 export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
 export type WorkspaceArchiveSectionStatus = 'ready' | 'unsupported';
@@ -121,6 +150,9 @@ export interface WorkspaceArchiveSectionMap {
   shortlist: ReturnType<typeof buildShortlistExport>;
   detectionRules: ReturnType<typeof buildDetectionRuleExport>;
   relationshipObservations: ReturnType<typeof buildRelationshipObservationExport>;
+  bulkSessions: ReturnType<typeof buildBulkSessionExport>;
+  websiteSnapshots: ReturnType<typeof buildWebsiteSnapshotExport>;
+  investigationTemplates: ReturnType<typeof buildInvestigationTemplateExport>;
   settings: WorkspaceSettingsDocument;
 }
 
@@ -158,6 +190,9 @@ interface NormalizedWorkspaceInput {
   shortlist: unknown[];
   detectionRules: unknown[];
   relationshipObservations: unknown[];
+  bulkSessions: unknown[];
+  websiteSnapshots: unknown[];
+  investigationTemplates: unknown[];
   settings: UnknownRecord;
 }
 
@@ -271,6 +306,9 @@ function workspaceArchiveSections(
     shortlist: buildShortlistExport(input.shortlist, now),
     detectionRules: buildDetectionRuleExport(input.detectionRules, now),
     relationshipObservations: buildRelationshipObservationExport(input.relationshipObservations, now),
+    bulkSessions: buildBulkSessionExport(input.bulkSessions, now),
+    websiteSnapshots: buildWebsiteSnapshotExport(input.websiteSnapshots, now),
+    investigationTemplates: buildInvestigationTemplateExport(input.investigationTemplates, now),
     settings: settingsDocument(input),
   };
 }
@@ -345,6 +383,34 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     merge: (local, data) => mergeRelationshipObservations(local.relationshipObservations, data),
   },
   {
+    id: 'bulkSessions',
+    label: 'Saved Bulk sessions',
+    schema: BULK_SESSION_SCHEMA,
+    version: BULK_SESSION_SCHEMA_VERSION,
+    count: (data) => arrayCount(data, 'sessions'),
+    merge: (local, data) => {
+      const result = mergeBulkSessions(local.bulkSessions, data);
+      enforceBulkSessionStoreBudget(result.sessions);
+      return result;
+    },
+  },
+  {
+    id: 'websiteSnapshots',
+    label: 'Website profile snapshots',
+    schema: WEBSITE_SNAPSHOT_SCHEMA,
+    version: WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+    count: (data) => arrayCount(data, 'snapshots'),
+    merge: (local, data) => mergeWebsiteSnapshots(local.websiteSnapshots, data),
+  },
+  {
+    id: 'investigationTemplates',
+    label: 'Investigation templates',
+    schema: INVESTIGATION_TEMPLATE_SCHEMA,
+    version: INVESTIGATION_TEMPLATE_VERSION,
+    count: (data) => arrayCount(data, 'templates'),
+    merge: (local, data) => mergeInvestigationTemplates(local.investigationTemplates, data),
+  },
+  {
     id: 'settings', label: 'Workspace settings', schema: WORKSPACE_SETTINGS_SCHEMA, version: WORKSPACE_SETTINGS_VERSION,
     count: () => 1,
     merge: null,
@@ -372,6 +438,9 @@ function normalizedInput(input: unknown): NormalizedWorkspaceInput {
     shortlist: Array.isArray(value.shortlist) ? value.shortlist : [],
     detectionRules: Array.isArray(value.detectionRules) ? value.detectionRules : [],
     relationshipObservations: Array.isArray(value.relationshipObservations) ? value.relationshipObservations : [],
+    bulkSessions: Array.isArray(value.bulkSessions) ? value.bulkSessions : [],
+    websiteSnapshots: Array.isArray(value.websiteSnapshots) ? value.websiteSnapshots : [],
+    investigationTemplates: Array.isArray(value.investigationTemplates) ? value.investigationTemplates : [],
     settings: record(value.settings) || {},
   };
 }
@@ -423,7 +492,7 @@ export async function buildWorkspaceArchive(input: unknown, options: WorkspaceAr
     sections,
     limitations: [
       'This archive contains only the bounded browser-local workspace sections listed in its manifest.',
-      'It excludes sessions, passwords, API credentials, hosted-monitor encryption keys, raw upstream payloads, tab state, and unrelated browser storage.',
+      'It excludes login sessions, passwords, API credentials, hosted-monitor encryption keys, raw upstream payloads, tab state, and unrelated browser storage.',
       'Import is a reviewed non-destructive merge. Existing records can be updated according to their section-specific versioned merge rules but are not deleted by absence from the archive.',
     ],
   };
@@ -451,11 +520,13 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   if (!value || value.schema !== WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not a WHOISleuth workspace archive.');
   }
-  if (typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version !== WORKSPACE_ARCHIVE_VERSION) {
+  if (
+    !isSupportedWorkspaceArchiveVersion(value.version)
+  ) {
     if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
       throw new Error(`This workspace archive uses newer schema ${value.version}. Update the app before importing it.`);
     }
-    throw new Error(`Expected workspace archive schema ${WORKSPACE_ARCHIVE_VERSION}.`);
+    throw new Error(`Expected workspace archive schema 1, 2, 3, or ${WORKSPACE_ARCHIVE_VERSION}.`);
   }
   const { bytes } = ensureArchiveBudget(value);
   const manifest = record(value.manifest);

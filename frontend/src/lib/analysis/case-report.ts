@@ -18,7 +18,7 @@ import { httpSecurityHeaderLabel } from './http-summary.ts';
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 1;
+export const CASE_REPORT_SCHEMA_VERSION = 2;
 
 const APPLICATION_NAME = 'WHOISleuth';
 
@@ -73,6 +73,11 @@ type CaseReportJson = {
   };
   currentAssessment: CaseEvidenceSnapshot | null;
   evidenceTimeline: ReportTimelineEntry[];
+  analystResponse: {
+    evidencePins: CaseRecord['evidencePins'];
+    decisions: CaseRecord['decisions'];
+    actions: CaseRecord['actions'];
+  };
   limitations: string;
 };
 
@@ -276,6 +281,11 @@ export function buildCaseReport(
     },
     currentAssessment,
     evidenceTimeline: timelineEntries,
+    analystResponse: {
+      evidencePins: caseRecord.evidencePins.map((item) => ({ ...item, limitations: [...item.limitations] })),
+      decisions: caseRecord.decisions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
+      actions: caseRecord.actions.map((item) => ({ ...item, contactLimitations: [...item.contactLimitations] })),
+    },
     limitations: LIMITATIONS_TEXT,
   };
 
@@ -438,6 +448,46 @@ function buildMarkdown(report: CaseReportJson): string {
         lines.push('');
       }
     }
+  }
+
+  lines.push('## Analyst Decision Packet');
+  lines.push('');
+  const response = report.analystResponse;
+  if (!response.evidencePins.length && !response.decisions.length && !response.actions.length) {
+    lines.push('No evidence pins, decision records, or case actions recorded.');
+    lines.push('');
+  } else {
+    lines.push('### Evidence pins');
+    lines.push('');
+    if (!response.evidencePins.length) lines.push('No evidence pins recorded.');
+    for (const pin of response.evidencePins) {
+      lines.push(`- **${escapeMarkdownInline(pin.label)}:** ${escapeMarkdownInline(pin.value)}`);
+      lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt)}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
+      if (pin.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(pin.limitations.join('; '))}`);
+    }
+    lines.push('');
+    lines.push('### Decisions');
+    lines.push('');
+    if (!response.decisions.length) lines.push('No decision records recorded.');
+    for (const decision of response.decisions) {
+      lines.push(`- **${escapeMarkdownInline(decision.summary)}** (${escapeMarkdownInline(decision.createdAt)})`);
+      lines.push(`  ${escapeMarkdownInline(decision.rationale)}`);
+      if (decision.evidencePinIds.length) lines.push(`  Evidence pins: ${escapeMarkdownInline(decision.evidencePinIds.join(', '))}`);
+    }
+    lines.push('');
+    lines.push('### Actions and outcomes');
+    lines.push('');
+    if (!response.actions.length) lines.push('No case actions recorded.');
+    for (const action of response.actions) {
+      lines.push(`- **${escapeMarkdownInline(action.type.replaceAll('_', ' '))}:** ${escapeMarkdownInline(action.recipient)} (${escapeMarkdownInline(action.state)})`);
+      lines.push(`  Contact source: ${escapeMarkdownInline(action.contactSource)}; updated ${escapeMarkdownInline(action.updatedAt)}.`);
+      if (action.dueAt) lines.push(`  Due: ${escapeMarkdownInline(action.dueAt)}`);
+      if (action.followUpAt) lines.push(`  Follow-up: ${escapeMarkdownInline(action.followUpAt)}`);
+      if (action.reference) lines.push(`  Reference: ${escapeMarkdownInline(action.reference)}`);
+      if (action.outcome) lines.push(`  Outcome: ${escapeMarkdownInline(action.outcome)}`);
+      if (action.contactLimitations.length) lines.push(`  Contact limitations: ${escapeMarkdownInline(action.contactLimitations.join('; '))}`);
+    }
+    lines.push('');
   }
 
   // Analyst notes (only when included)

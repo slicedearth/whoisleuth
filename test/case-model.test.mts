@@ -925,16 +925,16 @@ describe('rejects unsupported future-schema imports', () => {
 
   test('only the current exported envelope is importable', () => {
     const local = localCases();
-    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), /using schema 2/);
-    assert.throws(() => model.mergeCases(local, { version: 1, cases: [{ domain: 'v1.example', updatedAt: ISO }] }), /using schema 2/);
-    assert.equal(model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }).added, 1);
+    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), new RegExp(`using schema ${model.CASE_SCHEMA_VERSION}`));
+    assert.throws(() => model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }), new RegExp(`using schema ${model.CASE_SCHEMA_VERSION}`));
+    assert.equal(model.mergeCases(local, { version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'current.example', updatedAt: ISO }] }).added, 1);
   });
 });
 
 describe('imported note normalization is deterministic', () => {
   test('a timestamp-less, id-less imported note uses the record timestamp, not "now", and is idempotent', () => {
     const payload = {
-      version: 2,
+      version: model.CASE_SCHEMA_VERSION,
       cases: [{ domain: 'notes.example', createdAt: ISO, updatedAt: ISO, notes: [{ body: 'a timeless observation' }] }],
     };
     const once = requiredValue(model.mergeCases([], payload).cases[0]);

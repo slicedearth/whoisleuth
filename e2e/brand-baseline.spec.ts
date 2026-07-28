@@ -19,6 +19,9 @@ function profileFixture() {
     allowlistedDomains: [],
     allowlistedRegistrars: [],
     dkimSelectors: [],
+    retiredDkimSelectors: [],
+    mailProtectionProfile: 'standard',
+    protectionAttestations: [],
     trademarkOwner: '',
     trademarkRegistration: '',
     officialFaviconHash: '',
@@ -202,6 +205,99 @@ test('a malformed successful posture report renders as an explicit audit error',
   await page.getByRole('button', { name: 'Audit official domains' }).click();
   await expect(page.getByRole('status')).toHaveText('Audited 0/1 official domain.');
   await expect(page.getByText('Official-domain audit returned an invalid response.', { exact: true })).toBeVisible();
+});
+
+test('defensive mail settings, retired selectors, and expiring analyst attestations persist locally', async ({ page }) => {
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+  await page.getByLabel('Mail posture profile').selectOption('defensive_no_mail');
+  await page.getByLabel('Active DKIM selectors').fill('active');
+  await page.getByLabel('Retired DKIM selectors').fill('retired, active');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+
+  const registrarMfa = page.getByRole('group', { name: 'Registrar MFA' });
+  await registrarMfa.getByLabel('Review state').selectOption('observed');
+  await registrarMfa.getByLabel('Review expiry').fill('2026-10-01');
+  await registrarMfa.getByLabel('Bounded note').fill('Reviewed with the domain owner.');
+  await page.getByRole('button', { name: 'Save attestations' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved reviewed protection attestations');
+
+  const persisted = requiredValue(
+    (await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0],
+    'The saved brand-profile fixture is missing.',
+  ).value;
+  expect(persisted.mailProtectionProfile).toBe('defensive_no_mail');
+  expect(persisted.dkimSelectors).toEqual(['active']);
+  expect(persisted.retiredDkimSelectors).toEqual(['retired']);
+  expect(persisted.protectionAttestations).toContainEqual(expect.objectContaining({
+    control: 'registrar_mfa',
+    state: 'observed',
+    expiresAt: '2026-10-01T23:59:59.999Z',
+    note: 'Reviewed with the domain owner.',
+  }));
+});
+
+test('valid posture results disclose bounded SPF and external-dependency evidence', async ({ page }) => {
+  await page.route('**/api/domain-posture?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      domain: 'example.com',
+      checkedAt: ISO,
+      dkimSelectors: [],
+      retiredDkimSelectors: [],
+      mailProtectionProfile: 'standard',
+      summary: { pass: 1, warning: 0, danger: 0, info: 0 },
+      checks: [{
+        id: 'spf',
+        label: 'SPF',
+        status: 'pass',
+        summary: 'Restrictive fail-all policy',
+        detail: '',
+        records: ['v=spf1 -all'],
+        remediation: '',
+      }],
+      spfExpansion: {
+        version: 1,
+        state: 'complete',
+        lookupLimit: 10,
+        lookupsUsed: 1,
+        voidLookupLimit: 2,
+        voidLookups: 0,
+        maxDepth: 5,
+        dnsLookupTerms: 0,
+        branches: [{
+          domain: 'example.com',
+          parent: null,
+          relation: 'root',
+          depth: 0,
+          state: 'success',
+          terminalPolicy: 'fail',
+          dnsLookupTerms: 0,
+          issues: [],
+        }],
+        issues: [],
+      },
+      dmarcAuthorizations: [],
+      externalDependencies: [{
+        kind: 'nameserver',
+        target: 'ns1.example.net',
+        source: 'DNS NS',
+        scope: 'external',
+        state: 'observed',
+        limitation: 'A shared or external dependency is an operational review lead, not evidence of common ownership, insecurity, exploitability, or availability.',
+      }],
+    }),
+  }));
+  await cleanBrandStorage(page);
+  await openProfileForm(page);
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await page.getByRole('button', { name: 'Audit official domains' }).click();
+
+  await expect(page.getByRole('status')).toHaveText('Audited 1/1 official domain.');
+  await expect(page.getByText('SPF expansion', { exact: true })).toBeVisible();
+  await page.getByText('External dependencies', { exact: true }).click();
+  await expect(page.getByText('ns1.example.net', { exact: true })).toBeVisible();
 });
 
 test('official-site baseline controls fit a narrow mobile viewport without horizontal overflow', async ({ page }) => {

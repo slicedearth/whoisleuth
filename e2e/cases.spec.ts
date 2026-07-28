@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 
@@ -264,6 +265,70 @@ test('a note can be added and is shown in the record', async ({ page }) => {
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
 });
 
+test('reviewed response records persist and produce a local non-submitted packet', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'response.invalid');
+
+  const workspace = page.locator('.response-workspace');
+  const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await pin.getByText('Pin an observed fact', { exact: true }).click();
+  await pin.getByLabel('Label').fill('Observed credential form');
+  await pin.getByLabel('Source').fill('Lookup evidence');
+  await pin.getByLabel('Observed at').fill('2026-07-28T10:00');
+  await pin.getByLabel('Fact').fill('A password field was observed in the captured static page.');
+  await pin.getByLabel(/Limitations/).fill('Static page evidence only');
+  await pin.getByRole('button', { name: 'Pin evidence' }).click();
+  await expect(workspace).toContainText('Observed credential form');
+
+  const decision = workspace.locator('details', { hasText: 'Record an analyst decision' });
+  await decision.getByText('Record an analyst decision', { exact: true }).click();
+  await decision.getByLabel('Decision summary').fill('Escalate for reviewed reporting');
+  await decision.getByLabel('Rationale').fill('The observed page and exact URL require human review.');
+  await decision.getByRole('checkbox', { name: 'Observed credential form' }).check();
+  await decision.getByRole('button', { name: 'Record decision' }).click();
+  await expect(workspace).toContainText('Escalate for reviewed reporting');
+
+  const action = workspace.locator('details', { hasText: 'Track a reviewed action or outcome' });
+  await action.getByText('Track a reviewed action or outcome', { exact: true }).click();
+  await action.getByLabel('Action type').selectOption('registrar_report');
+  await action.getByLabel('Recipient or internal owner').fill('Registrar abuse desk');
+  await action.getByLabel('Contact source').fill('RDAP entity role');
+  await action.getByRole('button', { name: 'Record action' }).click();
+  await expect(workspace).toContainText('registrar report · planned');
+
+  const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+  await packet.getByLabel('Abuse category').fill('Credential phishing');
+  await packet.getByLabel('Affected party').fill('Example service');
+  await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
+  await packet.getByLabel(/Exact abusive HTTP/).fill('https://response.invalid/sign-in');
+  await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name.');
+
+  const downloadPromise = page.waitForEvent('download');
+  await packet.getByRole('button', { name: 'Export JSON' }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
+  expect(exported).toMatchObject({
+    schema: 'whoisleuth.case-response-packet',
+    reviewRequired: true,
+    submissionPerformed: false,
+    incident: {
+      category: 'Credential phishing',
+      affectedParty: 'Example service',
+      abusiveUrls: ['https://response.invalid/sign-in'],
+    },
+    provenance: { evidencePinCount: 1, decisionCount: 1 },
+  });
+  await expect(page.getByRole('status')).toContainText('Nothing was submitted');
+
+  await page.reload();
+  await page.getByRole('tab', { name: /Cases/ }).click();
+  await page.locator('.case-head', { hasText: 'response.invalid' }).click();
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 1 action');
+});
+
 test('deleting a case removes it after confirmation', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'delete-me.invalid');
@@ -279,7 +344,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
   await createCase(page, 'local.invalid');
 
   const importPayload = {
-    version: 2,
+    version: 3,
     exportedAt: '2026-07-01T00:00:00.000Z',
     cases: [
       {
@@ -772,7 +837,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(text);
 
     expect(parsed.schema).toBe('whoisleuth.case-report');
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(2);
     expect(parsed.case.domain).toBe('export-json.invalid');
     expect(parsed.case.notesIncluded).toBe(false);
     expect(parsed.evidenceTimeline.length).toBe(2);
@@ -884,7 +949,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-cases-.*\.json$/);
-    expect(parsed.version).toBe(2);
+    expect(parsed.version).toBe(3);
     expect(parsed.cases).toEqual(expect.arrayContaining([
       expect.objectContaining({ domain: 'backup-test.invalid' }),
     ]));

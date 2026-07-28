@@ -73,6 +73,37 @@ import {
 } from './analysis/relationship-observation-model.ts';
 import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
 import {
+  BULK_SESSION_SCHEMA,
+  BULK_SESSION_SCHEMA_VERSION,
+  MAX_BULK_SESSIONS,
+  MAX_BULK_SESSION_STORE_BYTES,
+  bulkSessionStoreVersion,
+  enforceBulkSessionStoreBudget,
+  normalizeBulkSessionStore,
+  serializeBulkSessionStore,
+} from './analysis/bulk-session-model.ts';
+import type { BulkSession } from './analysis/bulk-session-model.ts';
+import {
+  MAX_WEBSITE_SNAPSHOTS,
+  MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
+  WEBSITE_SNAPSHOT_SCHEMA,
+  WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+  normalizeWebsiteSnapshotStore,
+  serializeWebsiteSnapshotStore,
+  websiteSnapshotStoreVersion,
+} from './analysis/website-snapshot-model.ts';
+import type { WebsiteProfileSnapshot } from './analysis/website-snapshot-model.ts';
+import {
+  INVESTIGATION_TEMPLATE_SCHEMA,
+  INVESTIGATION_TEMPLATE_VERSION,
+  MAX_INVESTIGATION_TEMPLATES,
+  MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
+  investigationTemplateStoreVersion,
+  normalizeInvestigationTemplateStore,
+  serializeInvestigationTemplateStore,
+} from './analysis/investigation-template-model.ts';
+import type { InvestigationTemplate } from './analysis/investigation-template-model.ts';
+import {
   BrowserLocalDataError,
   plaintextJsonCodec,
 } from './browser-local-data.ts';
@@ -93,6 +124,9 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   ct_history: CtHistoryEntry;
   detection_rules: DetectionRule;
   relationship_observations: RelationshipObservation;
+  bulk_sessions: BulkSession;
+  website_snapshots: WebsiteProfileSnapshot;
+  investigation_templates: InvestigationTemplate;
 }>;
 
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
@@ -109,6 +143,9 @@ export const LEGACY_SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
 export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
 export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
+export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
+export const LEGACY_WEBSITE_SNAPSHOTS_KEY = 'whoisleuth-website-snapshots-v1';
+export const LEGACY_INVESTIGATION_TEMPLATES_KEY = 'whoisleuth-investigation-templates-v1';
 
 function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
@@ -246,6 +283,63 @@ export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition
   }),
 });
 
+export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession[]> = Object.freeze({
+  id: 'bulk_sessions',
+  label: 'Saved Bulk sessions',
+  legacyKey: LEGACY_BULK_SESSIONS_KEY,
+  schemaVersion: BULK_SESSION_SCHEMA_VERSION,
+  maximumBytes: MAX_BULK_SESSION_STORE_BYTES,
+  maximumRecords: MAX_BULK_SESSIONS,
+  empty: () => [],
+  normalize: (raw) => normalizeBulkSessionStore(raw).sessions,
+  version: bulkSessionStoreVersion,
+  serialize: serializeBulkSessionStore,
+  split: (sessions) => recordsFromArray(sessions, (record) => record.id),
+  join: (records, schemaVersion) => ({
+    schema: BULK_SESSION_SCHEMA,
+    version: schemaVersion,
+    sessions: arrayFromRecords(records),
+  }),
+});
+
+export const WEBSITE_SNAPSHOTS_COLLECTION: LocalDataCollectionDefinition<WebsiteProfileSnapshot[]> = Object.freeze({
+  id: 'website_snapshots',
+  label: 'Website profile snapshots',
+  legacyKey: LEGACY_WEBSITE_SNAPSHOTS_KEY,
+  schemaVersion: WEBSITE_SNAPSHOT_SCHEMA_VERSION,
+  maximumBytes: MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
+  maximumRecords: MAX_WEBSITE_SNAPSHOTS,
+  empty: () => [],
+  normalize: (raw) => normalizeWebsiteSnapshotStore(raw).snapshots,
+  version: websiteSnapshotStoreVersion,
+  serialize: serializeWebsiteSnapshotStore,
+  split: (snapshots) => recordsFromArray(snapshots, (record) => record.id),
+  join: (records, schemaVersion) => ({
+    schema: WEBSITE_SNAPSHOT_SCHEMA,
+    version: schemaVersion,
+    snapshots: arrayFromRecords(records),
+  }),
+});
+
+export const INVESTIGATION_TEMPLATES_COLLECTION: LocalDataCollectionDefinition<InvestigationTemplate[]> = Object.freeze({
+  id: 'investigation_templates',
+  label: 'Investigation templates',
+  legacyKey: LEGACY_INVESTIGATION_TEMPLATES_KEY,
+  schemaVersion: INVESTIGATION_TEMPLATE_VERSION,
+  maximumBytes: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
+  maximumRecords: MAX_INVESTIGATION_TEMPLATES,
+  empty: () => [],
+  normalize: (raw) => normalizeInvestigationTemplateStore(raw).templates,
+  version: investigationTemplateStoreVersion,
+  serialize: serializeInvestigationTemplateStore,
+  split: (templates) => recordsFromArray(templates, (record) => record.id),
+  join: (records, schemaVersion) => ({
+    schema: INVESTIGATION_TEMPLATE_SCHEMA,
+    version: schemaVersion,
+    templates: arrayFromRecords(records),
+  }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
@@ -255,6 +349,9 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CT_HISTORY_COLLECTION,
   DETECTION_RULES_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
+  BULK_SESSIONS_COLLECTION,
+  WEBSITE_SNAPSHOTS_COLLECTION,
+  INVESTIGATION_TEMPLATES_COLLECTION,
 ]);
 
 function browserLocalCollectionDefinition(

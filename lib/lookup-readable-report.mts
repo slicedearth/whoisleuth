@@ -1,5 +1,6 @@
 import { buildLookupEvidence } from './evidence-export.mts';
 import { formatLookupEvidenceMarkdown } from './evidence-report-markdown.mts';
+import { buildRegistryInsights } from './registry-insights.mts';
 import {
   createLookupViewModel,
   isJsonObject,
@@ -227,6 +228,24 @@ function projectedLookup(response: LookupHttpResponse): Record<string, unknown> 
         }),
       }
     : null;
+  const firstWhoisHopObservedAt = firstWhoisHop?.queriedAt ?? null;
+  const rdapDiagnostics = isJsonObject(view.diagnostics.rdap) ? view.diagnostics.rdap : {};
+  const whoisDiagnostics = isJsonObject(view.diagnostics.whois) ? view.diagnostics.whois : {};
+  const registrarDiagnostics = isJsonObject(rdapDiagnostics.registrar) ? rdapDiagnostics.registrar : {};
+  // The readable report deliberately derives current interpretation from the
+  // already-collected bounded fields. It performs no collection and preserves
+  // the limitations and source-health states of incomplete or fast results.
+  const registryInsights = buildRegistryInsights({
+    rdapParsed: view.rdapParsed,
+    rdapStatus: rdapDiagnostics.status,
+    rdapFetchedAt: rdap.fetchedAt,
+    whoisParsed: view.whoisParsed,
+    whoisStatus: whoisDiagnostics.status,
+    whoisQueriedAt: firstWhoisHopObservedAt,
+    registrarRdapParsed: view.registrarRdapParsed,
+    registrarRdapStatus: registrarRdap.status ?? registrarDiagnostics.status,
+    registrarRdapFetchedAt: registrarRdap.fetchedAt,
+  });
 
   return {
     query: response.query,
@@ -235,6 +254,7 @@ function projectedLookup(response: LookupHttpResponse): Record<string, unknown> 
     registrableDomain: response.registrableDomain,
     isSubdomain: response.isSubdomain === true,
     availability: projectedAvailability(view.availability),
+    registryInsights,
     diagnostics: projectedDiagnostics(view.diagnostics),
     rdap: {
       ...selectedObjectValues(rdap, [

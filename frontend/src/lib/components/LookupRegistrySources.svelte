@@ -20,6 +20,10 @@
     tone: string;
   };
   type ContactRole = { role: string; contacts: Array<{ identity: string; details: string[] }> };
+  const asRecord = (value: unknown): JsonRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+  const asRecords = (value: unknown): JsonRecord[] => Array.isArray(value) ? value.filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [];
+  const asStrings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  const display = (value: unknown): string => typeof value === 'string' && value ? value.replaceAll('_', ' ') : 'unavailable';
 
   let {
     comparisonSummary,
@@ -34,6 +38,7 @@
     whoisRows,
     whoisContactRoles,
     whoisTruncatedFields,
+    insights = {},
     registrar,
   }: {
     comparisonSummary: string;
@@ -48,6 +53,7 @@
     whoisRows: DisplayRow[];
     whoisContactRoles: ContactRole[];
     whoisTruncatedFields: string[];
+    insights?: JsonRecord;
     registrar: {
       visible: boolean;
       label: string;
@@ -61,7 +67,61 @@
       comparisonRows?: PublicationComparisonRow[];
     };
   } = $props();
+
+  const disclosure = $derived(asRecord(insights.contactDisclosure));
+  const registryDisclosure = $derived(asRecord(disclosure.registryRdap));
+  const whoisDisclosure = $derived(asRecord(disclosure.whois));
+  const lifecycle = $derived(asRecord(insights.lifecycle));
+  const lifecycleLocks = $derived(asRecord(lifecycle.locks));
+  const reconciliation = $derived(asRecord(insights.reconciliation));
+  const publications = $derived(asRecords(insights.publications));
+  const abuseRouting = $derived(asRecords(insights.abuseRouting));
 </script>
+
+{#if insights.version === 1}
+  <details class="registry-insights card">
+    <summary>Registry interpretation · {display(lifecycle.label)}</summary>
+    <div class="insight-grid">
+      <article>
+        <span>Lifecycle</span>
+        <strong>{display(lifecycle.label)}</strong>
+        <small>Redemption: {lifecycle.redemption === true ? 'observed' : 'not observed'} · pending delete: {lifecycle.pendingDelete === true ? 'observed' : 'not observed'}</small>
+      </article>
+      <article>
+        <span>Registration locks</span>
+        <strong>{lifecycleLocks.client === true ? 'Client lock observed' : 'No client lock observed'} · {lifecycleLocks.server === true ? 'server lock observed' : 'no server lock observed'}</strong>
+        <small>These point-in-time statuses do not prove protection remains enabled.</small>
+      </article>
+      <article>
+        <span>Contact disclosure</span>
+        <strong>RDAP: {display(registryDisclosure.state)} · WHOIS: {display(whoisDisclosure.state)}</strong>
+        <small>Missing, redacted, withheld, proxy, public, and unavailable states remain distinct.</small>
+      </article>
+      <article>
+        <span>Reconciliation</span>
+        <strong>{display(reconciliation.state)}</strong>
+        <small>{String(reconciliation.summary || 'No comparable publication summary was available.')}</small>
+      </article>
+    </div>
+    {#if asStrings(lifecycle.rawStatuses).length}
+      <div class="raw-statuses"><strong>Raw source statuses</strong><div>{#each asStrings(lifecycle.rawStatuses) as status}<code>{status}</code>{/each}</div></div>
+    {/if}
+    {#if asStrings(lifecycle.acquisitionPath).length}
+      <section class="acquisition-path"><strong>Lifecycle-aware next steps</strong><ol>{#each asStrings(lifecycle.acquisitionPath) as step}<li>{step}</li>{/each}</ol><p>{String(lifecycle.limitation || '')}</p></section>
+    {/if}
+    <details class="publication-quality">
+      <summary>Publication quality · {publications.filter((item) => item.state === 'complete').length} complete</summary>
+      <div class="publication-list">{#each publications as publication}<article><strong>{display(publication.source)}</strong><span class={`chip ${publication.state === 'complete' ? 'ok' : publication.state === 'partial' ? 'warn' : ''}`}>{display(publication.state)}</span>{#if publication.observedAt}<small>{String(publication.observedAt)}</small>{/if}{#each asStrings(publication.issues) as issue}<p>{issue}</p>{/each}</article>{/each}</div>
+    </details>
+    {#if abuseRouting.length}
+      <details class="routing">
+        <summary>Published escalation routes · {abuseRouting.length}</summary>
+        <ul>{#each abuseRouting as route}<li><strong>{display(route.kind)} {display(route.channel)}</strong><span>{String(route.contact || '')}</span><small>{String(route.source || '')}</small>{#each asStrings(route.limitations) as limitation}<small>{limitation}</small>{/each}</li>{/each}</ul>
+      </details>
+    {/if}
+    <p class="interpretation-limit">{String(disclosure.limitation || '')}</p>
+  </details>
+{/if}
 
 {#if comparisonRows.length}
   <details class="comparison card" open={comparisonHasConflicts}>
@@ -120,7 +180,21 @@
 {/if}
 
 <style>
-  .comparison,.sources>details,.registrar-rdap{padding:0;overflow:hidden}
+  .registry-insights,.comparison,.sources>details,.registrar-rdap{padding:0;overflow:hidden}
+  .registry-insights>summary{color:var(--accent)}
+  .insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;padding:0 var(--card-pad) var(--card-pad);background:var(--border)}
+  .insight-grid article{min-width:0;padding:12px;background:var(--panel)}
+  .insight-grid span,.insight-grid strong,.insight-grid small{display:block;overflow-wrap:anywhere}
+  .insight-grid span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .insight-grid strong{margin-top:5px;font-size:var(--text-sm)}
+  .insight-grid small{margin-top:5px;color:var(--muted)}
+  .raw-statuses,.acquisition-path,.interpretation-limit{margin:0 var(--card-pad) var(--card-pad)}
+  .raw-statuses>strong,.acquisition-path>strong{font:700 var(--text-xs) var(--mono)}
+  .raw-statuses>div{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.raw-statuses code{padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-2xs)}
+  .acquisition-path ol{margin:8px 0;padding-left:20px}.acquisition-path li,.acquisition-path p,.interpretation-limit{color:var(--muted);font-size:var(--text-xs);line-height:1.55}.acquisition-path p{margin:8px 0 0}
+  .publication-quality,.routing{margin:0 var(--card-pad) var(--card-pad);border:1px solid var(--border);border-radius:var(--radius-sm)}.publication-quality>summary,.routing>summary{padding:10px 11px}
+  .publication-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border)}.publication-list article{padding:10px;background:var(--panel)}.publication-list strong,.publication-list small{display:block}.publication-list .chip{display:inline-block;margin:5px 0}.publication-list small,.publication-list p{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.publication-list p{margin:5px 0 0}
+  .routing ul{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}.routing li{padding:10px;background:var(--panel)}.routing strong,.routing span,.routing small{display:block;overflow-wrap:anywhere}.routing span{margin-top:4px}.routing small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
   .comparison .table-wrap{border-top:1px solid var(--border)}
   .comparison tr.conflict{background:rgb(var(--danger-rgb) / .03)}
   .comparison .chip{white-space:normal}
@@ -154,6 +228,7 @@
   .registrar-state{margin:0;padding:0 var(--card-pad) var(--card-pad);color:var(--muted);font-size:var(--text-xs)}
   .registrar-state.error{color:var(--danger)}
   @media(max-width:650px){
+    .insight-grid,.publication-list{grid-template-columns:1fr}
     dl{grid-template-columns:1fr;gap:4px}
     dt:not(:first-child){margin-top:7px}
   }

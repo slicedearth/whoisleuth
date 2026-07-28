@@ -1,8 +1,9 @@
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 
-const GUIDE_KEY = 'whoisleuth:investigation-guide:v2';
-const LEGACY_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
+const GUIDE_KEY = 'whoisleuth:investigation-guide:v3';
+const LEGACY_GUIDE_KEY = 'whoisleuth:investigation-guide:v2';
+const ORIGINAL_GUIDE_KEY = 'whoisleuth:investigation-guide:v1';
 
 type RecipeLabel = 'Brand sweep' | 'Infrastructure pivot' | 'New-domain triage';
 
@@ -177,6 +178,12 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   await expect(guide).toContainText('Brand sweep: portal.example.test');
   await expect(guide).toBeFocused();
   await expect(guide).toContainText('0 of 5 steps reviewed');
+  const context = guide.locator('.context-tray');
+  await expect(context.getByText('Target', { exact: true })).toBeVisible();
+  await expect(context.getByText('portal.example.test', { exact: true })).toBeVisible();
+  await expect(context.getByText('None active', { exact: true })).toBeVisible();
+  await expect(context.getByText('Not retained', { exact: true })).toBeVisible();
+  await expect(context.getByText('Confirm brand profile', { exact: true })).toBeVisible();
   await expect(currentAction(page)).toContainText('Step 1 of 5');
   await expect(currentAction(page)).toContainText('Confirm brand profile');
   await expect(currentAction(page).getByRole('heading', { name: 'What to do' })).toBeVisible();
@@ -191,8 +198,40 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   expect(analysisRequests).toEqual([]);
 
   const stored = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
-  expect(stored).toMatchObject({ version: 2, recipeId: 'brand_sweep', domain: 'portal.example.test', focusDomain: null, status: 'active' });
+  expect(stored).toMatchObject({ version: 3, recipeId: 'brand_sweep', template: null, domain: 'portal.example.test', focusDomain: null, status: 'active' });
   expect(stored.stages.every((stage: Record<string, unknown>) => stage.outcome === 'pending' && stage.openedAt === null)).toBe(true);
+});
+
+test('an analyst can save and run a bounded local guide template without removing request gates', async ({ page }) => {
+  await page.goto('/dashboard');
+  await page.getByRole('button', { name: 'New template' }).click();
+  await page.getByRole('textbox', { name: 'Template name' }).fill('Focused local review');
+  await page.getByRole('textbox', { name: 'Summary' }).fill('Review the selected bounded evidence and record a decision.');
+  await page.getByRole('textbox', { name: 'Step label' }).first().fill('Collect selected evidence');
+  const mandatoryApproval = page.getByRole('checkbox', { name: /Require approval.+mandatory/u }).first();
+  await expect(mandatoryApproval).toBeChecked();
+  await expect(mandatoryApproval).toBeDisabled();
+  await page.getByRole('button', { name: 'Save template' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved the Focused local review template.');
+
+  await page.getByRole('combobox', { name: 'Template' }).selectOption({ label: 'Focused local review' });
+  await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
+  await page.getByRole('button', { name: 'Start guide' }).click();
+  await expect(page.locator('.guide')).toContainText('Focused local review: portal.example.test');
+  await expect(currentAction(page)).toContainText('Collect selected evidence');
+  await expect(currentAction(page).getByRole('button', { name: 'Review requests' })).toBeVisible();
+  const stored = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
+  expect(stored).toMatchObject({
+    version: 3,
+    recipeId: 'new_domain_triage',
+    template: { label: 'Focused local review' },
+  });
+  expect(stored.template.stages).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'lookup', requiresApproval: true }),
+  ]));
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await expectNoHorizontalOverflow(page);
 });
 
 test('new-domain triage leads from a deep lookup through comparison and a review queue', async ({ page }) => {
@@ -349,8 +388,8 @@ test('exports only a compact versioned progress summary after explicit confirmat
   const payload = JSON.parse(Buffer.concat(body).toString('utf-8'));
 
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-recipe-portal\.example\.test-.+\.json$/u);
-  expect(payload).toMatchObject({ schema: 'whoisleuth.investigation-recipe-summary', version: 1, recipe: { id: 'new_domain_triage' } });
-  expect(Object.keys(payload).sort()).toEqual(['createdAt', 'generatedAt', 'limitations', 'recipe', 'schema', 'stages', 'status', 'target', 'updatedAt', 'version']);
+  expect(payload).toMatchObject({ schema: 'whoisleuth.investigation-recipe-summary', version: 2, recipe: { id: 'new_domain_triage' }, template: null });
+  expect(Object.keys(payload).sort()).toEqual(['createdAt', 'generatedAt', 'limitations', 'recipe', 'schema', 'stages', 'status', 'target', 'template', 'updatedAt', 'version']);
 });
 
 test('shows retained evidence without treating it as workflow completion', async ({ page }) => {
@@ -371,12 +410,12 @@ test('shows retained evidence without treating it as workflow completion', async
 test('legacy progress migrates while future and oversized current records stay untouched', async ({ page }) => {
   await page.goto('/dashboard');
   const legacy = JSON.stringify({ version: 1, domain: 'example.test', createdAt: '2026-07-18T00:00:00.000Z', updatedAt: '2026-07-18T00:05:00.000Z', visitedStages: ['lookup'] });
-  await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: LEGACY_GUIDE_KEY, value: legacy });
+  await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: ORIGINAL_GUIDE_KEY, value: legacy });
   await page.reload();
   await expect(page.locator('.guide')).toContainText('New-domain triage: example.test');
-  expect(await page.evaluate((key) => sessionStorage.getItem(key), LEGACY_GUIDE_KEY)).toBe(legacy);
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), ORIGINAL_GUIDE_KEY)).toBe(legacy);
 
-  const future = JSON.stringify({ version: 3, recipeId: 'new_domain_triage' });
+  const future = JSON.stringify({ version: 4, recipeId: 'new_domain_triage' });
   await page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: GUIDE_KEY, value: future });
   await page.reload();
   await expect(page.locator('.guide')).toHaveCount(0);
@@ -413,11 +452,12 @@ test('malformed guide focus fragments are ignored without disrupting the active 
 test('ending a recipe removes current and legacy tab records only', async ({ page }) => {
   await startRecipe(page);
   await page.evaluate((key) => sessionStorage.setItem(key, 'legacy-copy'), LEGACY_GUIDE_KEY);
+  await page.evaluate((key) => sessionStorage.setItem(key, 'original-copy'), ORIGINAL_GUIDE_KEY);
   await page.getByText('Guide options', { exact: true }).click();
   await page.getByRole('button', { name: 'End guide' }).click();
   await expect(page.locator('.guide')).toHaveCount(0);
   expect(await page.evaluate(
-    ({ current, legacy }) => [sessionStorage.getItem(current), sessionStorage.getItem(legacy)],
-    { current: GUIDE_KEY, legacy: LEGACY_GUIDE_KEY },
-  )).toEqual([null, null]);
+    ({ current, legacy, original }) => [sessionStorage.getItem(current), sessionStorage.getItem(legacy), sessionStorage.getItem(original)],
+    { current: GUIDE_KEY, legacy: LEGACY_GUIDE_KEY, original: ORIGINAL_GUIDE_KEY },
+  )).toEqual([null, null, null]);
 });

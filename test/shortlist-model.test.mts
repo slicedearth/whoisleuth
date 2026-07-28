@@ -9,6 +9,7 @@ import {
   mergeShortlistStores,
   normalizeShortlistRecord,
   normalizeShortlistStore,
+  setShortlistSelection,
   serializeShortlistStore,
   SHORTLIST_SCHEMA,
   SHORTLIST_SCHEMA_VERSION,
@@ -60,6 +61,27 @@ test('internal record collections normalize into the current envelope', () => {
   const store = normalizeShortlistStore([record()]);
   assert.equal(store.version, SHORTLIST_SCHEMA_VERSION);
   assert.equal(requiredValue(store.entries[0]).domain, 'example.invalid');
+});
+
+test('adds, refreshes, and removes an explicit selection as one bounded update', () => {
+  const added = setShortlistSelection(
+    [record('existing.invalid', { riskScore: 10 })],
+    [record('existing.invalid', { riskScore: 20 }), record('new.invalid'), record('NEW.INVALID')],
+    true,
+    NOW,
+  );
+  assert.deepEqual(
+    { added: added.added, updated: added.updated, removed: added.removed, skipped: added.skipped },
+    { added: 1, updated: 1, removed: 0, skipped: 1 },
+  );
+  assert.equal(added.entries.find((item) => item.domain === 'existing.invalid')?.riskScore, 20);
+
+  const removed = setShortlistSelection(added.entries, [record('new.invalid'), record('missing.invalid')], false, NOW);
+  assert.deepEqual(
+    { added: removed.added, updated: removed.updated, removed: removed.removed, skipped: removed.skipped },
+    { added: 0, updated: 0, removed: 1, skipped: 0 },
+  );
+  assert.deepEqual(removed.entries.map((item) => item.domain), ['existing.invalid']);
 });
 
 test('versioned stores normalize, deduplicate, and retain the last bounded record', () => {

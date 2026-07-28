@@ -89,6 +89,12 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(registrySources.nth(1)).not.toHaveAttribute('open', '');
   await expect(registrySources.nth(0).getByText('RDAP structured data')).toBeVisible();
   await expect(registrySources.nth(1).getByText('WHOIS structured data')).toBeVisible();
+  const registryInterpretation = page.locator('.registry-insights');
+  await expect(registryInterpretation).not.toHaveAttribute('open', '');
+  await expect(registryInterpretation.getByText('Registry interpretation · Registered')).toBeVisible();
+  await registryInterpretation.locator(':scope > summary').click();
+  await expect(registryInterpretation.getByText('RDAP: redacted · WHOIS: redacted')).toBeVisible();
+  await expect(registryInterpretation.getByText('clientTransferProhibited')).toBeVisible();
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toBeVisible();
   await expect(page.locator('#watchlist-activity .activity-summary')).toContainText(/1\s*retained checks/);

@@ -86,6 +86,26 @@ function formatTerminalLookup(document: TerminalRecord): string {
     if (registrarRdap.endpoint) lines.push(`Registrar source ${safeTerminalValue(registrarRdap.endpoint)}`);
   }
   lines.push(`WHOIS          ${titleCase(whoisDiagnostics.status)}`);
+  const registryInsights = terminalRecord(document.registryInsights);
+  if (registryInsights.version === 1) {
+    const lifecycle = terminalRecord(registryInsights.lifecycle);
+    const disclosure = terminalRecord(registryInsights.contactDisclosure);
+    const registryDisclosure = terminalRecord(disclosure.registryRdap);
+    const whoisDisclosure = terminalRecord(disclosure.whois);
+    const reconciliation = terminalRecord(registryInsights.reconciliation);
+    const publications = Array.isArray(registryInsights.publications)
+      ? registryInsights.publications.map(terminalRecord)
+      : [];
+    const publicationCounts = {
+      complete: publications.filter((item) => item.state === 'complete').length,
+      partial: publications.filter((item) => item.state === 'partial').length,
+      unavailable: publications.filter((item) => item.state === 'unavailable').length,
+    };
+    lines.push(`Lifecycle      ${titleCase(lifecycle.label)}`);
+    lines.push(`Disclosure     RDAP ${titleCase(registryDisclosure.state)} · WHOIS ${titleCase(whoisDisclosure.state)}`);
+    lines.push(`Reconciliation ${titleCase(reconciliation.state)}`);
+    lines.push(`Publications   ${publicationCounts.complete} complete · ${publicationCounts.partial} partial · ${publicationCounts.unavailable} unavailable`);
+  }
   if (document.mode === 'deep' && document.type === 'domain') {
     const dns = terminalRecord(availability.dns);
     const http = terminalRecord(availability.http);
@@ -333,13 +353,20 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
 
 function formatTerminalPosture(document: TerminalRecord): string {
   const summary = terminalRecord(document.summary);
+  const spfExpansion = terminalRecord(document.spfExpansion);
   const selectors = Array.isArray(document.dkimSelectors) ? document.dkimSelectors : [];
   const checks = Array.isArray(document.checks) ? document.checks : [];
+  const dependencies = Array.isArray(document.externalDependencies) ? document.externalDependencies : [];
+  const dmarcAuthorizations = Array.isArray(document.dmarcAuthorizations) ? document.dmarcAuthorizations : [];
   const lines = [
     `Domain         ${safeTerminalValue(document.domain)}`,
     `Checked        ${safeTerminalValue(document.checkedAt)}`,
     `DKIM selectors ${selectors.length ? selectors.map((value: unknown) => safeTerminalValue(value)).join(', ') : 'None supplied'}`,
     `Summary        ${safeTerminalValue(summary.danger, '0')} action · ${safeTerminalValue(summary.warning, '0')} review · ${safeTerminalValue(summary.pass, '0')} pass · ${safeTerminalValue(summary.info, '0')} info`,
+    ...(Object.keys(spfExpansion).length ? [
+      `SPF expansion  ${safeTerminalValue(spfExpansion.state)} · ${safeTerminalValue(spfExpansion.lookupsUsed, '0')}/${safeTerminalValue(spfExpansion.lookupLimit, '0')} policy queries · ${safeTerminalValue(spfExpansion.dnsLookupTerms, '0')} DNS terms`,
+    ] : []),
+    `Dependencies   ${dependencies.length} observed · ${dmarcAuthorizations.length} DMARC reporting destination${dmarcAuthorizations.length === 1 ? '' : 's'} checked`,
     '',
   ];
   for (const value of checks) {

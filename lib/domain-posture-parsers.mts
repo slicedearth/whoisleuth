@@ -2,6 +2,8 @@
 // Kept separate from DNS/network I/O so policy edge cases can be tested with
 // synthetic records and the Express/Netlify paths share identical behavior.
 
+import { createPublicKey } from 'node:crypto';
+
 type TagList = {
   tags: Record<string, string>;
   duplicates: string[];
@@ -45,12 +47,22 @@ function parseTagList(record: unknown): TagList {
 function parseSpfRecords(records: unknown) {
   const allRecords = joinTxtRecords(records);
   const spfRecords = allRecords.filter((record) => /^v=spf1(?:\s|$)/i.test(record));
-  const result: { records: string[]; valid: boolean; record: string | null; terminalPolicy: string | null; redirect: string | null; dnsLookupTerms: number; issues: string[] } = {
+  const result: {
+    records: string[];
+    valid: boolean;
+    record: string | null;
+    terminalPolicy: string | null;
+    redirect: string | null;
+    includes: string[];
+    dnsLookupTerms: number;
+    issues: string[];
+  } = {
     records: spfRecords,
     valid: false,
     record: spfRecords[0] || null,
     terminalPolicy: null,
     redirect: null,
+    includes: [],
     dnsLookupTerms: 0,
     issues: [],
   };
@@ -73,6 +85,9 @@ function parseSpfRecords(records: unknown) {
   const lookupTermRe = /^[+?~-]?(?:include:|a(?::|\/|$)|mx(?::|\/|$)|ptr(?::|$)|exists:)/i;
   result.dnsLookupTerms = terms.filter((term) => lookupTermRe.test(term)).length + (redirectTerm ? 1 : 0);
   result.redirect = redirectTerm ? redirectTerm.slice(redirectTerm.indexOf('=') + 1) : null;
+  result.includes = terms
+    .map((term) => term.match(/^[+?~-]?include:(.+)$/i)?.[1] || '')
+    .filter(Boolean);
 
   if (terms.some((term) => /^[+?~-]?ptr(?::|$)/i.test(term))) {
     result.issues.push('The deprecated ptr mechanism should not be used.');
@@ -98,7 +113,23 @@ function parseSpfRecords(records: unknown) {
 function parseDmarcRecords(records: unknown) {
   const allRecords = joinTxtRecords(records);
   const dmarcRecords = allRecords.filter((record) => /^v\s*=\s*dmarc1(?:\s*;|$)/i.test(record));
-  const result: { records: string[]; valid: boolean; record: string | null; tags: Record<string, string>; policy: string | null; subdomainPolicy: string | null; nonexistentSubdomainPolicy: string | null; testMode: boolean; enforced: boolean; aggregateReporting: boolean; failureReporting: boolean; legacyPct: number | null; issues: string[] } = {
+  const result: {
+    records: string[];
+    valid: boolean;
+    record: string | null;
+    tags: Record<string, string>;
+    policy: string | null;
+    subdomainPolicy: string | null;
+    nonexistentSubdomainPolicy: string | null;
+    testMode: boolean;
+    enforced: boolean;
+    aggregateReporting: boolean;
+    failureReporting: boolean;
+    aggregateDestinations: string[];
+    failureDestinations: string[];
+    legacyPct: number | null;
+    issues: string[];
+  } = {
     records: dmarcRecords,
     valid: false,
     record: dmarcRecords[0] || null,
@@ -110,6 +141,8 @@ function parseDmarcRecords(records: unknown) {
     enforced: false,
     aggregateReporting: false,
     failureReporting: false,
+    aggregateDestinations: [],
+    failureDestinations: [],
     legacyPct: null,
     issues: [],
   };
@@ -150,6 +183,8 @@ function parseDmarcRecords(records: unknown) {
   result.enforced = Boolean(result.policy && result.policy !== 'none' && !result.testMode);
   result.aggregateReporting = Boolean(parsed.tags.rua);
   result.failureReporting = Boolean(parsed.tags.ruf);
+  result.aggregateDestinations = (parsed.tags.rua || '').split(',').map((value) => value.trim()).filter(Boolean);
+  result.failureDestinations = (parsed.tags.ruf || '').split(',').map((value) => value.trim()).filter(Boolean);
   result.valid = parsed.duplicates.length === 0
     && parsed.malformed.length === 0
     && Boolean(result.policy && result.subdomainPolicy && result.nonexistentSubdomainPolicy)
@@ -265,11 +300,23 @@ function parseBimiRecords(records: unknown) {
 
 function parseDkimRecords(selector: string, records: unknown) {
   const allRecords = joinTxtRecords(records);
-  const result: { selector: string; records: string[]; valid: boolean; keyType: string | null; revoked: boolean; testing: boolean; issues: string[] } = {
+  const result: {
+    selector: string;
+    records: string[];
+    valid: boolean;
+    keyType: string | null;
+    keyBits: number | null;
+    keyParseState: 'not_checked' | 'parsed' | 'invalid';
+    revoked: boolean;
+    testing: boolean;
+    issues: string[];
+  } = {
     selector,
     records: allRecords,
     valid: false,
     keyType: null,
+    keyBits: null,
+    keyParseState: 'not_checked',
     revoked: false,
     testing: false,
     issues: [],
@@ -290,6 +337,44 @@ function parseDkimRecords(selector: string, records: unknown) {
   if (version.toUpperCase() !== 'DKIM1') result.issues.push(`Unsupported DKIM version: ${version}.`);
   if (!Object.prototype.hasOwnProperty.call(parsed.tags, 'p')) result.issues.push('The DKIM record has no public-key p tag.');
   if (result.revoked) result.issues.push('The DKIM key is revoked (empty p tag).');
+  if (
+    !result.revoked
+    && Object.prototype.hasOwnProperty.call(parsed.tags, 'p')
+    && parsed.tags.p
+  ) {
+    const encodedKey = parsed.tags.p.replace(/\s+/g, '');
+    if (encodedKey.length > 16_384 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encodedKey)) {
+      result.keyParseState = 'invalid';
+      result.issues.push('The DKIM public key is not bounded valid base64.');
+    } else {
+      try {
+        const key = createPublicKey({
+          key: Buffer.from(encodedKey, 'base64'),
+          format: 'der',
+          type: 'spki',
+        });
+        const actualType = key.asymmetricKeyType;
+        result.keyParseState = 'parsed';
+        if (actualType === 'rsa' || actualType === 'rsa-pss') {
+          result.keyBits = key.asymmetricKeyDetails?.modulusLength || null;
+        } else if (actualType === 'ed25519') {
+          result.keyBits = 256;
+        }
+        if (
+          (result.keyType === 'rsa' && actualType !== 'rsa' && actualType !== 'rsa-pss')
+          || (result.keyType === 'ed25519' && actualType !== 'ed25519')
+        ) {
+          result.issues.push(`The DKIM k tag declares ${result.keyType}, but the public key is ${actualType || 'an unsupported type'}.`);
+        }
+      } catch {
+        result.keyParseState = 'invalid';
+        result.issues.push('The DKIM public key could not be parsed as SubjectPublicKeyInfo.');
+      }
+    }
+  }
+  if (!['rsa', 'ed25519'].includes(result.keyType || '')) {
+    result.issues.push(`Unsupported DKIM key algorithm: ${result.keyType}.`);
+  }
   if (parsed.duplicates.length) result.issues.push(`Duplicate DKIM tag${parsed.duplicates.length === 1 ? '' : 's'}: ${parsed.duplicates.join(', ')}.`);
   if (parsed.malformed.length) result.issues.push(`Malformed DKIM field${parsed.malformed.length === 1 ? '' : 's'}: ${parsed.malformed.join(', ')}.`);
   result.valid = result.issues.length === 0;

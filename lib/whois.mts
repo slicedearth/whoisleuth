@@ -2,17 +2,21 @@
 // the IANA root WHOIS server, plus response parsing. Shared by the Express
 // server and the Netlify Functions.
 
-import net from 'node:net';
 import { domainToASCII, domainToUnicode } from 'node:url';
 
 import { cached } from './lookup-cache.mts';
-import { safeFetch, readTextCapped, resolvePublicAddresses } from './safe-fetch.mts';
+import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { registryDateIso } from './registry-dates.mts';
 import { registryCapabilityFor, type WhoisQueryProfile } from './registry-capabilities.mts';
+import {
+  MAX_WHOIS_BYTES,
+  queryWhoisAddress,
+  whoisQuery,
+  type WhoisQuery,
+} from './whois-transport.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type WhoisScalarFields = Record<string, string | undefined>;
-type PublicAddressRecord = { address: string; family: number };
 type WhoisHop = {
   server: string;
   address?: string | null;
@@ -23,22 +27,6 @@ type WhoisHop = {
   error?: string;
 };
 type WhoisChain = WhoisHop[];
-type QueryAddress = (
-  address: string,
-  server: string,
-  query: string,
-  options: { port?: number; timeoutMs?: number; totalDeadlineMs?: number },
-) => Promise<string>;
-type WhoisQuery = (
-  server: string,
-  query: string,
-  options: {
-    port?: number;
-    timeoutMs?: number;
-    totalDeadlineMs?: number;
-    onAddressSelected?: (address: string) => void;
-  },
-) => Promise<string>;
 type GtRegistryResult = { registered: false } | {
   registered: true;
   status: string | null;
@@ -154,24 +142,9 @@ export type ParsedWhoisRecord = Record<string, unknown> & Partial<{
   contactsByRole: Record<string, WhoisContact[]>;
   fieldsTruncated: string[];
 } & WhoisAuthority;
-type WhoisSocket = {
-  write(value: string): unknown;
-  destroy(): unknown;
-  setTimeout(timeoutMs: number): unknown;
-  on(event: 'data', listener: (chunk: Buffer | string) => void): unknown;
-  on(event: 'end' | 'close' | 'timeout', listener: () => void): unknown;
-  on(event: 'error', listener: (error: Error) => void): unknown;
-};
-type CreateWhoisConnection = (
-  options: { host: string; port: number },
-  connected: () => void,
-) => WhoisSocket;
-
 const IANA_WHOIS = 'whois.iana.org';
-const MAX_WHOIS_BYTES = 200000; // far more than even a large multi-section response needs
 const WHOIS_HOP_DEADLINE_MS = 12000; // DNS + connect + body ceiling for one server
 const WHOIS_CHAIN_DEADLINE_MS = 25000; // hard ceiling across the full referral chain
-const MAX_WHOIS_ADDRESSES = 3;
 const MAX_GT_REGISTRY_HTML_BYTES = 500000;
 const MAX_WHOIS_FIELD_LENGTH = 1000;
 const MAX_WHOIS_NAMESERVERS = 200;
@@ -227,128 +200,6 @@ function normalizeWhoisChain(value: unknown): WhoisChain {
     });
   }
   return normalized;
-}
-
-// `server` here isn't always the trusted IANA root - after the first hop,
-// it's a referral hostname lib/whois.mts's own extractReferral() pulled out
-// of the *previous* server's response text (a "refer:"/"whois:" field), so
-// a malicious or compromised registry could point this at an internal
-// address. Same DNS-rebinding-guarded-connection-pinning approach
-// safe-fetch.js uses for HTTP: net.createConnection() would otherwise do
-// its own internal DNS lookup with no way to inspect/validate the result,
-// so this resolves and validates the address first, then connects to that
-// pinned IP directly rather than trusting a second, independent lookup at
-// connect time to answer the same way.
-function queryWhoisAddress(address: string, server: string, query: string, {
-  port = 43,
-  timeoutMs = 10000,
-  totalDeadlineMs = WHOIS_HOP_DEADLINE_MS,
-  createConnection = net.createConnection,
-}: {
-  port?: number;
-  timeoutMs?: number;
-  totalDeadlineMs?: number;
-  createConnection?: CreateWhoisConnection;
-} = {}): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const socket = createConnection({ host: address, port }, () => {
-      socket.write(query + '\r\n');
-    });
-    const chunks: Buffer[] = [];
-    let totalBytes = 0;
-    let settled = false;
-
-    const deadline = setTimeout(() => {
-      settled = true;
-      socket.destroy();
-      reject(new Error(`WHOIS request to ${server} exceeded the total time limit`));
-    }, totalDeadlineMs);
-
-    function settle<T>(fn: (value: T) => void, value: T) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(deadline);
-      fn(value);
-    }
-
-    socket.setTimeout(Math.min(timeoutMs, totalDeadlineMs)); // inactivity timeout - resets on each chunk received
-    socket.on('data', (chunk: Buffer | string) => {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      totalBytes += buffer.length;
-      if (totalBytes > MAX_WHOIS_BYTES) {
-        socket.destroy();
-        settle(reject, new Error(`WHOIS response from ${server} exceeded ${MAX_WHOIS_BYTES} bytes`));
-        return;
-      }
-      chunks.push(buffer);
-    });
-    // Decode once after the complete bounded byte sequence is assembled. A
-    // TCP chunk boundary can fall inside one UTF-8 code point; decoding each
-    // chunk independently would replace both halves with U+FFFD.
-    const responseText = () => Buffer.concat(chunks, totalBytes).toString('utf8');
-    socket.on('end', () => settle(resolve, responseText()));
-    socket.on('close', () => settle(resolve, responseText()));
-    socket.on('timeout', () => {
-      socket.destroy();
-      settle(reject, new Error(`WHOIS request to ${server} timed out`));
-    });
-    socket.on('error', (err) => settle(reject, err));
-  });
-}
-
-async function whoisQuery(server: string, query: string, {
-  port = 43,
-  timeoutMs = 10000,
-  totalDeadlineMs = WHOIS_HOP_DEADLINE_MS,
-  resolveAddresses = resolvePublicAddresses,
-  queryAddress = queryWhoisAddress,
-  now = Date.now,
-  onAddressSelected = (_address) => {},
-}: {
-  port?: number;
-  timeoutMs?: number;
-  totalDeadlineMs?: number;
-  resolveAddresses?: (hostname: string) => Promise<PublicAddressRecord[]>;
-  queryAddress?: QueryAddress;
-  now?: () => number;
-  onAddressSelected?: (address: string) => void;
-} = {}): Promise<string> {
-  const startedAt = now();
-  let resolutionTimer: NodeJS.Timeout | undefined;
-  const records = await Promise.race([
-    resolveAddresses(server),
-    new Promise<never>((_, reject) => {
-      resolutionTimer = setTimeout(
-        () => reject(new Error(`WHOIS request to ${server} timed out during DNS resolution`)),
-        totalDeadlineMs
-      );
-    }),
-  ]).finally(() => clearTimeout(resolutionTimer));
-
-  const candidates = records.slice(0, MAX_WHOIS_ADDRESSES);
-  const failures: string[] = [];
-  let attempts = 0;
-  for (const { address } of candidates) {
-    const remainingMs = totalDeadlineMs - (now() - startedAt);
-    if (remainingMs <= 0) break;
-    attempts += 1;
-    try {
-      const response = await queryAddress(address, server, query, {
-        port,
-        timeoutMs: Math.min(timeoutMs, remainingMs),
-        totalDeadlineMs: remainingMs,
-      });
-      try { onAddressSelected(address); } catch { /* diagnostics must not break a successful lookup */ }
-      return response;
-    } catch (err) {
-      failures.push(errorMessage(err, 'connection failed').slice(0, 200));
-    }
-  }
-
-  const detail = failures.length
-    ? `: ${failures.join('; ')}`
-    : ' because the total time limit expired';
-  throw new Error(`WHOIS request to ${server} failed after ${attempts} of ${candidates.length} validated address(es)${detail}`);
 }
 
 function extractReferral(whoisText: string): string | null {

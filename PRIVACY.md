@@ -203,17 +203,22 @@ default (see the README), so many lookups return no personal data at all.
   a full reload, or closing the tab clears it. Deliberate case, watchlist,
   shortlist, download, and archive actions remain the only ways those tools
   retain or export selected evidence.
-- **Guided investigations**: an authenticated user can optionally start a fixed
+- **Guided investigations**: an authenticated user can optionally start a standard
   brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
-  domain. The versioned storage contract calls the selected guide a recipe;
-  schema version 2 keeps only that recipe identifier, official or starting
+  domain, or a bounded analyst-authored template derived from one of those
+  guides. The versioned storage contract calls the selected guide a recipe;
+  schema version 3 keeps only that recipe identifier, an optional compact
+  template snapshot, official or starting
   domain, an optional analyst-selected candidate domain, up to 25 canonical
   domains carried from a guided Bulk comparison, an explicit truncation marker,
   creation/update timestamps, active or paused state, and bounded stage
   approval, opened, and outcome markers in the current tab's `sessionStorage`
-  under `whoisleuth:investigation-guide:v2`. A deployed version 1 navigation
-  record can normalize into the new-domain triage recipe when no current record
-  exists; future records remain untouched. Guide progress is not sent to the
+  under `whoisleuth:investigation-guide:v3`. Deployed version 1 and 2 records
+  can normalize without inventing a custom template when no current record
+  exists; future records remain untouched. A saved template can customise
+  bounded guidance, omit allowlisted steps, and add approval gates. It cannot
+  add arbitrary actions, run code, start collection, submit evidence, change a
+  case, or remove a required request gate. Guide progress is not sent to the
   server or copied into persistent browser stores, and it is not treated as
   evidence completion. The guide can pre-fill or preserve a bounded profile,
   discovery, lookup, Bulk, or case target, and carries the bounded comparison
@@ -349,7 +354,8 @@ default (see the README), so many lookups return no personal data at all.
   Bulk results, but is included when the user deliberately downloads a full
   Lookup evidence export.
 - **Brand Profiles / Shortlist / Watchlist / Cases / Campaigns / Certificate
-  search history / Custom rules / Retained relationship observations**: saved
+  search history / Custom rules / Retained relationship observations / Saved
+  Bulk sessions / Website profile snapshots / Investigation templates**: saved
   as bounded records in your own browser's IndexedDB database, not on the
   server, and visible to whoever can use that browser profile. On the first
   authenticated load after this storage change, WHOISleuth normalizes
@@ -364,6 +370,36 @@ default (see the README), so many lookups return no personal data at all.
   wrapped in passphrase-based authenticated encryption entirely in the
   browser. This protects the downloaded file while locked, not the active
   browser database or an open Console.
+  Saved Bulk sessions retain only the analyst-provided name, bounded domain
+  queue, scan mode, compact settled result fields, per-source completion
+  states, and session timestamps needed to load, compare, or resume unstarted
+  domains. They exclude raw source payloads, complete Lookup responses,
+  registrant and abuse contacts, and Certificate Transparency rows. Saving and
+  loading make no network request; an explicit resume sends only domains that
+  had no settled row through the selected Bulk mode.
+  Website profile snapshots are retained only after an analyst explicitly
+  saves a completed Deep Lookup. Each bounded record contains the canonical
+  domain, observation and save times, collection completeness and truncation,
+  curated technology identifiers, passive posture states, selected
+  page-identity digests, and source-health states. It excludes raw RDAP,
+  WHOIS, HTTP, HTML, contact, credential, and provider payloads. Snapshot
+  comparison, deletion, import, and export happen locally and make no request.
+  A changed or unavailable field is a review lead, not evidence of compromise,
+  ownership, intent, safety, or maliciousness.
+  Investigation templates retain only allowlisted guide-stage identities,
+  bounded analyst-authored labels and instructions, expected evidence,
+  completion criteria, and optional additional request gates. They cannot add
+  arbitrary routes or operations, execute code, start requests, submit
+  evidence, change a case, or remove mandatory gates. Saving, editing,
+  importing, exporting, and deleting templates happen locally and make no
+  network request.
+  Bulk filters and group summaries are derived locally from the compact rows
+  already in memory. Explicit batch selection is stored in the same bounded
+  shortlist and does not make a request. A selected deep rescan sends only the
+  selected domains; selected case, disposition, export, and watchlist actions
+  operate only on that visible analyst-controlled set. Missing provider, ASN,
+  hosting, registration, or mail fields remain unavailable rather than being
+  converted into a negative conclusion.
   The appearance selector can also retain one bounded `dark`, `light`, or
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
   server. It is included only when you deliberately download a unified
@@ -373,6 +409,11 @@ default (see the README), so many lookups return no personal data at all.
   Campaigns retain a bounded label, optional description, and normalized case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.
+  Cases can additionally retain bounded analyst-selected evidence pins,
+  decision rationales, contact routes, reviewed response actions, follow-up
+  dates, references, and outcomes. These analyst-authored records remain
+  separate from collected evidence snapshots and can contain sensitive
+  investigation context. Creating or editing them makes no network request.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword
@@ -423,11 +464,12 @@ default (see the README), so many lookups return no personal data at all.
   expanded contacts, provider payloads, scripts, and remote assets. A
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
-  detection rules, retained relationship observations, active-profile
+  detection rules, retained relationship observations, compact saved Bulk
+  sessions, website profile snapshots, investigation templates, active-profile
   selection, and theme preference. It uses a versioned manifest with
   per-section SHA-256
   checksums, previews conflicts before a non-destructive merge, and excludes
-  sessions, passwords, API credentials, hosted-monitor encryption keys, raw
+  login sessions, passwords, API credentials, hosted-monitor encryption keys, raw
   upstream payloads, tab state, Certificate Transparency history, and unrelated
   browser storage. The recommended download uses browser-native
   PBKDF2-HMAC-SHA-256 and AES-256-GCM to encrypt that ordinary archive with a
@@ -441,14 +483,33 @@ default (see the README), so many lookups return no personal data at all.
   passphrase. Nothing is uploaded or retained by the server when you export or
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
+- **Reviewed response and defensive-control exports**: a case response packet
+  is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
+  UTC observation time, and separately attributed registrar, registry,
+  network/hosting, or security.txt contacts. JSON, Markdown, and email-text
+  outputs state that review is required and that no submission occurred.
+  Defensive domain exports require an explicit reviewed selection and eligible
+  analyst disposition. They exclude configured official, allowlisted, and
+  common-infrastructure domains, include an expiry and provenance manifest,
+  and create paired rollback instructions. Wildcard RPZ entries require a
+  separate opt-in. WHOISleuth does not send either export or modify a defensive
+  system.
 - **Official-domain posture audits**: handled per request and discarded. The
-  server queries public DNS, the domain registry's RDAP service for DNSSEC
-  delegation status, and (only when advertised) the official domain's own
-  `mta-sts` HTTPS policy host. DKIM selector names saved in a Brand Profile
-  are included in the request so those exact public DNS records can be checked.
-- **Outreach / abuse-report drafts**: build a `mailto:` link and copy
-  pre-filled text to your clipboard. Nothing is sent automatically; a
-  human reviews and sends each one from their own mail client.
+  server queries public DNS, the domain registry's RDAP service for status,
+  nameserver, DS, and DNSSEC delegation evidence, and (only when advertised)
+  the official domain's own `mta-sts` HTTPS policy host. The bounded audit can
+  follow literal SPF include and redirect TXT targets and query external DMARC
+  reporting-authorization names. Active and retired DKIM selector names saved
+  in a Brand Profile, plus its fixed mail-profile choice, are included in the
+  request so those exact public DNS records and expectations can be checked.
+  DKIM public keys are parsed transiently for supported algorithm and size
+  evidence and are not retained by the server. Registry and resolver failures,
+  exhausted traversal bounds, and unsupported policy targets remain explicit
+  incomplete states.
+- **External response actions**: WHOISleuth records only analyst-authored
+  planned or completed actions in browser-local cases. It does not open a
+  pre-addressed mail client, send a report, contact a provider, change DNS, or
+  apply a block automatically.
 - **Optional distributed operation limits**: when the operator configures the
   shared REST counter provider, it receives only bounded operation classes,
   opaque random lease identifiers, expiry timestamps, and a one-way hash of
@@ -479,7 +540,7 @@ remain outside that measurement surface.
 ## Legal basis for processing
 
 Using this tool to monitor domains/brands you have a legitimate interest in
-(the **Report abuse** flow, watchlist monitoring) is generally supported by
+(reviewed case-response preparation, watchlist monitoring) is generally supported by
 "legitimate interest." Using the **outreach** (acquisition) flow to contact
 a registrant is closer to direct marketing and a weaker legitimate-interest
 case - keep it low-volume, human-reviewed (already enforced by the

@@ -23,6 +23,7 @@
   import LookupStructuredDataIdentity from '$lib/components/LookupStructuredDataIdentity.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
+  import WebsiteSnapshotManager from '$lib/components/WebsiteSnapshotManager.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
@@ -30,7 +31,7 @@
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { abuseAction, outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
+  import { outreachAction, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
@@ -115,63 +116,64 @@
     try{const value=entries[0];if(!value)return false;const url=new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value)?value:`https://${value}`);const host=url.hostname;return host.includes('.')&&!host.includes(':')&&!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);}catch{return false;}
   });
   const lookupView=$derived(createLookupViewModel(result));
-  const availability=$derived(lookupView.availability as JsonRecord);
+  const availability=$derived(lookupView.availability);
   const lookupEvidenceDepth=$derived(availability.deepScanComplete===false?'fast':'deep');
-  const rdap=$derived(lookupView.rdap as JsonRecord);
-  const registrarRdap=$derived(lookupView.registrarRdap as JsonRecord);
-  const registrarRdapParsed=$derived(lookupView.registrarRdapParsed as JsonRecord);
-  const whois=$derived(lookupView.whois as JsonRecord);
-  const rdapParsed=$derived(lookupView.rdapParsed as JsonRecord);
-  const whoisParsed=$derived(lookupView.whoisParsed as JsonRecord);
-  const diagnostics=$derived(lookupView.diagnostics as JsonRecord);
+  const rdap=$derived(lookupView.rdap);
+  const registrarRdap=$derived(lookupView.registrarRdap);
+  const registrarRdapParsed=$derived(lookupView.registrarRdapParsed);
+  const whois=$derived(lookupView.whois);
+  const rdapParsed=$derived(lookupView.rdapParsed);
+  const whoisParsed=$derived(lookupView.whoisParsed);
+  const diagnostics=$derived(lookupView.diagnostics);
   const lookupTiming=$derived(lookupView.timing);
-  const registryAccess=$derived(lookupView.registryAccess as JsonRecord);
-  const reverseDns=$derived(lookupView.reverseDns as JsonRecord);
-  const reverseDnsRecords=$derived(lookupView.reverseDnsRecords as JsonRecord);
-  const observedNetworkContext=$derived(lookupView.observedNetworkContext as JsonRecord);
-  const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint as JsonRecord);
-  const observedNetworkRdap=$derived(lookupView.observedNetworkRdap as JsonRecord);
-  const observedNetwork=$derived(lookupView.observedNetwork as JsonRecord);
-  const securityTxt=$derived(lookupView.securityTxt as JsonRecord);
-  const threatIntelligence=$derived(lookupView.threatIntelligence as JsonRecord);
-  const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders as JsonRecord[]);
-  const dnsEvidence=$derived(lookupView.dnsEvidence as JsonRecord);
-  const dnsRecords=$derived(lookupView.dnsRecords as JsonRecord);
-  const httpEvidence=$derived(lookupView.httpEvidence as JsonRecord);
-  const httpResponse=$derived(lookupView.httpResponse as JsonRecord);
-  const httpSecurityHeaders=$derived(lookupView.httpSecurityHeaders as JsonRecord);
-  const tlsEvidence=$derived(lookupView.tlsEvidence as JsonRecord);
-  const tlsCertificate=$derived(lookupView.tlsCertificate as JsonRecord);
-  const tlsSubject=$derived(lookupView.tlsSubject as JsonRecord);
-  const tlsIssuer=$derived(lookupView.tlsIssuer as JsonRecord);
-  const tlsAltNames=$derived(lookupView.tlsAltNames as JsonRecord);
-  const tlsPublicKey=$derived(lookupView.tlsPublicKey as JsonRecord);
-  const tlsCipher=$derived(lookupView.tlsCipher as JsonRecord);
-  const tlsAuthorization=$derived(lookupView.tlsAuthorization as JsonRecord);
-  const tlsHostname=$derived(lookupView.tlsHostname as JsonRecord);
-  const tlsValidity=$derived(lookupView.tlsValidity as JsonRecord);
-  const tlsDiagnostics=$derived(lookupView.tlsDiagnostics as JsonRecord);
-  const pageIdentity=$derived(lookupView.pageIdentity as JsonRecord);
-  const pageCanonical=$derived(lookupView.pageCanonical as JsonRecord);
-  const pageMetaRefresh=$derived(lookupView.pageMetaRefresh as JsonRecord);
-  const pageOpenGraph=$derived(lookupView.pageOpenGraph as JsonRecord);
-  const pageOpenGraphUrl=$derived(lookupView.pageOpenGraphUrl as JsonRecord);
-  const pageForms=$derived(lookupView.pageForms as JsonRecord);
-  const pageResources=$derived(lookupView.pageResources as JsonRecord);
-  const pageResourceTypes=$derived(lookupView.pageResourceTypes as JsonRecord);
-  const pageDownloads=$derived(lookupView.pageDownloads as JsonRecord);
-  const pageFingerprints=$derived(lookupView.pageFingerprints as JsonRecord);
-  const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile as JsonRecord);
+  const registryAccess=$derived(lookupView.registryAccess);
+  const registryInsights=$derived(lookupView.registryInsights);
+  const reverseDns=$derived(lookupView.reverseDns);
+  const reverseDnsRecords=$derived(lookupView.reverseDnsRecords);
+  const observedNetworkContext=$derived(lookupView.observedNetworkContext);
+  const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint);
+  const observedNetworkRdap=$derived(lookupView.observedNetworkRdap);
+  const observedNetwork=$derived(lookupView.observedNetwork);
+  const securityTxt=$derived(lookupView.securityTxt);
+  const threatIntelligence=$derived(lookupView.threatIntelligence);
+  const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders);
+  const dnsEvidence=$derived(lookupView.dnsEvidence);
+  const dnsRecords=$derived(lookupView.dnsRecords);
+  const httpEvidence=$derived(lookupView.httpEvidence);
+  const httpResponse=$derived(lookupView.httpResponse);
+  const httpSecurityHeaders=$derived(lookupView.httpSecurityHeaders);
+  const tlsEvidence=$derived(lookupView.tlsEvidence);
+  const tlsCertificate=$derived(lookupView.tlsCertificate);
+  const tlsSubject=$derived(lookupView.tlsSubject);
+  const tlsIssuer=$derived(lookupView.tlsIssuer);
+  const tlsAltNames=$derived(lookupView.tlsAltNames);
+  const tlsPublicKey=$derived(lookupView.tlsPublicKey);
+  const tlsCipher=$derived(lookupView.tlsCipher);
+  const tlsAuthorization=$derived(lookupView.tlsAuthorization);
+  const tlsHostname=$derived(lookupView.tlsHostname);
+  const tlsValidity=$derived(lookupView.tlsValidity);
+  const tlsDiagnostics=$derived(lookupView.tlsDiagnostics);
+  const pageIdentity=$derived(lookupView.pageIdentity);
+  const pageCanonical=$derived(lookupView.pageCanonical);
+  const pageMetaRefresh=$derived(lookupView.pageMetaRefresh);
+  const pageOpenGraph=$derived(lookupView.pageOpenGraph);
+  const pageOpenGraphUrl=$derived(lookupView.pageOpenGraphUrl);
+  const pageForms=$derived(lookupView.pageForms);
+  const pageResources=$derived(lookupView.pageResources);
+  const pageResourceTypes=$derived(lookupView.pageResourceTypes);
+  const pageDownloads=$derived(lookupView.pageDownloads);
+  const pageFingerprints=$derived(lookupView.pageFingerprints);
+  const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile);
   const credentialSurfaceForms=$derived(rec(credentialSurfaceProfile.forms));
   const credentialSurfaceMethods=$derived(rec(credentialSurfaceForms.methods));
   const credentialSurfaceActions=$derived(rec(credentialSurfaceForms.actions));
   const credentialSurfaceInputs=$derived(rec(credentialSurfaceProfile.inputs));
   const credentialSurfaceCategories=$derived(rec(credentialSurfaceInputs.categories));
-  const structuredDataIdentity=$derived(lookupView.structuredDataIdentity as JsonRecord);
-  const technologyProfile=$derived(lookupView.technologyProfile as JsonRecord);
-  const browserLibraryProfile=$derived(technologyProfile.browserLibraryProfile as JsonRecord);
-  const securityPosture=$derived(lookupView.securityPosture as JsonRecord);
-  const securityPostureSummary=$derived(lookupView.securityPostureSummary as JsonRecord);
+  const structuredDataIdentity=$derived(lookupView.structuredDataIdentity);
+  const technologyProfile=$derived(lookupView.technologyProfile);
+  const browserLibraryProfile=$derived(rec(technologyProfile.browserLibraryProfile));
+  const securityPosture=$derived(lookupView.securityPosture);
+  const securityPostureSummary=$derived(lookupView.securityPostureSummary);
   const compactHttpSummary=$derived(compactHttpObservation(availability.http)||{});
   const whoisRoleOrder=['registrant','administrative','technical','billing','abuse'];
   const whoisContactsByRole=$derived(rec(whoisParsed.contactsByRole));
@@ -190,7 +192,7 @@
   const risk=$derived(explainRiskScore(scoredAvailability) as ScoreExplanation);
   const outreach=$derived(outreachAction(String(availability.domain||result?.registrableDomain||''),(availability.registrant||null) as Contact|null));
   const abuseContact=$derived(rec(availability.abuse));
-  const abuse=$derived(profileSignals.trusted?null:abuseAction(String(availability.domain||result?.registrableDomain||''),abuseContact.email?{abuseEmail:String(abuseContact.email),hasMx:availability.hasMx??null,activityStatus:availability.activityStatus||null,privacyProtected:availability.privacyProtected??null,domainAgeDays:availability.domainAgeDays??null} as AbuseEvidence:null));
+  const abuseContactEmail=$derived(profileSignals.trusted?'':boundedTechnologyText(abuseContact.email,320));
   const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only);
   const redactedComparisonCount=$derived(comparison.counts.rdap_redacted+comparison.counts.whois_redacted);
   const limitedComparisonCount=$derived(comparison.counts.rdap_unavailable+comparison.counts.whois_unavailable+comparison.counts.rdap_incomplete+comparison.counts.whois_incomplete);
@@ -198,7 +200,7 @@
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
   const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
-  const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
+  const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuseContactEmail));
   const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
     type:result?.type,
@@ -394,6 +396,32 @@
     evidence:stringList(finding.evidence).slice(0,4).map((item)=>boundedTechnologyText(item,120)).filter(Boolean),
   }));}
   function securityPostureLimitations(){return stringList(securityPosture.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
+  function websiteSnapshotInput(){
+    const now=new Date().toISOString();
+    const observedAt=typeof result?.fetchedAt==='string'?result.fetchedAt:now;
+    const baseline=observedPageBaseline;
+    const sourceNames=['rdap','whois','availability','dns','http','tls'];
+    return{
+      id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      domain:caseDomain,
+      observedAt,
+      savedAt:now,
+      complete:lookupEvidenceDepth==='deep'&&technologyProfile.complete===true&&securityPosture.complete===true&&Boolean(baseline?.complete),
+      truncated:Boolean(technologyProfile.truncated||securityPosture.truncated||baseline?.truncated),
+      technologies:technologyFindingRows().map(({id,name,category,confidence})=>({id,name,category,confidence})),
+      posture:securityPostureFindingRows().map(({id,state})=>({id,state})),
+      identity:{
+        normalizedHtml:baseline?.normalizedHtml.value??null,
+        visibleText:baseline?.visibleText?.value??null,
+        domStructure:baseline?.domStructure.value??null,
+        formStructure:baseline?.formStructure?.value??null,
+        resourceHosts:baseline?.resourceHosts.value??null,
+        trackingIdentifiers:baseline?.trackingIdentifiers.value??null,
+        faviconHash:baseline?.faviconHash??null,
+      },
+      sources:sourceNames.flatMap((source)=>{const state=boundedTechnologyText(rec(diagnostics[source]).status,40);return state?[{source,state}]:[];}),
+    };
+  }
   function pageFingerprintRows(){const exact=rec(pageFingerprints.exact);const normalizedHtml=rec(pageFingerprints.normalizedHtml);const visibleText=rec(pageFingerprints.visibleText);const domStructure=rec(pageFingerprints.domStructure);const formStructure=rec(pageFingerprints.formStructure);const resourceHosts=rec(pageFingerprints.resourceHosts);const identifiers=rec(pageFingerprints.identifiers);const resourceHostValues=Array.isArray(resourceHosts.values)?resourceHosts.values:[];const identifierValues=Array.isArray(identifiers.values)?identifiers.values:[];return[
     {label:'Exact captured body',value:exact.value,detail:exact.scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
     {label:'Normalized HTML',value:normalizedHtml.value,detail:`${show(normalizedHtml.tokenCount)} tokens`},
@@ -839,6 +867,13 @@
     {#if hasWebEvidence}
     <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
       <h3 id="web-evidence-title">{result.type==='domain'?'Web and DNS evidence':'DNS evidence'}</h3>
+      {#if result.type==='domain'}
+        <WebsiteSnapshotManager
+          domain={caseDomain}
+          canSave={!loading&&lookupEvidenceDepth==='deep'&&Boolean(caseDomain)&&technologyProfile.source==='derived'&&securityPosture.source==='derived'}
+          buildSnapshot={websiteSnapshotInput}
+        />
+      {/if}
 
       {#if reverseDns.source==='reverse_dns'}
         <div class="evidence-component" id="evidence-reverse-dns"><LookupDnsEvidence
@@ -981,6 +1016,7 @@
         whoisRows={whoisSourceRows()}
         whoisContactRoles={whoisContactRoleRows()}
         whoisTruncatedFields={stringList(whoisParsed.fieldsTruncated)}
+        insights={registryInsights}
         registrar={registrarRdapDisplay()}
       /></div>
 
@@ -1010,7 +1046,7 @@
       <section class="result-section family-analyst" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
 
-        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuse} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
+        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuseContactEmail} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
       </section>
     {/if}
 

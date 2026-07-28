@@ -202,7 +202,7 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 20);
+    assert.equal(result.schemaVersion, 21);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     const query = recordValue(result.query);
     const sources = recordValue(result.sources);
@@ -322,6 +322,8 @@ describe('lookup evidence Markdown rendering', () => {
     assert.match(markdown, /## Assessment/);
     assert.match(markdown, /### Registry RDAP/);
     assert.match(markdown, /### WHOIS/);
+    assert.match(markdown, /## Registry interpretation/);
+    assert.match(markdown, /Registry RDAP disclosure/);
     assert.match(markdown, /## Registry-source comparison/);
     assert.match(markdown, /## Registry \/ registrar RDAP comparison/);
     assert.match(markdown, /Registry RDAP/);

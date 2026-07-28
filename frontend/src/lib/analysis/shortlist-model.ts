@@ -149,6 +149,49 @@ export function serializeShortlistStore(records: unknown): string {
   return JSON.stringify(assertShortlistStoreBudget(records));
 }
 
+/** Add, refresh, or remove an explicit bounded selection in one transaction. */
+export function setShortlistSelection(
+  localRaw: unknown,
+  selectedRaw: unknown,
+  selected: boolean,
+  nowIso: unknown = new Date().toISOString(),
+) {
+  const local = normalizeShortlistStore(localRaw).entries;
+  const byDomain = new Map(local.map((record) => [record.domain, record]));
+  const candidates = Array.isArray(selectedRaw) ? selectedRaw.slice(0, MAX_SHORTLIST_INPUTS) : [];
+  let added = 0;
+  let updated = 0;
+  let removed = 0;
+  let skipped = Math.max(0, (Array.isArray(selectedRaw) ? selectedRaw.length : 0) - MAX_SHORTLIST_INPUTS);
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const record = normalizeShortlistRecord(candidate, { fallbackTimestamp: nowIso });
+    if (!record || seen.has(record.domain)) {
+      skipped += 1;
+      continue;
+    }
+    seen.add(record.domain);
+    if (selected) {
+      if (!byDomain.has(record.domain) && byDomain.size >= MAX_SHORTLIST_ENTRIES) {
+        skipped += 1;
+        continue;
+      }
+      if (byDomain.has(record.domain)) updated += 1;
+      else added += 1;
+      byDomain.set(record.domain, record);
+    } else if (byDomain.delete(record.domain)) {
+      removed += 1;
+    }
+  }
+  return {
+    entries: assertShortlistStoreBudget([...byDomain.values()]).entries,
+    added,
+    updated,
+    removed,
+    skipped,
+  };
+}
+
 function validateImport(raw: unknown): void {
   const value = plainRecord(raw);
   if (!value || value.schema !== SHORTLIST_SCHEMA || !Array.isArray(value.entries)) {

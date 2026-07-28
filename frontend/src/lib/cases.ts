@@ -11,6 +11,11 @@ import {
   openOrCreateCase,
   updateCase,
 } from './analysis/case-model.ts';
+import type {
+  CaseInput,
+  CasePatch,
+  CaseRecord,
+} from './analysis/case-model.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.ts';
 
@@ -24,35 +29,29 @@ export {
   sourceLabel,
   statusLabel,
 } from './analysis/case-model.ts';
+export {
+  CASE_ACTION_STATES,
+  CASE_ACTION_TYPES,
+  CASE_PIN_COMPLETENESS,
+} from './analysis/case-response-model.ts';
+export type {
+  CaseActionRecord,
+  CaseDecisionRecord,
+  CaseEvidencePin,
+} from './analysis/case-response-model.ts';
+export type {
+  CaseEvidenceSnapshot,
+  CaseInput,
+  CaseNote,
+  CasePatch,
+  CaseRecord,
+  EvidenceFactor,
+} from './analysis/case-model.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
 
-export interface CaseNote { id: string; body: string; createdAt: string }
-export interface EvidenceFactor { label: string; points: number }
-export interface CaseEvidenceSnapshot {
-  id: string; fingerprint: string; firstCapturedAt: string; capturedAt: string; source: string; scanDepth: string;
-  availability: string | null; confidence: string | null;
-  riskModelVersion: number | null; riskScore: number | null; opportunityScore: number | null;
-  riskFactors: EvidenceFactor[]; opportunityFactors: EvidenceFactor[];
-  registrar: string | null; createdDate: string | null; expiryDate: string | null; nameservers: string[];
-  hasMx: boolean | null; hasSpf: boolean | null; hasDmarc: boolean | null;
-  activityStatus: string | null; websiteProbeDetail: string | null; pageTitle: string | null;
-  httpSummaryVersion: number | null; httpEvidenceStatus: string | null; httpFinalOrigin: string | null; httpResponseStatus: number | null;
-  httpTransportSecurity: string | null; httpRedirectCount: number | null;
-  httpCrossOriginRedirect: boolean | null; httpHttpsDowngrade: boolean | null; httpContentType: string | null;
-  httpSecurityHeaders: string[] | null;
-  faviconMatch: boolean | null; faviconNearMatch: boolean | null; reusesOfficialAssets: boolean | null; hasPasswordField: boolean | null;
-  phishingLanguageMatch: string | null;
-  mutationTypes: string[];
-}
-export interface CaseRecord { id: string; domain: string; status: string; disposition: string; tags: string[]; notes: CaseNote[]; source: string; evidenceHistory: CaseEvidenceSnapshot[]; createdAt: string; updatedAt: string }
-// Evidence input from Lookup/Bulk is a loose bag of result fields; the model's
-// snapshot normalizer keeps only the bounded, known ones.
-export interface CaseInput { domain: string; status?: string; disposition?: string; source?: string; tags?: string[]; evidence?: Record<string, unknown> | null; note?: string }
-export interface CasePatch { status?: string; disposition?: string; tags?: string[]; source?: string; evidence?: Record<string, unknown> | null; note?: string }
-
 export async function loadCases(): Promise<CaseRecord[]> {
-  return (await browserLocalDataProvider()).read(CASES_COLLECTION) as Promise<CaseRecord[]>;
+  return (await browserLocalDataProvider()).read(CASES_COLLECTION);
 }
 
 // Persists a clean, bounded, budget-checked store. Enforces the serialized-size
@@ -61,8 +60,7 @@ export async function loadCases(): Promise<CaseRecord[]> {
 // when storage is full or unavailable. Returns the persisted cases plus how many
 // evidence snapshots were pruned to fit.
 function boundedCases(cases: CaseRecord[]): { cases: CaseRecord[]; pruned: number } {
-  const { cases: bounded, pruned } = enforceStoreBudget(cases);
-  return { cases: bounded as CaseRecord[], pruned };
+  return enforceStoreBudget(cases);
 }
 
 export async function getCase(id: string): Promise<CaseRecord | null> {
@@ -80,19 +78,19 @@ export async function getCaseByDomain(domain: string): Promise<CaseRecord | null
 // plus how many snapshots were pruned so the UI can warn.
 export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; created: boolean; pruned: number }> {
   return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
-    const result = openOrCreateCase(current, input as never);
-    if (!result.created) return { document: current, result: { record: result.record as CaseRecord, created: false as boolean, pruned: 0 } };
-    const { cases, pruned } = boundedCases(result.cases as CaseRecord[]);
-    const record = cases.find((item) => item.id === (result.record as CaseRecord).id) ?? (result.record as CaseRecord);
+    const result = openOrCreateCase(current, input);
+    if (!result.created) return { document: current, result: { record: result.record, created: false as boolean, pruned: 0 } };
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find((item) => item.id === result.record.id) ?? result.record;
     return { document: cases, result: { record, created: true as boolean, pruned } };
   });
 }
 
 export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; pruned: number }> {
   return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
-    const result = updateCase(current, id, patch as never);
-    const { cases, pruned } = boundedCases(result.cases as CaseRecord[]);
-    const record = cases.find((item) => item.id === id) ?? (result.record as CaseRecord);
+    const result = updateCase(current, id, patch);
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find((item) => item.id === id) ?? result.record;
     return { document: cases, result: { record, pruned } };
   });
 }
@@ -111,7 +109,7 @@ export async function deleteCase(id: string): Promise<void> {
 export async function importCases(value: unknown): Promise<{ added: number; updated: number; skipped: number; pruned: number }> {
   return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
     const result = mergeCases(current, value);
-    const { cases, pruned } = boundedCases(result.cases as CaseRecord[]);
+    const { cases, pruned } = boundedCases(result.cases);
     return {
       document: cases,
       result: { added: result.added, updated: result.updated, skipped: result.skipped, pruned },

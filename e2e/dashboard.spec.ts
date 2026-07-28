@@ -106,6 +106,51 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
         limitations: ['Shared infrastructure is not proof of common control.'],
       }],
     },
+    'whoisleuth-website-snapshots-v1': {
+      schema: 'whoisleuth.website-profile-snapshots',
+      version: 1,
+      snapshots: [{
+        id: 'archive-website-snapshot',
+        domain: 'archive-case.invalid',
+        observedAt: NOW,
+        savedAt: NOW,
+        complete: true,
+        truncated: false,
+        technologies: [{ id: 'cms-one', name: 'CMS One', category: 'cms', confidence: 'high' }],
+        posture: [{ id: 'https', state: 'observed' }],
+        identity: {
+          normalizedHtml: 'a'.repeat(64),
+          visibleText: null,
+          domStructure: null,
+          formStructure: null,
+          resourceHosts: null,
+          trackingIdentifiers: null,
+          faviconHash: null,
+        },
+        sources: [{ source: 'page', state: 'success' }],
+      }],
+    },
+    'whoisleuth-investigation-templates-v1': {
+      schema: 'whoisleuth.investigation-templates',
+      version: 1,
+      templates: [{
+        id: 'archive-investigation-template',
+        label: 'Archive review template',
+        summary: 'A portable bounded guide template.',
+        recipeId: 'new_domain_triage',
+        stages: [{
+          id: 'lookup',
+          label: 'Collect evidence',
+          detail: 'Review one bounded target.',
+          expectedEvidence: 'Separately attributed evidence.',
+          completionCriteria: 'Source states were reviewed.',
+          instructions: ['Run a Deep lookup.'],
+          requiresApproval: true,
+        }],
+        createdAt: NOW,
+        updatedAt: NOW,
+      }],
+    },
     'whoisleuth:theme:v1': 'light',
     'unrelated-private-key': 'must-not-export',
   }, { clearStorage: true });
@@ -134,7 +179,7 @@ async function downloadEncryptedWorkspaceArchive(
   return { download, content: Buffer.concat(body).toString('utf-8') };
 }
 
-test('the Dashboard groups core tasks without duplicating the sidebar tool map', async ({ page }) => {
+test('the Dashboard presents task lanes without duplicating the sidebar labels', async ({ page }) => {
   await page.goto('/dashboard');
 
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
@@ -143,11 +188,13 @@ test('the Dashboard groups core tasks without duplicating the sidebar tool map',
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
-  await expect(page.locator('.quick-card')).toHaveCount(3);
-  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(3);
-  await expect(page.locator('.quick-card', { hasText: 'Check one target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
-  await expect(page.locator('.quick-card', { hasText: 'Find lookalike domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'discover');
-  await expect(page.locator('.quick-card', { hasText: 'Compare domain candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
+  await expect(page.locator('.quick-card')).toHaveCount(5);
+  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(5);
+  await expect(page.locator('.quick-card', { hasText: 'Investigate a target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
+  await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'brand');
+  await expect(page.locator('.quick-card', { hasText: 'Review candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
+  await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'registry');
+  await expect(page.locator('.quick-card', { hasText: 'Continue case work' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'case');
   await expect(page.locator('.workspace-card')).toHaveCount(0);
   await expect(page.locator('.summary-card .summary-icon svg')).toHaveCount(3);
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
@@ -156,9 +203,22 @@ test('the Dashboard groups core tasks without duplicating the sidebar tool map',
   await expect(page.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', '/guide');
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compare two domains' })).toBeVisible();
   await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
   await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
+});
+
+test('the focused comparison handoff requires exactly two domains and opens Bulk without running it', async ({ page }) => {
+  await page.goto('/dashboard');
+  await page.getByLabel('First domain').fill('first.example');
+  await page.getByLabel('Second domain').fill('second.example');
+  await page.getByRole('button', { name: 'Load comparison' }).click();
+  await expect(page).toHaveURL('/bulk?source=manual#domains');
+  await expect(page.locator('#domains')).toHaveValue('first.example\nsecond.example');
+  await expect(page.getByText('Loaded 2 candidates from manual.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Scan 2 domains/ })).toBeEnabled();
+  await expect(page.locator('.results-table')).toHaveCount(0);
 });
 
 test('the dashboard reports bounded browser-local counts without exposing stored values', async ({ page }) => {
@@ -214,10 +274,10 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-\d{4}-\d{2}-\d{2}\.json$/);
   const archive = JSON.parse(content) as WorkspaceArchiveDocument;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
-  expect(archive.version).toBe(1);
-  expect(archive.manifest.sectionCount).toBe(8);
+  expect(archive.version).toBe(4);
+  expect(archive.manifest.sectionCount).toBe(11);
   expect(archive.manifest.sections.map((section) => section.id)).toEqual([
-    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'settings',
+    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'settings',
   ]);
   expect(archive.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum))).toBe(true);
   const archivedCase = requiredValue(archive.sections.cases.cases[0], 'The exported case fixture is missing.');
@@ -227,11 +287,14 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
     archive.sections.relationshipObservations.observations[0],
     'The exported relationship fixture is missing.',
   ).normalizedValue).toBe('192.0.2.20');
+  expect(archive.sections.websiteSnapshots.snapshots).toHaveLength(1);
+  expect(archive.sections.websiteSnapshots.snapshots[0]?.domain).toBe('archive-case.invalid');
+  expect(archive.sections.investigationTemplates.templates[0]?.label).toBe('Archive review template');
   expect(archive.sections.settings).toMatchObject({ activeProfileId: 'archive-profile', theme: 'light' });
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 8 verified data sections');
+  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 11 verified data sections');
 });
 
 test('the dashboard encrypts and locally unlocks a portable workspace backup', async ({ page }) => {
@@ -267,7 +330,7 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   await page.getByRole('button', { name: 'Unlock and review' }).click();
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(8);
+  await expect(preview.locator('li')).toHaveCount(11);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await preview.getByRole('button', { name: 'Add selected data' }).click();
@@ -290,19 +353,21 @@ test('workspace archive import previews conflicts before a non-destructive mobil
 
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(8);
+  await expect(preview.locator('li')).toHaveCount(11);
   await expect(preview.locator('li', { hasText: 'Cases' })).toContainText('1 new');
   await expect(preview.locator('li', { hasText: 'Workspace settings' })).toContainText('Ready');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('Added backup data from 8 sections');
-  const [cases, campaigns, profiles, relationshipObservations, settings] = await Promise.all([
+  await expect(page.getByRole('status')).toContainText('Added backup data from 11 sections');
+  const [cases, campaigns, profiles, relationshipObservations, websiteSnapshots, investigationTemplates, settings] = await Promise.all([
     readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'brand_profiles', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'relationship_observations', { minimumRevision: 2 }),
+    readBrowserLocalCollection(page, 'website_snapshots', { minimumRevision: 2 }),
+    readBrowserLocalCollection(page, 'investigation_templates', { minimumRevision: 2 }),
     page.evaluate(() => ({
     activeProfile: localStorage.getItem('whois-rdap-active-brand-profile-v1'),
     theme: localStorage.getItem('whoisleuth:theme:v1'),
@@ -312,6 +377,8 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   expect(campaigns.records).toHaveLength(1);
   expect(profiles.records).toHaveLength(1);
   expect(relationshipObservations.records).toHaveLength(1);
+  expect(websiteSnapshots.records).toHaveLength(1);
+  expect(investigationTemplates.records).toHaveLength(1);
   expect(settings.activeProfile).toBe('archive-profile');
   expect(settings.theme).toBe('light');
 });

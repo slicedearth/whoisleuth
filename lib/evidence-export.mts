@@ -1,7 +1,8 @@
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
+import { buildRegistryInsights } from './registry-insights.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 20;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 21;
 
 type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
@@ -308,6 +309,23 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
   const whoisDiagnostics = recordOrNull(diagnostics?.whois);
   const rdapParsed = rdap && !rdap.error ? recordOrNull(rdap.parsed) : null;
   const whoisParsed = whois && !whois.error ? recordOrNull(whois.parsed) : null;
+  const registrarRdap = recordOrNull(rdap?.registrarRdap);
+  const registrarRdapParsed = recordOrNull(registrarRdap?.parsed);
+  // Rebuild the pure interpretation from bounded source fields instead of
+  // trusting a supplied derived object. This adds no collection or network
+  // work and lets saved or fast responses carry current source-health-aware
+  // interpretation in a deliberate analyst-created export.
+  const registryInsights = buildRegistryInsights({
+    rdapParsed,
+    rdapStatus: rdapDiagnostics?.status,
+    rdapFetchedAt: rdap?.fetchedAt,
+    whoisParsed,
+    whoisStatus: whoisDiagnostics?.status,
+    whoisQueriedAt: recordOrNull(Array.isArray(whois?.chain) ? whois.chain[0] : null)?.queriedAt,
+    registrarRdapParsed,
+    registrarRdapStatus: registrarRdap?.status ?? recordOrNull(rdapDiagnostics?.registrar)?.status,
+    registrarRdapFetchedAt: registrarRdap?.fetchedAt,
+  });
   return {
     schema: LOOKUP_EVIDENCE_SCHEMA,
     schemaVersion: LOOKUP_EVIDENCE_SCHEMA_VERSION,
@@ -331,6 +349,7 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
     analysis: {
       availability: cloneJson(body.availability),
       idn: cloneJson(idnAnalysis),
+      registryInsights,
       registryComparison: compareRegistrySources(rdapParsed, whoisParsed, {
         rdapStatus: rdapDiagnostics?.status,
         whoisStatus: whoisDiagnostics?.status,

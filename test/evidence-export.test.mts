@@ -304,6 +304,10 @@ describe('lookup evidence export', () => {
       version: 1,
       providers: [{ provider: { id: 'fixture_provider' }, findings: [{ detail: 'provider-only-secret' }] }],
     };
+    response.registryInsights = {
+      version: 99,
+      abuseRouting: [{ contact: 'untrusted-registry-insight@example.test' }],
+    };
     const result = evidence.buildLookupEvidence(response, { generatedAt: '2026-07-11T02:00:00.000Z' });
     const diagnostics = recordValue(result.diagnostics);
     const rdapDiagnostics = recordValue(diagnostics.rdap);
@@ -354,9 +358,10 @@ describe('lookup evidence export', () => {
     const securityPosture = recordValue(availability.securityPosture);
     const securityFindings = arrayValue(securityPosture.findings).map(recordValue);
     const registrarComparison = requiredValue(result.analysis.registrarPublicationComparison);
+    const registryInsights = requiredValue(result.analysis.registryInsights);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 20);
+    assert.equal(result.schemaVersion, 21);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(rdapDiagnostics.status, 'success');
@@ -419,6 +424,8 @@ describe('lookup evidence export', () => {
     assert.equal(requiredValue(securityFindings[0]).state, 'observed_absence');
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
+    assert.equal(registryInsights.version, 1);
+    assert.equal(JSON.stringify(registryInsights).includes('untrusted-registry-insight'), false);
     assert.equal(registrarComparison.counts.conflict, 1);
     assert.equal(registrarComparison.counts.equivalent, 7);
     assert.equal(registrarComparison.sourceHealth.registry.status, 'success');
@@ -444,7 +451,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 20);
+    assert.equal(result.schemaVersion, 21);
     const idn = recordValue(result.analysis.idn);
     assert.equal(idn.version, 1);
     assert.equal(idn.unicodeDomain, 'éxample.test');

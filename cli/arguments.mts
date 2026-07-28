@@ -27,7 +27,7 @@ type CliArguments =
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl'; deep: boolean; concurrency: number } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null } & TerminalOptions)
-  | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null } & TerminalOptions)
+  | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard' } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-support'; target: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -241,6 +241,9 @@ function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 
   let quiet = false;
   let color = true;
   let selectorText: string | null = null;
+  let retiredSelectorText: string | null = null;
+  let mailProfile: 'defensive_no_mail' | 'parked' | 'standard' = 'standard';
+  let mailProfileSeen = false;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === undefined) break;
@@ -252,6 +255,19 @@ function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 
       const value = argv[++index];
       if (!value) throw new CliUsageError('--selectors requires a comma-separated list.');
       selectorText = value;
+    } else if (argument === '--retired-selectors') {
+      if (retiredSelectorText !== null) throw new CliUsageError('--retired-selectors may be supplied only once.');
+      const value = argv[++index];
+      if (!value) throw new CliUsageError('--retired-selectors requires a comma-separated list.');
+      retiredSelectorText = value;
+    } else if (argument === '--mail-profile') {
+      if (mailProfileSeen) throw new CliUsageError('--mail-profile may be supplied only once.');
+      const value = argv[++index];
+      if (!value || !['standard', 'defensive-no-mail', 'parked'].includes(value)) {
+        throw new CliUsageError('--mail-profile must be standard, defensive-no-mail, or parked.');
+      }
+      mailProfile = value === 'defensive-no-mail' ? 'defensive_no_mail' : value as 'parked' | 'standard';
+      mailProfileSeen = true;
     } else if (argument === '--quiet') quiet = true;
     else if (argument === '--no-color') color = false;
     else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
@@ -259,7 +275,7 @@ function parsePostureArguments(argv: string[]): Extract<CliArguments, { action: 
     else throw new CliUsageError('posture accepts one domain.');
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
-  return { action: 'posture', domain, output, quiet, color, selectorText };
+  return { action: 'posture', domain, output, quiet, color, selectorText, retiredSelectorText, mailProfile };
 }
 
 function parseHttpArguments(argv: string[]): Extract<CliArguments, { action: 'http' }> {

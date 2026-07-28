@@ -84,6 +84,64 @@ function relationshipObservation() {
   });
 }
 
+function bulkSession() {
+  return {
+    id: 'bulk-session-one',
+    name: 'Archive Bulk review',
+    mode: 'fast',
+    state: 'partial',
+    inputDigest: `sha256:${'a'.repeat(64)}`,
+    domains: ['archive-one.invalid'],
+    results: [],
+    startedAt: NOW,
+    updatedAt: NOW,
+    completedAt: null,
+  };
+}
+
+function websiteSnapshot() {
+  return {
+    id: 'website-snapshot-one',
+    domain: 'archive-one.invalid',
+    observedAt: NOW,
+    savedAt: NOW,
+    complete: true,
+    truncated: false,
+    technologies: [{ id: 'cms-one', name: 'CMS One', category: 'cms', confidence: 'high' }],
+    posture: [{ id: 'https', state: 'observed' }],
+    identity: {
+      normalizedHtml: 'a'.repeat(64),
+      visibleText: null,
+      domStructure: null,
+      formStructure: null,
+      resourceHosts: null,
+      trackingIdentifiers: null,
+      faviconHash: null,
+    },
+    sources: [{ source: 'page', state: 'success' }],
+  };
+}
+
+function investigationTemplate() {
+  return {
+    id: 'template-one',
+    label: 'Archive review template',
+    summary: 'A portable bounded guide template.',
+    recipeId: 'new_domain_triage',
+    stages: [{
+      id: 'lookup',
+      label: 'Collect evidence',
+      detail: 'Review one bounded target.',
+      expectedEvidence: 'Separately attributed evidence.',
+      completionCriteria: 'Source states were reviewed.',
+      instructions: ['Run a Deep lookup.'],
+      requiresApproval: true,
+    }],
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
 type WorkspaceFixture = {
   cases: ReturnType<typeof caseRecord>[];
   campaigns: ReturnType<typeof campaign>[];
@@ -92,6 +150,9 @@ type WorkspaceFixture = {
   shortlist: Record<string, unknown>[];
   detectionRules: Record<string, unknown>[];
   relationshipObservations: ReturnType<typeof relationshipObservation>[];
+  bulkSessions: ReturnType<typeof bulkSession>[];
+  websiteSnapshots: ReturnType<typeof websiteSnapshot>[];
+  investigationTemplates: ReturnType<typeof investigationTemplate>[];
   settings: { activeProfileId: string; theme: string };
 };
 
@@ -114,13 +175,16 @@ function input(): WorkspaceFixture {
       tag: 'review',
     }],
     relationshipObservations: [relationshipObservation()],
+    bulkSessions: [bulkSession()],
+    websiteSnapshots: [websiteSnapshot()],
+    investigationTemplates: [investigationTemplate()],
     settings: { activeProfileId: 'profile-one', theme: 'light' },
   };
 }
 
 function emptyInput(): WorkspaceFixture {
   return {
-    cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [], relationshipObservations: [],
+    cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [], relationshipObservations: [], bulkSessions: [], websiteSnapshots: [], investigationTemplates: [],
     settings: { activeProfileId: '', theme: 'dark' },
   };
 }
@@ -137,8 +201,8 @@ describe('portable workspace archive', () => {
     assert.equal(left.schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(left.version, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(left.manifest.sections.map((section) => section.id), [...WORKSPACE_ARCHIVE_SECTION_IDS]);
-    assert.equal(left.manifest.sectionCount, 8);
-    assert.equal(left.manifest.totalRecords, 8);
+    assert.equal(left.manifest.sectionCount, 11);
+    assert.equal(left.manifest.totalRecords, 11);
     assert.ok(left.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum)));
     const settings = recordValue(left.sections.settings);
     assert.equal(settings.activeProfileId, 'profile-one');
@@ -150,7 +214,7 @@ describe('portable workspace archive', () => {
     const parsed = await readWorkspaceArchive(archive);
 
     assert.equal(parsed.generatedAt, NOW);
-    assert.equal(parsed.sections.length, 8);
+    assert.equal(parsed.sections.length, 11);
     assert.equal(parsed.sections.every((section) => section.status === 'ready'), true);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     const relationships = parsed.sections.find((section) => section.id === 'relationshipObservations');
@@ -159,6 +223,66 @@ describe('portable workspace archive', () => {
     assert.equal(cases.recordCount, 1);
     assert.equal(relationships.recordCount, 1);
     assert.ok(parsed.bytes > 0 && parsed.bytes < MAX_WORKSPACE_ARCHIVE_BYTES);
+  });
+
+  test('keeps version 1 archives readable without inventing newer saved-data sections', async () => {
+    const legacy = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    Reflect.set(legacy, 'version', 1);
+    const bulkEntry = legacy.manifest.sections.find((section) => section.id === 'bulkSessions');
+    const websiteEntry = legacy.manifest.sections.find((section) => section.id === 'websiteSnapshots');
+    const templateEntry = legacy.manifest.sections.find((section) => section.id === 'investigationTemplates');
+    assert.ok(bulkEntry);
+    assert.ok(websiteEntry);
+    assert.ok(templateEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => !['bulkSessions', 'websiteSnapshots', 'investigationTemplates'].includes(section.id));
+    legacy.manifest.sectionCount -= 3;
+    legacy.manifest.totalRecords -= bulkEntry.recordCount + websiteEntry.recordCount + templateEntry.recordCount;
+    Reflect.deleteProperty(legacy.sections, 'bulkSessions');
+    Reflect.deleteProperty(legacy.sections, 'websiteSnapshots');
+    Reflect.deleteProperty(legacy.sections, 'investigationTemplates');
+
+    const parsed = await readWorkspaceArchive(legacy);
+    assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sections.length, 8);
+    assert.equal(parsed.sections.some((section) => section.id === 'bulkSessions'), false);
+    assert.equal(parsed.sections.some((section) => section.id === 'websiteSnapshots'), false);
+    assert.equal(parsed.sections.some((section) => section.id === 'investigationTemplates'), false);
+  });
+
+  test('keeps version 2 archives readable without inventing website snapshots or templates', async () => {
+    const legacy = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    Reflect.set(legacy, 'version', 2);
+    const websiteEntry = legacy.manifest.sections.find((section) => section.id === 'websiteSnapshots');
+    const templateEntry = legacy.manifest.sections.find((section) => section.id === 'investigationTemplates');
+    assert.ok(websiteEntry);
+    assert.ok(templateEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => !['websiteSnapshots', 'investigationTemplates'].includes(section.id));
+    legacy.manifest.sectionCount -= 2;
+    legacy.manifest.totalRecords -= websiteEntry.recordCount + templateEntry.recordCount;
+    Reflect.deleteProperty(legacy.sections, 'websiteSnapshots');
+    Reflect.deleteProperty(legacy.sections, 'investigationTemplates');
+
+    const parsed = await readWorkspaceArchive(legacy);
+    assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sections.length, 9);
+    assert.equal(parsed.sections.some((section) => section.id === 'websiteSnapshots'), false);
+    assert.equal(parsed.sections.some((section) => section.id === 'investigationTemplates'), false);
+  });
+
+  test('keeps version 3 archives readable without inventing investigation templates', async () => {
+    const legacy = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    Reflect.set(legacy, 'version', 3);
+    const templateEntry = legacy.manifest.sections.find((section) => section.id === 'investigationTemplates');
+    assert.ok(templateEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => section.id !== 'investigationTemplates');
+    legacy.manifest.sectionCount -= 1;
+    legacy.manifest.totalRecords -= templateEntry.recordCount;
+    Reflect.deleteProperty(legacy.sections, 'investigationTemplates');
+
+    const parsed = await readWorkspaceArchive(legacy);
+    assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sections.length, 10);
+    assert.equal(parsed.sections.some((section) => section.id === 'investigationTemplates'), false);
   });
 
   test('rejects a changed section even when its manifest still looks valid', async () => {
@@ -187,7 +311,7 @@ describe('portable workspace archive', () => {
       ...await buildWorkspaceArchive(input(), { generatedAt: NOW }),
       version: WORKSPACE_ARCHIVE_VERSION + 1,
     };
-    await assert.rejects(readWorkspaceArchive(archive), /newer schema 2/);
+    await assert.rejects(readWorkspaceArchive(archive), new RegExp(`newer schema ${WORKSPACE_ARCHIVE_VERSION + 1}`));
   });
 
   test('reports a future section as unsupported without reinterpreting it', async () => {

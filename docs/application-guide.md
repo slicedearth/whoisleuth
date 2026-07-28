@@ -175,6 +175,14 @@ It supports pasted domains, text files, common delimited files, and handoffs
 from Discover. Results can be filtered and sorted without changing the saved or
 exported scan data.
 
+Bulk sessions are saved only when the analyst names and saves the current
+investigation. Each bounded browser-local session retains the input domain
+order, scan mode, compact settled rows, and per-source completion states so it
+can be loaded, compared with another saved session, or resumed for domains that
+never reached a settled row. Saving never retains raw source payloads or
+expanded contact records, and resuming does not repeat failed rows unless the
+analyst separately selects **Retry failed**.
+
 Bulk relationship evidence compares only observations already collected in the
 current scan. It can highlight exact nameserver sets, addresses, tracking
 identifiers, favicons, official asset hosts, and native certificate hashes. A
@@ -197,13 +205,26 @@ exposures, available gaps, and unknown results without making extra requests.
 ### Brands
 
 A Brand Profile stores official domains, product names, selected domain
-endings, approved partners, allowlists, optional DKIM selectors, and an
-optional official-site baseline. Profiles stay in the current browser by
-default.
+endings, approved partners, allowlists, active and retired DKIM selectors, a
+standard, defensive-no-mail, or parked mail profile, and an optional
+official-site baseline. Profiles stay in the current browser by default.
 
 The official-domain posture audit checks configured DNS and mail controls such
-as SPF, DMARC, MX, DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly supplied
-DKIM selectors. It does not guess DKIM selectors.
+as registry transfer restrictions, nameserver delegation, SPF, DMARC, MX,
+DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly supplied DKIM selectors.
+It recursively expands only literal SPF include and redirect branches within
+fixed query, depth, void-answer, cycle, and time bounds. It also validates
+external DMARC reporting authorization, parses supported DKIM public-key
+strength without retaining key material, checks whether configured retired
+selectors remain published, and inventories bounded external nameserver,
+mail, SPF, and reporting dependencies. Resolver failures and exhausted bounds
+remain incomplete. External infrastructure is a review lead, not an ownership,
+insecurity, or exploitability claim.
+
+The profile can separately retain six expiring analyst attestations for
+registrar MFA, recovery-email separation, registry lock, emergency contacts,
+account audit logging, and zone backups. These statements are not inferred
+from public evidence and must be reviewed by the analyst.
 
 An official-site baseline can retain bounded page identity and fingerprint
 data without keeping page HTML, URL paths, query strings, credentials, or
@@ -214,8 +235,11 @@ not prove common ownership or intent.
 
 Monitor contains Cases, Campaigns, Relationships, and Watchlists.
 
-- **Cases** retain analyst status, disposition, tags, notes, and a bounded
-  history of compact normalized evidence snapshots.
+- **Cases** retain analyst status, disposition, tags, notes, a bounded history
+  of compact normalized evidence snapshots, analyst-selected evidence pins,
+  decision rationales, and reviewed response actions with follow-up outcomes.
+  Pins, decisions, and actions stay separately typed so an analyst assertion is
+  never presented as collected evidence.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution.
 - **Relationships** review analyst-selected Bulk observations and project
@@ -310,6 +334,16 @@ A browser-library advisory match is a lead for review, not proof that the
 component is loaded, reachable, vulnerable in context, or exploitable. A
 non-match does not establish that no vulnerable component exists.
 
+After a completed Deep Lookup, **Save current snapshot** creates one bounded
+browser-local website profile only when the analyst chooses it. The snapshot
+keeps curated technology identifiers, posture states, page-identity digests,
+source health, collection completeness, and timestamps. It excludes raw RDAP,
+WHOIS, HTTP, HTML, contact, and provider payloads. Select an earlier and later
+snapshot of the same domain to review added, removed, changed, unavailable, or
+incomparable fields. Differences are leads for review, not evidence of
+compromise, ownership, intent, or maliciousness. Saving, comparing, deleting,
+exporting, and importing snapshots make no network request.
+
 Response-policy checks use the same selected homepage response and make no
 extra request. They retain fixed finding identifiers and bounded counts rather
 than complete policies or cookies. A finding is a response-scoped review lead,
@@ -368,7 +402,7 @@ documents deterministic offline calibration against analyst-labelled fixtures.
 
 ## Guided investigations
 
-Dashboard can coordinate three fixed recipes:
+Dashboard can coordinate three standard recipes:
 
 - brand sweep;
 - infrastructure pivot; and
@@ -385,23 +419,41 @@ It does not decide when evidence is sufficient, create a case automatically,
 or infer a finding from navigation. Analysts remain responsible for starting
 each collection action and marking its outcome.
 
+Dashboard also provides a browser-local template manager. A custom template
+must start from one of the three standard guides. It can rename instructions,
+clarify expected evidence and completion criteria, omit an existing step, or
+add an approval gate. It cannot introduce a new route or operation, execute
+code, start a request, submit evidence, alter a case, or remove an approval
+gate required by the standard guide. Starting a custom guide copies a bounded
+template snapshot into that tab's guide state so later template edits do not
+silently change work already in progress.
+
+Investigation templates are stored in the current browser's IndexedDB
+collection. They can be exported or imported as a strict versioned JSON
+document and are included in the deliberate workspace archive. They contain
+analyst-authored workflow guidance, so review them before sharing.
+
 ## Browser-local storage and archives
 
 Cases, campaigns, Brand Profiles, watchlists, shortlist entries, Certificate
-Transparency history, detection rules, and analyst-selected relationship
-observations use bounded native IndexedDB stores. Relationship observations
+Transparency history, detection rules, analyst-selected relationship
+observations, explicitly saved Bulk sessions, website profile snapshots, and
+investigation templates use bounded native IndexedDB stores. Relationship observations
 are never retained automatically: Bulk writes one only after the analyst
 selects **Retain observation**. Browser storage can still be cleared or evicted
 and does not synchronize across devices.
 
 Dashboard can create one deliberate workspace archive for the supported
-collections and preferences, including retained relationship observations.
+collections and preferences, including retained relationship observations and
+compact saved Bulk sessions. Version 2 added Bulk sessions, version 3 added
+website profile snapshots, and version 4 adds investigation templates.
+Versions 1 through 3 remain readable and do not invent missing later sections.
 The recommended download wraps the ordinary checksummed archive in
 passphrase-based browser-local authenticated encryption. The passphrase is
 never stored or sent to the server and cannot be recovered. A separately
 labelled unencrypted download remains available for compatibility. Import
 detects either format, unlocks encrypted files locally, previews changes, and
-uses the existing non-destructive merge rules. Both formats exclude sessions,
+uses the existing non-destructive merge rules. Both formats exclude login sessions,
 passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
 state, and unrelated browser storage.
 
@@ -421,12 +473,21 @@ observations, or compact case history.
   expanded contacts.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
+- Build a case response packet only after recording the category, affected
+  party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
+  sourced contact routes. JSON, Markdown, and email-text outputs remain local,
+  require review, and do not submit anything.
+- Defensive domain lists require an explicit reviewed selection and eligible
+  analyst disposition. Review their exclusions, expiry, provenance manifest,
+  and paired rollback instructions before applying them. Wildcard RPZ coverage
+  is opt-in.
 - Review each file before sharing it.
 - Keep sensitive analyst notes out of reports unless needed.
 - Treat source timestamps and fingerprints as provenance and deduplication
   context, not proof of legal custody or ownership.
 - Do not confuse a whole-workspace archive with a single-case evidence report.
-- Do not treat a report draft as an automatically submitted abuse report.
+- Do not treat a response packet as a submitted abuse report or a defensive
+  export as an applied control.
 
 The synthetic demo has a separate export schema marked `synthetic: true`. It
 cannot be imported as live evidence.

@@ -11,13 +11,9 @@ import {
   normalizeSnapshot,
 } from './case-model.ts';
 import {
-  INVESTIGATION_PROJECTION_SCHEMA,
-  INVESTIGATION_PROJECTION_VERSION,
-  MAX_PROJECTION_ENTITIES,
   MAX_PROJECTION_LIMITATIONS,
-  MAX_PROJECTION_OBSERVATIONS,
-  MAX_PROJECTION_RELATIONSHIPS,
 } from './investigation-projection.ts';
+import { readBoundedInvestigationProjection } from './investigation-projection-reader.ts';
 
 export const CASE_RELATIONSHIP_VERSION = 1;
 export const MAX_RELATIONSHIP_CASES = MAX_CASES;
@@ -412,28 +408,14 @@ function emptyProjectionRelationships(
  * @param {unknown} rawProjection
  */
 export function buildInvestigationCaseRelationships(rawProjection: unknown): CaseRelationshipSummary {
-  const projection = plainRecord(rawProjection);
-  if (!projection) {
-    return emptyProjectionRelationships('absent');
+  const projection = readBoundedInvestigationProjection(rawProjection);
+  if (projection.state !== 'ready') {
+    return emptyProjectionRelationships(projection.state, projection.version, [projection.detail]);
   }
-  const projectionVersion = Number.isSafeInteger(projection.version) && Number(projection.version) > 0
-    ? Number(projection.version)
-    : null;
-  if (projection.schema !== INVESTIGATION_PROJECTION_SCHEMA || projectionVersion === null) {
-    return emptyProjectionRelationships('invalid', projectionVersion, ['The local investigation projection was malformed and was not interpreted.']);
-  }
-  if (projectionVersion > INVESTIGATION_PROJECTION_VERSION) {
-    return emptyProjectionRelationships('unsupported', projectionVersion, [`Investigation projection schema ${projectionVersion} is newer than supported schema ${INVESTIGATION_PROJECTION_VERSION}; it was not interpreted.`]);
-  }
-  if (projectionVersion !== INVESTIGATION_PROJECTION_VERSION
-    || !Array.isArray(projection.entities)
-    || !Array.isArray(projection.observations)
-    || !Array.isArray(projection.relationships)) {
-    return emptyProjectionRelationships('invalid', projectionVersion, ['The local investigation projection did not match the current relationship contract.']);
-  }
+  const projectionVersion = projection.version;
 
   const entities = new Map<string, ProjectionEntity>();
-  for (const value of projection.entities.slice(0, MAX_PROJECTION_ENTITIES)) {
+  for (const value of projection.entities) {
     const item = plainRecord(value);
     if (!item) continue;
     const id = safeProjectionText(item.id, 100);
@@ -448,14 +430,14 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     });
   }
   const observations = new Map<string, Record<string, unknown>>();
-  for (const value of projection.observations.slice(0, MAX_PROJECTION_OBSERVATIONS)) {
+  for (const value of projection.observations) {
     const item = plainRecord(value);
     if (!item) continue;
     const id = safeProjectionText(item.id, 100);
     if (id && !observations.has(id)) observations.set(id, item);
   }
 
-  const relationships = projection.relationships.slice(0, MAX_PROJECTION_RELATIONSHIPS)
+  const relationships = projection.relationships
     .map(plainRecord)
     .filter((value): value is Record<string, unknown> => value !== null);
   const casesByDomain = new Map<string, Map<string, ProjectionCaseMember>>();
@@ -483,10 +465,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
   }
 
   const buckets = new Map<string, ProjectionBucket>();
-  let truncated = projection.truncated === true
-    || projection.entities.length > MAX_PROJECTION_ENTITIES
-    || projection.observations.length > MAX_PROJECTION_OBSERVATIONS
-    || projection.relationships.length > relationships.length;
+  let truncated = projection.truncated || projection.relationships.length > relationships.length;
   for (const relationship of relationships) {
     const relationshipType = safeProjectionText(relationship.type, 80);
     const definition = PROJECTION_RELATIONSHIP_TYPES.get(relationshipType) as ProjectionDefinition | undefined;

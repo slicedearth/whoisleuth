@@ -25,6 +25,7 @@ import { lookupUrlhausDomain, URLHAUS_PROVIDER } from './urlhaus-intelligence.mt
 import { lookupThreatfoxDomain, THREATFOX_PROVIDER } from './threatfox-intelligence.mts';
 import { createThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
+import { buildRegistryInsights } from './registry-insights.mts';
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;
@@ -586,11 +587,31 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const threatIntelligence = threatIntelligenceProviders.length
     ? { version: 1, providers: threatIntelligenceProviders }
     : null;
+  const registrarRdapParsed = registrarRdap
+    && typeof registrarRdap.parsed === 'object'
+    && registrarRdap.parsed
+    && !Array.isArray(registrarRdap.parsed)
+    ? registrarRdap.parsed
+    : null;
+  const registryInsights = classified.type === 'domain' && !fast && !compact
+    ? buildRegistryInsights({
+        rdapParsed: rdapRecord?.parsed,
+        rdapStatus,
+        rdapFetchedAt: rdapRecord?.fetchedAt,
+        whoisParsed: whois.parsed,
+        whoisStatus,
+        whoisQueriedAt: Array.isArray(whoisChain) && whoisChain[0] ? whoisChain[0].queriedAt : null,
+        registrarRdapParsed,
+        registrarRdapStatus: registrarRdap?.status,
+        registrarRdapFetchedAt: registrarRdap?.fetchedAt,
+      })
+    : null;
   return {
     rdap,
     whois,
     availability,
     diagnostics,
+    ...(registryInsights ? { registryInsights } : {}),
     ...(reverseDns ? { reverseDns } : {}),
     ...(networkContext ? { networkContext } : {}),
     ...(securityTxt ? { securityTxt } : {}),

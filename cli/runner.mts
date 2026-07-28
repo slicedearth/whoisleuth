@@ -88,7 +88,7 @@ Usage:
   whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]
   printf 'example brand\\n' | whoisleuth ct-search --json
   whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--json|--jsonl]
-  whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]
+  whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json] [--quiet] [--no-color]
   whoisleuth http <domain> [--json] [--quiet] [--no-color]
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
   whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]
@@ -113,7 +113,7 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   bulk: 'whoisleuth bulk [file] [--json|--jsonl] [--fast|--deep] [--concurrency <1-8>]',
   'ct-search': 'whoisleuth ct-search <keyword> [--json] [--quiet] [--no-color]',
   discover: 'whoisleuth discover <brand|domain> [--tlds <list>] [--preset <name>|--families <ids>] [--keyboard <layout>] [--dictionary <file>] [--json|--jsonl]',
-  posture: 'whoisleuth posture <domain> [--selectors <list>] [--json] [--quiet] [--no-color]',
+  posture: 'whoisleuth posture <domain> [--selectors <list>] [--retired-selectors <list>] [--mail-profile <profile>] [--json] [--quiet] [--no-color]',
   http: 'whoisleuth http <domain> [--json] [--quiet] [--no-color]',
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
@@ -165,7 +165,7 @@ type CliDependencies = {
   normalizeDkimSelectors?: (raw: unknown) => string[];
   checkDomainPosture?: (
     domain: string,
-    options?: { dkimSelectors?: unknown[] },
+    options?: { dkimSelectors?: unknown[]; retiredDkimSelectors?: unknown[]; mailProtectionProfile?: unknown },
   ) => unknown | Promise<unknown>;
   fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
   normalizeTlsHostname?: (value: unknown) => string | null;
@@ -435,8 +435,15 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
       if (!domain) throw new CliUsageError('posture requires a valid domain name.');
       const normalizeSelectors = dependencies.normalizeDkimSelectors || normalizeDkimSelectors;
       const dkimSelectors = normalizePostureSelectors(args.selectorText, normalizeSelectors);
+      const retiredDkimSelectors = normalizePostureSelectors(args.retiredSelectorText, normalizeSelectors)
+        .filter((selector) => !dkimSelectors.includes(selector))
+        .slice(0, Math.max(0, 10 - dkimSelectors.length));
       const audit = dependencies.checkDomainPosture || checkDomainPosture;
-      const report = await audit(domain, { dkimSelectors });
+      const report = await audit(domain, {
+        dkimSelectors,
+        retiredDkimSelectors,
+        mailProtectionProfile: args.mailProfile,
+      });
       const now = dependencies.now ? dependencies.now() : new Date().toISOString();
       const document = buildCliPostureDocument(requestedDomain, report as UnknownRecord, now);
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(document) : formatTerminalPosture(document));

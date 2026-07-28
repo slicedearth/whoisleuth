@@ -1,4 +1,10 @@
 import type { BulkSortDirection, BulkSortKey } from './analysis/bulk-sort.ts';
+import type {
+  BulkAgeFilter,
+  BulkGroupBy,
+  BulkMailFilter,
+  BulkSourceFilter,
+} from './analysis/bulk-triage.ts';
 import type { LookupHttpResponse } from './analysis/lookup-response.ts';
 
 export type LookupMode = 'fast' | 'deep';
@@ -24,11 +30,19 @@ export type BulkWorkflowState<Result> = {
   filter: 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
   mutationFilter: string;
   signalFilters: string[];
+  sourceFilter?: BulkSourceFilter;
+  lifecycleFilter?: string;
+  ageFilter?: BulkAgeFilter;
+  mailFilter?: BulkMailFilter;
+  registrarFilter?: string;
+  caseDispositionFilter?: string;
+  groupBy?: BulkGroupBy;
   sortKey: BulkSortKey;
   sortDirection: BulkSortDirection;
   page: number;
   status: string;
   indicatorFormat: 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';
+  indicatorWildcards: boolean;
   watchlistName: string;
 };
 

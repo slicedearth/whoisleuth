@@ -2,6 +2,7 @@
   import CaseRelationships from '$lib/components/CaseRelationships.svelte';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '$lib/components/CaseReportExport.svelte';
+  import CaseResponseWorkspace from '$lib/components/CaseResponseWorkspace.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import {
     CASE_DISPOSITIONS,
@@ -26,6 +27,7 @@
     saveTags,
     addNote,
     removeCase,
+    refreshCases,
     setMessage,
     formatDate,
     currentPage,
@@ -45,6 +47,7 @@
     saveTags: (record: CaseRecord) => void;
     addNote: (record: CaseRecord) => void;
     removeCase: (record: CaseRecord) => void;
+    refreshCases: () => void | Promise<void>;
     setMessage: (value: string) => void;
     formatDate: (value: string) => string;
     currentPage: number;
@@ -80,6 +83,7 @@
           {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
           <CaseRelationships {record} records={allRecords} onselect={expand} />
           {#key record.id}<EvidenceTimeline {record} />{/key}
+          {#key `${record.id}-${record.updatedAt}`}<CaseResponseWorkspace {record} onsaved={refreshCases} onmessage={setMessage} />{/key}
           {#key record.id}<CaseReportExport {record} onmessage={setMessage} />{/key}
           <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span></div>
           <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(record.domain)}`}>Look up domain</a><button class="btn danger" onclick={() => removeCase(record)}>Delete case</button></div>

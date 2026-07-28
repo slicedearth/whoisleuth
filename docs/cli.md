@@ -20,7 +20,7 @@ cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
 node bin/whoisleuth.mts bulk domains.txt --concurrency 4
 node bin/whoisleuth.mts ct-search 'example brand' --json
 node bin/whoisleuth.mts discover example.com --preset common --jsonl
-node bin/whoisleuth.mts posture example.com --selectors selector1,selector2 --json
+node bin/whoisleuth.mts posture example.com --selectors selector1 --retired-selectors selector0 --mail-profile defensive-no-mail --json
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
@@ -106,6 +106,12 @@ Deep mode may report success, unsupported, not found, or an explicit failure;
 fast mode reports the existing skipped state. IP, ASN, and lookup responses
 without registrar diagnostics remain unchanged. These source states are
 provenance only and do not decide availability or imply safety.
+
+When a deep domain response includes registry interpretation version 1, the
+terminal summary also shows the lifecycle label, separately attributed RDAP and
+WHOIS disclosure states, reconciliation state, and complete, partial, and
+unavailable publication counts. It does not print published contact routes.
+The JSON document retains the bounded interpretation and its limitations.
 
 A deep domain lookup can also show the status, selected public address, and
 registered network name from the bounded observed network context. It uses the
@@ -288,15 +294,24 @@ label variants omitted by the family or overall generation budget.
 
 ## Domain posture audit
 
-`posture` runs the same owned-domain DNS and email-security audit used by Brand
-Profiles. It queries SPF, DMARC, MX, CAA, MTA-STS, TLS-RPT, BIMI, and RDAP
-DNSSEC state directly from the local machine. Supply up to ten known DKIM
-selectors with `--selectors selector1,selector2`; selectors cannot be reliably
-discovered from DNS, so no-selector output reports DKIM as not checked.
+`posture` runs the standard-profile form of the owned-domain DNS and
+email-security audit used by Brand Profiles. It queries registry status and
+DNSSEC evidence, nameserver delegation, SPF, DMARC, MX, CAA, MTA-STS, TLS-RPT,
+and BIMI directly from the local machine. Literal SPF include and redirect
+branches are expanded within fixed depth, policy-query, DNS-term, void-answer,
+cycle, and time bounds. External DMARC reporting authorization and external
+nameserver, mail, SPF, and reporting dependencies are separately reported.
+Supply up to ten known active and retired DKIM selectors in total with
+`--selectors selector1,selector2` and `--retired-selectors selector0`;
+selectors cannot be reliably discovered from DNS, so no-selector output
+reports DKIM as not checked. Use `--mail-profile standard`,
+`--mail-profile defensive-no-mail`, or `--mail-profile parked` to make the
+intended mail posture explicit rather than inferring it from DNS.
 
 Terminal output shows each pass, review, action, or informational result and
 caps displayed records at five per check with an explicit omission notice.
-Versioned JSON retains the complete bounded report. Warnings and dangers are
+Versioned JSON retains the complete bounded report, including SPF traversal,
+DMARC authorization, and dependency provenance. Warnings and dangers are
 findings rather than command failures; transient resolver or policy-fetch
 failures remain informational and should be retried before changing DNS.
 
@@ -386,9 +401,12 @@ The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
 The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
-and the shared registry-source comparison. Registrar RDAP raw data, contacts,
-entities, links, notices, and source-specific handles remain excluded. Schema
-version 20 replaces selected security-policy values in retained HTTP evidence
+and the shared registry-source comparison. Version 21 adds the bounded registry
+lifecycle, disclosure, publication-quality, reconciliation, and abuse-routing
+interpretation derived from the already-collected sources. Registrar RDAP raw
+data, contacts, entities, links, notices, and source-specific handles remain
+excluded. Schema version 20 replaces selected security-policy values in
+retained HTTP evidence
 with presence-only markers and can include fixed response-policy findings from
 an already-represented deep lookup. Version 19 additionally retains the bounded credential-surface projection
 when the saved deep lookup represents it. Version 18 retains the bounded structured identity projection

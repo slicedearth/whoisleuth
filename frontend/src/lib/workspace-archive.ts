@@ -18,11 +18,17 @@ import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/wat
 import { assertShortlistStoreBudget, mergeShortlistStores } from './analysis/shortlist-model.ts';
 import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.ts';
 import { mergeRelationshipObservations } from './analysis/relationship-observation-model.ts';
+import { enforceBulkSessionStoreBudget, mergeBulkSessions } from './analysis/bulk-session-model.ts';
+import { mergeWebsiteSnapshots } from './analysis/website-snapshot-model.ts';
+import { mergeInvestigationTemplates } from './analysis/investigation-template-model.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { loadCampaigns } from './campaigns';
 import { loadCases } from './cases';
 import { loadDetectionRules } from './detection-rules';
 import { loadRelationshipObservations } from './relationship-observations';
+import { loadBulkSessions } from './bulk-sessions';
+import { loadWebsiteSnapshots } from './website-snapshots';
+import { loadInvestigationTemplates } from './investigation-templates';
 import { loadShortlist } from './shortlist';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import { loadWatchlists } from './watchlists';
@@ -35,6 +41,9 @@ import {
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
+  BULK_SESSIONS_COLLECTION,
+  WEBSITE_SNAPSHOTS_COLLECTION,
+  INVESTIGATION_TEMPLATES_COLLECTION,
 } from './browser-local-data-definitions.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 
@@ -73,7 +82,7 @@ const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
 const profileId = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 async function localInput() {
-  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations] = await Promise.all([
+  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates] = await Promise.all([
     loadCases(),
     loadCampaigns(),
     loadProfiles(),
@@ -81,6 +90,9 @@ async function localInput() {
     loadShortlist(),
     loadDetectionRules(),
     loadRelationshipObservations(),
+    loadBulkSessions(),
+    loadWebsiteSnapshots(),
+    loadInvestigationTemplates(),
   ]);
   return {
     cases,
@@ -90,6 +102,9 @@ async function localInput() {
     shortlist,
     detectionRules,
     relationshipObservations,
+    bulkSessions,
+    websiteSnapshots,
+    investigationTemplates,
     settings: {
       activeProfileId: activeProfileId(),
       theme: readThemePreference(),
@@ -189,6 +204,9 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
     ['shortlist', SHORTLIST_COLLECTION],
     ['detectionRules', DETECTION_RULES_COLLECTION],
     ['relationshipObservations', RELATIONSHIP_OBSERVATIONS_COLLECTION],
+    ['bulkSessions', BULK_SESSIONS_COLLECTION],
+    ['websiteSnapshots', WEBSITE_SNAPSHOTS_COLLECTION],
+    ['investigationTemplates', INVESTIGATION_TEMPLATES_COLLECTION],
   ]);
   const definitions = dataSections
     .map((section) => definitionBySection.get(section.id))
@@ -233,6 +251,18 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
           } else if (section.id === 'relationshipObservations') {
             const result = mergeRelationshipObservations(documents.get('relationship_observations'), section.data);
             next.set('relationship_observations', result.observations);
+            summaries.push(importSummary(section.id, result));
+          } else if (section.id === 'bulkSessions') {
+            const result = mergeBulkSessions(documents.get('bulk_sessions'), section.data);
+            next.set('bulk_sessions', enforceBulkSessionStoreBudget(result.sessions).store.sessions);
+            summaries.push(importSummary(section.id, result));
+          } else if (section.id === 'websiteSnapshots') {
+            const result = mergeWebsiteSnapshots(documents.get('website_snapshots'), section.data);
+            next.set('website_snapshots', result.snapshots);
+            summaries.push(importSummary(section.id, result));
+          } else if (section.id === 'investigationTemplates') {
+            const result = mergeInvestigationTemplates(documents.get('investigation_templates'), section.data);
+            next.set('investigation_templates', result.templates);
             summaries.push(importSummary(section.id, result));
           } else continue;
         }

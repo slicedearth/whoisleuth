@@ -55,6 +55,7 @@ type LookupHttpResponse = JsonObject & {
   readonly networkContext?: JsonObject;
   readonly securityTxt?: JsonObject;
   readonly threatIntelligence?: JsonObject;
+  readonly registryInsights?: JsonObject;
 };
 
 type CompactLookupAvailabilityState =
@@ -90,6 +91,7 @@ type LookupViewModel = {
   readonly diagnostics: JsonObject;
   readonly timing: LookupTiming | null;
   readonly registryAccess: JsonObject;
+  readonly registryInsights: JsonObject;
   readonly reverseDns: JsonObject;
   readonly reverseDnsRecords: JsonObject;
   readonly observedNetworkContext: JsonObject;
@@ -271,7 +273,7 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
     return invalidLookupResponse();
   }
 
-  for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'threatIntelligence']) {
+  for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'threatIntelligence', 'registryInsights']) {
     const section = value[key];
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
   }
@@ -399,6 +401,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const diagnostics = record(response?.diagnostics);
   const reverseDns = record(response?.reverseDns);
   const observedNetworkContext = record(response?.networkContext);
+  const registryInsights = record(response?.registryInsights);
   const securityTxt = record(response?.securityTxt);
   const threatIntelligence = record(response?.threatIntelligence);
   const providers = Array.isArray(threatIntelligence.providers)
@@ -427,6 +430,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     diagnostics,
     timing: normalizeLookupTiming(diagnostics.timing),
     registryAccess: record(diagnostics.registryAccess),
+    registryInsights,
     reverseDns,
     reverseDnsRecords: record(reverseDns.records),
     observedNetworkContext,

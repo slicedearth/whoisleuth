@@ -166,6 +166,9 @@ describe('browser-local readable Lookup report', () => {
     assert.match(report, /Risk factors:\*\* Hostile/u);
     assert.match(report, /Source status:\*\* Partial/u);
     assert.match(report, /### Registrar RDAP/u);
+    assert.match(report, /## Registry interpretation/u);
+    assert.match(report, /Lifecycle:\*\* Registered/u);
+    assert.match(report, /Registry RDAP disclosure:\*\* Unavailable/u);
     assert.match(report, /registrar\\\.example\\\.test\/domain\/example\\\.test/u);
     assert.match(report, /Server-declared truncation:\*\* Yes/u);
     assert.match(report, /Truncated response:\*\* Yes/u);

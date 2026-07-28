@@ -32,7 +32,7 @@
     mutationLabel: string;
     caseRecord: { id: string; disposition: string } | null;
     outreach: DraftAction | null;
-    abuse: DraftAction | null;
+    responseHref: string;
   };
 
   let {
@@ -84,7 +84,7 @@
           <td data-label="Registrar">{row.registrar}</td>
           <td data-label="Mutation">{row.mutationLabel}</td>
           <td data-label="Case">{#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`}>Open</a></div>{:else}<button class="btn small case-track" onclick={() => trackCase(row.resultIndex)}>＋ Create case</button>{/if}</td>
-          <td data-label="Actions"><div class="draft-actions"><button class="inspect" onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.abuse}<a class="danger" href={row.abuse.mailto}>Report abuse</a><button onclick={() => copyDraft(row.abuse?.body ?? '', `${row.domain} abuse draft`)}>Copy</button>{/if}</div></td>
+          <td data-label="Actions"><div class="draft-actions"><button class="inspect" onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.responseHref}<a href={row.responseHref}>Prepare reviewed report</a>{/if}</div></td>
         </tr>
       {/each}
     </tbody>
@@ -118,7 +118,6 @@
   .trusted-row{background:rgb(var(--accent2-rgb) / .03)}
   .draft-actions{display:grid;grid-template-columns:auto auto;gap:4px;align-items:center}
   .draft-actions a,.draft-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:600 var(--text-2xs) var(--mono);text-align:center}
-  .draft-actions a.danger{border-color:rgb(var(--danger-rgb) / .34);background:rgb(var(--danger-rgb) / .05)}
   .draft-actions .inspect{grid-column:1 / -1;border-color:rgb(var(--accent-rgb) / .45);color:var(--accent)}
   .draft-status{color:var(--accent)!important;font-size:var(--text-xs)}
   .case-cell{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
