@@ -8,16 +8,19 @@ import { registryDateIso } from './registry-dates.mts';
 import {
   BOOTSTRAP_STALE_TTL_MS,
   BOOTSTRAP_TTL_MS,
-  MAX_RDAP_ENDPOINT_LENGTH,
   clearRdapBootstrapCache,
   fetchBootstrap,
   findRdapBases,
   uniqueRdapBases as uniqueBases,
 } from './rdap-bootstrap.mts';
+import { rdapAttempt, rdapFailure } from './rdap-attempts.mts';
+import {
+  fetchRegistrarRdapRecordWithParser,
+  selectRegistrarRdapLink,
+} from './rdap-registrar.mts';
 import {
   fetchRdapWithTimeout,
   type RdapFetch,
-  type RdapFetchResult,
 } from './rdap-transport.mts';
 import {
   type LooseRdapRecord,
@@ -38,10 +41,7 @@ import {
   type RdapLookupRecord,
   type RegistryRdapLinkSource,
 } from './rdap-types.mts';
-import {
-  canonicalRdapDomain,
-  validateRdapResponse,
-} from './rdap-validation.mts';
+import { validateRdapResponse } from './rdap-validation.mts';
 
 type LooseRecord = LooseRdapRecord;
 type EntitySummary = RdapEntitySummary;
@@ -51,12 +51,6 @@ function errorProperty(value: unknown, key: string): unknown {
   return (value as LooseRecord)[key];
 }
 
-function recordOrNull(value: unknown): LooseRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as LooseRecord
-    : null;
-}
-
 // Every other upstream call in this project (crt.sh, a domain's own
 // homepage, WHOIS sockets) already has a timeout - this one didn't, so a
 // slow/unresponsive registry or the IANA bootstrap endpoint could hang a
@@ -64,9 +58,7 @@ function recordOrNull(value: unknown): LooseRecord | null {
 // function's own execution limit instead of failing cleanly.
 const UPSTREAM_TIMEOUT_MS = 7000;
 const UPSTREAM_TOTAL_DEADLINE_MS = 12000;
-const REGISTRAR_RDAP_TIMEOUT_MS = 7000;
 const MAX_RDAP_ENDPOINTS = 3;
-const MAX_RDAP_ATTEMPT_DETAIL_LENGTH = 240;
 const MAX_RDAP_ENTITIES = 100;
 const MAX_RDAP_ENTITY_DEPTH = 6;
 const MAX_ENTITIES_PER_ROLE = 5;
@@ -99,261 +91,6 @@ function rdapPathFor(type: string, value: string): string {
   if (type === 'ipv4' || type === 'ipv6') return `ip/${value}`;
   if (type === 'asn') return `autnum/${value.replace(/^AS/i, '')}`;
   throw new Error(`Unsupported RDAP type: ${type}`);
-}
-
-function safeAttemptDetail(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const normalized = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return normalized ? normalized.slice(0, MAX_RDAP_ATTEMPT_DETAIL_LENGTH) : null;
-}
-
-/**
- * @param {string} endpoint
- * @param {string} outcome
- * @param {{status?: number|null, detail?: string|null, selected?: boolean}} [options]
- */
-function rdapAttempt(
-  endpoint: string,
-  outcome: string,
-  options: { status?: number | null; detail?: string | null; selected?: boolean } = {},
-): RdapAttempt {
-  const { status = null, detail = null, selected = false } = options;
-  return {
-    endpoint: String(endpoint).slice(0, MAX_RDAP_ENDPOINT_LENGTH),
-    transportSecurity: /^https:\/\//i.test(endpoint) ? 'https' : 'http',
-    status: Number.isInteger(status) ? status : null,
-    outcome,
-    detail: safeAttemptDetail(detail),
-    selected,
-  };
-}
-
-function rdapFailure(outcome: string, status: number | null): string {
-  if (outcome === 'invalid_json') return 'returned invalid JSON';
-  if (outcome === 'invalid_response') return 'returned an invalid RDAP object';
-  if (outcome === 'rate_limited') return `returned HTTP ${status}`;
-  if (outcome === 'server_error' || outcome === 'client_error') return `returned HTTP ${status}`;
-  return outcome.replaceAll('_', ' ');
-}
-
-function registrarRdapError(
-  endpoint: string,
-  outcome: string,
-  options: { status?: number | null; detail?: string | null; selected?: boolean } = {},
-) {
-  const attempt = rdapAttempt(endpoint, outcome, options);
-  const detail = attempt.detail || 'The registrar RDAP request failed.';
-  return Object.assign(new Error(detail), {
-    registrarRdap: {
-      status: 'error',
-      detail,
-      endpoint: attempt.endpoint,
-      transportSecurity: attempt.transportSecurity,
-      upstreamStatus: attempt.status,
-      fetchedAt: null,
-      attempt,
-    },
-  });
-}
-
-function domainEndpointIdentity(raw: string, domain: string): string | null {
-  try {
-    const url = new URL(raw);
-    const canonical = canonicalRdapDomain(domain);
-    const path = url.pathname.replace(/\/+$/, '');
-    const match = path.match(/\/domain\/([^/]+)$/i);
-    const encodedDomain = match?.[1];
-    if (!canonical || !encodedDomain) return null;
-    const pathDomain = canonicalRdapDomain(decodeURIComponent(encodedDomain));
-    if (pathDomain !== canonical) return null;
-    return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}/domain/${canonical}`;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Select one registrar-published domain-object URL from normalized RDAP links.
- * The href is registry-controlled input, so this boundary accepts only a
- * complete HTTPS domain-object URL; it never constructs a request path from an
- * upstream-provided service base.
- *
- * @param {string} domain
- * @param {unknown[]} links
- * @param {string|null} [registryEndpoint]
- */
-function selectRegistrarRdapLink(domain: string, links: unknown, registryEndpoint: string | null = null): string | null {
-  const canonical = canonicalRdapDomain(domain);
-  if (!canonical || !Array.isArray(links)) return null;
-  const registryIdentity = registryEndpoint
-    ? domainEndpointIdentity(registryEndpoint, canonical)
-    : null;
-
-  for (const linkValue of links) {
-    const link = linkValue as LooseRecord;
-    if (!link || typeof link !== 'object' || Array.isArray(link)) continue;
-    if (link.rel !== 'related' || typeof link.href !== 'string') continue;
-    if (link.href.length > MAX_RDAP_ENDPOINT_LENGTH || /[\u0000-\u001f\u007f]/.test(link.href)) continue;
-
-    let url;
-    try {
-      url = new URL(link.href);
-    } catch {
-      continue;
-    }
-    if (url.protocol !== 'https:' || url.username || url.password) continue;
-    // WHATWG URL parsing normalizes an explicit default :443 to an empty port,
-    // so this reliably rejects non-default ports without fragile raw parsing.
-    if (url.port || url.search || url.hash) continue;
-    const hostname = url.hostname.replace(/^\[|\]$/g, '');
-    if (net.isIP(hostname)) continue;
-
-    const type = typeof link.type === 'string'
-      ? (link.type.split(';', 1)[0] ?? '').trim().toLowerCase()
-      : '';
-    if (type && type !== 'application/rdap+json') continue;
-
-    const identity = domainEndpointIdentity(url.href, canonical);
-    if (!identity || identity === registryIdentity) continue;
-    return url.href;
-  }
-  return null;
-}
-
-/**
- * Fetch at most one registrar RDAP object linked by a successful registry
- * response. Definitive results use the shared three-minute lookup cache;
- * transient errors reject so the cache never retains them.
- *
- * @param {string} domain
- * @param {{fetchUpstream?: Function}} [options]
- */
-async function fetchRegistrarRdapRecord(
-  domain: string,
-  registryRecord: RegistryRdapLinkSource | null | undefined,
-  options: { fetchUpstream?: RdapFetch } = {},
-) {
-  const canonical = canonicalRdapDomain(domain);
-  if (!canonical) throw new Error('A valid domain is required for registrar RDAP.');
-  const fetchUpstream = options.fetchUpstream || fetchRdapWithTimeout;
-
-  return cached(`rdap-registrar:domain:${canonical}`, async () => {
-    const registryParsed = recordOrNull(registryRecord?.parsed);
-    const registryEndpoint = typeof registryRecord?.rdapServer === 'string'
-      ? registryRecord.rdapServer
-      : null;
-    const endpoint = selectRegistrarRdapLink(
-      canonical,
-      registryParsed?.links,
-      registryEndpoint
-    );
-    if (!endpoint) {
-      return {
-        status: 'unsupported',
-        detail: 'The registry did not publish a registrar RDAP link for this domain.',
-        endpoint: null,
-        transportSecurity: null,
-        upstreamStatus: null,
-        fetchedAt: null,
-        attempt: null,
-      };
-    }
-
-    let upstream: RdapFetchResult;
-    try {
-      upstream = await fetchUpstream(
-        endpoint,
-        { headers: { Accept: 'application/rdap+json' } },
-        REGISTRAR_RDAP_TIMEOUT_MS
-      );
-    } catch (err) {
-      const error = err && typeof err === 'object' && !Array.isArray(err)
-        ? err as LooseRecord
-        : {};
-      const detail = typeof error.message === 'string' ? error.message : 'request failed';
-      const outcome = error.name === 'AbortError' || /timed? out|time limit/i.test(detail)
-        ? 'timeout'
-        : /exceeded \d+ bytes/i.test(detail) ? 'invalid_response' : 'network_error';
-      throw registrarRdapError(endpoint, outcome, { detail });
-    }
-
-    const selectedEndpoint = upstream.finalUrl || endpoint;
-    if (selectRegistrarRdapLink(
-      canonical,
-      [{ rel: 'related', href: selectedEndpoint }],
-      registryEndpoint
-    ) !== selectedEndpoint) {
-      throw registrarRdapError(selectedEndpoint, 'invalid_response', {
-        status: upstream.status,
-        detail: 'The registrar endpoint redirected outside the eligible HTTPS domain-object URL boundary.',
-      });
-    }
-
-    if (upstream.status !== 404 && !upstream.ok) {
-      const outcome = upstream.status === 429 ? 'rate_limited'
-        : upstream.status >= 500 ? 'server_error' : 'client_error';
-      throw registrarRdapError(selectedEndpoint, outcome, {
-        status: upstream.status,
-        detail: `The registrar endpoint returned HTTP ${upstream.status}.`,
-      });
-    }
-
-    let data: unknown;
-    try {
-      data = JSON.parse(upstream.text);
-    } catch {
-      throw registrarRdapError(selectedEndpoint, 'invalid_json', {
-        status: upstream.status,
-        detail: 'The registrar endpoint returned invalid JSON.',
-      });
-    }
-
-    const fetchedAt = new Date().toISOString();
-    if (upstream.status === 404) {
-      const attempt = rdapAttempt(selectedEndpoint, 'not_found', {
-        status: upstream.status,
-        detail: 'The registrar endpoint reported no matching object.',
-        selected: true,
-      });
-      return {
-        status: 'not_found',
-        detail: 'The registrar RDAP service reported no matching object.',
-        endpoint: selectedEndpoint,
-        transportSecurity: 'https',
-        upstreamStatus: upstream.status,
-        fetchedAt,
-        data,
-        parsed: null,
-        attempt,
-      };
-    }
-
-    const parsed = parseRdap('domain', data);
-    const validation = validateRdapResponse('domain', canonical, parsed);
-    if (!validation.valid) {
-      throw registrarRdapError(selectedEndpoint, 'invalid_response', {
-        status: upstream.status,
-        detail: validation.detail,
-      });
-    }
-
-    const attempt = rdapAttempt(selectedEndpoint, 'success', {
-      status: upstream.status,
-      detail: 'The registrar endpoint returned the requested RDAP object.',
-      selected: true,
-    });
-    return {
-      status: 'success',
-      detail: null,
-      endpoint: selectedEndpoint,
-      transportSecurity: 'https',
-      upstreamStatus: upstream.status,
-      fetchedAt,
-      data,
-      parsed,
-      attempt,
-    };
-  });
 }
 
 // Resolves the registry, fetches the record, and parses it - the full
@@ -1097,6 +834,19 @@ function parseRdap<const T extends string>(type: T, data: unknown): NormalizedRd
   // This cast preserves that relationship for literal callers without
   // weakening the untrusted JSON boundary to any.
   return parseRdapObject(type, data as LooseRecord) as NormalizedRdapRecordFor<T> | null;
+}
+
+async function fetchRegistrarRdapRecord(
+  domain: string,
+  registryRecord: RegistryRdapLinkSource | null | undefined,
+  options: { fetchUpstream?: RdapFetch } = {},
+) {
+  return fetchRegistrarRdapRecordWithParser(
+    domain,
+    registryRecord,
+    parseRdap,
+    options,
+  );
 }
 
 export {
