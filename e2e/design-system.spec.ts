@@ -480,6 +480,22 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeVisible();
   await expect(lifecycle.getByRole('list', { name: 'Lookup lifecycle events' })).toContainText('Domain created');
 
+  const activationContext = page.getByRole('region', { name: 'Observed service relationship' });
+  await expect(activationContext).toBeVisible();
+  await expect(activationContext).toContainText('Web response observed');
+  await expect(activationContext).toContainText('Mail state inconclusive');
+  await expect(activationContext).toContainText('Cross-layer timing inconclusive');
+
+  const coverage = page.getByRole('region', { name: 'Evidence coverage' });
+  await expect(coverage).toBeVisible();
+  await expect(coverage.getByText(/complete$/u)).toBeVisible();
+  await expect(coverage.getByText(/limited$/u)).toBeVisible();
+  await coverage.getByText(/Review \d+ source and analysis states/u).click();
+  await expect(coverage).toContainText('Registry RDAP');
+  await expect(coverage).toContainText('WHOIS');
+  await expect(coverage).toContainText('DNS');
+  await expect(coverage).toContainText('Limited, unavailable, skipped, unsupported, unknown, and not-found states remain distinct');
+
   // Detailed registry and raw unified records stay collapsed and subordinate.
   await expect(page.locator('.sources > details').first()).not.toHaveAttribute('open', '');
   await expect(page.locator('details.raw')).not.toHaveAttribute('open', '');

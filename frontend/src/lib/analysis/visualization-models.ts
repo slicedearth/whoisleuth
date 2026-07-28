@@ -64,7 +64,7 @@ function boundedScore(value: unknown) {
   return Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : null;
 }
 
-export function projectLifecycleEvents(rawEvents: LifecycleEventInput[]) {
+export function projectLifecycleEvents(rawEvents: readonly LifecycleEventInput[]) {
   const seen = new Set<string>();
   const candidates = (Array.isArray(rawEvents) ? rawEvents : [])
     .map((event) => {

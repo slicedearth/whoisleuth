@@ -5,7 +5,7 @@
     type LifecycleEventInput,
   } from '$lib/analysis/visualization-models.ts';
 
-  let { events }: { events: LifecycleEventInput[] } = $props();
+  let { events }: { events: readonly LifecycleEventInput[] } = $props();
   const timeline = $derived(projectLifecycleEvents(events));
 
   function displayDate(value: string) {
