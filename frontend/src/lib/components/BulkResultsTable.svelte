@@ -33,6 +33,7 @@
     caseRecord: { id: string; disposition: string } | null;
     outreach: DraftAction | null;
     responseHref: string;
+    reviewState: string;
   };
 
   let {
@@ -51,6 +52,7 @@
     setPage,
     draftStatus,
     caseStatus,
+    setReviewState,
   }: {
     rows: ResultRow[];
     sortKey: SortKey;
@@ -67,12 +69,13 @@
     setPage: (value: number) => void;
     draftStatus: string;
     caseStatus: string;
+    setReviewState: (resultIndex: number, value: string) => void;
   } = $props();
 </script>
 
 <div class="table-wrap results-table">
   <table>
-    <thead><tr><th aria-sort={sortKey === 'domain' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('domain')}>Domain {sortKey === 'domain' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'availability' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('availability')}>Registration {sortKey === 'availability' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'risk' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('risk')}>Risk {sortKey === 'risk' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'opportunity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('opportunity')}>Opportunity {sortKey === 'opportunity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'activity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('activity')}>Website {sortKey === 'activity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'registrar' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('registrar')}>Registrar {sortKey === 'registrar' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'mutation' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('mutation')}>Mutation {sortKey === 'mutation' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th>Case</th><th>Actions</th></tr></thead>
+    <thead><tr><th aria-sort={sortKey === 'domain' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('domain')}>Domain {sortKey === 'domain' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'availability' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('availability')}>Registration {sortKey === 'availability' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'risk' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('risk')}>Risk {sortKey === 'risk' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'opportunity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('opportunity')}>Opportunity {sortKey === 'opportunity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'activity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('activity')}>Website {sortKey === 'activity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'registrar' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('registrar')}>Registrar {sortKey === 'registrar' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'mutation' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('mutation')}>Mutation {sortKey === 'mutation' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th>Review</th><th>Case</th><th>Actions</th></tr></thead>
     <tbody>
       {#each rows as row}
         <tr class:error-row={row.errorRow} class:trusted-row={Boolean(row.trusted)}>
@@ -83,6 +86,7 @@
           <td data-label="Website">{row.activity}</td>
           <td data-label="Registrar">{row.registrar}</td>
           <td data-label="Mutation">{row.mutationLabel}</td>
+          <td data-label="Review"><select class="review-state" aria-label={`Review state for ${row.domain}`} value={row.reviewState} onchange={(event) => setReviewState(row.resultIndex, event.currentTarget.value)}><option value="unreviewed">Unreviewed</option><option value="reviewing">Reviewing</option><option value="reviewed">Reviewed</option><option value="deferred">Deferred</option></select></td>
           <td data-label="Case">{#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`}>Open</a></div>{:else}<button class="btn small case-track" onclick={() => trackCase(row.resultIndex)}>＋ Create case</button>{/if}</td>
           <td data-label="Actions"><div class="draft-actions"><button class="inspect" onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.responseHref}<a href={row.responseHref}>Prepare reviewed report</a>{/if}</div></td>
         </tr>
@@ -122,6 +126,7 @@
   .draft-status{color:var(--accent)!important;font-size:var(--text-xs)}
   .case-cell{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
   .case-disp{min-height:32px;padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}
+  .review-state{min-height:32px;min-width:112px;padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}
   .case-open{color:var(--accent);font-size:var(--text-2xs);font-weight:700}
   .case-track{white-space:nowrap}
   @media(max-width:700px){

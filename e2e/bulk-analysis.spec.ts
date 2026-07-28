@@ -117,6 +117,58 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   expect(content).not.toContain('available-two.example');
 });
 
+test('persists named review views and per-domain review state without restarting collection', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: 'registered',
+          confidence: 'high',
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: domain.startsWith('limited') ? 'partial' : 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  await runBulkScan(page, ['limited-review.example', 'complete-review.example']);
+
+  await page.getByLabel('Review state for limited-review.example').selectOption('reviewing');
+  await page.getByLabel('Source coverage').selectOption('limited');
+  await page.getByLabel('Filter by review state').selectOption('reviewing');
+  await page.getByLabel('New view name').fill('Limited active review');
+  await page.getByRole('button', { name: 'Save current view' }).click();
+  await expect(page.locator('.review-views .review-status')).toContainText('Saved the “Limited active review” view.');
+
+  const stored = await readBrowserLocalCollection(page, 'bulk_review', { minimumRecords: 2 });
+  expect(JSON.stringify(stored.records)).not.toContain('availability');
+  expect(stored.records.map((record) => record.value.kind).sort()).toEqual(['preset', 'row']);
+  const presetRecord = stored.records.find((record) => record.value.kind === 'preset');
+  if (presetRecord?.value.kind !== 'preset') throw new Error('The saved Bulk review preset is missing.');
+  expect(presetRecord.value.view).toMatchObject({
+    sourceFilter: 'limited',
+    reviewStateFilter: 'reviewing',
+  });
+
+  await page.reload();
+  await page.getByLabel('Saved Bulk review view').selectOption({ label: 'Limited active review' });
+  await page.getByRole('button', { name: 'Load view' }).click();
+  await expect(page.getByLabel('Filter by review state')).toHaveValue('reviewing');
+  await expect(page.locator('.results-table')).toHaveCount(0);
+  await expect(page.locator('.review-views .review-status')).toContainText('No scan was started');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('a malformed successful response remains an explicit failure in exports and retained monitoring state', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

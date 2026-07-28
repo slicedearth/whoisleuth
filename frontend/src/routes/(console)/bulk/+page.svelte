@@ -11,6 +11,7 @@
   import BulkShortlist from '$lib/components/BulkShortlist.svelte';
   import BulkSessions from '$lib/components/BulkSessions.svelte';
   import BulkTriageControls from '$lib/components/BulkTriageControls.svelte';
+  import BulkReviewWorkspace from '$lib/components/BulkReviewWorkspace.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
@@ -76,6 +77,18 @@
     saveBulkSession,
     type BulkSession,
   } from '$lib/bulk-sessions';
+  import {
+    deleteBulkReviewPreset,
+    loadBulkReviewStore,
+    saveBulkReviewPreset,
+    saveBulkReviewRowState,
+    type BulkReviewFilter,
+    type BulkReviewPreset,
+    type BulkReviewPresetView,
+    type BulkReviewState,
+    type BulkReviewStore,
+  } from '$lib/bulk-review';
+  import { BULK_REVIEW_SCHEMA, BULK_REVIEW_SCHEMA_VERSION } from '$lib/analysis/bulk-review-model.ts';
 
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'errors';
   const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -96,6 +109,7 @@
   let cases=$state<CaseRecord[]>([]);let caseStatus=$state('');
   let retainedRelationshipIds=$state<Set<string>>(new Set());let relationshipRetentionStatus=$state('');
   let bulkSessions=$state<BulkSession[]>([]);let bulkSessionName=$state('');let bulkSessionStatus=$state('');let currentBulkSessionId=$state('');let scanStartedAt=$state('');
+  let bulkReviewStore=$state<BulkReviewStore>({schema:BULK_REVIEW_SCHEMA,version:BULK_REVIEW_SCHEMA_VERSION,presets:[],rows:[]});let reviewStateFilter=$state<BulkReviewFilter>('');let bulkReviewStatus=$state('');
   let localContextStatus=$state('');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
@@ -105,7 +119,8 @@
   const mutationOptions=$derived([...new Set(results.flatMap(row=>row.mutationTypes))].sort((a,b)=>(mutationLabels[a]||a).localeCompare(mutationLabels[b]||b)));
   const triageRows=$derived(results.map(toBulkTriageRow));
   const advancedFilters=$derived<BulkAdvancedFilters>({source:sourceFilter,lifecycle:lifecycleFilter,age:ageFilter,mail:mailFilter,registrar:registrarFilter,caseDisposition:caseDispositionFilter});
-  const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesFilter(row)&&matchesBulkAdvancedFilters(toBulkTriageRow(row),advancedFilters)),sortKey,sortDirection));
+  const bulkReviewStateByDomain=$derived(new Map(bulkReviewStore.rows.map((row)=>[row.domain,row.state])));
+  const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesFilter(row)&&matchesBulkAdvancedFilters(toBulkTriageRow(row),advancedFilters)&&matchesReviewState(row.domain)),sortKey,sortDirection));
   const advancedFilterOptions=$derived(bulkAdvancedFilterOptions(triageRows));
   const groupSummary=$derived(buildBulkTriageGroups(filtered.map(toBulkTriageRow),groupBy));
   const shortlistedDomains=$derived(new Set(shortlist.map(item=>item.domain)));
@@ -137,10 +152,10 @@
     else if(investigationTarget&&!restored){input=investigationTarget;results=[];completed=0;total=0;status='Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';}
     try{
       let retained;
-      [profile,shortlist,cases,retained,bulkSessions]=await Promise.all([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations(),loadBulkSessions()]);
+      [profile,shortlist,cases,retained,bulkSessions,bulkReviewStore]=await Promise.all([activeProfile(),loadShortlist(),loadCases(),loadRelationshipObservations(),loadBulkSessions(),loadBulkReviewStore()]);
       retainedRelationshipIds=new Set(retained.map((item)=>item.id));
     }catch(cause){
-      localContextStatus='Some browser-local profile, shortlist, case, relationship, or saved-session context could not be loaded. Scan results and restored queue state remain available; reload to retry the saved context.';
+      localContextStatus='Some browser-local profile, shortlist, case, relationship, or saved-session context could not be loaded, including saved review-queue state. Scan results and restored queue state remain available; reload to retry the saved context.';
       if(!isExpectedBrowserLocalDataFailure(cause))throw cause;
     }
   }
@@ -168,9 +183,15 @@
   function provenance(domain:string):Candidate|undefined{return provenanceByDomain.get(domain.toLowerCase());}
   function toBulkTriageRow(row:ScanResult):BulkTriageRow{return{domain:row.domain,availability:row.availability,registrar:row.registrar,mutationTypes:row.mutationTypes,nameservers:row.nameservers,sourceCoverage:row.sourceCoverage,createdDate:row.saved.createdDate??null,hasMx:row.saved.hasMx??null,hasSpf:row.saved.hasSpf??null,hasDmarc:row.saved.hasDmarc??null,caseDisposition:caseByDomain.get(row.domain)?.disposition||'untracked'};}
   function matchesFilter(r:ScanResult){if(filter==='available'&&r.availability!=='available')return false;if(filter==='registered'&&!['registered','for_sale','expiring'].includes(r.availability))return false;if(filter==='high_risk'&&((r.risk??-1)<70||Boolean(r.trusted)))return false;if(filter==='trusted'&&!r.trusted)return false;if(filter==='errors'&&r.status!=='error')return false;if(mutationFilter&&!r.mutationTypes.includes(mutationFilter))return false;for(const signal of signalFilters){if(signal==='favicon'&&!r.faviconMatch&&!r.faviconNearMatch)return false;if(signal==='password'&&!r.hasPasswordField)return false;if(signal==='phishing'&&!r.phishingLanguageMatch)return false;if(signal==='asset_reuse'&&!r.reusesOfficialAssets)return false;if(signal==='idn'&&!r.idn?.mixedScript&&!r.idn?.referenceMatches?.length)return false;}return true;}
+  function matchesReviewState(domain:string){const state=bulkReviewStateByDomain.get(domain)||'unreviewed';return !reviewStateFilter||state===reviewStateFilter;}
   function setFilter(next:Filter){filter=next;page=1;}
   function toggleSignal(signal:string){const next=new Set(signalFilters);next.has(signal)?next.delete(signal):next.add(signal);signalFilters=next;page=1;}
-  function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();sourceFilter='';lifecycleFilter='';ageFilter='';mailFilter='';registrarFilter='';caseDispositionFilter='';page=1;}
+  function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();sourceFilter='';lifecycleFilter='';ageFilter='';mailFilter='';registrarFilter='';caseDispositionFilter='';reviewStateFilter='';page=1;}
+  function currentBulkReviewView():BulkReviewPresetView{return{primaryFilter:filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,reviewStateFilter,groupBy,sortKey,sortDirection};}
+  async function saveCurrentBulkReviewView(name:string,view:BulkReviewPresetView){try{bulkReviewStore=await saveBulkReviewPreset({name,view});bulkReviewStatus=`Saved the “${name.trim()}” view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not save the review view.';}}
+  function loadBulkReviewView(preset:BulkReviewPreset){const view=preset.view;filter=view.primaryFilter as Filter;mutationFilter=view.mutationFilter;signalFilters=new Set(view.signalFilters);sourceFilter=view.sourceFilter as BulkSourceFilter;lifecycleFilter=view.lifecycleFilter;ageFilter=view.ageFilter as BulkAgeFilter;mailFilter=view.mailFilter as BulkMailFilter;registrarFilter=view.registrarFilter;caseDispositionFilter=view.caseDispositionFilter;reviewStateFilter=view.reviewStateFilter;groupBy=view.groupBy as BulkGroupBy;sortKey=view.sortKey;sortDirection=view.sortDirection;page=1;bulkReviewStatus=`Loaded the ${preset.name} review view. No scan was started.`;}
+  async function removeBulkReviewView(preset:BulkReviewPreset){try{bulkReviewStore=await deleteBulkReviewPreset(preset.id);bulkReviewStatus=`Deleted the ${preset.name} review view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not delete the review view.';}}
+  async function setBulkReviewState(row:ScanResult,state:string){try{bulkReviewStore=await saveBulkReviewRowState(row.domain,state as BulkReviewState);bulkReviewStatus=`Marked ${row.domain} as ${state}. Case disposition was not changed.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not update the review state.';}}
   function setSort(key:BulkSortKey){if(sortKey===key)sortDirection=sortDirection===1?-1:1;else{sortKey=key;sortDirection=defaultBulkSortDirection(key);}page=1;}
   function setSortKey(key:BulkSortKey){if(sortKey!==key){sortKey=key;sortDirection=defaultBulkSortDirection(key);}page=1;}
   function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
@@ -217,11 +238,12 @@
   async function removeSavedBulkSession(session:BulkSession){if(!confirm(`Delete the saved session “${session.name}”?`))return;try{bulkSessions=await deleteBulkSession(session.id);if(currentBulkSessionId===session.id){currentBulkSessionId='';bulkSessionName='';}bulkSessionStatus=`Deleted ${session.name}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not delete the Bulk session.';}}
   async function downloadBulkSessions(){try{await exportBulkSessions();bulkSessionStatus=`Exported ${bulkSessions.length} saved session${bulkSessions.length===1?'':'s'}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not export saved Bulk sessions.';}}
   function riskTitle(row:ScanResult){const factors=Array.isArray(row.saved.riskFactors)?row.saved.riskFactors:[];const lines=factors.map((factor)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`);if(row.saved.riskModelVersion)lines.push(`Risk model v${row.saved.riskModelVersion}`);return lines.join('\n')||undefined;}
-  function resultDisplayRows(){return visibleResults.map((row)=>{const resultIndex=results.indexOf(row);const caseRecord=caseByDomain.get(row.domain)||null;const outreach=outreachAction(row.domain,row.registrant);return{resultIndex,domain:row.domain,shortlisted:isShortlisted(row.domain),unicodeDomain:row.idn?.hasIdn?String(row.idn.unicodeDomain||''):'',mixedScript:Boolean(row.idn?.mixedScript),referenceMatch:Boolean(row.idn?.referenceMatches?.length),trusted:row.trusted||'',faviconMatch:row.faviconMatch,faviconNearMatch:row.faviconNearMatch,reusesOfficialAssets:row.reusesOfficialAssets,hasPasswordField:row.hasPasswordField,phishingLanguageMatch:row.phishingLanguageMatch||'',ct:row.ct?{lastObservedAt:row.ct.lastObservedAt,hostnameCount:row.ct.hostnames.length,certificateCount:row.ct.certificateCount}:null,errorRow:row.status==='error',error:row.error,availability:row.availability,confidence:row.confidence,risk:row.risk,highRisk:(row.risk??-1)>=70&&!row.trusted,riskTitle:riskTitle(row),opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,mutationLabel:row.mutationTypes.map(value=>mutationLabels[value]||value.replaceAll('_',' ')).join(', ')||'—',caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null,outreach:outreach?{mailto:outreach.mailto,body:outreach.body}:null,responseHref:row.abuseEvidence&&caseRecord?`/monitor?case=${encodeURIComponent(caseRecord.id)}`:''};});}
+  function resultDisplayRows(){return visibleResults.map((row)=>{const resultIndex=results.indexOf(row);const caseRecord=caseByDomain.get(row.domain)||null;const outreach=outreachAction(row.domain,row.registrant);return{resultIndex,domain:row.domain,shortlisted:isShortlisted(row.domain),unicodeDomain:row.idn?.hasIdn?String(row.idn.unicodeDomain||''):'',mixedScript:Boolean(row.idn?.mixedScript),referenceMatch:Boolean(row.idn?.referenceMatches?.length),trusted:row.trusted||'',faviconMatch:row.faviconMatch,faviconNearMatch:row.faviconNearMatch,reusesOfficialAssets:row.reusesOfficialAssets,hasPasswordField:row.hasPasswordField,phishingLanguageMatch:row.phishingLanguageMatch||'',ct:row.ct?{lastObservedAt:row.ct.lastObservedAt,hostnameCount:row.ct.hostnames.length,certificateCount:row.ct.certificateCount}:null,errorRow:row.status==='error',error:row.error,availability:row.availability,confidence:row.confidence,risk:row.risk,highRisk:(row.risk??-1)>=70&&!row.trusted,riskTitle:riskTitle(row),opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,mutationLabel:row.mutationTypes.map(value=>mutationLabels[value]||value.replaceAll('_',' ')).join(', ')||'—',reviewState:bulkReviewStateByDomain.get(row.domain)||'unreviewed',caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null,outreach:outreach?{mailto:outreach.mailto,body:outreach.body}:null,responseHref:row.abuseEvidence&&caseRecord?`/monitor?case=${encodeURIComponent(caseRecord.id)}`:''};});}
   function resultAt(index:number){return index>=0&&index<results.length?results[index]:null;}
   function toggleSavedAt(index:number){const row=resultAt(index);if(row)toggleSaved(row);}
   function trackCaseAt(index:number){const row=resultAt(index);if(row)trackCase(row);}
   function setDispositionAt(index:number,value:string){const row=resultAt(index);if(row)setRowDisposition(row,value);}
+  function setReviewStateAt(index:number,value:string){const row=resultAt(index);if(row)void setBulkReviewState(row,value);}
   async function inspectAt(index:number){const row=resultAt(index);if(!row)return;selectInvestigationGuideFocusDomain(row.domain);await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);}
   async function run(domains:string[],replace=true){
     const limit=mode==='fast'?2000:200;
@@ -309,6 +331,17 @@
   exportSessions={downloadBulkSessions}
   status={bulkSessionStatus}
   canSave={!running&&results.length>0}
+/>
+
+<BulkReviewWorkspace
+  store={bulkReviewStore}
+  currentView={currentBulkReviewView()}
+  reviewFilter={reviewStateFilter}
+  setReviewFilter={(value)=>{reviewStateFilter=value;page=1;}}
+  saveView={saveCurrentBulkReviewView}
+  loadView={loadBulkReviewView}
+  deleteView={removeBulkReviewView}
+  status={bulkReviewStatus}
 />
 
 {#if results.length}
@@ -407,6 +440,7 @@
       setPage={(value)=>page=value}
       {draftStatus}
       {caseStatus}
+      setReviewState={setReviewStateAt}
     />
   </section>
 

@@ -142,6 +142,42 @@ function investigationTemplate() {
   };
 }
 
+function bulkReview() {
+  return {
+    schema: 'whoisleuth.bulk-review' as const,
+    version: 1 as const,
+    presets: [{
+      kind: 'preset' as const,
+      id: 'priority-review',
+      name: 'Priority review',
+      view: {
+        primaryFilter: 'high_risk',
+        mutationFilter: '',
+        signalFilters: [],
+        sourceFilter: '',
+        lifecycleFilter: '',
+        ageFilter: '',
+        mailFilter: '',
+        registrarFilter: '',
+        caseDispositionFilter: '',
+        reviewStateFilter: 'reviewing' as const,
+        groupBy: '',
+        sortKey: 'risk' as const,
+        sortDirection: -1 as const,
+      },
+      createdAt: NOW,
+      updatedAt: NOW,
+    }],
+    rows: [{
+      kind: 'row' as const,
+      id: 'd-archive-one.invalid',
+      domain: 'archive-one.invalid',
+      state: 'reviewing' as const,
+      updatedAt: NOW,
+    }],
+  };
+}
+
 type WorkspaceFixture = {
   cases: ReturnType<typeof caseRecord>[];
   campaigns: ReturnType<typeof campaign>[];
@@ -153,6 +189,7 @@ type WorkspaceFixture = {
   bulkSessions: ReturnType<typeof bulkSession>[];
   websiteSnapshots: ReturnType<typeof websiteSnapshot>[];
   investigationTemplates: ReturnType<typeof investigationTemplate>[];
+  bulkReview: ReturnType<typeof bulkReview>;
   settings: { activeProfileId: string; theme: string };
 };
 
@@ -178,6 +215,7 @@ function input(): WorkspaceFixture {
     bulkSessions: [bulkSession()],
     websiteSnapshots: [websiteSnapshot()],
     investigationTemplates: [investigationTemplate()],
+    bulkReview: bulkReview(),
     settings: { activeProfileId: 'profile-one', theme: 'light' },
   };
 }
@@ -185,6 +223,7 @@ function input(): WorkspaceFixture {
 function emptyInput(): WorkspaceFixture {
   return {
     cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [], relationshipObservations: [], bulkSessions: [], websiteSnapshots: [], investigationTemplates: [],
+    bulkReview: { schema: 'whoisleuth.bulk-review', version: 1, presets: [], rows: [] },
     settings: { activeProfileId: '', theme: 'dark' },
   };
 }
@@ -201,8 +240,8 @@ describe('portable workspace archive', () => {
     assert.equal(left.schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(left.version, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(left.manifest.sections.map((section) => section.id), [...WORKSPACE_ARCHIVE_SECTION_IDS]);
-    assert.equal(left.manifest.sectionCount, 11);
-    assert.equal(left.manifest.totalRecords, 11);
+    assert.equal(left.manifest.sectionCount, 12);
+    assert.equal(left.manifest.totalRecords, 13);
     assert.ok(left.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum)));
     const settings = recordValue(left.sections.settings);
     assert.equal(settings.activeProfileId, 'profile-one');
@@ -214,7 +253,7 @@ describe('portable workspace archive', () => {
     const parsed = await readWorkspaceArchive(archive);
 
     assert.equal(parsed.generatedAt, NOW);
-    assert.equal(parsed.sections.length, 11);
+    assert.equal(parsed.sections.length, 12);
     assert.equal(parsed.sections.every((section) => section.status === 'ready'), true);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     const relationships = parsed.sections.find((section) => section.id === 'relationshipObservations');
@@ -231,15 +270,18 @@ describe('portable workspace archive', () => {
     const bulkEntry = legacy.manifest.sections.find((section) => section.id === 'bulkSessions');
     const websiteEntry = legacy.manifest.sections.find((section) => section.id === 'websiteSnapshots');
     const templateEntry = legacy.manifest.sections.find((section) => section.id === 'investigationTemplates');
+    const bulkReviewEntry = legacy.manifest.sections.find((section) => section.id === 'bulkReview');
     assert.ok(bulkEntry);
     assert.ok(websiteEntry);
     assert.ok(templateEntry);
-    legacy.manifest.sections = legacy.manifest.sections.filter((section) => !['bulkSessions', 'websiteSnapshots', 'investigationTemplates'].includes(section.id));
-    legacy.manifest.sectionCount -= 3;
-    legacy.manifest.totalRecords -= bulkEntry.recordCount + websiteEntry.recordCount + templateEntry.recordCount;
+    assert.ok(bulkReviewEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => !['bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'bulkReview'].includes(section.id));
+    legacy.manifest.sectionCount -= 4;
+    legacy.manifest.totalRecords -= bulkEntry.recordCount + websiteEntry.recordCount + templateEntry.recordCount + bulkReviewEntry.recordCount;
     Reflect.deleteProperty(legacy.sections, 'bulkSessions');
     Reflect.deleteProperty(legacy.sections, 'websiteSnapshots');
     Reflect.deleteProperty(legacy.sections, 'investigationTemplates');
+    Reflect.deleteProperty(legacy.sections, 'bulkReview');
 
     const parsed = await readWorkspaceArchive(legacy);
     assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
@@ -254,13 +296,16 @@ describe('portable workspace archive', () => {
     Reflect.set(legacy, 'version', 2);
     const websiteEntry = legacy.manifest.sections.find((section) => section.id === 'websiteSnapshots');
     const templateEntry = legacy.manifest.sections.find((section) => section.id === 'investigationTemplates');
+    const bulkReviewEntry = legacy.manifest.sections.find((section) => section.id === 'bulkReview');
     assert.ok(websiteEntry);
     assert.ok(templateEntry);
-    legacy.manifest.sections = legacy.manifest.sections.filter((section) => !['websiteSnapshots', 'investigationTemplates'].includes(section.id));
-    legacy.manifest.sectionCount -= 2;
-    legacy.manifest.totalRecords -= websiteEntry.recordCount + templateEntry.recordCount;
+    assert.ok(bulkReviewEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => !['websiteSnapshots', 'investigationTemplates', 'bulkReview'].includes(section.id));
+    legacy.manifest.sectionCount -= 3;
+    legacy.manifest.totalRecords -= websiteEntry.recordCount + templateEntry.recordCount + bulkReviewEntry.recordCount;
     Reflect.deleteProperty(legacy.sections, 'websiteSnapshots');
     Reflect.deleteProperty(legacy.sections, 'investigationTemplates');
+    Reflect.deleteProperty(legacy.sections, 'bulkReview');
 
     const parsed = await readWorkspaceArchive(legacy);
     assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
@@ -274,15 +319,35 @@ describe('portable workspace archive', () => {
     Reflect.set(legacy, 'version', 3);
     const templateEntry = legacy.manifest.sections.find((section) => section.id === 'investigationTemplates');
     assert.ok(templateEntry);
-    legacy.manifest.sections = legacy.manifest.sections.filter((section) => section.id !== 'investigationTemplates');
-    legacy.manifest.sectionCount -= 1;
-    legacy.manifest.totalRecords -= templateEntry.recordCount;
+    const bulkReviewEntry = legacy.manifest.sections.find((section) => section.id === 'bulkReview');
+    assert.ok(bulkReviewEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => !['investigationTemplates', 'bulkReview'].includes(section.id));
+    legacy.manifest.sectionCount -= 2;
+    legacy.manifest.totalRecords -= templateEntry.recordCount + bulkReviewEntry.recordCount;
     Reflect.deleteProperty(legacy.sections, 'investigationTemplates');
+    Reflect.deleteProperty(legacy.sections, 'bulkReview');
 
     const parsed = await readWorkspaceArchive(legacy);
     assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
     assert.equal(parsed.sections.length, 10);
     assert.equal(parsed.sections.some((section) => section.id === 'investigationTemplates'), false);
+    assert.equal(parsed.sections.some((section) => section.id === 'bulkReview'), false);
+  });
+
+  test('keeps version 4 archives readable without inventing Bulk review state', async () => {
+    const legacy = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    Reflect.set(legacy, 'version', 4);
+    const bulkReviewEntry = legacy.manifest.sections.find((section) => section.id === 'bulkReview');
+    assert.ok(bulkReviewEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => section.id !== 'bulkReview');
+    legacy.manifest.sectionCount -= 1;
+    legacy.manifest.totalRecords -= bulkReviewEntry.recordCount;
+    Reflect.deleteProperty(legacy.sections, 'bulkReview');
+
+    const parsed = await readWorkspaceArchive(legacy);
+    assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sections.length, 11);
+    assert.equal(parsed.sections.some((section) => section.id === 'bulkReview'), false);
   });
 
   test('rejects a changed section even when its manifest still looks valid', async () => {
