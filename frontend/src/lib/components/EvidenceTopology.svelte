@@ -118,7 +118,7 @@
         {@render topologyHeading()}
         <p>{description}</p>
       </div>
-      <div class="topology-summary" aria-label={`${graph.nodes.length} mapped evidence sources`}>
+      <div class="topology-summary" role="group" aria-label={`${graph.nodes.length} mapped evidence sources`}>
         <strong>{graph.nodes.length}</strong>
         <span>sources</span>
       </div>

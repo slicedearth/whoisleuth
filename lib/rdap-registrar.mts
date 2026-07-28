@@ -4,7 +4,7 @@ import { cached } from './lookup-cache.mts';
 import { rdapAttempt } from './rdap-attempts.mts';
 import { MAX_RDAP_ENDPOINT_LENGTH } from './rdap-bootstrap.mts';
 import {
-  fetchRdapWithTimeout,
+  fetchRdapDetailedWithTimeout,
   type RdapFetch,
   type RdapFetchResult,
 } from './rdap-transport.mts';
@@ -120,7 +120,7 @@ export async function fetchRegistrarRdapRecordWithParser(
 ) {
   const canonical = canonicalRdapDomain(domain);
   if (!canonical) throw new Error('A valid domain is required for registrar RDAP.');
-  const fetchUpstream = options.fetchUpstream || fetchRdapWithTimeout;
+  const fetchUpstream = options.fetchUpstream || fetchRdapDetailedWithTimeout;
 
   return cached(`rdap-registrar:domain:${canonical}`, async () => {
     const registryParsed = recordOrNull(registryRecord?.parsed);

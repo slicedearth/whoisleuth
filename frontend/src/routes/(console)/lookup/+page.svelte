@@ -407,11 +407,9 @@
     catch{profile=null;}
   }
   async function refreshCase(){
-    try{caseRecord=await lookupCaseController.refresh(caseDomain);}
-    catch{
-      caseRecord=null;
-      caseStatus='Browser-local case context is unavailable. The collected lookup evidence remains available.';
-    }
+    const next=await lookupCaseController.refresh(caseDomain);
+    caseRecord=next.record;
+    caseStatus=next.status;
   }
   async function openLookupCase(){
     const next=await lookupCaseController.open(caseDomain,caseEvidence,lookupEvidenceDepth);

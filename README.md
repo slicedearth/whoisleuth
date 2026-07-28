@@ -126,6 +126,9 @@ will share only after the analyst opens it.
 Long source records and secondary Deep evidence start collapsed. Their status
 and summary remain visible so the page can be scanned before opening the
 evidence, provenance, and limitations that matter to the investigation. A
+separate Evidence coverage summary keeps complete, limited, unavailable,
+skipped, unsupported, unknown, and not-found states distinct without retrying
+sources or treating incomplete collection as a clean result. A
 collapsed acquisition workspace organizes the current authority-aware
 registration decision, lifecycle timing, transfer constraints, observed
 service dependencies, and published contact routes into a manual checklist. It
@@ -182,6 +185,11 @@ accessible lists, tables, or source records.
   before export. Defensive-control exports also require explicit review;
   the latter include a provenance manifest, expiry, exclusions, and rollback
   instructions. Wildcard blocking remains opt-in.
+
+Monitor also projects a bounded Review inbox from retained cases, planned
+actions, material watchlist changes, and incomplete saved Bulk sessions. It is
+a local resume queue, not an alert feed or automatic decision engine; opening
+an item does not run a lookup or change its analyst-owned state.
 
 ## Quick start
 

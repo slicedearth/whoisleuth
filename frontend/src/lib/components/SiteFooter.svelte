@@ -21,6 +21,7 @@
   .footer-meta{display:grid;flex:none;gap:8px;text-align:right}
   .footer-links{display:flex;justify-content:flex-end;gap:14px;margin:0}
   a{color:var(--accent)}
+  .footer-meta>p a{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
   a:hover{color:var(--text)}
   @media(max-width:720px){
     footer{align-items:flex-start;flex-direction:column}

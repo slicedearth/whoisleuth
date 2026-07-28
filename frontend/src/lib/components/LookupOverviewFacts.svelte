@@ -62,7 +62,7 @@
   {/each}
 </div>
 
-<div class="diagnostics stat-grid" aria-label="Source diagnostics">
+<div class="diagnostics stat-grid" role="group" aria-label="Source diagnostics">
   {#each diagnostics as diagnostic}
     <article>
       <small>{diagnostic.source}</small>

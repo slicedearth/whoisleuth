@@ -88,6 +88,12 @@ evidence group. The topology uses separate visual families for registry,
 network, web, derived, and analyst evidence, with an adjacent key; source
 status remains an independent label and colour.
 
+**Evidence coverage** summarizes which requested source and analysis families
+completed and which remained limited, unavailable, skipped, unsupported,
+unknown, or not found. It preserves those states separately, lists retained
+limitations, and never retries a source or converts incomplete collection into
+a clean finding.
+
 After a successful single-domain Lookup, **Download report** creates a readable
 Markdown summary locally in the browser. It includes registry, registrar, and
 WHOIS source health and collection time, normalized findings, the explainable
@@ -262,6 +268,19 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   and campaign membership without another network request.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
   deliberately.
+
+The **Review inbox** is a bounded local queue projected from retained cases,
+planned case actions, material watchlist changes, and incomplete saved Bulk
+sessions. Its filters and due-state labels help an analyst resume work; opening
+an item does not start collection, change a disposition, submit a response, or
+claim that the underlying evidence is complete.
+
+Inside an expanded case, the response workspace keeps evidence pins, observed
+facts, analyst assertions, decisions, actions, and manual investigation steps
+separately typed. Its decision packet summarizes required incident facts,
+source freshness and limitations, open contradictions or unknowns, recipient
+provenance, disposition, and follow-up state before a local export. It never
+submits a report or treats a planned action as completed.
 
 The complete evidence timeline remains depth-aware. A Fast observation does
 not erase last-known Deep-only evidence, and score changes are compared only

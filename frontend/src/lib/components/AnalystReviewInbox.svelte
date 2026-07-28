@@ -48,7 +48,7 @@
     <strong>{inbox.counts.all}</strong>
   </div>
 
-  <div class="filters" aria-label="Review inbox filters">
+  <div class="filters" role="group" aria-label="Review inbox filters">
     {#each filters as option}
       <button type="button" class:active={filter === option.value} onclick={() => setFilter(option.value)}>
         {option.label} <span>{inbox.counts[option.value]}</span>

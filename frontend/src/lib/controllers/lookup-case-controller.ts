@@ -42,8 +42,20 @@ export class LookupCaseController {
     this.#api = api;
   }
 
-  async refresh(domain: string): Promise<CaseRecord | null> {
-    return domain ? this.#api.getByDomain(domain) : null;
+  async refresh(domain: string): Promise<LookupCaseActionResult> {
+    if (!domain) return { record: null, status: '' };
+    try {
+      return {
+        record: await this.#api.getByDomain(domain),
+        status: '',
+      };
+    } catch {
+      return {
+        record: null,
+        status:
+          'Browser-local case context is unavailable. The collected lookup evidence remains available.',
+      };
+    }
   }
 
   async open(

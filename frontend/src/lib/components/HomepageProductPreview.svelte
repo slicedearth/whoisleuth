@@ -17,7 +17,7 @@
   ];
 </script>
 
-<div class="product-preview" aria-label="Synthetic WHOISleuth console preview">
+<section class="product-preview" aria-label="Synthetic WHOISleuth console preview">
   <article class="preview-panel discover-panel">
     <header><span>Discover</span><small>Synthetic candidates</small></header>
     <div class="candidate-list">
@@ -63,7 +63,7 @@
       {/each}
     </ol>
   </article>
-</div>
+</section>
 
 <p class="preview-note">Fixed fictional data from the public demo. No live target is contacted.</p>
 

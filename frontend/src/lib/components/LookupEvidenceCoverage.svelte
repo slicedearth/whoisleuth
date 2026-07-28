@@ -16,7 +16,7 @@
         <h4 id="coverage-title">Evidence coverage</h4>
         <p>What this lookup collected, what was limited, and where a source did not produce complete evidence.</p>
       </div>
-      <div class="coverage-metrics" aria-label="Evidence coverage summary">
+      <div class="coverage-metrics" role="group" aria-label="Evidence coverage summary">
         <span><strong>{ledger.completeCount}</strong> complete</span>
         <span class:attention={ledger.limitedCount > 0}><strong>{ledger.limitedCount}</strong> limited</span>
       </div>

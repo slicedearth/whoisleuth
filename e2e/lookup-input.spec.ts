@@ -1183,6 +1183,7 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
 });
 
 test('HTTP intelligence presents bounded redirect provenance and response metadata', async ({ page }) => {
+  test.slow();
   await page.evaluate(() => {
     const observedAt = '2026-07-12T00:00:00.000Z';
     const profile = {

@@ -340,7 +340,7 @@
     <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
   </header>
   {#if actionSummary.total}
-    <div class="action-summary" aria-label="Case action outcome summary">
+    <div class="action-summary" role="group" aria-label="Case action outcome summary">
       <span><strong>{actionSummary.active}</strong> active</span>
       <span><strong>{actionSummary.submitted}</strong> submitted</span>
       <span><strong>{actionSummary.acknowledged}</strong> acknowledged</span>

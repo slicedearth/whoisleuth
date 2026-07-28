@@ -24,7 +24,7 @@
       </div>
       <button class="btn" type="button" onclick={exportComparison}>Export comparison</button>
     </header>
-    <div class="comparison-summary" aria-label="Comparison summary">
+    <div class="comparison-summary" role="group" aria-label="Comparison summary">
       <span><strong>{comparison.counts.equal}</strong> equal</span>
       <span><strong>{comparison.counts.different}</strong> different</span>
       <span><strong>{comparison.counts.missing}</strong> one-sided</span>

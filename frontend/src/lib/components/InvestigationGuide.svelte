@@ -142,6 +142,7 @@
   async function revealAction() {
     actionVisible = true;
     await tick();
+    actionPanel?.focus({ preventScroll: true });
     await afterLayout();
     const panel = actionPanel;
     if (!panel) return;
@@ -153,6 +154,7 @@
     panel.focus({ preventScroll: true });
     await afterLayout();
     await observeAction();
+    actionPanel?.focus({ preventScroll: true });
   }
 
   async function focusRouteTarget(hash: string) {
@@ -443,7 +445,7 @@
             {/if}
 
             {#if guide.status !== 'paused' && actionProgress.outcome === 'pending'}
-              <div class="outcome-actions" aria-label={`Finish ${actionStage.label}`}>
+              <div class="outcome-actions" role="group" aria-label={`Finish ${actionStage.label}`}>
                 <span>After doing the work above</span>
                 {#if actionProgress.openedAt}
                   <button class="primary compact" type="button" onclick={() => setOutcome(actionStage.id, 'complete')}>Mark reviewed</button>
@@ -528,7 +530,7 @@
       </details>
       <details class="guide-options">
         <summary>Guide options</summary>
-        <div class="guide-controls toolbar" aria-label="Guide controls">
+        <div class="guide-controls toolbar" role="group" aria-label="Guide controls">
           <button class="btn compact" type="button" onclick={togglePause}>{guide.status === 'paused' ? 'Resume guide' : 'Pause guide'}</button>
           <button class="btn compact" type="button" onclick={restart}>{restartPending ? 'Confirm restart' : 'Restart guide'}</button>
           {#if restartPending}<button class="btn compact" type="button" onclick={() => restartPending = false}>Cancel restart</button>{/if}

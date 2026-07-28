@@ -115,7 +115,7 @@
       title={`${labelFor(preference)} theme`}
       aria-haspopup="listbox"
       aria-expanded={open}
-      aria-controls="colour-theme-options"
+      aria-controls={open ? 'colour-theme-options' : undefined}
       bind:this={trigger}
       onclick={() => { open = !open; }}
       onkeydown={handleTriggerKeydown}
