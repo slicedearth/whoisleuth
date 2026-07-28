@@ -515,6 +515,13 @@ decision, supporting evidence pins, and explicit unresolved unknowns or
 contradictions. This checklist measures workflow structure only. It does not
 validate an analyst conclusion or make a claim about the target.
 
+The Console also offers a short in-tab undo after changing a Bulk review state,
+shortlist membership, case tags, or a temporary evidence-cluster label. The
+notice identifies the action and affected record and expires after 12 seconds.
+Undo never starts a request, reverses an import or export, restores a confirmed
+deletion, changes case disposition, or rewrites collected source evidence.
+Reloading the page clears the pending undo action.
+
 Dashboard also provides a browser-local template manager. A custom template
 must start from one of the three standard guides. It can rename instructions,
 clarify expected evidence and completion criteria, omit an existing step, or

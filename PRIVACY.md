@@ -544,6 +544,13 @@ default (see the README), so many lookups return no personal data at all.
   passphrase. Nothing is uploaded or retained by the server when you export or
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
+- **In-tab undo**: the Console's 12-second undo notice is held only in the
+  current tab's runtime memory. It can restore a prior Bulk review state,
+  shortlist membership, case-tag set, or temporary evidence-cluster label by
+  using the same browser-local write path as the original edit. The pending
+  action is not serialized, exported, uploaded, or retained after reload. It
+  cannot replay collection or reverse imports, exports, confirmed deletions,
+  case disposition changes, or source evidence.
 - **Reviewed response and defensive-control exports**: a case response packet
   is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
   UTC observation time, and separately attributed registrar, registry,

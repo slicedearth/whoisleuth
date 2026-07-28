@@ -204,6 +204,10 @@ accessible lists, tables, or source records.
   surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
+  A 12-second, tab-memory undo is available only for the most common
+  analyst-owned edits: Bulk review state, shortlist membership, case tags, and
+  temporary evidence-cluster labels. It never replays collection, imports,
+  exports, confirmed deletion, source evidence, or network activity.
   Case response packets expose required facts, evidence freshness, open
   contradictions, recipient provenance, case disposition, action tracking,
   and an audience-specific inclusion, exclusion, redaction, attachment, and

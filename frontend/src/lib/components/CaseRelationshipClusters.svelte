@@ -5,6 +5,7 @@
     type RelationshipClusterAdjustments,
     type RelationshipClusterSummary,
   } from '$lib/analysis/case-relationship-clusters.ts';
+  import { registerAnalystUndo } from '$lib/analyst-undo';
 
   let { summary }: { summary: RelationshipClusterSummary } = $props();
   let labels = $state<Record<string, string>>({});
@@ -12,6 +13,7 @@
   let merged = $state<string[][]>([]);
   let splitCases = $state<Record<string, string[]>>({});
   let selected = $state<string[]>([]);
+  let labelStartValues = $state<Record<string, string>>({});
   const adjustments = $derived<RelationshipClusterAdjustments>({ labels, dismissed, merged, splitCases });
   const reviewed = $derived(applyCaseRelationshipClusterAdjustments(summary, adjustments));
   const visible = $derived(reviewed.clusters.filter((cluster) => !cluster.dismissed));
@@ -24,6 +26,27 @@
 
   function setLabel(id: string, value: string) {
     labels = { ...labels, [id]: value.slice(0, 80) };
+  }
+
+  function beginLabelEdit(id: string): void {
+    labelStartValues = { ...labelStartValues, [id]: labels[id] ?? '' };
+  }
+
+  function commitLabelEdit(id: string, clusterName: string): void {
+    const previous = labelStartValues[id] ?? '';
+    const current = labels[id] ?? '';
+    if (previous === current) return;
+    registerAnalystUndo({
+      kind: 'local_label',
+      action: current ? 'Evidence-cluster label updated' : 'Evidence-cluster label cleared',
+      affectedRecord: clusterName,
+      undo: async () => {
+        setLabel(id, previous);
+        return `Restored the previous label for ${clusterName}.`;
+      },
+    });
+    const { [id]: _discarded, ...remaining } = labelStartValues;
+    labelStartValues = remaining;
   }
 
   function toggleDismissed(id: string) {
@@ -117,7 +140,7 @@
           </header>
           <label class="label-field">
             <span>Analyst label</span>
-            <input value={cluster.label ?? ''} oninput={(event) => setLabel(cluster.sourceClusterIds[0] ?? cluster.id, event.currentTarget.value)} maxlength="80" placeholder="Optional review label">
+            <input value={cluster.label ?? ''} onfocus={() => beginLabelEdit(cluster.sourceClusterIds[0] ?? cluster.id)} oninput={(event) => setLabel(cluster.sourceClusterIds[0] ?? cluster.id, event.currentTarget.value)} onchange={() => commitLabelEdit(cluster.sourceClusterIds[0] ?? cluster.id, cluster.label || `Cluster with ${cluster.cases.length} cases`)} maxlength="80" placeholder="Optional review label">
           </label>
           <dl>
             <div><dt>Cases</dt><dd>{cluster.cases.length}</dd></div>

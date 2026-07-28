@@ -122,6 +122,10 @@ test('filters, groups, and selected-only actions use compact observed evidence',
 
   const stored = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   expect(stored.records[0]?.value).toMatchObject({ domain: 'limited-one.example' });
+  await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByText('0 selected in the filtered set')).toBeVisible();
+  await groups.getByRole('button', { name: 'Select group' }).click();
+  await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
 
   const downloads = await captureDownloads(
     page,
@@ -255,6 +259,10 @@ test('persists named review views and per-domain review state without restarting
   });
   await runBulkScan(page, ['limited-review.example', 'complete-review.example']);
 
+  await page.getByLabel('Review state for limited-review.example').selectOption('reviewing');
+  await expect(page.getByRole('region', { name: 'Undo analyst change' })).toContainText('limited-review.example');
+  await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByLabel('Review state for limited-review.example')).toHaveValue('unreviewed');
   await page.getByLabel('Review state for limited-review.example').selectOption('reviewing');
   await page.getByLabel('Source coverage').selectOption('limited');
   await page.getByLabel('Filter by review state').selectOption('reviewing');

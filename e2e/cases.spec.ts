@@ -176,6 +176,18 @@ test('status and disposition edits persist across a reload', async ({ page }) =>
   await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
 });
 
+test('case tags offer bounded in-tab undo', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'undo-review.invalid');
+
+  const tags = page.getByLabel('Tags');
+  await tags.fill('review, phishing');
+  await page.getByRole('button', { name: 'Save tags' }).click();
+  await expect(page.getByRole('region', { name: 'Undo analyst change' })).toContainText('undo-review.invalid');
+  await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(tags).toHaveValue('');
+});
+
 test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
@@ -1474,7 +1486,13 @@ test.describe('accessible cross-case relationship table', () => {
     const workspace = page.getByRole('region', { name: 'Evidence clusters' });
     await expect(workspace).toBeVisible();
     await expect(workspace.locator('article')).toHaveCount(2);
-    await workspace.getByLabel('Analyst label').first().fill('Related review set');
+    const label = workspace.getByLabel('Analyst label').first();
+    await label.fill('Related review set');
+    await label.press('Tab');
+    await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(label).toHaveValue('');
+    await label.fill('Related review set');
+    await label.press('Tab');
     await workspace.getByLabel('Select cluster').nth(0).check();
     await workspace.getByLabel('Select cluster').nth(1).check();
     await workspace.getByRole('button', { name: 'Merge selected' }).click();
