@@ -41,16 +41,16 @@ function postureReport(overrides = {}) {
 describe('posture CLI argument parsing', () => {
   test('accepts terminal defaults and optional selectors', () => {
     assert.deepEqual(parseCliArguments(['posture', 'example.test']), {
-      action: 'posture', domain: 'example.test', output: 'terminal', quiet: false, color: true, selectorText: null,
+      action: 'posture', domain: 'example.test', output: 'terminal', quiet: false, color: true, selectorText: null, retiredSelectorText: null, mailProfile: 'standard',
     });
-    assert.deepEqual(parseCliArguments(['posture', 'example.test', '--selectors', 'one,two', '--json', '--no-color']), {
-      action: 'posture', domain: 'example.test', output: 'json', quiet: false, color: false, selectorText: 'one,two',
+    assert.deepEqual(parseCliArguments(['posture', 'example.test', '--selectors', 'one,two', '--retired-selectors', 'old', '--mail-profile', 'defensive-no-mail', '--json', '--no-color']), {
+      action: 'posture', domain: 'example.test', output: 'json', quiet: false, color: false, selectorText: 'one,two', retiredSelectorText: 'old', mailProfile: 'defensive_no_mail',
     });
   });
 
   test('accepts stdin mode and quiet terminal execution', () => {
     assert.deepEqual(parseCliArguments(['posture', '--quiet']), {
-      action: 'posture', domain: null, output: 'terminal', quiet: true, color: true, selectorText: null,
+      action: 'posture', domain: null, output: 'terminal', quiet: true, color: true, selectorText: null, retiredSelectorText: null, mailProfile: 'standard',
     });
   });
 
@@ -59,6 +59,9 @@ describe('posture CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--json', '--json']), /only once/);
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--selectors', 'one', '--selectors', 'two']), /only once/);
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--selectors']), /requires/);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--retired-selectors', 'one', '--retired-selectors', 'two']), /only once/);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'future']), /must be/);
+    assert.throws(() => parseCliArguments(['posture', 'one.test', '--mail-profile', 'standard', '--mail-profile', 'parked']), /only once/);
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--deep']), /Unknown option/);
     assert.throws(() => parseCliArguments(['posture', 'one.test', '--json', '--quiet']), /cannot be combined/);
   });
@@ -130,7 +133,7 @@ describe('posture runner', () => {
   test('normalizes the domain and selectors before calling the shared audit', async () => {
     const stdout = capture();
     let received;
-    const code = await runCli(['posture', 'EXAMPLE.test.', '--selectors', 'Selector1,.mail.2026.', '--json'], {
+    const code = await runCli(['posture', 'EXAMPLE.test.', '--selectors', 'Selector1,.mail.2026.', '--retired-selectors', 'Old,selector1', '--mail-profile', 'parked', '--json'], {
       stdout: stdout.stream,
       stderr: capture().stream,
       now: () => '2026-07-14T02:00:00.000Z',
@@ -143,7 +146,7 @@ describe('posture runner', () => {
       },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.deepEqual(received, { domain: 'example.test', options: { dkimSelectors: ['selector1', 'mail.2026'] } });
+    assert.deepEqual(received, { domain: 'example.test', options: { dkimSelectors: ['selector1', 'mail.2026'], retiredDkimSelectors: ['old'], mailProtectionProfile: 'parked' } });
     const document = JSON.parse(stdout.value());
     assert.equal(document.schema, 'whoisleuth.cli.posture');
     assert.equal(document.requestedDomain, 'EXAMPLE.test.');

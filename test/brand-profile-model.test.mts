@@ -16,6 +16,7 @@ import {
   normalizeBrandProfile,
   normalizeBrandProfileStore,
   normalizeDkimSelectors,
+  normalizeProtectionAttestations,
   normalizeProfileDomains,
   normalizeProfileTextValues,
   normalizeProfileTlds,
@@ -35,6 +36,9 @@ function profile(overrides = {}) {
     allowlistedDomains: [],
     allowlistedRegistrars: [],
     dkimSelectors: ['selector1'],
+    retiredDkimSelectors: [],
+    mailProtectionProfile: 'standard',
+    protectionAttestations: [],
     trademarkOwner: '',
     trademarkRegistration: '',
     officialFaviconHash: '',
@@ -85,6 +89,30 @@ test('caps each general list and DKIM selectors at their effective limits', () =
   const selectors = Array.from({ length: MAX_PROFILE_VALUES }, (_, index) => `selector-${index}`);
   assert.equal(normalizeProfileTextValues(values).length, MAX_PROFILE_VALUES);
   assert.equal(normalizeDkimSelectors(selectors).length, MAX_DKIM_SELECTORS);
+});
+
+test('normalizes defensive mail profiles, retired selectors, and expiring analyst attestations', () => {
+  const result = normalizeBrandProfile(profile({
+    dkimSelectors: ['active'],
+    retiredDkimSelectors: ['retired', 'active'],
+    mailProtectionProfile: 'defensive_no_mail',
+    protectionAttestations: [
+      { control: 'registrar_mfa', state: 'observed', assertedAt: NOW, expiresAt: '2026-10-01', note: 'Reviewed with owner.' },
+      { control: 'registrar_mfa', state: 'not_observed', assertedAt: NOW },
+      { control: 'future_control', state: 'observed', assertedAt: NOW },
+    ],
+  }));
+  assert.ok(result);
+  assert.deepEqual(result.retiredDkimSelectors, ['retired']);
+  assert.equal(result.mailProtectionProfile, 'defensive_no_mail');
+  assert.deepEqual(result.protectionAttestations, [{
+    control: 'registrar_mfa',
+    state: 'observed',
+    assertedAt: NOW,
+    expiresAt: '2026-10-01T00:00:00.000Z',
+    note: 'Reviewed with owner.',
+  }]);
+  assert.deepEqual(normalizeProtectionAttestations([{ control: 'registry_lock', state: 'future', assertedAt: NOW }]), []);
 });
 
 test('bounds attacker-controlled list input before searching for usable values', () => {
@@ -201,8 +229,8 @@ test('imports reject unrelated and future schemas', () => {
   assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 3, profiles: [] }), /newer schema 3/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2 or 3/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 4, profiles: [] }), /newer schema 4/);
 });
 
 test('serialized stores stay within a dedicated UTF-8 byte budget', () => {

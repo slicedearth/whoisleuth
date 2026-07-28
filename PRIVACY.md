@@ -458,10 +458,17 @@ default (see the README), so many lookups return no personal data at all.
   separate opt-in. WHOISleuth does not send either export or modify a defensive
   system.
 - **Official-domain posture audits**: handled per request and discarded. The
-  server queries public DNS, the domain registry's RDAP service for DNSSEC
-  delegation status, and (only when advertised) the official domain's own
-  `mta-sts` HTTPS policy host. DKIM selector names saved in a Brand Profile
-  are included in the request so those exact public DNS records can be checked.
+  server queries public DNS, the domain registry's RDAP service for status,
+  nameserver, DS, and DNSSEC delegation evidence, and (only when advertised)
+  the official domain's own `mta-sts` HTTPS policy host. The bounded audit can
+  follow literal SPF include and redirect TXT targets and query external DMARC
+  reporting-authorization names. Active and retired DKIM selector names saved
+  in a Brand Profile, plus its fixed mail-profile choice, are included in the
+  request so those exact public DNS records and expectations can be checked.
+  DKIM public keys are parsed transiently for supported algorithm and size
+  evidence and are not retained by the server. Registry and resolver failures,
+  exhausted traversal bounds, and unsupported policy targets remain explicit
+  incomplete states.
 - **External response actions**: WHOISleuth records only analyst-authored
   planned or completed actions in browser-local cases. It does not open a
   pre-addressed mail client, send a report, contact a provider, change DNS, or

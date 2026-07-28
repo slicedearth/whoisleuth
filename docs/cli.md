@@ -20,7 +20,7 @@ cat domains.txt | node bin/whoisleuth.mts bulk --jsonl
 node bin/whoisleuth.mts bulk domains.txt --concurrency 4
 node bin/whoisleuth.mts ct-search 'example brand' --json
 node bin/whoisleuth.mts discover example.com --preset common --jsonl
-node bin/whoisleuth.mts posture example.com --selectors selector1,selector2 --json
+node bin/whoisleuth.mts posture example.com --selectors selector1 --retired-selectors selector0 --mail-profile defensive-no-mail --json
 node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
@@ -294,15 +294,24 @@ label variants omitted by the family or overall generation budget.
 
 ## Domain posture audit
 
-`posture` runs the same owned-domain DNS and email-security audit used by Brand
-Profiles. It queries SPF, DMARC, MX, CAA, MTA-STS, TLS-RPT, BIMI, and RDAP
-DNSSEC state directly from the local machine. Supply up to ten known DKIM
-selectors with `--selectors selector1,selector2`; selectors cannot be reliably
-discovered from DNS, so no-selector output reports DKIM as not checked.
+`posture` runs the standard-profile form of the owned-domain DNS and
+email-security audit used by Brand Profiles. It queries registry status and
+DNSSEC evidence, nameserver delegation, SPF, DMARC, MX, CAA, MTA-STS, TLS-RPT,
+and BIMI directly from the local machine. Literal SPF include and redirect
+branches are expanded within fixed depth, policy-query, DNS-term, void-answer,
+cycle, and time bounds. External DMARC reporting authorization and external
+nameserver, mail, SPF, and reporting dependencies are separately reported.
+Supply up to ten known active and retired DKIM selectors in total with
+`--selectors selector1,selector2` and `--retired-selectors selector0`;
+selectors cannot be reliably discovered from DNS, so no-selector output
+reports DKIM as not checked. Use `--mail-profile standard`,
+`--mail-profile defensive-no-mail`, or `--mail-profile parked` to make the
+intended mail posture explicit rather than inferring it from DNS.
 
 Terminal output shows each pass, review, action, or informational result and
 caps displayed records at five per check with an explicit omission notice.
-Versioned JSON retains the complete bounded report. Warnings and dangers are
+Versioned JSON retains the complete bounded report, including SPF traversal,
+DMARC authorization, and dependency provenance. Warnings and dangers are
 findings rather than command failures; transient resolver or policy-fetch
 failures remain informational and should be retried before changing DNS.
 

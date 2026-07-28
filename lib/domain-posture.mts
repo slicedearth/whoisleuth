@@ -18,11 +18,22 @@ import {
   parseBimiRecords,
   parseDkimRecords,
 } from './domain-posture-parsers.mts';
+import {
+  buildExternalDependencies,
+  expandSpfPolicy,
+  validateDmarcExternalReporting,
+} from './domain-posture-analysis.mts';
+import type {
+  DmarcExternalAuthorization,
+  ExternalDependency,
+  SpfExpansion,
+} from './domain-posture-analysis.mts';
 
 const DNS_TIMEOUT_MS = 6000;
 const POLICY_TIMEOUT_MS = 7000;
 const MAX_POLICY_BYTES = 64 * 1024;
 const MAX_DKIM_SELECTORS = 10;
+const POSTURE_ENRICHMENT_DEADLINE_MS = 6500;
 const MISSING_DNS_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
 
 type DnsQuery = {
@@ -41,7 +52,14 @@ type MtaStsPolicyFetch = {
   error: string | null;
 };
 
-type DkimQuery = DnsQuery & { selector: string };
+type DkimQuery = DnsQuery & { selector: string; retired?: boolean };
+type MailProtectionProfile = 'defensive_no_mail' | 'parked' | 'standard';
+type RegistryPostureEvidence = {
+  statuses: string[];
+  nameservers: string[];
+  dsRecordCount: number;
+  error: string | null;
+};
 type CheckStatus = 'pass' | 'warning' | 'danger' | 'info';
 type PostureCheck = {
   id: string;
@@ -64,6 +82,11 @@ type PostureInput = {
   tlsRpt: DnsQuery;
   bimi: DnsQuery;
   dkim: DkimQuery[];
+  spfExpansion?: SpfExpansion;
+  dmarcAuthorizations?: DmarcExternalAuthorization[];
+  nameservers?: DnsQuery;
+  registry?: RegistryPostureEvidence;
+  mailProtectionProfile?: MailProtectionProfile;
 };
 
 function errorRecord(value: unknown): Record<string, unknown> {
@@ -110,6 +133,10 @@ function normalizeDkimSelectors(rawSelectors: unknown): string[] {
     .slice(0, MAX_DKIM_SELECTORS);
 }
 
+function normalizeMailProtectionProfile(value: unknown): MailProtectionProfile {
+  return value === 'defensive_no_mail' || value === 'parked' ? value : 'standard';
+}
+
 function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = DNS_TIMEOUT_MS): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
@@ -120,9 +147,13 @@ function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = DNS_TIME
   });
 }
 
-async function resolveDns(label: string, factory: () => Promise<unknown[]>): Promise<DnsQuery> {
+async function resolveDns(
+  label: string,
+  factory: () => Promise<unknown[]>,
+  timeoutMs = DNS_TIMEOUT_MS,
+): Promise<DnsQuery> {
   try {
-    return { records: await withTimeout(factory(), label), error: null };
+    return { records: await withTimeout(factory(), label, timeoutMs), error: null };
   } catch (err) {
     const error = errorRecord(err);
     if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return { records: [], error: null };
@@ -141,7 +172,7 @@ function queryFailureCheck(id: string, label: string, error: string): PostureChe
   });
 }
 
-function spfCheck(query: DnsQuery): PostureCheck {
+function spfCheck(query: DnsQuery, expansion?: SpfExpansion): PostureCheck {
   if (query.error) return queryFailureCheck('spf', 'SPF', query.error);
   const parsed = parseSpfRecords(query.records);
   if (parsed.records.length === 0) {
@@ -156,19 +187,40 @@ function spfCheck(query: DnsQuery): PostureCheck {
     });
   }
 
-  const details = [`Terminal policy: ${parsed.terminalPolicy}.`, `Top-level DNS-querying terms: ${parsed.dnsLookupTerms}.`, ...parsed.issues];
+  const expansionDetails = expansion
+    ? [
+        `Expanded policy: ${expansion.state}.`,
+        `Policy queries: ${expansion.lookupsUsed}/${expansion.lookupLimit}.`,
+        `DNS-querying terms observed: ${expansion.dnsLookupTerms}.`,
+        `Void answers: ${expansion.voidLookups}/${expansion.voidLookupLimit}.`,
+        ...expansion.issues,
+      ]
+    : [];
+  const details = [
+    `Terminal policy: ${parsed.terminalPolicy}.`,
+    `Top-level DNS-querying terms: ${parsed.dnsLookupTerms}.`,
+    ...expansionDetails,
+    ...parsed.issues,
+  ];
   if (parsed.terminalPolicy === 'pass') {
     return check('spf', 'SPF', 'danger', 'Policy authorizes every sender (+all)', {
       detail: details.join(' '), records: parsed.records,
       remediation: 'Replace +all with an explicit sender allowlist and a restrictive terminal policy.',
     });
   }
-  if (parsed.terminalPolicy === 'fail' && parsed.issues.length === 0) {
+  if (parsed.terminalPolicy === 'fail' && parsed.issues.length === 0 && (!expansion || expansion.state === 'complete')) {
     return check('spf', 'SPF', 'pass', 'Restrictive fail-all policy', { detail: details.join(' '), records: parsed.records });
+  }
+  if (expansion && expansion.state !== 'complete') {
+    return check('spf', 'SPF', expansion.state === 'invalid' ? 'danger' : 'warning', 'SPF expansion is incomplete', {
+      detail: details.join(' '),
+      records: parsed.records,
+      remediation: 'Review unresolved, invalid, cyclic, or budget-limited include and redirect branches before treating the policy as complete.',
+    });
   }
   if (parsed.terminalPolicy === 'redirect') {
     return check('spf', 'SPF', 'info', 'Policy delegates evaluation with redirect', {
-      detail: `${details.join(' ')} The redirect target is not recursively evaluated by this audit.`, records: parsed.records,
+      detail: details.join(' '), records: parsed.records,
       remediation: 'Confirm the redirect target exists, remains under trusted control, and resolves within SPF lookup limits.',
     });
   }
@@ -180,7 +232,7 @@ function spfCheck(query: DnsQuery): PostureCheck {
   });
 }
 
-function dmarcCheck(query: DnsQuery): PostureCheck {
+function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[] = []): PostureCheck {
   if (query.error) return queryFailureCheck('dmarc', 'DMARC', query.error);
   const parsed = parseDmarcRecords(query.records);
   if (parsed.records.length === 0) {
@@ -203,6 +255,14 @@ function dmarcCheck(query: DnsQuery): PostureCheck {
     parsed.failureReporting ? 'Failure reporting is configured.' : 'No failure reporting destination is configured.',
     ...parsed.issues,
   ];
+  const external = authorizations.filter((authorization) => authorization.state !== 'self');
+  const unresolvedExternal = external.filter((authorization) => authorization.state !== 'authorized');
+  if (external.length > 0) {
+    details.push(
+      `${external.length} external reporting destination${external.length === 1 ? '' : 's'} checked; `
+      + `${unresolvedExternal.length} could not be authorized.`,
+    );
+  }
   if (parsed.testMode) {
     return check('dmarc', 'DMARC', 'warning', 'Policy is in test mode (t=y)', {
       detail: details.join(' '), records: parsed.records,
@@ -219,6 +279,13 @@ function dmarcCheck(query: DnsQuery): PostureCheck {
     return check('dmarc', 'DMARC', 'warning', `Domain enforced at p=${parsed.policy}; subdomain coverage is weaker`, {
       detail: details.join(' '), records: parsed.records,
       remediation: 'Set sp and np to quarantine or reject unless weaker subdomain treatment is intentional.',
+    });
+  }
+  if (unresolvedExternal.length > 0) {
+    return check('dmarc', 'DMARC', 'warning', `Enforced at p=${parsed.policy}; external reporting authorization is incomplete`, {
+      detail: `${details.join(' ')} ${unresolvedExternal.map((authorization) => `${authorization.destination}: ${authorization.state}.`).join(' ')}`,
+      records: parsed.records,
+      remediation: 'Publish the required external reporting authorization record or remove the unavailable destination.',
     });
   }
   if (!parsed.aggregateReporting) {
@@ -402,6 +469,7 @@ function bimiCheck(query: DnsQuery, dmarcQuery: DnsQuery): PostureCheck {
 }
 
 function dkimCheck(selectorQueries: DkimQuery[]): PostureCheck {
+  selectorQueries = selectorQueries.filter((query) => query.retired !== true);
   if (!Array.isArray(selectorQueries) || selectorQueries.length === 0) {
     return check('dkim', 'DKIM', 'info', 'Not checked: no selectors configured', {
       detail: 'DKIM selectors cannot be discovered reliably from DNS; configure the selectors used by each legitimate sending platform in the Brand Profile.',
@@ -409,15 +477,40 @@ function dkimCheck(selectorQueries: DkimQuery[]): PostureCheck {
   }
 
   const results = selectorQueries.map(({ selector, records, error }) => error
-    ? { selector, valid: false, records: [], keyType: null, revoked: false, testing: false, issues: [error] }
+    ? {
+        selector,
+        valid: false,
+        records: [],
+        keyType: null,
+        keyBits: null,
+        keyParseState: 'not_checked' as const,
+        revoked: false,
+        testing: false,
+        issues: [error],
+      }
     : parseDkimRecords(selector, records));
   const valid = results.filter((result) => result.valid);
   const records = results.flatMap((result) => result.records.map((record) => `${result.selector}: ${record}`));
   if (valid.length === results.length) {
     const testing = results.filter((result) => result.testing).map((result) => result.selector);
-    return check('dkim', 'DKIM', testing.length ? 'warning' : 'pass', `${valid.length} configured selector${valid.length === 1 ? '' : 's'} publish valid keys`, {
-      detail: testing.length ? `Testing flag is enabled for: ${testing.join(', ')}.` : '', records,
-      remediation: testing.length ? 'Remove the DKIM t=y testing flag after validation.' : '',
+    const weakRsa = results.filter((result) => result.keyType === 'rsa' && result.keyBits !== null && result.keyBits < 2048);
+    const unknownStrength = results.filter((result) => result.keyBits === null);
+    const needsReview = testing.length > 0 || weakRsa.length > 0 || unknownStrength.length > 0;
+    const detail = [
+      testing.length ? `Testing flag is enabled for: ${testing.join(', ')}.` : '',
+      weakRsa.length ? `RSA keys below 2048 bits: ${weakRsa.map((result) => `${result.selector} (${result.keyBits} bits)`).join(', ')}.` : '',
+      unknownStrength.length ? `Key strength could not be determined for: ${unknownStrength.map((result) => result.selector).join(', ')}.` : '',
+      ...results.filter((result) => result.keyBits !== null).map((result) => `${result.selector}: ${result.keyType} ${result.keyBits}-bit key.`),
+    ].filter(Boolean).join(' ');
+    return check('dkim', 'DKIM', needsReview ? 'warning' : 'pass', `${valid.length} configured selector${valid.length === 1 ? '' : 's'} publish valid keys`, {
+      detail, records,
+      remediation: testing.length
+        ? 'Remove the DKIM t=y testing flag after validation.'
+        : weakRsa.length
+          ? 'Rotate RSA DKIM keys below 2048 bits and verify the replacement selector before retirement.'
+          : unknownStrength.length
+            ? 'Confirm the published public key can be parsed and meets the sending platform policy.'
+            : '',
     });
   }
   const failed = results.filter((result) => !result.valid);
@@ -427,10 +520,117 @@ function dkimCheck(selectorQueries: DkimQuery[]): PostureCheck {
   });
 }
 
+function retiredDkimCheck(selectorQueries: DkimQuery[]): PostureCheck | null {
+  const retired = selectorQueries.filter((query) => query.retired === true);
+  if (retired.length === 0) return null;
+  const unavailable = retired.filter((query) => Boolean(query.error));
+  const published = retired.filter((query) => !query.error && query.records.length > 0);
+  const records = published.flatMap((query) => query.records.map((record) => `${query.selector}: ${String(Array.isArray(record) ? record.join('') : record || '')}`));
+  if (unavailable.length > 0) {
+    return check('dkim_retired', 'Retired DKIM selectors', 'info', 'Retired-selector review is incomplete', {
+      detail: unavailable.map((query) => `${query.selector}: ${query.error}`).join(' '),
+      records,
+      remediation: 'Retry before concluding that retired keys are no longer published.',
+    });
+  }
+  if (published.length > 0) {
+    return check('dkim_retired', 'Retired DKIM selectors', 'warning', `${published.length} retired selector${published.length === 1 ? '' : 's'} remain published`, {
+      detail: 'Continued publication is not proof that a key is still used, but it should be confirmed with the sending platform.',
+      records,
+      remediation: 'Confirm mail has moved to the active selector, then remove obsolete public keys according to the provider rotation plan.',
+    });
+  }
+  return check('dkim_retired', 'Retired DKIM selectors', 'pass', `${retired.length} retired selector${retired.length === 1 ? '' : 's'} are no longer published`);
+}
+
+function defensiveMailProfileCheck(profile: MailProtectionProfile, input: PostureInput): PostureCheck | null {
+  if (profile === 'standard') return null;
+  const spf = input.spf.error ? null : parseSpfRecords(input.spf.records);
+  const dmarc = input.dmarc.error ? null : parseDmarcRecords(input.dmarc.records);
+  const mx = input.mx.error ? null : classifyMxRecords(asMxRecords(input.mx.records));
+  const requirements = {
+    nullMx: mx?.hasNullMx === true,
+    restrictiveSpf: spf?.valid === true && spf.terminalPolicy === 'fail' && spf.dnsLookupTerms === 0,
+    rejectingDmarc: dmarc?.valid === true
+      && dmarc.policy === 'reject'
+      && dmarc.subdomainPolicy === 'reject'
+      && dmarc.nonexistentSubdomainPolicy === 'reject'
+      && !dmarc.testMode,
+  };
+  const unavailable = Boolean(input.spf.error || input.dmarc.error || input.mx.error);
+  const passed = Object.values(requirements).filter(Boolean).length;
+  return check('defensive_mail_profile', profile === 'parked' ? 'Parked-domain mail posture' : 'Defensive no-mail posture', unavailable
+    ? 'info'
+    : passed === 3
+      ? 'pass'
+      : 'warning', unavailable
+    ? 'The defensive mail profile could not be fully evaluated'
+    : passed === 3
+      ? 'Null MX, restrictive SPF, and rejecting DMARC are observed'
+      : `${passed}/3 defensive mail controls are observed`, {
+    detail: `Null MX: ${requirements.nullMx ? 'observed' : 'not observed'}. Restrictive SPF without sender dependencies: ${requirements.restrictiveSpf ? 'observed' : 'not observed'}. Rejecting DMARC for domain and subdomains: ${requirements.rejectingDmarc ? 'observed' : 'not observed'}.`,
+    remediation: unavailable || passed === 3
+      ? ''
+      : 'For a domain that should not send or receive mail, review null MX, v=spf1 -all, and enforced DMARC reject policy.',
+  });
+}
+
+function registrationLockCheck(registry: RegistryPostureEvidence): PostureCheck {
+  if (registry.error) return queryFailureCheck('registration_lock', 'Registration controls', registry.error);
+  const statuses = registry.statuses.map((status) => status.toLowerCase().replace(/[^a-z]/gu, ''));
+  if (statuses.length === 0) {
+    return check('registration_lock', 'Registration controls', 'info', 'Registry lock state is unavailable', {
+      detail: 'No normalized EPP status was returned. This does not describe registrar account security.',
+    });
+  }
+  const transferLocks = statuses.filter((status) => ['clienttransferprohibited', 'servertransferprohibited'].includes(status));
+  const changeLocks = statuses.filter((status) => [
+    'clientupdateprohibited',
+    'serverupdateprohibited',
+    'clientdeleteprohibited',
+    'serverdeleteprohibited',
+  ].includes(status));
+  if (transferLocks.length === 0) {
+    return check('registration_lock', 'Registration controls', 'warning', 'No transfer restriction observed in registry status', {
+      detail: 'EPP status is point-in-time registry evidence and does not reveal registrar MFA, registry-lock enrolment, account recovery controls, or every registrar-side lock.',
+      records: registry.statuses,
+      remediation: 'Confirm the registrar transfer lock, MFA, recovery controls, and registry-lock options directly with the account owner.',
+    });
+  }
+  return check('registration_lock', 'Registration controls', 'pass', 'Transfer restriction observed in registry status', {
+    detail: `${changeLocks.length} update or delete restriction${changeLocks.length === 1 ? '' : 's'} also observed. EPP status does not prove registrar account security.`,
+    records: registry.statuses,
+  });
+}
+
+function nameserverCheck(query: DnsQuery, registry: RegistryPostureEvidence): PostureCheck {
+  if (query.error) return queryFailureCheck('nameservers', 'Nameserver delegation', query.error);
+  const records = query.records.map((record) => String(record || '').toLowerCase().replace(/\.+$/u, '')).filter(Boolean);
+  if (records.length === 0) {
+    return check('nameservers', 'Nameserver delegation', 'warning', 'No nameserver delegation returned', {
+      detail: 'A missing answer may reflect resolver or publication state and is not proof that a provider account or zone is absent.',
+      remediation: 'Confirm delegation at the registry and DNS provider before making a change.',
+    });
+  }
+  const registryNameservers = new Set(registry.nameservers.map((value) => value.toLowerCase().replace(/\.+$/u, '')));
+  const differs = registryNameservers.size > 0
+    && (records.some((record) => !registryNameservers.has(record)) || registryNameservers.size !== records.length);
+  return check('nameservers', 'Nameserver delegation', differs ? 'warning' : 'pass', differs
+    ? 'DNS and registry nameserver sets differ'
+    : `${records.length} nameserver${records.length === 1 ? '' : 's'} observed`, {
+    detail: `${registry.dsRecordCount} registry DS record${registry.dsRecordCount === 1 ? '' : 's'} observed.`
+      + (differs ? ' The difference may be transient or publication-limited and should be reviewed before changing delegation.' : ''),
+    records,
+    remediation: differs ? 'Verify the intended delegation with both the registry and authoritative DNS provider.' : '',
+  });
+}
+
 function buildPostureReport(domain: string, input: PostureInput) {
+  const retiredDkim = retiredDkimCheck(input.dkim);
+  const defensiveMail = defensiveMailProfileCheck(input.mailProtectionProfile || 'standard', input);
   const checks = [
-    spfCheck(input.spf),
-    dmarcCheck(input.dmarc),
+    spfCheck(input.spf, input.spfExpansion),
+    dmarcCheck(input.dmarc, input.dmarcAuthorizations),
     mxCheck(input.mx),
     dnssecCheck(input.dnssec),
     caaCheck(input.caa),
@@ -438,6 +638,10 @@ function buildPostureReport(domain: string, input: PostureInput) {
     tlsRptCheck(input.tlsRpt, input.mx),
     bimiCheck(input.bimi, input.dmarc),
     dkimCheck(input.dkim),
+    ...(retiredDkim ? [retiredDkim] : []),
+    ...(defensiveMail ? [defensiveMail] : []),
+    ...(input.registry ? [registrationLockCheck(input.registry)] : []),
+    ...(input.registry && input.nameservers ? [nameserverCheck(input.nameservers, input.registry)] : []),
   ];
   const summary = { pass: 0, warning: 0, danger: 0, info: 0 };
   for (const item of checks) summary[item.status] += 1;
@@ -476,30 +680,64 @@ async function fetchMtaStsPolicy(domain: string): Promise<MtaStsPolicyFetch> {
   }
 }
 
-async function checkDomainPosture(domain: string, { dkimSelectors = [] }: { dkimSelectors?: unknown[] } = {}) {
+async function checkDomainPosture(
+  domain: string,
+  {
+    dkimSelectors = [],
+    retiredDkimSelectors = [],
+    mailProtectionProfile = 'standard',
+  }: {
+    dkimSelectors?: unknown[];
+    retiredDkimSelectors?: unknown[];
+    mailProtectionProfile?: unknown;
+  } = {},
+) {
   const normalizedDomain = normalizeAuditDomain(domain);
   if (!normalizedDomain) throw new Error('Invalid domain name for posture audit.');
   domain = normalizedDomain;
   const selectors = normalizeDkimSelectors(dkimSelectors);
-  const [spf, dmarc, mx, caa, mtaStsDns, tlsRpt, bimi, dkim, rdap] = await Promise.all([
+  const retiredSelectors = normalizeDkimSelectors(retiredDkimSelectors)
+    .filter((selector) => !selectors.includes(selector))
+    .slice(0, Math.max(0, MAX_DKIM_SELECTORS - selectors.length));
+  const normalizedMailProfile = normalizeMailProtectionProfile(mailProtectionProfile);
+  const [spf, dmarc, mx, nameservers, caa, mtaStsDns, tlsRpt, bimi, dkim, rdap] = await Promise.all([
     resolveDns(`TXT ${domain}`, () => dns.resolveTxt(domain)),
     resolveDns(`TXT _dmarc.${domain}`, () => dns.resolveTxt(`_dmarc.${domain}`)),
     resolveDns(`MX ${domain}`, () => dns.resolveMx(domain)),
+    resolveDns(`NS ${domain}`, () => dns.resolveNs(domain)),
     resolveDns(`CAA ${domain}`, () => dns.resolveCaa(domain)),
     resolveDns(`TXT _mta-sts.${domain}`, () => dns.resolveTxt(`_mta-sts.${domain}`)),
     resolveDns(`TXT _smtp._tls.${domain}`, () => dns.resolveTxt(`_smtp._tls.${domain}`)),
     resolveDns(`TXT default._bimi.${domain}`, () => dns.resolveTxt(`default._bimi.${domain}`)),
-    Promise.all(selectors.map(async (selector) => ({
-      selector,
-      ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dns.resolveTxt(`${selector}._domainkey.${domain}`)),
-    }))),
+    Promise.all([
+      ...selectors.map(async (selector) => ({
+        selector,
+        retired: false,
+        ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dns.resolveTxt(`${selector}._domainkey.${domain}`)),
+      })),
+      ...retiredSelectors.map(async (selector) => ({
+        selector,
+        retired: true,
+        ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dns.resolveTxt(`${selector}._domainkey.${domain}`)),
+      })),
+    ]),
     fetchRdapRecord('domain', domain).catch((err: unknown) => ({
       error: nonEmptyErrorMessage(err, String(err)),
     })),
   ]);
 
   const parsedMtaDns = mtaStsDns.error ? null : parseMtaStsDnsRecords(mtaStsDns.records);
-  const mtaStsPolicy = parsedMtaDns?.valid ? await fetchMtaStsPolicy(domain) : null;
+  const enrichmentDeadline = Date.now() + POSTURE_ENRICHMENT_DEADLINE_MS;
+  const resolveEnrichmentTxt = (name: string) => {
+    const remaining = Math.max(1, enrichmentDeadline - Date.now());
+    if (remaining <= 1) return Promise.resolve({ records: [], error: 'The bounded posture-enrichment deadline was reached.' });
+    return resolveDns(`TXT ${name}`, () => dns.resolveTxt(name), Math.min(DNS_TIMEOUT_MS, remaining));
+  };
+  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations] = await Promise.all([
+    parsedMtaDns?.valid ? fetchMtaStsPolicy(domain) : Promise.resolve(null),
+    expandSpfPolicy(domain, spf, resolveEnrichmentTxt),
+    validateDmarcExternalReporting(domain, dmarc, resolveEnrichmentTxt),
+  ]);
   const dnssec = !rdap
     ? { value: null, error: 'RDAP did not return a domain record.' }
     : 'error' in rdap
@@ -508,13 +746,60 @@ async function checkDomainPosture(domain: string, { dkimSelectors = [] }: { dkim
         value: rdap.parsed && 'dnssec' in rdap.parsed ? rdap.parsed.dnssec : null,
         error: null,
       };
-  const report = buildPostureReport(domain, { spf, dmarc, mx, caa, mtaStsDns, mtaStsPolicy, tlsRpt, bimi, dkim, dnssec });
-  return { ...report, checkedAt: new Date().toISOString(), dkimSelectors: selectors };
+  const parsedDomain = rdap && !('error' in rdap) ? rdap.parsed : null;
+  const registry: RegistryPostureEvidence = parsedDomain
+    ? {
+        statuses: parsedDomain.statuses,
+        nameservers: parsedDomain.nameservers,
+        dsRecordCount: parsedDomain.dsData.length,
+        error: null,
+      }
+    : {
+        statuses: [],
+        nameservers: [],
+        dsRecordCount: 0,
+        error: rdap && 'error' in rdap ? rdap.error : 'RDAP did not return normalized domain evidence.',
+      };
+  const externalDependencies: ExternalDependency[] = buildExternalDependencies({
+    domain,
+    nameservers,
+    mx,
+    spfExpansion,
+    dmarcAuthorizations,
+  });
+  const report = buildPostureReport(domain, {
+    spf,
+    dmarc,
+    mx,
+    nameservers,
+    caa,
+    mtaStsDns,
+    mtaStsPolicy,
+    tlsRpt,
+    bimi,
+    dkim,
+    dnssec,
+    registry,
+    spfExpansion,
+    dmarcAuthorizations,
+    mailProtectionProfile: normalizedMailProfile,
+  });
+  return {
+    ...report,
+    checkedAt: new Date().toISOString(),
+    dkimSelectors: selectors,
+    retiredDkimSelectors: retiredSelectors,
+    mailProtectionProfile: normalizedMailProfile,
+    spfExpansion,
+    dmarcAuthorizations,
+    externalDependencies,
+  };
 }
 
 export {
   normalizeAuditDomain,
   normalizeDkimSelectors,
+  normalizeMailProtectionProfile,
   matchesMtaPattern,
   buildPostureReport,
   checkDomainPosture,

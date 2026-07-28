@@ -12,7 +12,7 @@ import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
 import { CANONICAL_TRAILING_SLASH_REDIRECTS } from './lib/prerendered-routes.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
-import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from './lib/domain-posture.mts';
+import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
 import { capabilityReport } from './lib/capabilities.mts';
 import {
   COOKIE_NAME,
@@ -384,9 +384,17 @@ app.get('/api/domain-posture', apiRateLimit, requireAuth, requireFeature('domain
   if (!domain) return res.status(400).json({ error: 'Invalid domain name for posture audit.' });
 
   const selectors = normalizeDkimSelectors(queryText(req.query.selectors).split(','));
+  const retiredSelectors = normalizeDkimSelectors(queryText(req.query.retiredSelectors).split(','))
+    .filter((selector) => !selectors.includes(selector))
+    .slice(0, Math.max(0, 10 - selectors.length));
+  const mailProtectionProfile = normalizeMailProtectionProfile(queryText(req.query.mailProfile));
   return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_posture'), async () => {
     try {
-      res.json(await checkDomainPosture(domain, { dkimSelectors: selectors }));
+      res.json(await checkDomainPosture(domain, {
+        dkimSelectors: selectors,
+        retiredDkimSelectors: retiredSelectors,
+        mailProtectionProfile,
+      }));
     } catch (err) {
       sendUnexpectedApiError(res);
     }

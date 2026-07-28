@@ -3,6 +3,8 @@ import { describe, test } from 'node:test';
 import { buildPostureReport, matchesMtaPattern, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { requiredValue } from './value-assertions.mts';
 
+const RSA_2048_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoUwDmvRvwyuGHZ0vZBD3z+Zyusi3f+ccPP7s6IGnw5talY8ZpxC8SAB29A4zsGU8azxzEkhiiPeNlal0nBrVu5mfVeCJ8vUMIxiVZf3sSEpPRO9JM0KtF9FjujN2lR2c6pAFIUurSHR5zHsopgZUqzDIfy54PQ2UUMDgzy9avfmCqbStL+t7EHDPaydIw9PrKihG8pdhtiVEX0gbkmVnBSl3BLt5zmN/I7p6MnAJddRXZBQIljpGU4bQh2JpISKaewTpjicPVhmlYM09ssUWUkmIfI55Tf26HwO5N6z9hmEUpWbyVMe0hXTydNUgxJK+460H0f0QQdVHc8sDsgPEcwIDAQAB';
+
 function query<T>(records: T[] = [], error: string | null = null): { records: T[]; error: string | null } {
   return { records, error };
 }
@@ -22,7 +24,7 @@ function strongInput(): Parameters<typeof buildPostureReport>[1] {
     },
     tlsRpt: query(['v=TLSRPTv1; rua=mailto:tls@example.com']),
     bimi: query(['v=BIMI1; l=https://example.com/logo.svg']),
-    dkim: [{ selector: 'selector1', records: ['v=DKIM1; p=abc123'], error: null }],
+    dkim: [{ selector: 'selector1', records: [`v=DKIM1; p=${RSA_2048_PUBLIC_KEY}`], error: null }],
   };
 }
 
@@ -120,5 +122,40 @@ describe('buildPostureReport', () => {
     const report = buildPostureReport('example.com', input);
     assert.equal(byId(report, 'dmarc').status, 'warning');
     assert.match(byId(report, 'dmarc').summary, /reporting is not configured/);
+  });
+
+  test('evaluates defensive no-mail posture without treating it as an active-mail profile', () => {
+    const input = strongInput();
+    input.spf = query(['v=spf1 -all']);
+    input.mx = query([{ priority: 0, exchange: '' }]);
+    input.mailProtectionProfile = 'defensive_no_mail';
+    const report = buildPostureReport('example.com', input);
+    assert.equal(byId(report, 'defensive_mail_profile').status, 'pass');
+
+    input.spf = query(['v=spf1 include:_spf.example.net -all']);
+    assert.equal(byId(buildPostureReport('example.com', input), 'defensive_mail_profile').status, 'warning');
+  });
+
+  test('keeps retired DKIM selector publication separate from active key validation', () => {
+    const input = strongInput();
+    input.dkim.push({ selector: 'retired', retired: true, records: [`v=DKIM1; p=${RSA_2048_PUBLIC_KEY}`], error: null });
+    const report = buildPostureReport('example.com', input);
+    assert.equal(byId(report, 'dkim').status, 'pass');
+    assert.equal(byId(report, 'dkim_retired').status, 'warning');
+    assert.match(byId(report, 'dkim_retired').summary, /remain published/u);
+  });
+
+  test('reports registry transfer restrictions and delegation disagreement as separate evidence', () => {
+    const input = strongInput();
+    input.registry = {
+      statuses: ['client transfer prohibited'],
+      nameservers: ['ns1.example.net'],
+      dsRecordCount: 1,
+      error: null,
+    };
+    input.nameservers = query(['ns2.example.net']);
+    const report = buildPostureReport('example.com', input);
+    assert.equal(byId(report, 'registration_lock').status, 'pass');
+    assert.equal(byId(report, 'nameservers').status, 'warning');
   });
 });

@@ -13,6 +13,8 @@ import {
   parseDkimRecords,
 } from '../lib/domain-posture-parsers.mts';
 
+const RSA_2048_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoUwDmvRvwyuGHZ0vZBD3z+Zyusi3f+ccPP7s6IGnw5talY8ZpxC8SAB29A4zsGU8azxzEkhiiPeNlal0nBrVu5mfVeCJ8vUMIxiVZf3sSEpPRO9JM0KtF9FjujN2lR2c6pAFIUurSHR5zHsopgZUqzDIfy54PQ2UUMDgzy9avfmCqbStL+t7EHDPaydIw9PrKihG8pdhtiVEX0gbkmVnBSl3BLt5zmN/I7p6MnAJddRXZBQIljpGU4bQh2JpISKaewTpjicPVhmlYM09ssUWUkmIfI55Tf26HwO5N6z9hmEUpWbyVMe0hXTydNUgxJK+460H0f0QQdVHc8sDsgPEcwIDAQAB';
+
 describe('TXT/tag parsing', () => {
   test('joins DNS TXT chunks without inserting spaces', () => {
     assert.deepEqual(joinTxtRecords([['v=spf1 include:', 'example.net -all']]), ['v=spf1 include:example.net -all']);
@@ -32,6 +34,7 @@ describe('SPF', () => {
     assert.equal(parsed.valid, true);
     assert.equal(parsed.terminalPolicy, 'fail');
     assert.equal(parsed.dnsLookupTerms, 2);
+    assert.deepEqual(parsed.includes, ['_spf.example.net']);
   });
 
   test('classifies softfail, neutral, pass, redirect, and missing terminal policies', () => {
@@ -66,6 +69,8 @@ describe('DMARC', () => {
     assert.equal(parsed.nonexistentSubdomainPolicy, 'reject');
     assert.equal(parsed.aggregateReporting, true);
     assert.equal(parsed.failureReporting, true);
+    assert.deepEqual(parsed.aggregateDestinations, ['mailto:dmarc@example.com']);
+    assert.deepEqual(parsed.failureDestinations, ['mailto:forensic@example.com']);
   });
 
   test('defaults a missing p tag to none and respects current t=y test mode', () => {
@@ -127,10 +132,12 @@ describe('BIMI', () => {
 
 describe('DKIM', () => {
   test('validates a configured selector without guessing it', () => {
-    const parsed = parseDkimRecords('selector1', ['v=DKIM1; k=rsa; p=abc123']);
+    const parsed = parseDkimRecords('selector1', [`v=DKIM1; k=rsa; p=${RSA_2048_PUBLIC_KEY}`]);
     assert.equal(parsed.valid, true);
     assert.equal(parsed.selector, 'selector1');
     assert.equal(parsed.keyType, 'rsa');
+    assert.equal(parsed.keyBits, 2048);
+    assert.equal(parsed.keyParseState, 'parsed');
   });
 
   test('distinguishes missing and revoked selector records', () => {
@@ -138,5 +145,12 @@ describe('DKIM', () => {
     const revoked = parseDkimRecords('old', ['v=DKIM1; p=']);
     assert.equal(revoked.revoked, true);
     assert.equal(revoked.valid, false);
+  });
+
+  test('rejects unparseable and unsupported public keys', () => {
+    const malformed = parseDkimRecords('broken', ['v=DKIM1; k=rsa; p=abc123']);
+    assert.equal(malformed.valid, false);
+    assert.equal(malformed.keyParseState, 'invalid');
+    assert.equal(parseDkimRecords('future', [`v=DKIM1; k=future; p=${RSA_2048_PUBLIC_KEY}`]).valid, false);
   });
 });

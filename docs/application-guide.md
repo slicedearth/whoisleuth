@@ -197,13 +197,26 @@ exposures, available gaps, and unknown results without making extra requests.
 ### Brands
 
 A Brand Profile stores official domains, product names, selected domain
-endings, approved partners, allowlists, optional DKIM selectors, and an
-optional official-site baseline. Profiles stay in the current browser by
-default.
+endings, approved partners, allowlists, active and retired DKIM selectors, a
+standard, defensive-no-mail, or parked mail profile, and an optional
+official-site baseline. Profiles stay in the current browser by default.
 
 The official-domain posture audit checks configured DNS and mail controls such
-as SPF, DMARC, MX, DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly supplied
-DKIM selectors. It does not guess DKIM selectors.
+as registry transfer restrictions, nameserver delegation, SPF, DMARC, MX,
+DNSSEC, CAA, MTA-STS, TLS-RPT, BIMI, and explicitly supplied DKIM selectors.
+It recursively expands only literal SPF include and redirect branches within
+fixed query, depth, void-answer, cycle, and time bounds. It also validates
+external DMARC reporting authorization, parses supported DKIM public-key
+strength without retaining key material, checks whether configured retired
+selectors remain published, and inventories bounded external nameserver,
+mail, SPF, and reporting dependencies. Resolver failures and exhausted bounds
+remain incomplete. External infrastructure is a review lead, not an ownership,
+insecurity, or exploitability claim.
+
+The profile can separately retain six expiring analyst attestations for
+registrar MFA, recovery-email separation, registry lock, emergency contacts,
+account audit logging, and zone backups. These statements are not inferred
+from public evidence and must be reviewed by the analyst.
 
 An official-site baseline can retain bounded page identity and fingerprint
 data without keeping page HTML, URL paths, query strings, credentials, or

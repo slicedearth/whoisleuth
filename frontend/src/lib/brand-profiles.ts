@@ -7,6 +7,10 @@ import {
   MAX_PROFILES,
   MAX_PROFILE_VALUES,
 } from './analysis/brand-profile-model.ts';
+import type {
+  MailProtectionProfile,
+  ProtectionAttestation,
+} from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import { LEGACY_PROFILES_KEY, PROFILES_COLLECTION } from './browser-local-data-definitions.ts';
@@ -26,6 +30,9 @@ export interface BrandProfile {
   allowlistedDomains: string[];
   allowlistedRegistrars: string[];
   dkimSelectors: string[];
+  retiredDkimSelectors: string[];
+  mailProtectionProfile: MailProtectionProfile;
+  protectionAttestations: ProtectionAttestation[];
   trademarkOwner: string;
   trademarkRegistration: string;
   officialFaviconHash: string;

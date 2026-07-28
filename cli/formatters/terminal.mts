@@ -353,13 +353,20 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
 
 function formatTerminalPosture(document: TerminalRecord): string {
   const summary = terminalRecord(document.summary);
+  const spfExpansion = terminalRecord(document.spfExpansion);
   const selectors = Array.isArray(document.dkimSelectors) ? document.dkimSelectors : [];
   const checks = Array.isArray(document.checks) ? document.checks : [];
+  const dependencies = Array.isArray(document.externalDependencies) ? document.externalDependencies : [];
+  const dmarcAuthorizations = Array.isArray(document.dmarcAuthorizations) ? document.dmarcAuthorizations : [];
   const lines = [
     `Domain         ${safeTerminalValue(document.domain)}`,
     `Checked        ${safeTerminalValue(document.checkedAt)}`,
     `DKIM selectors ${selectors.length ? selectors.map((value: unknown) => safeTerminalValue(value)).join(', ') : 'None supplied'}`,
     `Summary        ${safeTerminalValue(summary.danger, '0')} action · ${safeTerminalValue(summary.warning, '0')} review · ${safeTerminalValue(summary.pass, '0')} pass · ${safeTerminalValue(summary.info, '0')} info`,
+    ...(Object.keys(spfExpansion).length ? [
+      `SPF expansion  ${safeTerminalValue(spfExpansion.state)} · ${safeTerminalValue(spfExpansion.lookupsUsed, '0')}/${safeTerminalValue(spfExpansion.lookupLimit, '0')} policy queries · ${safeTerminalValue(spfExpansion.dnsLookupTerms, '0')} DNS terms`,
+    ] : []),
+    `Dependencies   ${dependencies.length} observed · ${dmarcAuthorizations.length} DMARC reporting destination${dmarcAuthorizations.length === 1 ? '' : 's'} checked`,
     '',
   ];
   for (const value of checks) {

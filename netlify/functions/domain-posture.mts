@@ -1,5 +1,5 @@
 import { classifyQuery } from '../../lib/classify.mts';
-import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from '../../lib/domain-posture.mts';
+import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from '../../lib/domain-posture.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
@@ -24,8 +24,16 @@ const handleDomainPosture: NetlifyFunctionHandler = async (event) => {
   if (!domain) return json(400, { error: 'Invalid domain name for posture audit.' });
 
   const selectors = normalizeDkimSelectors(String(params.selectors || '').split(','));
+  const retiredSelectors = normalizeDkimSelectors(String(params.retiredSelectors || '').split(','))
+    .filter((selector) => !selectors.includes(selector))
+    .slice(0, Math.max(0, 10 - selectors.length));
+  const mailProtectionProfile = normalizeMailProtectionProfile(params.mailProfile);
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('domain_posture'), async () => {
-    return json(200, await checkDomainPosture(domain, { dkimSelectors: selectors }));
+    return json(200, await checkDomainPosture(domain, {
+      dkimSelectors: selectors,
+      retiredDkimSelectors: retiredSelectors,
+      mailProtectionProfile,
+    }));
   });
 };
 

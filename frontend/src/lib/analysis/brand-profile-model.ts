@@ -8,7 +8,7 @@ import type { PageBaseline } from './page-baseline.ts';
 import { isInformativeFaviconHash } from './utils.ts';
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
-export const BRAND_PROFILE_SCHEMA_VERSION = 2;
+export const BRAND_PROFILE_SCHEMA_VERSION = 3;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
 export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
@@ -21,11 +21,45 @@ export const MAX_PROFILE_DOMAIN_LENGTH = 253;
 export const MAX_PROFILE_TLD_LENGTH = 63;
 export const MAX_DKIM_SELECTOR_LENGTH = 253;
 export const MAX_DKIM_SELECTORS = 10;
+export const MAX_PROTECTION_ATTESTATIONS = 6;
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const SHA256_RE = /^[a-f0-9]{64}$/i;
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const DNS_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const MAIL_PROFILES = new Set(['standard', 'defensive_no_mail', 'parked']);
+export const PROTECTION_ATTESTATION_CONTROLS = Object.freeze([
+  'registrar_mfa',
+  'recovery_email_separation',
+  'registry_lock',
+  'emergency_contacts',
+  'account_audit_logging',
+  'zone_backups',
+] as const);
+const PROTECTION_ATTESTATION_CONTROL_SET = new Set<string>(PROTECTION_ATTESTATION_CONTROLS);
+const PROTECTION_ATTESTATION_STATES = new Set([
+  'observed',
+  'not_observed',
+  'needs_confirmation',
+  'unavailable',
+  'not_applicable',
+]);
+
+export type MailProtectionProfile = 'defensive_no_mail' | 'parked' | 'standard';
+export type ProtectionAttestationControl = typeof PROTECTION_ATTESTATION_CONTROLS[number];
+export type ProtectionAttestationState =
+  | 'needs_confirmation'
+  | 'not_applicable'
+  | 'not_observed'
+  | 'observed'
+  | 'unavailable';
+export type ProtectionAttestation = {
+  control: ProtectionAttestationControl;
+  state: ProtectionAttestationState;
+  assertedAt: string;
+  expiresAt: string | null;
+  note: string;
+};
 
 export type BrandProfile = {
   id: string;
@@ -37,6 +71,9 @@ export type BrandProfile = {
   allowlistedDomains: string[];
   allowlistedRegistrars: string[];
   dkimSelectors: string[];
+  retiredDkimSelectors: string[];
+  mailProtectionProfile: MailProtectionProfile;
+  protectionAttestations: ProtectionAttestation[];
   trademarkOwner: string;
   trademarkRegistration: string;
   officialFaviconHash: string;
@@ -130,6 +167,42 @@ export function normalizeDkimSelectors(value: unknown): string[] {
   return normalizeList(value, normalizeSelector).slice(0, MAX_DKIM_SELECTORS);
 }
 
+function normalizeMailProtectionProfile(value: unknown): MailProtectionProfile {
+  return typeof value === 'string' && MAIL_PROFILES.has(value)
+    ? value as MailProtectionProfile
+    : 'standard';
+}
+
+export function normalizeProtectionAttestations(value: unknown): ProtectionAttestation[] {
+  if (!Array.isArray(value)) return [];
+  const output: ProtectionAttestation[] = [];
+  const seen = new Set<string>();
+  for (const item of value.slice(0, MAX_PROTECTION_ATTESTATIONS * 4)) {
+    const candidate = record(item);
+    if (
+      typeof candidate.control !== 'string'
+      || !PROTECTION_ATTESTATION_CONTROL_SET.has(candidate.control)
+      || seen.has(candidate.control)
+      || typeof candidate.state !== 'string'
+      || !PROTECTION_ATTESTATION_STATES.has(candidate.state)
+    ) {
+      continue;
+    }
+    const assertedAt = timestamp(candidate.assertedAt, null);
+    if (!assertedAt) continue;
+    seen.add(candidate.control);
+    output.push({
+      control: candidate.control as ProtectionAttestationControl,
+      state: candidate.state as ProtectionAttestationState,
+      assertedAt,
+      expiresAt: timestamp(candidate.expiresAt, null),
+      note: boundedText(candidate.note),
+    });
+    if (output.length >= MAX_PROTECTION_ATTESTATIONS) break;
+  }
+  return output;
+}
+
 function normalizeFaviconHash(value: unknown): string {
   return typeof value === 'string' && SHA256_RE.test(value) ? value.toLowerCase() : '';
 }
@@ -147,6 +220,7 @@ export function normalizeBrandProfile(
   const existing = options.existing ? record(options.existing) : null;
   const now = timestamp(options.nowIso, new Date().toISOString());
   const officialDomains = normalizeProfileDomains(value.officialDomains);
+  const dkimSelectors = normalizeDkimSelectors(value.dkimSelectors);
   const candidateBaseline = Object.prototype.hasOwnProperty.call(value, 'pageBaseline')
     ? normalizePageBaseline(value.pageBaseline)
     : normalizePageBaseline(existing?.pageBaseline);
@@ -166,7 +240,11 @@ export function normalizeBrandProfile(
     approvedPartnerDomains: normalizeProfileDomains(value.approvedPartnerDomains),
     allowlistedDomains: normalizeProfileDomains(value.allowlistedDomains),
     allowlistedRegistrars: normalizeProfileTextValues(value.allowlistedRegistrars),
-    dkimSelectors: normalizeDkimSelectors(value.dkimSelectors),
+    dkimSelectors,
+    retiredDkimSelectors: normalizeDkimSelectors(value.retiredDkimSelectors)
+      .filter((selector) => !dkimSelectors.includes(selector)),
+    mailProtectionProfile: normalizeMailProtectionProfile(value.mailProtectionProfile),
+    protectionAttestations: normalizeProtectionAttestations(value.protectionAttestations),
     trademarkOwner: boundedText(value.trademarkOwner),
     trademarkRegistration: boundedText(value.trademarkRegistration),
     officialFaviconHash: normalizeFaviconHash(value.officialFaviconHash),
@@ -234,8 +312,8 @@ export function mergeBrandProfiles(
   if (importedVersion !== null && importedVersion > BRAND_PROFILE_SCHEMA_VERSION) {
     throw new Error(`This Brand Profile file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
-  if (importedVersion !== BRAND_PROFILE_SCHEMA_VERSION) {
-    throw new Error(`Expected a WHOISleuth Brand Profile export using schema ${BRAND_PROFILE_SCHEMA_VERSION}.`);
+  if (importedVersion !== 2 && importedVersion !== BRAND_PROFILE_SCHEMA_VERSION) {
+    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2 or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
   }
   const local = normalizeBrandProfileStore(localRaw).profiles;
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));
