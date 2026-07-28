@@ -402,7 +402,17 @@
     mutationTypes:[]
   });
 
-  async function refreshCase(){caseRecord=await lookupCaseController.refresh(caseDomain);}
+  async function refreshProfileContext(){
+    try{profile=await activeProfile();}
+    catch{profile=null;}
+  }
+  async function refreshCase(){
+    try{caseRecord=await lookupCaseController.refresh(caseDomain);}
+    catch{
+      caseRecord=null;
+      caseStatus='Browser-local case context is unavailable. The collected lookup evidence remains available.';
+    }
+  }
   async function openLookupCase(){
     const next=await lookupCaseController.open(caseDomain,caseEvidence,lookupEvidenceDepth);
     caseRecord=next.record;
@@ -431,7 +441,7 @@
     if(q&&(targetChanged||depthChanged)){query=q;result=null;error='';}
     else if(q)query=q;
     if(requestedDepth==='fast'||requestedDepth==='deep')lookupMode=requestedDepth;
-    void (async()=>{profile=await activeProfile();if(result)await refreshCase();})();
+    void (async()=>{await refreshProfileContext();if(result)await refreshCase();})();
     return()=>{
       pageActive=false;
       lookupRequestController.dispose();
@@ -504,7 +514,7 @@
       const completed=await lookupRequestController.run(
         lookupUrl,
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
-        async()=>{profile=await activeProfile();},
+        refreshProfileContext,
       );
       if(completed.state==='stale'||!pageActive)return;
       const outcome=completed.outcome;
