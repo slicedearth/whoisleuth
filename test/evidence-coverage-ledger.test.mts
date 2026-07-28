@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildEvidenceCoverageLedger } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
+import {
+  buildEvidenceCoverageLedger,
+  buildLookupEvidenceCoverageLedger,
+} from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
 
 test('evidence coverage preserves distinct limited and absent-source states', () => {
   const ledger = buildEvidenceCoverageLedger([
@@ -47,4 +50,73 @@ test('truncation overrides a nominal source success', () => {
     { id: 'page', label: 'Page identity', category: 'web', status: 'success', truncated: true },
   ]);
   assert.equal(ledger.entries[0]?.state, 'partial');
+});
+
+test('builds domain lookup coverage without merging source limitations', () => {
+  const ledger = buildLookupEvidenceCoverageLedger({
+    targetType: 'domain',
+    diagnostics: {
+      rdap: { status: 'success' },
+      whois: { status: 'partial' },
+      availability: { status: 'success' },
+    },
+    availability: { complete: true },
+    rdapParsed: {
+      serverTruncated: true,
+      serverTruncationReasons: ['privacy policy'],
+    },
+    whoisParsed: {
+      fieldsTruncated: ['raw'],
+      limitations: ['Registry response was capped.'],
+    },
+    dnsEvidence: {
+      status: 'success',
+      complete: false,
+      diagnostics: {
+        mx: { status: 'error', error: 'query failed safely' },
+      },
+    },
+    httpEvidence: { status: 'success', complete: true },
+    httpResponse: { bodyTruncated: true },
+    tlsEvidence: { status: 'skipped' },
+    pageIdentity: { status: 'not_found', complete: true },
+    technologyProfile: { status: 'success', complete: true },
+    securityPosture: { status: 'partial', complete: false },
+    securityTxt: { securityTxtVersion: 1, state: 'unavailable' },
+    threatIntelligenceProviders: [{
+      provider: { id: 'archive', label: 'Archive verdicts' },
+      state: 'not_found',
+      detail: 'No matching archived observation.',
+    }],
+  });
+
+  assert.equal(ledger.entries.find((entry) => entry.id === 'rdap')?.state, 'partial');
+  assert.deepEqual(
+    ledger.entries.find((entry) => entry.id === 'rdap')?.limitations,
+    ['The registry reported that some RDAP data was omitted. privacy policy.'],
+  );
+  assert.equal(ledger.entries.find((entry) => entry.id === 'dns')?.state, 'partial');
+  assert.deepEqual(
+    ledger.entries.find((entry) => entry.id === 'dns')?.limitations,
+    ['MX: query failed safely'],
+  );
+  assert.equal(ledger.entries.find((entry) => entry.id === 'http')?.state, 'partial');
+  assert.equal(ledger.entries.find((entry) => entry.id === 'tls')?.state, 'skipped');
+  assert.equal(ledger.entries.find((entry) => entry.id === 'page-identity')?.state, 'not_found');
+  assert.equal(ledger.entries.find((entry) => entry.id === 'external-archive')?.state, 'not_found');
+});
+
+test('keeps non-domain coverage to applicable sources', () => {
+  const ledger = buildLookupEvidenceCoverageLedger({
+    targetType: 'ipv4',
+    diagnostics: {
+      rdap: { status: 'success' },
+      whois: { status: 'unsupported' },
+      availability: { status: 'success' },
+    },
+    availability: { complete: true },
+    dnsEvidence: { status: 'success', complete: true },
+  });
+
+  assert.deepEqual(ledger.entries.map((entry) => entry.id), ['rdap', 'whois', 'availability']);
 });

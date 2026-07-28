@@ -40,7 +40,7 @@
   import { buildActivationContext } from '$lib/analysis/activation-context.ts';
   import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
-  import { buildEvidenceCoverageLedger, type EvidenceCoverageInput } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
   import {
@@ -257,7 +257,25 @@
     registryInsights,
     activationContext,
   }));
-  const evidenceCoverage=$derived(buildEvidenceCoverageLedger(evidenceCoverageInputs()));
+  const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
+    targetType:result?.type,
+    availability,
+    diagnostics,
+    registrarRdap,
+    reverseDns,
+    observedNetworkContext,
+    dnsEvidence,
+    httpEvidence,
+    httpResponse,
+    tlsEvidence,
+    pageIdentity,
+    technologyProfile,
+    securityPosture,
+    securityTxt,
+    rdapParsed,
+    whoisParsed,
+    threatIntelligenceProviders,
+  }));
   const evidenceTopologyTarget=$derived({
     label:show(result?.registrableDomain||result?.query),
     detail:`${show(result?.type)} · ${lookupEvidenceDepth} lookup`,
@@ -679,30 +697,6 @@
     {label:'Website',value:show(availability.activityStatus),detail:show(availability.websiteProbeDetail)},
   ];}
   function sourceDiagnostics(){const sources=['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});if(rec(diagnostics.reverseDns).status){const item=rec(diagnostics.reverseDns) as SourceStatus;sources.push({source:'reverse DNS',status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)});}return sources;}
-  function evidenceCoverageInputs():EvidenceCoverageInput[]{
-    const items:EvidenceCoverageInput[]=[
-      {id:'rdap',label:result?.type==='domain'?'Registry RDAP':'RDAP',category:'registry',status:rdapDiagnostic.status,truncated:rdapParsed.serverTruncated,limitations:rdapPartialDetail()?[rdapPartialDetail()]:[]},
-      {id:'whois',label:'WHOIS',category:'registry',status:whoisDiagnostic.status,truncated:Array.isArray(whoisParsed.fieldsTruncated)&&whoisParsed.fieldsTruncated.length>0,limitations:stringList(whoisParsed.limitations)},
-      {id:'availability',label:'Availability decision',category:'analysis',status:rec(diagnostics.availability).status,complete:availability.complete,limitations:stringList(availability.limitations)},
-    ];
-    if(registrarRdap.status)items.push({id:'registrar-rdap',label:'Registrar RDAP',category:'registry',status:registrarRdap.status,limitations:stringList(registrarRdap.limitations)});
-    if(reverseDns.source==='reverse_dns'||rec(diagnostics.reverseDns).status)items.push({id:'reverse-dns',label:'Reverse DNS',category:'network',status:reverseDns.status||rec(diagnostics.reverseDns).status,complete:reverseDns.complete,truncated:reverseDns.truncated,limitations:stringList(reverseDns.limitations)});
-    if(observedNetworkContext.contextVersion===1)items.push({id:'network-context',label:'Observed network context',category:'network',status:observedNetworkContext.status,complete:observedNetworkContext.complete,limitations:stringList(observedNetworkContext.limitations)});
-    if(result?.type==='domain')items.push(
-      {id:'dns',label:'DNS',category:'network',status:dnsEvidence.status,complete:dnsEvidence.complete,truncated:dnsEvidence.truncated,limitations:[...stringList(dnsEvidence.limitations),...(dnsQueryFailures()?[dnsQueryFailures()]:[])]},
-      {id:'http',label:'HTTP',category:'web',status:httpEvidence.status,complete:httpEvidence.complete,truncated:httpResponse.bodyTruncated,limitations:stringList(httpEvidence.limitations)},
-      {id:'tls',label:'TLS',category:'web',status:tlsEvidence.status,complete:tlsEvidence.complete,truncated:tlsEvidence.chainTruncated,limitations:stringList(tlsEvidence.limitations)},
-      {id:'page-identity',label:'Page identity',category:'web',status:pageIdentity.status,complete:pageIdentity.complete,truncated:pageIdentity.truncated,limitations:stringList(pageIdentity.limitations)},
-      {id:'technology',label:'Technology indicators',category:'analysis',status:technologyProfile.status,complete:technologyProfile.complete,truncated:technologyProfile.truncated,limitations:technologyLimitations()},
-      {id:'security-posture',label:'Security posture',category:'analysis',status:securityPosture.status,complete:securityPosture.complete,truncated:securityPosture.truncated,limitations:securityPostureLimitations()},
-    );
-    if(securityTxt.securityTxtVersion===1)items.push({id:'security-txt',label:'security.txt',category:'web',status:securityTxt.state,limitations:stringList(securityTxt.limitations)});
-    for(const[providerIndex,providerValue]of threatIntelligenceProviders.entries()){
-      const provider=rec(providerValue);const identity=rec(provider.provider);const id=boundedTechnologyText(identity.id||`external-${providerIndex+1}`,64);
-      items.push({id:`external-${id}`,label:boundedTechnologyText(identity.label||`External source ${providerIndex+1}`,120),category:'external',status:provider.state,limitations:[boundedTechnologyText(provider.detail,280)].filter(Boolean)});
-    }
-    return items;
-  }
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
