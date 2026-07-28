@@ -58,6 +58,7 @@
     buildLookupReadableReport,
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.ts';
+  import { buildLookupSummaryModel } from '$lib/analysis/lookup-summary-model.ts';
   import { createPageBaseline } from '$lib/analysis/page-baseline.ts';
   import { comparePageBaselines } from '$lib/analysis/page-similarity.ts';
   import { compareRdapPublications, compareRegistrySources } from '$lib/analysis/registry-comparison.ts';
@@ -68,10 +69,6 @@
   import {
     explainOpportunityScore,
     explainRiskScore,
-    fmtAge,
-    fmtExpiresIn,
-    formatActivityCell,
-    formatPrivacyCell,
   } from '$lib/analysis/scoring.ts';
 
   type JsonRecord = JsonObject;
@@ -275,6 +272,17 @@
     rdapParsed,
     whoisParsed,
     threatIntelligenceProviders,
+  }));
+  const lookupSummary=$derived(buildLookupSummaryModel({
+    availability,
+    rdapParsed,
+    whoisParsed,
+    diagnostics,
+    profileSignals,
+    idnAnalysis,
+    createdDate:created(),
+    expiresDate:expires(),
+    updatedDate:updated(),
   }));
   const evidenceTopologyTarget=$derived({
     label:show(result?.registrableDomain||result?.query),
@@ -687,16 +695,6 @@
     ...(tlsAuthorization.error?[{label:'Authorization',value:String(tlsAuthorization.error)}]:[]),
     ...(tlsHostname.error?[{label:'Hostname',value:String(tlsHostname.error)}]:[]),
   ];}
-  function signals(){const values:Array<{label:string;tone:string;detail?:string}>=[];if(profileSignals.trusted)values.push({label:`Trusted ${profileSignals.trusted}`,tone:'good'});if(profileSignals.faviconMatch)values.push({label:'Favicon match',tone:'danger'});else if(profileSignals.faviconNearMatch)values.push({label:'Favicon near-match',tone:'warn'});if(profileSignals.reusesOfficialAssets)values.push({label:'Reuses official assets',tone:'danger'});if(availability.hasPasswordField===true)values.push({label:'Password field',tone:'warn'});const phishingLanguage=typeof availability.phishingLanguageMatch==='string'?availability.phishingLanguageMatch:undefined;if(phishingLanguage)values.push({label:'Phishing language',tone:'danger',detail:phishingLanguage});if(idnAnalysis?.mixedScript)values.push({label:'Mixed-script IDN',tone:'warn',detail:'The Unicode label combines writing scripts.'});if(idnAnalysis?.referenceMatches?.length)values.push({label:'Official-domain skeleton match',tone:'warn',detail:'A bounded visual skeleton matches an official domain in the active brand profile.'});const domainAgeDays=typeof availability.domainAgeDays==='number'?availability.domainAgeDays:null;const age=fmtAge(domainAgeDays);if(age)values.push({label:age,tone:'neutral'});const expiresInDays=typeof availability.expiresInDays==='number'?availability.expiresInDays:null;const expiry=fmtExpiresIn(expiresInDays);if(expiry&&expiresInDays!==null)values.push({label:expiry,tone:expiresInDays<=60?'warn':'neutral'});const privacyProtected=typeof availability.privacyProtected==='boolean'?availability.privacyProtected:null;if(privacyProtected!==null)values.push({label:formatPrivacyCell(privacyProtected),tone:privacyProtected?'warn':'good'});const activityStatus=typeof availability.activityStatus==='string'?availability.activityStatus:null;if(activityStatus){const detail=textOrNull(availability.websiteProbeDetail);values.push({label:formatActivityCell(activityStatus,availability.hasMx===true,availability.hasSpf===true,availability.hasDmarc===true),tone:activityStatus==='active'?'good':activityStatus==='parked'?'warn':'neutral',...(detail?{detail}:{})});}return values;}
-  function overviewFacts(){return[
-    {label:'Registration',value:show(availability.state||whoisParsed.registrationStatus),detail:`${show(availability.confidence)} confidence`},
-    {label:'Registrar',value:show(availability.registrar||rdapParsed.registrar||whoisParsed.registrar),detail:show(whoisParsed.registrarUrl)},
-    {label:'Created',value:formatDate(created()),detail:fmtAge(availability.domainAgeDays)||'Registry lifecycle date'},
-    {label:'Expires',value:formatDate(expires()),detail:fmtExpiresIn(availability.expiresInDays)||'Registry lifecycle date'},
-    {label:'Updated',value:formatDate(updated()),detail:'Most recent registry change'},
-    {label:'Website',value:show(availability.activityStatus),detail:show(availability.websiteProbeDetail)},
-  ];}
-  function sourceDiagnostics(){const sources=['rdap','whois','availability'].map((source)=>{const item=rec(diagnostics[source]) as SourceStatus;return{source,status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)};});if(rec(diagnostics.reverseDns).status){const item=rec(diagnostics.reverseDns) as SourceStatus;sources.push({source:'reverse DNS',status:String(item.status||''),label:diagnosticLabel(item),detail:diagnosticDetail(item)});}return sources;}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
@@ -784,7 +782,7 @@
       <h3 id="overview-title">Overview</h3>
 
       {#if availability.applicable!==false}
-        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={signals()} trusted={String(profileSignals.trusted||'')} />
+        <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
       {#if lookupTiming}
@@ -810,7 +808,7 @@
 
       <LookupEvidenceCoverage ledger={evidenceCoverage} />
 
-      <LookupOverviewFacts facts={overviewFacts()} diagnostics={sourceDiagnostics()} hasAssessment={availability.applicable!==false} />
+      <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />
 
       {#if idnAnalysis && (idnAnalysis.hasIdn || idnAnalysis.referenceMatches.length)}
         <section class="idn-card evidence-card card" aria-labelledby="idn-title">
