@@ -1,8 +1,8 @@
 import {
-  assertCuratedConnectorDefinition,
   createCuratedConnectorResult,
   normalizeCuratedConnectorTarget,
 } from './threat-intelligence-runtime.mts';
+import { assertCuratedConnectorDefinition } from './threat-intelligence-definition-registry.mts';
 import type {
   CuratedConnectorDefinition,
   CuratedConnectorResult,
