@@ -27,7 +27,7 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await expect(page.getByText('Catalogue v26')).toBeVisible();
   await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('312');
-  await expect(page.locator('tbody tr')).toHaveCount(50);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 312 matching profiles (312 total)');
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
   await expect(standards).toContainText('1114 / 1114');
@@ -37,46 +37,46 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await expect(standards).toContainText('.arpa');
 
   await page.locator('#registry-sort-direction').selectOption('desc');
-  await expect(page.locator('tbody tr').first().locator('td[data-label="Suffix"] > code')).toHaveText('.zw');
+  await expect(page.locator('.catalogue-section tbody tr').first().locator('td[data-label="Suffix"] > code')).toHaveText('.zw');
   await page.locator('#registry-sort-direction').selectOption('asc');
 
   const search = page.getByLabel('Suffix or capability');
   await search.fill('punktum domain');
-  await expect(page.locator('tbody tr')).toHaveCount(1);
-  await expect(page.locator('tbody tr')).toContainText('.dk');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
+  await expect(page.locator('.catalogue-section tbody tr')).toContainText('.dk');
 
   await search.fill('iana cc colon');
-  await expect(page.locator('tbody tr')).toHaveCount(43);
-  await expect(page.locator('tbody')).toContainText('.as');
-  await expect(page.locator('tbody')).toContainText('.sr');
-  await expect(page.locator('tbody')).toContainText('.to');
-  await expect(page.locator('tbody')).toContainText('.zm');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(43);
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.as');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.sr');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.to');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.zm');
 
   await search.fill('iana cc negative');
-  await expect(page.locator('tbody tr')).toHaveCount(31);
-  await expect(page.locator('tbody')).toContainText('.ag');
-  await expect(page.locator('tbody')).toContainText('.vg');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(31);
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.ag');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.vg');
 
   await search.fill('iana referral unverified');
-  await expect(page.locator('tbody tr')).toHaveCount(17);
-  await expect(page.locator('tbody')).toContainText('.bo');
-  await expect(page.locator('tbody')).toContainText('.vi');
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(17);
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.bo');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.vi');
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('tbody tr')).toHaveCount(50);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 94 matching profiles (312 total)');
-  await expect(page.locator('tbody')).toContainText('.ao');
-  await expect(page.locator('tbody')).toContainText('.ch');
-  await expect(page.locator('tbody')).toContainText('.es');
-  await expect(page.locator('tbody')).toContainText('.gr');
-  await expect(page.locator('tbody')).toContainText('.arpa');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.ao');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.ch');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.es');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.gr');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.arpa');
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.locator('tbody tr')).toHaveCount(44);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(44);
   await expect(page.locator('.result-count')).toContainText('Showing 51–94 of 94 matching profiles (312 total)');
-  await expect(page.locator('tbody')).toContainText('.mil');
-  await expect(page.locator('tbody')).toContainText('.vn');
-  await expect(page.locator('tbody')).toContainText('.zw');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.mil');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.vn');
+  await expect(page.locator('.catalogue-section tbody')).toContainText('.zw');
 
   await search.fill('no matching capability');
   await expect(page.getByRole('heading', { name: 'No matching profiles' })).toBeVisible();
@@ -89,7 +89,7 @@ test('profile details preserve provenance and safe external-link behavior', asyn
   await page.getByLabel('Suffix or capability').fill('uk');
   await page.getByText('Review UK profile').click();
 
-  const row = page.locator('tbody tr');
+  const row = page.locator('.catalogue-section tbody tr');
   await expect(row).toContainText('Profile ID');
   await expect(row).toContainText('fixture coverage does not prove current reachability');
   const links = row.locator('a[target="_blank"]');
@@ -139,6 +139,31 @@ test('the local inspector explains explicit and generic suffix support without a
   expect(unexpectedApiRequests).toEqual([]);
 });
 
+test('the lookup matrix makes profile and target differences explicit without network work', async ({ page }) => {
+  const unexpectedApiRequests: string[] = [];
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) unexpectedApiRequests.push(pathname);
+  });
+  await page.goto('/registry-support');
+
+  const matrix = page.getByRole('region', { name: 'Field-level collection matrix' });
+  await expect(matrix.getByText('Matrix v1')).toBeVisible();
+  await expect(matrix.locator('tbody tr')).toHaveCount(18);
+  await expect(matrix.getByText('Page identity, forms and fingerprints')).toBeVisible();
+  await expect(matrix.getByText('Static evidence only; referenced resources are not fetched and JavaScript is not executed.')).toBeVisible();
+
+  await matrix.getByLabel('IP address').check();
+  await expect(matrix.locator('tbody tr')).toHaveCount(2);
+  await expect(matrix.getByText('IP network registration')).toBeVisible();
+  await expect(matrix.getByText('Page identity, forms and fingerprints')).toHaveCount(0);
+
+  await matrix.getByLabel('ASN').check();
+  await expect(matrix.locator('tbody tr')).toHaveCount(1);
+  await expect(matrix.getByText('ASN registration and lifecycle')).toBeVisible();
+  expect(unexpectedApiRequests).toEqual([]);
+});
+
 test('the inspector resolves an explicit IDN suffix and remains mobile-safe', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto('/registry-support');
@@ -168,7 +193,7 @@ test('the registry-support reference remains readable without horizontal overflo
   await expect(page.getByRole('button', { name: 'Toggle navigation' })).toHaveAttribute('aria-expanded', 'false');
 
   const sectionIntros = page.locator('.section-intro');
-  await expect(sectionIntros).toHaveCount(3);
+  await expect(sectionIntros).toHaveCount(4);
   await expect(sectionIntros.first()).toHaveCSS('display', 'block');
   for (const heading of await sectionIntros.getByRole('heading').all()) {
     const box = await heading.boundingBox();
@@ -178,6 +203,6 @@ test('the registry-support reference remains readable without horizontal overflo
   await expect(page.getByLabel('Suffix or capability')).toBeVisible();
   await expect(page.locator('#coverage-filter')).toBeVisible();
   await page.getByLabel('Suffix or capability').fill('vn');
-  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
   await expectNoHorizontalOverflow(page);
 });

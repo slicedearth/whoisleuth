@@ -44,6 +44,21 @@ test('the scan button only takes the high-contrast primary treatment once ready'
   expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('gradient');
 });
 
+test('offers bounded request pacing and preserves the operator choice during console navigation', async ({ page }) => {
+  const pacing = page.getByLabel('Request pacing');
+  await expect(pacing).toHaveValue('standard');
+  await expect(page.locator('.mode-help')).toContainText('at most 12 lookups run in parallel');
+
+  await pacing.selectOption('gentle');
+  await expect(page.locator('.mode-help')).toContainText('at most 2 lookups run in parallel');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByLabel('Request pacing')).toHaveValue('gentle');
+
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await expect(page.locator('.mode-help')).toContainText('at most 1 lookup runs in parallel');
+});
+
 test('keeps the Bulk queue available when browser-local context cannot be loaded', async ({ page }) => {
   await expect(page.locator('#domains')).toBeEditable();
   await failBrowserLocalReads(page);

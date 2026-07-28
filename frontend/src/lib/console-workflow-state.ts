@@ -1,4 +1,5 @@
 import type { BulkSortDirection, BulkSortKey } from './analysis/bulk-sort.ts';
+import type { BulkPacing } from './analysis/bulk-pacing.ts';
 import type {
   BulkAgeFilter,
   BulkGroupBy,
@@ -24,6 +25,7 @@ export type BulkWorkflowState<Result> = {
   guideContext: string;
   input: string;
   mode: LookupMode;
+  pacing?: BulkPacing;
   completed: number;
   total: number;
   results: Result[];

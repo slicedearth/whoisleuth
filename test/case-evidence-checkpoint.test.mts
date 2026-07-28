@@ -107,7 +107,7 @@ describe('case evidence checkpoints', () => {
     assert.equal(byField.get('http.final_origin')?.value, 'https://checkpoint.example');
     assert.equal(byField.get('page.password_field')?.value, 'Observed');
     assert.equal(byField.get('tls.protocol')?.completeness, 'partial');
-    assert.equal(byField.get('registration.registrar')?.sourceSchema.version, 21);
+    assert.equal(byField.get('registration.registrar')?.sourceSchema.version, 22);
     assert.equal(JSON.stringify(facts).includes('secret=discard'), false);
   });
 

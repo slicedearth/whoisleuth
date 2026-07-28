@@ -1,4 +1,10 @@
 <script lang="ts">
+  import type {
+    BulkPacing,
+    BulkPacingOption,
+    BulkProgressEstimate,
+  } from '$lib/analysis/bulk-pacing.ts';
+
   type ScanMode = 'fast' | 'deep';
 
   let {
@@ -11,6 +17,11 @@
     setInput,
     mode,
     setMode,
+    pacing,
+    setPacing,
+    pacingOptions,
+    concurrency,
+    progress,
     running,
     paused,
     entryCount,
@@ -32,6 +43,11 @@
     setInput: (value: string) => void;
     mode: ScanMode;
     setMode: (value: ScanMode) => void;
+    pacing: BulkPacing;
+    setPacing: (value: BulkPacing) => void;
+    pacingOptions: readonly BulkPacingOption[];
+    concurrency: number;
+    progress: BulkProgressEstimate;
     running: boolean;
     paused: boolean;
     entryCount: number;
@@ -56,11 +72,13 @@
   <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}</p>
   <div class="queue-actions">
     <label class="field">Scan mode<select value={mode} onchange={(event) => setMode(event.currentTarget.value as ScanMode)} disabled={running}><option value="fast">Fast · registration</option><option value="deep">Deep · compact web and mail triage</option></select></label>
+    <label class="field">Request pacing<select value={pacing} onchange={(event) => setPacing(event.currentTarget.value as BulkPacing)} disabled={running}>{#each pacingOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
     <button class="primary" onclick={start} disabled={running || !input.trim() || Boolean(lookupDisabledReason)}>{entryCount ? `Scan ${entryCount} domain${entryCount === 1 ? '' : 's'}` : 'Scan domains'}</button>
     {#if running}<button class="btn" onclick={togglePause}>{paused ? 'Resume' : 'Pause'}</button><button class="btn danger" onclick={cancel}>Cancel</button>{/if}
   </div>
-  <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, and mail signals for triage. Open a domain in Lookup for the complete source-level evidence and optional enrichments.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep enrichment.'}</p>
+  <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, and mail signals for triage. Open a domain in Lookup for the complete source-level evidence and optional enrichments.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep enrichment.'} {pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Bounded request pacing'}; at most {concurrency} {concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.</p>
   {#if running || total}<div class="progress" role="progressbar" aria-label="Bulk scan progress" aria-valuemin="0" aria-valuemax={total} aria-valuenow={completed}><span style:width={`${total ? completed / total * 100 : 0}%`}></span></div>{/if}
+  {#if running || total}<p class="progress-detail">{progress.completed} of {progress.total} settled · {progress.percent}% · {progress.label}</p>{/if}
   <p class="status" role="status" aria-live="polite">{status}</p>
 </section>
 
@@ -74,11 +92,12 @@
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
   textarea{width:100%;min-height:150px;padding:12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
   .queue-actions{display:flex;gap:9px;align-items:end;margin-top:12px}
-  .queue-actions .field{margin-right:auto}
+  .queue-actions .field:first-child{margin-right:auto}
   .queue-actions select{min-width:220px;min-height:42px}
   .progress{height:6px;margin-top:16px;overflow:hidden;border-radius:99px;background:var(--border)}
   .progress span{display:block;height:100%;background:var(--accent);transition:width .15s}
   .status{margin-bottom:0}
+  .progress-detail{margin:7px 0 0;color:var(--muted);font:600 var(--text-xs) var(--mono)}
   .mode-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   @media(max-width:700px){
     .queue-label{align-items:flex-start;flex-direction:column;gap:8px}

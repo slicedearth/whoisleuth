@@ -94,6 +94,13 @@
   import { BULK_REVIEW_SCHEMA, BULK_REVIEW_SCHEMA_VERSION } from '$lib/analysis/bulk-review-model.ts';
   import { buildBulkDomainComparison, buildBulkDomainComparisonExport } from '$lib/analysis/bulk-domain-comparison.ts';
   import { buildBulkRetryPlan, preservePriorBulkResult } from '$lib/analysis/bulk-retry-plan.ts';
+  import {
+    BULK_PACING_OPTIONS,
+    buildBulkProgressEstimate,
+    bulkConcurrency,
+    normalizeBulkPacing,
+    type BulkPacing,
+  } from '$lib/analysis/bulk-pacing.ts';
   import { buildBulkReviewManifest } from '$lib/analysis/bulk-review-export.ts';
   import {
     buildBulkMailExposureExport,
@@ -108,6 +115,7 @@
 
   let handoff = $state<CandidateHandoff|null>(null);
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
+  let pacing = $state<BulkPacing>('standard'); let scanElapsedMs = $state(0);
   let completed = $state(0); let total = $state(0); let results = $state<ScanResult[]>([]); let filter = $state<Filter>('all');
   let mutationFilter=$state('');let signalFilters=$state<Set<string>>(new Set());let sortKey=$state<BulkSortKey>('risk');let sortDirection=$state<BulkSortDirection>(-1);let page=$state(1);
   let sourceFilter=$state<BulkSourceFilter>('');let lifecycleFilter=$state('');let ageFilter=$state<BulkAgeFilter>('');let mailFilter=$state<BulkMailFilter>('');let registrarFilter=$state('');let caseDispositionFilter=$state('');let groupBy=$state<BulkGroupBy>('');
@@ -165,6 +173,8 @@
   const provenanceByDomain=$derived(new Map((handoff?.candidates||[]).map(candidate=>[candidate.domain.toLowerCase(),candidate])));
   const relationshipSummary=$derived(buildScanRelationships(running?[]:results));
   const parsedInput=$derived(parseDomainInput(input));
+  const scanProgress=$derived(buildBulkProgressEstimate(completed,total,scanElapsedMs));
+  const activeConcurrency=$derived(bulkConcurrency(mode,pacing));
   $effect(()=>{if(routePage.url.searchParams.has('investigation')&&!running&&results.length)selectInvestigationGuideReviewDomains(results.map((row)=>row.domain));});
   const coverage=$derived.by(()=>{if(!handoff||!['typosquat','keyword'].includes(handoff.source))return null;const generated=handoff.generatedCandidates||handoff.candidates;const trusted=new Set(generated.filter(candidate=>isDomainAllowlisted(candidate.domain,profile)).map(candidate=>candidate.domain));return buildCoverageReport(results.map(row=>({...row.saved,domain:row.domain,availability:row.availability,mutationTypes:row.mutationTypes})),generated,trusted,mutationLabels);});
 
@@ -189,13 +199,13 @@
     const guideContext=investigationTarget&&activeGuide?.domain===investigationTarget?`${activeGuide.recipeId}\u0000${activeGuide.domain}\u0000${activeGuide.createdAt}`:investigationTarget?`target\u0000${investigationTarget}`:'';
     const candidateState=handoffNavigation?null:readBulkWorkflowState<ScanResult>();
     const restored=candidateState&&(!investigationTarget||candidateState.guideContext===guideContext)?candidateState:null;
-    if(restored){input=restored.input;mode=restored.mode;completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sourceFilter=restored.sourceFilter||'';lifecycleFilter=restored.lifecycleFilter||'';ageFilter=restored.ageFilter||'';mailFilter=restored.mailFilter||'';registrarFilter=restored.registrarFilter||'';caseDispositionFilter=restored.caseDispositionFilter||'';groupBy=restored.groupBy||'';sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;indicatorWildcards=restored.indicatorWildcards===true;watchlistName=restored.watchlistName;}
+    if(restored){input=restored.input;mode=restored.mode;pacing=normalizeBulkPacing(restored.pacing);completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sourceFilter=restored.sourceFilter||'';lifecycleFilter=restored.lifecycleFilter||'';ageFilter=restored.ageFilter||'';mailFilter=restored.mailFilter||'';registrarFilter=restored.registrarFilter||'';caseDispositionFilter=restored.caseDispositionFilter||'';groupBy=restored.groupBy||'';sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;indicatorWildcards=restored.indicatorWildcards===true;watchlistName=restored.watchlistName;}
     void initializeLocalContext(handoffNavigation,investigationTarget,restored);
     return()=>{
       resume();
       controller?.abort();
       const retainedResults=activeScanSnapshot?.()||results;
-      writeBulkWorkflowState({guideContext,input,mode,completed,total,results:retainedResults,filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,groupBy,sortKey,sortDirection,page,status:running?`Stopped after ${completed} of ${total} lookups when you left Bulk. Completed results were retained.`:status,indicatorFormat,indicatorWildcards,watchlistName});
+      writeBulkWorkflowState({guideContext,input,mode,pacing,completed,total,results:retainedResults,filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,groupBy,sortKey,sortDirection,page,status:running?`Stopped after ${completed} of ${total} lookups when you left Bulk. Completed results were retained.`:status,indicatorFormat,indicatorWildcards,watchlistName});
     };
   });
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
@@ -283,11 +293,12 @@
     activeScanSnapshot=snapshot;
     const publish=()=>{if(publishTimer){clearTimeout(publishTimer);publishTimer=null;}results=snapshot();};
     const schedulePublish=()=>{if(!publishTimer)publishTimer=setTimeout(publish,RESULT_PUBLISH_MS);};
-    controller=scanController;running=true;paused=false;completed=0;total=domains.length;page=1;
+    controller=scanController;running=true;paused=false;completed=0;total=domains.length;page=1;scanElapsedMs=0;
     if(replace)results=[];
     status=`Scanning ${total} domain${total===1?'':'s'}…`;
-    const concurrency=mode==='fast'?12:4;
-    const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted)break;const index=cursor++,domain=domains[index];if(domain===undefined)break;let next:ScanResult;try{const body=await fetchLookup(domain,scanController.signal);next=normalize(domain,body);if(mode==='deep'&&body.availability?.deepScanComplete===false)next.saved.scanDepth='fast';}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;next=failedResult(domain,cause instanceof Error?cause.message:'Lookup failed');}const prior=priorByDomain.get(domain);if(preservePrior&&prior){const decision=preservePriorBulkResult(toBulkSessionResult(prior),toBulkSessionResult(next));if(decision.preserve){pendingResults[index]=prior;preservedReasons.push(`${domain}: ${decision.reason}`);}else pendingResults[index]=next;}else pendingResults[index]=next;completed+=1;schedulePublish();}};
+    const concurrency=bulkConcurrency(mode,pacing);
+    const startedAt=performance.now();
+    const worker=async()=>{while(cursor<domains.length&&!scanController.signal.aborted){await waitWhilePaused();if(scanController.signal.aborted)break;const index=cursor++,domain=domains[index];if(domain===undefined)break;let next:ScanResult;try{const body=await fetchLookup(domain,scanController.signal);next=normalize(domain,body);if(mode==='deep'&&body.availability?.deepScanComplete===false)next.saved.scanDepth='fast';}catch(cause){if(cause instanceof DOMException&&cause.name==='AbortError')break;next=failedResult(domain,cause instanceof Error?cause.message:'Lookup failed');}const prior=priorByDomain.get(domain);if(preservePrior&&prior){const decision=preservePriorBulkResult(toBulkSessionResult(prior),toBulkSessionResult(next));if(decision.preserve){pendingResults[index]=prior;preservedReasons.push(`${domain}: ${decision.reason}`);}else pendingResults[index]=next;}else pendingResults[index]=next;completed+=1;scanElapsedMs=performance.now()-startedAt;schedulePublish();}};
     await Promise.all(Array.from({length:Math.min(concurrency,domains.length)},worker));
     publish();activeScanSnapshot=null;running=false;controller=null;
     if(scanController.signal.aborted)return preservedReasons;
@@ -333,6 +344,11 @@
   setInput={(value)=>input=value}
   {mode}
   setMode={(value)=>mode=value}
+  {pacing}
+  setPacing={(value)=>pacing=value}
+  pacingOptions={BULK_PACING_OPTIONS}
+  concurrency={activeConcurrency}
+  progress={scanProgress}
   {running}
   {paused}
   entryCount={parsedInput.entries.length}
