@@ -1,6 +1,7 @@
 import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { MockAgent } from 'undici';
 import {
   MAX_SAFE_FETCH_URL_LENGTH,
   safeFetchDetailed,
@@ -48,6 +49,31 @@ function fixtureDependencies(responses: Response[], overrides: Partial<SafeFetch
 }
 
 describe('safe fetch redirect provenance', () => {
+  test('uses the dispatcher-compatible undici fetch instead of the host global', async () => {
+    const agent = new MockAgent();
+    agent.disableNetConnect();
+    agent
+      .get('https://example.com')
+      .intercept({ path: '/', method: 'GET' })
+      .reply(200, 'ok');
+    const hostFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      throw new Error('host global fetch must not receive a package dispatcher');
+    };
+
+    try {
+      const result = await safeFetchDetailed('https://example.com/', {}, {
+        resolvePublicAddresses: async () => PUBLIC_ADDRESSES,
+        pinnedDispatcher: () => agent,
+      });
+
+      assert.equal(result.response.status, 200);
+      assert.equal(await result.response.text(), 'ok');
+    } finally {
+      globalThis.fetch = hostFetch;
+    }
+  });
+
   test('records every validated redirect hop and returns the terminal response', async () => {
     const terminal = new Response('ok', { status: 200 });
     const fixture = fixtureDependencies([

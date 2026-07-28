@@ -22,7 +22,7 @@
 import { promises as dns } from 'node:dns';
 import * as net from 'node:net';
 import * as crypto from 'node:crypto';
-import { Agent } from 'undici';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 type PublicAddressRecord = { address: string; family: number };
 type SafeFetchDispatcher = { close?: () => Promise<unknown> | unknown };
@@ -52,6 +52,21 @@ type CappedTextOptions = { includeSha256?: boolean };
 const MAX_REDIRECTS = 5;
 const MAX_SAFE_FETCH_URL_LENGTH = 4096;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+async function defaultSafeFetchRequest(
+  url: string,
+  options: SafeFetchRequestOptions,
+): Promise<Response> {
+  // TypeScript's DOM and undici fetch declarations model equivalent web
+  // primitives with different iterator and Blob types. Keep that declaration
+  // mismatch isolated at this runtime boundary; callers continue to receive a
+  // standards-compatible Response.
+  const response = await undiciFetch(
+    url,
+    options as unknown as NonNullable<Parameters<typeof undiciFetch>[1]>,
+  );
+  return response as unknown as Response;
+}
 
 function isPrivateIpv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
@@ -280,7 +295,12 @@ async function safeFetchDetailed(
 ): Promise<SafeFetchDetailedResult> {
   const resolveAddresses = dependencies.resolvePublicAddresses || resolvePublicAddresses;
   const makeDispatcher = dependencies.pinnedDispatcher || pinnedDispatcher;
-  const request = dependencies.fetch || fetch;
+  // Keep the request function and dispatcher on the same undici runtime.
+  // Hosting platforms may wrap or replace Node's global fetch implementation;
+  // passing an Agent created by this package across that runtime boundary can
+  // fail before a socket is opened. The matching undici fetch implementation
+  // preserves the pinned DNS connection while avoiding that incompatibility.
+  const request = dependencies.fetch || defaultSafeFetchRequest;
   const now = dependencies.now || Date.now;
   const requestedMaxRedirects = Number(dependencies.maxRedirects);
   const maxRedirects = Number.isInteger(requestedMaxRedirects)
