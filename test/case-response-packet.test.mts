@@ -3,10 +3,12 @@ import { describe, test } from 'node:test';
 import {
   buildCaseResponsePacket,
   buildCaseResponsePreflight,
+  buildResponsePacketProfilePreview,
   caseResponsePacketFilename,
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
   MAX_ABUSIVE_URLS,
+  RESPONSE_PACKET_PROFILES,
   verifyCaseResponsePacketIntegrity,
 } from '../frontend/src/lib/analysis/case-response-packet.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
@@ -39,6 +41,7 @@ function reviewedCase() {
 describe('case response packet', () => {
   test('builds reviewable JSON, Markdown, and email without a submission action', async () => {
     const result = await buildCaseResponsePacket(reviewedCase(), {
+      profile: 'registrar',
       category: 'Credential phishing',
       affectedParty: 'Example service',
       abusiveUrls: ['https://report.example/sign-in?campaign=one'],
@@ -62,6 +65,8 @@ describe('case response packet', () => {
     assert.equal(result.json.schemaVersion, CASE_RESPONSE_PACKET_VERSION);
     assert.equal(result.json.reviewRequired, true);
     assert.equal(result.json.submissionPerformed, false);
+    assert.equal(result.json.profile.id, 'registrar');
+    assert.match(result.json.profile.subject, /Reviewed domain abuse report/u);
     assert.equal(result.json.contacts.length, 2);
     assert.equal(result.json.provenance.evidencePinCount, 1);
     assert.equal(result.json.provenance.decisionCount, 1);
@@ -113,6 +118,7 @@ describe('case response packet', () => {
 
   test('removes every control character from packet fields and rendered drafts', async () => {
     const result = await buildCaseResponsePacket(reviewedCase(), {
+      profile: 'security_contact',
       category: 'Credential\rphishing\nreview\u0007',
       affectedParty: 'Example\tservice\u007fteam',
       abusiveUrls: ['https://report.example/sign-in'],
@@ -141,7 +147,7 @@ describe('case response packet', () => {
     }
     assert.doesNotMatch(result.markdown, renderedControl);
     assert.doesNotMatch(result.email, renderedControl);
-    assert.match(result.email, /^Subject: Reviewed Credential phishing review report for report\.example$/mu);
+    assert.match(result.email, /^Subject: Reviewed security finding: report\.example \(Credential phishing review\)$/mu);
   });
 
   test('marks old evidence for refresh and detects packet changes', async () => {
@@ -184,5 +190,46 @@ describe('case response packet', () => {
     const filename = caseResponsePacketFilename('../REPORT.example', 'json', NOW);
     assert.equal(filename, 'whoisleuth-response-..-report.example-2026-07-28.json');
     assert.doesNotMatch(filename, /\//u);
+  });
+
+  test('defines audience-specific inclusion, exclusion, redaction, attachment, and follow-up previews', () => {
+    assert.deepEqual(
+      RESPONSE_PACKET_PROFILES.map((profile) => profile.id),
+      ['registrar', 'registry', 'network_hosting', 'security_contact', 'browser_blocklist', 'internal_soc'],
+    );
+    const preview = buildResponsePacketProfilePreview(reviewedCase(), {
+      profile: 'network_hosting',
+      category: 'Credential phishing',
+      abusiveUrls: ['https://report.example/sign-in'],
+      observedAt: NOW,
+      contacts: [],
+    });
+    assert.equal(preview.id, 'network_hosting');
+    assert.match(preview.audience, /Hosting provider/u);
+    assert.ok(preview.includedEvidence.length > 0);
+    assert.ok(preview.excludedEvidence.length > 0);
+    assert.ok(preview.redactions.length > 0);
+    assert.ok(preview.attachments.length > 0);
+    assert.ok(preview.followUpFields.length > 0);
+    assert.match(preview.missingEvidence.join(' '), /Network or hosting contact route/u);
+  });
+
+  test('keeps fixed-recipient profile gaps visible without blocking local export', () => {
+    const input = {
+      profile: 'registry',
+      category: 'Phishing',
+      affectedParty: 'Example service',
+      abusiveUrls: ['https://report.example/sign-in'],
+      observedHarm: 'A credential request was observed.',
+      observedAt: NOW,
+      contacts: [{ kind: 'registrar', contact: 'abuse@example.test' }],
+    };
+    const preflight = buildCaseResponsePreflight(reviewedCase(), input, NOW);
+    assert.equal(preflight.canExport, true);
+    assert.equal(preflight.status, 'review_cautions');
+    assert.equal(
+      preflight.checks.find((item) => item.id === 'profile_recipient')?.state,
+      'caution',
+    );
   });
 });

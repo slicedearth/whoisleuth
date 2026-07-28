@@ -494,12 +494,14 @@ default (see the README), so many lookups return no personal data at all.
   stated interpretation limits; they do not include case evidence or notes.
   Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
-  registry-published contact data. The separate single-domain Markdown report
-  is generated from a bounded known-field projection in the browser. It
-  includes registry, registrar, and WHOIS source states, collection time,
-  normalized findings, Risk
-  explanation, and limitations while excluding raw RDAP and WHOIS responses,
-  expanded contacts, provider payloads, scripts, and remote assets. A
+  registry-published contact data. The separate Lookup Markdown reports are
+  generated from bounded known-field projections in the browser. Domain
+  reports include registry, registrar, WHOIS, Risk, and limitation context; IP
+  reports include normalized network registration and bounded reverse-DNS
+  context when collected; ASN reports include normalized routing registration
+  evidence. All preserve source states and collection time while excluding raw
+  RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
+  remote assets. A
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
   detection rules, retained relationship observations, compact saved Bulk
@@ -524,7 +526,10 @@ default (see the README), so many lookups return no personal data at all.
 - **Reviewed response and defensive-control exports**: a case response packet
   is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
   UTC observation time, and separately attributed registrar, registry,
-  network/hosting, or security.txt contacts. Its local preflight blocks export
+  network/hosting, or security.txt contacts. The analyst selects a bounded
+  registrar, registry, network/hosting, security-contact, browser/blocklist, or
+  internal-SOC profile that states included and excluded evidence, expected
+  redactions and attachments, and follow-up fields. Its local preflight blocks export
   when required incident facts are incomplete and identifies review cautions
   for missing pins, decisions, recipient routes, disposition, stale evidence,
   contradictions, or action tracking. JSON, Markdown, and email-text outputs
@@ -536,6 +541,16 @@ default (see the README), so many lookups return no personal data at all.
   and create paired rollback instructions. Wildcard RPZ entries require a
   separate opt-in. WHOISleuth does not send either export or modify a defensive
   system.
+- **Field-level case checkpoints and readable reports**: an analyst can
+  deliberately save up to 20 normalized facts from a completed domain Lookup
+  into an open browser-local case. A fact retains its source, observation time,
+  collection depth, source state, completeness, truncation, schema version, and
+  limitations. Raw registration payloads, expanded contacts, HTML, scripts,
+  provider payloads, and unselected fields are not copied by this action. A
+  later Lookup compares the same fields while keeping changed, missing,
+  unavailable, conflicting, and not-recorded states distinct. Domain, IP, and
+  ASN readable Markdown reports are generated locally from bounded known fields
+  and keep partial source states explicit.
 - **Official-domain posture audits**: handled per request and discarded. The
   server queries public DNS, the domain registry's RDAP service for status,
   nameserver, DS, and DNSSEC delegation evidence, and (only when advertised)

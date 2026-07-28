@@ -31,6 +31,7 @@
   import WebsiteSnapshotManager from '$lib/components/WebsiteSnapshotManager.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
+  import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
@@ -47,6 +48,7 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import { buildLookupCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
   import {
@@ -401,6 +403,9 @@
     ...compactHttpSummary,
     mutationTypes:[]
   });
+  const checkpointFacts=$derived(result?.type==='domain'
+    ? buildLookupCheckpointFacts(result,{collectionDepth:lookupEvidenceDepth})
+    : []);
 
   async function refreshProfileContext(){
     try{profile=await activeProfile();}
@@ -424,6 +429,11 @@
   }
   async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){
     const next=await lookupCaseController.recordRecipient(caseRecord,route);
+    caseRecord=next.record;
+    caseStatus=next.status;
+  }
+  async function saveEvidenceCheckpoint(selectedFields:string[]){
+    const next=await lookupCaseController.recordCheckpoint(caseRecord,checkpointFacts,selectedFields);
     caseRecord=next.record;
     caseStatus=next.status;
   }
@@ -556,7 +566,7 @@
 
 {#if result}
   <section class="result-root" id="result">
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={result.type==='domain'?downloadReadableReport:null} />
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} />
 
     <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 
@@ -791,6 +801,9 @@
         <h3 id="case-response-title">Case and response</h3>
 
         <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
+        {#if caseRecord && checkpointFacts.length}
+          <LookupEvidenceCheckpoint facts={checkpointFacts} pins={caseRecord.evidencePins} onsave={saveEvidenceCheckpoint} />
+        {/if}
       </section>
     {/if}
 

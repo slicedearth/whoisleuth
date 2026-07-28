@@ -300,6 +300,11 @@ test('reviewed response records persist and produce a local non-submitted packet
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+  await expect(packet.getByLabel('Audience profile')).toHaveValue('internal_soc');
+  await expect(packet).toContainText('Internal security operations or incident-response team');
+  await packet.getByLabel('Audience profile').selectOption('registrar');
+  await expect(packet).toContainText('Domain registrar abuse or compliance team');
+  await expect(packet).toContainText('Raw WHOIS or RDAP payloads');
   await packet.getByLabel('Abuse category').fill('Credential phishing');
   await packet.getByLabel('Affected party').fill('Example service');
   await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
@@ -319,7 +324,11 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 4,
+    schemaVersion: 5,
+    profile: {
+      id: 'registrar',
+      audience: 'Domain registrar abuse or compliance team',
+    },
     incident: {
       category: 'Credential phishing',
       affectedParty: 'Example service',
@@ -1011,7 +1020,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-cases-.*\.json$/);
-    expect(parsed.version).toBe(4);
+    expect(parsed.version).toBe(5);
     expect(parsed.cases).toEqual(expect.arrayContaining([
       expect.objectContaining({ domain: 'backup-test.invalid' }),
     ]));

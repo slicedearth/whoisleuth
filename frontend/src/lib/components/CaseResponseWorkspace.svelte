@@ -17,10 +17,13 @@
   import {
     buildCaseResponsePacket,
     buildCaseResponsePreflight,
+    buildResponsePacketProfilePreview,
     caseResponsePacketFilename,
     RESPONSE_CONTACT_KINDS,
+    RESPONSE_PACKET_PROFILES,
     type CaseResponsePacketInput,
     type ResponseContactKind,
+    type ResponsePacketProfileId,
   } from '$lib/analysis/case-response-packet.ts';
 
   let {
@@ -63,6 +66,7 @@
   const investigationTrail = $derived(buildCaseInvestigationTrail(record));
 
   let packetCategory = $state('');
+  let packetProfile = $state<ResponsePacketProfileId>('internal_soc');
   let packetAffectedParty = $state('');
   let packetUrls = $state('');
   let packetHarm = $state('');
@@ -89,6 +93,7 @@
   const reviewNow = new Date().toISOString();
   const actionSummary = $derived(buildCaseActionOutcomeSummary(record.actions, reviewNow));
   const packetPreflight = $derived(buildCaseResponsePreflight(record, packetInput(), reviewNow));
+  const packetProfilePreview = $derived(buildResponsePacketProfilePreview(record, packetInput()));
 
   function isoFromLocal(value: string): string | null {
     if (!value) return null;
@@ -251,6 +256,7 @@
 
   function packetInput(): CaseResponsePacketInput {
     return {
+      profile: packetProfile,
       category: packetCategory,
       affectedParty: packetAffectedParty,
       abusiveUrls: packetUrls,
@@ -446,6 +452,23 @@
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">This prepares local JSON, Markdown, or plain-text drafts only. WHOISleuth does not send reports. JSON and Markdown include observation-age context, reviewed action history, and a canonical SHA-256 digest for later integrity checks.</p>
+      <label class="field">Audience profile<select bind:value={packetProfile}>{#each RESPONSE_PACKET_PROFILES as profile}<option value={profile.id}>{profile.label}</option>{/each}</select></label>
+      <section class="profile-preview" aria-labelledby={`profile-preview-title-${record.id}`}>
+        <div>
+          <strong id={`profile-preview-title-${record.id}`}>{packetProfilePreview.label}</strong>
+          <span>{packetProfilePreview.audience}</span>
+        </div>
+        <p><strong>Suggested subject:</strong> {packetProfilePreview.subject}</p>
+        <div class="profile-columns">
+          <section><strong>Included</strong><ul>{#each packetProfilePreview.includedEvidence as item}<li>{item}</li>{/each}</ul></section>
+          <section><strong>Excluded</strong><ul>{#each packetProfilePreview.excludedEvidence as item}<li>{item}</li>{/each}</ul></section>
+          <section><strong>Redactions</strong><ul>{#each packetProfilePreview.redactions as item}<li>{item}</li>{/each}</ul></section>
+          <section><strong>Attachments and follow-up</strong><ul>{#each packetProfilePreview.attachments as item}<li>{item}</li>{/each}{#each packetProfilePreview.followUpFields as item}<li>{item}</li>{/each}</ul></section>
+        </div>
+        {#if packetProfilePreview.missingEvidence.length}
+          <p class="profile-missing"><strong>Still needed:</strong> {packetProfilePreview.missingEvidence.join('; ')}</p>
+        {/if}
+      </section>
       <section class="preflight" aria-labelledby={`preflight-title-${record.id}`}>
         <div><strong id={`preflight-title-${record.id}`}>Response preflight</strong><span class={`preflight-state state-${packetPreflight.status}`}>{packetPreflight.status.replaceAll('_', ' ')}</span></div>
         <p>{packetPreflight.counts.pass} pass · {packetPreflight.counts.caution} caution · {packetPreflight.counts.block} block</p>
@@ -489,6 +512,7 @@
   .pin-references,.contacts{display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}
   .actions{display:flex;flex-wrap:wrap;gap:8px}.notice{margin:0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-xs)}
   .preflight{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.preflight>div{display:flex;align-items:center;justify-content:space-between;gap:8px}.preflight>p{margin:0;color:var(--muted);font-size:var(--text-2xs)}.preflight-state{padding:4px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.preflight .state-ready_for_review{color:var(--accent);border-color:rgb(var(--accent-rgb) / .4)}.preflight .state-review_cautions{color:var(--amber);border-color:rgb(var(--amber-rgb) / .4)}.preflight .state-needs_input{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}.preflight ul{display:grid;gap:5px;margin:0;padding:0;list-style:none}.preflight li{display:grid;grid-template-columns:minmax(110px,.35fr) minmax(0,1fr);gap:8px;padding:7px;border-left:3px solid var(--border);font-size:var(--text-2xs)}.preflight li[data-state="pass"]{border-color:var(--accent)}.preflight li[data-state="caution"]{border-color:var(--amber)}.preflight li[data-state="block"]{border-color:var(--danger)}.preflight li span{color:var(--muted);line-height:1.45}
+  .profile-preview{display:grid;gap:9px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.profile-preview>div:first-child{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:5px 12px}.profile-preview>div:first-child>strong{font:700 var(--text-sm) var(--mono)}.profile-preview>div:first-child>span,.profile-preview>p{color:var(--muted);font-size:var(--text-2xs)}.profile-preview>p{margin:0;overflow-wrap:anywhere}.profile-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.profile-columns section{padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.profile-columns strong{font:700 var(--text-2xs) var(--mono)}.profile-columns ul{margin:6px 0 0;padding-left:17px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.profile-missing{padding:7px 8px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06)}
   .contact-row{display:grid;grid-template-columns:130px repeat(3,minmax(0,1fr));gap:8px;align-items:end}.contact-row>strong{padding-bottom:10px;font:700 var(--text-xs) var(--mono);text-transform:capitalize}
-  @media(max-width:800px){.two-columns,.contact-row,.preflight li{grid-template-columns:1fr}.contact-row>strong{padding:4px 0 0}.actions .btn{flex:1 1 150px}}
+  @media(max-width:800px){.two-columns,.contact-row,.preflight li,.profile-columns{grid-template-columns:1fr}.contact-row>strong{padding:4px 0 0}.actions .btn{flex:1 1 150px}}
 </style>

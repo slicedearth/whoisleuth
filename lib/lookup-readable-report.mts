@@ -8,7 +8,7 @@ import {
   type LookupHttpResponse,
 } from './lookup-response-contract.mts';
 
-export const LOOKUP_READABLE_REPORT_VERSION = 1;
+export const LOOKUP_READABLE_REPORT_VERSION = 2;
 export const MAX_LOOKUP_READABLE_REPORT_BYTES = 64 * 1024;
 
 type LookupReadableReportOptions = {
@@ -25,6 +25,21 @@ function selectedObjectValues(value: JsonObject, keys: readonly string[]): Recor
 function projectedRegistrar(value: unknown): Record<string, unknown> | null {
   if (!isJsonObject(value)) return null;
   return selectedObjectValues(value, ['name', 'org', 'handle']);
+}
+
+function projectedEndpoint(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 2_048) return null;
+  try {
+    const endpoint = new URL(value);
+    if (!['http:', 'https:'].includes(endpoint.protocol) || !endpoint.hostname || endpoint.username || endpoint.password) {
+      return null;
+    }
+    endpoint.search = '';
+    endpoint.hash = '';
+    return endpoint.toString().slice(0, 2_048);
+  } catch {
+    return null;
+  }
 }
 
 function projectedRegistryPublication(
@@ -69,6 +84,70 @@ function projectedRegistryPublication(
   projected.lifecycle = lifecycle;
   projected.registrar = projectedRegistrar(value.registrar);
   return projected;
+}
+
+function projectedNetworkRegistration(value: JsonObject): Record<string, unknown> {
+  const lifecycle = isJsonObject(value.lifecycle)
+    ? selectedObjectValues(value.lifecycle, [
+        'createdDate',
+        'createdDateIso',
+        'updatedDate',
+        'updatedDateIso',
+      ])
+    : {};
+  return {
+    ...selectedObjectValues(value, [
+      'handle',
+      'name',
+      'startAddress',
+      'endAddress',
+      'cidrs',
+      'cidrsTruncated',
+      'country',
+      'networkType',
+      'statuses',
+    ]),
+    lifecycle,
+  };
+}
+
+function projectedAutnumRegistration(value: JsonObject): Record<string, unknown> {
+  const lifecycle = isJsonObject(value.lifecycle)
+    ? selectedObjectValues(value.lifecycle, [
+        'createdDate',
+        'createdDateIso',
+        'updatedDate',
+        'updatedDateIso',
+      ])
+    : {};
+  return {
+    ...selectedObjectValues(value, [
+      'handle',
+      'name',
+      'startAutnum',
+      'endAutnum',
+      'country',
+      'autnumType',
+      'statuses',
+    ]),
+    lifecycle,
+  };
+}
+
+function projectedReverseDns(value: JsonObject): Record<string, unknown> {
+  const records = isJsonObject(value.records) ? value.records : {};
+  return {
+    ...selectedObjectValues(value, [
+      'version',
+      'status',
+      'observedAt',
+      'scanMode',
+      'complete',
+      'truncated',
+      'limitations',
+    ]),
+    records: selectedObjectValues(records, ['ptr']),
+  };
 }
 
 function projectedSoaRecords(value: unknown): Record<string, unknown>[] {
@@ -247,6 +326,12 @@ function projectedLookup(response: LookupHttpResponse): Record<string, unknown> 
     registrarRdapFetchedAt: registrarRdap.fetchedAt,
   });
 
+  const queryType = response.type;
+  const projectedParsed = queryType === 'domain'
+    ? projectedRegistryPublication(view.rdapParsed)
+    : queryType === 'asn'
+      ? projectedAutnumRegistration(view.rdapParsed)
+      : projectedNetworkRegistration(view.rdapParsed);
   return {
     query: response.query,
     type: response.type,
@@ -264,9 +349,13 @@ function projectedLookup(response: LookupHttpResponse): Record<string, unknown> 
         'upstreamStatus',
         'fetchedAt',
       ]),
-      parsed: projectedRegistryPublication(view.rdapParsed),
+      rdapServer: projectedEndpoint(rdap.rdapServer),
+      parsed: projectedParsed,
       ...(projectedRegistrarRdap ? { registrarRdap: projectedRegistrarRdap } : {}),
     },
+    ...(queryType === 'ipv4' || queryType === 'ipv6'
+      ? { reverseDns: projectedReverseDns(view.reverseDns) }
+      : {}),
     whois: {
       ...selectedObjectValues(whois, ['error']),
       parsed: projectedRegistryPublication(view.whoisParsed),
@@ -292,6 +381,13 @@ function buildLookupReadableReport(
 ): string {
   const generatedAt = generatedTimestamp(options.generatedAt);
   const projected = projectedLookup(response);
+  if (response.type !== 'domain') {
+    const markdown = formatNetworkIdentifierReadableReport(projected, generatedAt);
+    if (new TextEncoder().encode(markdown).byteLength > MAX_LOOKUP_READABLE_REPORT_BYTES) {
+      throw new RangeError('Readable Lookup report exceeded its byte limit.');
+    }
+    return markdown;
+  }
   const evidence = buildLookupEvidence(projected, {
     generatedAt,
     idnAnalysis: null,
@@ -308,6 +404,119 @@ function buildLookupReadableReport(
     throw new RangeError('Readable Lookup report exceeded its byte limit.');
   }
   return markdown;
+}
+
+function markdownValue(value: unknown, fallback = 'Not reported'): string {
+  const raw = value === null || value === undefined || value === ''
+    ? fallback
+    : Array.isArray(value)
+      ? value.length ? value.join(', ') : fallback
+      : String(value);
+  return raw
+    .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
+    .replace(/[\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, 1_000)
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/([\\`*_{}\[\]()#+\-.!|=~])/gu, '\\$1')
+    .replace(/:/gu, '\\:')
+    .replace(/@/gu, '\\@');
+}
+
+function lifecycleValue(value: JsonObject, field: 'createdDate' | 'updatedDate'): unknown {
+  const lifecycle = isJsonObject(value.lifecycle) ? value.lifecycle : {};
+  return lifecycle[`${field}Iso`] ?? lifecycle[field] ?? null;
+}
+
+function appendReadableField(lines: string[], label: string, value: unknown): void {
+  lines.push(`- **${label}:** ${markdownValue(value)}`);
+}
+
+function formatNetworkIdentifierReadableReport(
+  projectedRaw: Record<string, unknown>,
+  generatedAt: string,
+): string {
+  const projected = projectedRaw as JsonObject;
+  const type = typeof projected.type === 'string' ? projected.type : 'network';
+  const title = type === 'asn' ? 'ASN evidence report' : 'IP evidence report';
+  const submitted = projected.query ?? 'Unknown target';
+  const diagnostics = isJsonObject(projected.diagnostics) ? projected.diagnostics : {};
+  const rdapDiagnostic = isJsonObject(diagnostics.rdap) ? diagnostics.rdap : {};
+  const whoisDiagnostic = isJsonObject(diagnostics.whois) ? diagnostics.whois : {};
+  const rdap = isJsonObject(projected.rdap) ? projected.rdap : {};
+  const parsed = isJsonObject(rdap.parsed) ? rdap.parsed : {};
+  const reverseDns = isJsonObject(projected.reverseDns) ? projected.reverseDns : {};
+  const reverseRecords = isJsonObject(reverseDns.records) ? reverseDns.records : {};
+  const lines = [
+    `# ${title} — ${markdownValue(submitted)}`,
+    '',
+    '> Human-readable point-in-time summary. Raw RDAP and WHOIS responses, expanded contacts, secrets, and remote assets are deliberately excluded.',
+    '',
+  ];
+  appendReadableField(lines, 'Generated', generatedAt);
+  appendReadableField(lines, 'Report contract', `whoisleuth.lookup-readable-report v${LOOKUP_READABLE_REPORT_VERSION}`);
+  lines.push('', '## Query');
+  appendReadableField(lines, 'Submitted', submitted);
+  appendReadableField(lines, 'Type', type === 'asn' ? 'ASN' : type.toUpperCase());
+  lines.push('', '## Source health');
+  appendReadableField(lines, 'RDAP', rdapDiagnostic.status ?? (rdap.error ? 'error' : 'unknown'));
+  appendReadableField(lines, 'WHOIS', whoisDiagnostic.status ?? 'unknown');
+  appendReadableField(lines, 'RDAP endpoint', rdap.rdapServer);
+  appendReadableField(lines, 'RDAP transport', rdap.transportSecurity);
+  appendReadableField(lines, 'RDAP HTTP status', rdap.upstreamStatus);
+  appendReadableField(lines, 'RDAP fetched', rdap.fetchedAt);
+  if (type !== 'asn') appendReadableField(lines, 'Reverse DNS', reverseDns.status ?? 'not recorded');
+  lines.push('', type === 'asn' ? '## Autonomous-system registration' : '## Network registration');
+  appendReadableField(lines, 'Handle', parsed.handle);
+  appendReadableField(lines, 'Name', parsed.name);
+  if (type === 'asn') {
+    appendReadableField(lines, 'ASN range', parsed.startAutnum === parsed.endAutnum
+      ? parsed.startAutnum
+      : parsed.startAutnum !== undefined && parsed.endAutnum !== undefined
+        ? `${parsed.startAutnum} to ${parsed.endAutnum}`
+        : null);
+    appendReadableField(lines, 'Allocation type', parsed.autnumType);
+  } else {
+    appendReadableField(lines, 'Address range', parsed.startAddress && parsed.endAddress
+      ? `${parsed.startAddress} to ${parsed.endAddress}`
+      : null);
+    appendReadableField(lines, 'CIDR prefixes', parsed.cidrs);
+    appendReadableField(lines, 'CIDR list truncated', typeof parsed.cidrsTruncated === 'boolean'
+      ? parsed.cidrsTruncated ? 'Yes' : 'No'
+      : null);
+    appendReadableField(lines, 'Network type', parsed.networkType);
+  }
+  appendReadableField(lines, 'Country', parsed.country);
+  appendReadableField(lines, 'Statuses', parsed.statuses);
+  appendReadableField(lines, 'Created', lifecycleValue(parsed, 'createdDate'));
+  appendReadableField(lines, 'Updated', lifecycleValue(parsed, 'updatedDate'));
+  if (type !== 'asn') {
+    lines.push('', '## Reverse DNS context');
+    appendReadableField(lines, 'Observed', reverseDns.observedAt);
+    appendReadableField(lines, 'Collection depth', reverseDns.scanMode);
+    appendReadableField(lines, 'Complete', typeof reverseDns.complete === 'boolean'
+      ? reverseDns.complete ? 'Yes' : 'No'
+      : null);
+    appendReadableField(lines, 'Truncated', typeof reverseDns.truncated === 'boolean'
+      ? reverseDns.truncated ? 'Yes' : 'No'
+      : null);
+    appendReadableField(lines, 'PTR names', reverseRecords.ptr);
+    appendReadableField(lines, 'Source limitations', reverseDns.limitations);
+  }
+  lines.push(
+    '',
+    '## Limitations',
+    '',
+    '- This report preserves the observed source states. Unavailable, partial, unsupported, stale, conflicting, or missing evidence is inconclusive rather than a negative finding.',
+    '- Public registration and routing identifiers describe published allocation context. They do not prove ownership, current control, hosting responsibility, intent, safety, or maliciousness.',
+    '- Reverse DNS names are operator-published context. They do not prove identity, hosting control, or a forward-confirmed relationship.',
+    '- The report projects only bounded normalized fields already collected by Lookup and makes no additional request.',
+    '',
+  );
+  return lines.join('\n');
 }
 
 function lookupReadableReportFilename(

@@ -4,6 +4,7 @@
 // action records a reviewed external or internal follow-up.
 
 export const MAX_CASE_EVIDENCE_PINS = 40;
+export const MAX_CASE_CHECKPOINT_FACTS = 20;
 export const MAX_CASE_DECISIONS = 30;
 export const MAX_CASE_ACTIONS = 50;
 export const MAX_CASE_ASSERTIONS = 50;
@@ -58,11 +59,22 @@ export type CaseManualTrailKind = typeof CASE_MANUAL_TRAIL_KINDS[number];
 
 export type CaseEvidencePin = {
   id: string;
+  checkpointId: string | null;
+  field: string | null;
+  category: string | null;
   label: string;
   value: string;
   source: string;
+  sourceState: string | null;
+  sourceSchema: {
+    collection: string;
+    schema: string;
+    version: number;
+  } | null;
   observedAt: string;
+  collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: CasePinCompleteness;
+  truncated: boolean | null;
   limitations: string[];
   createdAt: string;
 };
@@ -206,6 +218,19 @@ function limitations(value: unknown): string[] {
   return [...unique];
 }
 
+function sourceSchema(value: unknown): CaseEvidencePin['sourceSchema'] {
+  const item = record(value);
+  const collection = text(item.collection, 80);
+  const schema = text(item.schema, 120);
+  const version = typeof item.version === 'number'
+    && Number.isSafeInteger(item.version)
+    && item.version > 0
+    && item.version <= 10_000
+    ? item.version
+    : null;
+  return collection && schema && version !== null ? { collection, schema, version } : null;
+}
+
 function uniqueIds(value: unknown, validIds?: ReadonlySet<string>): string[] {
   if (!Array.isArray(value)) return [];
   const unique = new Set<string>();
@@ -225,13 +250,24 @@ function normalizePin(raw: unknown, fallback: string): CaseEvidencePin | null {
   const createdAt = iso(item.createdAt, fallback);
   return {
     id: safeId(item.id, 'pin', { label, value, createdAt }),
+    checkpointId: typeof item.checkpointId === 'string' && SAFE_ID_RE.test(item.checkpointId)
+      ? item.checkpointId
+      : null,
+    field: text(item.field, 120) || null,
+    category: text(item.category, 80) || null,
     label,
     value,
     source: text(item.source, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_selected',
+    sourceState: text(item.sourceState, 40) || null,
+    sourceSchema: sourceSchema(item.sourceSchema),
     observedAt: iso(item.observedAt, createdAt),
+    collectionDepth: item.collectionDepth === 'deep' || item.collectionDepth === 'fast'
+      ? item.collectionDepth
+      : 'unknown',
     completeness: typeof item.completeness === 'string' && COMPLETENESS.has(item.completeness)
       ? item.completeness as CasePinCompleteness
       : 'unknown',
+    truncated: typeof item.truncated === 'boolean' ? item.truncated : null,
     limitations: limitations(item.limitations),
     createdAt,
   };
@@ -258,6 +294,22 @@ export function appendCaseEvidencePin(
   const created = normalizePin({ ...item, id: freshId('pin'), createdAt: now }, now);
   if (!created) throw new Error('An evidence pin requires a label and value.');
   return normalizeCaseEvidencePins([...current, created], now);
+}
+
+export function appendCaseEvidencePins(
+  current: readonly CaseEvidencePin[],
+  raw: unknown,
+  now: string,
+): CaseEvidencePin[] {
+  if (!Array.isArray(raw) || !raw.length) throw new Error('An evidence checkpoint requires at least one selected fact.');
+  let output = [...current];
+  let added = 0;
+  for (const item of raw.slice(0, MAX_CASE_CHECKPOINT_FACTS)) {
+    output = appendCaseEvidencePin(output, item, now);
+    added += 1;
+  }
+  if (!added) throw new Error('An evidence checkpoint requires at least one valid selected fact.');
+  return output;
 }
 
 function normalizeDecision(

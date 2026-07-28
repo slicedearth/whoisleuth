@@ -735,6 +735,17 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.setViewportSize({ width: 360, height: 780 });
   await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Create case' }).click();
+  const checkpoint = page.locator('.checkpoint');
+  await expect(checkpoint.getByRole('heading', { name: 'Retain selected normalized facts' })).toBeVisible();
+  await checkpoint.getByRole('checkbox', { name: /Registrar/u }).check();
+  await checkpoint.getByRole('checkbox', { name: /Registration statuses/u }).check();
+  await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 2 analyst-selected checkpoint facts');
+  await checkpoint.getByText(/Compare with latest saved checkpoint/u).click();
+  await expect(checkpoint).toContainText('equal');
+  await expectNoHorizontalOverflow(page);
 });
 
 test('registrar RDAP unsupported and error states remain neutral source rows', async ({ page }) => {
@@ -1655,7 +1666,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await reverseDnsCard.locator(':scope > summary').click();
   await expect(reverseDnsCard.getByText('edge.example.test', { exact: true })).toBeVisible();
   await expect(reverseDnsCard.getByText(/does not prove hosting control/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download report' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download report' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
@@ -1688,7 +1699,7 @@ test('ASN results retain allocation status and lifecycle metadata at narrow widt
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2003-04-05T06:07:08.000Z"]')).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2024-05-06T07:08:09.000Z"]')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download report' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download report' })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

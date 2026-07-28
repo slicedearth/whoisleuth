@@ -107,15 +107,22 @@ the branches that actually ran. Cancelling or leaving the page stops the
 browser from waiting but cannot recall work already admitted by the server;
 no incomplete response is retained or rendered.
 
-After a domain result arrives, **Download report** creates a bounded readable
-Markdown summary entirely in the browser. It records registry, registrar, and
-WHOIS source health and collection time alongside normalized findings, the
-registry lifecycle and disclosure interpretation, explainable Risk assessment,
-and interpretation limits. It does not include raw
-RDAP or WHOIS responses, expanded contacts, provider payloads, scripts, or
-remote assets. The separate JSON evidence export remains the full-fidelity
-option and can contain public registration contacts. IP and ASN reports remain
-outside this first readable-report contract.
+After a result arrives, **Download report** creates a bounded readable Markdown
+summary entirely in the browser. Domain reports record registry, registrar,
+WHOIS, lifecycle, Risk, and limitation context. IP reports present normalized
+network registration and reverse-DNS evidence, while ASN reports present the
+normalized routing registration fields returned by RDAP. Every report keeps
+source health, collection time, partial states, and limitations explicit. It
+does not include raw RDAP or WHOIS responses, expanded contacts, provider
+payloads, scripts, or remote assets. The separate JSON evidence export remains
+the full-fidelity option and can contain public registration contacts.
+
+For an open domain case, Lookup can also retain a deliberately selected
+field-level checkpoint. Each bounded fact keeps its source, observed time,
+collection depth, source state, completeness, truncation, schema version, and
+limitations. A later Lookup compares the same fields as equal, changed,
+missing, unavailable, conflicting, or not recorded; incomplete collection
+never overwrites the earlier checkpoint.
 
 The external evidence pivots are ordinary links, not integrations. WHOISleuth
 does not prefetch them, call their APIs, cache or store their results, or use
@@ -181,8 +188,9 @@ accessible lists, tables, or source records.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
   Case response packets expose required facts, evidence freshness, open
-  contradictions, recipient provenance, case disposition, and action tracking
-  before export. Defensive-control exports also require explicit review;
+  contradictions, recipient provenance, case disposition, action tracking,
+  and an audience-specific inclusion, exclusion, redaction, attachment, and
+  follow-up checklist before export. Defensive-control exports also require explicit review;
   the latter include a provenance manifest, expiry, exclusions, and rollback
   instructions. Wildcard blocking remains opt-in.
 

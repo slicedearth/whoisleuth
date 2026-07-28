@@ -192,4 +192,114 @@ describe('browser-local readable Lookup report', () => {
       'whoisleuth-lookup-report-unsafe-name.example.test-2026-07-26T03-04-05-006Z.md',
     );
   });
+
+  test('renders a bounded IP report with registration, reverse-DNS, and source health', () => {
+    const source = lookupResponse({
+      query: '192.0.2.8',
+      type: 'ipv4',
+      inputHostname: '',
+      registrableDomain: '',
+      isSubdomain: false,
+      rdap: {
+        rdapServer: 'https://rdap.example.test/ip/192.0.2.8?discard=this',
+        transportSecurity: 'https',
+        upstreamStatus: 200,
+        fetchedAt: '2026-07-29T01:02:03.000Z',
+        data: { raw: 'excluded' },
+        parsed: {
+          handle: 'NET-192-0-2-0-1',
+          name: 'Example Network',
+          startAddress: '192.0.2.0',
+          endAddress: '192.0.2.255',
+          cidrs: ['192.0.2.0/24'],
+          cidrsTruncated: false,
+          country: 'AU',
+          networkType: 'DIRECT ALLOCATION',
+          statuses: ['active'],
+          lifecycle: {
+            createdDateIso: '2001-02-03T04:05:06.000Z',
+            updatedDateIso: '2024-05-06T07:08:09.000Z',
+          },
+          entitiesByRole: { registrant: [{ emails: ['private@example.test'] }] },
+        },
+      },
+      reverseDns: {
+        version: 1,
+        status: 'partial',
+        observedAt: '2026-07-29T01:02:04.000Z',
+        scanMode: 'deep',
+        complete: false,
+        truncated: true,
+        limitations: ['One PTR answer was omitted.'],
+        records: { ptr: ['edge.example.test'] },
+        raw: 'excluded',
+      },
+      diagnostics: {
+        version: 8,
+        rdap: { status: 'success' },
+        whois: { status: 'unsupported' },
+        availability: { status: 'not_applicable' },
+        reverseDns: { status: 'partial' },
+      },
+    });
+    const projected = projectLookupForReadableReport(source);
+    const report = buildLookupReadableReport(source, {
+      generatedAt: '2026-07-29T02:00:00.000Z',
+    });
+
+    assert.match(report, /^# IP evidence report/u);
+    assert.match(report, /192\\\.0\\\.2\\\.0 to 192\\\.0\\\.2\\\.255/u);
+    assert.match(report, /192\\\.0\\\.2\\\.0\/24/u);
+    assert.match(report, /edge\\\.example\\\.test/u);
+    assert.match(report, /Reverse DNS:\*\* partial/u);
+    assert.match(report, /WHOIS:\*\* unsupported/u);
+    assert.match(report, /One PTR answer was omitted/u);
+    assert.equal(JSON.stringify(projected).includes('private@example.test'), false);
+    assert.equal(JSON.stringify(projected).includes('"raw"'), false);
+    assert.doesNotMatch(report, /private@example\.test|discard=this/u);
+  });
+
+  test('renders a bounded ASN report without inventing reverse-DNS context', () => {
+    const source = lookupResponse({
+      query: 'AS64496',
+      type: 'asn',
+      inputHostname: '',
+      registrableDomain: '',
+      isSubdomain: false,
+      rdap: {
+        upstreamStatus: 200,
+        fetchedAt: '2026-07-29T01:02:03.000Z',
+        parsed: {
+          handle: 'AS64496',
+          name: 'Example Autonomous System',
+          startAutnum: 64496,
+          endAutnum: 64500,
+          country: 'AU',
+          autnumType: 'DIRECT ALLOCATION',
+          statuses: ['active'],
+          lifecycle: {
+            createdDate: '2003-04-05T06:07:08Z',
+            updatedDate: '2024-05-06T07:08:09Z',
+          },
+          entitiesByRole: { abuse: [{ emails: ['private@example.test'] }] },
+        },
+      },
+      diagnostics: {
+        version: 8,
+        rdap: { status: 'partial' },
+        whois: { status: 'unavailable' },
+        availability: { status: 'not_applicable' },
+      },
+    });
+    const report = buildLookupReadableReport(source, {
+      generatedAt: '2026-07-29T02:00:00.000Z',
+    });
+
+    assert.match(report, /^# ASN evidence report/u);
+    assert.match(report, /64496 to 64500/u);
+    assert.match(report, /DIRECT ALLOCATION/u);
+    assert.match(report, /RDAP:\*\* partial/u);
+    assert.match(report, /WHOIS:\*\* unavailable/u);
+    assert.doesNotMatch(report, /Reverse DNS context|private@example\.test/u);
+  });
 });

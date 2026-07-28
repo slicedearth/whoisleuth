@@ -425,8 +425,10 @@ lists, and deliberately omits raw RDAP JSON and full WHOIS response bodies.
 Use JSON when the complete evidence package or machine processing is required.
 The browser Console reuses this bounded Markdown renderer for domain results
 after first reducing the typed Lookup response to the known normalized fields
-needed by the report. IP and ASN results do not offer that first browser
-format. The browser action does not change the CLI input or output contract.
+needed by the report. It separately offers bounded IP and ASN summaries from
+their normalized RDAP and source-health fields; IP reports can also include
+bounded reverse-DNS context already collected by Lookup. The browser action
+does not change the CLI input or output contract.
 When a version-5, version-6, or version-7 lookup records a documented registry-access constraint, both
 Markdown and HTML include that context in collection diagnostics without
 changing its non-authoritative interpretation. Both formats also include the

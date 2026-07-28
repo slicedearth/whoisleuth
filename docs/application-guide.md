@@ -94,13 +94,20 @@ unknown, or not found. It preserves those states separately, lists retained
 limitations, and never retries a source or converts incomplete collection into
 a clean finding.
 
-After a successful single-domain Lookup, **Download report** creates a readable
-Markdown summary locally in the browser. It includes registry, registrar, and
-WHOIS source health and collection time, normalized findings, the explainable
-Risk assessment, and limitations. It deliberately excludes raw RDAP and WHOIS
-responses, expanded contacts, provider payloads, scripts, and remote assets.
-IP and ASN results retain the JSON evidence action but do not offer this first
-domain-focused readable report.
+After a successful Lookup, **Download report** creates a readable Markdown
+summary locally in the browser. Domain reports include registry, registrar,
+WHOIS, Risk, and limitation context. IP reports include normalized network
+registration and reverse-DNS evidence. ASN reports include normalized routing
+registration evidence. Each report preserves source health, collection time,
+partial states, and limitations while deliberately excluding raw RDAP and
+WHOIS responses, expanded contacts, provider payloads, scripts, and remote
+assets.
+
+When a domain case is open, **Retain selected normalized facts** lets you save
+only the fields needed for later review. Each field keeps source, observation
+time, collection depth, source state, completeness, truncation, schema version,
+and limitations. A later Lookup compares those fields without converting an
+unavailable or incomplete source into a change or an absent finding.
 
 **Export evidence JSON** remains the separate full-fidelity option. It can
 include normalized and raw registration sources, supporting observations,
@@ -536,15 +543,18 @@ Exports are created locally and only after an explicit action. Depending on the
 workflow they can contain public registration contacts, analyst notes, source
 observations, or compact case history.
 
-- Use a domain Lookup Markdown report for a bounded readable registry,
-  registrar, and WHOIS source summary. It omits raw registration payloads and
-  expanded contacts.
+- Use a Lookup Markdown report for a bounded readable domain, IP, or ASN
+  summary. It omits raw registration payloads and expanded contacts.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
 - Build a case response packet only after recording the category, affected
   party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
-  sourced contact routes. JSON, Markdown, and email-text outputs remain local,
-  require review, and do not submit anything.
+  sourced contact routes. Select the intended audience first: the local preview
+  identifies included and excluded evidence, required redactions, expected
+  attachments, recipient gaps, and follow-up fields for registrar, registry,
+  hosting/network, security-contact, browser/blocklist, or internal-SOC review.
+  JSON, Markdown, and email-text outputs remain local, require review, and do
+  not submit anything.
 - Defensive domain lists require an explicit reviewed selection and eligible
   analyst disposition. Review their exclusions, expiry, provenance manifest,
   and paired rollback instructions before applying them. Wildcard RPZ coverage
