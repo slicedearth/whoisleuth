@@ -189,6 +189,19 @@ never reached a settled row. Saving never retains raw source payloads or
 expanded contact records, and resuming does not repeat failed rows unless the
 analyst separately selects **Retry failed**.
 
+The lookalike mail-exposure review groups the currently filtered compact rows
+without another request. It keeps receiving mail with SPF and DMARC, receiving
+mail with an authentication gap, incomplete authentication evidence, null MX,
+no explicit MX, and incomplete DNS evidence separate. When a Brand Profile is
+active, the review compares those observations with its configured standard,
+defensive-no-mail, or parked mail posture. That profile is analyst-configured
+context rather than a live observation. The review never opens an SMTP
+connection, sends a message, tests a mailbox or catch-all behavior, or treats
+mail configuration as evidence of use, control, intent, safety, or abuse.
+Selecting one classification adds only those visible domains to the existing
+browser-local selection so the ordinary reviewed export, case, disposition,
+rescan, and Monitor actions remain explicit.
+
 Bulk relationship evidence compares only observations already collected in the
 current scan. It can highlight exact nameserver sets, addresses, tracking
 identifiers, favicons, official asset hosts, and native certificate hashes. A

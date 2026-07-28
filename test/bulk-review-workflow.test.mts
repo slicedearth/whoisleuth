@@ -33,6 +33,7 @@ function result(
     expiryDate: '2027-07-01T00:00:00.000Z',
     nameservers: ['ns1.example.test'],
     hasMx: true,
+    hasNullMx: false,
     hasSpf: true,
     hasDmarc: false,
     activityStatus: 'active',

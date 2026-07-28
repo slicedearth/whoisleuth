@@ -396,6 +396,15 @@ default (see the README), so many lookups return no personal data at all.
   registrant and abuse contacts, and Certificate Transparency rows. Saving and
   loading make no network request; an explicit resume sends only domains that
   had no settled row through the selected Bulk mode.
+  Compact Deep rows and saved Bulk sessions can retain one nullable null-MX
+  observation alongside the existing MX, SPF, and DMARC booleans. The local
+  lookalike mail-exposure review uses those bounded fields, source coverage,
+  mutation provenance, registration state, and the active Brand Profile's
+  configured mail posture. It makes no additional request and never connects
+  to SMTP, sends a message, tests a mailbox or catch-all behavior, or retains
+  message data. Its optional JSON export is generated locally, includes an
+  integrity digest and stated limitations, and excludes raw DNS responses,
+  contacts, scripts, and provider payloads.
   Website profile snapshots are retained only after an analyst explicitly
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,

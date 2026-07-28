@@ -146,8 +146,13 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
           registrar: { name: left ? 'First Registrar' : 'Second Registrar' },
           nameservers: left ? ['ns1.shared.example'] : ['ns2.separate.example'],
           hasMx: left,
+          hasNullMx: !left,
           hasSpf: left,
           hasDmarc: false,
+          dns: {
+            status: 'success',
+            records: { a: [], aaaa: [], cname: [], caa: [] },
+          },
         },
         diagnostics: {
           version: 7,
@@ -158,6 +163,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
       }),
     });
   });
+  await page.getByLabel('Scan mode').selectOption('deep');
   await runBulkScan(page, ['left-review.example', 'right-review.example']);
 
   const cockpit = page.getByRole('region', { name: 'Bulk review cockpit' });
@@ -185,6 +191,26 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
     },
   });
   expect(exported.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
+
+  const mailReview = page.getByRole('region', { name: 'Lookalike mail exposure' });
+  await expect(mailReview.getByText('Authentication gap', { exact: true })).toBeVisible();
+  await expect(mailReview.getByText('Null MX', { exact: true })).toBeVisible();
+  await expect(mailReview).toContainText('No SMTP connection');
+  const mailDownloadPromise = page.waitForEvent('download');
+  await mailReview.getByRole('button', { name: 'Export review' }).click();
+  const mailDownload = await mailDownloadPromise;
+  expect(mailDownload.suggestedFilename()).toMatch(/^whoisleuth-mail-exposure-/u);
+  const mailExport = JSON.parse(await readFile((await mailDownload.path())!, 'utf8'));
+  expect(mailExport).toMatchObject({
+    schema: 'whoisleuth.bulk-mail-exposure',
+    report: {
+      counts: {
+        mail_auth_gap: 1,
+        null_mx: 1,
+      },
+    },
+  });
+  expect(mailExport.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
