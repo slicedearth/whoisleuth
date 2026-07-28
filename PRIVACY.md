@@ -181,9 +181,11 @@ default (see the README), so many lookups return no personal data at all.
   IndexedDB database. It excludes the complete Bulk result, raw RDAP/WHOIS or
   page responses, contacts, credentials, and unrelated DNS or HTTP evidence.
   Monitor can review or delete the record, local search can find its known
-  fields, and the typed projection can connect it to existing cases without a
-  new request. The record is derived evidence and does not prove ownership,
-  coordination, intent, or maliciousness.
+  fields, and a disposable typed envelope can adapt it into the local search
+  and graph projection without a new request or another stored copy. The
+  IndexedDB record remains authoritative; the envelope is bounded, performs no
+  writes, and is discarded after use. The record is derived evidence and does
+  not prove ownership, coordination, intent, or maliciousness.
 - **Public synthetic demo** - the unauthenticated demo uses fixed fictional
   fixtures on reserved domains to represent Dashboard, Brands, Discover, Bulk,
   Lookup, and Monitor without performing a live analysis request. Its bounded

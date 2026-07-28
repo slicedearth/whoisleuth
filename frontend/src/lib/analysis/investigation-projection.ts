@@ -28,8 +28,11 @@ import {
   RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
   normalizeRelationshipObservationStore,
   type RelationshipObservation,
-  type RelationshipObservationType,
 } from './relationship-observation-model.ts';
+import {
+  adaptRelationshipObservationsToEnvelope,
+  type ObservationEnvelopeDerivation,
+} from './observation-envelope.ts';
 
 export const INVESTIGATION_PROJECTION_SCHEMA = 'whoisleuth.investigation-projection';
 export const INVESTIGATION_PROJECTION_VERSION = 1;
@@ -272,24 +275,27 @@ const ENTITY_TYPES = new Set<InvestigationEntityType>([
   'case',
   'campaign',
 ]);
+const RELATIONSHIP_TYPES = new Set<InvestigationRelationshipType>([
+  'domain_uses_nameserver_set',
+  'domain_reached_http_origin',
+  'case_documents_domain',
+  'brand_declares_official_domain',
+  'brand_declares_official_favicon',
+  'domain_observed_favicon',
+  'campaign_contains_domain',
+  'campaign_contains_case',
+  'domain_presented_certificate',
+  'domain_resolved_to_ip',
+  'domain_exposed_tracking_identifier',
+  'domain_related_by_favicon',
+  'domain_loaded_official_asset',
+]);
 
 const BASE_LIMITATIONS = Object.freeze([
   'This projection uses only bounded evidence already retained locally or explicitly supplied normalized scan observations. It makes no network requests.',
   'Shared infrastructure and identifiers are investigation pivots, not proof of ownership, coordination, intent, or maliciousness.',
   'Missing, unsupported, partial, or inconclusive source data does not create a negative finding or an evidence edge.',
 ]);
-
-const RETAINED_RELATIONSHIP_PROJECTION = Object.freeze({
-  nameserver_set: { entity: 'nameserver_set', relationship: 'domain_uses_nameserver_set' },
-  ip_address: { entity: 'ip_address', relationship: 'domain_resolved_to_ip' },
-  certificate: { entity: 'certificate', relationship: 'domain_presented_certificate' },
-  tracking_identifier: { entity: 'tracking_identifier', relationship: 'domain_exposed_tracking_identifier' },
-  favicon: { entity: 'favicon_cluster', relationship: 'domain_related_by_favicon' },
-  official_asset: { entity: 'official_asset_host', relationship: 'domain_loaded_official_asset' },
-} satisfies Record<RelationshipObservationType, {
-  entity: InvestigationEntityType;
-  relationship: InvestigationRelationshipType;
-}>);
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -366,6 +372,25 @@ function scanDepth(value: unknown): InvestigationScanDepth {
   return typeof value === 'string' && SCAN_DEPTHS.has(value as InvestigationScanDepth)
     ? value as InvestigationScanDepth
     : 'unknown';
+}
+
+function projectionEntityType(value: string): InvestigationEntityType | null {
+  return ENTITY_TYPES.has(value as InvestigationEntityType)
+    ? value as InvestigationEntityType
+    : null;
+}
+
+function projectionRelationshipType(value: string): InvestigationRelationshipType | null {
+  return RELATIONSHIP_TYPES.has(value as InvestigationRelationshipType)
+    ? value as InvestigationRelationshipType
+    : null;
+}
+
+function projectionClassification(
+  value: ObservationEnvelopeDerivation,
+): InvestigationRelationshipClassification {
+  if (value === 'observed') return 'direct';
+  return value === 'normalized' ? 'normalized' : 'derived';
 }
 
 function readStore<T>(
@@ -448,6 +473,7 @@ export function buildInvestigationProjection(
   options: InvestigationProjectionOptions = {},
 ): InvestigationProjection {
   const input = record(rawInput) || {};
+  const generatedAt = timestamp(options.generatedAt) || new Date().toISOString();
   const cases = readStore<NormalizedCaseRecord>(input.cases, 'cases', CASE_SCHEMA_VERSION, MAX_CASES, normalizeCaseStore);
   const campaigns = readStore<NormalizedCampaign>(input.campaigns, 'campaigns', CAMPAIGN_SCHEMA_VERSION, MAX_CAMPAIGNS, normalizeCampaignStore);
   const brands = readStore<NormalizedBrandProfile>(input.brandProfiles, 'profiles', BRAND_PROFILE_SCHEMA_VERSION, MAX_PROFILES, normalizeBrandProfileStore);
@@ -459,6 +485,9 @@ export function buildInvestigationProjection(
     MAX_RELATIONSHIP_OBSERVATIONS,
     normalizeRelationshipObservationStore,
   );
+  const relationshipObservationEnvelope = relationshipObservations.state === 'supported'
+    ? adaptRelationshipObservationsToEnvelope(input.relationshipObservations, { generatedAt })
+    : null;
   const sourceReads = { cases, campaigns, brandProfiles: brands, relationshipRows, relationshipObservations };
 
   const entities = new Map<string, InvestigationEntity>();
@@ -468,6 +497,12 @@ export function buildInvestigationProjection(
   const projectionLimitations = [...BASE_LIMITATIONS];
   for (const source of Object.values(sourceReads)) {
     if (source.limitation) projectionLimitations.push(source.limitation);
+  }
+  if (relationshipObservationEnvelope && relationshipObservationEnvelope.state !== 'ready') {
+    projectionLimitations.push(relationshipObservationEnvelope.detail);
+  } else if (relationshipObservationEnvelope?.document) {
+    truncated ||= relationshipObservationEnvelope.document.quota.truncated;
+    projectionLimitations.push(...relationshipObservationEnvelope.document.limitations);
   }
 
   function addEntity(
@@ -905,57 +940,61 @@ export function buildInvestigationProjection(
     }
   }
 
-  for (const retained of relationshipObservations.records) {
-    const definition = RETAINED_RELATIONSHIP_PROJECTION[retained.type];
-    const observedAt = timestamp(retained.observedAt);
-    if (!definition || !observedAt) continue;
-    const canonical = retained.normalizedValue.length <= 300 ? retained.normalizedValue : retained.id;
-    const display = text(retained.displayValue, 300) || text(retained.label, 100) || retained.type.replaceAll('_', ' ');
-    const properties: Record<string, unknown> = {
-      observationId: retained.id,
-      relationshipType: retained.type,
-      value: retained.normalizedValue.length <= 300 ? retained.normalizedValue : '',
-    };
-    if (retained.type === 'nameserver_set') {
-      properties.nameservers = retained.normalizedValue.split(' · ').map(normalizeDomain).filter(Boolean).slice(0, MAX_NAMESERVERS_PER_ROW);
-    } else if (retained.type === 'certificate' && sha256(retained.normalizedValue)) {
-      properties.sha256 = sha256(retained.normalizedValue);
-    } else if (retained.type === 'ip_address') properties.ipAddress = retained.normalizedValue;
-    else if (retained.type === 'tracking_identifier') properties.identifier = retained.normalizedValue;
-    else if (retained.type === 'official_asset') properties.domain = normalizeDomain(retained.normalizedValue);
-    const targetEntity = addEntity(definition.entity, canonical, display, properties);
-    if (!targetEntity) continue;
-    const domainEntities = retained.domains.map((domain) => addEntity('domain', domain, domain, { domain })).filter(Boolean) as InvestigationEntity[];
-    if (!domainEntities.length) continue;
-    const observation = addObservation({
-      id: stableId('observation', `retained-relationship|${retained.id}|${observedAt}`),
-      kind: 'retained_relationship_observation',
-      entityIds: [targetEntity.id, ...domainEntities.map((entity) => entity.id)],
-      store: 'relationshipObservations',
-      recordId: retained.id,
-      source: retained.source,
-      observedAt,
-      scanDepth: null,
-      status: retained.complete && !retained.truncated ? 'success' : 'partial',
-      complete: retained.complete,
-      truncated: retained.truncated,
-      schemaVersions: {
-        relationshipEvidence: retained.sourceVersion,
-        relationshipObservation: RELATIONSHIP_OBSERVATION_SCHEMA_VERSION,
-      },
-      limitations: [
-        ...retained.limitations,
-        'This relationship was retained by an explicit analyst action after Bulk derived it from bounded observations.',
-      ],
-    });
-    for (const domainEntity of domainEntities) {
-      addRelationship({
-        type: definition.relationship,
-        from: domainEntity.id,
-        to: targetEntity.id,
-        classification: 'derived',
-        method: retained.method,
-      }, observation);
+  if (relationshipObservationEnvelope?.state === 'ready') {
+    const envelopeEntityIds = new Map<string, string>();
+    for (const envelopeEntity of relationshipObservationEnvelope.document.entities) {
+      const type = projectionEntityType(envelopeEntity.type);
+      if (!type) continue;
+      const projected = addEntity(type, envelopeEntity.canonical, envelopeEntity.label, envelopeEntity.properties);
+      if (projected) envelopeEntityIds.set(envelopeEntity.id, projected.id);
+    }
+    const envelopeObservations = new Map<string, InvestigationObservation>();
+    for (const envelopeObservation of relationshipObservationEnvelope.document.observations) {
+      const mappedEntityIds = envelopeObservation.entityIds
+        .map((entityId) => envelopeEntityIds.get(entityId))
+        .filter((entityId): entityId is string => typeof entityId === 'string');
+      const evidenceSchema = envelopeObservation.upstreamSchemas.find(
+        (source) => source.schema === 'whoisleuth.relationship-evidence',
+      );
+      const projected = addObservation({
+        id: stableId(
+          'observation',
+          `retained-relationship|${envelopeObservation.sourceRecordId}|${envelopeObservation.observedAt}`,
+        ),
+        kind: 'retained_relationship_observation',
+        entityIds: mappedEntityIds,
+        store: 'relationshipObservations',
+        recordId: envelopeObservation.sourceRecordId,
+        source: envelopeObservation.source,
+        observedAt: envelopeObservation.observedAt,
+        scanDepth: envelopeObservation.collectionDepth === null
+          ? null
+          : scanDepth(envelopeObservation.collectionDepth),
+        status: envelopeObservation.status,
+        complete: envelopeObservation.complete,
+        truncated: envelopeObservation.truncated,
+        schemaVersions: {
+          relationshipEvidence: evidenceSchema?.version ?? null,
+          relationshipObservation: envelopeObservation.sourceSchema.version,
+        },
+        limitations: envelopeObservation.limitations,
+      });
+      if (projected) envelopeObservations.set(envelopeObservation.id, projected);
+    }
+    for (const envelopeRelationship of relationshipObservationEnvelope.document.relationships) {
+      const type = projectionRelationshipType(envelopeRelationship.type);
+      const from = envelopeEntityIds.get(envelopeRelationship.from);
+      const to = envelopeEntityIds.get(envelopeRelationship.to);
+      if (!type || !from || !to) continue;
+      for (const sourceObservationId of envelopeRelationship.sourceObservationIds) {
+        addRelationship({
+          type,
+          from,
+          to,
+          classification: projectionClassification(envelopeRelationship.derivation),
+          method: envelopeRelationship.method,
+        }, envelopeObservations.get(sourceObservationId) ?? null);
+      }
     }
   }
 
@@ -973,7 +1012,6 @@ export function buildInvestigationProjection(
     relationshipRows: summarizeSource(sourceReads.relationshipRows),
     relationshipObservations: summarizeSource(sourceReads.relationshipObservations),
   };
-  const generatedAt = timestamp(options.generatedAt) || new Date().toISOString();
   const entityList = [...entities.values()]
     .filter((entity) => entity.observationIds.length > 0)
     .sort((left, right) => left.id.localeCompare(right.id));

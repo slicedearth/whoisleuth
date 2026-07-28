@@ -314,6 +314,7 @@ describe('typed local investigation projection', () => {
     assert.ok(retainedObservation);
     assert.equal(result.sources.relationshipObservations.state, 'supported');
     assert.equal(entity(result, 'ip_address').properties.ipAddress, '192.0.2.20');
+    assert.equal(entity(result, 'ip_address').properties.observationId, retained.id);
     assert.equal(retainedObservation.store, 'relationshipObservations');
     assert.equal(retainedObservation.source, 'bulk_relationship_analysis');
     assert.equal(retainedObservation.status, 'success');
@@ -324,6 +325,7 @@ describe('typed local investigation projection', () => {
     assert.equal(retainedRelationship.classification, 'derived');
     assert.equal(result.relationships.filter((item) => item.type === 'domain_resolved_to_ip').length, 2);
     assert.match(retainedRelationship.limitations.join(' '), /explicit analyst action/i);
+    assert.match(result.limitations.join(' '), /disposable envelope/i);
   });
 
   test('drops malformed identity values and absent deep evidence without negative edges', () => {
