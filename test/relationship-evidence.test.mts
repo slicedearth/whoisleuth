@@ -78,12 +78,13 @@ describe('relationshipObservation', () => {
     assert.equal(result.certificateFingerprint, null);
   });
 
-  it('accepts only current native TLS leaf-certificate observations', () => {
+  it('accepts current and legacy native TLS leaf-certificate observations', () => {
     const valid = { source: 'tls', profileVersion: evidence.TLS_RELATIONSHIP_PROFILE_VERSION, status: 'partial', certificate: { fingerprintSha256: 'A'.repeat(64) } };
     assert.equal(evidence.relationshipObservation({ tls: valid }).certificateFingerprint, 'a'.repeat(64));
+    assert.equal(evidence.relationshipObservation({ tls: { ...valid, profileVersion: 1 } }).certificateFingerprint, 'a'.repeat(64));
     for (const tls of [
       { ...valid, source: 'certificate_transparency' },
-      { ...valid, profileVersion: 2 },
+      { ...valid, profileVersion: 3 },
       { ...valid, status: 'error' },
       { ...valid, certificate: { fingerprintSha256: 'a'.repeat(63) } },
     ]) assert.equal(evidence.relationshipObservation({ tls }).certificateFingerprint, null);

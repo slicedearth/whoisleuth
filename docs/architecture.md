@@ -52,7 +52,7 @@ profiles, notes, raw registry payloads, or deep website evidence.
 | `frontend/src/lib/analysis/` | Pure scoring, candidate generation, comparison, typed investigation projection, relationship, history, report, and normalization models that can be tested without the DOM. | Direct network access or browser storage. |
 | Browser-store wrappers in `frontend/src/lib/` | Versioned access to Brand Profiles, watchlists, cases, campaigns, CT history, shortlist, custom rules, and analyst-selected relationship observations. | General server persistence, cross-device synchronization, accounts, or a general background-job system. |
 | `server.mts` and `netlify/functions/` | HTTP entry points, authentication, request throttling, feature enforcement, operation admission, response shaping, and the optional Netlify scheduled-watchlist boundary. | Separate copies of lookup and parsing rules. |
-| `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security.txt collection, optional external intelligence adapters, bounded structured identity, derived technology and passive-posture analysis, observed network context, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
+| `lib/` | Query classification, RDAP bootstrap/failover, WHOIS referral chains, availability, DNS/HTTP/page/TLS intelligence, CT search, security.txt collection, optional external intelligence adapters, bounded structured identity, derived technology and response-policy/passive-posture analysis, observed network context, security boundaries, capability reporting, and operation budgets. | User interface state or analyst decisions. |
 | Optional distributed budget provider | Opaque expiring leases and bounded operation counters when explicitly configured. | Query targets, responses, evidence, notes, profiles, or session tokens. |
 | Optional Netlify Blob store | One application-encrypted, bounded compact scheduled-watchlist envelope when explicitly configured. | Raw RDAP/WHOIS, expanded contacts, analyst notes, sessions, Brand Profiles, cases, or deep website evidence. |
 
@@ -135,7 +135,11 @@ version 7 and their existing payload shape.
   every redirect, caps redirects and retained body bytes, and closes its
   per-request dispatcher. The homepage, favicon, optional security.txt file,
   and owned-domain policy requests reuse these trust controls with their own
-  bounded contracts.
+  bounded contracts. Deep full Lookup can transiently reduce selected CSP,
+  HSTS, referrer-policy, and response-cookie attributes from the chosen
+  homepage response to fixed posture signals and bounded counts. Complete
+  values and cookie identifiers are discarded, and the signals do not affect
+  availability or Risk.
 - **TLS** resolves through the public-address guard and opens one pinned
   connection while retaining the hostname for SNI and hostname validation. It
   stores bounded public certificate metadata rather than certificate bytes or
@@ -213,7 +217,9 @@ maintainer-run `npm run platform:local-data` command derives that total from the
 owning constants without reading user data. The native provider preserves those
 application bounds while removing the single-origin local-storage capacity
 assumption. Browser tests use only fixed synthetic records and isolate their
-database state. Application-level encryption, PWA support, and synchronization
+database state. Portable workspace archives can be wrapped in browser-local
+passphrase-based authenticated encryption. The active IndexedDB codec remains
+plaintext, while a live encrypted vault, PWA support, and synchronization
 remain separate decisions documented in
 [the browser-local data architecture](browser-local-data.md).
 
@@ -275,6 +281,21 @@ The test pyramid is designed to avoid dependence on public services:
 5. CI runs the locked install, production dependency audit, and complete
    verification sequence for pushes and pull requests, retaining browser
    artifacts only on failure.
+
+### Enforced dependency boundaries
+
+`npm run architecture:check` validates the application dependency graph during
+local verification and CI. It rejects circular dependencies, prevents browser
+modules from reaching server networking, authentication, secret, filesystem,
+CLI, or function code, and requires optional intelligence adapters to import the
+provider-neutral contract directly.
+
+Scheduled monitoring calls the shared Lookup dispatcher with both `fast` and
+`compact` fixed to `true`. Because that dispatcher owns the runtime collector
+gates, the architecture rule permits the dispatcher dependency but prohibits a
+scheduled fast or compact entry point from importing a deep-only collector
+directly. This is the only deliberate exception; it avoids duplicating lookup
+orchestration while keeping bypasses mechanically detectable.
 
 The on-demand `npm run schema:inventory` report is assembled from the owning
 contract constants and readers rather than a copied version table. Its explicit

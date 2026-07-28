@@ -160,6 +160,22 @@ fixtures, candidate generation, partial-source handling, relationships,
 detection rules, graph limits, and workspace archive round trips. It is not a
 live coverage or production-performance benchmark.
 
+### Technology-signature benchmark
+
+```bash
+npm run benchmark:technology
+npm run benchmark:technology -- --json
+```
+
+Runs the versioned synthetic technology corpus through the same bounded
+signature analyser used by Deep Lookup. It lints catalogue identifiers,
+categories, confidence levels, evidence classes, fixed explanations, evidence
+bounds, and positive and negative fixture coverage. The report includes
+per-category expected, observed, missed, unexpected, overlap, collision, and
+false-positive metrics without copying fixture HTML, headers, generators, or
+resource origins into its output. It makes no network request and is a
+regression/calibration result rather than a live coverage claim.
+
 ### Unicode confusable audit
 
 ```bash
@@ -237,6 +253,29 @@ catalogue edit fails offline verification without requiring the source file.
 Replace `--check` with `--write` only when deliberately updating the generated
 projection and its digest together. The command reads only the supplied local
 file and does not download a catalogue.
+
+### Architectural dependency boundaries
+
+```bash
+npm run architecture:check
+```
+
+This development-only check rejects circular application dependencies, browser
+imports of server-only code, direct deep-collector imports from scheduled fast
+and compact entry points, and optional intelligence adapters that bypass the
+provider-neutral contract. The existing guarded Lookup dispatcher is the narrow
+exception for fast and compact callers: its runtime profile gates remain the
+authority for choosing collectors. The check reads local source and the locked
+dependency graph only; it makes no network request and has no production effect.
+
+### Dependency maintenance and SPDX export
+
+Monthly grouped dependency update pull requests and the read-only GitHub
+dependency-graph export are documented in
+[Dependency maintenance and SBOM export](dependency-maintenance.md). Updates
+remain subject to human review, branch protection, the complete verification
+sequence, and the existing pinned-action, lockfile, licence, audit, CodeQL, and
+architecture controls.
 
 ### Registry drift
 

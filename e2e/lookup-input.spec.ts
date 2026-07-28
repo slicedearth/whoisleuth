@@ -662,7 +662,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(19);
+  expect(exported.schemaVersion).toBe(20);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -1127,7 +1127,7 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             status: 200, contentType: 'text/html; charset=utf-8', contentLanguage: 'en', server: 'Example Server',
             declaredContentLength: 4096, capturedBodyBytes: 2048, bodyInspected: true, bodyTruncated: false,
             bodyHash: { algorithm: 'sha256', value: 'a'.repeat(64), scope: 'complete-body', bytes: 2048 },
-            securityHeaders: { strictTransportSecurity: 'max-age=31536000', contentSecurityPolicy: "default-src 'self'", xFrameOptions: 'DENY', xContentTypeOptions: 'nosniff', referrerPolicy: 'no-referrer' },
+            securityHeaders: { strictTransportSecurity: 'observed', contentSecurityPolicy: 'observed', xFrameOptions: 'observed', xContentTypeOptions: 'observed', referrerPolicy: 'observed' },
           },
         },
         pageIdentity: {
@@ -1242,7 +1242,9 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await card.getByText('Redirect chain · 1 hop', { exact: true }).click();
   await expect(card.getByText('→ https://login.example.test/final', { exact: true })).toBeVisible();
   await card.getByText('Selected response metadata', { exact: true }).click();
-  await expect(card.getByText('max-age=31536000', { exact: true })).toBeVisible();
+  await expect(card.getByText('Observed', { exact: true }).first()).toBeVisible();
+  await expect(card).not.toContainText('max-age=31536000');
+  await expect(card).not.toContainText("default-src 'self'");
   await expect(card.getByText('a'.repeat(64), { exact: true })).toBeVisible();
   await expect(card.getByText('Complete captured body (2.0 KiB)', { exact: true })).toBeVisible();
   await expect(card).not.toContainText('secret');

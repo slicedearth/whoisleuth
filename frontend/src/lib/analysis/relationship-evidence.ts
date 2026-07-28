@@ -8,7 +8,8 @@ import { normalizeDomain } from './case-model.ts';
 import { groupBySimilarFavicon } from './utils.ts';
 
 export const RELATIONSHIP_EVIDENCE_VERSION = 2;
-export const TLS_RELATIONSHIP_PROFILE_VERSION = 1;
+export const TLS_RELATIONSHIP_PROFILE_VERSION = 2;
+export const SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS = Object.freeze([1, TLS_RELATIONSHIP_PROFILE_VERSION]);
 export const MAX_RELATIONSHIP_ROWS = 2000;
 export const MAX_RELATIONSHIP_GROUPS = 100;
 export const MAX_RELATIONSHIP_DOMAINS = 50;
@@ -138,7 +139,7 @@ function tlsCertificateFingerprint(availability: Record<string, unknown>): strin
   const certificate = record(tls?.certificate);
   const fingerprint = certificate?.fingerprintSha256;
   const status = tls?.status;
-  if (tls?.source !== 'tls' || tls?.profileVersion !== TLS_RELATIONSHIP_PROFILE_VERSION
+  if (tls?.source !== 'tls' || !SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS.includes(Number(tls?.profileVersion))
     || typeof status !== 'string' || !['success', 'partial'].includes(status) || typeof fingerprint !== 'string'
     || fingerprint.length !== 64 || !CERTIFICATE_SHA_RE.test(fingerprint)) return null;
   return fingerprint.toLowerCase();

@@ -92,11 +92,9 @@ describe('website technology profile', () => {
     assert.equal(result.findings.find((item) => item.id === 'woocommerce'), undefined);
   });
 
-  test('treats a recognized resource origin alone as medium-confidence evidence', () => {
+  test('does not identify a site-builder platform from an embedded resource origin alone', () => {
     const result = analyze({ resourceOrigins: ['https://assets.wixstatic.com'] });
-    const item = finding(result, 'wix');
-    assert.equal(item.confidence, 'medium');
-    assert.equal(requiredValue(item.evidence[0]).source, 'resource origin');
+    assert.equal(result.findings.find((item) => item.id === 'wix'), undefined);
   });
 
   test('recognizes bounded static framework markers case-insensitively', () => {
@@ -166,7 +164,7 @@ describe('website technology profile', () => {
     assert.doesNotMatch(JSON.stringify(result), /20\.1\.0|discarded|start\.fixture/);
   });
 
-  test('keeps shared site-builder resource origins at medium confidence', () => {
+  test('keeps embedded site-builder resource origins neutral without page evidence', () => {
     const result = analyze({
       resourceOrigins: [
         'https://assets.framerusercontent.com',
@@ -174,12 +172,17 @@ describe('website technology profile', () => {
       ],
     });
 
-    assert.equal(finding(result, 'framer').confidence, 'medium');
-    assert.equal(finding(result, 'weebly').confidence, 'medium');
-    assert.deepEqual(
-      result.findings.filter((item) => item.category === 'site builder').map((item) => item.id),
-      ['framer', 'weebly'],
-    );
+    assert.deepEqual(result.findings, []);
+  });
+
+  test('requires both storefront markup and origin evidence for a shared commerce CDN', () => {
+    assert.deepEqual(analyze({
+      resourceOrigins: ['https://cdn11.bigcommerce.com'],
+    }).findings, []);
+    assert.equal(finding(analyze({
+      html: '<script src="https://cdn11.bigcommerce.com/s/fixture/stencil-utils.js"></script>',
+      resourceOrigins: ['https://cdn11.bigcommerce.com'],
+    }), 'bigcommerce').confidence, 'medium');
   });
 
   test('keeps delivery and application technologies separately attributed', () => {

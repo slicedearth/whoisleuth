@@ -45,7 +45,7 @@ describe('registry standards coverage snapshot', () => {
 
     const second = registryStandardsCoverageSnapshot();
     assert.equal(second.sources.urls[0], 'https://data.iana.org/TLD/tlds-alpha-by-domain.txt');
-    assert.equal(second.counts.generic, 1110);
+    assert.equal(second.counts.generic, 1111);
     assert.equal(requiredValue(second.exceptions[0]).suffix, 'edu');
   });
 

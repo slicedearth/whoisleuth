@@ -5,7 +5,11 @@ import { Writable } from 'node:stream';
 import { parseCliArguments } from '../cli/arguments.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliTlsDocument } from '../cli/formatters/json.mts';
-import { MAX_TLS_TERMINAL_ALT_NAMES, formatTerminalTls } from '../cli/formatters/terminal.mts';
+import {
+  MAX_TLS_TERMINAL_ALT_NAMES,
+  MAX_TLS_TERMINAL_PURPOSES,
+  formatTerminalTls,
+} from '../cli/formatters/terminal.mts';
 import { runCli } from '../cli/runner.mts';
 
 function capture() {
@@ -30,8 +34,27 @@ function certificate(overrides = {}) {
     validTo: '2026-08-01T00:00:00.000Z',
     fingerprintSha256: 'a'.repeat(64),
     isCertificateAuthority: false,
-    subjectAltNames: { dnsNames: ['*.example.test', 'login.example.test'], ipAddresses: ['93.184.216.34'], truncated: false },
+    subjectAltNames: {
+      dnsNames: ['*.example.test', 'login.example.test'],
+      ipAddresses: ['93.184.216.34'],
+      classes: { dns: 2, ip: 1, email: 1, uri: 0, directoryName: 0, registeredId: 0, otherName: 0, unclassified: 0 },
+      truncated: false,
+    },
     publicKey: { type: 'rsa', bits: 2048, curve: null, fingerprintSha256: 'b'.repeat(64) },
+    signature: { algorithm: 'sha256WithRSAEncryption', oid: '1.2.840.113549.1.1.11' },
+    extendedKeyUsage: {
+      values: [
+        { oid: '1.3.6.1.5.5.7.3.1', name: 'TLS web server authentication' },
+        { oid: '1.3.6.1.5.5.7.3.2', name: 'TLS web client authentication' },
+      ],
+      truncated: false,
+    },
+    authorityInformationAccess: {
+      ocsp: { total: 1, http: 0, https: 1, other: 0 },
+      caIssuers: { total: 1, http: 1, https: 0, other: 0 },
+      unknownMethods: 0,
+      truncated: false,
+    },
     ...overrides,
   };
 }
@@ -50,7 +73,7 @@ function tlsObservation(overrides = {}) {
       'This is a point-in-time TLS handshake to one validated public address; other addresses or edge locations may present different results.',
     ],
     diagnostics: { connectionAttempts: 1, resolvedAddressCount: 2, discardedFields: 0 },
-    profileVersion: 1,
+    profileVersion: 2,
     connectedAddress: '93.184.216.34',
     connectedFamily: 4,
     port: 443,
@@ -118,6 +141,10 @@ describe('TLS CLI output', () => {
     assert.match(output, /Subject\s+login\.example\.test/);
     assert.match(output, /Fingerprint\s+a{64}/);
     assert.match(output, /Public key\s+rsa 2048 bits/);
+    assert.match(output, /Signature\s+sha256WithRSAEncryption \(1\.2\.840\.113549\.1\.1\.11\)/);
+    assert.match(output, /Purposes\s+TLS web server authentication/);
+    assert.match(output, /SAN classes\s+DNS 2, IP 1, email 1/);
+    assert.match(output, /AIA presence\s+OCSP 1 \(1 HTTPS, 0 HTTP, 0 other\)/);
     assert.match(output, /Chain\s+2 certificates/);
     assert.match(output, /Finding\s+Wildcard certificate/);
     assert.match(output, /Limitation\s+This is a point-in-time TLS handshake/);
@@ -130,6 +157,20 @@ describe('TLS CLI output', () => {
     assert.match(output, /\(\+2 more\)/);
     assert.doesNotMatch(output, /host-11\.example\.test/);
     assert.equal(result.certificate.subjectAltNames.dnsNames.length, MAX_TLS_TERMINAL_ALT_NAMES + 2);
+  });
+
+  test('terminal purpose cap is explicit while machine evidence remains complete', () => {
+    const values = Array.from({ length: MAX_TLS_TERMINAL_PURPOSES + 2 }, (_, index) => ({
+      oid: `1.3.6.1.5.5.7.3.${index + 1}`,
+      name: `Purpose ${index + 1}`,
+    }));
+    const result = tlsObservation({
+      certificate: certificate({ extendedKeyUsage: { values, truncated: false } }),
+    });
+    const output = formatTerminalTls(buildCliTlsDocument('login.example.test', result));
+    assert.match(output, /\(\+2 more\)/);
+    assert.doesNotMatch(output, /Purpose 10/);
+    assert.equal(result.certificate.extendedKeyUsage.values.length, MAX_TLS_TERMINAL_PURPOSES + 2);
   });
 
   test('terminal output keeps trust, hostname, and collection failures explicit', () => {

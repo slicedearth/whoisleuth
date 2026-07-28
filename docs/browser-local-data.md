@@ -114,18 +114,47 @@ records. The digest detects accidental corruption and unsynchronised mutation;
 it is not a secret or an authentication boundary against code already running
 on the same origin.
 
+## Encrypted portable archives
+
+Dashboard offers an optional encrypted wrapper around the ordinary checksummed
+workspace archive. Encryption and decryption happen in the browser through
+native Web Crypto. Version 1 uses PBKDF2-HMAC-SHA-256 with 600,000 iterations,
+a fresh 16-byte salt, and AES-256-GCM with a fresh 12-byte initialization
+vector and 128-bit authentication tag. The schema, version, creation time,
+content contract, key-derivation parameters, salt, cipher parameters, and
+initialization vector are authenticated as additional data.
+
+The envelope is bounded to approximately 13.4 MiB around the existing 10 MiB
+plaintext archive limit. It accepts only its fixed version 1 algorithm contract
+and canonical base64url fields before performing password work. Import then
+passes the decrypted document through the ordinary archive byte, manifest,
+checksum, schema, preview, and non-destructive merge checks.
+
+The threat model is deliberately narrow:
+
+- it protects the downloaded file while the file is locked and its passphrase
+  is unknown;
+- the passphrase and derived key stay in memory, are not persisted, are not
+  sent to the server, and are cleared from the form after each attempt;
+- a forgotten passphrase is not recoverable;
+- a wrong passphrase and corrupted authenticated ciphertext produce the same
+  error;
+- it does not protect the active plaintext IndexedDB workspace, an unlocked
+  Console, a compromised same-origin page, a malicious browser extension,
+  device malware, a keylogger, or a weak or reused passphrase; and
+- unencrypted version 1 archives remain importable and can still be downloaded
+  through a separately labelled compatibility action.
+
 ## Separate decisions
 
-- **Encryption:** Version 1 stores normalized records as plaintext JSON inside
-  the browser database. IndexedDB does not provide application-level
-  encryption. The provider separates record persistence from a versioned codec
-  so an optional encrypted vault can be added without replacing collection
-  models or the database schema. That vault still requires a separate threat
-  model, passphrase and recovery design, authenticated encryption, opaque or
-  blind lookup keys, auto-lock behavior, rekeying, and performance tests. A key
-  or passphrase must not be persisted beside the ciphertext. Encryption cannot
-  protect records while the vault is unlocked from same-origin script or a
-  malicious browser extension.
+- **IndexedDB vault:** Version 1 still stores normalized records as plaintext
+  JSON inside the browser database. Portable archive encryption does not change
+  that boundary. An optional encrypted live vault would still require a
+  separate passphrase and recovery design, opaque or blind lookup keys,
+  auto-lock behavior, rekeying, and performance tests. A key or passphrase must
+  not be persisted beside the ciphertext. Encryption cannot protect records
+  while the vault is unlocked from same-origin script or a malicious browser
+  extension.
 - **PWA support:** Offline installation, caching, and service-worker lifecycle
   are independent from local database selection.
 - **Synchronization:** IndexedDB remains tied to one origin and browser profile.

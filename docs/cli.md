@@ -325,9 +325,13 @@ and handshake work share a five-second deadline.
 
 The report retains the negotiated protocol, ALPN and cipher, runtime trust and
 hostname checks, certificate validity, bounded subject and issuer names, SANs,
-SHA-256 certificate and public-key fingerprints, a bounded certificate chain,
-and neutral findings. It stores no certificate bytes, session material, or
-application data and does not enumerate supported protocol or cipher suites.
+SAN class counts, signature algorithm and OID, extended-key-usage purposes,
+classified Authority Information Access presence counts, SHA-256 certificate
+and public-key fingerprints, a bounded certificate chain, and neutral
+findings. AIA responder and issuer locations are classified as HTTP, HTTPS, or
+other and then discarded; they are not retained or followed. The collector
+stores no certificate bytes, session material, or application data and does
+not enumerate supported protocol or cipher suites.
 A failed collection is inconclusive rather than proof that no TLS service
 exists.
 
@@ -384,7 +388,9 @@ The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
 and the shared registry-source comparison. Registrar RDAP raw data, contacts,
 entities, links, notices, and source-specific handles remain excluded. Schema
-version 19 additionally retains the bounded credential-surface projection
+version 20 replaces selected security-policy values in retained HTTP evidence
+with presence-only markers and can include fixed response-policy findings from
+an already-represented deep lookup. Version 19 additionally retains the bounded credential-surface projection
 when the saved deep lookup represents it. Version 18 retains the bounded structured identity projection
 when the saved deep lookup represents it. Version 17 retains the normalized portable-field comparison, explicit
 source-health states, a strict bounded projection of observed network

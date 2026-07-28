@@ -26,6 +26,8 @@ jobs:
         run: npm run release:check
       - name: Verify production dependency notices
         run: npm run licenses:check
+      - name: Verify architectural dependency boundaries
+        run: npm run architecture:check
       - name: Audit production dependencies
         run: npm audit --omit=dev
       - name: Run tests

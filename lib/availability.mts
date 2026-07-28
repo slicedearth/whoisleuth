@@ -21,6 +21,8 @@ import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } f
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
 import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
+import { analyzeResponsePolicyHeaders } from './response-policy.mts';
+import type { ResponsePolicyAnalysis } from './response-policy.mts';
 import { nonEmptyErrorMessage } from './error-detail.mts';
 
 const MAX_HOMEPAGE_BYTES = 300000;
@@ -54,6 +56,7 @@ type HomepageResult = {
   status: string;
   detail: string;
   http: HttpObservation;
+  responsePolicy?: ResponsePolicyAnalysis | null;
 };
 type HomepageFailure = { url: string; error: string };
 type HomepageFetchDetail = {
@@ -308,6 +311,7 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
           text: body.text,
           status: 'fetched',
           detail: `Homepage responded over ${scheme.toUpperCase()} (HTTP ${res.status}).`,
+          responsePolicy: analyzeResponsePolicyHeaders(res.headers),
           http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
             previousAttempts: failures,
             capturedBodyBytes: body.bytesRead,
@@ -328,6 +332,7 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
         text: null,
         status: 'responded',
         detail: `Web server responded over ${scheme.toUpperCase()} (HTTP ${res.status}); homepage content was not available for inspection.`,
+        responsePolicy: analyzeResponsePolicyHeaders(res.headers),
         http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
           previousAttempts: failures,
           capturedBodyBytes: 0,
@@ -628,14 +633,14 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   // extra round-trip on the already-slow deep path, in exchange for finding
   // favicons the bare /favicon.ico probe would miss.
   const [homepage, dnsIntelligence, tlsIntelligence] = await Promise.all([
-    websiteProbeEnabled ? fetchHomepageForDomain(domain).catch((err) => ({
+    websiteProbeEnabled ? fetchHomepageForDomain(domain).catch((err): HomepageResult => ({
       text: null,
       status: 'inconclusive',
       detail: `Could not confirm homepage activity: ${String(err && err.message ? err.message : 'request failed').slice(0, 180)}.`,
       http: failedHttpObservation([
         { url: `https://${domain}`, error: String(err && err.message ? err.message : 'request failed') },
       ]),
-    })) : Promise.resolve({
+    })) : Promise.resolve<HomepageResult>({
       text: null,
       status: 'skipped',
       detail: 'Website probing is disabled by deployment policy.',
@@ -702,6 +707,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
 
   const securityPosture = options.includeSecurityPosture === false ? null : analyzeWebsiteSecurityPosture({
     http: homepage.http,
+    responsePolicy: homepage.responsePolicy,
     pageIdentity: htmlSignals.pageIdentity,
     tls: tlsIntelligence,
     dns: dnsIntelligence,

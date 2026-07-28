@@ -20,6 +20,7 @@ type PostureFinding = {
 };
 type WebsiteSecurityPostureInput = {
   http?: unknown;
+  responsePolicy?: unknown;
   pageIdentity?: unknown;
   tls?: unknown;
   dns?: unknown;
@@ -27,8 +28,8 @@ type WebsiteSecurityPostureInput = {
   observedAt?: unknown;
 };
 
-const WEBSITE_SECURITY_POSTURE_VERSION = 1;
-const MAX_SECURITY_POSTURE_FINDINGS = 20;
+const WEBSITE_SECURITY_POSTURE_VERSION = 2;
+const MAX_SECURITY_POSTURE_FINDINGS = 32;
 const MAX_RETAINED_ORIGINS = 30;
 
 function record(value: unknown): UnknownRecord {
@@ -125,12 +126,114 @@ function httpFindings(httpValue: unknown): PostureFinding[] {
     findings.push(present(value)
       ? finding(
         `${id}_observed`, 'response headers', 'observed', 'configured', `${label} observed`,
-        `The selected response included the ${header} header. Its policy quality was not scored.`, ['Selected HTTP response headers'],
+        `The selected response included the ${header} header. Supported policy-quality checks are reported separately.`, ['Selected HTTP response headers'],
       )
       : finding(
         `${id}_absent`, 'response headers', 'observed_absence', 'review', `${label} not observed`,
         `The selected response did not include the ${header} header. This is a response-scoped observation, not a site-wide vulnerability finding.`, ['Selected HTTP response headers'],
       ));
+  }
+  return findings;
+}
+
+type ResponsePolicyFindingDefinition = {
+  label: string;
+  detail: (count: number) => string;
+};
+
+const RESPONSE_POLICY_FINDINGS: Readonly<Record<string, ResponsePolicyFindingDefinition>> = Object.freeze({
+  csp_default_source_missing: {
+    label: 'CSP default source not declared',
+    detail: () => 'The selected Content Security Policy did not declare default-src. A policy can enumerate fetch directives individually, so this is a bounded review signal rather than proof of exposure.',
+  },
+  csp_base_uri_missing: {
+    label: 'CSP base URI control not declared',
+    detail: () => 'The selected Content Security Policy did not declare base-uri, which has no default-src fallback.',
+  },
+  csp_object_source_unbounded: {
+    label: 'CSP object source not bounded',
+    detail: () => 'The selected Content Security Policy declared neither object-src nor a default-src fallback.',
+  },
+  csp_permissive_script_source: {
+    label: 'Permissive CSP script source observed',
+    detail: () => 'The effective selected script source included a wildcard or broad scheme source. This fixed observation does not establish that an unsafe script is reachable.',
+  },
+  csp_unsafe_eval: {
+    label: 'CSP permits unsafe evaluation',
+    detail: () => "The effective selected script source included 'unsafe-eval'.",
+  },
+  csp_unsafe_inline: {
+    label: 'CSP permits unqualified inline script',
+    detail: () => "The effective selected script source included 'unsafe-inline' without an observed nonce or hash source in that directive.",
+  },
+  hsts_disabled: {
+    label: 'HSTS disabled by selected response',
+    detail: () => 'The selected Strict-Transport-Security policy declared max-age=0.',
+  },
+  hsts_short_max_age: {
+    label: 'Short HSTS duration observed',
+    detail: () => 'The selected Strict-Transport-Security max-age was greater than zero but shorter than 180 days.',
+  },
+  referrer_policy_permissive: {
+    label: 'Permissive referrer policy observed',
+    detail: () => 'The effective selected Referrer-Policy was unsafe-url or no-referrer-when-downgrade.',
+  },
+  cookies_missing_secure: {
+    label: 'Response cookies without Secure',
+    detail: (count) => `${count} selected response cookie${count === 1 ? '' : 's'} did not declare Secure. Cookie purpose and application behavior were not inspected.`,
+  },
+  cookies_missing_http_only: {
+    label: 'Response cookies without HttpOnly',
+    detail: (count) => `${count} selected response cookie${count === 1 ? '' : 's'} did not declare HttpOnly. Some client-readable cookies are intentional, so this is a review signal only.`,
+  },
+  cookies_missing_same_site: {
+    label: 'Response cookies without SameSite',
+    detail: (count) => `${count} selected response cookie${count === 1 ? '' : 's'} did not declare SameSite.`,
+  },
+  cookies_same_site_none_without_secure: {
+    label: 'SameSite=None cookies without Secure',
+    detail: (count) => `${count} selected response cookie${count === 1 ? '' : 's'} declared SameSite=None without Secure.`,
+  },
+});
+
+function responsePolicyFindings(value: unknown): PostureFinding[] {
+  const policy = record(value);
+  if (policy.responsePolicyVersion !== 1) return [];
+  const findings: PostureFinding[] = [];
+  const components = record(policy.components);
+  const componentLabels: Array<[string, string]> = [
+    ['contentSecurityPolicy', 'Content Security Policy quality unavailable'],
+    ['strictTransportSecurity', 'Strict Transport Security quality unavailable'],
+    ['referrerPolicy', 'Referrer policy quality unavailable'],
+    ['responseCookies', 'Response-cookie attribute review incomplete'],
+  ];
+  for (const [key, label] of componentLabels) {
+    if (!['partial', 'malformed'].includes(String(components[key] || ''))) continue;
+    findings.push(finding(
+      `response_policy_${key}_unavailable`,
+      'response headers',
+      'unavailable',
+      'neutral',
+      label,
+      'The selected value was present but could not be interpreted completely within the configured parser and byte limits.',
+      ['Transient selected response-policy analysis'],
+    ));
+  }
+  for (const rawSignal of (Array.isArray(policy.signals) ? policy.signals : []).slice(0, 16)) {
+    const signal = record(rawSignal);
+    const id = typeof signal.id === 'string' ? signal.id : '';
+    const definition = RESPONSE_POLICY_FINDINGS[id];
+    if (!definition || findings.some((item) => item.id === id)) continue;
+    const count = boundedCount(signal.count, 32);
+    findings.push(finding(
+      id,
+      'response headers',
+      'potential_exposure',
+      'review',
+      definition.label,
+      definition.detail(count),
+      ['Transient selected response-policy analysis'],
+    ));
   }
   return findings;
 }
@@ -342,11 +445,13 @@ function dnsFindings(dnsValue: unknown, dnssecValue: unknown): PostureFinding[] 
 function analyzeWebsiteSecurityPosture(input: WebsiteSecurityPostureInput = {}) {
   const findings = [
     ...httpFindings(input.http),
+    ...responsePolicyFindings(input.responsePolicy),
     ...pageFindings(input.pageIdentity, input.http),
     ...tlsFindings(input.tls),
     ...dnsFindings(input.dns, input.dnssec),
   ].slice(0, MAX_SECURITY_POSTURE_FINDINGS);
   const sourceValues = [input.http, input.pageIdentity, input.tls, input.dns];
+  if (input.responsePolicy !== undefined) sourceValues.push(input.responsePolicy);
   const partial = sourceValues.some((value) => {
     const item = record(value);
     return item.status !== 'success' || item.complete !== true;
@@ -360,6 +465,7 @@ function analyzeWebsiteSecurityPosture(input: WebsiteSecurityPostureInput = {}) 
   const limitations = [
     'This is a point-in-time passive interpretation of one bounded deep lookup, not an active vulnerability assessment.',
     'Observed absence applies only to the selected response or retained static evidence and does not establish site-wide absence.',
+    'Response-policy findings retain fixed identifiers and counts only; complete policies, cookie data, nonces, hashes, and reporting endpoints are discarded.',
     'The TLS result describes one negotiated connection and does not enumerate every supported protocol or cipher.',
   ];
   if (partial) limitations.push('One or more contributing source observations were partial or unavailable.');

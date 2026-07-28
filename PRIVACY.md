@@ -152,7 +152,8 @@ default (see the README), so many lookups return no personal data at all.
   point-in-time context and do not prove ownership, hosting control, intent,
   or safety.
 - **HTTP intelligence**: Lookup can display the bounded final URL, redirect
-  provenance, selected response/header metadata, and response-body fingerprint
+  provenance, selected response metadata, presence-only security-header
+  markers, and response-body fingerprint
   collected by a requested deep check. Bulk results, watchlists, and analyst
   cases retain only the final origin (never its path or query), response status,
   transport, redirect count/flags, MIME type, and presence-only security-header
@@ -166,8 +167,10 @@ default (see the README), so many lookups return no personal data at all.
   limitations, and up to 8 bounded source observations per relationship as
   versioned JSON, GraphML, or GEXF. It excludes case notes, status, disposition,
   raw registry or page responses, contacts, credentials, and transient graph
-  view state. Raw header values, attempt errors, and redirect inventories are
-  not copied into browser-local investigation stores or graph exports.
+  view state. Selected security-policy values are discarded after the
+  transient analysis described below. Other raw header values, attempt errors,
+  and redirect inventories are not copied into browser-local investigation
+  stores or graph exports.
 - **Analyst-selected relationship observations**: Bulk can compare bounded
   nameserver, IP-address, native certificate, public tracking-identifier,
   favicon, and configured official-asset-host observations inside the current
@@ -233,9 +236,14 @@ default (see the README), so many lookups return no personal data at all.
   connection to one validated address while retaining the domain as SNI.
   Lookup and its deliberate evidence export can include the connected public
   address, negotiated protocol/cipher/ALPN, runtime trust and hostname outcome,
-  bounded public certificate identity/validity/SAN/public-key metadata, and a
-  capped certificate-chain summary. Certificate bytes and TLS session material
-  are not retained. Deep Bulk may compare the exact leaf-certificate SHA-256
+  bounded public certificate identity/validity/SAN/public-key metadata,
+  signature algorithm and OID, extended-key-usage purposes, fixed SAN class
+  counts, classified AIA presence counts, and a capped certificate-chain
+  summary. Email, URI, directory-name, registered-ID, other-name, and
+  unclassified SAN values are counted but not retained. AIA responder and
+  issuer locations are classified as HTTP, HTTPS, or other, then discarded
+  without being followed. Certificate bytes and TLS session material are not
+  retained. Deep Bulk may compare the exact leaf-certificate SHA-256
   transiently within the current result set; the derived relationship is not
   persisted or treated as ownership evidence. The richer profile is not copied
   into browser-local cases, watchlists, profiles, or Certificate Transparency
@@ -304,7 +312,10 @@ default (see the README), so many lookups return no personal data at all.
 - **Technology indicators**: a requested deep Lookup can derive a versioned
   technology profile from the selected HTTP server header, generator metadata,
   normalized resource origins, and capped static HTML already collected for
-  the page-identity analysis. The profile retains only curated technology
+  the page-identity analysis. A site-builder or commerce platform is not
+  identified from a retained third-party resource origin alone; that origin
+  must be corroborated by page, generator, or additional storefront evidence.
+  Delivery origins remain separately attributed. The profile retains only curated technology
   names, categories, confidence levels, evidence classes, and fixed
   explanations. A nested browser-library profile can also match up to 64
   observed script elements and 65,536 cumulative inline-script characters
@@ -325,8 +336,12 @@ default (see the README), so many lookups return no personal data at all.
   handshake, DNSSEC publication, and CAA query as a separate versioned posture
   profile. It retains fixed finding identifiers, categories, state and tone
   labels, fixed explanations, fixed evidence classes, and bounded counts. It
-  does not copy response-header values, TLS error strings, URLs, certificate
-  contents, DNS record contents, or page markup into the derived profile.
+  can review bounded Content-Security-Policy, Strict-Transport-Security,
+  Referrer-Policy, and response-cookie attributes from the selected response
+  without another request. It does not copy response-header values, cookie
+  names or values, paths, domains, nonces, hashes, reporting endpoints, TLS
+  error strings, URLs, certificate contents, DNS record contents, or page
+  markup into the derived profile.
   Observed absence is explicitly limited to the selected response or retained
   static evidence. The analysis makes no extra request, performs no active
   vulnerability testing, and does not affect availability or Risk scoring.
@@ -345,7 +360,10 @@ default (see the README), so many lookups return no personal data at all.
   legacy compatibility copies before returning to an older build, subject to
   local-storage quota. The IndexedDB record codec is currently plaintext JSON;
   SHA-256 manifest digests detect corruption but are not encryption. A
-  downloaded workspace archive remains the safer portable backup.
+  downloaded workspace archive remains the safer portable backup and can be
+  wrapped in passphrase-based authenticated encryption entirely in the
+  browser. This protects the downloaded file while locked, not the active
+  browser database or an open Console.
   The appearance selector can also retain one bounded `dark`, `light`, or
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
   server. It is included only when you deliberately download a unified
@@ -411,10 +429,18 @@ default (see the README), so many lookups return no personal data at all.
   checksums, previews conflicts before a non-destructive merge, and excludes
   sessions, passwords, API credentials, hosted-monitor encryption keys, raw
   upstream payloads, tab state, Certificate Transparency history, and unrelated
-  browser storage. It is unencrypted, so secure it like the analyst records it
-  contains. Nothing is uploaded or retained by the
-  server when you export. From that point on, the file is yours to manage -
-  store it appropriately and delete it once you no longer need it.
+  browser storage. The recommended download uses browser-native
+  PBKDF2-HMAC-SHA-256 and AES-256-GCM to encrypt that ordinary archive with a
+  passphrase. The passphrase and derived key are not persisted, sent, logged,
+  or recoverable. A separately labelled unencrypted download remains
+  available. Encrypted import decrypts in browser memory, reports the same
+  error for a wrong passphrase or corrupted authenticated ciphertext, and then
+  applies the ordinary archive validation and reviewed merge. Archive
+  encryption cannot protect an unlocked Console from same-origin code, a
+  malicious extension, device malware, a keylogger, or a weak or reused
+  passphrase. Nothing is uploaded or retained by the server when you export or
+  import. From that point on, the file is yours to manage, so store it
+  appropriately and delete it once you no longer need it.
 - **Official-domain posture audits**: handled per request and discarded. The
   server queries public DNS, the domain registry's RDAP service for DNSSEC
   delegation status, and (only when advertised) the official domain's own

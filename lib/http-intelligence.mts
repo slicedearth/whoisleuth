@@ -34,6 +34,7 @@ const MAX_HTTP_ATTEMPTS = 2;
 const MAX_HTTP_ERROR_LENGTH = 180;
 const MAX_HTTP_HEADER_LENGTH = 1024;
 const MAX_CAPTURED_BODY_BYTES = 5 * 1024 * 1024;
+const OBSERVED_HEADER_MARKER = 'observed';
 
 const SECURITY_HEADERS = Object.freeze({
   'strict-transport-security': 'strictTransportSecurity',
@@ -131,7 +132,7 @@ function normalizeRedirects(hops: unknown): HttpRedirect[] {
 function securityHeaders(headers: HeaderReader | null | undefined): Record<string, string | null> {
   return Object.fromEntries(Object.entries(SECURITY_HEADERS).map(([header, field]) => [
     field,
-    headerValue(headers, header),
+    headerValue(headers, header) ? OBSERVED_HEADER_MARKER : null,
   ]));
 }
 

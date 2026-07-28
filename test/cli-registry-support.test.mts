@@ -79,8 +79,8 @@ describe('versioned registry-support document', () => {
     assert.equal(document.version, 2);
     assert.equal(document.catalogueVersion, 5);
     assert.deepEqual(document.standardsCoverage.genericAndRestricted, {
-      total: 1113,
-      rdapCovered: 1113,
+      total: 1114,
+      rdapCovered: 1114,
     });
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.verification.fixtureScenarios.length, MAX_REGISTRY_SUPPORT_REFERENCES);
@@ -115,7 +115,7 @@ describe('registry-support runner', () => {
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.profile.coverageState, 'fixture_verified');
     assert.equal(document.interpretation.liveReachability, 'not_tested');
-    assert.equal(document.standardsCoverage.verifiedAt, '2026-07-19');
+    assert.equal(document.standardsCoverage.verifiedAt, '2026-07-28');
     assert.match(document.interpretation.statement, /does not test current live reachability/);
   });
 
@@ -172,7 +172,7 @@ describe('registry-support runner', () => {
     assert.match(military.value(), /Registry class Sponsored/);
     assert.match(military.value(), /RDAP access\s+No service published by IANA/);
     assert.match(military.value(), /WHOIS access\s+No service published by IANA/);
-    assert.match(military.value(), /gTLD RDAP\s+1113 \/ 1113/);
+    assert.match(military.value(), /gTLD RDAP\s+1114 \/ 1114/);
 
     const infrastructure = capture();
     assert.equal(await runCli(['registry-support', '.arpa'], {

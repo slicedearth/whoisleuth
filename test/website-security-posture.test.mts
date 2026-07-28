@@ -53,9 +53,27 @@ function dns(overrides = {}) {
   };
 }
 
+function responsePolicy(overrides = {}) {
+  return {
+    responsePolicyVersion: 1,
+    status: 'success',
+    complete: true,
+    components: {
+      contentSecurityPolicy: 'parsed',
+      strictTransportSecurity: 'parsed',
+      referrerPolicy: 'parsed',
+      responseCookies: 'parsed',
+    },
+    signals: [],
+    diagnostics: { signalCount: 0, cookieCount: 0, cookiesTruncated: false },
+    limitations: [],
+    ...overrides,
+  };
+}
+
 function analyze(overrides = {}) {
   return analyzeWebsiteSecurityPosture({
-    http: http(), pageIdentity: pageIdentity(), tls: tls(), dns: dns(), dnssec: 'Signed', observedAt: OBSERVED_AT,
+    http: http(), responsePolicy: responsePolicy(), pageIdentity: pageIdentity(), tls: tls(), dns: dns(), dnssec: 'Signed', observedAt: OBSERVED_AT,
     ...overrides,
   });
 }
@@ -97,6 +115,42 @@ describe('passive website security posture', () => {
     assert.match(csp.detail, /selected response/i);
     assert.match(csp.detail, /not a site-wide vulnerability finding/i);
     assert.equal(result.findings.filter((item) => item.category === 'response headers' && item.state === 'observed_absence').length, 5);
+  });
+
+  test('maps only recognized fixed policy signals and bounded counts into review findings', () => {
+    const secret = 'private-policy-value';
+    const result = analyze({
+      responsePolicy: responsePolicy({
+        signals: [
+          { id: 'csp_unsafe_eval' },
+          { id: 'cookies_missing_secure', count: 2 },
+          { id: 'unknown_future_signal', detail: secret },
+        ],
+      }),
+    });
+    assert.equal(byId(result, 'csp_unsafe_eval').tone, 'review');
+    assert.match(byId(result, 'cookies_missing_secure').detail, /^2 selected response cookies/);
+    assert.equal(result.findings.some((item) => item.id === 'unknown_future_signal'), false);
+    assert.doesNotMatch(JSON.stringify(result), new RegExp(secret));
+  });
+
+  test('keeps malformed or capped policy components unavailable rather than absent', () => {
+    const result = analyze({
+      responsePolicy: responsePolicy({
+        status: 'partial',
+        complete: false,
+        components: {
+          contentSecurityPolicy: 'malformed',
+          strictTransportSecurity: 'partial',
+          referrerPolicy: 'absent',
+          responseCookies: 'partial',
+        },
+      }),
+    });
+    assert.equal(byId(result, 'response_policy_contentSecurityPolicy_unavailable').state, 'unavailable');
+    assert.equal(byId(result, 'response_policy_strictTransportSecurity_unavailable').tone, 'neutral');
+    assert.equal(byId(result, 'response_policy_responseCookies_unavailable').state, 'unavailable');
+    assert.equal(result.status, 'partial');
   });
 
   test('flags cleartext transport and a retained HTTPS downgrade as review signals', () => {

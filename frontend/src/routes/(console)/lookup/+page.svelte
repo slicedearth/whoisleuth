@@ -533,6 +533,7 @@
     ['Content-type protection',httpSecurityHeaders.xContentTypeOptions],
     ['Referrer policy',httpSecurityHeaders.referrerPolicy]
   ];}
+  function httpSecurityValue(value:unknown){return value==='observed'?'Observed':show(value);}
   function httpEvidenceRows(){return[
     {label:'Final URL',value:show(httpEvidence.finalUrl||httpEvidence.requestUrl)},
     {label:'Response',value:httpResponse.status?`HTTP ${httpResponse.status}`:'Not observed'},
@@ -543,7 +544,7 @@
   ];}
   function httpRedirectRows(){return records(httpEvidence.redirects).map((redirect)=>({status:show(redirect.status),from:show(redirect.from),to:show(redirect.to),queryOmitted:Boolean(redirect.queryOmitted)}));}
   function httpAttemptRows(){const attempts=records(httpEvidence.attempts);return attempts.some((attempt)=>attempt.error)?attempts.map((attempt)=>({url:show(attempt.url),detail:attempt.error?String(attempt.error):`HTTP ${show(attempt.httpStatus)}`})):[];}
-  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:show(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});const bodyHash=rec(httpResponse.bodyHash);if(bodyHash.value){rows.push({label:'Body SHA-256',value:show(bodyHash.value),hash:true},{label:'Hash scope',value:bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(bodyHash.bytes)})`:`Complete captured body (${formatBytes(bodyHash.bytes)})`});}return rows;}
+  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:httpSecurityValue(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});const bodyHash=rec(httpResponse.bodyHash);if(bodyHash.value){rows.push({label:'Body SHA-256',value:show(bodyHash.value),hash:true},{label:'Hash scope',value:bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(bodyHash.bytes)})`:`Complete captured body (${formatBytes(bodyHash.bytes)})`});}return rows;}
   function tlsEvidenceRows(){return[
     {label:'Connected address',value:show(tlsEvidence.connectedAddress)},
     {label:'SNI hostname',value:show(tlsEvidence.sniHost)},
@@ -555,7 +556,42 @@
     {label:'Validity',value:tlsValidityStatus(),danger:tlsValidity.status==='expired'||tlsValidity.status==='not_yet_valid'},
   ];}
   function tlsFindingRows(){return records(tlsEvidence.findings).map((finding)=>({label:show(finding.label),detail:show(finding.detail),tone:String(finding.tone||'')}));}
-  function tlsLeafCertificateRows(){if(!tlsCertificate.fingerprintSha256)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=[{label:'Subject',value:tlsName(tlsSubject)},{label:'Issuer',value:tlsName(tlsIssuer)},{label:'Serial number',value:show(tlsCertificate.serialNumber),hash:true},{label:'Valid from',value:formatDate(tlsCertificate.validFrom)},{label:'Valid to',value:formatDate(tlsCertificate.validTo)},{label:'Certificate SHA-256',value:show(tlsCertificate.fingerprintSha256),hash:true},{label:'Public key',value:`${show(tlsPublicKey.type)}${tlsPublicKey.bits?` · ${tlsPublicKey.bits} bits`:''}${tlsPublicKey.curve?` · ${tlsPublicKey.curve}`:''}`}];if(tlsPublicKey.fingerprintSha256)rows.push({label:'Public-key SHA-256',value:show(tlsPublicKey.fingerprintSha256),hash:true});return rows;}
+  function tlsMetadataCount(value:unknown){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,999):0;}
+  function tlsCountSummary(value:unknown,labels:Array<[string,string]>){const source=rec(value);return labels.map(([key,label])=>[label,tlsMetadataCount(source[key])]as const).filter(([,count])=>count>0).map(([label,count])=>`${label} ${count}`).join(' · ');}
+  function tlsLeafCertificateRows(){
+    if(!tlsCertificate.fingerprintSha256)return[];
+    const rows:Array<{label:string;value:string;hash?:boolean}>=[
+      {label:'Subject',value:tlsName(tlsSubject)},
+      {label:'Issuer',value:tlsName(tlsIssuer)},
+      {label:'Serial number',value:show(tlsCertificate.serialNumber),hash:true},
+      {label:'Valid from',value:formatDate(tlsCertificate.validFrom)},
+      {label:'Valid to',value:formatDate(tlsCertificate.validTo)},
+      {label:'Certificate SHA-256',value:show(tlsCertificate.fingerprintSha256),hash:true},
+      {label:'Public key',value:`${show(tlsPublicKey.type)}${tlsPublicKey.bits?` · ${tlsPublicKey.bits} bits`:''}${tlsPublicKey.curve?` · ${tlsPublicKey.curve}`:''}`}
+    ];
+    if(tlsPublicKey.fingerprintSha256)rows.push({label:'Public-key SHA-256',value:show(tlsPublicKey.fingerprintSha256),hash:true});
+    const signature=rec(tlsCertificate.signature);
+    if(signature.algorithm||signature.oid)rows.push({label:'Signature',value:[signature.algorithm,signature.oid?`(${signature.oid})`:null].filter(Boolean).join(' ')});
+    const purposes=rec(tlsCertificate.extendedKeyUsage);
+    if(Object.keys(purposes).length){
+      const values=records(purposes.values).slice(0,8).map((purpose)=>`${show(purpose.name)} (${show(purpose.oid)})`);
+      const omitted=Array.isArray(purposes.values)?Math.max(0,purposes.values.length-values.length):0;
+      rows.push({label:'Certificate purposes',value:`${values.join(' · ')||'None declared'}${omitted?` · +${omitted} more`:''}${purposes.truncated?' · source truncated':''}`});
+    }
+    const sanClasses=tlsCountSummary(tlsAltNames.classes,[['dns','DNS'],['ip','IP'],['email','email'],['uri','URI'],['directoryName','directory name'],['registeredId','registered ID'],['otherName','other name'],['unclassified','other']]);
+    if(Object.keys(rec(tlsAltNames.classes)).length)rows.push({label:'SAN classes',value:`${sanClasses||'None observed'}${tlsAltNames.truncated?' · truncated':''}`});
+    const aia=rec(tlsCertificate.authorityInformationAccess);
+    if(Object.keys(aia).length){
+      const ocsp=rec(aia.ocsp);const issuers=rec(aia.caIssuers);
+      const values=[
+        tlsMetadataCount(ocsp.total)?`OCSP ${tlsMetadataCount(ocsp.total)} (${tlsMetadataCount(ocsp.https)} HTTPS, ${tlsMetadataCount(ocsp.http)} HTTP, ${tlsMetadataCount(ocsp.other)} other)`:null,
+        tlsMetadataCount(issuers.total)?`CA issuers ${tlsMetadataCount(issuers.total)} (${tlsMetadataCount(issuers.https)} HTTPS, ${tlsMetadataCount(issuers.http)} HTTP, ${tlsMetadataCount(issuers.other)} other)`:null,
+        tlsMetadataCount(aia.unknownMethods)?`Unknown methods ${tlsMetadataCount(aia.unknownMethods)}`:null,
+      ].filter(Boolean);
+      rows.push({label:'AIA presence',value:`${values.join(' · ')||'None declared'}${aia.truncated?' · truncated':''}`});
+    }
+    return rows;
+  }
   function tlsAlternativeNameRows(){return[
     ...(Array.isArray(tlsAltNames.dnsNames)?tlsAltNames.dnsNames.map((value)=>({type:'DNS',value:show(value)})):[]),
     ...(Array.isArray(tlsAltNames.ipAddresses)?tlsAltNames.ipAddresses.map((value)=>({type:'IP address',value:show(value)})):[]),

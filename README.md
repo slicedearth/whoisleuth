@@ -47,6 +47,12 @@ navigation without shortening the policy.
 | **Monitor** | Manage cases, campaigns, analyst-selected relationship observations, watchlists, timelines, and evidence reports. | Ordinary investigation state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
 | **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
 
+Dashboard can download the bounded workspace as an encrypted portable backup.
+The passphrase and encryption work stay in the browser, and the ordinary
+versioned archive is still validated before any reviewed non-destructive
+import. This protects the downloaded file while locked; the active IndexedDB
+workspace remains plaintext and browser-local.
+
 Deep domain Lookup can combine:
 
 - IANA-bootstrap RDAP and bounded WHOIS referral-chain evidence;
@@ -56,10 +62,13 @@ Deep domain Lookup can combine:
 - DNS, including deep-only SOA zone context and HTTPS service-binding
   publication, plus HTTP, favicon,
   page-identity, bounded publisher-declared structured identity, mail, and
-  one-connection TLS evidence;
-- passive technology, browser-library catalogue, and security-posture
-  indicators derived from the captured response, without fetching referenced
-  scripts or performing vulnerability testing;
+  one-connection TLS evidence with bounded certificate signature, purpose,
+  subject-alternative-name class, and authority-information-access presence
+  metadata;
+- passive technology, browser-library catalogue, and response-scoped
+  security-posture indicators, including bounded policy-quality checks,
+  derived from the captured response without fetching referenced scripts or
+  performing vulnerability testing;
 - a privacy-minimized credential collection surface with fixed semantic input,
   form-method, and action-relationship counts from the captured static HTML;
 - one observed public endpoint mapped to its IP RDAP network registration;
@@ -187,6 +196,7 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Registry data contract](docs/registry-data-contract.md) | Normalized RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
 | [Registry compatibility](docs/registry-compatibility.md) | Fixture-backed parser support and separately documented access context. |
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
+| [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
 | [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, and evidence exports. |
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
 | [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
@@ -203,6 +213,7 @@ npm test
 npm run typecheck
 npm run check
 npm run build
+npm run architecture:check
 npm run test:e2e:built
 git diff --check
 npm audit --omit=dev
@@ -213,6 +224,7 @@ Additional offline or bounded maintainer checks include:
 
 ```bash
 npm run schema:inventory
+npm run benchmark:technology
 npm run benchmark:workflow
 npm run platform:local-data
 npm run release:check
