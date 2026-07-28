@@ -51,7 +51,7 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
 
-  await expect(page.locator('.local-context-status')).toContainText('browser-local profile, shortlist, case, or relationship context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('browser-local profile, shortlist, case, relationship, or saved-session context could not be loaded');
   await expect(page.locator('#domains')).toBeEditable();
 });
 
@@ -198,6 +198,139 @@ test('keeps the current queue, results, filters, sort, and page during console n
   await page.reload();
   await expect(page.locator('#domains')).toHaveValue('');
   await expect(page.locator('.results-table')).toHaveCount(0);
+});
+
+test('saves compact Bulk sessions, restores them after reload, and compares later observations', async ({ page }) => {
+  let availability = 'registered';
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: availability,
+          confidence: 'high',
+          registrant: { email: 'must-not-persist@priority.invalid' },
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: availability === 'registered' ? 'complete' : 'not_found' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await runBulkScan(page, ['priority.invalid']);
+  await page.getByLabel('Session name').fill('Baseline review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Baseline review.' })).toBeVisible();
+
+  availability = 'available';
+  await page.getByRole('button', { name: 'Scan 1 domain' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Completed 1 of 1 lookups.' })).toBeVisible();
+  await page.getByLabel('Session name').fill('Later review');
+  await page.getByRole('button', { name: 'Save current session' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Later review.' })).toBeVisible();
+
+  const stored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 2 });
+  expect(stored.records).toHaveLength(2);
+  expect(JSON.stringify(stored.records)).not.toContain('must-not-persist@priority.invalid');
+
+  await page.getByText('Compare two saved sessions', { exact: true }).click();
+  await page.getByLabel('Baseline', { exact: true }).selectOption({ label: 'Baseline review' });
+  await page.getByLabel('Later session', { exact: true }).selectOption({ label: 'Later review' });
+  await expect(page.getByText('Registration: registered → available')).toBeVisible();
+  await expect(page.getByText(/source-state change may reflect collection availability/i)).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Saved Bulk sessions' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Baseline review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Later review' })).toBeVisible();
+  await page.locator('article').filter({ hasText: 'Baseline review' }).getByRole('button', { name: 'Load' }).click();
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
+  await expect(page.getByRole('status').filter({ hasText: /Loaded Baseline review/ })).toBeVisible();
+});
+
+test('resumes only unstarted rows from an explicitly saved partial session', async ({ page }) => {
+  const savedAt = '2026-07-28T03:00:00.000Z';
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': {
+      schema: 'whoisleuth.bulk-sessions',
+      version: 1,
+      sessions: [{
+        id: 'partial-review',
+        name: 'Partial review',
+        mode: 'fast',
+        state: 'partial',
+        inputDigest: `sha256:${'a'.repeat(64)}`,
+        domains: ['settled.invalid', 'pending.invalid'],
+        results: [{
+          domain: 'settled.invalid',
+          status: 'error',
+          availability: 'error',
+          confidence: 'unknown',
+          registrar: '—',
+          activity: '—',
+          risk: null,
+          opportunity: null,
+          mutationTypes: [],
+          trusted: null,
+          error: 'Earlier lookup failed',
+          scanDepth: 'fast',
+          nameservers: [],
+          faviconMatch: false,
+          faviconNearMatch: false,
+          reusesOfficialAssets: false,
+          hasPasswordField: false,
+          riskFactors: [],
+          relationship: {
+            version: 2,
+            nameservers: [],
+            ipAddresses: [],
+            trackingIdentifiers: [],
+            officialAssetHosts: [],
+            faviconHash: null,
+            faviconPHash: null,
+            certificateFingerprint: null,
+            truncated: false,
+          },
+          sourceCoverage: [{ source: 'lookup', state: 'error' }],
+        }],
+        startedAt: savedAt,
+        updatedAt: savedAt,
+        completedAt: null,
+      }],
+    },
+  });
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    requests.push(domain);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        diagnostics: {
+          version: 7,
+          rdap: { status: 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  await page.getByRole('button', { name: 'Resume unstarted' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Completed 1 of 1 lookups.' })).toBeVisible();
+  expect(requests).toEqual(['pending.invalid']);
+  const stored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1, minimumRevision: 2 });
+  expect(stored.records[0]?.value?.results).toHaveLength(2);
 });
 
 test('leaving a paused scan retains every settled result and releases paused workers', async ({ page }) => {

@@ -214,10 +214,10 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-\d{4}-\d{2}-\d{2}\.json$/);
   const archive = JSON.parse(content) as WorkspaceArchiveDocument;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
-  expect(archive.version).toBe(1);
-  expect(archive.manifest.sectionCount).toBe(8);
+  expect(archive.version).toBe(2);
+  expect(archive.manifest.sectionCount).toBe(9);
   expect(archive.manifest.sections.map((section) => section.id)).toEqual([
-    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'settings',
+    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'settings',
   ]);
   expect(archive.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum))).toBe(true);
   const archivedCase = requiredValue(archive.sections.cases.cases[0], 'The exported case fixture is missing.');
@@ -231,7 +231,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 8 verified data sections');
+  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 9 verified data sections');
 });
 
 test('the dashboard encrypts and locally unlocks a portable workspace backup', async ({ page }) => {
@@ -267,7 +267,7 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   await page.getByRole('button', { name: 'Unlock and review' }).click();
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(8);
+  await expect(preview.locator('li')).toHaveCount(9);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await preview.getByRole('button', { name: 'Add selected data' }).click();
@@ -290,14 +290,14 @@ test('workspace archive import previews conflicts before a non-destructive mobil
 
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(8);
+  await expect(preview.locator('li')).toHaveCount(9);
   await expect(preview.locator('li', { hasText: 'Cases' })).toContainText('1 new');
   await expect(preview.locator('li', { hasText: 'Workspace settings' })).toContainText('Ready');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('Added backup data from 8 sections');
+  await expect(page.getByRole('status')).toContainText('Added backup data from 9 sections');
   const [cases, campaigns, profiles, relationshipObservations, settings] = await Promise.all([
     readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),

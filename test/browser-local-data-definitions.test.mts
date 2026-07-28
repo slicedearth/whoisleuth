@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   BROWSER_LOCAL_COLLECTIONS,
+  BULK_SESSIONS_COLLECTION,
   decodeBrowserLocalCollectionRecord,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   SHORTLIST_COLLECTION,
@@ -163,6 +164,60 @@ describe('browser-local collection definitions', () => {
     assert.match(first.id, /^relationship-/);
     assert.notEqual(first.id, 'relationship-untrusted-alias');
     assert.deepEqual(RELATIONSHIP_OBSERVATIONS_COLLECTION.split(result.joined).map((record) => record.id), [first.id]);
+  });
+
+  test('saved Bulk sessions retain compact resumable rows as independent records', () => {
+    const input = {
+      schema: 'whoisleuth.bulk-sessions',
+      version: 1,
+      sessions: [{
+        id: 'bulk-session',
+        name: 'Priority review',
+        mode: 'fast',
+        state: 'partial',
+        inputDigest: `sha256:${'a'.repeat(64)}`,
+        domains: ['first.invalid', 'second.invalid'],
+        results: [{
+          domain: 'first.invalid',
+          status: 'error',
+          availability: 'error',
+          confidence: 'unknown',
+          registrar: '—',
+          activity: '—',
+          risk: null,
+          opportunity: null,
+          mutationTypes: [],
+          trusted: null,
+          error: 'Lookup failed',
+          scanDepth: 'fast',
+          nameservers: [],
+          faviconMatch: false,
+          faviconNearMatch: false,
+          reusesOfficialAssets: false,
+          hasPasswordField: false,
+          riskFactors: [],
+          relationship: {
+            version: 2,
+            nameservers: [],
+            ipAddresses: [],
+            trackingIdentifiers: [],
+            officialAssetHosts: [],
+            faviconHash: null,
+            faviconPHash: null,
+            certificateFingerprint: null,
+            truncated: false,
+          },
+          sourceCoverage: [{ source: 'lookup', state: 'error' }],
+        }],
+        startedAt: NOW,
+        updatedAt: NOW,
+        completedAt: null,
+      }],
+    };
+    const result = roundTrip(BULK_SESSIONS_COLLECTION, input);
+    assert.equal(result.after, result.before);
+    assert.equal(result.joined.length, 1);
+    assert.deepEqual(BULK_SESSIONS_COLLECTION.split(result.joined).map((record) => record.id), ['bulk-session']);
   });
 
   test('stored record decoding uses the codec and owning collection normalizer before typing values', async () => {

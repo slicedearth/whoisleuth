@@ -36,7 +36,7 @@ export interface EncryptedWorkspaceArchiveEnvelope {
   createdAt: string;
   content: {
     schema: typeof WORKSPACE_ARCHIVE_SCHEMA;
-    version: typeof WORKSPACE_ARCHIVE_VERSION;
+    version: number;
   };
   kdf: {
     name: 'PBKDF2';
@@ -169,7 +169,9 @@ function validateEnvelope(raw: unknown): {
     !content
     || !hasExactKeys(content, ['schema', 'version'])
     || content.schema !== WORKSPACE_ARCHIVE_SCHEMA
-    || content.version !== WORKSPACE_ARCHIVE_VERSION
+    || typeof content.version !== 'number'
+    || !Number.isSafeInteger(content.version)
+    || ![1, WORKSPACE_ARCHIVE_VERSION].includes(content.version)
   ) {
     throw new Error('The encrypted workspace archive declares an unsupported content contract.');
   }
@@ -213,7 +215,7 @@ function validateEnvelope(raw: unknown): {
       createdAt: value.createdAt,
       content: {
         schema: WORKSPACE_ARCHIVE_SCHEMA,
-        version: WORKSPACE_ARCHIVE_VERSION,
+        version: content.version,
       },
       kdf: {
         name: 'PBKDF2',
@@ -290,6 +292,10 @@ export async function encryptWorkspaceArchive(
   provider?: Crypto,
 ): Promise<EncryptedWorkspaceArchiveEnvelope> {
   await readWorkspaceArchive(archive);
+  const archiveVersion = record(archive)?.version;
+  if (archiveVersion !== 1 && archiveVersion !== WORKSPACE_ARCHIVE_VERSION) {
+    throw new Error('The workspace archive declares an unsupported content contract.');
+  }
   const plaintext = JSON.stringify(archive);
   const plaintextBytes = encoder.encode(plaintext);
   if (plaintextBytes.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
@@ -305,7 +311,7 @@ export async function encryptWorkspaceArchive(
     createdAt: new Date().toISOString(),
     content: {
       schema: WORKSPACE_ARCHIVE_SCHEMA,
-      version: WORKSPACE_ARCHIVE_VERSION,
+      version: archiveVersion,
     },
     kdf: {
       name: 'PBKDF2',

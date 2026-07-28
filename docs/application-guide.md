@@ -175,6 +175,14 @@ It supports pasted domains, text files, common delimited files, and handoffs
 from Discover. Results can be filtered and sorted without changing the saved or
 exported scan data.
 
+Bulk sessions are saved only when the analyst names and saves the current
+investigation. Each bounded browser-local session retains the input domain
+order, scan mode, compact settled rows, and per-source completion states so it
+can be loaded, compared with another saved session, or resumed for domains that
+never reached a settled row. Saving never retains raw source payloads or
+expanded contact records, and resuming does not repeat failed rows unless the
+analyst separately selects **Retry failed**.
+
 Bulk relationship evidence compares only observations already collected in the
 current scan. It can highlight exact nameserver sets, addresses, tracking
 identifiers, favicons, official asset hosts, and native certificate hashes. A
@@ -404,20 +412,23 @@ each collection action and marking its outcome.
 ## Browser-local storage and archives
 
 Cases, campaigns, Brand Profiles, watchlists, shortlist entries, Certificate
-Transparency history, detection rules, and analyst-selected relationship
-observations use bounded native IndexedDB stores. Relationship observations
+Transparency history, detection rules, analyst-selected relationship
+observations, and explicitly saved Bulk sessions use bounded native IndexedDB
+stores. Relationship observations
 are never retained automatically: Bulk writes one only after the analyst
 selects **Retain observation**. Browser storage can still be cleared or evicted
 and does not synchronize across devices.
 
 Dashboard can create one deliberate workspace archive for the supported
-collections and preferences, including retained relationship observations.
+collections and preferences, including retained relationship observations and
+compact saved Bulk sessions. Version 2 adds the Bulk-session section while
+version 1 archives remain readable and do not invent that missing section.
 The recommended download wraps the ordinary checksummed archive in
 passphrase-based browser-local authenticated encryption. The passphrase is
 never stored or sent to the server and cannot be recovered. A separately
 labelled unencrypted download remains available for compatibility. Import
 detects either format, unlocks encrypted files locally, previews changes, and
-uses the existing non-destructive merge rules. Both formats exclude sessions,
+uses the existing non-destructive merge rules. Both formats exclude login sessions,
 passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab
 state, and unrelated browser storage.
 

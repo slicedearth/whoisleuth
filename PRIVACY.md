@@ -349,7 +349,8 @@ default (see the README), so many lookups return no personal data at all.
   Bulk results, but is included when the user deliberately downloads a full
   Lookup evidence export.
 - **Brand Profiles / Shortlist / Watchlist / Cases / Campaigns / Certificate
-  search history / Custom rules / Retained relationship observations**: saved
+  search history / Custom rules / Retained relationship observations / Saved
+  Bulk sessions**: saved
   as bounded records in your own browser's IndexedDB database, not on the
   server, and visible to whoever can use that browser profile. On the first
   authenticated load after this storage change, WHOISleuth normalizes
@@ -364,6 +365,13 @@ default (see the README), so many lookups return no personal data at all.
   wrapped in passphrase-based authenticated encryption entirely in the
   browser. This protects the downloaded file while locked, not the active
   browser database or an open Console.
+  Saved Bulk sessions retain only the analyst-provided name, bounded domain
+  queue, scan mode, compact settled result fields, per-source completion
+  states, and session timestamps needed to load, compare, or resume unstarted
+  domains. They exclude raw source payloads, complete Lookup responses,
+  registrant and abuse contacts, and Certificate Transparency rows. Saving and
+  loading make no network request; an explicit resume sends only domains that
+  had no settled row through the selected Bulk mode.
   The appearance selector can also retain one bounded `dark`, `light`, or
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
   server. It is included only when you deliberately download a unified
@@ -428,11 +436,12 @@ default (see the README), so many lookups return no personal data at all.
   expanded contacts, provider payloads, scripts, and remote assets. A
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
-  detection rules, retained relationship observations, active-profile
+  detection rules, retained relationship observations, compact saved Bulk
+  sessions, active-profile
   selection, and theme preference. It uses a versioned manifest with
   per-section SHA-256
   checksums, previews conflicts before a non-destructive merge, and excludes
-  sessions, passwords, API credentials, hosted-monitor encryption keys, raw
+  login sessions, passwords, API credentials, hosted-monitor encryption keys, raw
   upstream payloads, tab state, Certificate Transparency history, and unrelated
   browser storage. The recommended download uses browser-native
   PBKDF2-HMAC-SHA-256 and AES-256-GCM to encrypt that ordinary archive with a

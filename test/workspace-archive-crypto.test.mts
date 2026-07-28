@@ -30,6 +30,7 @@ async function workspaceArchive() {
     shortlist: [],
     detectionRules: [],
     relationshipObservations: [],
+    bulkSessions: [],
     settings: { activeProfileId: '', theme: 'system' },
   }, { generatedAt: NOW });
 }
@@ -60,7 +61,7 @@ describe('encrypted portable workspace archives', () => {
       iv: encrypted.cipher.iv,
     });
     assert.equal(parsed.generatedAt, NOW);
-    assert.equal(parsed.sections.length, 8);
+    assert.equal(parsed.sections.length, 9);
     assert.equal(JSON.stringify(encrypted).includes(PASSPHRASE), false);
     assert.equal(JSON.stringify(encrypted).includes(WORKSPACE_ARCHIVE_SCHEMA), true);
   });
@@ -73,6 +74,17 @@ describe('encrypted portable workspace archives', () => {
     assert.notEqual(first.kdf.salt, second.kdf.salt);
     assert.notEqual(first.cipher.iv, second.cipher.iv);
     assert.notEqual(first.ciphertext, second.ciphertext);
+  });
+
+  test('preserves the declared content version when locking a readable legacy archive', async () => {
+    const legacy = structuredClone(await workspaceArchive());
+    Reflect.set(legacy, 'version', 1);
+    const encrypted = await encryptWorkspaceArchive(legacy, PASSPHRASE);
+
+    assert.equal(encrypted.content.version, 1);
+    const decrypted = await decryptWorkspaceArchive(encrypted, PASSPHRASE);
+    const parsed = await readWorkspaceArchive(decrypted);
+    assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
   });
 
   test('reports one generic failure for a wrong passphrase or authenticated-data tampering', async () => {

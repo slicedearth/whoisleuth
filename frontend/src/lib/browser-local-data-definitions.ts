@@ -73,6 +73,17 @@ import {
 } from './analysis/relationship-observation-model.ts';
 import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
 import {
+  BULK_SESSION_SCHEMA,
+  BULK_SESSION_SCHEMA_VERSION,
+  MAX_BULK_SESSIONS,
+  MAX_BULK_SESSION_STORE_BYTES,
+  bulkSessionStoreVersion,
+  enforceBulkSessionStoreBudget,
+  normalizeBulkSessionStore,
+  serializeBulkSessionStore,
+} from './analysis/bulk-session-model.ts';
+import type { BulkSession } from './analysis/bulk-session-model.ts';
+import {
   BrowserLocalDataError,
   plaintextJsonCodec,
 } from './browser-local-data.ts';
@@ -93,6 +104,7 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   ct_history: CtHistoryEntry;
   detection_rules: DetectionRule;
   relationship_observations: RelationshipObservation;
+  bulk_sessions: BulkSession;
 }>;
 
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
@@ -109,6 +121,7 @@ export const LEGACY_SHORTLIST_KEY = 'whois-rdap-shortlist-v1';
 export const LEGACY_CT_HISTORY_KEY = 'whoisleuth:ct-search-history:v1';
 export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
 export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
+export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
 
 function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
@@ -246,6 +259,25 @@ export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition
   }),
 });
 
+export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession[]> = Object.freeze({
+  id: 'bulk_sessions',
+  label: 'Saved Bulk sessions',
+  legacyKey: LEGACY_BULK_SESSIONS_KEY,
+  schemaVersion: BULK_SESSION_SCHEMA_VERSION,
+  maximumBytes: MAX_BULK_SESSION_STORE_BYTES,
+  maximumRecords: MAX_BULK_SESSIONS,
+  empty: () => [],
+  normalize: (raw) => normalizeBulkSessionStore(raw).sessions,
+  version: bulkSessionStoreVersion,
+  serialize: serializeBulkSessionStore,
+  split: (sessions) => recordsFromArray(sessions, (record) => record.id),
+  join: (records, schemaVersion) => ({
+    schema: BULK_SESSION_SCHEMA,
+    version: schemaVersion,
+    sessions: arrayFromRecords(records),
+  }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
@@ -255,6 +287,7 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CT_HISTORY_COLLECTION,
   DETECTION_RULES_COLLECTION,
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
+  BULK_SESSIONS_COLLECTION,
 ]);
 
 function browserLocalCollectionDefinition(

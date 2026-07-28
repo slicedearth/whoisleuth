@@ -84,6 +84,21 @@ function relationshipObservation() {
   });
 }
 
+function bulkSession() {
+  return {
+    id: 'bulk-session-one',
+    name: 'Archive Bulk review',
+    mode: 'fast',
+    state: 'partial',
+    inputDigest: `sha256:${'a'.repeat(64)}`,
+    domains: ['archive-one.invalid'],
+    results: [],
+    startedAt: NOW,
+    updatedAt: NOW,
+    completedAt: null,
+  };
+}
+
 type WorkspaceFixture = {
   cases: ReturnType<typeof caseRecord>[];
   campaigns: ReturnType<typeof campaign>[];
@@ -92,6 +107,7 @@ type WorkspaceFixture = {
   shortlist: Record<string, unknown>[];
   detectionRules: Record<string, unknown>[];
   relationshipObservations: ReturnType<typeof relationshipObservation>[];
+  bulkSessions: ReturnType<typeof bulkSession>[];
   settings: { activeProfileId: string; theme: string };
 };
 
@@ -114,13 +130,14 @@ function input(): WorkspaceFixture {
       tag: 'review',
     }],
     relationshipObservations: [relationshipObservation()],
+    bulkSessions: [bulkSession()],
     settings: { activeProfileId: 'profile-one', theme: 'light' },
   };
 }
 
 function emptyInput(): WorkspaceFixture {
   return {
-    cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [], relationshipObservations: [],
+    cases: [], campaigns: [], brandProfiles: [], watchlists: {}, shortlist: [], detectionRules: [], relationshipObservations: [], bulkSessions: [],
     settings: { activeProfileId: '', theme: 'dark' },
   };
 }
@@ -137,8 +154,8 @@ describe('portable workspace archive', () => {
     assert.equal(left.schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(left.version, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(left.manifest.sections.map((section) => section.id), [...WORKSPACE_ARCHIVE_SECTION_IDS]);
-    assert.equal(left.manifest.sectionCount, 8);
-    assert.equal(left.manifest.totalRecords, 8);
+    assert.equal(left.manifest.sectionCount, 9);
+    assert.equal(left.manifest.totalRecords, 9);
     assert.ok(left.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum)));
     const settings = recordValue(left.sections.settings);
     assert.equal(settings.activeProfileId, 'profile-one');
@@ -150,7 +167,7 @@ describe('portable workspace archive', () => {
     const parsed = await readWorkspaceArchive(archive);
 
     assert.equal(parsed.generatedAt, NOW);
-    assert.equal(parsed.sections.length, 8);
+    assert.equal(parsed.sections.length, 9);
     assert.equal(parsed.sections.every((section) => section.status === 'ready'), true);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     const relationships = parsed.sections.find((section) => section.id === 'relationshipObservations');
@@ -159,6 +176,22 @@ describe('portable workspace archive', () => {
     assert.equal(cases.recordCount, 1);
     assert.equal(relationships.recordCount, 1);
     assert.ok(parsed.bytes > 0 && parsed.bytes < MAX_WORKSPACE_ARCHIVE_BYTES);
+  });
+
+  test('keeps version 1 archives readable without inventing a saved-session section', async () => {
+    const legacy = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
+    Reflect.set(legacy, 'version', 1);
+    const bulkEntry = legacy.manifest.sections.find((section) => section.id === 'bulkSessions');
+    assert.ok(bulkEntry);
+    legacy.manifest.sections = legacy.manifest.sections.filter((section) => section.id !== 'bulkSessions');
+    legacy.manifest.sectionCount -= 1;
+    legacy.manifest.totalRecords -= bulkEntry.recordCount;
+    Reflect.deleteProperty(legacy.sections, 'bulkSessions');
+
+    const parsed = await readWorkspaceArchive(legacy);
+    assert.equal(parsed.version, WORKSPACE_ARCHIVE_VERSION);
+    assert.equal(parsed.sections.length, 8);
+    assert.equal(parsed.sections.some((section) => section.id === 'bulkSessions'), false);
   });
 
   test('rejects a changed section even when its manifest still looks valid', async () => {
@@ -187,7 +220,7 @@ describe('portable workspace archive', () => {
       ...await buildWorkspaceArchive(input(), { generatedAt: NOW }),
       version: WORKSPACE_ARCHIVE_VERSION + 1,
     };
-    await assert.rejects(readWorkspaceArchive(archive), /newer schema 2/);
+    await assert.rejects(readWorkspaceArchive(archive), /newer schema 3/);
   });
 
   test('reports a future section as unsupported without reinterpreting it', async () => {

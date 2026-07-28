@@ -42,7 +42,7 @@ navigation without shortening the policy.
 | --- | --- | --- |
 | **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. |
 | **Discover** | Generate bounded typo, Unicode-confusable, keyboard, plural, separator, word-order, WWW-style, TLD, and dictionary candidates, including analyst-controlled token replacements and an opt-in two-character Unicode family, with optional Certificate Transparency discovery. Presets or an exact family selection control the local generator. | Candidate generation and optional custom dictionary input stay local. The advanced Unicode family is never preset-enabled. Confusability is a review lead, while certificate-log observations do not prove site activity or maliciousness. |
-| **Bulk** | Compare multiple domains with filters, sorting, score explanations, CSV export, and scan-local relationship evidence. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. Relationships remain transient unless the analyst explicitly retains one bounded observation. |
+| **Bulk** | Compare multiple domains with filters, sorting, score explanations, CSV export, scan-local relationship evidence, and explicitly saved resumable sessions. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. Saved sessions retain compact rows and source states, not raw payloads or contact records. Relationships remain transient unless the analyst explicitly retains one bounded observation. |
 | **Brands** | Save official domains, product names, allowlists, mail-posture settings, expiring protection attestations, and optional page-identity baselines. Audit bounded registration, delegation, mail-authentication, and external-dependency evidence. | Profiles and analyst attestations stay in the current browser unless deliberately exported. Public evidence and analyst statements remain separate and neither is a security guarantee. |
 | **Monitor** | Manage cases, evidence pins, analyst decisions, reviewed response actions, campaigns, relationship observations, watchlists, timelines, and reports. | Ordinary investigation and response state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
 | **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
@@ -135,8 +135,8 @@ accessible lists, tables, or source records.
   addresses, revalidate redirects, resist DNS rebinding, and avoid private
   network targets.
 - **Local-first investigation state.** Cases, evidence pins, analyst decisions,
-  response actions, profiles, watchlists, campaigns, shortlist entries, and
-  rules use bounded IndexedDB stores in the current browser.
+  response actions, profiles, watchlists, campaigns, shortlist entries, saved
+  Bulk sessions, and rules use bounded IndexedDB stores in the current browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
 - **Supplementary visuals.** Charts summarize bounded data already present in
