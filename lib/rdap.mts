@@ -3,7 +3,6 @@
 
 import net from 'node:net';
 
-import { cached } from './lookup-cache.mts';
 import { registryDateIso } from './registry-dates.mts';
 import {
   BOOTSTRAP_STALE_TTL_MS,
@@ -13,7 +12,10 @@ import {
   findRdapBases,
   uniqueRdapBases as uniqueBases,
 } from './rdap-bootstrap.mts';
-import { rdapAttempt, rdapFailure } from './rdap-attempts.mts';
+import {
+  fetchRdapFromBasesWithParser,
+  fetchRdapRecordWithParser,
+} from './rdap-client.mts';
 import {
   fetchRegistrarRdapRecordWithParser,
   selectRegistrarRdapLink,
@@ -36,29 +38,13 @@ import {
   type NormalizedRdapRedaction,
   type NormalizedRdapTextBlock,
   type NormalizedRdapVariant,
-  type RdapAttempt,
   type RdapEntitySummary,
-  type RdapLookupRecord,
   type RegistryRdapLinkSource,
 } from './rdap-types.mts';
-import { validateRdapResponse } from './rdap-validation.mts';
 
 type LooseRecord = LooseRdapRecord;
 type EntitySummary = RdapEntitySummary;
 
-function errorProperty(value: unknown, key: string): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  return (value as LooseRecord)[key];
-}
-
-// Every other upstream call in this project (crt.sh, a domain's own
-// homepage, WHOIS sockets) already has a timeout - this one didn't, so a
-// slow/unresponsive registry or the IANA bootstrap endpoint could hang a
-// request indefinitely on server.mts, or die ungracefully on a Netlify
-// function's own execution limit instead of failing cleanly.
-const UPSTREAM_TIMEOUT_MS = 7000;
-const UPSTREAM_TOTAL_DEADLINE_MS = 12000;
-const MAX_RDAP_ENDPOINTS = 3;
 const MAX_RDAP_ENTITIES = 100;
 const MAX_RDAP_ENTITY_DEPTH = 6;
 const MAX_ENTITIES_PER_ROLE = 5;
@@ -85,132 +71,6 @@ const RDAP_CONTACT_ROLES = new Set([
   'registrar', 'registrant', 'administrative', 'technical', 'billing', 'abuse', 'noc',
   'reseller', 'sponsor', 'proxy', 'notifications',
 ]);
-
-function rdapPathFor(type: string, value: string): string {
-  if (type === 'domain') return `domain/${value}`;
-  if (type === 'ipv4' || type === 'ipv6') return `ip/${value}`;
-  if (type === 'asn') return `autnum/${value.replace(/^AS/i, '')}`;
-  throw new Error(`Unsupported RDAP type: ${type}`);
-}
-
-// Resolves the registry, fetches the record, and parses it - the full
-// /api/rdap request shape shared by both server.mts and
-// netlify/functions/rdap.mts, so the two deployment targets can't drift.
-// Returns null when no RDAP registry covers this query (the caller decides
-// how to report that as a 404). Cached briefly (lib/lookup-cache.mts) since
-// checkDomainAvailability() also calls this for the same domain a fast
-// scan and a follow-up deep-check both look up in quick succession.
-async function fetchRdapFromBases<const T extends string>(
-  type: T,
-  value: string,
-  bases: unknown,
-  fetchUpstream: RdapFetch = fetchRdapWithTimeout,
-): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
-  const candidates = uniqueBases(bases).slice(0, MAX_RDAP_ENDPOINTS);
-  if (candidates.length === 0) return null;
-
-  const startedAt = Date.now();
-  const attempts: RdapAttempt[] = [];
-  for (const base of candidates) {
-    const elapsed = Date.now() - startedAt;
-    const remaining = UPSTREAM_TOTAL_DEADLINE_MS - elapsed;
-    if (remaining <= 0) break;
-
-    const url = base.replace(/\/$/, '') + '/' + rdapPathFor(type, value);
-    try {
-      const upstream = await fetchUpstream(
-        url,
-        { headers: { Accept: 'application/rdap+json' } },
-        Math.min(UPSTREAM_TIMEOUT_MS, remaining)
-      );
-
-      // Classify transport/service failures before attempting to parse their
-      // bodies. Registry error pages are often HTML; a 5xx HTML response is a
-      // server failure, not evidence that an otherwise-successful RDAP object
-      // contained invalid JSON. A 404 remains the exception because its RDAP
-      // error object is retained as the authoritative no-object response.
-      if (upstream.status !== 404 && !upstream.ok) {
-        const outcome = upstream.status === 429 ? 'rate_limited'
-          : upstream.status >= 500 ? 'server_error' : 'client_error';
-        attempts.push(rdapAttempt(url, outcome, {
-          status: upstream.status, detail: `The endpoint returned HTTP ${upstream.status}.`,
-        }));
-        continue;
-      }
-
-      let data: unknown;
-      try {
-        data = JSON.parse(upstream.text);
-      } catch {
-        attempts.push(rdapAttempt(url, 'invalid_json', {
-          status: upstream.status, detail: 'The endpoint returned invalid JSON.',
-        }));
-        continue;
-      }
-
-      if (upstream.status === 404) {
-        attempts.push(rdapAttempt(url, 'not_found', {
-          status: upstream.status, detail: 'The authoritative endpoint reported no matching object.', selected: true,
-        }));
-        return {
-          rdapServer: url,
-          transportSecurity: /^https:\/\//i.test(url) ? 'https' : 'http',
-          upstreamStatus: upstream.status,
-          fetchedAt: new Date().toISOString(),
-          data,
-          parsed: null,
-          attempts,
-        };
-      }
-
-      const parsed = parseRdap(type, data);
-      const validation = validateRdapResponse(type, value, parsed);
-      if (!validation.valid) {
-        attempts.push(rdapAttempt(url, 'invalid_response', {
-          status: upstream.status, detail: validation.detail,
-        }));
-        continue;
-      }
-
-      attempts.push(rdapAttempt(url, 'success', {
-        status: upstream.status, detail: 'The endpoint returned the requested RDAP object.', selected: true,
-      }));
-
-      return {
-        rdapServer: url,
-        transportSecurity: /^https:\/\//i.test(url) ? 'https' : 'http',
-        upstreamStatus: upstream.status,
-        fetchedAt: new Date().toISOString(),
-        data,
-        parsed,
-        attempts,
-      };
-    } catch (err) {
-      const detail = String(errorProperty(err, 'message') || 'request failed');
-      const outcome = errorProperty(err, 'name') === 'AbortError' || /timed? out|time limit/i.test(detail)
-        ? 'timeout' : 'network_error';
-      attempts.push(rdapAttempt(url, outcome, { detail }));
-    }
-  }
-
-  const detail = attempts.length
-    ? attempts.map((attempt) => `${attempt.endpoint} ${rdapFailure(attempt.outcome, attempt.status)}`).join('; ')
-    : 'the total upstream deadline expired';
-  throw Object.assign(
-    new Error(`RDAP lookup failed across ${candidates.length} endpoint(s): ${detail}`),
-    { attempts }
-  );
-}
-
-async function fetchRdapRecord<const T extends string>(
-  type: T,
-  value: string,
-): Promise<RdapLookupRecord<NormalizedRdapRecordFor<T>> | null> {
-  return cached(`rdap:${type}:${value}`, async () => {
-    const bases = await findRdapBases(type, value);
-    return fetchRdapFromBases(type, value, bases);
-  });
-}
 
 // ---------------------------------------------------------------------------
 // RDAP response parsing (turns the raw JSON into a readable summary)
@@ -834,6 +694,28 @@ function parseRdap<const T extends string>(type: T, data: unknown): NormalizedRd
   // This cast preserves that relationship for literal callers without
   // weakening the untrusted JSON boundary to any.
   return parseRdapObject(type, data as LooseRecord) as NormalizedRdapRecordFor<T> | null;
+}
+
+async function fetchRdapFromBases<const T extends string>(
+  type: T,
+  value: string,
+  bases: unknown,
+  fetchUpstream: RdapFetch = fetchRdapWithTimeout,
+) {
+  return fetchRdapFromBasesWithParser(
+    type,
+    value,
+    bases,
+    parseRdap,
+    fetchUpstream,
+  );
+}
+
+async function fetchRdapRecord<const T extends string>(
+  type: T,
+  value: string,
+) {
+  return fetchRdapRecordWithParser(type, value, parseRdap);
 }
 
 async function fetchRegistrarRdapRecord(
