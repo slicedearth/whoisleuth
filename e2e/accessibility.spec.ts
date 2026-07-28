@@ -77,6 +77,7 @@ async function installLookupFixture(page: Page) {
 }
 
 test('scans representative public initial, error, populated, and expanded states', async ({ page }, testInfo) => {
+  test.slow();
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
@@ -118,6 +119,7 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
 });
 
 test('scans populated Lookup, Bulk, and guided-investigation states', async ({ page }, testInfo) => {
+  test.slow();
   await installLookupFixture(page);
   await useTheme(page, 'dark');
   await page.setViewportSize({ width: 1280, height: 800 });

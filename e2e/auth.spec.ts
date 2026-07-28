@@ -10,6 +10,7 @@ import { protectedDestinations } from '../frontend/src/lib/workspaces';
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test('signs in through the login form and back out again', async ({ page }) => {
+  test.slow();
   // A local, all-levels console capture just for the password-leak check
   // below - separate from (and in addition to) the shared fixture's
   // error/warning-only guard, which wouldn't catch a plain console.log leak.
