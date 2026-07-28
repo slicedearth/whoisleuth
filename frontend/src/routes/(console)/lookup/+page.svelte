@@ -55,9 +55,23 @@
   } from '$lib/analysis/evidence-topology.ts';
   import {
     createLookupViewModel,
-    type JsonObject,
     type LookupHttpResponse,
   } from '$lib/analysis/lookup-response.ts';
+  import {
+    boundedTechnologyText,
+    buildLookupLifecycleDates,
+    buildLookupNetworkDisplay,
+    buildLookupPageDisplay,
+    buildLookupRegistryDisplay,
+    dateTimeAttribute,
+    formatDate,
+    rec,
+    records,
+    show,
+    statusLabel,
+    stringList,
+    type JsonRecord,
+  } from '$lib/analysis/lookup-display-model.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
@@ -79,11 +93,7 @@
     explainRiskScore,
   } from '$lib/analysis/scoring.ts';
 
-  type JsonRecord = JsonObject;
-  type SourceStatus = { status?: string; errorCode?: string|null; endpoint?: string|null; transportSecurity?: string|null; httpStatus?: number|null; fetchedAt?: string|null; queriedAt?: string|null; authoritativeHop?: string|null; failedHop?: string|null; conflictingHop?: string|null; resultState?: string|null; attempts?:Array<{outcome?:string}> };
   type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
-  type ComparisonField = { label:string; status:string; rdapDisplay:string; whoisDisplay:string };
-  type RdapPublicationField = { label:string; status:string; registryDisplay:string; registrarDisplay:string };
   type LookupMode = 'fast' | 'deep';
 
   let query=$state('');
@@ -113,12 +123,6 @@
   const websiteProbeCapability=$derived(featureCapability(capabilityReport?.()||null,'website_probe'));
   const securityTxtSupported=$derived(websiteProbeCapability?.status==='supported');
 
-  const isRecord=(value:unknown):value is JsonRecord=>value!==null&&typeof value==='object'&&!Array.isArray(value);
-  const rec=(value:unknown):JsonRecord=>isRecord(value)?value:{};
-  const records=(value:unknown):JsonRecord[]=>Array.isArray(value)?value.filter(isRecord):[];
-  const show=(value:unknown):string=>value==null||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='object'?show(rec(value).name||rec(value).org||rec(value).handle||rec(value).domain):String(value);
-  const textOrNull=(value:unknown):string|null=>typeof value==='string'&&value?value:null;
-  const firstText=(...values:unknown[]):string|null=>values.map(textOrNull).find((value):value is string=>value!==null)??null;
   const parsedInput=$derived(parseDomainInput(query));
   const entries=$derived(parsedInput.entries);
   const securityTxtEligible=$derived.by(()=>{
@@ -174,11 +178,6 @@
   const pageDownloads=$derived(lookupView.pageDownloads);
   const pageFingerprints=$derived(lookupView.pageFingerprints);
   const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile);
-  const credentialSurfaceForms=$derived(rec(credentialSurfaceProfile.forms));
-  const credentialSurfaceMethods=$derived(rec(credentialSurfaceForms.methods));
-  const credentialSurfaceActions=$derived(rec(credentialSurfaceForms.actions));
-  const credentialSurfaceInputs=$derived(rec(credentialSurfaceProfile.inputs));
-  const credentialSurfaceCategories=$derived(rec(credentialSurfaceInputs.categories));
   const structuredDataIdentity=$derived(lookupView.structuredDataIdentity);
   const technologyProfile=$derived(lookupView.technologyProfile);
   const browserLibraryProfile=$derived(rec(technologyProfile.browserLibraryProfile));
@@ -192,6 +191,39 @@
   const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>records(whoisContactsByRole[role]).length>0));
   const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed,{rdapStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,whoisStatus:typeof whoisDiagnostic.status==='string'?whoisDiagnostic.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0,rdap_unavailable:0,whois_unavailable:0,rdap_incomplete:0,whois_incomplete:0}});
   const registrarPublicationComparison=$derived(result?.type==='domain'?compareRdapPublications(rdapParsed,registrarRdapParsed,{registryStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,registrarStatus:typeof registrarRdap.status==='string'?registrarRdap.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,registry_only:0,registrar_only:0,registry_redacted:0,registrar_redacted:0,registry_unavailable:0,registrar_unavailable:0,registry_incomplete:0,registrar_incomplete:0}});
+  const lifecycleDates=$derived(buildLookupLifecycleDates({availability,rdapParsed,whoisParsed}));
+  const networkDisplay=$derived(buildLookupNetworkDisplay({
+    availability,
+    reverseDns,
+    reverseDnsRecords,
+    dnsEvidence,
+    dnsRecords,
+    httpEvidence,
+    httpResponse,
+    httpSecurityHeaders,
+    tlsEvidence,
+    tlsCertificate,
+    tlsSubject,
+    tlsIssuer,
+    tlsAltNames,
+    tlsPublicKey,
+    tlsCipher,
+    tlsAuthorization,
+    tlsHostname,
+    tlsValidity,
+    tlsDiagnostics,
+  }));
+  const registryDisplay=$derived(buildLookupRegistryDisplay({
+    result,
+    rdapParsed,
+    whoisParsed,
+    whoisContactsByRole,
+    populatedWhoisRoles,
+    comparison,
+    registrarRdap,
+    registrarRdapParsed,
+    registrarPublicationComparison,
+  }));
   const idnAnalysis=$derived(result?.type==='domain'?analyzeDomainIdn(String(result?.registrableDomain||availability.domain||''),profile?.officialDomains||[]):null);
   const profileSignals=$derived.by(()=>{
     return matchProfileSignals(String(availability.domain||result?.registrableDomain||''),availability,profile);
@@ -212,6 +244,28 @@
   const caseDomain=$derived(String(availability.domain||result?.registrableDomain||'').trim().toLowerCase());
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
+  const pageDisplay=$derived(buildLookupPageDisplay({
+    pageIdentity,
+    pageCanonical,
+    pageMetaRefresh,
+    pageOpenGraph,
+    pageOpenGraphUrl,
+    pageForms,
+    pageResources,
+    pageResourceTypes,
+    pageDownloads,
+    pageFingerprints,
+    credentialSurfaceProfile,
+    structuredDataIdentity,
+    technologyProfile,
+    browserLibraryProfile,
+    observedNetworkContext,
+    observedNetworkEndpoint,
+    observedNetwork,
+    securityPosture,
+    securityPostureSummary,
+    pageComparison,
+  }));
   const brandMimicryReview=$derived(buildBrandMimicryReview({
     hasActiveProfile:Boolean(profile),
     trustedDomainKind:profileSignals.trusted,
@@ -253,9 +307,9 @@
     endAutnum:rdapParsed.endAutnum,
   }));
   const activationContext=$derived(buildActivationContext({
-    registryCreated:created(),
-    registryUpdated:updated(),
-    registryExpires:expires(),
+    registryCreated:lifecycleDates.created,
+    registryUpdated:lifecycleDates.updated,
+    registryExpires:lifecycleDates.expires,
     tlsValidFrom:tlsCertificate.validFrom,
     tlsValidTo:tlsCertificate.validTo,
     observedAt:typeof result?.fetchedAt==='string'?result.fetchedAt:typeof rdapDiagnostic.fetchedAt==='string'?rdapDiagnostic.fetchedAt:typeof whoisDiagnostic.queriedAt==='string'?whoisDiagnostic.queriedAt:null,
@@ -311,9 +365,9 @@
     profileSignals,
     idnAnalysis,
     resultObservedAt:result?.fetchedAt,
-    createdDate:created(),
-    expiresDate:expires(),
-    updatedDate:updated(),
+    createdDate:lifecycleDates.created,
+    expiresDate:lifecycleDates.expires,
+    updatedDate:lifecycleDates.updated,
   }));
   const evidenceTopologyTarget=$derived({
     label:show(result?.registrableDomain||result?.query),
@@ -329,8 +383,8 @@
     riskFactors:risk?risk.factors.map((f)=>({label:f.label,points:f.delta})):[],
     opportunityFactors:opportunity?opportunity.factors.map((f)=>({label:f.label,points:f.delta})):[],
     registrar:entityDisplayName(availability.registrar)||entityDisplayName(rdapParsed.registrar)||entityDisplayName(whoisParsed.registrar),
-    createdDate:created()||null,
-    expiryDate:expires()||null,
+    createdDate:lifecycleDates.created,
+    expiryDate:lifecycleDates.expires,
     nameservers:Array.isArray(availability.nameservers)?availability.nameservers:[],
     hasMx:availability.hasMx??null,hasSpf:availability.hasSpf??null,hasDmarc:availability.hasDmarc??null,
     activityStatus:availability.activityStatus?String(availability.activityStatus):null,
@@ -383,131 +437,6 @@
     };
   });
 
-  function eventDate(action:string){return textOrNull(records(rdapParsed.events).find((item)=>item.action===action)?.date);}
-  function created(){const rdapLifecycle=rec(rdapParsed.lifecycle);const whoisLifecycle=rec(whoisParsed.lifecycle);return firstText(availability.createdDateIso,availability.createdDate,rdapLifecycle.createdDateIso,rdapLifecycle.createdDate,eventDate('registration'),whoisParsed.createdDateIso,whoisLifecycle.createdDateIso,whoisParsed.createdDate);}
-  function expires(){const rdapLifecycle=rec(rdapParsed.lifecycle);const whoisLifecycle=rec(whoisParsed.lifecycle);return firstText(availability.expiryDateIso,availability.expiryDate,rdapLifecycle.expiryDateIso,rdapLifecycle.expiryDate,eventDate('expiration'),whoisParsed.expiryDateIso,whoisLifecycle.expiryDateIso,whoisParsed.expiryDate);}
-  function updated(){const rdapLifecycle=rec(rdapParsed.lifecycle);const whoisLifecycle=rec(whoisParsed.lifecycle);return firstText(rdapLifecycle.updatedDateIso,rdapLifecycle.updatedDate,eventDate('last changed'),whoisParsed.updatedDateIso,whoisLifecycle.updatedDateIso,whoisParsed.updatedDate);}
-  function formatDate(value:unknown){if(!value)return'—';const parsed=new Date(String(value));return Number.isNaN(parsed.getTime())?String(value):parsed.toLocaleString();}
-  function dateTimeAttribute(value:unknown){if(!value)return undefined;const parsed=new Date(String(value));return Number.isNaN(parsed.getTime())?undefined:parsed.toISOString();}
-  function datedRow(label:string,value:unknown){const datetime=dateTimeAttribute(value);return{label,value:formatDate(value),...(datetime?{datetime}:{})};}
-  function statusLabel(value:string){return value.replaceAll('_',' ');}
-  function trackingIdentifierLabel(value:unknown){return({
-    'advertising-property':'Advertising property',
-    'analytics-property':'Analytics property',
-    'legacy-analytics-property':'Legacy analytics property',
-    'tag-container':'Tag container'
-  } as Record<string,string>)[String(value)]||statusLabel(show(value));}
-  function stringList(value:unknown){return Array.isArray(value)?value.map((item)=>String(item)):[];}
-  function boundedTechnologyText(value:unknown,maxLength=240){return String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,maxLength);}
-  function pageIdentityFactRows(){return[
-    {label:'Document language',value:show(pageIdentity.documentLanguage)},
-    {label:'Canonical URL',value:show(pageCanonical.url)},
-    {label:'Meta refresh target',value:show(pageMetaRefresh.url)},
-    {label:'Open Graph title',value:show(pageOpenGraph.title)},
-    {label:'Open Graph site',value:show(pageOpenGraph.siteName)},
-    {label:'Open Graph URL',value:show(pageOpenGraphUrl.url)},
-    {label:'Generator',value:show(pageIdentity.generator)},
-    {label:'Forms observed',value:`${show(pageForms.count)}${pageForms.truncated?' · capped':''}`},
-    {label:'POST forms',value:show(pageForms.postCount)},
-    {label:'Insecure actions',value:show(pageForms.insecureActionCount),danger:Number(pageForms.insecureActionCount)>0},
-    {label:'Resource references',value:`${show(pageResources.count)}${pageResources.truncated?' · capped':''}`},
-    {label:'External resources',value:Array.isArray(pageResources.externalOrigins)?String(pageResources.externalOrigins.length):'—'},
-    {label:'Embedded origins',value:Array.isArray(pageIdentity.embeddedOrigins)?String(pageIdentity.embeddedOrigins.length):'—'},
-    {label:'Contact domains',value:Array.isArray(pageIdentity.contactDomains)?String(pageIdentity.contactDomains.length):'—'},
-    {label:'Download links',value:`${show(pageDownloads.count)}${Number(pageDownloads.riskyCount)>0?` · ${pageDownloads.riskyCount} review`:''}`},
-    {label:'Tracking identifiers',value:Array.isArray(pageIdentity.trackingIdentifiers)?String(pageIdentity.trackingIdentifiers.length):'—'},
-    {label:'Page fingerprints',value:`${pageFingerprintRows().length}${pageFingerprints.truncated?' · partial':''}`},
-  ];}
-  function pageResourceSummaryRows(){return[
-    ['Images',pageResourceTypes.image],
-    ['Scripts',pageResourceTypes.script],
-    ['Stylesheets',pageResourceTypes.stylesheet],
-    ['Other links',pageResourceTypes.link],
-    ['Frames',pageResourceTypes.frame],
-    ['Media',pageResourceTypes.media],
-    ['Objects',pageResourceTypes.object],
-  ].filter(([,value])=>Boolean(value)).map(([label,value])=>({label:String(label),value:show(value)})).concat({label:'External origins',value:stringList(pageResources.externalOrigins).join(', ')||'None observed'});}
-  function pageDownloadSummaryRows(){return[
-    {label:'Explicit links',value:show(pageDownloads.explicitCount)},
-    {label:'Review file types',value:stringList(pageDownloads.riskyFileTypes).join(', ')||'None observed'},
-    {label:'External origins',value:stringList(pageDownloads.externalOrigins).join(', ')||'None observed'},
-  ];}
-  function pageTrackingIdentifierRows(){return records(pageIdentity.trackingIdentifiers).map((identifier)=>({label:trackingIdentifierLabel(identifier.type),value:show(identifier.value)}));}
-  function boundedCredentialCount(value:unknown,maximum=500){return Number.isSafeInteger(value)&&Number(value)>=0?Math.min(Number(value),maximum):0;}
-  function credentialSurfaceDisplay(){return{
-    formCount:boundedCredentialCount(credentialSurfaceForms.count,50),
-    inputCount:boundedCredentialCount(credentialSurfaceInputs.count),
-    classifiedCount:boundedCredentialCount(credentialSurfaceInputs.classifiedCount),
-    categories:{
-      password:boundedCredentialCount(credentialSurfaceCategories.password),
-      email:boundedCredentialCount(credentialSurfaceCategories.email),
-      username:boundedCredentialCount(credentialSurfaceCategories.username),
-      oneTimeCode:boundedCredentialCount(credentialSurfaceCategories.one_time_code),
-      payment:boundedCredentialCount(credentialSurfaceCategories.payment),
-    },
-    methods:{
-      missing:boundedCredentialCount(credentialSurfaceMethods.missing,50),
-      get:boundedCredentialCount(credentialSurfaceMethods.get,50),
-      post:boundedCredentialCount(credentialSurfaceMethods.post,50),
-      dialog:boundedCredentialCount(credentialSurfaceMethods.dialog,50),
-      other:boundedCredentialCount(credentialSurfaceMethods.other,50),
-    },
-    actions:{
-      sameOrigin:boundedCredentialCount(credentialSurfaceActions.sameOrigin,50),
-      external:boundedCredentialCount(credentialSurfaceActions.external,50),
-      missing:boundedCredentialCount(credentialSurfaceActions.missing,50),
-      cleartext:boundedCredentialCount(credentialSurfaceActions.cleartext,50),
-      unclassified:boundedCredentialCount(credentialSurfaceActions.unclassified,50),
-    },
-  };}
-  function credentialSurfaceLimitations(){return stringList(credentialSurfaceProfile.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
-  function structuredIdentityRows(){return records(structuredDataIdentity.entities).slice(0,16).map((entity)=>({
-    types:stringList(entity.types).slice(0,8).map((item)=>boundedTechnologyText(item,80)).filter(Boolean).join(', '),
-    name:boundedTechnologyText(entity.name,160),
-    declaredOrigin:boundedTechnologyText(entity.declaredOrigin,2048),
-    sameAsHosts:stringList(entity.sameAsHosts).slice(0,12).map((item)=>boundedTechnologyText(item,253)).filter(Boolean).join(', '),
-  }));}
-  function structuredIdentityLimitations(){return stringList(structuredDataIdentity.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
-  function technologyFindingRows(){return records(technologyProfile.findings).slice(0,24).map((finding)=>({
-    id:boundedTechnologyText(finding?.id,80),name:boundedTechnologyText(finding?.name||'Unknown indicator',120),category:statusLabel(boundedTechnologyText(finding?.category||'technology',80)),
-    confidence:boundedTechnologyText(finding?.confidence||'unknown',20),evidence:records(finding.evidence).slice(0,4).map((item)=>({source:statusLabel(boundedTechnologyText(item.source||'evidence',80)),description:boundedTechnologyText(item.description||'Observed signature matched.',300)}))
-  }));}
-  function technologyLimitations(){return stringList(technologyProfile.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
-  function browserLibraryRows(){return records(browserLibraryProfile.findings).slice(0,16).map((finding)=>({
-    id:boundedTechnologyText(finding?.id,80),
-    name:statusLabel(boundedTechnologyText(finding?.name||'unknown library',80)),
-    version:boundedTechnologyText(finding?.apparentVersion||'unknown',64),
-    detection:stringList(finding?.detectionMethods).slice(0,4).map(statusLabel).join(', '),
-    advisoryCount:Math.max(0,Math.min(128,Number(finding?.advisoryCount)||0)),
-    severity:boundedTechnologyText(finding?.highestSeverity,16),
-    identifiers:stringList(finding?.advisoryIdentifiers).slice(0,16).join(', '),
-    weaknesses:stringList(finding?.weaknessClasses).slice(0,12).join(', '),
-  }));}
-  function browserLibraryLimitations(){return stringList(browserLibraryProfile.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
-  function observedNetworkSourceLabel(){return({tls_connection:'TLS connection',dns_a:'DNS A fallback',dns_aaaa:'DNS AAAA fallback'} as Record<string,string>)[String(observedNetworkEndpoint.selectedFrom)]||'Unavailable';}
-  function observedNetworkRows(){return Object.keys(observedNetwork).length?[
-    {label:'Registered network',value:show(observedNetwork.name)},
-    {label:'Network holder',value:show(observedNetwork.holder)},
-    {label:'Handle',value:show(observedNetwork.handle)},
-    {label:'CIDR ranges',value:stringList(observedNetwork.cidrs).slice(0,16).map((item)=>boundedTechnologyText(item,96)).filter(Boolean).join(', ')||'—'},
-    {label:'Address range',value:[boundedTechnologyText(observedNetwork.startAddress,64),boundedTechnologyText(observedNetwork.endAddress,64)].filter(Boolean).join(' to ')||'—'},
-    {label:'Country',value:show(observedNetwork.country)},
-    {label:'Network type',value:show(observedNetwork.networkType)},
-    datedRow('RDAP database updated',observedNetwork.databaseUpdatedAt),
-  ]:[];}
-  function observedNetworkLimitations(){return stringList(observedNetworkContext.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
-  function boundedPostureCount(value:unknown){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,20):0;}
-  function securityPostureDisplaySummary(){return{
-    observed:boundedPostureCount(securityPostureSummary.observed),potentialExposure:boundedPostureCount(securityPostureSummary.potentialExposure),
-    observedAbsence:boundedPostureCount(securityPostureSummary.observedAbsence),unavailable:boundedPostureCount(securityPostureSummary.unavailable),
-  };}
-  function securityPostureFindingRows(){const states=new Set(['observed','potential_exposure','observed_absence','unavailable']);const tones=new Set(['configured','review','neutral']);return records(securityPosture.findings).slice(0,20).map((finding)=>({
-    id:boundedTechnologyText(finding?.id,80),category:statusLabel(boundedTechnologyText(finding?.category||'posture',80)),
-    state:states.has(String(finding?.state))?String(finding.state):'unavailable',tone:tones.has(String(finding?.tone))?String(finding.tone):'neutral',
-    label:boundedTechnologyText(finding?.label||'Posture finding',160),detail:boundedTechnologyText(finding?.detail||'No additional detail is available.',300),
-    evidence:stringList(finding.evidence).slice(0,4).map((item)=>boundedTechnologyText(item,120)).filter(Boolean),
-  }));}
-  function securityPostureLimitations(){return stringList(securityPosture.limitations).slice(0,10).map((item)=>boundedTechnologyText(item,300)).filter(Boolean);}
   function websiteSnapshotInput(){
     const now=new Date().toISOString();
     const observedAt=typeof result?.fetchedAt==='string'?result.fetchedAt:now;
@@ -520,8 +449,8 @@
       savedAt:now,
       complete:lookupEvidenceDepth==='deep'&&technologyProfile.complete===true&&securityPosture.complete===true&&Boolean(baseline?.complete),
       truncated:Boolean(technologyProfile.truncated||securityPosture.truncated||baseline?.truncated),
-      technologies:technologyFindingRows().map(({id,name,category,confidence})=>({id,name,category,confidence})),
-      posture:securityPostureFindingRows().map(({id,state})=>({id,state})),
+      technologies:pageDisplay.technologyFindings.map(({id,name,category,confidence})=>({id,name,category,confidence})),
+      posture:pageDisplay.securityPostureFindings.map(({id,state})=>({id,state})),
       identity:{
         normalizedHtml:baseline?.normalizedHtml.value??null,
         visibleText:baseline?.visibleText?.value??null,
@@ -534,214 +463,6 @@
       sources:sourceNames.flatMap((source)=>{const state=boundedTechnologyText(rec(diagnostics[source]).status,40);return state?[{source,state}]:[];}),
     };
   }
-  function pageFingerprintRows(){const exact=rec(pageFingerprints.exact);const normalizedHtml=rec(pageFingerprints.normalizedHtml);const visibleText=rec(pageFingerprints.visibleText);const domStructure=rec(pageFingerprints.domStructure);const formStructure=rec(pageFingerprints.formStructure);const resourceHosts=rec(pageFingerprints.resourceHosts);const identifiers=rec(pageFingerprints.identifiers);const resourceHostValues=Array.isArray(resourceHosts.values)?resourceHosts.values:[];const identifierValues=Array.isArray(identifiers.values)?identifiers.values:[];return[
-    {label:'Exact captured body',value:exact.value,detail:exact.scope==='captured-prefix'?'Captured prefix':'Complete captured body'},
-    {label:'Normalized HTML',value:normalizedHtml.value,detail:`${show(normalizedHtml.tokenCount)} tokens`},
-    {label:'Visible text',value:visibleText.value,detail:visibleText.value?`${show(visibleText.tokenCount)} tokens · fuzzy SimHash`:null},
-    {label:'Static tag structure',value:domStructure.value,detail:`${show(domStructure.nodeCount)} nodes`},
-    {label:'Form structure',value:formStructure.value,detail:formStructure.value?`${show(formStructure.formCount)} forms · ${show(formStructure.controlCount)} controls`:null},
-    {label:'External resource hosts',value:resourceHosts.value,detail:resourceHosts.value?`${resourceHostValues.length} hosts`:null},
-    {label:'Tracking identifiers',value:identifiers.value,detail:identifiers.value?`${identifierValues.length} identifiers`:null}
-  ].filter((row)=>row.value).map((row)=>({...row,value:String(row.value)}));}
-  function pageComparisonDisplay(){if(!pageComparison)return null;return{
-    partial:Boolean(pageComparison.partial),
-    referenceDomain:String(pageComparison.reference.domain),
-    referenceObservedAt:String(pageComparison.reference.observedAt),
-    referenceObservedLabel:formatDate(pageComparison.reference.observedAt),
-    components:records(pageComparison.components).map((item)=>({label:String(item.label),method:String(item.method),outcome:String(item.outcome),detail:String(item.detail),status:String(item.status),sharedValues:stringList(item.sharedValues)})),
-  };}
-  function assessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',rdap_only:'RDAP only',whois_only:'WHOIS only',rdap_redacted:'RDAP redacted',whois_redacted:'WHOIS redacted',rdap_unavailable:'RDAP unavailable',whois_unavailable:'WHOIS unavailable',rdap_incomplete:'RDAP incomplete',whois_incomplete:'WHOIS incomplete'} as Record<string,string>)[status]||status;}
-  function publicationAssessment(status:string){return({equivalent:'Equivalent',conflict:'Conflict',registry_only:'Registry only',registrar_only:'Registrar only',registry_redacted:'Registry redacted',registrar_redacted:'Registrar redacted',registry_unavailable:'Registry unavailable',registrar_unavailable:'Registrar unavailable',registry_incomplete:'Registry incomplete',registrar_incomplete:'Registrar incomplete'} as Record<string,string>)[status]||status;}
-  function diagnosticLabel(source:SourceStatus){return source.status?source.status.replaceAll('_',' '):'unknown';}
-  function attemptSummary(source:SourceStatus){return Array.isArray(source.attempts)&&source.attempts.length?`attempts: ${source.attempts.map((item)=>String(item.outcome||'unknown').replaceAll('_',' ')).join(' → ')}`:null;}
-  function diagnosticDetail(source:SourceStatus){return[source.endpoint,source.transportSecurity==='http'?'transport: cleartext HTTP':null,source.httpStatus?`HTTP ${source.httpStatus}`:null,attemptSummary(source),source.resultState?`result: ${source.resultState}`:null,source.errorCode,source.authoritativeHop?`authoritative: ${show(source.authoritativeHop)}`:null,source.failedHop?`failed: ${show(source.failedHop)}`:null,source.fetchedAt?`fetched ${formatDate(source.fetchedAt)}`:null,source.queriedAt?`queried ${formatDate(source.queriedAt)}`:null].filter(Boolean).join(' · ')||'No additional source detail';}
-  function contactIdentity(contact:JsonRecord){return show(contact.name||contact.org||contact.handle);}
-  function contactDetails(contact:JsonRecord){return[
-    Array.isArray(contact.organizations)&&contact.organizations.length?`Organizations: ${contact.organizations.join(', ')}`:null,
-    Array.isArray(contact.emails)&&contact.emails.length?`Email: ${contact.emails.join(', ')}`:null,
-    Array.isArray(contact.phones)&&contact.phones.length?`Phone: ${contact.phones.join(', ')}`:null,
-    Array.isArray(contact.addresses)&&contact.addresses.length?`Address: ${contact.addresses.join(' · ')}`:null,
-    records(contact.publicIds).length?`IDs: ${records(contact.publicIds).map((item)=>`${item.type}: ${item.identifier}`).join(', ')}`:null,
-    records(contact.links).length?`Links: ${records(contact.links).map((item)=>item.href).join(', ')}`:null
-  ].filter(Boolean) as string[];}
-  function comparisonDisplayRows(){return comparison.fields.map((field:ComparisonField)=>({
-    label:field.label,
-    rdapValue:field.rdapDisplay,
-    whoisValue:field.whoisDisplay,
-    status:field.status,
-    assessment:assessment(field.status),
-    tone:field.status==='conflict'?'danger':field.status==='equivalent'?'good':['rdap_unavailable','whois_unavailable','rdap_incomplete','whois_incomplete'].includes(field.status)?'warn':'',
-  }));}
-  function registrarPublicationRows(){return registrarPublicationComparison.fields.map((field:RdapPublicationField)=>({
-    label:field.label,
-    registryValue:field.registryDisplay,
-    registrarValue:field.registrarDisplay,
-    status:field.status,
-    assessment:publicationAssessment(field.status),
-    tone:field.status==='conflict'?'danger':field.status==='equivalent'?'good':['registry_unavailable','registrar_unavailable','registry_incomplete','registrar_incomplete'].includes(field.status)?'warn':'',
-  }));}
-  function rdapPartialDetail(){if(!rdapParsed.serverTruncated)return'';const reasons=stringList(rdapParsed.serverTruncationReasons);return`The registry reported that some RDAP data was omitted.${reasons.length?` ${reasons.join(' · ')}.`:''}`;}
-  function rdapSourceRows(){const rows:Array<{label:string;value:string;datetime?:string}>=[];if(result?.type==='ipv4'||result?.type==='ipv6')rows.push(
-    {label:'Handle',value:show(rdapParsed.handle)},
-    {label:'Name',value:show(rdapParsed.name)},
-    {label:'Range',value:`${show(rdapParsed.startAddress)} – ${show(rdapParsed.endAddress)}`},
-    {label:'CIDRs',value:`${show(rdapParsed.cidrs)}${rdapParsed.cidrsTruncated?' (capped)':''}`},
-    {label:'Country',value:show(rdapParsed.country)},
-    {label:'Type',value:show(rdapParsed.networkType)},
-    {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
-    datedRow('Registered',rec(rdapParsed.lifecycle).createdDate),
-    datedRow('Updated',rec(rdapParsed.lifecycle).updatedDate),
-  );else if(result?.type==='asn')rows.push(
-    {label:'Handle',value:show(rdapParsed.handle)},
-    {label:'Name',value:show(rdapParsed.name)},
-    {label:'AS range',value:`${show(rdapParsed.startAutnum)} – ${show(rdapParsed.endAutnum)}`},
-    {label:'Country',value:show(rdapParsed.country)},
-    {label:'Type',value:show(rdapParsed.autnumType)},
-    {label:'Status',value:`${show(rdapParsed.statuses)}${rdapParsed.statusesTruncated?' (capped)':''}`},
-    datedRow('Registered',rec(rdapParsed.lifecycle).createdDate),
-    datedRow('Updated',rec(rdapParsed.lifecycle).updatedDate),
-  );rows.push(
-    {label:'Object class',value:show(rdapParsed.objectClassName)},
-    {label:'Language',value:show(rdapParsed.language)},
-    {label:'Conformance',value:`${show(rdapParsed.conformance)}${rdapParsed.conformanceTruncated?' (capped)':''}`},
-    {label:'Lifecycle events',value:`${Array.isArray(rdapParsed.events)?rdapParsed.events.length:0}${rdapParsed.eventsTruncated?' (capped)':''}`},
-    {label:'RDAP database updated',value:formatDate(rec(rdapParsed.lifecycle).databaseUpdatedDate)},
-    {label:'Port 43',value:show(rdapParsed.port43)},
-    {label:'Parent handle',value:show(rdapParsed.parentHandle)},
-  );return rows;}
-  function whoisSourceRows(){return[
-    {label:'Domain',value:show(whoisParsed.domainName)},
-    {label:'Registry ID',value:show(whoisParsed.registryDomainId)},
-    {label:'Registrar',value:show(whoisParsed.registrar)},
-    {label:'Registrar ID',value:show(whoisParsed.registrarIanaId)},
-    {label:'Registrar WHOIS',value:show(whoisParsed.registrarWhoisServer)},
-    {label:'Reseller',value:show(whoisParsed.reseller)},
-    {label:'Created',value:formatDate(rec(whoisParsed.lifecycle).createdDate)},
-    {label:'Expires',value:formatDate(rec(whoisParsed.lifecycle).expiryDate)},
-    {label:'Updated',value:formatDate(rec(whoisParsed.lifecycle).updatedDate)},
-    {label:'DNSSEC',value:show(whoisParsed.dnssec)},
-    {label:'Status',value:show(whoisParsed.statuses)},
-    {label:'Nameservers',value:show(whoisParsed.nameservers)},
-    {label:'Chain',value:show(whoisParsed.chainStatus)},
-  ];}
-  function whoisContactRoleRows(){return populatedWhoisRoles.map((role)=>({role,contacts:records(whoisContactsByRole[role]).map((contact)=>({identity:contactIdentity(contact),details:contactDetails(contact)}))}));}
-  function registrarRdapDisplay(){return{
-    visible:Boolean(registrarRdap.status),
-    label:diagnosticLabel(registrarRdap),
-    endpoint:registrarRdap.endpoint?String(registrarRdap.endpoint):'',
-    detail:[registrarRdap.upstreamStatus?`HTTP ${registrarRdap.upstreamStatus}`:null,registrarRdap.fetchedAt?`Fetched ${formatDate(registrarRdap.fetchedAt)}`:null].filter(Boolean).join(' · '),
-    stateDetail:show(registrarRdap.detail),
-    error:registrarRdap.status==='error',
-    success:registrarRdap.status==='success',
-    parsed:registrarRdapParsed,
-    comparisonSummary:`Registry / registrar publication comparison · ${registrarPublicationComparison.counts.conflict} conflicts · ${registrarPublicationComparison.counts.registry_only+registrarPublicationComparison.counts.registrar_only} source-only · ${registrarPublicationComparison.counts.registry_redacted+registrarPublicationComparison.counts.registrar_redacted} redacted · ${registrarPublicationComparison.counts.registry_unavailable+registrarPublicationComparison.counts.registrar_unavailable+registrarPublicationComparison.counts.registry_incomplete+registrarPublicationComparison.counts.registrar_incomplete} unavailable/incomplete · ${registrarPublicationComparison.counts.equivalent} equivalent`,
-    comparisonRows:registrarPublicationRows(),
-  };}
-  function httpsServiceBindingValue(value:unknown){
-    const record=rec(value);
-    const parameters=rec(record.parameters);
-    const mode=record.mode==='alias'?'Alias':'Service';
-    const target=record.serviceUnavailable===true?'advisory unavailable':record.targetIsOwner===true?'owner':boundedTechnologyText(record.target,253)||'target unavailable';
-    const details=[
-      `${mode} priority ${Number.isInteger(Number(record.priority))?Number(record.priority):'—'} → ${target}`,
-      stringList(parameters.alpn).length?`ALPN ${stringList(parameters.alpn).slice(0,16).map((item)=>boundedTechnologyText(item,132)).join(', ')}`:'',
-      parameters.port!==null&&parameters.port!==undefined&&Number.isInteger(Number(parameters.port))?`port ${Number(parameters.port)}`:'',
-      stringList(parameters.ipv4hint).length?`IPv4 hints ${stringList(parameters.ipv4hint).slice(0,8).map((item)=>boundedTechnologyText(item,64)).join(', ')}`:'',
-      stringList(parameters.ipv6hint).length?`IPv6 hints ${stringList(parameters.ipv6hint).slice(0,8).map((item)=>boundedTechnologyText(item,64)).join(', ')}`:'',
-      records(parameters.opaque).length?`Published ${records(parameters.opaque).slice(0,24).map((item)=>boundedTechnologyText(item.name||`key ${item.key}`,63)).filter(Boolean).join(', ')}`:'',
-      Array.isArray(parameters.unsupportedMandatoryKeys)&&parameters.unsupportedMandatoryKeys.length?`unsupported mandatory keys ${parameters.unsupportedMandatoryKeys.slice(0,24).map(Number).join(', ')}`:'',
-      record.compatible===false?'not compatible with this parser':'',
-      Number.isInteger(Number(record.ttl))?`TTL ${Number(record.ttl)}s`:'',
-    ].filter(Boolean);
-    return details.join(' · ');
-  }
-  function dnsValues(name:string){const values=Array.isArray(dnsRecords[name])?dnsRecords[name]:[];return values.map((value)=>{if(typeof value==='string')return value;const record=rec(value);return name==='mx'?`${record.priority} ${record.exchange||'.'}`:name==='caa'?`${record.critical} ${record.tag} ${record.value}`:name==='soa'?`${record.nsname} · hostmaster ${record.hostmaster} · serial ${record.serial} · refresh ${record.refresh}s · retry ${record.retry}s · expire ${record.expire}s · minimum TTL ${record.minttl}s`:name==='https'?httpsServiceBindingValue(record):String(value);}).filter(Boolean).join(' | ');}
-  function dnsDisplay(name:string){return dnsEvidence.status==='skipped'?'Not evaluated':dnsValues(name)||'Not observed';}
-  function dnsQueryFailures(){return Object.entries(rec(dnsEvidence.diagnostics)).filter(([,item])=>rec(item).status==='error').map(([name,item])=>`${name.toUpperCase()}: ${rec(item).error||'query failed'}`).join(' · ');}
-  function dnsEvidenceRows(){const rows:Array<{label:string;value:string}>=[{label:'DNSSEC',value:show(availability.dnssec)}];for(const[label,name]of[['A','a'],['AAAA','aaaa'],['CNAME','cname'],['Nameservers','ns'],['MX','mx'],['SPF','spf'],['DMARC','dmarc'],['CAA','caa']]as const)rows.push({label,value:dnsDisplay(name)});if(Array.isArray(dnsRecords.soa)||rec(dnsEvidence.diagnostics).soa)rows.push({label:'SOA',value:dnsDisplay('soa')});if(Array.isArray(dnsRecords.https)||rec(dnsEvidence.diagnostics).https)rows.push({label:'HTTPS service binding',value:dnsDisplay('https')});return rows;}
-  function reverseDnsRows(){const records=Array.isArray(reverseDnsRecords.ptr)?reverseDnsRecords.ptr.map(String):[];return[{label:'PTR names',value:records.join(' · ')||'Not observed'}];}
-  function reverseDnsFailure(){const diagnostic=rec(rec(reverseDns.diagnostics).ptr);return diagnostic.status==='error'?String(diagnostic.error||'query failed'):'';}
-  function formatBytes(value:unknown){const bytes=Number(value);if(!Number.isFinite(bytes)||bytes<0)return'—';return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(bytes<10240?1:0)} KiB`;}
-  function tlsName(value:JsonRecord){const common=Array.isArray(value.commonNames)?value.commonNames:[];const organizations=Array.isArray(value.organizations)?value.organizations:[];return[...common,...organizations].join(' · ')||'—';}
-  function tlsTrust(){return tlsAuthorization.authorized===true?'Authorized':tlsAuthorization.authorized===false?'Not authorized':'Not observed';}
-  function tlsHostnameStatus(){return tlsHostname.matches===true?'Matches SNI':tlsHostname.matches===false?'Mismatch':'Not observed';}
-  function tlsValidityStatus(){return tlsValidity.status==='valid'?'Valid now':tlsValidity.status==='expired'?'Expired':tlsValidity.status==='not_yet_valid'?'Not yet valid':'Unknown';}
-  function httpSecurityRows():Array<[string,unknown]>{return[
-    ['HSTS',httpSecurityHeaders.strictTransportSecurity],
-    ['Content Security Policy',httpSecurityHeaders.contentSecurityPolicy],
-    ['Frame protection',httpSecurityHeaders.xFrameOptions],
-    ['Content-type protection',httpSecurityHeaders.xContentTypeOptions],
-    ['Referrer policy',httpSecurityHeaders.referrerPolicy]
-  ];}
-  function httpSecurityValue(value:unknown){return value==='observed'?'Observed':show(value);}
-  function httpEvidenceRows(){return[
-    {label:'Final URL',value:show(httpEvidence.finalUrl||httpEvidence.requestUrl)},
-    {label:'Response',value:httpResponse.status?`HTTP ${httpResponse.status}`:'Not observed'},
-    {label:'Transport',value:httpEvidence.transportSecurity==='https'?'HTTPS':httpEvidence.transportSecurity==='http'?'Cleartext HTTP':'Not observed'},
-    {label:'Redirects',value:show(httpEvidence.redirectCount)},
-    {label:'Content type',value:show(httpResponse.contentType)},
-    {label:'Body captured',value:`${formatBytes(httpResponse.capturedBodyBytes)}${httpResponse.bodyTruncated?' · capped':''}`},
-  ];}
-  function httpRedirectRows(){return records(httpEvidence.redirects).map((redirect)=>({status:show(redirect.status),from:show(redirect.from),to:show(redirect.to),queryOmitted:Boolean(redirect.queryOmitted)}));}
-  function httpAttemptRows(){const attempts=records(httpEvidence.attempts);return attempts.some((attempt)=>attempt.error)?attempts.map((attempt)=>({url:show(attempt.url),detail:attempt.error?String(attempt.error):`HTTP ${show(attempt.httpStatus)}`})):[];}
-  function httpMetadataRows(){if(!httpResponse.status)return[];const rows:Array<{label:string;value:string;hash?:boolean}>=httpSecurityRows().map(([label,value])=>({label,value:httpSecurityValue(value)}));rows.push({label:'Server',value:show(httpResponse.server)},{label:'Content language',value:show(httpResponse.contentLanguage)},{label:'Declared length',value:httpResponse.declaredContentLength===null||httpResponse.declaredContentLength===undefined?'—':formatBytes(httpResponse.declaredContentLength)});const bodyHash=rec(httpResponse.bodyHash);if(bodyHash.value){rows.push({label:'Body SHA-256',value:show(bodyHash.value),hash:true},{label:'Hash scope',value:bodyHash.scope==='captured-prefix'?`Captured prefix (${formatBytes(bodyHash.bytes)})`:`Complete captured body (${formatBytes(bodyHash.bytes)})`});}return rows;}
-  function tlsEvidenceRows(){return[
-    {label:'Connected address',value:show(tlsEvidence.connectedAddress)},
-    {label:'SNI hostname',value:show(tlsEvidence.sniHost)},
-    {label:'Protocol',value:show(tlsEvidence.protocol)},
-    {label:'Cipher',value:show(tlsCipher.standardName||tlsCipher.name)},
-    {label:'ALPN',value:show(tlsEvidence.alpnProtocol)},
-    {label:'Chain trust',value:tlsTrust(),danger:tlsAuthorization.authorized===false},
-    {label:'Hostname',value:tlsHostnameStatus(),danger:tlsHostname.matches===false},
-    {label:'Validity',value:tlsValidityStatus(),danger:tlsValidity.status==='expired'||tlsValidity.status==='not_yet_valid'},
-  ];}
-  function tlsFindingRows(){return records(tlsEvidence.findings).map((finding)=>({label:show(finding.label),detail:show(finding.detail),tone:String(finding.tone||'')}));}
-  function tlsMetadataCount(value:unknown){const count=Number(value);return Number.isSafeInteger(count)&&count>=0?Math.min(count,999):0;}
-  function tlsCountSummary(value:unknown,labels:Array<[string,string]>){const source=rec(value);return labels.map(([key,label])=>[label,tlsMetadataCount(source[key])]as const).filter(([,count])=>count>0).map(([label,count])=>`${label} ${count}`).join(' · ');}
-  function tlsLeafCertificateRows(){
-    if(!tlsCertificate.fingerprintSha256)return[];
-    const rows:Array<{label:string;value:string;hash?:boolean}>=[
-      {label:'Subject',value:tlsName(tlsSubject)},
-      {label:'Issuer',value:tlsName(tlsIssuer)},
-      {label:'Serial number',value:show(tlsCertificate.serialNumber),hash:true},
-      {label:'Valid from',value:formatDate(tlsCertificate.validFrom)},
-      {label:'Valid to',value:formatDate(tlsCertificate.validTo)},
-      {label:'Certificate SHA-256',value:show(tlsCertificate.fingerprintSha256),hash:true},
-      {label:'Public key',value:`${show(tlsPublicKey.type)}${tlsPublicKey.bits?` · ${tlsPublicKey.bits} bits`:''}${tlsPublicKey.curve?` · ${tlsPublicKey.curve}`:''}`}
-    ];
-    if(tlsPublicKey.fingerprintSha256)rows.push({label:'Public-key SHA-256',value:show(tlsPublicKey.fingerprintSha256),hash:true});
-    const signature=rec(tlsCertificate.signature);
-    if(signature.algorithm||signature.oid)rows.push({label:'Signature',value:[signature.algorithm,signature.oid?`(${signature.oid})`:null].filter(Boolean).join(' ')});
-    const purposes=rec(tlsCertificate.extendedKeyUsage);
-    if(Object.keys(purposes).length){
-      const values=records(purposes.values).slice(0,8).map((purpose)=>`${show(purpose.name)} (${show(purpose.oid)})`);
-      const omitted=Array.isArray(purposes.values)?Math.max(0,purposes.values.length-values.length):0;
-      rows.push({label:'Certificate purposes',value:`${values.join(' · ')||'None declared'}${omitted?` · +${omitted} more`:''}${purposes.truncated?' · source truncated':''}`});
-    }
-    const sanClasses=tlsCountSummary(tlsAltNames.classes,[['dns','DNS'],['ip','IP'],['email','email'],['uri','URI'],['directoryName','directory name'],['registeredId','registered ID'],['otherName','other name'],['unclassified','other']]);
-    if(Object.keys(rec(tlsAltNames.classes)).length)rows.push({label:'SAN classes',value:`${sanClasses||'None observed'}${tlsAltNames.truncated?' · truncated':''}`});
-    const aia=rec(tlsCertificate.authorityInformationAccess);
-    if(Object.keys(aia).length){
-      const ocsp=rec(aia.ocsp);const issuers=rec(aia.caIssuers);
-      const values=[
-        tlsMetadataCount(ocsp.total)?`OCSP ${tlsMetadataCount(ocsp.total)} (${tlsMetadataCount(ocsp.https)} HTTPS, ${tlsMetadataCount(ocsp.http)} HTTP, ${tlsMetadataCount(ocsp.other)} other)`:null,
-        tlsMetadataCount(issuers.total)?`CA issuers ${tlsMetadataCount(issuers.total)} (${tlsMetadataCount(issuers.https)} HTTPS, ${tlsMetadataCount(issuers.http)} HTTP, ${tlsMetadataCount(issuers.other)} other)`:null,
-        tlsMetadataCount(aia.unknownMethods)?`Unknown methods ${tlsMetadataCount(aia.unknownMethods)}`:null,
-      ].filter(Boolean);
-      rows.push({label:'AIA presence',value:`${values.join(' · ')||'None declared'}${aia.truncated?' · truncated':''}`});
-    }
-    return rows;
-  }
-  function tlsAlternativeNameRows(){return[
-    ...(Array.isArray(tlsAltNames.dnsNames)?tlsAltNames.dnsNames.map((value)=>({type:'DNS',value:show(value)})):[]),
-    ...(Array.isArray(tlsAltNames.ipAddresses)?tlsAltNames.ipAddresses.map((value)=>({type:'IP address',value:show(value)})):[]),
-  ];}
-  function tlsChainRows(){return records(tlsEvidence.chain).map((certificate,index)=>({label:index===0?'Leaf certificate':`Chain certificate ${index+1}`,subject:tlsName(rec(certificate.subject)),fingerprint:show(certificate.fingerprintSha256)}));}
-  function tlsValidationRows(){return[
-    ...(tlsDiagnostics.error?[{label:'Collection',value:String(tlsDiagnostics.error)}]:[]),
-    ...(tlsAuthorization.error?[{label:'Authorization',value:String(tlsAuthorization.error)}]:[]),
-    ...(tlsHostname.error?[{label:'Hostname',value:String(tlsHostname.error)}]:[]),
-  ];}
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
@@ -884,8 +605,8 @@
           summaryDetail="Expand for PTR names, provenance, and limitations"
           status={show(reverseDns.status)}
           complete={reverseDns.complete!==false}
-          rows={reverseDnsRows()}
-          failureDetail={reverseDnsFailure()}
+          rows={networkDisplay.reverseDnsRows}
+          failureDetail={networkDisplay.reverseDnsFailure}
           truncated={Boolean(reverseDns.truncated)}
           note="Point-in-time PTR evidence is controlled by the address operator. It may be absent, stale, generic, or misleading and does not prove hosting control, ownership, service identity, intent, or maliciousness."
         /></div>
@@ -895,8 +616,8 @@
         <div class="evidence-component" id="evidence-dns"><LookupDnsEvidence
           status={show(dnsEvidence.status)}
           complete={dnsEvidence.complete!==false}
-          rows={dnsEvidenceRows()}
-          failureDetail={dnsQueryFailures()}
+          rows={networkDisplay.dnsRows}
+          failureDetail={networkDisplay.dnsQueryFailures}
           truncated={Boolean(dnsEvidence.truncated)}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
         /></div>
@@ -906,11 +627,11 @@
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={httpEvidenceRows()} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={httpRedirectRows()} attempts={httpAttemptRows()} metadata={httpMetadataRows()} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
+        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={tlsEvidenceRows()} findings={tlsFindingRows()} leafCertificate={tlsLeafCertificateRows()} alternativeNames={tlsAlternativeNameRows()} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={tlsChainRows()} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={tlsValidationRows()} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} /></div>
+        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} /></div>
       {/if}
 
       {#if securityTxt.securityTxtVersion===1}
@@ -933,22 +654,22 @@
         <div class="evidence-component" id="evidence-page"><LookupPageIdentity
           status={statusLabel(show(pageIdentity.status))}
           complete={Boolean(pageIdentity.complete)}
-          facts={pageIdentityFactRows()}
+          facts={pageDisplay.pageIdentityFacts}
           externalFormOrigins={stringList(pageForms.externalActionOrigins)}
           resourceCount={Number(pageResources.count)||0}
-          resourceSummary={pageResourceSummaryRows()}
+          resourceSummary={pageDisplay.resourceSummary}
           embeddedOrigins={stringList(pageIdentity.embeddedOrigins)}
           contactDomains={stringList(pageIdentity.contactDomains)}
           downloadCount={Number(pageDownloads.count)||0}
-          downloadSummary={pageDownloadSummaryRows()}
-          trackingIdentifiers={pageTrackingIdentifierRows()}
-          fingerprints={pageFingerprintRows()}
+          downloadSummary={pageDisplay.downloadSummary}
+          trackingIdentifiers={pageDisplay.trackingIdentifiers}
+          fingerprints={pageDisplay.fingerprints}
           limitations={stringList(pageIdentity.limitations)}
         /></div>
       {/if}
 
       {#if credentialSurfaceProfile.source==='html'}
-        {@const credentialSurface=credentialSurfaceDisplay()}
+        {@const credentialSurface=pageDisplay.credentialSurface}
         <div class="evidence-component" id="evidence-credential-surface"><LookupCredentialSurfaceProfile
           status={statusLabel(show(credentialSurfaceProfile.status))}
           complete={Boolean(credentialSurfaceProfile.complete)}
@@ -958,7 +679,7 @@
           categories={credentialSurface.categories}
           methods={credentialSurface.methods}
           actions={credentialSurface.actions}
-          limitations={credentialSurfaceLimitations()}
+          limitations={pageDisplay.credentialSurfaceLimitations}
         /></div>
       {/if}
 
@@ -966,9 +687,9 @@
         <div class="evidence-component" id="evidence-posture"><LookupSecurityPosture
           status={statusLabel(show(securityPosture.status))}
           complete={Boolean(securityPosture.complete)}
-          summary={securityPostureDisplaySummary()}
-          findings={securityPostureFindingRows()}
-          limitations={securityPostureLimitations()}
+          summary={pageDisplay.securityPostureSummary}
+          findings={pageDisplay.securityPostureFindings}
+          limitations={pageDisplay.securityPostureLimitations}
         /></div>
       {/if}
 
@@ -976,8 +697,8 @@
         <div class="evidence-component" id="evidence-structured-identity"><LookupStructuredDataIdentity
           status={statusLabel(show(structuredDataIdentity.status))}
           complete={Boolean(structuredDataIdentity.complete)}
-          entities={structuredIdentityRows()}
-          limitations={structuredIdentityLimitations()}
+          entities={pageDisplay.structuredIdentities}
+          limitations={pageDisplay.structuredIdentityLimitations}
         /></div>
       {/if}
 
@@ -985,19 +706,19 @@
         <div class="evidence-component" id="evidence-technology"><LookupTechnologyProfile
           status={statusLabel(show(technologyProfile.status))}
           complete={Boolean(technologyProfile.complete)}
-          findings={technologyFindingRows()}
-          limitations={technologyLimitations()}
+          findings={pageDisplay.technologyFindings}
+          limitations={pageDisplay.technologyLimitations}
           libraryAvailable={browserLibraryProfile.profileVersion===1}
           libraryStatus={statusLabel(show(browserLibraryProfile.status))}
           libraryComplete={Boolean(browserLibraryProfile.complete)}
           libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}
-          libraries={browserLibraryRows()}
-          libraryLimitations={browserLibraryLimitations()}
+          libraries={pageDisplay.browserLibraries}
+          libraryLimitations={pageDisplay.browserLibraryLimitations}
         /></div>
       {/if}
 
       {#if pageComparison || (profile?.pageBaseline && result.type==='domain')}
-        <div class="evidence-component"><LookupPageComparison comparison={pageComparisonDisplay()} unavailable={Boolean(!pageComparison&&profile?.pageBaseline&&result.type==='domain')} /></div>
+        <div class="evidence-component"><LookupPageComparison comparison={pageDisplay.pageComparison} unavailable={Boolean(!pageComparison&&profile?.pageBaseline&&result.type==='domain')} /></div>
       {/if}
       {#if brandMimicryReview}
         <div class="evidence-component"><LookupBrandMimicryReview review={brandMimicryReview} /></div>
@@ -1014,19 +735,19 @@
 
       <div class="evidence-component" id="evidence-registry"><LookupRegistrySources
         comparisonSummary={`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`}
-        comparisonRows={comparisonDisplayRows()}
+        comparisonRows={registryDisplay.comparisonRows}
         comparisonHasConflicts={comparison.counts.conflict>0}
         rdapError={rdap.error?String(rdap.error):''}
         resultType={String(result.type)}
         {rdapParsed}
-        rdapPartialDetail={rdapPartialDetail()}
-        rdapRows={rdapSourceRows()}
+        rdapPartialDetail={registryDisplay.rdapPartialDetail}
+        rdapRows={registryDisplay.rdapRows}
         whoisError={whois.error?String(whois.error):''}
-        whoisRows={whoisSourceRows()}
-        whoisContactRoles={whoisContactRoleRows()}
+        whoisRows={registryDisplay.whoisRows}
+        whoisContactRoles={registryDisplay.whoisContactRoles}
         whoisTruncatedFields={stringList(whoisParsed.fieldsTruncated)}
         insights={registryInsights}
-        registrar={registrarRdapDisplay()}
+        registrar={registryDisplay.registrarRdap}
       /></div>
 
       {#if observedNetworkContext.contextVersion===1}
@@ -1034,12 +755,12 @@
           status={statusLabel(boundedTechnologyText(observedNetworkContext.status||'unsupported',40))}
           detail={boundedTechnologyText(observedNetworkContext.detail||'Observed network context was unavailable.',300)}
           address={boundedTechnologyText(observedNetworkEndpoint.address,64)}
-          addressSource={observedNetworkSourceLabel()}
+          addressSource={pageDisplay.observedNetworkSourceLabel}
           rdapEndpoint={boundedTechnologyText(observedNetworkRdap.endpoint,2048)}
           httpStatus={observedNetworkRdap.httpStatus?String(observedNetworkRdap.httpStatus):''}
           fetchedAt={dateTimeAttribute(observedNetworkRdap.fetchedAt)||''}
-          rows={observedNetworkRows()}
-          limitations={observedNetworkLimitations()}
+          rows={pageDisplay.observedNetworkRows}
+          limitations={pageDisplay.observedNetworkLimitations}
         /></div>
       {/if}
     </section>
