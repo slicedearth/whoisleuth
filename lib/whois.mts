@@ -2,43 +2,24 @@
 // the IANA root WHOIS server, plus response parsing. Shared by the Express
 // server and the Netlify Functions.
 
-import { domainToASCII, domainToUnicode } from 'node:url';
+import { domainToASCII } from 'node:url';
 
-import { cached } from './lookup-cache.mts';
-import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { registryDateIso } from './registry-dates.mts';
-import { registryCapabilityFor, type WhoisQueryProfile } from './registry-capabilities.mts';
 import {
   MAX_WHOIS_BYTES,
   queryWhoisAddress,
   whoisQuery,
-  type WhoisQuery,
 } from './whois-transport.mts';
+import {
+  buildWhoisChain,
+  buildWhoisChainUncached,
+  fetchGtRegistryWhois,
+  type WhoisChain,
+  type WhoisHop,
+} from './whois-chain.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type WhoisScalarFields = Record<string, string | undefined>;
-type WhoisHop = {
-  server: string;
-  address?: string | null;
-  queriedAt?: string;
-  queryProfile?: string;
-  responseEncoding?: string;
-  response?: string;
-  error?: string;
-};
-type WhoisChain = WhoisHop[];
-type GtRegistryResult = { registered: false } | {
-  registered: true;
-  status: string | null;
-  expiryDate: string | null;
-  registrantOrg: string | null;
-  registrantAddress: string | null;
-  registrantPhone: string | null;
-  adminName: string | null;
-  adminOrg: string | null;
-  adminEmail: string | null;
-  nameservers: string[];
-};
 type WhoisContact = {
   handle: string | null;
   roles: string[];
@@ -142,45 +123,11 @@ export type ParsedWhoisRecord = Record<string, unknown> & Partial<{
   contactsByRole: Record<string, WhoisContact[]>;
   fieldsTruncated: string[];
 } & WhoisAuthority;
-const IANA_WHOIS = 'whois.iana.org';
-const WHOIS_HOP_DEADLINE_MS = 12000; // DNS + connect + body ceiling for one server
-const WHOIS_CHAIN_DEADLINE_MS = 25000; // hard ceiling across the full referral chain
-const MAX_GT_REGISTRY_HTML_BYTES = 500000;
 const MAX_WHOIS_FIELD_LENGTH = 1000;
 const MAX_WHOIS_NAMESERVERS = 200;
 const MAX_WHOIS_STATUSES = 100;
 const MAX_WHOIS_HOPS = 6;
 const WHOIS_DOMAIN_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
-
-const WHOIS_QUERY_FORMATTERS: Record<WhoisQueryProfile, (domain: string) => string> = {
-  'plain-domain': (domain) => domain,
-  'denic-domain-ace': (domain) => `-T dn,ace ${domain}`,
-  'jprs-domain-english': (domain) => `${domain}/e`,
-  'registry-domain-unicode': (domain) => domainToUnicode(domain),
-};
-
-function whoisTransportForHop(domain: string, hop: number): {
-  query: string;
-  queryProfile: WhoisQueryProfile;
-  responseEncoding: 'utf-8';
-} {
-  const capability = registryCapabilityFor(domain);
-  const queryProfile = hop === 1
-    && capability?.whoisQueryScope === 'first-referral'
-    ? capability.whoisQueryProfile
-    : 'plain-domain';
-  return {
-    query: WHOIS_QUERY_FORMATTERS[queryProfile](domain),
-    queryProfile,
-    responseEncoding: capability?.whoisEncodingProfile || 'utf-8',
-  };
-}
-
-function errorMessage(value: unknown, fallback: string): string {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
-  const message = (value as UnknownRecord).message;
-  return message ? String(message) : fallback;
-}
 
 function normalizeWhoisChain(value: unknown): WhoisChain {
   if (!Array.isArray(value)) return [];
@@ -200,255 +147,6 @@ function normalizeWhoisChain(value: unknown): WhoisChain {
     });
   }
   return normalized;
-}
-
-function extractReferral(whoisText: string): string | null {
-  // [ \t]* (not \s*) after the colon - some registries (e.g. .gt) list
-  // "refer:" and "whois:" fields with no value, and \s* would cross the
-  // blank line and wrongly capture the next field's label as a hostname.
-  const patterns = [
-    /^[ \t]*refer:[ \t]*([a-zA-Z0-9.\-]+)/mi,
-    /^[ \t]*ReferralServer:[ \t]*whois:\/\/([a-zA-Z0-9.\-]+)/mi,
-    /^[ \t]*whois:[ \t]*([a-zA-Z0-9.\-]+)/mi,
-  ];
-  for (const re of patterns) {
-    const m = whoisText.match(re);
-    const referral = m?.[1]?.trim();
-    if (referral) return referral;
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// .gt has no WHOIS:43 server registered with IANA (its "refer:"/"whois:"
-// fields are blank) - the registry instead exposes registrant/expiry/
-// nameserver data through a plain server-rendered page on their own site,
-// no CAPTCHA or JS required. This is scraped best-effort and formatted as
-// standard WHOIS text so it flows through the same parseWhoisChain/
-// checkDomainAvailability logic as every other registry, rather than a
-// bespoke parallel path. Any parsing failure here is swallowed - it just
-// means .gt lookups fall back to showing only the IANA hop, same as before.
-// ---------------------------------------------------------------------------
-
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function sectionBetween(html: string, startRe: RegExp, endRes: RegExp[]): string {
-  const startMatch = html.match(startRe);
-  if (!startMatch) return '';
-  const rest = html.slice((startMatch.index ?? 0) + startMatch[0].length);
-  let endIdx = rest.length;
-  for (const endRe of endRes) {
-    const m = rest.match(endRe);
-    if (!m) continue;
-    // If the match starts with the ">" that closes the previous tag (e.g.
-    // "</a>" right before a header's text), include that ">" so we don't
-    // leave a dangling "</a" with no closing bracket for stripTags to clean up.
-    const matchIndex = m.index ?? 0;
-    const idx = m[0].startsWith('>') ? matchIndex + 1 : matchIndex;
-    if (idx < endIdx) endIdx = idx;
-  }
-  return rest.slice(0, endIdx);
-}
-
-// Font Awesome icons act as the only "labels" for several fields in this
-// markup (no text label, just an icon) - replace each with a text marker
-// before stripping tags, then split on those markers.
-function extractIconFields(html: string, iconMap: Record<string, string>): Record<string, string> {
-  let marked = html;
-  for (const [icon, key] of Object.entries(iconMap)) {
-    marked = marked.replace(new RegExp(`<i[^>]*\\b${icon}\\b[^>]*></i>`, 'gi'), `\n@@${key}@@\n`);
-  }
-  const text = stripTags(marked);
-  const parts = text.split(/@@(\w+)@@/);
-  const fields: Record<string, string> = {};
-  for (let i = 1; i < parts.length; i += 2) {
-    const value = (parts[i + 1] || '').trim();
-    const key = parts[i];
-    if (key && value && !fields[key]) fields[key] = value;
-  }
-  return fields;
-}
-
-async function fetchGtRegistryWhois(
-  domain: string,
-  { fetcher = safeFetch }: { fetcher?: (url: string, options: RequestInit) => Promise<Response> } = {},
-): Promise<GtRegistryResult | null> {
-  const url = `https://www.gt/sitio/whois.php?dn=${encodeURIComponent(domain)}.&lang=en`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const res = await fetcher(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DomainStatusChecker/1.0)' },
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      // Not reading this body - release it explicitly instead of leaving an
-      // unconsumed stream (and the connection it's tied to) open until
-      // undici's own idle-timeout eventually notices.
-      await res.body?.cancel().catch(() => {});
-      return null;
-    }
-    const body = await readTextCapped(res, MAX_GT_REGISTRY_HTML_BYTES);
-    if (body.truncated) return null;
-    const html = body.text;
-
-    if (/is not registered/i.test(html)) return { registered: false };
-
-    const statusMatch = html.match(/<i class="fas fa-bell fa-fw"><\/i>\s*([A-Za-z]+)/i);
-    const expiryMatch = html.match(/Expiration:\s*([0-9]{4}-[A-Za-z]{3}-[0-9]{2}[^<]*)/i);
-
-    const orgSection = sectionBetween(html, /Entitled Organization/i, [/Servers\s*<\/h4>/i]);
-    const org = extractIconFields(orgSection, {
-      'fa-building': 'org',
-      'fa-address-card': 'address',
-      'fa-phone': 'phone',
-    });
-
-    const adminSection = sectionBetween(html, />\s*ADMINISTRATIVE\s*</i, [/>\s*TECHNICAL\s*</i, />\s*BILLING\s*</i]);
-    const admin = extractIconFields(adminSection, {
-      'fa-user': 'name',
-      'fa-envelope': 'email',
-      'fa-address-card': 'address', // marked but unused - prevents it bleeding into "email"
-      'fa-building': 'org',
-    });
-
-    const serversSection = sectionBetween(html, /Servers\s*<\/h4>/i, [/<div class="span6">/i]);
-    const nameservers = [...serversSection.matchAll(/<strong>\s*([a-zA-Z0-9.\-]+)\.?\s*<\/strong>/gi)]
-      .map((match) => match[1]?.trim())
-      .filter((value): value is string => Boolean(value));
-
-    return {
-      registered: true,
-      status: statusMatch?.[1]?.trim() || null,
-      expiryDate: expiryMatch?.[1]?.trim() || null,
-      registrantOrg: org.org || null,
-      registrantAddress: org.address || null,
-      registrantPhone: org.phone || null,
-      adminName: admin.name || null,
-      adminOrg: admin.org || null,
-      adminEmail: admin.email || null,
-      nameservers,
-    };
-  } catch {
-    return null; // best-effort - never breaks the main lookup
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function formatGtResultAsText(domain: string, result: GtRegistryResult): string {
-  if (!result.registered) {
-    return `No match for domain ${domain.toUpperCase()}.`;
-  }
-  const lines = [`Domain Name: ${domain.toUpperCase()}`];
-  if (result.status) lines.push(`Domain Status: ${result.status}`);
-  if (result.expiryDate) lines.push(`Registry Expiry Date: ${result.expiryDate}`);
-  if (result.registrantOrg) lines.push(`Registrant Organization: ${result.registrantOrg}`);
-  if (result.registrantAddress) lines.push(`Registrant Address: ${result.registrantAddress}`);
-  if (result.registrantPhone) lines.push(`Registrant Phone: ${result.registrantPhone}`);
-  if (result.adminName) lines.push(`Admin Name: ${result.adminName}`);
-  if (result.adminOrg) lines.push(`Admin Organization: ${result.adminOrg}`);
-  if (result.adminEmail) lines.push(`Admin Email: ${result.adminEmail}`);
-  for (const ns of result.nameservers) lines.push(`Name Server: ${ns}`);
-  return lines.join('\n');
-}
-
-// Cached briefly (lib/lookup-cache.mts) - the same query looked up again
-// shortly after (a deep-check following a fast scan, re-reviewing a
-// candidate list) doesn't need a fresh TCP:43 chain every time.
-async function buildWhoisChainUncached(
-  queryStr: string,
-  options: {
-    whoisQuery?: WhoisQuery;
-    fetchGtRegistryWhois?: (domain: string) => Promise<GtRegistryResult | null>;
-    now?: () => number;
-    chainDeadlineMs?: number;
-  } = {},
-): Promise<WhoisChain> {
-  const queryWhois = options.whoisQuery || whoisQuery;
-  const fetchGtWhois = options.fetchGtRegistryWhois || fetchGtRegistryWhois;
-  const now = options.now || Date.now;
-  const chainDeadlineMs = options.chainDeadlineMs || WHOIS_CHAIN_DEADLINE_MS;
-  const chain: WhoisChain = [];
-  const visited = new Set<string>();
-  let currentServer = IANA_WHOIS;
-  const startedAt = now();
-
-  for (let hop = 0; hop < 6; hop += 1) {
-    if (visited.has(currentServer.toLowerCase())) break;
-    visited.add(currentServer.toLowerCase());
-    const transport = whoisTransportForHop(queryStr, hop);
-
-    const remainingMs = chainDeadlineMs - (now() - startedAt);
-    if (remainingMs <= 0) {
-      chain.push({
-        server: currentServer,
-        queriedAt: new Date().toISOString(),
-        queryProfile: transport.queryProfile,
-        responseEncoding: transport.responseEncoding,
-        error: 'WHOIS referral chain exceeded the total time limit',
-      });
-      break;
-    }
-
-    let text: string;
-    let address: string | null = null;
-    const queriedAt = new Date().toISOString();
-    try {
-      text = await queryWhois(currentServer, transport.query, {
-        timeoutMs: Math.min(10000, remainingMs),
-        totalDeadlineMs: Math.min(WHOIS_HOP_DEADLINE_MS, remainingMs),
-        onAddressSelected: (selected) => { address = selected; },
-      });
-    } catch (err) {
-      chain.push({
-        server: currentServer,
-        queriedAt,
-        queryProfile: transport.queryProfile,
-        responseEncoding: transport.responseEncoding,
-        error: errorMessage(err, 'WHOIS request failed'),
-      });
-      break;
-    }
-    chain.push({
-      server: currentServer,
-      address,
-      queriedAt,
-      queryProfile: transport.queryProfile,
-      responseEncoding: transport.responseEncoding,
-      response: text,
-    });
-
-    const referral = extractReferral(text);
-    if (!referral || referral.toLowerCase() === currentServer.toLowerCase()) break;
-    currentServer = referral;
-  }
-
-  const firstHop = chain[0];
-  if (queryStr.toLowerCase().endsWith('.gt') && chain.length === 1 && firstHop && !('error' in firstHop)) {
-    try {
-      const gtResult = await fetchGtWhois(queryStr);
-      if (gtResult) {
-        chain.push({
-          server: 'www.gt (registry website - .gt has no WHOIS:43 server)',
-          queriedAt: new Date().toISOString(),
-          queryProfile: 'gt-registry-web',
-          responseEncoding: 'utf-8',
-          response: formatGtResultAsText(queryStr, gtResult),
-        });
-      }
-    } catch {
-      /* best-effort fallback - a failure here just leaves the IANA hop as-is */
-    }
-  }
-
-  return chain;
-}
-
-async function buildWhoisChain(queryStr: string): Promise<WhoisChain> {
-  return cached(`whois:${queryStr.toLowerCase()}`, () => buildWhoisChainUncached(queryStr));
 }
 
 // ---------------------------------------------------------------------------
