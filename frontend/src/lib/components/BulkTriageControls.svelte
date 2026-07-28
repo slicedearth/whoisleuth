@@ -120,7 +120,7 @@
     selectedCount: number;
     selectFiltered: () => void | Promise<void>;
     clearFilteredSelection: () => void | Promise<void>;
-    exportSelectedCsv: () => void;
+    exportSelectedCsv: () => void | Promise<void>;
     deepRescanSelected: () => void | Promise<void>;
     createCasesSelected: () => void | Promise<void>;
     setSelectedDisposition: (value: string) => void | Promise<void>;

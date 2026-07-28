@@ -108,13 +108,86 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   const stored = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   expect(stored.records[0]?.value).toMatchObject({ domain: 'limited-one.example' });
 
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export selected CSV' }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^whoisleuth-selected-/);
-  const content = await readFile((await download.path())!, 'utf8');
+  const downloads = await captureDownloads(
+    page,
+    () => page.getByRole('button', { name: 'Export selected CSV' }).click(),
+    2,
+  );
+  const download = downloads.find((item) => item.suggestedFilename().endsWith('.csv'));
+  const manifest = downloads.find((item) => item.suggestedFilename().endsWith('.manifest.json'));
+  expect(download).toBeDefined();
+  expect(manifest).toBeDefined();
+  expect(download!.suggestedFilename()).toMatch(/^whoisleuth-selected-/);
+  const content = await readFile((await download!.path())!, 'utf8');
   expect(content).toContain('limited-one.example');
   expect(content).not.toContain('available-two.example');
+  const manifestContent = JSON.parse(await readFile((await manifest!.path())!, 'utf8'));
+  expect(manifestContent).toMatchObject({
+    schema: 'whoisleuth.bulk-review-manifest',
+    selection: { count: 1, domains: ['limited-one.example'] },
+    lookupProfile: 'fast',
+  });
+  expect(manifestContent.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
+});
+
+test('supports focused review and an evidence-qualified two-domain comparison', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const left = domain.startsWith('left');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: 'registered',
+          confidence: 'high',
+          registrar: { name: left ? 'First Registrar' : 'Second Registrar' },
+          nameservers: left ? ['ns1.shared.example'] : ['ns2.separate.example'],
+          hasMx: left,
+          hasSpf: left,
+          hasDmarc: false,
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: left ? 'complete' : 'partial' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  await runBulkScan(page, ['left-review.example', 'right-review.example']);
+
+  const cockpit = page.getByRole('region', { name: 'Bulk review cockpit' });
+  await expect(cockpit).toContainText('1 of 2');
+  await cockpit.getByRole('button', { name: 'Mark reviewed' }).click();
+  await cockpit.getByRole('button', { name: 'Next unresolved' }).click();
+  await expect(cockpit.getByRole('heading', { level: 3 })).toHaveText('right-review.example');
+  await expect(cockpit.getByText('Evidence freshness')).toBeVisible();
+
+  const comparison = page.getByRole('region', { name: 'Two-domain comparison' });
+  await expect(comparison).toContainText('First Registrar');
+  await expect(comparison).toContainText('Second Registrar');
+  await expect(comparison.getByText('different', { exact: true }).first()).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await comparison.getByRole('button', { name: 'Export comparison' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^whoisleuth-domain-comparison-/u);
+  const exported = JSON.parse(await readFile((await download.path())!, 'utf8'));
+  expect(exported).toMatchObject({
+    schema: 'whoisleuth.domain-comparison',
+    comparison: {
+      leftDomain: expect.any(String),
+      rightDomain: expect.any(String),
+    },
+  });
+  expect(exported.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
 });
 
 test('persists named review views and per-domain review state without restarting collection', async ({ page }) => {
