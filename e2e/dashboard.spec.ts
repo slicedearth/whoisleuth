@@ -134,7 +134,7 @@ async function downloadEncryptedWorkspaceArchive(
   return { download, content: Buffer.concat(body).toString('utf-8') };
 }
 
-test('the Dashboard groups core tasks without duplicating the sidebar tool map', async ({ page }) => {
+test('the Dashboard presents task lanes without duplicating the sidebar labels', async ({ page }) => {
   await page.goto('/dashboard');
 
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
@@ -143,11 +143,13 @@ test('the Dashboard groups core tasks without duplicating the sidebar tool map',
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toBeVisible();
-  await expect(page.locator('.quick-card')).toHaveCount(3);
-  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(3);
-  await expect(page.locator('.quick-card', { hasText: 'Check one target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
-  await expect(page.locator('.quick-card', { hasText: 'Find lookalike domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'discover');
-  await expect(page.locator('.quick-card', { hasText: 'Compare domain candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
+  await expect(page.locator('.quick-card')).toHaveCount(5);
+  await expect(page.locator('.quick-card .quick-icon svg')).toHaveCount(5);
+  await expect(page.locator('.quick-card', { hasText: 'Investigate a target' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'lookup');
+  await expect(page.locator('.quick-card', { hasText: 'Protect owned domains' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'brand');
+  await expect(page.locator('.quick-card', { hasText: 'Review candidates' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'bulk');
+  await expect(page.locator('.quick-card', { hasText: 'Assess acquisition' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'registry');
+  await expect(page.locator('.quick-card', { hasText: 'Continue case work' }).locator('.quick-icon svg')).toHaveAttribute('data-icon', 'case');
   await expect(page.locator('.workspace-card')).toHaveCount(0);
   await expect(page.locator('.summary-card .summary-icon svg')).toHaveCount(3);
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toHaveAttribute('href', '/monitor?view=cases');
@@ -156,9 +158,22 @@ test('the Dashboard groups core tasks without duplicating the sidebar tool map',
   await expect(page.getByRole('link', { name: /Read the guide/ })).toHaveAttribute('href', '/guide');
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start guide' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Compare two domains' })).toBeVisible();
   await expect(page.getByText('Start recipe', { exact: true })).toHaveCount(0);
   await expect(page.getByText('indexed entities', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Investigation tools', { exact: true })).toHaveCount(0);
+});
+
+test('the focused comparison handoff requires exactly two domains and opens Bulk without running it', async ({ page }) => {
+  await page.goto('/dashboard');
+  await page.getByLabel('First domain').fill('first.example');
+  await page.getByLabel('Second domain').fill('second.example');
+  await page.getByRole('button', { name: 'Load comparison' }).click();
+  await expect(page).toHaveURL('/bulk?source=manual#domains');
+  await expect(page.locator('#domains')).toHaveValue('first.example\nsecond.example');
+  await expect(page.getByText('Loaded 2 candidates from manual.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Scan 2 domains/ })).toBeEnabled();
+  await expect(page.locator('.results-table')).toHaveCount(0);
 });
 
 test('the dashboard reports bounded browser-local counts without exposing stored values', async ({ page }) => {

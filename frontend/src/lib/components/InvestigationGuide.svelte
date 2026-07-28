@@ -3,6 +3,9 @@
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
+  import { activeProfile } from '$lib/brand-profiles';
+  import { loadCases, type CaseRecord } from '$lib/cases';
+  import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
   import { toolNavigation } from '$lib/workspaces';
   import {
     approveInvestigationGuideCollection,
@@ -55,6 +58,8 @@
   let actionVisible = $state(true);
   let actionObserver: IntersectionObserver | null = null;
   let evidence = $state({ observations: 0, relationships: 0, partial: false, truncated: false });
+  let contextProfile = $state<BrandProfile | null>(null);
+  let contextCase = $state<CaseRecord | null>(null);
   const recipe = $derived(guide ? investigationGuideRecipe(guide.recipeId) : null);
   const stages = $derived(guide ? investigationGuideStagesForRecipe(guide.recipeId) : []);
   const currentStage = $derived(guide ? investigationGuideStageForPath(page.url.pathname, guide.recipeId) : null);
@@ -79,7 +84,7 @@
 
   async function refresh() {
     guide = loadInvestigationGuide();
-    await refreshEvidence();
+    await Promise.all([refreshEvidence(), refreshContext()]);
   }
 
   function guideIdentity(value: InvestigationGuide | null) {
@@ -165,7 +170,7 @@
       reviewingStageId = '';
       planOpen = false;
     }
-    await refreshEvidence();
+    await Promise.all([refreshEvidence(), refreshContext()]);
     if (identityChanged) void revealGuide();
     void observeAction();
   }
@@ -192,6 +197,17 @@
         || observations.some((observation) => observation.truncated === true || observation.entityReferencesTruncated)
         || relationships.some((relationship) => relationship.truncated === true || relationship.sourceObservationsTruncated),
     };
+  }
+
+  async function refreshContext() {
+    if (!guide) {
+      contextProfile = null;
+      contextCase = null;
+      return;
+    }
+    const [profile, cases] = await Promise.all([activeProfile(), loadCases()]);
+    contextProfile = profile;
+    contextCase = cases.find((record) => record.domain === guide?.domain) || null;
   }
 
   function endGuide() {
@@ -316,6 +332,12 @@
       </div>
       <span class:paused={guide.status === 'paused'} class="recipe-status">{guide.status === 'paused' ? 'Paused' : 'Active'}</span>
     </div>
+    <dl class="context-tray" aria-label="Active investigation context">
+      <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
+      <div><dt>Brand Profile</dt><dd>{contextProfile?.name || 'None active'}</dd></div>
+      <div><dt>Case</dt><dd>{contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained'}</dd></div>
+      <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
+    </dl>
 
     {#if actionStage && actionProgress}
       {#key actionStage.id}
@@ -444,6 +466,10 @@
   .recipe-progress{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs)}
   .recipe-status{flex:none;padding:5px 8px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:999px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .recipe-status.paused{border-color:var(--border);color:var(--muted)}
+  .context-tray{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:12px 0 0;padding:1px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}
+  .context-tray div{display:block;min-width:0;padding:8px 9px;background:var(--surface)}
+  .context-tray dt,.context-tray dd{display:block}
+  .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
   .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:18px;align-items:start;margin-top:13px;padding:16px;border:1px solid rgb(var(--accent-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .07);scroll-margin-top:88px}
   .step-number{margin:0;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .action-copy h2{margin:4px 0 5px;font:700 var(--text-md) var(--mono)}
@@ -499,7 +525,7 @@
   .guide-return strong{margin:2px 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .guide-return small{color:var(--accent);font-weight:700}
   .guide-return:hover{border-color:var(--accent);background:var(--surface2)}
-  @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}}
+  @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:560px){.guide-heading{flex-wrap:wrap}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
   @media(max-width:360px){.guide-controls{grid-template-columns:1fr}#investigation-plan>li summary{grid-template-columns:auto minmax(0,1fr) auto}.stage-state{grid-column:2;text-align:left}#investigation-plan>li summary::after{grid-column:3;grid-row:1}}
 </style>

@@ -53,6 +53,12 @@ versioned archive is still validated before any reviewed non-destructive
 import. This protects the downloaded file while locked; the active IndexedDB
 workspace remains plaintext and browser-local.
 
+Dashboard also separates common intentions into investigation, owned-domain
+protection, candidate review, acquisition assessment, and case-work lanes. A
+two-domain comparison loads only the two validated domains into Bulk and does
+not start collection. Active guided work keeps the target, Brand Profile,
+matching case, and next manual action visible across Console tools.
+
 Deep domain Lookup can combine:
 
 - IANA-bootstrap RDAP and bounded WHOIS referral-chain evidence;

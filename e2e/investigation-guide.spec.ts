@@ -177,6 +177,12 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   await expect(guide).toContainText('Brand sweep: portal.example.test');
   await expect(guide).toBeFocused();
   await expect(guide).toContainText('0 of 5 steps reviewed');
+  const context = guide.locator('.context-tray');
+  await expect(context.getByText('Target', { exact: true })).toBeVisible();
+  await expect(context.getByText('portal.example.test', { exact: true })).toBeVisible();
+  await expect(context.getByText('None active', { exact: true })).toBeVisible();
+  await expect(context.getByText('Not retained', { exact: true })).toBeVisible();
+  await expect(context.getByText('Confirm brand profile', { exact: true })).toBeVisible();
   await expect(currentAction(page)).toContainText('Step 1 of 5');
   await expect(currentAction(page)).toContainText('Confirm brand profile');
   await expect(currentAction(page).getByRole('heading', { name: 'What to do' })).toBeVisible();
