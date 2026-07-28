@@ -12,17 +12,9 @@ import {
   updateCase,
 } from './analysis/case-model.ts';
 import type {
-  CaseActionRecord,
-  CaseDecisionRecord,
-  CaseEvidencePin,
-} from './analysis/case-response-model.ts';
-import type {
-  CaseEvidenceSnapshot as ModelCaseEvidenceSnapshot,
-  CaseInput as ModelCaseInput,
-  CaseNote as ModelCaseNote,
-  CasePatch as ModelCasePatch,
-  CaseRecord as ModelCaseRecord,
-  EvidenceFactor as ModelEvidenceFactor,
+  CaseInput,
+  CasePatch,
+  CaseRecord,
 } from './analysis/case-model.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.ts';
@@ -46,19 +38,20 @@ export type {
   CaseActionRecord,
   CaseDecisionRecord,
   CaseEvidencePin,
-};
+} from './analysis/case-response-model.ts';
+export type {
+  CaseEvidenceSnapshot,
+  CaseInput,
+  CaseNote,
+  CasePatch,
+  CaseRecord,
+  EvidenceFactor,
+} from './analysis/case-model.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
 
-export type CaseNote = ModelCaseNote;
-export type EvidenceFactor = ModelEvidenceFactor;
-export type CaseEvidenceSnapshot = ModelCaseEvidenceSnapshot;
-export type CaseRecord = ModelCaseRecord;
-export type CaseInput = ModelCaseInput;
-export type CasePatch = ModelCasePatch;
-
 export async function loadCases(): Promise<CaseRecord[]> {
-  return (await browserLocalDataProvider()).read(CASES_COLLECTION) as Promise<CaseRecord[]>;
+  return (await browserLocalDataProvider()).read(CASES_COLLECTION);
 }
 
 // Persists a clean, bounded, budget-checked store. Enforces the serialized-size
@@ -67,8 +60,7 @@ export async function loadCases(): Promise<CaseRecord[]> {
 // when storage is full or unavailable. Returns the persisted cases plus how many
 // evidence snapshots were pruned to fit.
 function boundedCases(cases: CaseRecord[]): { cases: CaseRecord[]; pruned: number } {
-  const { cases: bounded, pruned } = enforceStoreBudget(cases);
-  return { cases: bounded as CaseRecord[], pruned };
+  return enforceStoreBudget(cases);
 }
 
 export async function getCase(id: string): Promise<CaseRecord | null> {
@@ -86,19 +78,19 @@ export async function getCaseByDomain(domain: string): Promise<CaseRecord | null
 // plus how many snapshots were pruned so the UI can warn.
 export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; created: boolean; pruned: number }> {
   return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
-    const result = openOrCreateCase(current, input as never);
-    if (!result.created) return { document: current, result: { record: result.record as CaseRecord, created: false as boolean, pruned: 0 } };
-    const { cases, pruned } = boundedCases(result.cases as CaseRecord[]);
-    const record = cases.find((item) => item.id === (result.record as CaseRecord).id) ?? (result.record as CaseRecord);
+    const result = openOrCreateCase(current, input);
+    if (!result.created) return { document: current, result: { record: result.record, created: false as boolean, pruned: 0 } };
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find((item) => item.id === result.record.id) ?? result.record;
     return { document: cases, result: { record, created: true as boolean, pruned } };
   });
 }
 
 export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; pruned: number }> {
   return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
-    const result = updateCase(current, id, patch as never);
-    const { cases, pruned } = boundedCases(result.cases as CaseRecord[]);
-    const record = cases.find((item) => item.id === id) ?? (result.record as CaseRecord);
+    const result = updateCase(current, id, patch);
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find((item) => item.id === id) ?? result.record;
     return { document: cases, result: { record, pruned } };
   });
 }
@@ -117,7 +109,7 @@ export async function deleteCase(id: string): Promise<void> {
 export async function importCases(value: unknown): Promise<{ added: number; updated: number; skipped: number; pruned: number }> {
   return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
     const result = mergeCases(current, value);
-    const { cases, pruned } = boundedCases(result.cases as CaseRecord[]);
+    const { cases, pruned } = boundedCases(result.cases);
     return {
       document: cases,
       result: { added: result.added, updated: result.updated, skipped: result.skipped, pruned },
