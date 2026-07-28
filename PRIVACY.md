@@ -551,6 +551,13 @@ default (see the README), so many lookups return no personal data at all.
   action is not serialized, exported, uploaded, or retained after reload. It
   cannot replay collection or reverse imports, exports, confirmed deletions,
   case disposition changes, or source evidence.
+- **Retained-evidence timeline**: Monitor can project bounded metadata from
+  deliberately retained case snapshots, evidence pins and checkpoint facts,
+  website-profile snapshots, watchlist checks, and relationship observations.
+  The projection stays in browser memory, links to the owning browser-local
+  record, and keeps observation time separate from storage time. It does not
+  duplicate raw payloads, pin values, relationship values, analyst notes, or
+  page content, and does not start collection.
 - **Reviewed response and defensive-control exports**: a case response packet
   is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
   UTC observation time, and separately attributed registrar, registry,

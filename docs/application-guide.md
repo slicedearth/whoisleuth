@@ -536,6 +536,15 @@ collection. They can be exported or imported as a strict versioned JSON
 document and are included in the deliberate workspace archive. They contain
 analyst-authored workflow guidance, so review them before sharing.
 
+Monitor's **Timeline** view combines a bounded projection of deliberately
+retained case snapshots, evidence pins and checkpoint facts, website-profile
+snapshots, watchlist checks, and relationship observations. Filters cover
+entity, case, source, evidence versus change, and observation age. Every event
+shows observation time separately from browser storage time, preserves
+completeness, truncation, derivation, and source state, and links back to its
+owning record. The projection does not copy raw payloads, pin values, analyst
+notes, or relationship values, and it never starts collection.
+
 ## Browser-local storage and archives
 
 Cases, campaigns, Brand Profiles, watchlists, shortlist entries, Certificate

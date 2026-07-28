@@ -188,6 +188,98 @@ test('case tags offer bounded in-tab undo', async ({ page }) => {
   await expect(tags).toHaveValue('');
 });
 
+test('projects retained evidence into a filterable source-aware timeline', async ({ page }) => {
+  await page.goto('/monitor?view=timeline');
+  const observedAt = '2026-07-20T00:00:00.000Z';
+  const storedAt = '2026-07-21T00:00:00.000Z';
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 2,
+      cases: [caseRecord({
+        id: 'timeline-case',
+        domain: 'timeline-case.invalid',
+        updatedAt: storedAt,
+        evidenceHistory: [snapshot({ id: 'timeline-snapshot', capturedAt: observedAt })],
+      })],
+    },
+    'whois-rdap-watchlist-v1': {
+      schema: 'whoisleuth.watchlists',
+      version: 2,
+      watchlists: {
+        'Timeline watchlist': {
+          updatedAt: storedAt,
+          results: [],
+          baseline: [],
+          history: [{
+            checkedAt: observedAt,
+            mode: 'deep',
+            resultCount: 1,
+            conclusiveCount: 1,
+            changeCount: 1,
+            omittedChanges: 0,
+            changes: [{ domain: 'timeline-case.invalid', field: 'availability', before: 'available', after: 'registered', kind: 'new_registration', tone: 'danger' }],
+          }],
+        },
+      },
+    },
+    'whoisleuth-relationship-observations-v1': {
+      schema: 'whoisleuth.relationship-observations',
+      version: 1,
+      observations: [{
+        id: 'relationship-timeline-fixture',
+        type: 'ip_address',
+        label: 'Shared IP address',
+        method: 'Exact normalized address',
+        normalizedValue: '192.0.2.40',
+        displayValue: '192.0.2.40',
+        domains: ['timeline-case.invalid', 'timeline-related.invalid'],
+        description: 'Bounded relationship fixture.',
+        classification: 'derived',
+        source: 'bulk_relationship_analysis',
+        sourceVersion: 1,
+        observedAt,
+        retainedAt: storedAt,
+        complete: true,
+        truncated: false,
+        limitations: ['Shared infrastructure is not proof of common control.'],
+      }],
+    },
+    'whoisleuth-website-snapshots-v1': {
+      schema: 'whoisleuth.website-profile-snapshots',
+      version: 1,
+      snapshots: [{
+        id: 'timeline-website-snapshot',
+        domain: 'timeline-case.invalid',
+        observedAt,
+        savedAt: storedAt,
+        complete: false,
+        truncated: true,
+        technologies: [],
+        posture: [],
+        identity: {},
+        sources: [{ source: 'page', state: 'partial' }],
+      }],
+    },
+  });
+
+  await expect(page.getByRole('tab', { name: /Timeline/ })).toHaveAttribute('aria-selected', 'true');
+  const workspace = page.getByRole('region', { name: 'Investigation timeline' });
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(4);
+  await expect(workspace).toContainText('Observed');
+  await expect(workspace).toContainText('Stored');
+  await expect(workspace).toContainText('Derived relationship');
+  await page.getByLabel('Type').selectOption('change');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
+  await expect(workspace).toContainText('watchlist change');
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByLabel('Entity').selectOption('timeline-related.invalid');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
+  await expect(workspace.getByRole('link', { name: /Open Retained relationship/ })).toHaveAttribute('href', /view=relationships/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {

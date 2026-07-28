@@ -13,6 +13,7 @@
   import WatchlistWorkspace from '$lib/components/WatchlistWorkspace.svelte';
   import HostedWatchlistManager from '$lib/components/HostedWatchlistManager.svelte';
   import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
+  import RetainedEvidenceTimeline from '$lib/components/RetainedEvidenceTimeline.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
@@ -42,8 +43,10 @@
   import { loadBulkSessions } from '$lib/bulk-sessions';
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
   import { buildAnalystReviewInbox } from '$lib/analysis/analyst-review-inbox.ts';
+  import { buildRetainedEvidenceTimeline } from '$lib/analysis/retained-evidence-timeline.ts';
+  import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '$lib/website-snapshots';
 
-  type View = 'inbox' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
+  type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   const CASE_PAGE_SIZE=25;
   let view=$state<View>('inbox');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -70,11 +73,13 @@
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
   let bulkSessions=$state<BulkSession[]>([]);
+  let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
   const reviewInbox=$derived(buildAnalystReviewInbox({cases,watchlists,bulkSessions}));
   let casePage=$state(1);
   let campaignCount=$state(0);
   let investigationProjection=$state<unknown>(null);
   let retainedRelationships=$state<RelationshipObservation[]>([]);
+  const retainedTimeline=$derived(buildRetainedEvidenceTimeline({cases,watchlists,relationships:retainedRelationships,websiteSnapshots}));
   let customRuleCount=$state(0);
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
   const relationshipClusters=$derived(buildCaseRelationshipClusters(relationshipSummary));
@@ -148,15 +153,20 @@
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=await importCases(JSON.parse(await file.text()));await refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{void (async()=>{
-    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships(),loadBulkSessions().then((records)=>{bulkSessions=records;})]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
+    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships(),loadBulkSessions().then((records)=>{bulkSessions=records;}),loadWebsiteSnapshots().then((records)=>{websiteSnapshots=records;})]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';const target=cases.find(record=>record.id===focus);if(target){showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');await tick();const workspace=document.getElementById(`case-response-${target.id}`);if(page.url.hash===`#case-response-${encodeURIComponent(target.id)}`&&workspace){workspace.scrollIntoView({block:'start'});workspace.focus({preventScroll:true});}else await focusCase(target);}}
     else if(page.url.searchParams.get('view')==='inbox')view='inbox';
+    else if(page.url.searchParams.get('view')==='timeline')view='timeline';
     else if(page.url.searchParams.get('view')==='watchlists')view='watchlists';
     else if(page.url.searchParams.get('view')==='cases')view='cases';
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
     else if(page.url.searchParams.get('view')==='relationships')view='relationships';
     else if(page.url.searchParams.get('view')==='rules')view='rules';
+    if(view==='watchlists'){
+      const requestedWatchlist=page.url.searchParams.get('watchlist');
+      if(requestedWatchlist&&watchlists[requestedWatchlist])selected=requestedWatchlist;
+    }
     const guideDomain=parseDomainInput(page.url.searchParams.get('domain')||'').entries[0]||'';
     const investigationRoute=page.url.searchParams.get('investigation')==='1';
     if(investigationRoute){
@@ -179,11 +189,17 @@
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Track findings" title="Monitor" description="Review retained work, organize cases, inspect relationships, and compare watchlist changes over time." />
 
-<MonitorViewTabs {view} counts={{inbox:reviewInbox.counts.all,cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
+<MonitorViewTabs {view} counts={{inbox:reviewInbox.counts.all,timeline:retainedTimeline.counts.all,cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
 
 {#if view==='inbox'}
 <div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} />
+</div>
+{/if}
+
+{#if view==='timeline'}
+<div id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline">
+  <RetainedEvidenceTimeline timeline={retainedTimeline} />
 </div>
 {/if}
 
