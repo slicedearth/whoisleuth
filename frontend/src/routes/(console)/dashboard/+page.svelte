@@ -173,10 +173,10 @@
     <p class="eyebrow">Step-by-step help</p>
     <h2 id="guide-launcher-title">Follow a guided investigation</h2>
     <p>Choose a guide and a domain. WHOISleuth saves progress in this tab so you can work through one clearly explained step at a time.</p>
-    <div class="help-links" aria-label="Investigation help">
+    <nav class="help-links" aria-label="Investigation help">
       <a href="/guide"><strong>Read the guide</strong><span>Learn the tools, result states, and common mistakes.</span></a>
       <a href="/registry-support"><strong>Check domain-ending support</strong><span>See which domain endings have tested lookup support and known limits.</span></a>
-    </div>
+    </nav>
   </div>
   <form onsubmit={startGuide}>
     <label for="guide-recipe">Guide</label>

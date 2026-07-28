@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 import {
   EVIDENCE_TOPOLOGY_VERSION,
   MAX_EVIDENCE_TOPOLOGY_NODES,
+  buildLookupEvidenceTopologyNodes,
   horizontalConnectionPath,
   normalizeEvidenceTopologyStatus,
   projectEvidenceTopology,
@@ -64,5 +65,47 @@ describe('evidence topology projection', () => {
 
   test('creates a curved horizontal connector', () => {
     assert.equal(horizontalConnectionPath({ x: 10, y: 20 }, { x: 110, y: 60 }), 'M10,20C60,20,60,60,110,60');
+  });
+
+  test('builds separately attributed lookup nodes from bounded source records', () => {
+    const nodes = buildLookupEvidenceTopologyNodes({
+      targetType: 'domain',
+      diagnostics: {
+        rdap: { status: 'success', endpoint: 'https://rdap.example.test/domain/example.test', transportSecurity: 'https' },
+        whois: { status: 'partial' },
+      },
+      registrarRdap: { status: 'unsupported' },
+      observedNetworkContext: { contextVersion: 1, status: 'success' },
+      observedNetworkEndpoint: { address: '192.0.2.44' },
+      dnsEvidence: { source: 'dns', status: 'success', complete: false },
+      reverseDns: { source: 'reverse_dns', status: 'not_found', complete: true },
+      reverseDnsRecords: { ptr: [] },
+      httpEvidence: { source: 'http', status: 'success', complete: true, transportSecurity: 'https' },
+      httpResponse: { status: 200 },
+      tlsEvidence: { source: 'tls', status: 'success', complete: true, protocol: 'TLSv1.3' },
+      pageIdentity: { source: 'html', status: 'success', complete: true, title: 'Example page' },
+      structuredDataIdentity: { source: 'html', status: 'partial', complete: false, entities: [{ type: 'Organization' }] },
+      technologyProfile: { source: 'derived', status: 'success', complete: true, findings: [{ id: 'server' }] },
+      securityPosture: { source: 'derived', status: 'partial', complete: false },
+      securityPostureSummary: { label: 'Review required' },
+    });
+
+    assert.equal(nodes.find((node) => node.id === 'registry-rdap')?.family, 'registry');
+    assert.equal(nodes.find((node) => node.id === 'dns')?.status, 'partial');
+    assert.equal(nodes.find((node) => node.id === 'network')?.detail, '192.0.2.44');
+    assert.equal(nodes.find((node) => node.id === 'structured-identity')?.detail, '1 publisher-declared entity');
+    assert.equal(nodes.find((node) => node.id === 'technology')?.provenance, 'derived');
+    assert.equal(nodes.find((node) => node.id === 'posture')?.status, 'partial');
+    assert.equal(nodes.some((node) => node.id === 'security-txt'), false);
+  });
+
+  test('omits domain-only nodes for a non-domain target with no source evidence', () => {
+    const nodes = buildLookupEvidenceTopologyNodes({
+      targetType: 'ipv4',
+      diagnostics: { rdap: { status: 'success' } },
+    });
+
+    assert.deepEqual(nodes.map((node) => node.id), ['registry-rdap']);
+    assert.equal(nodes[0]?.label, 'RDAP');
   });
 });

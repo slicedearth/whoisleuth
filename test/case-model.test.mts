@@ -923,10 +923,11 @@ describe('rejects unsupported future-schema imports', () => {
     assert.equal(requiredValue(local[0]).disposition, 'confirmed_abuse');
   });
 
-  test('only the current exported envelope is importable', () => {
+  test('imports the current and immediately preceding case envelopes only', () => {
     const local = localCases();
-    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), new RegExp(`using schema ${model.CASE_SCHEMA_VERSION}`));
-    assert.throws(() => model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }), new RegExp(`using schema ${model.CASE_SCHEMA_VERSION}`));
+    assert.throws(() => model.mergeCases(local, [{ domain: 'bare.example', updatedAt: ISO }]), /schema 3 or 4/u);
+    assert.throws(() => model.mergeCases(local, { version: 2, cases: [{ domain: 'v2.example', updatedAt: ISO }] }), /schema 3 or 4/u);
+    assert.equal(model.mergeCases(local, { version: 3, cases: [{ domain: 'v3.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'current.example', updatedAt: ISO }] }).added, 1);
   });
 });

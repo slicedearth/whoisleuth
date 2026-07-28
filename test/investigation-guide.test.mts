@@ -18,6 +18,7 @@ import {
   investigationGuideStagesForRecipe,
   investigationGuideSummaryFilename,
   MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH,
+  MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH,
   MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS,
   normalizeInvestigationGuideDomain,
   parseInvestigationGuide,
@@ -131,6 +132,7 @@ test('parses current records through fixed stage and field allowlists', () => {
     outcome: 'partial',
     approvedAt: APPROVED_AT,
     openedAt: OPENED_AT,
+    reviewNote: null,
     updatedAt: COMPLETED_AT,
   });
   assert.equal('rawEvidence' in parsed, false);
@@ -270,23 +272,42 @@ test('requires explicit collection approval but approval never opens or complete
   assert.deepEqual(approveInvestigationGuideStage(original, 'brands', APPROVED_AT), original);
 });
 
-test('complete and partial outcomes require an opened stage while skipped remains explicit', () => {
+test('complete and partial outcomes require an opened stage while partial and skipped reviews retain a reason', () => {
   const original = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT);
   assert.ok(original);
   assert.deepEqual(setInvestigationGuideStageOutcome(original, 'lookup', 'complete', COMPLETED_AT), original);
-  const skipped = setInvestigationGuideStageOutcome(original, 'bulk', 'skipped', COMPLETED_AT);
+  assert.deepEqual(setInvestigationGuideStageOutcome(original, 'bulk', 'skipped', COMPLETED_AT), original);
+  const skipped = setInvestigationGuideStageOutcome(
+    original,
+    'bulk',
+    'skipped',
+    COMPLETED_AT,
+    'Peer comparison deferred until a second domain is selected.',
+  );
   assert.ok(skipped);
   const skippedStage = skipped.stages.find((stage) => stage.id === 'bulk');
   assert.ok(skippedStage);
   assert.equal(skippedStage.outcome, 'skipped');
+  assert.equal(skippedStage.reviewNote, 'Peer comparison deferred until a second domain is selected.');
   const approved = approveInvestigationGuideStage(original, 'lookup', APPROVED_AT);
   const opened = visitInvestigationGuide(approved, '/lookup', OPENED_AT);
-  const partial = setInvestigationGuideStageOutcome(opened, 'lookup', 'partial', COMPLETED_AT);
+  assert.deepEqual(setInvestigationGuideStageOutcome(opened, 'lookup', 'partial', COMPLETED_AT), opened);
+  const partial = setInvestigationGuideStageOutcome(
+    opened,
+    'lookup',
+    'partial',
+    COMPLETED_AT,
+    `  Registry source unavailable.\n${'x'.repeat(MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH)}  `,
+  );
   assert.ok(partial);
   const partialStage = partial.stages.find((stage) => stage.id === 'lookup');
   assert.ok(partialStage);
   assert.equal(partialStage.outcome, 'partial');
+  assert.equal(partialStage.reviewNote?.startsWith('Registry source unavailable. '), true);
+  assert.equal(partialStage.reviewNote?.length, MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH);
   assert.equal(partial.updatedAt, COMPLETED_AT);
+  const reopened = setInvestigationGuideStageOutcome(partial, 'lookup', 'pending', '2026-07-20T01:07:00.000Z');
+  assert.equal(reopened?.stages.find((stage) => stage.id === 'lookup')?.reviewNote, null);
 });
 
 test('pause blocks stage mutation until the recipe is resumed', () => {
@@ -330,6 +351,7 @@ test('builds a deterministic compact summary without evidence or analyst-owned c
     outcome: 'complete',
     approved: true,
     opened: true,
+    reviewNote: null,
     updatedAt: COMPLETED_AT,
   });
   const keys: string[] = [];

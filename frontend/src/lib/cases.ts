@@ -18,6 +18,11 @@ import type {
 } from './analysis/case-model.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.ts';
+import {
+  mergeExternalFindingsIntoCases,
+  parseExternalFindingsDocument,
+  type ExternalFindingsDocument,
+} from './analysis/external-findings-import.ts';
 
 export {
   CASE_DISPOSITIONS,
@@ -32,12 +37,25 @@ export {
 export {
   CASE_ACTION_STATES,
   CASE_ACTION_TYPES,
+  CASE_ASSERTION_KINDS,
+  CASE_ASSERTION_STATES,
+  CASE_MANUAL_TRAIL_KINDS,
   CASE_PIN_COMPLETENESS,
 } from './analysis/case-response-model.ts';
+export {
+  EXTERNAL_FINDING_CATEGORIES,
+  EXTERNAL_FINDINGS_SCHEMA,
+  EXTERNAL_FINDINGS_VERSION,
+  MAX_EXTERNAL_FINDINGS,
+  MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
+  parseExternalFindingsDocument,
+} from './analysis/external-findings-import.ts';
 export type {
   CaseActionRecord,
+  CaseAssertionRecord,
   CaseDecisionRecord,
   CaseEvidencePin,
+  CaseManualTrailEvent,
 } from './analysis/case-response-model.ts';
 export type {
   CaseEvidenceSnapshot,
@@ -47,6 +65,11 @@ export type {
   CaseRecord,
   EvidenceFactor,
 } from './analysis/case-model.ts';
+export type {
+  ExternalFinding,
+  ExternalFindingsDocument,
+  ExternalFindingsMergeResult,
+} from './analysis/external-findings-import.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
 
@@ -113,6 +136,32 @@ export async function importCases(value: unknown): Promise<{ added: number; upda
     return {
       document: cases,
       result: { added: result.added, updated: result.updated, skipped: result.skipped, pruned },
+    };
+  });
+}
+
+export async function importExternalFindings(
+  value: unknown,
+): Promise<{
+  casesCreated: number;
+  casesUpdated: number;
+  findingsAdded: number;
+  duplicatesSkipped: number;
+  pruned: number;
+}> {
+  const document: ExternalFindingsDocument = parseExternalFindingsDocument(value);
+  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+    const merged = mergeExternalFindingsIntoCases(current, document);
+    const { cases, pruned } = boundedCases(merged.cases);
+    return {
+      document: cases,
+      result: {
+        casesCreated: merged.casesCreated,
+        casesUpdated: merged.casesUpdated,
+        findingsAdded: merged.findingsAdded,
+        duplicatesSkipped: merged.duplicatesSkipped,
+        pruned,
+      },
     };
   });
 }

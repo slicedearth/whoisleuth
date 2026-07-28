@@ -85,7 +85,6 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 // location, changed fingerprint, duplicate occurrence, or removed result causes
 // review instead of suppressing an entire rule or file.
 const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
-  Object.freeze({ ruleId: 'js/request-forgery', file: 'lib/safe-fetch.mts', primaryLocationLineHash: 'fec0b1d981cb94bf:1', primaryLocationStartColumnFingerprint: '17', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: 'bb6b221105506c3:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
 ]);

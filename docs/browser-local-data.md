@@ -33,6 +33,15 @@ the backend does not make any collection unbounded.
 
 Investigation search still builds a disposable bounded projection from cases,
 campaigns, Brand Profiles, and analyst-selected relationship observations.
+Retained relationship observations first pass through a versioned, typed common
+evidence envelope in memory. That incremental adapter preserves source schema,
+observation time, completeness, truncation, derivation, and limitations before
+the existing search and graph projection consumes it. The envelope has explicit
+record and byte accounting, refuses malformed or future source schemas, makes
+no network request, and performs no writes. It is not a new collection:
+IndexedDB records and the workspace archive remain authoritative, and
+discarding the projection leaves them unchanged.
+
 Individual records are stored under stable collection keys, and workspace
 imports can update several collections in one IndexedDB transaction.
 Website-profile snapshots retain at most 60 explicit analyst saves and 12 per

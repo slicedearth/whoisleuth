@@ -6,12 +6,14 @@
   import { activeProfile } from '$lib/brand-profiles';
   import { loadCases, type CaseRecord } from '$lib/cases';
   import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
+  import { buildInvestigationHandoffReadiness } from '$lib/analysis/investigation-handoff-readiness.ts';
   import { toolNavigation } from '$lib/workspaces';
   import {
     approveInvestigationGuideCollection,
     clearInvestigationGuide,
     downloadInvestigationGuideSummary,
     INVESTIGATION_GUIDE_EVENT,
+    MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH,
     investigationGuideHref,
     investigationGuideRecipe,
     investigationGuideStageForGuidePath,
@@ -50,6 +52,8 @@
   let planOpen = $state(false);
   let selectedStageId = $state('');
   let reviewingStageId = $state('');
+  let pendingOutcome = $state<'partial' | 'skipped' | null>(null);
+  let outcomeNote = $state('');
   let restartPending = $state(false);
   let exportPending = $state(false);
   let exportError = $state('');
@@ -81,6 +85,13 @@
       : investigationGuideHref(actionStage.id, guide.domain, guide.recipeId, guide.focusDomain)
     : '/dashboard');
   const candidateSelectionRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'lookup' && !guide.focusDomain));
+  const handoffReadiness = $derived(buildInvestigationHandoffReadiness({
+    caseRecord: contextCase,
+    evidenceProjection: evidence,
+  }));
+  const caseWorkspaceHref = $derived(contextCase
+    ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
+    : null);
 
   async function refresh() {
     guide = loadInvestigationGuide();
@@ -131,6 +142,7 @@
   async function revealAction() {
     actionVisible = true;
     await tick();
+    actionPanel?.focus({ preventScroll: true });
     await afterLayout();
     const panel = actionPanel;
     if (!panel) return;
@@ -142,6 +154,7 @@
     panel.focus({ preventScroll: true });
     await afterLayout();
     await observeAction();
+    actionPanel?.focus({ preventScroll: true });
   }
 
   async function focusRouteTarget(hash: string) {
@@ -168,6 +181,8 @@
     if (identityChanged) {
       selectedStageId = '';
       reviewingStageId = '';
+      pendingOutcome = null;
+      outcomeNote = '';
       planOpen = false;
     }
     await Promise.all([refreshEvidence(), refreshContext()]);
@@ -181,7 +196,8 @@
       return;
     }
     const projection = await loadLocalInvestigationProjection();
-    const domainEntity = projection.entities.find((entity) => entity.type === 'domain' && entity.canonical === guide?.domain);
+    const targetDomain = guide.focusDomain || guide.domain;
+    const domainEntity = projection.entities.find((entity) => entity.type === 'domain' && entity.canonical === targetDomain);
     if (!domainEntity) {
       evidence = { observations: 0, relationships: 0, partial: false, truncated: projection.truncated };
       return;
@@ -207,7 +223,8 @@
     }
     const [profile, cases] = await Promise.all([activeProfile(), loadCases()]);
     contextProfile = profile;
-    contextCase = cases.find((record) => record.domain === guide?.domain) || null;
+    const targetDomain = guide.focusDomain || guide.domain;
+    contextCase = cases.find((record) => record.domain === targetDomain) || null;
   }
 
   function endGuide() {
@@ -238,6 +255,8 @@
 
   function setOutcome(stageId: string, outcome: 'pending' | 'complete' | 'partial' | 'skipped') {
     guide = updateInvestigationGuideOutcome(stageId, outcome);
+    pendingOutcome = null;
+    outcomeNote = '';
     if (outcome !== 'pending') {
       selectedStageId = '';
       planOpen = false;
@@ -245,9 +264,31 @@
     }
   }
 
+  function reviewOutcome(outcome: 'partial' | 'skipped') {
+    pendingOutcome = outcome;
+    outcomeNote = actionProgress?.reviewNote || '';
+  }
+
+  function confirmOutcome(stageId: string) {
+    if (!pendingOutcome || !outcomeNote.trim()) return;
+    guide = updateInvestigationGuideOutcome(stageId, pendingOutcome, outcomeNote);
+    pendingOutcome = null;
+    outcomeNote = '';
+    selectedStageId = '';
+    planOpen = false;
+    void revealAction();
+  }
+
+  function cancelOutcomeReview() {
+    pendingOutcome = null;
+    outcomeNote = '';
+  }
+
   function reviewStage(stageId: string) {
     selectedStageId = stageId;
     reviewingStageId = '';
+    pendingOutcome = null;
+    outcomeNote = '';
     planOpen = false;
     void revealAction();
   }
@@ -350,8 +391,33 @@
             <ol class="action-instructions">
               {#each actionStage.instructions as instruction}<li>{instruction}</li>{/each}
             </ol>
+            <section class="completion-check" aria-label={`Completion check for ${actionStage.label}`}>
+              <h3>Completion check</h3>
+              <dl>
+                <div><dt>Expected evidence</dt><dd>{actionStage.expectedEvidence}</dd></div>
+                <div><dt>Done when</dt><dd>{actionStage.completionCriteria}</dd></div>
+              </dl>
+            </section>
           </div>
           <div class="action-controls">
+            {#if actionStage.workspace === 'monitor'}
+              <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
+                <div>
+                  <span>Case handoff</span>
+                  <strong>{handoffReadiness.label}</strong>
+                </div>
+                <ul>
+                  {#each handoffReadiness.checks as check}
+                    <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
+                      <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
+                      <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                    </li>
+                  {/each}
+                </ul>
+                {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
+                <p>{handoffReadiness.limitations[0]}</p>
+              </section>
+            {/if}
             {#if guide.status === 'paused'}
               <button class="primary compact" type="button" onclick={togglePause}>Resume guide</button>
             {:else if actionProgress.outcome !== 'pending'}
@@ -379,14 +445,34 @@
             {/if}
 
             {#if guide.status !== 'paused' && actionProgress.outcome === 'pending'}
-              <div class="outcome-actions" aria-label={`Finish ${actionStage.label}`}>
+              <div class="outcome-actions" role="group" aria-label={`Finish ${actionStage.label}`}>
                 <span>After doing the work above</span>
                 {#if actionProgress.openedAt}
                   <button class="primary compact" type="button" onclick={() => setOutcome(actionStage.id, 'complete')}>Mark reviewed</button>
-                  <button class="btn compact" type="button" onclick={() => setOutcome(actionStage.id, 'partial')}>Mark partial</button>
+                  <button class="btn compact" type="button" onclick={() => reviewOutcome('partial')}>Mark partial</button>
                 {/if}
-                <button class="btn compact" type="button" onclick={() => setOutcome(actionStage.id, 'skipped')}>Skip this step</button>
+                <button class="btn compact" type="button" onclick={() => reviewOutcome('skipped')}>Skip this step</button>
               </div>
+              {#if pendingOutcome}
+                <form class="outcome-review" onsubmit={(event) => { event.preventDefault(); confirmOutcome(actionStage.id); }}>
+                  <label for={`guide-outcome-note-${actionStage.id}`}>
+                    {pendingOutcome === 'partial' ? 'What remains incomplete?' : 'Why is this step being skipped?'}
+                  </label>
+                  <textarea
+                    id={`guide-outcome-note-${actionStage.id}`}
+                    bind:value={outcomeNote}
+                    maxlength={MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH}
+                    rows="3"
+                    required
+                    placeholder={pendingOutcome === 'partial' ? 'Record missing, unavailable, or deferred work.' : 'Record why this step does not apply or is deferred.'}
+                  ></textarea>
+                  <small>{outcomeNote.length}/{MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH} characters · stored in this tab and included in the compact guide export</small>
+                  <div class="request-actions">
+                    <button class="primary compact" type="submit">Confirm {pendingOutcome}</button>
+                    <button class="btn compact" type="button" onclick={cancelOutcomeReview}>Cancel</button>
+                  </div>
+                </form>
+              {/if}
             {/if}
           </div>
         </article>
@@ -396,6 +482,14 @@
         <p class="step-number">Guide reviewed</p>
         <h2>All {stages.length} steps have an outcome</h2>
         <p>Review the full plan or export the compact progress summary. The guide outcomes remain analyst workflow markers, not findings about the target.</p>
+        <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
+          <div>
+            <span>Decision handoff</span>
+            <strong>{handoffReadiness.label}</strong>
+          </div>
+          <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
+          {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
+        </section>
       </article>
     {/if}
 
@@ -419,6 +513,7 @@
                   <div><dt>Requests</dt><dd>{stage.requestImpact}</dd></div>
                   <div><dt>Before starting</dt><dd>{stage.prerequisite}</dd></div>
                   <div><dt>Done when</dt><dd>{stage.completionCriteria}</dd></div>
+                  {#if progress?.reviewNote}<div><dt>Review note</dt><dd>{progress.reviewNote}</dd></div>{/if}
                 </dl>
                 <button class="btn compact" type="button" onclick={() => reviewStage(stage.id)}>{progress?.outcome === 'pending' ? 'Review this step' : 'Review or reopen'}</button>
               </div>
@@ -435,7 +530,7 @@
       </details>
       <details class="guide-options">
         <summary>Guide options</summary>
-        <div class="guide-controls toolbar" aria-label="Guide controls">
+        <div class="guide-controls toolbar" role="group" aria-label="Guide controls">
           <button class="btn compact" type="button" onclick={togglePause}>{guide.status === 'paused' ? 'Resume guide' : 'Pause guide'}</button>
           <button class="btn compact" type="button" onclick={restart}>{restartPending ? 'Confirm restart' : 'Restart guide'}</button>
           {#if restartPending}<button class="btn compact" type="button" onclick={() => restartPending = false}>Cancel restart</button>{/if}
@@ -477,6 +572,9 @@
   .action-copy>.step-number{color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .action-copy h3{margin:13px 0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .action-instructions{display:grid;gap:5px;margin:0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .completion-check{margin-top:13px;padding:10px 11px;border-left:3px solid var(--accent);background:rgb(var(--accent-rgb) / .06)}
+  .completion-check h3{margin:0 0 7px}
+  .completion-check dl{margin:0;padding:0;border:0}
   .action-controls{display:grid;gap:9px;align-content:start}
   .action-controls>a,.action-controls>button{text-align:center}
   .request-review{display:grid;gap:7px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
@@ -486,9 +584,28 @@
   .request-actions,.outcome-actions{display:flex;flex-wrap:wrap;gap:6px}
   .outcome-actions{margin-top:2px;padding-top:9px;border-top:1px solid var(--border)}
   .outcome-actions>span{flex:1 0 100%;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
+  .outcome-review{display:grid;gap:7px;padding:10px;border:1px solid var(--warning);border-radius:var(--radius-sm);background:var(--surface)}
+  .outcome-review label{font:700 var(--text-2xs) var(--mono)}
+  .outcome-review textarea{width:100%;min-height:74px;resize:vertical}
+  .outcome-review>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .handoff-readiness{display:grid;gap:8px;padding:11px;border:1px solid var(--warning);border-radius:var(--radius-sm);background:var(--surface)}
+  .handoff-readiness.ready{border-color:var(--accent)}
+  .handoff-readiness>div>span,.handoff-readiness>div>strong{display:block}
+  .handoff-readiness>div>span{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .handoff-readiness>div>strong{margin-top:2px;font:700 var(--text-xs) var(--mono)}
+  .handoff-readiness ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+  .handoff-readiness li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px;color:var(--accent)}
+  .handoff-readiness li.caution{color:var(--warning)}
+  .handoff-readiness li.block{color:var(--danger)}
+  .handoff-readiness li>span:first-child{font:700 var(--text-xs) var(--mono)}
+  .handoff-readiness li strong,.handoff-readiness li small{display:block}
+  .handoff-readiness li strong{color:var(--text);font-size:var(--text-2xs)}
+  .handoff-readiness li small{margin-top:1px;color:var(--muted);font-size:var(--text-2xs);line-height:1.35}
+  .handoff-readiness>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .complete-handoff{margin-top:12px;max-width:780px}
   .guide-complete{margin-top:13px;padding:16px;border:1px solid rgb(var(--accent-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .07)}
   .guide-complete h2{margin:4px 0 6px;font:700 var(--text-md) var(--mono)}
-  .guide-complete>p:last-child{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .guide-complete>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .compact{flex:none;padding:7px 10px;font-size:var(--text-2xs)}
   .plan-toggle{margin-top:10px}
   #investigation-plan{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}

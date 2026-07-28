@@ -40,11 +40,11 @@ navigation without shortening the policy.
 
 | Area | Purpose | Important boundary |
 | --- | --- | --- |
-| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. |
+| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. Published response routes are resolved only from the collected result and must be deliberately recorded in a case. |
 | **Discover** | Generate bounded typo, Unicode-confusable, keyboard, plural, separator, word-order, WWW-style, TLD, and dictionary candidates, including analyst-controlled token replacements and an opt-in two-character Unicode family, with optional Certificate Transparency discovery. Presets or an exact family selection control the local generator. | Candidate generation and optional custom dictionary input stay local. The advanced Unicode family is never preset-enabled. Confusability is a review lead, while certificate-log observations do not prove site activity or maliciousness. |
 | **Bulk** | Compare multiple domains with source-aware filters, observed-value grouping, explicit batch selection, score explanations, selected or complete CSV export, scan-local relationship evidence, and resumable saved sessions. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. Filters and groups use only fields already observed in that compact result; missing provider, ASN, or hosting evidence is never inferred. Batch rescans, case creation, dispositions, Monitor saves, and exports act only on the analyst's explicit selection. |
 | **Brands** | Save official domains, product names, allowlists, mail-posture settings, expiring protection attestations, and optional page-identity baselines. Audit bounded registration, delegation, mail-authentication, and external-dependency evidence. | Profiles and analyst attestations stay in the current browser unless deliberately exported. Public evidence and analyst statements remain separate and neither is a security guarantee. |
-| **Monitor** | Manage cases, evidence pins, analyst decisions, reviewed response actions, campaigns, relationship observations, watchlists, timelines, and reports. | Ordinary investigation and response state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
+| **Monitor** | Manage cases, evidence pins, analyst decisions, reviewed response actions and outcomes, response preflight, campaigns, relationship observations, watchlists, timelines, and reports. | Ordinary investigation and response state is browser-local. Preflight blocks incomplete incident facts and exposes cautions; it never sends a report. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
 | **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
 
 Dashboard can download the bounded workspace as an encrypted portable backup.
@@ -126,6 +126,22 @@ will share only after the analyst opens it.
 Long source records and secondary Deep evidence start collapsed. Their status
 and summary remain visible so the page can be scanned before opening the
 evidence, provenance, and limitations that matter to the investigation. A
+separate Evidence coverage summary keeps complete, limited, unavailable,
+skipped, unsupported, unknown, and not-found states distinct without retrying
+sources or treating incomplete collection as a clean result. A
+collapsed acquisition workspace organizes the current authority-aware
+registration decision, lifecycle timing, transfer constraints, observed
+service dependencies, and published contact routes into a manual checklist. It
+also maps observed nameserver, web, mail, and TLS transition dependencies and
+prompts the analyst to confirm current registry and registrar policy rather
+than presenting policy assumptions as facts. It does not value a domain or
+establish eligibility, release timing, price, ownership, or acquisition
+success. An independent brand-mimicry review organizes official favicon,
+official-asset, page-component, credential-surface, and review-language cues
+without producing a combined mimicry or maliciousness score. A conservative
+service-dependency review surfaces observed CNAME and HTTPS alias targets for
+manual verification; it never follows a target or labels a dependency
+dangling, vulnerable, claimable, safe, or controlled. A
 bounded source map uses locally rendered D3 geometry to connect the target to
 separately attributed evidence and provide direct links to each visible source.
 Registry, network, web, derived, and analyst evidence retain consistent visual
@@ -164,9 +180,16 @@ accessible lists, tables, or source records.
   surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
-  Case response packets and defensive-control exports require explicit review;
+  Case response packets expose required facts, evidence freshness, open
+  contradictions, recipient provenance, case disposition, and action tracking
+  before export. Defensive-control exports also require explicit review;
   the latter include a provenance manifest, expiry, exclusions, and rollback
   instructions. Wildcard blocking remains opt-in.
+
+Monitor also projects a bounded Review inbox from retained cases, planned
+actions, material watchlist changes, and incomplete saved Bulk sessions. It is
+a local resume queue, not an alert feed or automatic decision engine; opening
+an item does not run a lookup or change its analyst-owned state.
 
 ## Quick start
 
@@ -223,6 +246,7 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Registry data contract](docs/registry-data-contract.md) | Normalized RDAP, WHOIS, diagnostics, provenance, and compatibility rules. |
 | [Registry compatibility](docs/registry-compatibility.md) | Fixture-backed parser support and separately documented access context. |
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
+| [External findings import](docs/external-findings-import.md) | Strict local JSON schema, evidence provenance, validation bounds, and case-merge behavior. |
 | [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
 | [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, and evidence exports. |
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |

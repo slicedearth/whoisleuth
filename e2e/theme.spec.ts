@@ -75,6 +75,23 @@ test('system preference follows operating-system colour-scheme changes', async (
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
+test('the theme trigger controls only a rendered option list', async ({ page }) => {
+  await clearThemePreference(page);
+  await page.goto('/');
+
+  const trigger = page.getByRole('button', { name: /^Colour theme,/ });
+  await expect(trigger).not.toHaveAttribute('aria-controls');
+  await expect(page.locator('#colour-theme-options')).toHaveCount(0);
+
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-controls', 'colour-theme-options');
+  await expect(page.locator('#colour-theme-options')).toBeVisible();
+
+  await page.getByRole('option', { name: 'System theme' }).click();
+  await expect(trigger).not.toHaveAttribute('aria-controls');
+  await expect(page.locator('#colour-theme-options')).toHaveCount(0);
+});
+
 test('a theme still applies to the current tab when persistent storage is unavailable', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(Storage.prototype, 'getItem', { configurable: true, value: () => { throw new Error('blocked'); } });

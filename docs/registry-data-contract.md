@@ -207,7 +207,7 @@ observed-network cards start collapsed with their headings, states, and bounded
 summaries visible. This is presentation only: expanding a card makes no request
 and does not change the response or export contract.
 
-## Shared observation envelope
+## Network-source observation envelope
 
 New network-derived evidence can add a version-1 `observation` envelope (or,
 for DNS compatibility, expose the same envelope fields on
@@ -228,6 +228,31 @@ absent envelope must not cause an otherwise valid legacy record to be rejected
 or rewritten. DNS and Certificate Transparency are the first adopters; other
 registry diagnostics retain their existing versioned contract until an
 additive migration provides material value.
+
+## Browser-local common evidence envelope
+
+The browser-local investigation layer has a separate version-1 common evidence
+envelope for incrementally adapting already retained evidence into typed
+entities, observations, relationships, artifact references, and analyst
+assertions. This is not the network-source envelope above and it does not add a
+second persistent database.
+
+The first adapter reads only the bounded retained-relationship collection. It
+preserves the authoritative collection and upstream relationship-evidence
+schema versions, source and observation time, collection depth when known,
+completeness, truncation, derivation, and stated limitations. Deterministic
+typed identifiers allow the existing disposable investigation projection to
+feed local search and graph consumers. Empty artifact-reference and assertion
+arrays reserve those typed boundaries without inventing records.
+
+The adapter performs no writes or network requests. It reuses the owning
+collection normalizer, refuses malformed and unsupported future schemas,
+enforces entity, observation, relationship, reference, limitation, record, and
+serialized-byte caps, and records its own quota and rollback state. The
+IndexedDB collection and workspace archive remain authoritative; discarding
+the in-memory envelope is the complete rollback. Other collections can adopt
+the envelope one at a time only when their current schema remains authoritative
+and the adapter provides demonstrated search or graph value.
 
 ## Capability discovery
 

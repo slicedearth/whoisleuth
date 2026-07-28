@@ -197,7 +197,7 @@
   </details>
 
   {#if preview}
-    <div class="preview" aria-labelledby="workspace-archive-preview-title">
+    <div class="preview" role="group" aria-labelledby="workspace-archive-preview-title">
       <header>
         <div><p class="eyebrow">Backup review</p><h3 id="workspace-archive-preview-title">Choose saved data to add</h3></div>
         <span>{preview.bytes.toLocaleString()} bytes · {preview.generatedAt?new Date(preview.generatedAt).toLocaleString():'Unknown creation time'}</span>

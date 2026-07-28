@@ -88,6 +88,12 @@ evidence group. The topology uses separate visual families for registry,
 network, web, derived, and analyst evidence, with an adjacent key; source
 status remains an independent label and colour.
 
+**Evidence coverage** summarizes which requested source and analysis families
+completed and which remained limited, unavailable, skipped, unsupported,
+unknown, or not found. It preserves those states separately, lists retained
+limitations, and never retries a source or converts incomplete collection into
+a clean finding.
+
 After a successful single-domain Lookup, **Download report** creates a readable
 Markdown summary locally in the browser. It includes registry, registrar, and
 WHOIS source health and collection time, normalized findings, the explainable
@@ -231,6 +237,21 @@ data without keeping page HTML, URL paths, query strings, credentials, or
 complete email addresses. Comparison results remain contextual evidence and do
 not prove common ownership or intent.
 
+When an active Brand Profile is available, **Brand mimicry review** organizes
+exact or perceptual favicon relationships, official-domain asset references,
+independent page-component comparisons, credential-surface context, and
+bounded review-language matches. Each cue retains its own method and
+provenance. WHOISleuth does not combine them into a mimicry or maliciousness
+score, and common infrastructure, templates, libraries, or analytics can
+produce legitimate relationships.
+
+**Service dependency review** reuses current DNS evidence to surface CNAME and
+HTTPS alias-mode targets. External targets are manual review leads. WHOISleuth
+does not follow them, query provider accounts, test claimability, or label a
+service dangling or vulnerable. Complete current DNS evidence with no alias is
+reported only as a point-in-time non-observation; incomplete DNS remains
+unavailable.
+
 ### Monitor
 
 Monitor contains Cases, Campaigns, Relationships, and Watchlists.
@@ -247,6 +268,19 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   and campaign membership without another network request.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
   deliberately.
+
+The **Review inbox** is a bounded local queue projected from retained cases,
+planned case actions, material watchlist changes, and incomplete saved Bulk
+sessions. Its filters and due-state labels help an analyst resume work; opening
+an item does not start collection, change a disposition, submit a response, or
+claim that the underlying evidence is complete.
+
+Inside an expanded case, the response workspace keeps evidence pins, observed
+facts, analyst assertions, decisions, actions, and manual investigation steps
+separately typed. Its decision packet summarizes required incident facts,
+source freshness and limitations, open contradictions or unknowns, recipient
+provenance, disposition, and follow-up state before a local export. It never
+submits a report or treats a planned action as completed.
 
 The complete evidence timeline remains depth-aware. A Fast observation does
 not erase last-known Deep-only evidence, and score changes are compared only
@@ -293,6 +327,19 @@ WHOIS follows a bounded referral chain. Its authority model protects a
 positive registry observation from contradictory or failed later referrals.
 Registrar RDAP, when available in a Deep single Lookup, remains a separate
 source and cannot decide registration availability.
+
+A collapsed **Acquisition due diligence** workspace reuses the evidence already
+present in a Deep result. It organizes the authority and confidence behind the
+registration decision, published lifecycle dates and EPP statuses, interpreted
+transfer constraints, current web and mail dependencies, and separately
+attributed contact routes. It then maps the observed nameserver, web, mail, and
+TLS dependencies that may need continuity during a transition. Registry
+eligibility, lifecycle, and transfer-policy entries remain manual confirmation
+prompts rather than locally inferred policy claims. The workspace makes no
+extra request and does not determine valuation, legal rights, registry
+eligibility, registrar terms, price, release timing, or acquisition success.
+Unavailable and partial source states remain visible rather than being
+converted into a clean finding.
 
 A missing delegation, failed provider, absent website, or unavailable registrar
 source never means that a domain is available. Registry compatibility metadata
@@ -408,16 +455,24 @@ Dashboard can coordinate three standard recipes:
 - infrastructure pivot; and
 - new-domain triage.
 
-The guide shows one current action, concrete instructions, request implications,
-and reviewed, partial, or skipped outcomes. It can carry one canonical target,
-an explicitly selected candidate, and a bounded set of reviewed Bulk domains
-between tools. Tool links focus the relevant input, and a return control keeps
-the current guide step reachable beside long results.
+The guide shows one current action, concrete instructions, expected evidence,
+completion criteria, request implications, and reviewed, partial, or skipped
+outcomes. A partial or skipped outcome requires a short reason so deferred,
+unavailable, or inapplicable work is visible in the full plan and compact
+export. It can carry one canonical target, an explicitly selected candidate,
+and a bounded set of reviewed Bulk domains between tools. Tool links focus the
+relevant input, and a return control keeps the current guide step reachable
+beside long results.
 
 The guide stores only compact progress in the current tab's `sessionStorage`.
 It does not decide when evidence is sufficient, create a case automatically,
 or infer a finding from navigation. Analysts remain responsible for starting
-each collection action and marking its outcome.
+each collection action and marking its outcome. At a case stage and after all
+steps have an outcome, a read-only handoff checklist summarizes whether the
+current browser-local case has a reviewed disposition, a typed analyst
+decision, supporting evidence pins, and explicit unresolved unknowns or
+contradictions. This checklist measures workflow structure only. It does not
+validate an analyst conclusion or make a claim about the target.
 
 Dashboard also provides a browser-local template manager. A custom template
 must start from one of the three standard guides. It can rename instructions,

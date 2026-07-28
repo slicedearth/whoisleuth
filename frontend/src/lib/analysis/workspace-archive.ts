@@ -70,15 +70,21 @@ import {
   buildInvestigationTemplateExport,
   mergeInvestigationTemplates,
 } from './investigation-template-model.ts';
+import {
+  BULK_REVIEW_SCHEMA,
+  BULK_REVIEW_SCHEMA_VERSION,
+  buildBulkReviewExport,
+  mergeBulkReviewStores,
+} from './bulk-review-model.ts';
 
 export const WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.workspace-archive';
-export const WORKSPACE_ARCHIVE_VERSION = 4;
-export const SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS = [1, 2, 3, WORKSPACE_ARCHIVE_VERSION] as const;
+export const WORKSPACE_ARCHIVE_VERSION = 5;
+export const SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS = [1, 2, 3, 4, WORKSPACE_ARCHIVE_VERSION] as const;
 export const WORKSPACE_SETTINGS_SCHEMA = 'whoisleuth.workspace-settings';
 export const WORKSPACE_SETTINGS_VERSION = 1;
 export const MAX_WORKSPACE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_WORKSPACE_ARCHIVE_SECTION_BYTES = 5 * 1024 * 1024;
-export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 11;
+export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 12;
 
 export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'cases',
@@ -91,6 +97,7 @@ export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'bulkSessions',
   'websiteSnapshots',
   'investigationTemplates',
+  'bulkReview',
   'settings',
 ] as const;
 
@@ -153,6 +160,7 @@ export interface WorkspaceArchiveSectionMap {
   bulkSessions: ReturnType<typeof buildBulkSessionExport>;
   websiteSnapshots: ReturnType<typeof buildWebsiteSnapshotExport>;
   investigationTemplates: ReturnType<typeof buildInvestigationTemplateExport>;
+  bulkReview: ReturnType<typeof buildBulkReviewExport>;
   settings: WorkspaceSettingsDocument;
 }
 
@@ -193,6 +201,7 @@ interface NormalizedWorkspaceInput {
   bulkSessions: unknown[];
   websiteSnapshots: unknown[];
   investigationTemplates: unknown[];
+  bulkReview: unknown;
   settings: UnknownRecord;
 }
 
@@ -309,6 +318,7 @@ function workspaceArchiveSections(
     bulkSessions: buildBulkSessionExport(input.bulkSessions, now),
     websiteSnapshots: buildWebsiteSnapshotExport(input.websiteSnapshots, now),
     investigationTemplates: buildInvestigationTemplateExport(input.investigationTemplates, now),
+    bulkReview: buildBulkReviewExport(input.bulkReview),
     settings: settingsDocument(input),
   };
 }
@@ -411,6 +421,14 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     merge: (local, data) => mergeInvestigationTemplates(local.investigationTemplates, data),
   },
   {
+    id: 'bulkReview',
+    label: 'Bulk saved views and review queue',
+    schema: BULK_REVIEW_SCHEMA,
+    version: BULK_REVIEW_SCHEMA_VERSION,
+    count: (data) => arrayCount(data, 'presets') + arrayCount(data, 'rows'),
+    merge: (local, data) => mergeBulkReviewStores(local.bulkReview, data),
+  },
+  {
     id: 'settings', label: 'Workspace settings', schema: WORKSPACE_SETTINGS_SCHEMA, version: WORKSPACE_SETTINGS_VERSION,
     count: () => 1,
     merge: null,
@@ -441,6 +459,7 @@ function normalizedInput(input: unknown): NormalizedWorkspaceInput {
     bulkSessions: Array.isArray(value.bulkSessions) ? value.bulkSessions : [],
     websiteSnapshots: Array.isArray(value.websiteSnapshots) ? value.websiteSnapshots : [],
     investigationTemplates: Array.isArray(value.investigationTemplates) ? value.investigationTemplates : [],
+    bulkReview: record(value.bulkReview) || {},
     settings: record(value.settings) || {},
   };
 }
@@ -526,7 +545,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
       throw new Error(`This workspace archive uses newer schema ${value.version}. Update the app before importing it.`);
     }
-    throw new Error(`Expected workspace archive schema 1, 2, 3, or ${WORKSPACE_ARCHIVE_VERSION}.`);
+    throw new Error(`Expected workspace archive schema 1, 2, 3, 4, or ${WORKSPACE_ARCHIVE_VERSION}.`);
   }
   const { bytes } = ensureArchiveBudget(value);
   const manifest = record(value.manifest);

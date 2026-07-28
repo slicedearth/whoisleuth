@@ -2,11 +2,13 @@
 // no network requests, mailto links, submissions, or provider side effects.
 
 import type { CaseRecord } from './case-model.ts';
+import { buildCaseActionOutcomeSummary } from './case-response-model.ts';
 
 export const CASE_RESPONSE_PACKET_SCHEMA = 'whoisleuth.case-response-packet';
-export const CASE_RESPONSE_PACKET_VERSION = 1;
+export const CASE_RESPONSE_PACKET_VERSION = 4;
 export const MAX_ABUSIVE_URLS = 20;
 export const MAX_RESPONSE_CONTACTS = 12;
+export const MAX_RESPONSE_ACTION_HISTORY = 20;
 export const MAX_RESPONSE_HARM_LENGTH = 2000;
 export const MAX_AFFECTED_PARTY_LENGTH = 200;
 export const MAX_ABUSE_CATEGORY_LENGTH = 80;
@@ -36,6 +38,22 @@ export type CaseResponsePacketInput = {
   contacts?: unknown;
 };
 
+export type CaseResponsePreflightCheck = Readonly<{
+  id: string;
+  label: string;
+  state: 'block' | 'caution' | 'pass';
+  detail: string;
+}>;
+
+export type CaseResponsePreflight = Readonly<{
+  version: 1;
+  status: 'needs_input' | 'ready_for_review' | 'review_cautions';
+  canExport: boolean;
+  counts: Readonly<{ block: number; caution: number; pass: number }>;
+  checks: readonly CaseResponsePreflightCheck[];
+  actionSummary: ReturnType<typeof buildCaseActionOutcomeSummary>;
+}>;
+
 export type CaseResponsePacket = {
   schema: typeof CASE_RESPONSE_PACKET_SCHEMA;
   schemaVersion: typeof CASE_RESPONSE_PACKET_VERSION;
@@ -62,11 +80,34 @@ export type CaseResponsePacket = {
     source: string;
     limitations: string[];
   }>;
+  preflight: CaseResponsePreflight;
+  escalationHistory: Array<{
+    type: string;
+    recipient: string;
+    contactSource: string;
+    state: string;
+    reference: string | null;
+    outcome: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   provenance: {
     latestEvidenceCapturedAt: string | null;
     evidencePinCount: number;
     decisionCount: number;
+    assertionCount: number;
+    observationAge: {
+      ageSeconds: number;
+      band: 'future_or_clock_skew' | 'one_to_seven_days' | 'over_seven_days' | 'under_24_hours';
+      refreshRecommended: boolean;
+    };
     limitations: string[];
+  };
+  integrity: {
+    algorithm: 'SHA-256';
+    canonicalization: 'sorted-json-v1';
+    scope: 'packet excluding integrity';
+    digestSha256: string;
   };
 };
 
@@ -153,6 +194,166 @@ function normalizeContacts(value: unknown): CaseResponsePacket['contacts'] {
   return contacts;
 }
 
+export function buildCaseResponsePreflight(
+  caseRecord: CaseRecord,
+  input: CaseResponsePacketInput,
+  generatedAt: string = new Date().toISOString(),
+): CaseResponsePreflight {
+  const latestEvidence = caseRecord.evidenceHistory.at(-1) ?? null;
+  const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
+  const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
+  const contacts = normalizeContacts(input.contacts);
+  const urls = normalizeUrls(input.abusiveUrls);
+  const requiredComplete = Boolean(
+    text(input.category, MAX_ABUSE_CATEGORY_LENGTH)
+    && text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH)
+    && urls.length
+    && text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH)
+    && observedAt,
+  );
+  const age = observedAt ? observationAge(observedAt, normalizedGeneratedAt) : null;
+  const openContradictions = caseRecord.assertions
+    .filter((item) => item.kind === 'contradiction' && item.state === 'open')
+    .length;
+  const actionSummary = buildCaseActionOutcomeSummary(caseRecord.actions, normalizedGeneratedAt);
+  const checks: CaseResponsePreflightCheck[] = [
+    {
+      id: 'required_incident_fields',
+      label: 'Incident facts',
+      state: requiredComplete ? 'pass' : 'block',
+      detail: requiredComplete
+        ? `${urls.length} exact HTTP(S) URL${urls.length === 1 ? '' : 's'} and the required incident context are present.`
+        : 'Category, affected party, an exact HTTP(S) URL, observed harm, and observation time are required.',
+    },
+    {
+      id: 'evidence_pins',
+      label: 'Selected evidence',
+      state: caseRecord.evidencePins.length ? 'pass' : 'caution',
+      detail: caseRecord.evidencePins.length
+        ? `${caseRecord.evidencePins.length} analyst-selected evidence pin${caseRecord.evidencePins.length === 1 ? '' : 's'} will remain separately attributable.`
+        : 'No precise evidence pin is recorded; the packet can be drafted, but its support is less reviewable.',
+    },
+    {
+      id: 'analyst_decision',
+      label: 'Analyst decision',
+      state: caseRecord.decisions.length ? 'pass' : 'caution',
+      detail: caseRecord.decisions.length
+        ? `${caseRecord.decisions.length} analyst decision${caseRecord.decisions.length === 1 ? '' : 's'} record the escalation rationale.`
+        : 'No explicit analyst decision explains why external reporting is appropriate.',
+    },
+    {
+      id: 'recipient_route',
+      label: 'Recipient route',
+      state: contacts.length ? 'pass' : 'caution',
+      detail: contacts.length
+        ? `${contacts.length} separately attributed contact route${contacts.length === 1 ? ' is' : 's are'} included.`
+        : 'No contact route is included; identify and review the intended recipient before sending.',
+    },
+    {
+      id: 'case_disposition',
+      label: 'Case disposition',
+      state: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition) ? 'pass' : 'caution',
+      detail: ['suspicious', 'confirmed_abuse'].includes(caseRecord.disposition)
+        ? `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}.`
+        : `The case disposition is ${caseRecord.disposition.replaceAll('_', ' ')}; confirm it before external use.`,
+    },
+    {
+      id: 'evidence_freshness',
+      label: 'Evidence freshness',
+      state: age?.refreshRecommended ? 'caution' : observedAt ? 'pass' : 'block',
+      detail: age
+        ? age.refreshRecommended
+          ? `The selected observation is ${age.band.replaceAll('_', ' ')} and should be refreshed before submission.`
+          : `The selected observation is ${age.band.replaceAll('_', ' ')}.`
+        : 'A valid observation time is required.',
+    },
+    {
+      id: 'contradictory_evidence',
+      label: 'Contradictory evidence',
+      state: openContradictions ? 'caution' : 'pass',
+      detail: openContradictions
+        ? `${openContradictions} open contradiction${openContradictions === 1 ? '' : 's'} should be addressed or disclosed.`
+        : 'No open contradictory-evidence assertion is recorded.',
+    },
+    {
+      id: 'action_tracking',
+      label: 'Action tracking',
+      state: actionSummary.total ? 'pass' : 'caution',
+      detail: actionSummary.total
+        ? `${actionSummary.total} reviewed action${actionSummary.total === 1 ? ' is' : 's are'} tracked; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} due for follow-up.`
+        : 'No reviewed case action is recorded for ownership, submission, or follow-up.',
+    },
+  ];
+  const counts = {
+    block: checks.filter((item) => item.state === 'block').length,
+    caution: checks.filter((item) => item.state === 'caution').length,
+    pass: checks.filter((item) => item.state === 'pass').length,
+  };
+  return {
+    version: 1,
+    status: counts.block ? 'needs_input' : counts.caution ? 'review_cautions' : 'ready_for_review',
+    canExport: counts.block === 0,
+    counts,
+    checks,
+    actionSummary,
+  };
+}
+
+function normalizeActionHistory(caseRecord: CaseRecord): CaseResponsePacket['escalationHistory'] {
+  return caseRecord.actions
+    .slice(-MAX_RESPONSE_ACTION_HISTORY)
+    .map((action) => ({
+      type: text(action.type, 80),
+      recipient: text(action.recipient, 320),
+      contactSource: text(action.contactSource, 120),
+      state: text(action.state, 80),
+      reference: text(action.reference, 500) || null,
+      outcome: text(action.outcome, 2000) || null,
+      createdAt: timestamp(action.createdAt) ?? caseRecord.createdAt,
+      updatedAt: timestamp(action.updatedAt) ?? caseRecord.updatedAt,
+    }));
+}
+
+function observationAge(observedAt: string, generatedAt: string): CaseResponsePacket['provenance']['observationAge'] {
+  const ageSeconds = Math.floor((Date.parse(generatedAt) - Date.parse(observedAt)) / 1000);
+  if (ageSeconds < -300) {
+    return { ageSeconds, band: 'future_or_clock_skew', refreshRecommended: true };
+  }
+  if (ageSeconds < 86_400) {
+    return { ageSeconds: Math.max(0, ageSeconds), band: 'under_24_hours', refreshRecommended: false };
+  }
+  if (ageSeconds <= 604_800) {
+    return { ageSeconds, band: 'one_to_seven_days', refreshRecommended: false };
+  }
+  return { ageSeconds, band: 'over_seven_days', refreshRecommended: true };
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const source = value as Record<string, unknown>;
+  return `{${Object.keys(source).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(source[key])}`).join(',')}}`;
+}
+
+async function sha256(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function verifyCaseResponsePacketIntegrity(packet: CaseResponsePacket): Promise<boolean> {
+  const { integrity, ...unsigned } = packet;
+  if (
+    integrity.algorithm !== 'SHA-256'
+    || integrity.canonicalization !== 'sorted-json-v1'
+    || integrity.scope !== 'packet excluding integrity'
+    || !/^[a-f0-9]{64}$/u.test(integrity.digestSha256)
+  ) {
+    return false;
+  }
+  return integrity.digestSha256 === await sha256(canonicalJson(unsigned));
+}
+
 function escapeMarkdown(value: string): string {
   return value.replace(/([\\`*_[\]<>|])/gu, '\\$1').replace(/\r?\n/gu, ' ');
 }
@@ -163,11 +364,11 @@ function contactLabel(value: ResponseContactKind): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export function buildCaseResponsePacket(
+export async function buildCaseResponsePacket(
   caseRecord: CaseRecord,
   input: CaseResponsePacketInput,
   generatedAt: string = new Date().toISOString(),
-): { json: CaseResponsePacket; markdown: string; email: string } {
+): Promise<{ json: CaseResponsePacket; markdown: string; email: string }> {
   const category = text(input.category, MAX_ABUSE_CATEGORY_LENGTH);
   const affectedParty = text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH);
   const abusiveUrls = normalizeUrls(input.abusiveUrls);
@@ -179,12 +380,16 @@ export function buildCaseResponsePacket(
   }
   const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
   const contacts = normalizeContacts(input.contacts);
+  const escalationHistory = normalizeActionHistory(caseRecord);
+  const age = observationAge(observedAt, normalizedGeneratedAt);
+  const preflight = buildCaseResponsePreflight(caseRecord, input, normalizedGeneratedAt);
   const limitations = [
     'This packet contains analyst-selected facts and must be reviewed before submission.',
     'WHOISleuth did not submit this packet or verify that any listed contact is monitored.',
     ...(!contacts.length ? ['No escalation contact was included.'] : []),
+    ...(age.refreshRecommended ? ['The selected observation is over seven days old or appears to be in the future. Refresh evidence before submission.'] : []),
   ];
-  const json: CaseResponsePacket = {
+  const unsigned: Omit<CaseResponsePacket, 'integrity'> = {
     schema: CASE_RESPONSE_PACKET_SCHEMA,
     schemaVersion: CASE_RESPONSE_PACKET_VERSION,
     generatedAt: normalizedGeneratedAt,
@@ -205,11 +410,25 @@ export function buildCaseResponsePacket(
       observedAt,
     },
     contacts,
+    preflight,
+    escalationHistory,
     provenance: {
       latestEvidenceCapturedAt: latestEvidence?.capturedAt ?? null,
       evidencePinCount: caseRecord.evidencePins.length,
       decisionCount: caseRecord.decisions.length,
+      assertionCount: caseRecord.assertions.length,
+      observationAge: age,
       limitations,
+    },
+  };
+  const digestSha256 = await sha256(canonicalJson(unsigned));
+  const json: CaseResponsePacket = {
+    ...unsigned,
+    integrity: {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v1',
+      scope: 'packet excluding integrity',
+      digestSha256,
     },
   };
 
@@ -242,11 +461,27 @@ export function buildCaseResponsePacket(
           '',
         ])
       : ['No escalation contact was included.', '']),
+    '## Escalation history',
+    '',
+    ...(escalationHistory.length
+      ? escalationHistory.flatMap((action) => [
+          `- ${escapeMarkdown(action.type.replaceAll('_', ' '))} to ${escapeMarkdown(action.recipient)} · ${escapeMarkdown(action.state.replaceAll('_', ' '))} · updated ${action.updatedAt}`,
+          ...(action.reference ? [`  - Reference: ${escapeMarkdown(action.reference)}`] : []),
+          ...(action.outcome ? [`  - Outcome: ${escapeMarkdown(action.outcome)}`] : []),
+        ])
+      : ['No reviewed case actions were recorded.']),
+    '',
     '## Review and provenance',
     '',
+    `- Preflight: ${preflight.status.replaceAll('_', ' ')} (${preflight.counts.pass} pass, ${preflight.counts.caution} caution, ${preflight.counts.block} block)`,
+    ...preflight.checks.map((check) => `- ${escapeMarkdown(check.label)} [${check.state}]: ${escapeMarkdown(check.detail)}`),
     ...limitations.map((limitation) => `- ${escapeMarkdown(limitation)}`),
     `- Case evidence pins: ${caseRecord.evidencePins.length}`,
     `- Case decision records: ${caseRecord.decisions.length}`,
+    `- Case structured assertions: ${caseRecord.assertions.length}`,
+    `- Observation-age band at export: ${age.band.replaceAll('_', ' ')}`,
+    `- Canonical packet SHA-256: ${digestSha256}`,
+    '- Digest scope: canonical sorted JSON packet excluding the integrity object',
   ];
   const markdown = `${lines.join('\n').trim()}\n`;
   const email = [

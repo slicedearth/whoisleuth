@@ -92,7 +92,7 @@ test('watchlist pagination preserves table actions on mobile', async ({ page }) 
     watchlistEntry(index + 1),
   ]));
   await page.setViewportSize({ width: 390, height: 700 });
-  await page.goto('/monitor');
+  await page.goto('/monitor?view=watchlists');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-watchlist-v1': { schema: 'whoisleuth.watchlists', version: 2, watchlists },
   });

@@ -43,7 +43,7 @@
   </summary>
 
   <div class="evidence-body">
-    <div class="posture-summary stat-grid" aria-label="Passive security posture summary">
+    <div class="posture-summary stat-grid" role="group" aria-label="Passive security posture summary">
       <article><small>Observed</small><strong>{summary.observed}</strong></article>
       <article class:review={summary.potentialExposure > 0}><small>Review</small><strong>{summary.potentialExposure}</strong></article>
       <article><small>Not observed</small><strong>{summary.observedAbsence}</strong></article>

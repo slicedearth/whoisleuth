@@ -19,6 +19,11 @@ import {
   brandProfileStoreVersion,
 } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
+  BULK_REVIEW_SCHEMA,
+  BULK_REVIEW_SCHEMA_VERSION,
+  MAX_BULK_REVIEW_STORE_BYTES,
+} from '../frontend/src/lib/analysis/bulk-review-model.ts';
+import {
   buildCampaignExport,
   CAMPAIGN_SCHEMA,
   CAMPAIGN_SCHEMA_VERSION,
@@ -120,6 +125,11 @@ import {
   MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
   MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
 } from '../frontend/src/lib/analysis/investigation-template-model.ts';
+import {
+  MAX_ENVELOPE_BYTES as MAX_OBSERVATION_ENVELOPE_BYTES,
+  OBSERVATION_ENVELOPE_SCHEMA,
+  OBSERVATION_ENVELOPE_VERSION,
+} from '../frontend/src/lib/analysis/observation-envelope.ts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -140,7 +150,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 58);
+    assert.equal(inventory.entries.length, 61);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -161,10 +171,14 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'browser.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
     assert.equal(byId(inventory, 'browser.investigation-templates').byteBudget, MAX_INVESTIGATION_TEMPLATE_STORE_BYTES);
+    assert.equal(byId(inventory, 'browser.bulk-review').schema, BULK_REVIEW_SCHEMA);
+    assert.equal(byId(inventory, 'browser.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
+    assert.equal(byId(inventory, 'browser.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
     assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
-    assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [1, 2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [1, 2, 3, 4, 5]);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
+    assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').schema, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').currentVersion, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').byteBudget, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);
@@ -178,15 +192,22 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.specialist-workflow-benchmark').currentVersion, SPECIALIST_WORKFLOW_BENCHMARK_VERSION);
     assert.equal(byId(inventory, 'derived.curated-connector-result').schema, CURATED_CONNECTOR_RESULT_SCHEMA);
     assert.equal(byId(inventory, 'derived.curated-connector-result').currentVersion, CURATED_CONNECTOR_CONTRACT_VERSION);
+    assert.equal(byId(inventory, 'derived.observation-envelope').schema, OBSERVATION_ENVELOPE_SCHEMA);
+    assert.equal(byId(inventory, 'derived.observation-envelope').currentVersion, OBSERVATION_ENVELOPE_VERSION);
+    assert.equal(byId(inventory, 'derived.observation-envelope').byteBudget, MAX_OBSERVATION_ENVELOPE_BYTES);
     assert.equal(byId(inventory, 'tab.investigation-guide').currentVersion, INVESTIGATION_GUIDE_VERSION);
-    assert.deepEqual(byId(inventory, 'tab.investigation-guide').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'tab.investigation-guide').supportedVersions, [1, 2, 3, 4]);
     assert.equal(byId(inventory, 'tab.investigation-guide').byteBudget, MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').schema, INVESTIGATION_GUIDE_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').currentVersion, INVESTIGATION_GUIDE_EXPORT_VERSION);
+    assert.deepEqual(byId(inventory, 'export.investigation-recipe-summary').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'export.investigation-recipe-summary').byteBudget, MAX_INVESTIGATION_GUIDE_EXPORT_BYTES);
     assert.equal(byId(inventory, 'export.investigation-templates').schema, INVESTIGATION_TEMPLATE_SCHEMA);
     assert.equal(byId(inventory, 'export.investigation-templates').currentVersion, INVESTIGATION_TEMPLATE_VERSION);
     assert.equal(byId(inventory, 'export.investigation-templates').byteBudget, MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES);
+    assert.equal(byId(inventory, 'export.bulk-review').schema, BULK_REVIEW_SCHEMA);
+    assert.equal(byId(inventory, 'export.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
+    assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
   });
 
   test('returns a fresh non-mutating document for each report build', () => {
@@ -261,7 +282,7 @@ describe('schema compatibility inventory', () => {
 
     const caseReport = buildCaseReport({
       id: 'case-fixture', domain: 'schema.invalid', status: 'new', disposition: 'unreviewed',
-      tags: [], notes: [], source: 'manual', evidenceHistory: [], evidencePins: [], decisions: [], actions: [],
+      tags: [], notes: [], source: 'manual', evidenceHistory: [], evidencePins: [], decisions: [], actions: [], assertions: [], manualTrail: [],
       createdAt: NOW, updatedAt: NOW,
     }, { generatedAt: NOW });
     assert.equal(byId(inventory, 'export.case-report').schema, caseReport.json.schema);

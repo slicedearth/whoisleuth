@@ -219,8 +219,10 @@ test('custom rules persist, can be disabled, and export a versioned safe schema'
   await page.getByRole('button', { name: 'Create custom rule' }).click();
   await expect(page.getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
 
-  await page.reload();
-  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const customRulesTab = page.getByRole('tab', { name: /Custom rules/ });
+  await expect(customRulesTab).toBeVisible();
+  await customRulesTab.click();
   const rule = page.getByRole('article').filter({ hasText: 'Registered domains' });
   await expect(rule).toBeVisible();
   await rule.getByRole('button', { name: 'Enabled' }).click();
@@ -303,6 +305,9 @@ test('reviewed response records persist and produce a local non-submitted packet
   await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
   await packet.getByLabel(/Exact abusive HTTP/).fill('https://response.invalid/sign-in');
   await packet.getByLabel('Observed harm').fill('The page solicited account credentials using the affected party name.');
+  await expect(packet).toContainText('review cautions');
+  await packet.getByRole('button', { name: 'Use recorded case routes' }).click();
+  await expect(packet.getByLabel(/registrar contact/i)).toHaveValue('Registrar abuse desk');
 
   const downloadPromise = page.waitForEvent('download');
   await packet.getByRole('button', { name: 'Export JSON' }).click();
@@ -314,19 +319,76 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
+    schemaVersion: 4,
     incident: {
       category: 'Credential phishing',
       affectedParty: 'Example service',
       abusiveUrls: ['https://response.invalid/sign-in'],
     },
     provenance: { evidencePinCount: 1, decisionCount: 1 },
+    escalationHistory: [{
+      type: 'registrar_report',
+      recipient: 'Registrar abuse desk',
+      state: 'planned',
+    }],
+    preflight: {
+      status: 'review_cautions',
+      canExport: true,
+      actionSummary: {
+        total: 1,
+        active: 1,
+      },
+    },
+    integrity: {
+      algorithm: 'SHA-256',
+      canonicalization: 'sorted-json-v1',
+      scope: 'packet excluding integrity',
+    },
   });
+  expect(exported.integrity.digestSha256).toMatch(/^[a-f0-9]{64}$/u);
   await expect(page.getByRole('status')).toContainText('Nothing was submitted');
 
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: 'response.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 1 action');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 0 assertions · 1 action');
+});
+
+test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
+  await openCasesView(page);
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const payload = JSON.stringify({
+    schema: 'whoisleuth.external-findings',
+    schemaVersion: 1,
+    source: { name: 'Local analyst export', reference: 'offline review' },
+    findings: [{
+      domain: 'external-review.invalid',
+      category: 'page',
+      summary: 'A credential form was reported in a retained external observation.',
+      observedAt: '2026-07-28T01:00:00.000Z',
+      completeness: 'partial',
+      limitations: ['Rendered behavior was not retained.'],
+      reference: 'finding-17',
+    }],
+  });
+  const file = { name: 'external-findings.json', mimeType: 'application/json', buffer: Buffer.from(payload) };
+
+  await externalImport.locator('input[type="file"]').setInputFiles(file);
+  await expect(externalImport.getByRole('heading', { name: 'Local analyst export' })).toBeVisible();
+  await expect(externalImport).toContainText('1 finding · 1 domain');
+  await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toHaveCount(0);
+
+  await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.locator('.case-head', { hasText: 'external-review.invalid' })).toBeVisible();
+  await page.locator('.case-head', { hasText: 'external-review.invalid' }).click();
+  await expect(page.locator('.response-workspace')).toContainText('External page finding');
+  await expect(page.locator('.response-workspace')).toContainText('WHOISleuth did not collect or independently verify this finding');
+
+  await externalImport.locator('input[type="file"]').setInputFiles(file);
+  await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 decisions');
 });
 
 test('deleting a case removes it after confirmation', async ({ page }) => {
@@ -837,7 +899,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(text);
 
     expect(parsed.schema).toBe('whoisleuth.case-report');
-    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.schemaVersion).toBe(3);
     expect(parsed.case.domain).toBe('export-json.invalid');
     expect(parsed.case.notesIncluded).toBe(false);
     expect(parsed.evidenceTimeline.length).toBe(2);
@@ -949,7 +1011,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-cases-.*\.json$/);
-    expect(parsed.version).toBe(3);
+    expect(parsed.version).toBe(4);
     expect(parsed.cases).toEqual(expect.arrayContaining([
       expect.objectContaining({ domain: 'backup-test.invalid' }),
     ]));

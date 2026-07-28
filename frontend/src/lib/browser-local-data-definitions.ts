@@ -104,6 +104,18 @@ import {
 } from './analysis/investigation-template-model.ts';
 import type { InvestigationTemplate } from './analysis/investigation-template-model.ts';
 import {
+  BULK_REVIEW_SCHEMA_VERSION,
+  MAX_BULK_REVIEW_PRESETS,
+  MAX_BULK_REVIEW_ROWS,
+  MAX_BULK_REVIEW_STORE_BYTES,
+  bulkReviewRecords,
+  bulkReviewStoreFromRecords,
+  bulkReviewStoreVersion,
+  enforceBulkReviewBudget,
+  serializeBulkReviewStore,
+} from './analysis/bulk-review-model.ts';
+import type { BulkReviewRecord, BulkReviewStore } from './analysis/bulk-review-model.ts';
+import {
   BrowserLocalDataError,
   plaintextJsonCodec,
 } from './browser-local-data.ts';
@@ -127,6 +139,7 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   bulk_sessions: BulkSession;
   website_snapshots: WebsiteProfileSnapshot;
   investigation_templates: InvestigationTemplate;
+  bulk_review: BulkReviewRecord;
 }>;
 
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
@@ -146,6 +159,7 @@ export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-obs
 export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
 export const LEGACY_WEBSITE_SNAPSHOTS_KEY = 'whoisleuth-website-snapshots-v1';
 export const LEGACY_INVESTIGATION_TEMPLATES_KEY = 'whoisleuth-investigation-templates-v1';
+export const LEGACY_BULK_REVIEW_KEY = 'whoisleuth-bulk-review-v1';
 
 function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
@@ -340,6 +354,21 @@ export const INVESTIGATION_TEMPLATES_COLLECTION: LocalDataCollectionDefinition<I
   }),
 });
 
+export const BULK_REVIEW_COLLECTION: LocalDataCollectionDefinition<BulkReviewStore> = Object.freeze({
+  id: 'bulk_review',
+  label: 'Bulk review views and queue state',
+  legacyKey: LEGACY_BULK_REVIEW_KEY,
+  schemaVersion: BULK_REVIEW_SCHEMA_VERSION,
+  maximumBytes: MAX_BULK_REVIEW_STORE_BYTES,
+  maximumRecords: MAX_BULK_REVIEW_PRESETS + MAX_BULK_REVIEW_ROWS,
+  empty: () => enforceBulkReviewBudget(null),
+  normalize: enforceBulkReviewBudget,
+  version: bulkReviewStoreVersion,
+  serialize: serializeBulkReviewStore,
+  split: (store) => bulkReviewRecords(store).map((value) => ({ id: value.id, value })),
+  join: (records) => bulkReviewStoreFromRecords(records.map((record) => record.value)),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
@@ -352,6 +381,7 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   BULK_SESSIONS_COLLECTION,
   WEBSITE_SNAPSHOTS_COLLECTION,
   INVESTIGATION_TEMPLATES_COLLECTION,
+  BULK_REVIEW_COLLECTION,
 ]);
 
 function browserLocalCollectionDefinition(

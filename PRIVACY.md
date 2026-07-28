@@ -181,9 +181,11 @@ default (see the README), so many lookups return no personal data at all.
   IndexedDB database. It excludes the complete Bulk result, raw RDAP/WHOIS or
   page responses, contacts, credentials, and unrelated DNS or HTTP evidence.
   Monitor can review or delete the record, local search can find its known
-  fields, and the typed projection can connect it to existing cases without a
-  new request. The record is derived evidence and does not prove ownership,
-  coordination, intent, or maliciousness.
+  fields, and a disposable typed envelope can adapt it into the local search
+  and graph projection without a new request or another stored copy. The
+  IndexedDB record remains authoritative; the envelope is bounded, performs no
+  writes, and is discarded after use. The record is derived evidence and does
+  not prove ownership, coordination, intent, or maliciousness.
 - **Public synthetic demo** - the unauthenticated demo uses fixed fictional
   fixtures on reserved domains to represent Dashboard, Brands, Discover, Bulk,
   Lookup, and Monitor without performing a live analysis request. Its bounded
@@ -207,13 +209,14 @@ default (see the README), so many lookups return no personal data at all.
   brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
   domain, or a bounded analyst-authored template derived from one of those
   guides. The versioned storage contract calls the selected guide a recipe;
-  schema version 3 keeps only that recipe identifier, an optional compact
+  schema version 4 keeps only that recipe identifier, an optional compact
   template snapshot, official or starting
   domain, an optional analyst-selected candidate domain, up to 25 canonical
   domains carried from a guided Bulk comparison, an explicit truncation marker,
   creation/update timestamps, active or paused state, and bounded stage
-  approval, opened, and outcome markers in the current tab's `sessionStorage`
-  under `whoisleuth:investigation-guide:v3`. Deployed version 1 and 2 records
+  approval, opened, and outcome markers. Partial and skipped stages also retain
+  a required review reason of up to 500 characters in the current tab's `sessionStorage`
+  under `whoisleuth:investigation-guide:v4`. Deployed version 1, 2, and 3 records
   can normalize without inventing a custom template when no current record
   exists; future records remain untouched. A saved template can customise
   bounded guidance, omit allowlisted steps, and add approval gates. It cannot
@@ -229,10 +232,13 @@ default (see the README), so many lookups return no personal data at all.
   an explicit approval marker before navigation, but opening that tool still
   never starts a lookup, search, scan, submission, export, or Monitor action.
   **Export summary** requires confirmation and deliberately downloads only a
-  versioned compact progress record without raw evidence, notes, credentials,
-  provider responses, or scan results. A read-only local checkpoint derives
-  retained observation and relationship counts from the typed investigation
-  projection without deciding stage completion. **End guide** removes both
+  versioned compact progress record, including bounded stage-review reasons,
+  without raw evidence, case notes, credentials, provider responses, or scan
+  results. A read-only local checkpoint derives retained observation and
+  relationship counts from the typed investigation projection. A separate
+  case-handoff checklist summarizes browser-local disposition, decision,
+  evidence-pin, and open-question structure. Neither view decides stage
+  completion or makes a finding about the target. **End guide** removes both
   current and migrated legacy tab records,
   and closing the tab session removes them with the rest of that tab's session
   storage.
@@ -286,8 +292,21 @@ default (see the README), so many lookups return no personal data at all.
   browser. Normalized HTML, visible text, DOM/form structure, resource hosts,
   and tracking identifiers remain separate comparison components; there is no
   combined similarity score and the comparison does not affect Risk scoring.
+  A transient brand-mimicry review can organize those comparison components
+  with existing favicon, official-asset, password-field, and bounded
+  review-language observations. It adds no collection, combined score, or
+  persistence, and it does not infer copying, ownership, control, intent, or
+  maliciousness.
   The derived comparison itself is transient and is not added to cases,
   watchlists, profiles, or evidence exports.
+- **Service and transition review**: a deep Lookup can organize already
+  collected DNS aliases, nameservers, web routing, mail publication, TLS
+  source health, lifecycle statuses, and transfer locks into transient manual
+  review prompts. Alias targets are not followed, provider accounts are not
+  queried, and claimability is not tested. The derived views are not persisted
+  or exported and do not label a dependency dangling, vulnerable, safe, or
+  controlled. Registry and registrar policy entries are prompts for external
+  confirmation, not inferred policy facts.
 - **Structured identity metadata**: a requested deep Lookup can examine
   JSON-LD already present in the captured homepage response. It retains only
   curated schema types, bounded labels, declared HTTP(S) origins, and
@@ -411,9 +430,19 @@ default (see the README), so many lookups return no personal data at all.
   disposition, and deriving or editing them makes no network request.
   Cases can additionally retain bounded analyst-selected evidence pins,
   decision rationales, contact routes, reviewed response actions, follow-up
-  dates, references, and outcomes. These analyst-authored records remain
+  dates, references, and outcomes. Lookup can derive a bounded local list of
+  published registrar, registry, and security.txt response routes only from the
+  completed response already in memory. It performs no contact discovery or
+  reachability check and records a route only after an analyst selects it.
+  Network or hosting coverage remains not collected unless an attributable
+  route is actually available. These analyst-authored records remain
   separate from collected evidence snapshots and can contain sensitive
-  investigation context. Creating or editing them makes no network request.
+  investigation context. A deliberately imported, strictly validated external
+  finding is stored as a separately attributed evidence pin with its stated
+  source, observation time, completeness, and limitations. Import preview and
+  application make no network request, do not fetch references, and do not
+  change analyst status or disposition. Creating or editing these records makes
+  no network request.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword
@@ -486,8 +515,12 @@ default (see the README), so many lookups return no personal data at all.
 - **Reviewed response and defensive-control exports**: a case response packet
   is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
   UTC observation time, and separately attributed registrar, registry,
-  network/hosting, or security.txt contacts. JSON, Markdown, and email-text
-  outputs state that review is required and that no submission occurred.
+  network/hosting, or security.txt contacts. Its local preflight blocks export
+  when required incident facts are incomplete and identifies review cautions
+  for missing pins, decisions, recipient routes, disposition, stale evidence,
+  contradictions, or action tracking. JSON, Markdown, and email-text outputs
+  include the bounded preflight and action-outcome summary, state that review
+  is required, and state that no submission occurred.
   Defensive domain exports require an explicit reviewed selection and eligible
   analyst disposition. They exclude configured official, allowlisted, and
   common-infrastructure domains, include an expiry and provenance manifest,

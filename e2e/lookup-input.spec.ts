@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 import { readFile } from 'node:fs/promises';
 import { TEST_SITE_PASSWORD } from './constants';
+import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 
 // Every value here is deliberately dotless (no TLD), so classifyQuery on the
 // server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
@@ -119,6 +120,48 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(timing.getByText('at +2.1 s')).toBeVisible();
   await page.setViewportSize({ width: 320, height: 720 });
   await expectNoHorizontalOverflow(page);
+});
+
+test('browser-local profile failure does not block collected lookup evidence', async ({ page }) => {
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'local-context.example.test',
+      type: 'domain',
+      registrableDomain: 'example.test',
+      availability: {
+        applicable: true,
+        state: 'registered',
+        confidence: 'medium',
+        domain: 'example.test',
+        deepScanComplete: true,
+      },
+      rdap: { error: 'Fixture source unavailable' },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        version: 8,
+        rdap: { status: 'error' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+      },
+    }),
+  }));
+  await page.evaluate((activeProfileKey) => {
+    const originalGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function getItem(key: string) {
+      if (key === activeProfileKey) {
+        throw new DOMException('Active profile storage is unavailable', 'InvalidStateError');
+      }
+      return originalGetItem.call(this, key);
+    };
+  }, ACTIVE_PROFILE_KEY);
+
+  await page.locator('#query').fill('local-context.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('an analyst can cancel a pending lookup without retaining a partial result', async ({ page }) => {
@@ -292,7 +335,7 @@ test('does not show a saved Fast result after a same-domain Deep handoff', async
   await page.getByLabel('Scan mode').selectOption('deep');
   await page.getByRole('button', { name: 'Scan 1 domain' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Inspect' }).click();
+  await page.getByRole('button', { name: 'Inspect', exact: true }).click();
 
   await expect(page.locator('#query')).toHaveValue(domain);
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
@@ -926,6 +969,60 @@ test('a Lookup case stores the registrar name rather than stringifying its entit
   expect(registrar).toBe('Example Registrar LLC');
 });
 
+test('published response routes can be recorded in a local case with their provenance', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'response-route.invalid',
+      type: 'domain',
+      registrableDomain: 'response-route.invalid',
+      availability: {
+        state: 'registered',
+        confidence: 'high',
+        domain: 'response-route.invalid',
+        deepScanComplete: true,
+      },
+      rdap: { parsed: {} },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: {
+        rdap: { status: 'success' },
+        whois: { status: 'success' },
+        availability: { status: 'complete' },
+      },
+      registryInsights: {
+        version: 1,
+        abuseRouting: [{
+          kind: 'registrar',
+          channel: 'email',
+          contact: 'abuse@example.test',
+          source: 'registrar RDAP entity',
+          limitations: ['Mailbox monitoring is not verified.'],
+        }],
+      },
+    }),
+  }));
+
+  await page.locator('#query').fill('response-route.invalid');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  const response = page.locator('section.response');
+  await expect(response.getByRole('heading', { name: 'Published routes and reviewed drafts' })).toBeVisible();
+  await expect(response).toContainText('abuse@example.test');
+  await page.getByRole('button', { name: 'Create case' }).click();
+  await response.getByRole('button', { name: 'Record in case' }).click();
+  await expect(page.locator('.case-status')).toContainText('Recorded the registrar route');
+
+  const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
+  expect(stored?.actions).toEqual([
+    expect.objectContaining({
+      type: 'registrar_report',
+      recipient: 'abuse@example.test',
+      contactSource: 'registrar RDAP entity',
+      state: 'planned',
+    }),
+  ]);
+});
+
 test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
@@ -1086,6 +1183,7 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
 });
 
 test('HTTP intelligence presents bounded redirect provenance and response metadata', async ({ page }) => {
+  test.slow();
   await page.evaluate(() => {
     const observedAt = '2026-07-12T00:00:00.000Z';
     const profile = {

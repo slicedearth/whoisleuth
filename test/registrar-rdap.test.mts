@@ -1,5 +1,6 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 import {
   fetchRegistrarRdapRecord,
@@ -114,6 +115,17 @@ describe('registrar RDAP link selection', () => {
 });
 
 describe('registrar RDAP fetching', () => {
+  test('uses the redirect-aware transport for the production fetch path', async () => {
+    const source = await readFile(
+      new URL('../lib/rdap-registrar.mts', import.meta.url),
+      'utf8',
+    );
+    assert.match(
+      source,
+      /options\.fetchUpstream \|\| fetchRdapDetailedWithTimeout/u,
+    );
+  });
+
   test('returns separately attributed parsed data without mutating the registry record', async () => {
     const domain = 'success-registrar.example';
     const record = registryRecord(domain, [link(`https://registrar.test/domain/${domain}`)]);
@@ -214,11 +226,14 @@ describe('registrar RDAP fetching', () => {
       }) }
     );
     assert.equal(accepted.endpoint, `https://regional-registrar.test/rdap/domain/${acceptedDomain}`);
+    assert.equal(accepted.transportSecurity, 'https');
 
     for (const [domain, finalUrl] of [
       ['redirect-http-registrar.example', 'http://registrar.test/domain/redirect-http-registrar.example'],
       ['redirect-path-registrar.example', 'https://registrar.test/rdap'],
       ['redirect-name-registrar.example', 'https://registrar.test/domain/other.example'],
+      ['redirect-query-registrar.example', 'https://registrar.test/domain/redirect-query-registrar.example?view=full'],
+      ['redirect-fragment-registrar.example', 'https://registrar.test/domain/redirect-fragment-registrar.example#record'],
     ] as const) {
       const record = registryRecord(domain, [link(`https://registrar.test/domain/${domain}`)]);
       await assert.rejects(

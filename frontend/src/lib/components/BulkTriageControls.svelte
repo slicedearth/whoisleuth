@@ -120,7 +120,7 @@
     selectedCount: number;
     selectFiltered: () => void | Promise<void>;
     clearFilteredSelection: () => void | Promise<void>;
-    exportSelectedCsv: () => void;
+    exportSelectedCsv: () => void | Promise<void>;
     deepRescanSelected: () => void | Promise<void>;
     createCasesSelected: () => void | Promise<void>;
     setSelectedDisposition: (value: string) => void | Promise<void>;
@@ -150,7 +150,7 @@
   <label class="field">Group summary<select value={groupBy} onchange={(event) => setGroupBy(event.currentTarget.value as BulkGroupBy)}><option value="">No grouping</option><option value="mutation">Mutation family</option><option value="tld">TLD</option><option value="registrar">Registrar</option><option value="nameserver">Nameserver set</option></select></label>
   <label class="field">Sort<select value={sortKey} onchange={(event) => setSortKey(event.currentTarget.value as BulkSortKey)}><option value="risk">Risk</option><option value="opportunity">Opportunity</option><option value="domain">Domain</option><option value="availability">Registration</option><option value="confidence">Confidence</option><option value="activity">Website</option><option value="registrar">Registrar</option><option value="mutation">Mutation</option></select></label>
   <label class="field">Order<select value={String(sortDirection)} onchange={(event) => setSortDirection(Number(event.currentTarget.value) === 1 ? 1 : -1)}><option value="-1">Descending</option><option value="1">Ascending</option></select></label>
-  <div class="signal-filters" aria-label="Evidence filters">{#each signalOptions as option}<button class="btn small" class:active={signalFilters.has(option[0])} aria-pressed={signalFilters.has(option[0])} onclick={() => toggleSignal(option[0])}>{option[1]}</button>{/each}</div>
+  <div class="signal-filters" role="group" aria-label="Evidence filters">{#each signalOptions as option}<button class="btn small" class:active={signalFilters.has(option[0])} aria-pressed={signalFilters.has(option[0])} onclick={() => toggleSignal(option[0])}>{option[1]}</button>{/each}</div>
   <button class="btn" onclick={clearFilters} disabled={filter === 'all' && !mutationFilter && !signalFilters.size && !sourceFilter && !lifecycleFilter && !ageFilter && !mailFilter && !registrarFilter && !caseDispositionFilter}>Clear filters</button>
 </div>
 {#if indicatorStatus}<p class="indicator-status" role="status" aria-live="polite">{indicatorStatus}</p>{/if}

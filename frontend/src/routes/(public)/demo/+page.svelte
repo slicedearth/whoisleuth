@@ -5,6 +5,7 @@
   import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
   import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
+  import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
@@ -26,6 +27,7 @@
     syntheticDemoCandidate, syntheticDemoCaseRecord, syntheticDemoLookupView,
     syntheticDemoRelationshipGroups, syntheticDemoStage, syntheticDemoTimeline,
   } from '$lib/analysis/demo-model.ts';
+  import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
 
   type View='dashboard'|'brands'|'discover'|'bulk'|'lookup'|'monitor';
   type CandidateFilter='all'|'high'|'related';
@@ -58,6 +60,18 @@
     {id:'certificate-first-observed',label:'Certificate observed',date:selected.provenance.firstObservedAt,detail:selected.evidence.certificate.source,kind:'certificate' as const},
     {id:'latest-observation',label:'Latest observation',date:selected.provenance.lastObservedAt,detail:selected.provenance.source,kind:'observation' as const},
   ]:[]);
+  const lookupAcquisitionReview=$derived(selected&&lookupView?buildAcquisitionDueDiligence({
+    availability:{
+      state:selected.availability.toLowerCase().replaceAll(' ','_'),
+      confidence:selected.availability==='Unknown'?'low':'high',
+      source:selected.availability==='Unknown'?null:'rdap',
+    },
+    registryInsights:lookupView.registry.insights,
+    activationContext:{
+      web:{state:lookupView.http.status==='success'?'response_observed':'inconclusive',label:lookupView.http.status==='success'?'Web response observed':'Web state inconclusive'},
+      mail:{state:'inconclusive',label:'Mail state inconclusive'},
+    },
+  }):null);
   const monitorActivity=$derived(selected?syntheticDemoTimeline(selected.id,demoState.followUpReady).map((entry:{capturedAt:string;changes:unknown[]})=>({
     checkedAt:entry.capturedAt,
     changeCount:entry.changes.length,
@@ -186,14 +200,14 @@
   <section class="demo-panel" aria-labelledby="bulk-heading">
     <p class="eyebrow">Bulk · Explainable triage</p><h2 id="bulk-heading">Prioritize candidates without collapsing evidence</h2>
     <p>Risk values and relationships are fixed demonstrations. They prioritize review but do not assert ownership, coordination, intent, or maliciousness. The signed-in Console can filter and group only observed compact fields, act on an explicit shortlist, save resumable sessions, and retain one reviewed relationship. This demo never writes production investigation data.</p>
-    <div class="filter-bar" aria-label="Candidate filters"><button class:active={candidateFilter==='all'} aria-pressed={candidateFilter==='all'} onclick={()=>candidateFilter='all'}>All candidates · 3</button><button class:active={candidateFilter==='high'} aria-pressed={candidateFilter==='high'} onclick={()=>candidateFilter='high'}>High priority · 1</button>{#if candidateFilter==='related'}<button class="active" aria-pressed="true">Related domains · {relatedDomains.length}</button>{/if}</div>
+    <div class="filter-bar" role="group" aria-label="Candidate filters"><button class:active={candidateFilter==='all'} aria-pressed={candidateFilter==='all'} onclick={()=>candidateFilter='all'}>All candidates · 3</button><button class:active={candidateFilter==='high'} aria-pressed={candidateFilter==='high'} onclick={()=>candidateFilter='high'}>High priority · 1</button>{#if candidateFilter==='related'}<button class="active" aria-pressed="true">Related domains · {relatedDomains.length}</button>{/if}</div>
     <div class="candidate-grid">{#each candidates as candidate}<article class="candidate card"><div><code>{candidate.domain}</code><span class:high={candidate.risk>=70}>Risk {candidate.risk}</span></div><p>{candidate.mutation} · {candidate.availability}</p><ul>{#each candidate.signals as signal}<li>{signal}</li>{/each}</ul><details><summary>Why this score</summary><ul>{#each candidate.riskFactors as factor}<li>{factor.label} · +{factor.points}</li>{/each}</ul></details>{#if candidate.provenance.certificateCount}<p class="provenance">{candidate.provenance.source} · {candidate.provenance.certificateCount} certificates · latest {shortDate(candidate.provenance.lastObservedAt)}</p>{/if}<button type="button" onclick={()=>inspect(candidate.id)}>Inspect {candidate.domain}</button></article>{/each}</div>
     <BulkRelationships groups={relationshipGroups} truncated={false} limitations={['Shared infrastructure is investigation context only. It does not establish ownership, coordination, intent, or maliciousness.']} loadDomains={loadRelated} />
   </section>
 {:else if view==='lookup'&&selected&&lookupView}
   <section class="demo-panel" aria-labelledby="lookup-heading">
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
-    <p>The production Lookup components render the synthetic view model below, including its bounded source map and dated lifecycle summary. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety. Long source records and secondary Deep evidence start collapsed with their headings, states, and summaries still visible. Live Lookup can also show analyst-controlled external evidence links; they are omitted here so the public demo cannot send even a fictional target to another site.</p>
+    <p>The production Lookup components render the synthetic view model below, including its bounded source map, dated lifecycle summary, and manual acquisition review. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety. Long source records and secondary Deep evidence start collapsed with their headings, states, and summaries still visible. Live Lookup can also show analyst-controlled external evidence links; they are omitted here so the public demo cannot send even a fictional target to another site.</p>
     <div class="shared-evidence" id="demo-assessment"><LookupAssessment {...lookupView.assessment} /></div>
     <div class="shared-evidence visual-summary">
       <EvidenceTopology
@@ -205,6 +219,7 @@
       />
     </div>
     <div class="shared-evidence visual-summary"><LookupLifecycle events={lookupLifecycleEvents} /></div>
+    {#if lookupAcquisitionReview}<div class="shared-evidence"><LookupAcquisitionDueDiligence review={lookupAcquisitionReview} /></div>{/if}
     <div class="shared-evidence" id="demo-evidence-registry"><LookupRegistrySources {...lookupView.registry} /></div>
     <div class="shared-evidence" id="demo-evidence-dns"><LookupDnsEvidence {...lookupView.dns} /></div>
     <div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidence {...lookupView.http} /></div>

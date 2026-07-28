@@ -4,6 +4,11 @@ import { expect, test } from './fixtures';
 import { runBulkScan, useTheme } from './helpers';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
+const REQUIRED_MANUAL_RULES = new Set([
+  'aria-prohibited-attr',
+  'aria-valid-attr-value',
+  'link-in-text-block',
+]);
 
 async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, state: string) {
   const startedAt = Date.now();
@@ -14,12 +19,22 @@ async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, s
       state,
       durationMs,
       passes: results.passes.length,
-      incomplete: results.incomplete.length,
+      incomplete: results.incomplete.map((result) => result.id),
       inapplicable: results.inapplicable.length,
     }),
     contentType: 'application/json',
   });
   expect(results.violations, `${state} produced accessibility violations`).toEqual([]);
+  const unresolvedRequiredRules = results.incomplete
+    .filter((result) => REQUIRED_MANUAL_RULES.has(result.id))
+    .map((result) => ({
+      id: result.id,
+      targets: result.nodes.map((node) => node.target),
+    }));
+  expect(
+    unresolvedRequiredRules,
+    `${state} left required accessibility rules unresolved`,
+  ).toEqual([]);
 }
 
 async function expectSequentialHeadingOrder(page: Page) {
@@ -75,6 +90,22 @@ async function installLookupFixture(page: Page) {
     });
   });
 }
+
+test('public and dashboard support content exposes semantic labels and link cues', async ({ page }) => {
+  await page.goto('/');
+  await expect(
+    page.getByRole('region', { name: 'Synthetic WHOISleuth console preview' }),
+  ).toBeVisible();
+  const attribution = page.getByRole('link', { name: 'slicedearth' });
+  expect(
+    await attribution.evaluate((element) => getComputedStyle(element).textDecorationLine),
+  ).toContain('underline');
+
+  await page.goto('/dashboard');
+  await expect(
+    page.getByRole('navigation', { name: 'Investigation help' }),
+  ).toBeVisible();
+});
 
 test('scans representative public initial, error, populated, and expanded states', async ({ page }, testInfo) => {
   test.slow();

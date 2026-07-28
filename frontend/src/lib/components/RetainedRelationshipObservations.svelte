@@ -74,7 +74,7 @@
             <div><dt>Observed</dt><dd>{date(record.observedAt)}</dd></div>
             <div><dt>Classification</dt><dd>Derived observation</dd></div>
           </dl>
-          <div class="domains" aria-label={`${record.domains.length} member domains`}>
+          <div class="domains" role="group" aria-label={`${record.domains.length} member domains`}>
             {#each record.domains as domain}<a class="btn small" href={`/lookup?q=${encodeURIComponent(domain)}`}>{domain}</a>{/each}
           </div>
           <p>{record.description}</p>
