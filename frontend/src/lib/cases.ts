@@ -32,12 +32,17 @@ export {
 export {
   CASE_ACTION_STATES,
   CASE_ACTION_TYPES,
+  CASE_ASSERTION_KINDS,
+  CASE_ASSERTION_STATES,
+  CASE_MANUAL_TRAIL_KINDS,
   CASE_PIN_COMPLETENESS,
 } from './analysis/case-response-model.ts';
 export type {
   CaseActionRecord,
+  CaseAssertionRecord,
   CaseDecisionRecord,
   CaseEvidencePin,
+  CaseManualTrailEvent,
 } from './analysis/case-response-model.ts';
 export type {
   CaseEvidenceSnapshot,

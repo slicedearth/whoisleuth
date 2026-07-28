@@ -6,6 +6,8 @@
 export const MAX_CASE_EVIDENCE_PINS = 40;
 export const MAX_CASE_DECISIONS = 30;
 export const MAX_CASE_ACTIONS = 50;
+export const MAX_CASE_ASSERTIONS = 50;
+export const MAX_CASE_MANUAL_TRAIL_EVENTS = 80;
 export const MAX_RESPONSE_LABEL_LENGTH = 80;
 export const MAX_RESPONSE_VALUE_LENGTH = 1000;
 export const MAX_RESPONSE_RATIONALE_LENGTH = 2000;
@@ -14,6 +16,7 @@ export const MAX_RESPONSE_REFERENCE_LENGTH = 500;
 export const MAX_RESPONSE_LIMITATIONS = 8;
 export const MAX_RESPONSE_LIMITATION_LENGTH = 240;
 export const MAX_DECISION_PIN_REFERENCES = 20;
+export const MAX_TRAIL_TARGET_LENGTH = 500;
 
 export const CASE_PIN_COMPLETENESS = ['complete', 'partial', 'inconclusive', 'unknown'] as const;
 export type CasePinCompleteness = typeof CASE_PIN_COMPLETENESS[number];
@@ -37,6 +40,21 @@ export const CASE_ACTION_STATES = [
   'closed',
 ] as const;
 export type CaseActionState = typeof CASE_ACTION_STATES[number];
+
+export const CASE_ASSERTION_KINDS = [
+  'verified_fact',
+  'hypothesis',
+  'unknown',
+  'contradiction',
+  'next_step',
+] as const;
+export type CaseAssertionKind = typeof CASE_ASSERTION_KINDS[number];
+
+export const CASE_ASSERTION_STATES = ['open', 'resolved'] as const;
+export type CaseAssertionState = typeof CASE_ASSERTION_STATES[number];
+
+export const CASE_MANUAL_TRAIL_KINDS = ['pivot', 'review', 'handoff'] as const;
+export type CaseManualTrailKind = typeof CASE_MANUAL_TRAIL_KINDS[number];
 
 export type CaseEvidencePin = {
   id: string;
@@ -72,12 +90,42 @@ export type CaseActionRecord = {
   updatedAt: string;
 };
 
+export type CaseAssertionRecord = {
+  id: string;
+  kind: CaseAssertionKind;
+  statement: string;
+  rationale: string | null;
+  evidencePinIds: string[];
+  state: CaseAssertionState;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CaseManualTrailEvent = {
+  id: string;
+  kind: CaseManualTrailKind;
+  summary: string;
+  target: string | null;
+  createdAt: string;
+};
+
+export type CaseInvestigationTrailItem = {
+  id: string;
+  kind: 'assertion' | 'decision' | 'action' | 'manual';
+  label: string;
+  detail: string;
+  createdAt: string;
+};
+
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const COMPLETENESS = new Set<string>(CASE_PIN_COMPLETENESS);
 const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
+const ASSERTION_KINDS = new Set<string>(CASE_ASSERTION_KINDS);
+const ASSERTION_STATES = new Set<string>(CASE_ASSERTION_STATES);
+const TRAIL_KINDS = new Set<string>(CASE_MANUAL_TRAIL_KINDS);
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -330,4 +378,183 @@ export function mergeCaseActions(
   fallback: string,
 ): CaseActionRecord[] {
   return normalizeCaseActions([...local, ...imported], fallback);
+}
+
+function normalizeAssertion(
+  raw: unknown,
+  fallback: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseAssertionRecord | null {
+  const item = record(raw);
+  const statement = text(item.statement, MAX_RESPONSE_RATIONALE_LENGTH);
+  if (!statement) return null;
+  const createdAt = iso(item.createdAt, fallback);
+  return {
+    id: safeId(item.id, 'assertion', { statement, createdAt }),
+    kind: typeof item.kind === 'string' && ASSERTION_KINDS.has(item.kind)
+      ? item.kind as CaseAssertionKind
+      : 'hypothesis',
+    statement,
+    rationale: text(item.rationale, MAX_RESPONSE_RATIONALE_LENGTH) || null,
+    evidencePinIds: uniqueIds(item.evidencePinIds, validPinIds),
+    state: typeof item.state === 'string' && ASSERTION_STATES.has(item.state)
+      ? item.state as CaseAssertionState
+      : 'open',
+    createdAt,
+    updatedAt: iso(item.updatedAt, createdAt),
+  };
+}
+
+export function normalizeCaseAssertions(
+  raw: unknown,
+  fallback: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseAssertionRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const byId = new Map<string, CaseAssertionRecord>();
+  for (const item of raw.slice(0, MAX_CASE_ASSERTIONS * 2)) {
+    const normalized = normalizeAssertion(item, fallback, validPinIds);
+    if (!normalized) continue;
+    const existing = byId.get(normalized.id);
+    if (!existing || Date.parse(normalized.updatedAt) >= Date.parse(existing.updatedAt)) {
+      byId.set(normalized.id, normalized);
+    }
+  }
+  return [...byId.values()]
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
+    .slice(-MAX_CASE_ASSERTIONS);
+}
+
+export function appendCaseAssertion(
+  current: readonly CaseAssertionRecord[],
+  raw: unknown,
+  now: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseAssertionRecord[] {
+  const item = record(raw);
+  const created = normalizeAssertion({
+    ...item,
+    id: freshId('assertion'),
+    createdAt: now,
+    updatedAt: now,
+  }, now, validPinIds);
+  if (!created) throw new Error('An analyst assertion requires a statement.');
+  return normalizeCaseAssertions([...current, created], now, validPinIds);
+}
+
+export function updateCaseAssertion(
+  current: readonly CaseAssertionRecord[],
+  raw: unknown,
+  now: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseAssertionRecord[] {
+  const patch = record(raw);
+  const id = typeof patch.id === 'string' && SAFE_ID_RE.test(patch.id) ? patch.id : '';
+  const existing = current.find((item) => item.id === id);
+  if (!existing) throw new Error('That analyst assertion no longer exists.');
+  const updated = normalizeAssertion({
+    ...existing,
+    ...patch,
+    id,
+    createdAt: existing.createdAt,
+    updatedAt: now,
+  }, now, validPinIds);
+  if (!updated) throw new Error('An analyst assertion requires a statement.');
+  return normalizeCaseAssertions(current.map((item) => item.id === id ? updated : item), now, validPinIds);
+}
+
+function normalizeManualTrailEvent(raw: unknown, fallback: string): CaseManualTrailEvent | null {
+  const item = record(raw);
+  const summary = text(item.summary, MAX_RESPONSE_RATIONALE_LENGTH);
+  if (!summary) return null;
+  const createdAt = iso(item.createdAt, fallback);
+  return {
+    id: safeId(item.id, 'trail', { summary, createdAt }),
+    kind: typeof item.kind === 'string' && TRAIL_KINDS.has(item.kind)
+      ? item.kind as CaseManualTrailKind
+      : 'review',
+    summary,
+    target: text(item.target, MAX_TRAIL_TARGET_LENGTH) || null,
+    createdAt,
+  };
+}
+
+export function normalizeCaseManualTrail(raw: unknown, fallback: string): CaseManualTrailEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const byId = new Map<string, CaseManualTrailEvent>();
+  for (const item of raw.slice(0, MAX_CASE_MANUAL_TRAIL_EVENTS * 2)) {
+    const normalized = normalizeManualTrailEvent(item, fallback);
+    if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized);
+  }
+  return [...byId.values()]
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
+    .slice(-MAX_CASE_MANUAL_TRAIL_EVENTS);
+}
+
+export function appendCaseManualTrailEvent(
+  current: readonly CaseManualTrailEvent[],
+  raw: unknown,
+  now: string,
+): CaseManualTrailEvent[] {
+  const item = record(raw);
+  const created = normalizeManualTrailEvent({ ...item, id: freshId('trail'), createdAt: now }, now);
+  if (!created) throw new Error('An investigation-trail entry requires a summary.');
+  return normalizeCaseManualTrail([...current, created], now);
+}
+
+export function mergeCaseAssertions(
+  local: readonly CaseAssertionRecord[],
+  imported: readonly CaseAssertionRecord[],
+  fallback: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseAssertionRecord[] {
+  return normalizeCaseAssertions([...local, ...imported], fallback, validPinIds);
+}
+
+export function mergeCaseManualTrail(
+  local: readonly CaseManualTrailEvent[],
+  imported: readonly CaseManualTrailEvent[],
+  fallback: string,
+): CaseManualTrailEvent[] {
+  return normalizeCaseManualTrail([...local, ...imported], fallback);
+}
+
+export function buildCaseInvestigationTrail(
+  input: Readonly<{
+    assertions?: readonly CaseAssertionRecord[];
+    decisions?: readonly CaseDecisionRecord[];
+    actions?: readonly CaseActionRecord[];
+    manualTrail?: readonly CaseManualTrailEvent[];
+  }>,
+): CaseInvestigationTrailItem[] {
+  return [
+    ...(input.assertions ?? []).map((item): CaseInvestigationTrailItem => ({
+      id: `assertion:${item.id}`,
+      kind: 'assertion',
+      label: `${item.kind.replaceAll('_', ' ')} · ${item.state}`,
+      detail: item.statement,
+      createdAt: item.updatedAt,
+    })),
+    ...(input.decisions ?? []).map((item): CaseInvestigationTrailItem => ({
+      id: `decision:${item.id}`,
+      kind: 'decision',
+      label: 'analyst decision',
+      detail: item.summary,
+      createdAt: item.createdAt,
+    })),
+    ...(input.actions ?? []).map((item): CaseInvestigationTrailItem => ({
+      id: `action:${item.id}`,
+      kind: 'action',
+      label: `${item.type.replaceAll('_', ' ')} · ${item.state}`,
+      detail: item.recipient,
+      createdAt: item.updatedAt,
+    })),
+    ...(input.manualTrail ?? []).map((item): CaseInvestigationTrailItem => ({
+      id: `manual:${item.id}`,
+      kind: 'manual',
+      label: item.kind.replaceAll('_', ' '),
+      detail: item.target ? `${item.summary} · ${item.target}` : item.summary,
+      createdAt: item.createdAt,
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || left.id.localeCompare(right.id));
 }

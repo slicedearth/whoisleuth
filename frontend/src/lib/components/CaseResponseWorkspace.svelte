@@ -2,11 +2,15 @@
   import {
     CASE_ACTION_STATES,
     CASE_ACTION_TYPES,
+    CASE_ASSERTION_KINDS,
+    CASE_ASSERTION_STATES,
+    CASE_MANUAL_TRAIL_KINDS,
     CASE_PIN_COMPLETENESS,
     editCase,
     type CaseActionRecord,
     type CaseRecord,
   } from '$lib/cases';
+  import { buildCaseInvestigationTrail } from '$lib/analysis/case-response-model.ts';
   import {
     buildCaseResponsePacket,
     caseResponsePacketFilename,
@@ -43,6 +47,15 @@
   let actionFollowUpAt = $state('');
   let actionOutcome = $state('');
   let selectedActionId = $state('');
+  let assertionKind = $state('hypothesis');
+  let assertionStatement = $state('');
+  let assertionRationale = $state('');
+  let assertionPinIds = $state<string[]>([]);
+  let assertionState = $state('open');
+  let trailKind = $state('pivot');
+  let trailSummary = $state('');
+  let trailTarget = $state('');
+  const investigationTrail = $derived(buildCaseInvestigationTrail(record));
 
   let packetCategory = $state('');
   let packetAffectedParty = $state('');
@@ -123,6 +136,40 @@
     decisionSummary = '';
     decisionRationale = '';
     decisionPinIds = [];
+  }
+
+  async function addAssertion() {
+    await persist({
+      assertion: {
+        kind: assertionKind,
+        statement: assertionStatement,
+        rationale: assertionRationale,
+        evidencePinIds: assertionPinIds,
+        state: assertionState,
+      },
+    }, `Recorded a structured analyst assertion for ${record.domain}.`);
+    assertionKind = 'hypothesis';
+    assertionStatement = '';
+    assertionRationale = '';
+    assertionPinIds = [];
+    assertionState = 'open';
+  }
+
+  async function setAssertionState(id: string, state: string) {
+    await persist({ assertionUpdate: { id, state } }, `Updated the analyst assertion for ${record.domain}.`);
+  }
+
+  async function addTrailEvent() {
+    await persist({
+      trailEvent: {
+        kind: trailKind,
+        summary: trailSummary,
+        target: trailTarget,
+      },
+    }, `Recorded a manual investigation step for ${record.domain}.`);
+    trailKind = 'pivot';
+    trailSummary = '';
+    trailTarget = '';
   }
 
   function actionInput() {
@@ -235,8 +282,8 @@
 
 <section class="response-workspace" aria-labelledby={`response-title-${record.id}`}>
   <header>
-    <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, decisions, and actions</h3></div>
-    <span>{record.evidencePins.length} pin{record.evidencePins.length === 1 ? '' : 's'} · {record.decisions.length} decision{record.decisions.length === 1 ? '' : 's'} · {record.actions.length} action{record.actions.length === 1 ? '' : 's'}</span>
+    <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
+    <span>{record.evidencePins.length} pins · {record.assertions.length} assertions · {record.actions.length} actions</span>
   </header>
 
   <details>
@@ -269,6 +316,40 @@
     </form>
     {#if record.decisions.length}
       <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>{decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
+    {/if}
+  </details>
+
+  <details>
+    <summary>Structure facts, hypotheses, unknowns, and next steps</summary>
+    <form class="stack" onsubmit={(event) => { event.preventDefault(); void addAssertion(); }}>
+      <div class="two-columns">
+        <label class="field">Assertion type<select bind:value={assertionKind}>{#each CASE_ASSERTION_KINDS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+        <label class="field">State<select bind:value={assertionState}>{#each CASE_ASSERTION_STATES as value}<option {value}>{value}</option>{/each}</select></label>
+      </div>
+      <label class="field">Statement<textarea bind:value={assertionStatement} maxlength="2000" rows="3" required></textarea></label>
+      <label class="field">Reasoning or limitation<textarea bind:value={assertionRationale} maxlength="2000" rows="2"></textarea></label>
+      {#if record.evidencePins.length}
+        <fieldset class="pin-references"><legend>Supporting evidence pins</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={assertionPinIds.includes(pin.id)} onchange={(event) => assertionPinIds = event.currentTarget.checked ? [...assertionPinIds, pin.id] : assertionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
+      {/if}
+      <button class="btn" type="submit">Record assertion</button>
+    </form>
+    {#if record.assertions.length}
+      <ol class="records">{#each [...record.assertions].reverse() as assertion}<li><strong>{assertion.kind.replaceAll('_', ' ')} · {assertion.state}</strong><p>{assertion.statement}</p>{#if assertion.rationale}<p>{assertion.rationale}</p>{/if}<small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} supporting pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>{#if assertion.state === 'open'}<button class="btn small" type="button" onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}</li>{/each}</ol>
+    {/if}
+  </details>
+
+  <details>
+    <summary>Record and review the investigation trail</summary>
+    <form class="stack" onsubmit={(event) => { event.preventDefault(); void addTrailEvent(); }}>
+      <label class="field">Manual step type<select bind:value={trailKind}>{#each CASE_MANUAL_TRAIL_KINDS as value}<option {value}>{value}</option>{/each}</select></label>
+      <label class="field">What did you do or decide?<textarea bind:value={trailSummary} maxlength="2000" rows="2" required></textarea></label>
+      <label class="field">Target or destination <small>optional; do not paste credentials or sensitive query strings</small><input bind:value={trailTarget} maxlength="500"></label>
+      <button class="btn" type="submit">Record manual step</button>
+    </form>
+    {#if investigationTrail.length}
+      <ol class="records trail">{#each investigationTrail as item}<li><strong>{item.label}</strong><p>{item.detail}</p><small>{item.createdAt}</small></li>{/each}</ol>
+    {:else}
+      <p class="notice">No explicit case reasoning, actions, or manual pivots have been recorded. Browser navigation is not tracked.</p>
     {/if}
   </details>
 

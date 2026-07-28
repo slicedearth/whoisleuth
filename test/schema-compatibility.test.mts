@@ -261,7 +261,7 @@ describe('schema compatibility inventory', () => {
 
     const caseReport = buildCaseReport({
       id: 'case-fixture', domain: 'schema.invalid', status: 'new', disposition: 'unreviewed',
-      tags: [], notes: [], source: 'manual', evidenceHistory: [], evidencePins: [], decisions: [], actions: [],
+      tags: [], notes: [], source: 'manual', evidenceHistory: [], evidencePins: [], decisions: [], actions: [], assertions: [], manualTrail: [],
       createdAt: NOW, updatedAt: NOW,
     }, { generatedAt: NOW });
     assert.equal(byId(inventory, 'export.case-report').schema, caseReport.json.schema);

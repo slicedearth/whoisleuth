@@ -4,7 +4,7 @@
 import type { CaseRecord } from './case-model.ts';
 
 export const CASE_RESPONSE_PACKET_SCHEMA = 'whoisleuth.case-response-packet';
-export const CASE_RESPONSE_PACKET_VERSION = 1;
+export const CASE_RESPONSE_PACKET_VERSION = 2;
 export const MAX_ABUSIVE_URLS = 20;
 export const MAX_RESPONSE_CONTACTS = 12;
 export const MAX_RESPONSE_HARM_LENGTH = 2000;
@@ -66,6 +66,7 @@ export type CaseResponsePacket = {
     latestEvidenceCapturedAt: string | null;
     evidencePinCount: number;
     decisionCount: number;
+    assertionCount: number;
     limitations: string[];
   };
 };
@@ -209,6 +210,7 @@ export function buildCaseResponsePacket(
       latestEvidenceCapturedAt: latestEvidence?.capturedAt ?? null,
       evidencePinCount: caseRecord.evidencePins.length,
       decisionCount: caseRecord.decisions.length,
+      assertionCount: caseRecord.assertions.length,
       limitations,
     },
   };
@@ -247,6 +249,7 @@ export function buildCaseResponsePacket(
     ...limitations.map((limitation) => `- ${escapeMarkdown(limitation)}`),
     `- Case evidence pins: ${caseRecord.evidencePins.length}`,
     `- Case decision records: ${caseRecord.decisions.length}`,
+    `- Case structured assertions: ${caseRecord.assertions.length}`,
   ];
   const markdown = `${lines.join('\n').trim()}\n`;
   const email = [

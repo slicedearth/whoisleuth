@@ -9,18 +9,27 @@ import { normalizeHttpSummary } from './http-summary.ts';
 import { normalizeRiskModelVersion } from './scoring.ts';
 import {
   appendCaseAction,
+  appendCaseAssertion,
   appendCaseDecision,
   appendCaseEvidencePin,
+  appendCaseManualTrailEvent,
   mergeCaseActions,
+  mergeCaseAssertions,
   mergeCaseDecisions,
   mergeCaseEvidencePins,
+  mergeCaseManualTrail,
   normalizeCaseActions,
+  normalizeCaseAssertions,
   normalizeCaseDecisions,
   normalizeCaseEvidencePins,
+  normalizeCaseManualTrail,
   updateCaseAction,
+  updateCaseAssertion,
   type CaseActionRecord,
+  type CaseAssertionRecord,
   type CaseDecisionRecord,
   type CaseEvidencePin,
+  type CaseManualTrailEvent,
 } from './case-response-model.ts';
 
 // Forward-version policy (two distinct guarantees):
@@ -31,7 +40,8 @@ import {
 //   - An IMPORT file that declares a greater version is never INTERPRETED at
 //     all: mergeCases rejects it up front so we don't merge data from a schema
 //     we don't understand.
-export const CASE_SCHEMA_VERSION = 3;
+export const CASE_SCHEMA_VERSION = 4;
+export const CASE_IMPORT_VERSIONS = [3, CASE_SCHEMA_VERSION] as const;
 
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;
@@ -170,6 +180,8 @@ export type CaseRecord = {
   evidencePins: CaseEvidencePin[];
   decisions: CaseDecisionRecord[];
   actions: CaseActionRecord[];
+  assertions: CaseAssertionRecord[];
+  manualTrail: CaseManualTrailEvent[];
   createdAt: string;
   updatedAt: string;
 };
@@ -185,6 +197,9 @@ export type CaseInput = {
   decision?: unknown;
   action?: unknown;
   actionUpdate?: unknown;
+  assertion?: unknown;
+  assertionUpdate?: unknown;
+  trailEvent?: unknown;
   note?: unknown;
 };
 export type CasePatch = Omit<Partial<CaseInput>, 'domain'>;
@@ -199,6 +214,8 @@ type ImportPatch = {
   evidencePins: CaseEvidencePin[];
   decisions: CaseDecisionRecord[];
   actions: CaseActionRecord[];
+  assertions: CaseAssertionRecord[];
+  manualTrail: CaseManualTrailEvent[];
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -1101,6 +1118,8 @@ export function normalizeCase(
     evidencePins,
     decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds),
     actions: normalizeCaseActions(record.actions, updatedAt),
+    assertions: normalizeCaseAssertions(record.assertions, updatedAt, pinIds),
+    manualTrail: normalizeCaseManualTrail(record.manualTrail, updatedAt),
     createdAt,
     updatedAt,
   };
@@ -1204,6 +1223,12 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     actions: input.action !== undefined
       ? appendCaseAction([], input.action, now)
       : [],
+    assertions: input.assertion !== undefined
+      ? appendCaseAssertion([], input.assertion, now)
+      : [],
+    manualTrail: input.trailEvent !== undefined
+      ? appendCaseManualTrailEvent([], input.trailEvent, now)
+      : [],
     createdAt: now,
     updatedAt: now,
   };
@@ -1287,6 +1312,17 @@ export function updateCase(
   if (patch.actionUpdate !== undefined) {
     actions = updateCaseAction(actions, patch.actionUpdate, now);
   }
+  let assertions = current.assertions;
+  if (patch.assertion !== undefined) {
+    assertions = appendCaseAssertion(current.assertions, patch.assertion, now, pinIds);
+  }
+  if (patch.assertionUpdate !== undefined) {
+    assertions = updateCaseAssertion(assertions, patch.assertionUpdate, now, pinIds);
+  }
+  let manualTrail = current.manualTrail;
+  if (patch.trailEvent !== undefined) {
+    manualTrail = appendCaseManualTrailEvent(current.manualTrail, patch.trailEvent, now);
+  }
   const record: CaseRecord = {
     ...current,
     status: patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
@@ -1297,6 +1333,8 @@ export function updateCase(
     evidencePins,
     decisions,
     actions,
+    assertions,
+    manualTrail,
     notes,
     updatedAt: now,
   };
@@ -1345,6 +1383,8 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
     evidencePins,
     decisions: normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds),
     actions: normalizeCaseActions(record.actions, normalizedFallback),
+    assertions: normalizeCaseAssertions(record.assertions, normalizedFallback, pinIds),
+    manualTrail: normalizeCaseManualTrail(record.manualTrail, normalizedFallback),
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -1391,6 +1431,8 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     evidencePins: patch.evidencePins,
     decisions: patch.decisions,
     actions: patch.actions,
+    assertions: patch.assertions,
+    manualTrail: patch.manualTrail,
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -1419,6 +1461,8 @@ function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
     evidencePins,
     decisions: mergeCaseDecisions(local.decisions, patch.decisions, fallback, pinIds),
     actions: mergeCaseActions(local.actions, patch.actions, fallback),
+    assertions: mergeCaseAssertions(local.assertions, patch.assertions, fallback, pinIds),
+    manualTrail: mergeCaseManualTrail(local.manualTrail, patch.manualTrail, fallback),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
@@ -1454,10 +1498,10 @@ export function mergeCases(
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
   }
-  if (importedVersion !== CASE_SCHEMA_VERSION
+  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | typeof CASE_SCHEMA_VERSION)
     || !importedRaw || typeof importedRaw !== 'object'
     || !Array.isArray(objectRecord(importedRaw).cases)) {
-    throw new Error(`Expected a WHOISleuth case export using schema ${CASE_SCHEMA_VERSION}.`);
+    throw new Error(`Expected a WHOISleuth case export using schema ${CASE_IMPORT_VERSIONS.join(' or ')}.`);
   }
   const local = normalizeCaseStore(localCases).cases;
   const byDomain = new Map(local.map((item) => [item.domain, item]));

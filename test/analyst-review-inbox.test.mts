@@ -33,6 +33,8 @@ function caseRecord(): CaseRecord {
       createdAt: '2026-07-26T08:00:00.000Z',
       updatedAt: '2026-07-27T08:00:00.000Z',
     }],
+    assertions: [],
+    manualTrail: [],
     createdAt: '2026-07-26T08:00:00.000Z',
     updatedAt: '2026-07-27T08:00:00.000Z',
   };

@@ -18,7 +18,7 @@ import { httpSecurityHeaderLabel } from './http-summary.ts';
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 2;
+export const CASE_REPORT_SCHEMA_VERSION = 3;
 
 const APPLICATION_NAME = 'WHOISleuth';
 
@@ -77,6 +77,8 @@ type CaseReportJson = {
     evidencePins: CaseRecord['evidencePins'];
     decisions: CaseRecord['decisions'];
     actions: CaseRecord['actions'];
+    assertions: CaseRecord['assertions'];
+    manualTrail: CaseRecord['manualTrail'];
   };
   limitations: string;
 };
@@ -285,6 +287,8 @@ export function buildCaseReport(
       evidencePins: caseRecord.evidencePins.map((item) => ({ ...item, limitations: [...item.limitations] })),
       decisions: caseRecord.decisions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
       actions: caseRecord.actions.map((item) => ({ ...item, contactLimitations: [...item.contactLimitations] })),
+      assertions: caseRecord.assertions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
+      manualTrail: caseRecord.manualTrail.map((item) => ({ ...item })),
     },
     limitations: LIMITATIONS_TEXT,
   };
@@ -453,8 +457,8 @@ function buildMarkdown(report: CaseReportJson): string {
   lines.push('## Analyst Decision Packet');
   lines.push('');
   const response = report.analystResponse;
-  if (!response.evidencePins.length && !response.decisions.length && !response.actions.length) {
-    lines.push('No evidence pins, decision records, or case actions recorded.');
+  if (!response.evidencePins.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length) {
+    lines.push('No evidence pins, structured assertions, decision records, case actions, or manual investigation steps recorded.');
     lines.push('');
   } else {
     lines.push('### Evidence pins');
@@ -466,6 +470,24 @@ function buildMarkdown(report: CaseReportJson): string {
       if (pin.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(pin.limitations.join('; '))}`);
     }
     lines.push('');
+    for (const section of [
+      { kind: 'verified_fact', heading: 'Verified facts' },
+      { kind: 'hypothesis', heading: 'Hypotheses' },
+      { kind: 'unknown', heading: 'Unknowns' },
+      { kind: 'contradiction', heading: 'Contradictory evidence' },
+      { kind: 'next_step', heading: 'Recommended next manual steps' },
+    ] as const) {
+      lines.push(`### ${section.heading}`);
+      lines.push('');
+      const assertions = response.assertions.filter((item) => item.kind === section.kind);
+      if (!assertions.length) lines.push(`No ${section.heading.toLowerCase()} recorded.`);
+      for (const assertion of assertions) {
+        lines.push(`- **${escapeMarkdownInline(assertion.state)}:** ${escapeMarkdownInline(assertion.statement)}`);
+        if (assertion.rationale) lines.push(`  ${escapeMarkdownInline(assertion.rationale)}`);
+        if (assertion.evidencePinIds.length) lines.push(`  Evidence pins: ${escapeMarkdownInline(assertion.evidencePinIds.join(', '))}`);
+      }
+      lines.push('');
+    }
     lines.push('### Decisions');
     lines.push('');
     if (!response.decisions.length) lines.push('No decision records recorded.');
@@ -486,6 +508,14 @@ function buildMarkdown(report: CaseReportJson): string {
       if (action.reference) lines.push(`  Reference: ${escapeMarkdownInline(action.reference)}`);
       if (action.outcome) lines.push(`  Outcome: ${escapeMarkdownInline(action.outcome)}`);
       if (action.contactLimitations.length) lines.push(`  Contact limitations: ${escapeMarkdownInline(action.contactLimitations.join('; '))}`);
+    }
+    lines.push('');
+    lines.push('### Explicit investigation trail');
+    lines.push('');
+    if (!response.manualTrail.length) lines.push('No manual pivots, handoffs, or review steps recorded. Browser navigation is not tracked.');
+    for (const item of response.manualTrail) {
+      lines.push(`- **${escapeMarkdownInline(item.kind)}** (${escapeMarkdownInline(item.createdAt)}): ${escapeMarkdownInline(item.summary)}`);
+      if (item.target) lines.push(`  Target: ${escapeMarkdownInline(item.target)}`);
     }
     lines.push('');
   }

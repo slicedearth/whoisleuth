@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   appendCaseAction,
+  appendCaseAssertion,
   appendCaseDecision,
   appendCaseEvidencePin,
+  appendCaseManualTrailEvent,
+  buildCaseInvestigationTrail,
   MAX_CASE_ACTIONS,
   MAX_CASE_DECISIONS,
   MAX_CASE_EVIDENCE_PINS,
@@ -11,6 +14,7 @@ import {
   normalizeCaseDecisions,
   normalizeCaseEvidencePins,
   updateCaseAction,
+  updateCaseAssertion,
 } from '../frontend/src/lib/analysis/case-response-model.ts';
 import * as caseModel from '../frontend/src/lib/analysis/case-model.ts';
 import { requiredValue } from './value-assertions.mts';
@@ -63,6 +67,32 @@ describe('case response record normalization', () => {
     assert.equal(requiredValue(updated[0]).state, 'acknowledged');
     assert.equal(requiredValue(updated[0]).reference, 'CASE-123');
     assert.equal(requiredValue(updated[0]).updatedAt, LATER);
+  });
+
+  test('keeps analyst assertions distinct from evidence and derives an explicit trail', () => {
+    const pins = appendCaseEvidencePin([], { label: 'Registration', value: 'Observed as registered' }, NOW);
+    const pin = requiredValue(pins[0]);
+    const assertions = appendCaseAssertion([], {
+      kind: 'hypothesis',
+      statement: 'The domain may be related to the reviewed campaign.',
+      rationale: 'Infrastructure overlap needs independent verification.',
+      evidencePinIds: [pin.id, 'missing-pin'],
+    }, NOW, new Set([pin.id]));
+    const assertion = requiredValue(assertions[0]);
+    assert.equal(assertion.kind, 'hypothesis');
+    assert.deepEqual(assertion.evidencePinIds, [pin.id]);
+    const resolved = updateCaseAssertion(assertions, { id: assertion.id, state: 'resolved' }, LATER, new Set([pin.id]));
+    assert.equal(requiredValue(resolved[0]).state, 'resolved');
+
+    const manualTrail = appendCaseManualTrailEvent([], {
+      kind: 'pivot',
+      summary: 'Reviewed the certificate relationship.',
+      target: 'certificate fingerprint',
+    }, LATER);
+    const trail = buildCaseInvestigationTrail({ assertions: resolved, manualTrail });
+    assert.equal(trail.length, 2);
+    assert.equal(trail[0]?.kind, 'assertion');
+    assert.equal(trail[1]?.kind, 'manual');
   });
 
   test('collections reject malformed entries and enforce record caps', () => {
@@ -130,12 +160,16 @@ describe('case store integration', () => {
       evidencePin: { label: 'Observed URL', value: 'https://response.example/path', observedAt: NOW },
       decision: { summary: 'Review', rationale: 'An analyst review is required.' },
       action: { recipient: 'security@example.test', type: 'security_contact_report' },
+      assertion: { kind: 'unknown', statement: 'The operator remains unknown.' },
+      trailEvent: { kind: 'review', summary: 'Reviewed the retained evidence.' },
     }, NOW);
     const payload = caseModel.buildCaseExport([created], NOW);
     const imported = requiredValue(caseModel.mergeCases([], payload).cases[0]);
     assert.equal(imported.evidencePins.length, 1);
     assert.equal(imported.decisions.length, 1);
     assert.equal(imported.actions.length, 1);
+    assert.equal(imported.assertions.length, 1);
+    assert.equal(imported.manualTrail.length, 1);
     assert.equal(imported.actions[0]?.type, 'security_contact_report');
   });
 
@@ -148,10 +182,14 @@ describe('case store integration', () => {
       evidencePin: { label: 'Registration', value: 'Registered', observedAt: NOW },
       decision: { summary: 'Monitor', rationale: 'Retain for comparison.' },
       action: { recipient: 'internal queue', type: 'internal_review' },
+      assertion: { kind: 'next_step', statement: 'Verify the contact destination.' },
+      trailEvent: { kind: 'handoff', summary: 'Handed off for internal review.' },
     }, LATER);
     assert.equal(result.record.evidenceHistory.length, 1);
     assert.equal(result.record.evidencePins.length, 1);
     assert.equal(result.record.decisions.length, 1);
     assert.equal(result.record.actions.length, 1);
+    assert.equal(result.record.assertions.length, 1);
+    assert.equal(result.record.manualTrail.length, 1);
   });
 });

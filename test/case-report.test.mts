@@ -59,6 +59,8 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
     evidencePins: [],
     decisions: [],
     actions: [],
+    assertions: [],
+    manualTrail: [],
     createdAt: ISO,
     updatedAt: ISO,
     ...overrides,
@@ -72,7 +74,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
 describe('schema identity', () => {
   test('exports correct schema and version', () => {
     assert.equal(caseReport.CASE_REPORT_SCHEMA, 'whoisleuth.case-report');
-    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 2);
+    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 3);
   });
 });
 
@@ -86,7 +88,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.schema, 'whoisleuth.case-report');
-    assert.equal(json.schemaVersion, 2);
+    assert.equal(json.schemaVersion, 3);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
     assert.equal(json.case.id, 'case-1');
@@ -98,6 +100,28 @@ describe('buildCaseReport JSON', () => {
     assert.ok(json.limitations.length > 0);
     // Notes not present when excluded.
     assert.equal('notes' in json.case, false);
+  });
+
+  test('separates structured assertions and explicit manual trail entries', () => {
+    const rec = caseRecord({
+      assertions: [
+        { id: 'assertion-1', kind: 'verified_fact', statement: 'MX was observed.', rationale: null, evidencePinIds: [], state: 'open', createdAt: ISO, updatedAt: ISO },
+        { id: 'assertion-2', kind: 'hypothesis', statement: 'Mail activation may be recent.', rationale: 'No earlier complete observation is retained.', evidencePinIds: [], state: 'open', createdAt: ISO, updatedAt: ISO },
+        { id: 'assertion-3', kind: 'unknown', statement: 'The responsible operator is unknown.', rationale: null, evidencePinIds: [], state: 'open', createdAt: ISO, updatedAt: ISO },
+        { id: 'assertion-4', kind: 'contradiction', statement: 'Registry and registrar dates differ.', rationale: null, evidencePinIds: [], state: 'open', createdAt: ISO, updatedAt: ISO },
+        { id: 'assertion-5', kind: 'next_step', statement: 'Verify the provider contact manually.', rationale: null, evidencePinIds: [], state: 'open', createdAt: ISO, updatedAt: ISO },
+      ],
+      manualTrail: [{ id: 'trail-1', kind: 'pivot', summary: 'Reviewed certificate evidence.', target: 'certificate fingerprint', createdAt: ISO }],
+    });
+    const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
+    assert.equal(json.analystResponse.assertions.length, 5);
+    assert.equal(json.analystResponse.manualTrail.length, 1);
+    assert.match(markdown, /### Verified facts/u);
+    assert.match(markdown, /### Hypotheses/u);
+    assert.match(markdown, /### Unknowns/u);
+    assert.match(markdown, /### Contradictory evidence/u);
+    assert.match(markdown, /### Recommended next manual steps/u);
+    assert.match(markdown, /Browser navigation is not tracked|certificate fingerprint/u);
   });
 
   test('single-snapshot baseline', () => {
