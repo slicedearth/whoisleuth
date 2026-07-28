@@ -34,7 +34,7 @@
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
-  import { addCaseNote, dispositionLabel as caseDispositionLabel, editCase, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
+  import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { outreachAction, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
@@ -44,7 +44,6 @@
   import { buildBrandMimicryReview } from '$lib/analysis/brand-mimicry-review.ts';
   import {
     resolveAbuseRecipients,
-    type ResolvedAbuseRecipient,
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
@@ -76,6 +75,10 @@
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
   import {
+    buildLookupRequestUrl,
+    buildLookupSectionLinks,
+  } from '$lib/analysis/lookup-page-actions.ts';
+  import {
     buildLookupReadableReport,
     lookupReadableReportFilename,
   } from '$lib/analysis/lookup-readable-report.ts';
@@ -88,6 +91,7 @@
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
+  import { LookupCaseController } from '$lib/controllers/lookup-case-controller';
   import {
     explainOpportunityScore,
     explainRiskScore,
@@ -111,6 +115,7 @@
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
   let pageActive=false;
   const lookupRequestController=new LookupRequestController();
+  const lookupCaseController=new LookupCaseController();
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const lookupLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
@@ -397,25 +402,22 @@
     mutationTypes:[]
   });
 
-  async function refreshCase(){caseRecord=caseDomain?await getCaseByDomain(caseDomain):null;}
-  function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
-  async function openLookupCase(){if(!caseDomain)return;try{const{record,created,pruned}=await openCase({domain:caseDomain,source:'lookup',evidence:{...caseEvidence,scanDepth:lookupEvidenceDepth}});caseRecord=record;caseStatus=`${created?`Opened a new case for ${record.domain}.`:`Opened the existing case for ${record.domain}.`}${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';}}
-  async function addLookupNote(){if(!caseRecord)return;const body=caseNote.trim();if(!body){caseStatus='A note cannot be empty.';return;}try{const{record,pruned}=await addCaseNote(caseRecord.id,body);caseRecord=record;caseNote='';caseStatus=`Added a note to the case.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not add the note.';}}
-  async function recordAbuseRecipient(route:ResolvedAbuseRecipient){
-    if(!caseRecord){caseStatus='Create or open the analyst case before recording a response route.';return;}
-    const alreadyRecorded=caseRecord.actions.some((action)=>action.type===route.actionType&&action.recipient.toLowerCase()===route.contact.toLowerCase());
-    if(alreadyRecorded){caseStatus='That response route is already recorded in this case.';return;}
-    try{
-      const{record,pruned}=await editCase(caseRecord.id,{action:{
-        type:route.actionType,
-        recipient:route.contact,
-        contactSource:route.source,
-        contactLimitations:[...route.limitations],
-        state:'planned',
-      }});
-      caseRecord=record;
-      caseStatus=`Recorded the ${route.kind.replaceAll('_',' ')} route as a planned, human-reviewed action.${prunedNote(pruned)}`;
-    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not record the response route.';}
+  async function refreshCase(){caseRecord=await lookupCaseController.refresh(caseDomain);}
+  async function openLookupCase(){
+    const next=await lookupCaseController.open(caseDomain,caseEvidence,lookupEvidenceDepth);
+    caseRecord=next.record;
+    caseStatus=next.status;
+  }
+  async function addLookupNote(){
+    const next=await lookupCaseController.appendNote(caseRecord,caseNote);
+    caseRecord=next.record;
+    caseStatus=next.status;
+    if(next.clearNote)caseNote='';
+  }
+  async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){
+    const next=await lookupCaseController.recordRecipient(caseRecord,route);
+    caseRecord=next.record;
+    caseStatus=next.status;
   }
   function cancelLookup(){lookupRequestController.cancel();}
   onMount(()=>{
@@ -466,14 +468,12 @@
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
-  function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return[
-    {href:'#overview',label:'Overview'},
-    ...(hasWebEvidence?[{href:'#web-evidence' as const,label:result?.type==='domain'?'Web & DNS':'DNS'}]:[]),
-    {href:'#registry',label:'Registry'},
-    ...(threatIntelligenceProviders.length?[{href:'#external-intelligence' as const,label:'External intel'}]:[]),
-    ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
-    {href:'#raw-data',label:'Raw data'},
-  ];}
+  function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return buildLookupSectionLinks({
+    hasWebEvidence,
+    domainResult:result?.type==='domain',
+    hasExternalIntelligence:threatIntelligenceProviders.length>0,
+    hasCaseSection,
+  });}
   async function submit(event:SubmitEvent){
     event.preventDefault();
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
@@ -487,16 +487,22 @@
 
     loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';
     const target=entries[0];if(!target)return;
-    const params=new URLSearchParams({q:target});
-    if(lookupMode==='fast')params.set('fast','1');
-    if(lookupMode==='deep'&&includeExternalIntelligence&&externalIntelligenceSupported)params.set('intelligence','1');
-    if(lookupMode==='deep'&&includeMalwareHostIntelligence&&malwareHostIntelligenceSupported)params.set('malware','1');
-    if(lookupMode==='deep'&&includeMalwareIocIntelligence&&malwareIocIntelligenceSupported)params.set('ioc','1');
-    if(lookupMode==='deep'&&includeSecurityTxt&&securityTxtSupported&&securityTxtEligible)params.set('security_txt','1');
+    const lookupUrl=buildLookupRequestUrl(target,{
+      mode:lookupMode,
+      includeExternalIntelligence,
+      externalIntelligenceSupported,
+      includeMalwareHostIntelligence,
+      malwareHostIntelligenceSupported,
+      includeMalwareIocIntelligence,
+      malwareIocIntelligenceSupported,
+      includeSecurityTxt,
+      securityTxtSupported,
+      securityTxtEligible,
+    });
 
     try{
       const completed=await lookupRequestController.run(
-        `/api/lookup?${params}`,
+        lookupUrl,
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
         async()=>{profile=await activeProfile();},
       );
