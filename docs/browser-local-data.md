@@ -23,8 +23,9 @@ The owning browser-store models declare these independent serialized ceilings:
 | Retained relationship observations | IndexedDB | 0.75 MiB |
 | Saved Bulk sessions | IndexedDB | 4 MiB |
 | Website profile snapshots | IndexedDB | 0.5 MiB |
+| Investigation templates | IndexedDB | 0.25 MiB |
 
-The combined declared ceiling is 15 MiB. These are safety limits rather than
+The combined declared ceiling is 15.25 MiB. These are safety limits rather than
 expected usage, and a browser may enforce a different origin quota. However,
 the aggregate exceeds the 5 MiB planning reference used by the former
 local-storage design. The model ceilings still apply in IndexedDB so changing
@@ -38,6 +39,10 @@ Website-profile snapshots retain at most 60 explicit analyst saves and 12 per
 canonical domain. They contain curated technology identifiers, posture states,
 identity digests, source health, timestamps, and completeness markers rather
 than raw lookup responses.
+Investigation templates retain at most 20 analyst-authored variants of the
+three built-in guides. They can customise bounded guidance, omit allowlisted
+steps, and add approval gates, but cannot introduce arbitrary actions, run
+code, start collection, submit evidence, or remove a mandatory request gate.
 
 Run the deterministic evaluation without reading browser data:
 

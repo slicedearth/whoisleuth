@@ -57,7 +57,11 @@ Dashboard also separates common intentions into investigation, owned-domain
 protection, candidate review, acquisition assessment, and case-work lanes. A
 two-domain comparison loads only the two validated domains into Bulk and does
 not start collection. Active guided work keeps the target, Brand Profile,
-matching case, and next manual action visible across Console tools.
+matching case, and next manual action visible across Console tools. Analysts
+can save bounded local templates derived from the three standard guides,
+customise their guidance, omit allowlisted steps, and add approval gates.
+Templates cannot add arbitrary actions, execute code, start requests, submit
+evidence, or remove a mandatory request gate.
 
 Deep domain Lookup can combine:
 
@@ -151,8 +155,8 @@ accessible lists, tables, or source records.
   network targets.
 - **Local-first investigation state.** Cases, evidence pins, analyst decisions,
   response actions, profiles, watchlists, campaigns, shortlist entries, saved
-  Bulk sessions, explicit website-profile snapshots, and rules use bounded
-  IndexedDB stores in the current browser.
+  Bulk sessions, explicit website-profile snapshots, investigation templates,
+  and rules use bounded IndexedDB stores in the current browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
 - **Supplementary visuals.** Charts summarize bounded data already present in

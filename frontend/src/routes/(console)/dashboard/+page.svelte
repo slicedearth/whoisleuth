@@ -5,6 +5,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import InvestigationSearch from '$lib/components/InvestigationSearch.svelte';
   import WorkspaceArchive from '$lib/components/WorkspaceArchive.svelte';
+  import InvestigationTemplateManager from '$lib/components/InvestigationTemplateManager.svelte';
   import { loadProfiles } from '$lib/brand-profiles';
   import { loadCases } from '$lib/cases';
   import { loadLocalInvestigationSearchIndex } from '$lib/investigation-search';
@@ -21,6 +22,7 @@
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
+  import { loadInvestigationTemplates, type InvestigationTemplate } from '$lib/investigation-templates';
 
   const quickActions: Array<{ href: string; label: string; detail: string; icon: IntelligenceIconName }> = [
     { href: '/lookup', label: 'Investigate a target', detail: 'Review a domain, IP address, or ASN across separately identified sources.', icon: 'lookup' },
@@ -35,11 +37,14 @@
   let summaryError = $state('');
   let guideDomain = $state('');
   let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
+  let guideTemplateId = $state('');
+  let templates = $state<InvestigationTemplate[]>([]);
   let guideError = $state('');
   let compareLeft = $state('');
   let compareRight = $state('');
   let compareError = $state('');
   const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
+  const compatibleTemplates = $derived(templates.filter((template) => template.recipeId === guideRecipeId));
 
   async function refreshLocalSummary() {
     summaryError = '';
@@ -64,13 +69,17 @@
     }
   }
 
-  onMount(()=>{void refreshLocalSummary();});
+  onMount(()=>{
+    void refreshLocalSummary();
+    void loadInvestigationTemplates().then((value) => { templates = value; });
+  });
 
   function startGuide(event:SubmitEvent) {
     event.preventDefault();
     guideError = '';
     try {
-      startInvestigationGuide(guideDomain, guideRecipeId);
+      const template = compatibleTemplates.find((candidate) => candidate.id === guideTemplateId) || null;
+      startInvestigationGuide(guideDomain, guideRecipeId, template);
     } catch (cause) {
       guideError = cause instanceof Error ? cause.message : 'Could not start the guided investigation.';
     }
@@ -170,12 +179,20 @@
   </div>
   <form onsubmit={startGuide}>
     <label for="guide-recipe">Guide</label>
-    <select id="guide-recipe" bind:value={guideRecipeId}>
+    <select id="guide-recipe" bind:value={guideRecipeId} onchange={() => { guideTemplateId = ''; }}>
       {#each investigationRecipes as recipe}
         <option value={recipe.id}>{recipe.label}</option>
       {/each}
     </select>
     <p class="recipe-detail">{selectedRecipe?.summary ?? ''}</p>
+    <label for="guide-template">Template</label>
+    <select id="guide-template" bind:value={guideTemplateId}>
+      <option value="">Standard guide</option>
+      {#each compatibleTemplates as template}
+        <option value={template.id}>{template.label}</option>
+      {/each}
+    </select>
+    <p class="recipe-detail">{guideTemplateId ? 'Uses your saved local labels, guidance, included steps, and additional approval gates.' : 'Uses the reviewed standard steps.'}</p>
     <label for="guide-domain">{selectedRecipe?.targetLabel ?? 'Domain'}</label>
     <div class="guide-input">
       <input id="guide-domain" bind:value={guideDomain} maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="example.test">
@@ -185,6 +202,8 @@
     <p class="guide-note">Starting a guide only saves its steps. Before a network step, you review what it requests and allow that step. Opening a tool only takes you there; you still start the check yourself.</p>
   </form>
 </section>
+
+<InvestigationTemplateManager {templates} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />
 
 <WorkspaceArchive onimport={refreshLocalSummary} />
 

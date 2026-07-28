@@ -94,6 +94,16 @@ import {
 } from './analysis/website-snapshot-model.ts';
 import type { WebsiteProfileSnapshot } from './analysis/website-snapshot-model.ts';
 import {
+  INVESTIGATION_TEMPLATE_SCHEMA,
+  INVESTIGATION_TEMPLATE_VERSION,
+  MAX_INVESTIGATION_TEMPLATES,
+  MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
+  investigationTemplateStoreVersion,
+  normalizeInvestigationTemplateStore,
+  serializeInvestigationTemplateStore,
+} from './analysis/investigation-template-model.ts';
+import type { InvestigationTemplate } from './analysis/investigation-template-model.ts';
+import {
   BrowserLocalDataError,
   plaintextJsonCodec,
 } from './browser-local-data.ts';
@@ -116,6 +126,7 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   relationship_observations: RelationshipObservation;
   bulk_sessions: BulkSession;
   website_snapshots: WebsiteProfileSnapshot;
+  investigation_templates: InvestigationTemplate;
 }>;
 
 export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
@@ -134,6 +145,7 @@ export const LEGACY_DETECTION_RULES_KEY = 'whoisleuth-detection-rules-v1';
 export const LEGACY_RELATIONSHIP_OBSERVATIONS_KEY = 'whoisleuth-relationship-observations-v1';
 export const LEGACY_BULK_SESSIONS_KEY = 'whoisleuth-bulk-sessions-v1';
 export const LEGACY_WEBSITE_SNAPSHOTS_KEY = 'whoisleuth-website-snapshots-v1';
+export const LEGACY_INVESTIGATION_TEMPLATES_KEY = 'whoisleuth-investigation-templates-v1';
 
 function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
@@ -309,6 +321,25 @@ export const WEBSITE_SNAPSHOTS_COLLECTION: LocalDataCollectionDefinition<Website
   }),
 });
 
+export const INVESTIGATION_TEMPLATES_COLLECTION: LocalDataCollectionDefinition<InvestigationTemplate[]> = Object.freeze({
+  id: 'investigation_templates',
+  label: 'Investigation templates',
+  legacyKey: LEGACY_INVESTIGATION_TEMPLATES_KEY,
+  schemaVersion: INVESTIGATION_TEMPLATE_VERSION,
+  maximumBytes: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
+  maximumRecords: MAX_INVESTIGATION_TEMPLATES,
+  empty: () => [],
+  normalize: (raw) => normalizeInvestigationTemplateStore(raw).templates,
+  version: investigationTemplateStoreVersion,
+  serialize: serializeInvestigationTemplateStore,
+  split: (templates) => recordsFromArray(templates, (record) => record.id),
+  join: (records, schemaVersion) => ({
+    schema: INVESTIGATION_TEMPLATE_SCHEMA,
+    version: schemaVersion,
+    templates: arrayFromRecords(records),
+  }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
@@ -320,6 +351,7 @@ export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   BULK_SESSIONS_COLLECTION,
   WEBSITE_SNAPSHOTS_COLLECTION,
+  INVESTIGATION_TEMPLATES_COLLECTION,
 ]);
 
 function browserLocalCollectionDefinition(

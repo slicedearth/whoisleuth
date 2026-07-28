@@ -14,6 +14,7 @@ import {
   investigationGuideHref,
   investigationGuideRecipe,
   investigationGuideStageForPath,
+  investigationGuideStagesForGuide,
   investigationGuideStagesForRecipe,
   investigationGuideSummaryFilename,
   MAX_INVESTIGATION_GUIDE_DOMAIN_LENGTH,
@@ -86,7 +87,7 @@ test('normalizes IDN hostnames without mutating the input', () => {
   assert.equal(value, 'café.example');
 });
 
-test('normalizes deployed version 1 navigation into new-domain triage version 2', () => {
+test('normalizes deployed version 1 navigation into the current new-domain triage schema', () => {
   const legacy = {
     version: INVESTIGATION_GUIDE_LEGACY_VERSION,
     domain: 'Example.Test.',
@@ -97,7 +98,7 @@ test('normalizes deployed version 1 navigation into new-domain triage version 2'
   };
   const parsed = parseInvestigationGuide(legacy);
   assert.ok(parsed);
-  assert.equal(parsed.version, 2);
+  assert.equal(parsed.version, INVESTIGATION_GUIDE_VERSION);
   assert.equal(parsed.recipeId, 'new_domain_triage');
   assert.equal(parsed.domain, 'example.test');
   assert.deepEqual(parsed.reviewDomains, ['example.test']);
@@ -139,13 +140,53 @@ test('parses current records through fixed stage and field allowlists', () => {
 });
 
 test('rejects malformed and future records without treating them as an empty recipe', () => {
-  for (const value of [null, [], { version: 3 }, { version: 2, domain: 'bad' }, {
+  for (const value of [null, [], { version: INVESTIGATION_GUIDE_VERSION + 1 }, { version: 2, domain: 'bad' }, {
     version: 2,
     recipeId: 'new_domain_triage',
     domain: 'example.test',
     createdAt: 'bad',
     updatedAt: OPENED_AT,
   }]) assert.equal(parseInvestigationGuide(value), null);
+});
+
+test('custom templates retain allowlisted stages and cannot remove mandatory request gates', () => {
+  const guide = createInvestigationGuide('example.test', 'new_domain_triage', STARTED_AT, {
+    id: 'focused-review',
+    label: 'Focused review',
+    summary: 'Review only the collection and disposition steps.',
+    recipeId: 'new_domain_triage',
+    stages: [
+      {
+        id: 'lookup',
+        label: 'Collect focused evidence',
+        expectedEvidence: 'A reviewed bounded result.',
+        completionCriteria: 'Source states have been reviewed.',
+        instructions: ['Run the Deep lookup.', 'Review source limitations.'],
+        requiresApproval: false,
+      },
+      { id: 'bulk', enabled: false },
+      {
+        id: 'monitor',
+        label: 'Record the decision',
+        requiresApproval: true,
+      },
+      { id: 'invented', label: 'Do not keep' },
+    ],
+  });
+  assert.ok(guide);
+  assert.equal(guide.template?.label, 'Focused review');
+  assert.deepEqual(investigationGuideStagesForGuide(guide).map((stage) => stage.id), ['lookup', 'monitor']);
+  assert.equal(requiredValue(investigationGuideStagesForGuide(guide)[0]).requiresApproval, true);
+  assert.equal(requiredValue(investigationGuideStagesForGuide(guide)[1]).requiresApproval, true);
+  assert.deepEqual(visitInvestigationGuide(guide, '/lookup', OPENED_AT), guide);
+  const approved = approveInvestigationGuideStage(guide, 'lookup', APPROVED_AT);
+  assert.equal(requiredValue(approved?.stages[0]).approvedAt, APPROVED_AT);
+  const restarted = restartInvestigationGuide(approved, COMPLETED_AT);
+  assert.equal(restarted?.template?.id, 'focused-review');
+  assert.deepEqual(restarted?.stages.map((stage) => stage.id), ['lookup', 'monitor']);
+  const summary = buildInvestigationGuideSummary(restarted, COMPLETED_AT);
+  assert.deepEqual(summary?.template, { id: 'focused-review', label: 'Focused review' });
+  assert.deepEqual(summary?.stages.map((stage) => stage.id), ['lookup', 'monitor']);
 });
 
 test('maps recipe stages to existing tool routes with safe target handoff', () => {

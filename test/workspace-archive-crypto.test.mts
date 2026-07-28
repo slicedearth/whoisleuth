@@ -32,6 +32,7 @@ async function workspaceArchive() {
     relationshipObservations: [],
     bulkSessions: [],
     websiteSnapshots: [],
+    investigationTemplates: [],
     settings: { activeProfileId: '', theme: 'system' },
   }, { generatedAt: NOW });
 }
@@ -62,7 +63,7 @@ describe('encrypted portable workspace archives', () => {
       iv: encrypted.cipher.iv,
     });
     assert.equal(parsed.generatedAt, NOW);
-    assert.equal(parsed.sections.length, 10);
+    assert.equal(parsed.sections.length, 11);
     assert.equal(JSON.stringify(encrypted).includes(PASSPHRASE), false);
     assert.equal(JSON.stringify(encrypted).includes(WORKSPACE_ARCHIVE_SCHEMA), true);
   });

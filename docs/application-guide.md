@@ -402,7 +402,7 @@ documents deterministic offline calibration against analyst-labelled fixtures.
 
 ## Guided investigations
 
-Dashboard can coordinate three fixed recipes:
+Dashboard can coordinate three standard recipes:
 
 - brand sweep;
 - infrastructure pivot; and
@@ -419,20 +419,35 @@ It does not decide when evidence is sufficient, create a case automatically,
 or infer a finding from navigation. Analysts remain responsible for starting
 each collection action and marking its outcome.
 
+Dashboard also provides a browser-local template manager. A custom template
+must start from one of the three standard guides. It can rename instructions,
+clarify expected evidence and completion criteria, omit an existing step, or
+add an approval gate. It cannot introduce a new route or operation, execute
+code, start a request, submit evidence, alter a case, or remove an approval
+gate required by the standard guide. Starting a custom guide copies a bounded
+template snapshot into that tab's guide state so later template edits do not
+silently change work already in progress.
+
+Investigation templates are stored in the current browser's IndexedDB
+collection. They can be exported or imported as a strict versioned JSON
+document and are included in the deliberate workspace archive. They contain
+analyst-authored workflow guidance, so review them before sharing.
+
 ## Browser-local storage and archives
 
 Cases, campaigns, Brand Profiles, watchlists, shortlist entries, Certificate
 Transparency history, detection rules, analyst-selected relationship
-observations, and explicitly saved Bulk sessions use bounded native IndexedDB
-stores. Relationship observations
+observations, explicitly saved Bulk sessions, website profile snapshots, and
+investigation templates use bounded native IndexedDB stores. Relationship observations
 are never retained automatically: Bulk writes one only after the analyst
 selects **Retain observation**. Browser storage can still be cleared or evicted
 and does not synchronize across devices.
 
 Dashboard can create one deliberate workspace archive for the supported
 collections and preferences, including retained relationship observations and
-compact saved Bulk sessions. Version 2 adds the Bulk-session section while
-version 1 archives remain readable and do not invent that missing section.
+compact saved Bulk sessions. Version 2 added Bulk sessions, version 3 added
+website profile snapshots, and version 4 adds investigation templates.
+Versions 1 through 3 remain readable and do not invent missing later sections.
 The recommended download wraps the ordinary checksummed archive in
 passphrase-based browser-local authenticated encryption. The passphrase is
 never stored or sent to the server and cannot be recovered. A separately

@@ -14,8 +14,8 @@
     INVESTIGATION_GUIDE_EVENT,
     investigationGuideHref,
     investigationGuideRecipe,
-    investigationGuideStageForPath,
-    investigationGuideStagesForRecipe,
+    investigationGuideStageForGuidePath,
+    investigationGuideStagesForGuide,
     loadInvestigationGuide,
     pauseInvestigationGuide,
     recordInvestigationGuideVisit,
@@ -61,8 +61,8 @@
   let contextProfile = $state<BrandProfile | null>(null);
   let contextCase = $state<CaseRecord | null>(null);
   const recipe = $derived(guide ? investigationGuideRecipe(guide.recipeId) : null);
-  const stages = $derived(guide ? investigationGuideStagesForRecipe(guide.recipeId) : []);
-  const currentStage = $derived(guide ? investigationGuideStageForPath(page.url.pathname, guide.recipeId) : null);
+  const stages = $derived(guide ? investigationGuideStagesForGuide(guide) : []);
+  const currentStage = $derived(guide ? investigationGuideStageForGuidePath(guide, page.url.pathname) : null);
   const nextStageId = $derived(guide?.stages.find((stage) => stage.outcome === 'pending')?.id || null);
   const selectedStage = $derived(stages.find((stage) => stage.id === selectedStageId) || null);
   const actionStage = $derived.by(() => {
@@ -88,7 +88,7 @@
   }
 
   function guideIdentity(value: InvestigationGuide | null) {
-    return value ? `${value.recipeId}\u0000${value.domain}\u0000${value.createdAt}` : '';
+    return value ? `${value.recipeId}\u0000${value.template?.id || ''}\u0000${value.domain}\u0000${value.createdAt}` : '';
   }
 
   async function revealGuide() {
@@ -327,8 +327,8 @@
     <div class="guide-heading">
       <div>
         <p class="eyebrow">Guided investigation</p>
-        <strong class="guide-title" id="investigation-guide-title">{recipe.label}: {guide.domain}</strong>
-        <p class="recipe-progress">{reviewedCount} of {stages.length} steps reviewed</p>
+        <strong class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</strong>
+        <p class="recipe-progress">{guide.template ? `${recipe.label} template · ` : ''}{reviewedCount} of {stages.length} steps reviewed</p>
       </div>
       <span class:paused={guide.status === 'paused'} class="recipe-status">{guide.status === 'paused' ? 'Paused' : 'Active'}</span>
     </div>

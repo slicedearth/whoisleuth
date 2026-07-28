@@ -64,14 +64,20 @@ import {
   buildWebsiteSnapshotExport,
   mergeWebsiteSnapshots,
 } from './website-snapshot-model.ts';
+import {
+  INVESTIGATION_TEMPLATE_SCHEMA,
+  INVESTIGATION_TEMPLATE_VERSION,
+  buildInvestigationTemplateExport,
+  mergeInvestigationTemplates,
+} from './investigation-template-model.ts';
 
 export const WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.workspace-archive';
-export const WORKSPACE_ARCHIVE_VERSION = 3;
+export const WORKSPACE_ARCHIVE_VERSION = 4;
 export const WORKSPACE_SETTINGS_SCHEMA = 'whoisleuth.workspace-settings';
 export const WORKSPACE_SETTINGS_VERSION = 1;
 export const MAX_WORKSPACE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_WORKSPACE_ARCHIVE_SECTION_BYTES = 5 * 1024 * 1024;
-export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 10;
+export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 11;
 
 export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'cases',
@@ -83,6 +89,7 @@ export const WORKSPACE_ARCHIVE_SECTION_IDS = [
   'relationshipObservations',
   'bulkSessions',
   'websiteSnapshots',
+  'investigationTemplates',
   'settings',
 ] as const;
 
@@ -138,6 +145,7 @@ export interface WorkspaceArchiveSectionMap {
   relationshipObservations: ReturnType<typeof buildRelationshipObservationExport>;
   bulkSessions: ReturnType<typeof buildBulkSessionExport>;
   websiteSnapshots: ReturnType<typeof buildWebsiteSnapshotExport>;
+  investigationTemplates: ReturnType<typeof buildInvestigationTemplateExport>;
   settings: WorkspaceSettingsDocument;
 }
 
@@ -177,6 +185,7 @@ interface NormalizedWorkspaceInput {
   relationshipObservations: unknown[];
   bulkSessions: unknown[];
   websiteSnapshots: unknown[];
+  investigationTemplates: unknown[];
   settings: UnknownRecord;
 }
 
@@ -292,6 +301,7 @@ function workspaceArchiveSections(
     relationshipObservations: buildRelationshipObservationExport(input.relationshipObservations, now),
     bulkSessions: buildBulkSessionExport(input.bulkSessions, now),
     websiteSnapshots: buildWebsiteSnapshotExport(input.websiteSnapshots, now),
+    investigationTemplates: buildInvestigationTemplateExport(input.investigationTemplates, now),
     settings: settingsDocument(input),
   };
 }
@@ -386,6 +396,14 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     merge: (local, data) => mergeWebsiteSnapshots(local.websiteSnapshots, data),
   },
   {
+    id: 'investigationTemplates',
+    label: 'Investigation templates',
+    schema: INVESTIGATION_TEMPLATE_SCHEMA,
+    version: INVESTIGATION_TEMPLATE_VERSION,
+    count: (data) => arrayCount(data, 'templates'),
+    merge: (local, data) => mergeInvestigationTemplates(local.investigationTemplates, data),
+  },
+  {
     id: 'settings', label: 'Workspace settings', schema: WORKSPACE_SETTINGS_SCHEMA, version: WORKSPACE_SETTINGS_VERSION,
     count: () => 1,
     merge: null,
@@ -415,6 +433,7 @@ function normalizedInput(input: unknown): NormalizedWorkspaceInput {
     relationshipObservations: Array.isArray(value.relationshipObservations) ? value.relationshipObservations : [],
     bulkSessions: Array.isArray(value.bulkSessions) ? value.bulkSessions : [],
     websiteSnapshots: Array.isArray(value.websiteSnapshots) ? value.websiteSnapshots : [],
+    investigationTemplates: Array.isArray(value.investigationTemplates) ? value.investigationTemplates : [],
     settings: record(value.settings) || {},
   };
 }
@@ -497,12 +516,12 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   if (
     typeof value.version !== 'number'
     || !Number.isSafeInteger(value.version)
-    || ![1, 2, WORKSPACE_ARCHIVE_VERSION].includes(value.version)
+    || ![1, 2, 3, WORKSPACE_ARCHIVE_VERSION].includes(value.version)
   ) {
     if (typeof value.version === 'number' && Number.isSafeInteger(value.version) && value.version > WORKSPACE_ARCHIVE_VERSION) {
       throw new Error(`This workspace archive uses newer schema ${value.version}. Update the app before importing it.`);
     }
-    throw new Error(`Expected workspace archive schema 1, 2, or ${WORKSPACE_ARCHIVE_VERSION}.`);
+    throw new Error(`Expected workspace archive schema 1, 2, 3, or ${WORKSPACE_ARCHIVE_VERSION}.`);
   }
   const { bytes } = ensureArchiveBudget(value);
   const manifest = record(value.manifest);

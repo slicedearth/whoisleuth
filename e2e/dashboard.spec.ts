@@ -130,6 +130,27 @@ async function seedArchiveWorkspace(page: import('@playwright/test').Page) {
         sources: [{ source: 'page', state: 'success' }],
       }],
     },
+    'whoisleuth-investigation-templates-v1': {
+      schema: 'whoisleuth.investigation-templates',
+      version: 1,
+      templates: [{
+        id: 'archive-investigation-template',
+        label: 'Archive review template',
+        summary: 'A portable bounded guide template.',
+        recipeId: 'new_domain_triage',
+        stages: [{
+          id: 'lookup',
+          label: 'Collect evidence',
+          detail: 'Review one bounded target.',
+          expectedEvidence: 'Separately attributed evidence.',
+          completionCriteria: 'Source states were reviewed.',
+          instructions: ['Run a Deep lookup.'],
+          requiresApproval: true,
+        }],
+        createdAt: NOW,
+        updatedAt: NOW,
+      }],
+    },
     'whoisleuth:theme:v1': 'light',
     'unrelated-private-key': 'must-not-export',
   }, { clearStorage: true });
@@ -253,10 +274,10 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(download.suggestedFilename()).toMatch(/^whoisleuth-workspace-\d{4}-\d{2}-\d{2}\.json$/);
   const archive = JSON.parse(content) as WorkspaceArchiveDocument;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
-  expect(archive.version).toBe(3);
-  expect(archive.manifest.sectionCount).toBe(10);
+  expect(archive.version).toBe(4);
+  expect(archive.manifest.sectionCount).toBe(11);
   expect(archive.manifest.sections.map((section) => section.id)).toEqual([
-    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'settings',
+    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'settings',
   ]);
   expect(archive.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum))).toBe(true);
   const archivedCase = requiredValue(archive.sections.cases.cases[0], 'The exported case fixture is missing.');
@@ -268,11 +289,12 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   ).normalizedValue).toBe('192.0.2.20');
   expect(archive.sections.websiteSnapshots.snapshots).toHaveLength(1);
   expect(archive.sections.websiteSnapshots.snapshots[0]?.domain).toBe('archive-case.invalid');
+  expect(archive.sections.investigationTemplates.templates[0]?.label).toBe('Archive review template');
   expect(archive.sections.settings).toMatchObject({ activeProfileId: 'archive-profile', theme: 'light' });
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 10 verified data sections');
+  await expect(page.getByRole('status')).toContainText('Downloaded an unencrypted workspace backup with 11 verified data sections');
 });
 
 test('the dashboard encrypts and locally unlocks a portable workspace backup', async ({ page }) => {
@@ -308,7 +330,7 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   await page.getByRole('button', { name: 'Unlock and review' }).click();
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(10);
+  await expect(preview.locator('li')).toHaveCount(11);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await preview.getByRole('button', { name: 'Add selected data' }).click();
@@ -331,20 +353,21 @@ test('workspace archive import previews conflicts before a non-destructive mobil
 
   const preview = page.locator('.preview');
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(10);
+  await expect(preview.locator('li')).toHaveCount(11);
   await expect(preview.locator('li', { hasText: 'Cases' })).toContainText('1 new');
   await expect(preview.locator('li', { hasText: 'Workspace settings' })).toContainText('Ready');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(page.getByRole('status')).toContainText('Added backup data from 10 sections');
-  const [cases, campaigns, profiles, relationshipObservations, websiteSnapshots, settings] = await Promise.all([
+  await expect(page.getByRole('status')).toContainText('Added backup data from 11 sections');
+  const [cases, campaigns, profiles, relationshipObservations, websiteSnapshots, investigationTemplates, settings] = await Promise.all([
     readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'brand_profiles', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'relationship_observations', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'website_snapshots', { minimumRevision: 2 }),
+    readBrowserLocalCollection(page, 'investigation_templates', { minimumRevision: 2 }),
     page.evaluate(() => ({
     activeProfile: localStorage.getItem('whois-rdap-active-brand-profile-v1'),
     theme: localStorage.getItem('whoisleuth:theme:v1'),
@@ -355,6 +378,7 @@ test('workspace archive import previews conflicts before a non-destructive mobil
   expect(profiles.records).toHaveLength(1);
   expect(relationshipObservations.records).toHaveLength(1);
   expect(websiteSnapshots.records).toHaveLength(1);
+  expect(investigationTemplates.records).toHaveLength(1);
   expect(settings.activeProfile).toBe('archive-profile');
   expect(settings.theme).toBe('light');
 });

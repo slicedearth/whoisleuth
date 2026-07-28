@@ -9,7 +9,9 @@ import {
   INVESTIGATION_RECIPES,
   investigationGuideHref,
   investigationGuideRecipe,
+  investigationGuideStageForGuidePath,
   investigationGuideStageForPath,
+  investigationGuideStagesForGuide,
   investigationGuideStagesForRecipe,
   investigationGuideSummaryFilename,
   MAX_INVESTIGATION_GUIDE_EXPORT_BYTES,
@@ -24,17 +26,20 @@ import {
   type InvestigationGuide,
   type InvestigationGuideOutcome,
   type InvestigationRecipeId,
+  type InvestigationGuideTemplateSnapshot,
 } from './analysis/investigation-guide.ts';
 import {
   INVESTIGATION_GUIDE_EVENT,
   INVESTIGATION_GUIDE_KEY,
   LEGACY_INVESTIGATION_GUIDE_KEY,
+  ORIGINAL_INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
 
 export {
   INVESTIGATION_GUIDE_EVENT,
   INVESTIGATION_GUIDE_KEY,
   LEGACY_INVESTIGATION_GUIDE_KEY,
+  ORIGINAL_INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
 
 export type {
@@ -43,6 +48,7 @@ export type {
   InvestigationGuideStageProgress,
   InvestigationGuideStatus,
   InvestigationGuideSummary,
+  InvestigationGuideTemplateSnapshot,
   InvestigationRecipe,
   InvestigationRecipeId,
   InvestigationRecipeStage,
@@ -104,17 +110,22 @@ export function loadInvestigationGuide(): InvestigationGuide | null {
   if (current.state !== 'absent') return current.guide;
 
   const legacy = readStoredGuide(LEGACY_INVESTIGATION_GUIDE_KEY);
-  if (!legacy.guide) return null;
+  const original = legacy.guide ? legacy : readStoredGuide(ORIGINAL_INVESTIGATION_GUIDE_KEY);
+  if (!original.guide) return null;
   try {
-    storeGuide(legacy.guide);
+    storeGuide(original.guide);
   } catch {
     // The normalized legacy record remains usable in memory when storage is unavailable.
   }
-  return legacy.guide;
+  return original.guide;
 }
 
-export function startInvestigationGuide(domain: string, recipeId: InvestigationRecipeId = 'new_domain_triage'): InvestigationGuide {
-  const guide = createInvestigationGuide(domain, recipeId) as InvestigationGuide | null;
+export function startInvestigationGuide(
+  domain: string,
+  recipeId: InvestigationRecipeId = 'new_domain_triage',
+  template: InvestigationGuideTemplateSnapshot | null = null,
+): InvestigationGuide {
+  const guide = createInvestigationGuide(domain, recipeId, new Date().toISOString(), template) as InvestigationGuide | null;
   if (!guide) throw new Error('Enter one valid domain without a URL, path, port, or spaces.');
   storeGuide(guide);
   announceGuideChange();
@@ -182,6 +193,7 @@ export function clearInvestigationGuide() {
   try {
     sessionStorage.removeItem(INVESTIGATION_GUIDE_KEY);
     sessionStorage.removeItem(LEGACY_INVESTIGATION_GUIDE_KEY);
+    sessionStorage.removeItem(ORIGINAL_INVESTIGATION_GUIDE_KEY);
   } catch {
     // Unavailable storage is already effectively clear.
   }
@@ -195,6 +207,8 @@ export {
   INVESTIGATION_GUIDE_VERSION,
   investigationGuideHref,
   investigationGuideRecipe,
+  investigationGuideStageForGuidePath,
   investigationGuideStageForPath,
+  investigationGuideStagesForGuide,
   investigationGuideStagesForRecipe,
 };

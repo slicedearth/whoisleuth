@@ -203,17 +203,22 @@ default (see the README), so many lookups return no personal data at all.
   a full reload, or closing the tab clears it. Deliberate case, watchlist,
   shortlist, download, and archive actions remain the only ways those tools
   retain or export selected evidence.
-- **Guided investigations**: an authenticated user can optionally start a fixed
+- **Guided investigations**: an authenticated user can optionally start a standard
   brand-sweep, infrastructure-pivot, or new-domain-triage guide for one canonical
-  domain. The versioned storage contract calls the selected guide a recipe;
-  schema version 2 keeps only that recipe identifier, official or starting
+  domain, or a bounded analyst-authored template derived from one of those
+  guides. The versioned storage contract calls the selected guide a recipe;
+  schema version 3 keeps only that recipe identifier, an optional compact
+  template snapshot, official or starting
   domain, an optional analyst-selected candidate domain, up to 25 canonical
   domains carried from a guided Bulk comparison, an explicit truncation marker,
   creation/update timestamps, active or paused state, and bounded stage
   approval, opened, and outcome markers in the current tab's `sessionStorage`
-  under `whoisleuth:investigation-guide:v2`. A deployed version 1 navigation
-  record can normalize into the new-domain triage recipe when no current record
-  exists; future records remain untouched. Guide progress is not sent to the
+  under `whoisleuth:investigation-guide:v3`. Deployed version 1 and 2 records
+  can normalize without inventing a custom template when no current record
+  exists; future records remain untouched. A saved template can customise
+  bounded guidance, omit allowlisted steps, and add approval gates. It cannot
+  add arbitrary actions, run code, start collection, submit evidence, change a
+  case, or remove a required request gate. Guide progress is not sent to the
   server or copied into persistent browser stores, and it is not treated as
   evidence completion. The guide can pre-fill or preserve a bounded profile,
   discovery, lookup, Bulk, or case target, and carries the bounded comparison
@@ -350,7 +355,7 @@ default (see the README), so many lookups return no personal data at all.
   Lookup evidence export.
 - **Brand Profiles / Shortlist / Watchlist / Cases / Campaigns / Certificate
   search history / Custom rules / Retained relationship observations / Saved
-  Bulk sessions**: saved
+  Bulk sessions / Website profile snapshots / Investigation templates**: saved
   as bounded records in your own browser's IndexedDB database, not on the
   server, and visible to whoever can use that browser profile. On the first
   authenticated load after this storage change, WHOISleuth normalizes
@@ -381,6 +386,13 @@ default (see the README), so many lookups return no personal data at all.
   comparison, deletion, import, and export happen locally and make no request.
   A changed or unavailable field is a review lead, not evidence of compromise,
   ownership, intent, safety, or maliciousness.
+  Investigation templates retain only allowlisted guide-stage identities,
+  bounded analyst-authored labels and instructions, expected evidence,
+  completion criteria, and optional additional request gates. They cannot add
+  arbitrary routes or operations, execute code, start requests, submit
+  evidence, change a case, or remove mandatory gates. Saving, editing,
+  importing, exporting, and deleting templates happen locally and make no
+  network request.
   Bulk filters and group summaries are derived locally from the compact rows
   already in memory. Explicit batch selection is stored in the same bounded
   shortlist and does not make a request. A selected deep rescan sends only the
@@ -453,7 +465,7 @@ default (see the README), so many lookups return no personal data at all.
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
   detection rules, retained relationship observations, compact saved Bulk
-  sessions, website profile snapshots, active-profile
+  sessions, website profile snapshots, investigation templates, active-profile
   selection, and theme preference. It uses a versioned manifest with
   per-section SHA-256
   checksums, previews conflicts before a non-destructive merge, and excludes
