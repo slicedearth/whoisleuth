@@ -50,7 +50,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@netlify/blobs": "10.7.9",
+    "@netlify/blobs": "10.1.0",
     "express": "^5.2.1",
     "parse5": "^8.0.1",
     "tldts": "^7.4.9",
