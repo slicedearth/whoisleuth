@@ -595,17 +595,30 @@ export class BrowserLocalDataProvider {
     const database = await this.#database();
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readonly');
     const done = transactionComplete(transaction, `Reading ${definition.label}`, this.timeoutMs);
-    const manifest = await requestResult(
-      transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-      `Reading the ${definition.label} manifest`,
-      this.timeoutMs,
-    );
-    const records = await requestResult(
-      transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(definition.id) as IDBRequest<BrowserLocalStoredRecord[]>,
-      `Reading ${definition.label}`,
-      this.timeoutMs,
-    );
-    await done;
+    let manifest: BrowserLocalCollectionManifest | undefined;
+    let records: BrowserLocalStoredRecord[];
+    try {
+      manifest = await requestResult(
+        transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
+        `Reading the ${definition.label} manifest`,
+        this.timeoutMs,
+      );
+      records = await requestResult(
+        transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX).getAll(definition.id) as IDBRequest<BrowserLocalStoredRecord[]>,
+        `Reading ${definition.label}`,
+        this.timeoutMs,
+      );
+      await done;
+    } catch (cause) {
+      try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
+      await done.catch(() => undefined);
+      if (cause instanceof BrowserLocalDataError) throw cause;
+      throw new BrowserLocalDataError(
+        'LOCAL_DATA_READ_FAILED',
+        `${definition.label} could not be read from browser-local storage.`,
+        { cause },
+      );
+    }
     if (!manifest) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', `${definition.label} has no migration manifest.`);
     this.#assertManifest(definition, manifest);
     if (manifest.codec !== this.codec.id) {

@@ -49,11 +49,12 @@
   async function refreshLocalSummary() {
     summaryError = '';
     try {
-      const [cases, watchlists, profiles, searchIndex] = await Promise.all([
+      const [cases, watchlists, profiles, searchIndex, savedTemplates] = await Promise.all([
         loadCases(),
         loadWatchlists(),
         loadProfiles(),
         loadLocalInvestigationSearchIndex(),
+        loadInvestigationTemplates(),
       ]);
       counts = {
         cases: cases.length,
@@ -62,6 +63,7 @@
         profiles: profiles.length,
       };
       investigationIndex = searchIndex;
+      templates = savedTemplates;
     } catch (cause) {
       summaryError = 'Saved-work counts and local search could not be refreshed. Reload the Dashboard to try again.';
       investigationIndex ??= unavailableInvestigationSearchIndex(summaryError);
@@ -71,7 +73,6 @@
 
   onMount(()=>{
     void refreshLocalSummary();
-    void loadInvestigationTemplates().then((value) => { templates = value; });
   });
 
   function startGuide(event:SubmitEvent) {
