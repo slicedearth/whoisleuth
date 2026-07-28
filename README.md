@@ -57,7 +57,10 @@ Dashboard also separates common intentions into investigation, owned-domain
 protection, candidate review, acquisition assessment, and case-work lanes. A
 two-domain comparison loads only the two validated domains into Bulk and does
 not start collection. Active guided work keeps the target, Brand Profile,
-matching case, and next manual action visible across Console tools. Analysts
+matching case, retained-evidence freshness, and next manual action visible
+across Console tools. Its detailed work plan can be dismissed without losing
+that context. Changing the target requires confirmation and restarts the same
+recipe rather than carrying progress to a different domain. Analysts
 can save bounded local templates derived from the three standard guides,
 customise their guidance, omit allowlisted steps, and add approval gates.
 Templates cannot add arbitrary actions, execute code, start requests, submit

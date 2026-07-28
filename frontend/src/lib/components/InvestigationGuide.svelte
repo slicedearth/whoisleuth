@@ -7,6 +7,7 @@
   import { loadCases, type CaseRecord } from '$lib/cases';
   import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
   import { buildInvestigationHandoffReadiness } from '$lib/analysis/investigation-handoff-readiness.ts';
+  import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
   import { toolNavigation } from '$lib/workspaces';
   import {
     approveInvestigationGuideCollection,
@@ -23,6 +24,7 @@
     recordInvestigationGuideVisit,
     restartStoredInvestigationGuide,
     resumeInvestigationGuide,
+    startInvestigationGuide,
     updateInvestigationGuideOutcome,
     type InvestigationGuide,
     type InvestigationRecipeStage,
@@ -57,11 +59,16 @@
   let restartPending = $state(false);
   let exportPending = $state(false);
   let exportError = $state('');
+  let contextDismissed = $state(false);
+  let editingTarget = $state(false);
+  let targetChangePending = $state(false);
+  let contextDomain = $state('');
+  let contextError = $state('');
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
   let actionObserver: IntersectionObserver | null = null;
-  let evidence = $state({ observations: 0, relationships: 0, partial: false, truncated: false });
+  let evidence = $state({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
   let contextProfile = $state<BrandProfile | null>(null);
   let contextCase = $state<CaseRecord | null>(null);
   const recipe = $derived(guide ? investigationGuideRecipe(guide.recipeId) : null);
@@ -92,6 +99,18 @@
   const caseWorkspaceHref = $derived(contextCase
     ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
     : null);
+  const evidenceFreshness = $derived(formatEvidenceFreshness(evidence.latestObservedAt, evidence.observations));
+
+  function formatEvidenceFreshness(observedAt: string, observations: number): string {
+    if (!observations || !observedAt) return 'No retained evidence';
+    const parsed = new Date(observedAt);
+    if (!Number.isFinite(parsed.getTime())) return 'Retained time unavailable';
+    return `Latest ${new Intl.DateTimeFormat('en-AU', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(parsed)}`;
+  }
 
   async function refresh() {
     guide = loadInvestigationGuide();
@@ -184,6 +203,11 @@
       pendingOutcome = null;
       outcomeNote = '';
       planOpen = false;
+      contextDismissed = false;
+      editingTarget = false;
+      targetChangePending = false;
+      contextDomain = guide?.focusDomain || guide?.domain || '';
+      contextError = '';
     }
     await Promise.all([refreshEvidence(), refreshContext()]);
     if (identityChanged) void revealGuide();
@@ -192,14 +216,14 @@
 
   async function refreshEvidence() {
     if (!guide) {
-      evidence = { observations: 0, relationships: 0, partial: false, truncated: false };
+      evidence = { observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' };
       return;
     }
     const projection = await loadLocalInvestigationProjection();
     const targetDomain = guide.focusDomain || guide.domain;
     const domainEntity = projection.entities.find((entity) => entity.type === 'domain' && entity.canonical === targetDomain);
     if (!domainEntity) {
-      evidence = { observations: 0, relationships: 0, partial: false, truncated: projection.truncated };
+      evidence = { observations: 0, relationships: 0, partial: false, truncated: projection.truncated, latestObservedAt: '' };
       return;
     }
     const observationIds = new Set(domainEntity.observationIds);
@@ -212,6 +236,10 @@
       truncated: projection.truncated || domainEntity.observationsTruncated
         || observations.some((observation) => observation.truncated === true || observation.entityReferencesTruncated)
         || relationships.some((relationship) => relationship.truncated === true || relationship.sourceObservationsTruncated),
+      latestObservedAt: observations.reduce(
+        (latest, observation) => observation.observedAt > latest ? observation.observedAt : latest,
+        '',
+      ),
     };
   }
 
@@ -236,6 +264,55 @@
 
   function togglePause() {
     guide = guide?.status === 'paused' ? resumeInvestigationGuide() : pauseInvestigationGuide();
+  }
+
+  function beginTargetEdit() {
+    if (!guide) return;
+    contextDomain = guide.focusDomain || guide.domain;
+    editingTarget = true;
+    targetChangePending = false;
+    contextError = '';
+  }
+
+  function cancelTargetEdit() {
+    editingTarget = false;
+    targetChangePending = false;
+    contextError = '';
+  }
+
+  function changeTarget() {
+    if (!guide) return;
+    const domain = normalizeInvestigationGuideDomain(contextDomain);
+    if (!domain) {
+      contextError = 'Enter one valid domain without a URL, path, port, or spaces.';
+      targetChangePending = false;
+      return;
+    }
+    if (domain === guide.domain && !guide.focusDomain) {
+      cancelTargetEdit();
+      return;
+    }
+    if (!targetChangePending) {
+      targetChangePending = true;
+      contextError = 'Changing the target restarts this guide. Existing progress is replaced and is not transferred to the new domain.';
+      return;
+    }
+    try {
+      guide = startInvestigationGuide(domain, guide.recipeId, guide.template);
+      selectedStageId = '';
+      reviewingStageId = '';
+      pendingOutcome = null;
+      outcomeNote = '';
+      planOpen = false;
+      contextDismissed = false;
+      editingTarget = false;
+      targetChangePending = false;
+      contextDomain = domain;
+      contextError = '';
+      void Promise.all([refreshEvidence(), refreshContext()]);
+    } catch (cause) {
+      contextError = cause instanceof Error ? cause.message : 'Could not change the investigation target.';
+    }
   }
 
   async function approveAndOpen(stage: InvestigationRecipeStage) {
@@ -340,6 +417,7 @@
   onMount(() => {
     mounted = true;
     void refresh().then(async () => {
+      contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
       await observeAction();
     });
@@ -371,15 +449,21 @@
         <strong class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</strong>
         <p class="recipe-progress">{guide.template ? `${recipe.label} template · ` : ''}{reviewedCount} of {stages.length} steps reviewed</p>
       </div>
-      <span class:paused={guide.status === 'paused'} class="recipe-status">{guide.status === 'paused' ? 'Paused' : 'Active'}</span>
+      <div class="context-actions">
+        <span class:paused={guide.status === 'paused'} class="recipe-status">{guide.status === 'paused' ? 'Paused' : 'Active'}</span>
+        <button class="btn compact" type="button" onclick={() => contextDismissed = !contextDismissed}>{contextDismissed ? 'Show work plan' : 'Dismiss details'}</button>
+        <button class="btn compact danger" type="button" onclick={endGuide}>Clear context</button>
+      </div>
     </div>
     <dl class="context-tray" aria-label="Active investigation context">
       <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
       <div><dt>Brand Profile</dt><dd>{contextProfile?.name || 'None active'}</dd></div>
       <div><dt>Case</dt><dd>{contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained'}</dd></div>
+      <div><dt>Evidence freshness</dt><dd>{evidenceFreshness}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
 
+    {#if !contextDismissed}
     {#if actionStage && actionProgress}
       {#key actionStage.id}
         <article class="current-action" tabindex="-1" bind:this={actionPanel}>
@@ -534,14 +618,28 @@
           <button class="btn compact" type="button" onclick={togglePause}>{guide.status === 'paused' ? 'Resume guide' : 'Pause guide'}</button>
           <button class="btn compact" type="button" onclick={restart}>{restartPending ? 'Confirm restart' : 'Restart guide'}</button>
           {#if restartPending}<button class="btn compact" type="button" onclick={() => restartPending = false}>Cancel restart</button>{/if}
+          <button class="btn compact" type="button" onclick={beginTargetEdit}>Change target</button>
           <button class="btn compact" type="button" onclick={exportSummary}>{exportPending ? 'Confirm export' : 'Export summary'}</button>
           {#if exportPending}<button class="btn compact" type="button" onclick={() => exportPending = false}>Cancel export</button>{/if}
           <button class="btn compact danger" type="button" onclick={endGuide}>End guide</button>
         </div>
+        {#if editingTarget}
+          <form class="target-edit" onsubmit={(event) => { event.preventDefault(); changeTarget(); }}>
+            <label for="investigation-context-target">Investigation target</label>
+            <input id="investigation-context-target" bind:value={contextDomain} maxlength="253" autocomplete="off" spellcheck="false" required />
+            <p>Use one bare domain. A confirmed change starts the same recipe again with no completed steps.</p>
+            <div class="request-actions">
+              <button class="primary compact" type="submit">{targetChangePending ? 'Confirm and restart guide' : 'Review target change'}</button>
+              <button class="btn compact" type="button" onclick={cancelTargetEdit}>Cancel</button>
+            </div>
+          </form>
+        {/if}
+        {#if contextError}<p class="context-error" role={targetChangePending ? 'status' : 'alert'}>{contextError}</p>{/if}
         {#if exportError}<p class="error" role="alert">{exportError}</p>{/if}
       </details>
     </div>
     <p class="boundary">Progress stays in this tab. The guide never starts a scan, submits a target, changes Risk, or decides a case disposition.</p>
+    {/if}
   </section>
 {/if}
 
@@ -557,11 +655,12 @@
   .guide{margin:0 0 24px;padding:16px;scroll-margin-top:76px}
   .guide:focus,.current-action:focus{outline:2px solid var(--accent);outline-offset:3px}
   .guide-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .context-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center}
   .guide-title{display:block;margin:3px 0 0;overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
   .recipe-progress{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs)}
   .recipe-status{flex:none;padding:5px 8px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:999px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .recipe-status.paused{border-color:var(--border);color:var(--muted)}
-  .context-tray{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:12px 0 0;padding:1px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}
+  .context-tray{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:12px 0 0;padding:1px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}
   .context-tray div{display:block;min-width:0;padding:8px 9px;background:var(--surface)}
   .context-tray dt,.context-tray dd{display:block}
   .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
@@ -635,6 +734,12 @@
   .evidence-checkpoint p{margin:0;padding:0 10px 10px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .guide-controls{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px}
   .guide-options .error{margin:0 10px 10px}
+  .target-edit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 10px;padding:0 10px 10px}
+  .target-edit label{grid-column:1 / -1;font:700 var(--text-2xs) var(--mono)}
+  .target-edit input{min-width:0}
+  .target-edit>p{grid-column:1 / -1;margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .target-edit .request-actions{grid-column:1 / -1}
+  .context-error{margin:0 10px 10px;color:var(--warning);font-size:var(--text-2xs);line-height:1.4}
   .boundary{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .guide-return{position:fixed;right:18px;bottom:18px;z-index:35;display:grid;visibility:hidden;max-width:min(320px,calc(100vw - 36px));padding:10px 13px;border:1px solid rgb(var(--accent-rgb) / .7);border-radius:var(--radius-md);background:var(--surface);box-shadow:0 10px 34px rgb(var(--shadow-rgb) / .28);color:var(--text);font-family:var(--mono);text-align:left;opacity:0;pointer-events:none}
   .guide-return.available{visibility:visible;opacity:1;pointer-events:auto}
@@ -643,6 +748,6 @@
   .guide-return small{color:var(--accent);font-weight:700}
   .guide-return:hover{border-color:var(--accent);background:var(--surface2)}
   @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:560px){.guide-heading{flex-wrap:wrap}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
+  @media(max-width:560px){.guide-heading{flex-wrap:wrap}.context-actions{width:100%;justify-content:flex-start}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}.target-edit{grid-template-columns:1fr}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
   @media(max-width:360px){.guide-controls{grid-template-columns:1fr}#investigation-plan>li summary{grid-template-columns:auto minmax(0,1fr) auto}.stage-state{grid-column:2;text-align:left}#investigation-plan>li summary::after{grid-column:3;grid-row:1}}
 </style>
