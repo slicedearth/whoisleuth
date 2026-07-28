@@ -44,7 +44,7 @@ navigation without shortening the policy.
 | **Discover** | Generate bounded typo, Unicode-confusable, keyboard, plural, separator, word-order, WWW-style, TLD, and dictionary candidates, including analyst-controlled token replacements and an opt-in two-character Unicode family, with optional Certificate Transparency discovery. Presets or an exact family selection control the local generator. | Candidate generation and optional custom dictionary input stay local. The advanced Unicode family is never preset-enabled. Confusability is a review lead, while certificate-log observations do not prove site activity or maliciousness. |
 | **Bulk** | Compare multiple domains with filters, sorting, score explanations, CSV export, and scan-local relationship evidence. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. Relationships remain transient unless the analyst explicitly retains one bounded observation. |
 | **Brands** | Save official domains, product names, allowlists, posture settings, and optional page-identity baselines. | Profiles stay in the current browser unless deliberately exported in a workspace archive. |
-| **Monitor** | Manage cases, campaigns, analyst-selected relationship observations, watchlists, timelines, and evidence reports. | Ordinary investigation state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
+| **Monitor** | Manage cases, evidence pins, analyst decisions, reviewed response actions, campaigns, relationship observations, watchlists, timelines, and reports. | Ordinary investigation and response state is browser-local. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
 | **Registry support** | Inspect fixture-backed parser coverage and documented registry access constraints. | Coverage metadata describes support and limitations. It never decides availability. |
 
 Dashboard can download the bounded workspace as an encrypted portable backup.
@@ -130,9 +130,9 @@ accessible lists, tables, or source records.
 - **Safe outbound networking.** HTTP and TLS collection validate public
   addresses, revalidate redirects, resist DNS rebinding, and avoid private
   network targets.
-- **Local-first investigation state.** Cases, profiles, watchlists, campaigns,
-  shortlist entries, and rules use bounded IndexedDB stores in the current
-  browser.
+- **Local-first investigation state.** Cases, evidence pins, analyst decisions,
+  response actions, profiles, watchlists, campaigns, shortlist entries, and
+  rules use bounded IndexedDB stores in the current browser.
 - **Explainable analysis.** Risk, Opportunity, page similarity, relationship,
   technology, and posture findings expose their evidence and limitations.
 - **Supplementary visuals.** Charts summarize bounded data already present in
@@ -140,6 +140,9 @@ accessible lists, tables, or source records.
   surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
+  Case response packets and defensive-control exports require explicit review;
+  the latter include a provenance manifest, expiry, exclusions, and rollback
+  instructions. Wildcard blocking remains opt-in.
 
 ## Quick start
 

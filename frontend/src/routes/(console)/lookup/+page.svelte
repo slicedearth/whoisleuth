@@ -30,7 +30,7 @@
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { addCaseNote, dispositionLabel as caseDispositionLabel, getCaseByDomain, openCase, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { abuseAction, outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
+  import { outreachAction, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
@@ -190,7 +190,7 @@
   const risk=$derived(explainRiskScore(scoredAvailability) as ScoreExplanation);
   const outreach=$derived(outreachAction(String(availability.domain||result?.registrableDomain||''),(availability.registrant||null) as Contact|null));
   const abuseContact=$derived(rec(availability.abuse));
-  const abuse=$derived(profileSignals.trusted?null:abuseAction(String(availability.domain||result?.registrableDomain||''),abuseContact.email?{abuseEmail:String(abuseContact.email),hasMx:availability.hasMx??null,activityStatus:availability.activityStatus||null,privacyProtected:availability.privacyProtected??null,domainAgeDays:availability.domainAgeDays??null} as AbuseEvidence:null));
+  const abuseContactEmail=$derived(profileSignals.trusted?'':boundedTechnologyText(abuseContact.email,320));
   const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only);
   const redactedComparisonCount=$derived(comparison.counts.rdap_redacted+comparison.counts.whois_redacted);
   const limitedComparisonCount=$derived(comparison.counts.rdap_unavailable+comparison.counts.whois_unavailable+comparison.counts.rdap_incomplete+comparison.counts.whois_incomplete);
@@ -198,7 +198,7 @@
   const observedPageBaseline=$derived(createPageBaseline(caseDomain,availability));
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
   const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
-  const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuse));
+  const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuseContactEmail));
   const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
     type:result?.type,
@@ -1010,7 +1010,7 @@
       <section class="result-section family-analyst" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
 
-        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuse} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
+        <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} {abuseContactEmail} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
       </section>
     {/if}
 

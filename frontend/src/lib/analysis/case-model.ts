@@ -7,6 +7,21 @@
 
 import { normalizeHttpSummary } from './http-summary.ts';
 import { normalizeRiskModelVersion } from './scoring.ts';
+import {
+  appendCaseAction,
+  appendCaseDecision,
+  appendCaseEvidencePin,
+  mergeCaseActions,
+  mergeCaseDecisions,
+  mergeCaseEvidencePins,
+  normalizeCaseActions,
+  normalizeCaseDecisions,
+  normalizeCaseEvidencePins,
+  updateCaseAction,
+  type CaseActionRecord,
+  type CaseDecisionRecord,
+  type CaseEvidencePin,
+} from './case-response-model.ts';
 
 // Forward-version policy (two distinct guarantees):
 //   - A locally-stored envelope that declares a version greater than this is
@@ -16,7 +31,7 @@ import { normalizeRiskModelVersion } from './scoring.ts';
 //   - An IMPORT file that declares a greater version is never INTERPRETED at
 //     all: mergeCases rejects it up front so we don't merge data from a schema
 //     we don't understand.
-export const CASE_SCHEMA_VERSION = 2;
+export const CASE_SCHEMA_VERSION = 3;
 
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;
@@ -152,6 +167,9 @@ export type CaseRecord = {
   notes: CaseNote[];
   source: string;
   evidenceHistory: CaseEvidenceSnapshot[];
+  evidencePins: CaseEvidencePin[];
+  decisions: CaseDecisionRecord[];
+  actions: CaseActionRecord[];
   createdAt: string;
   updatedAt: string;
 };
@@ -163,6 +181,10 @@ export type CaseInput = {
   source?: unknown;
   tags?: unknown;
   evidence?: unknown;
+  evidencePin?: unknown;
+  decision?: unknown;
+  action?: unknown;
+  actionUpdate?: unknown;
   note?: unknown;
 };
 export type CasePatch = Omit<Partial<CaseInput>, 'domain'>;
@@ -174,6 +196,9 @@ type ImportPatch = {
   disposition: string | undefined;
   source: string | undefined;
   evidenceHistory: CaseEvidenceSnapshot[];
+  evidencePins: CaseEvidencePin[];
+  decisions: CaseDecisionRecord[];
+  actions: CaseActionRecord[];
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -1062,6 +1087,8 @@ export function normalizeCase(
   if (!domain) return null;
   const createdAt = existing ? existing.createdAt : isoOrNow(record.createdAt, now);
   const updatedAt = isoOrNow(record.updatedAt, now);
+  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt);
+  const pinIds = new Set(evidencePins.map((item) => item.id));
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
@@ -1071,6 +1098,9 @@ export function normalizeCase(
     notes: normalizeNotes(record.notes, now),
     source: normalizeSource(record.source),
     evidenceHistory: normalizeCaseEvidence(record, createdAt, updatedAt, now),
+    evidencePins,
+    decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds),
+    actions: normalizeCaseActions(record.actions, updatedAt),
     createdAt,
     updatedAt,
   };
@@ -1165,6 +1195,15 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       source: inferCaptureSource(source),
       fallback: now,
     }),
+    evidencePins: input.evidencePin !== undefined
+      ? appendCaseEvidencePin([], input.evidencePin, now)
+      : [],
+    decisions: input.decision !== undefined
+      ? appendCaseDecision([], input.decision, now)
+      : [],
+    actions: input.action !== undefined
+      ? appendCaseAction([], input.action, now)
+      : [],
     createdAt: now,
     updatedAt: now,
   };
@@ -1232,6 +1271,22 @@ export function updateCase(
       { source: inferCaptureSource(source), fallback: now },
     );
   }
+  let evidencePins = current.evidencePins;
+  if (patch.evidencePin !== undefined) {
+    evidencePins = appendCaseEvidencePin(current.evidencePins, patch.evidencePin, now);
+  }
+  const pinIds = new Set(evidencePins.map((item) => item.id));
+  let decisions = current.decisions;
+  if (patch.decision !== undefined) {
+    decisions = appendCaseDecision(current.decisions, patch.decision, now, pinIds);
+  }
+  let actions = current.actions;
+  if (patch.action !== undefined) {
+    actions = appendCaseAction(current.actions, patch.action, now);
+  }
+  if (patch.actionUpdate !== undefined) {
+    actions = updateCaseAction(actions, patch.actionUpdate, now);
+  }
   const record: CaseRecord = {
     ...current,
     status: patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
@@ -1239,6 +1294,9 @@ export function updateCase(
     tags: patch.tags !== undefined ? normalizeTags(patch.tags) : current.tags,
     source,
     evidenceHistory,
+    evidencePins,
+    decisions,
+    actions,
     notes,
     updatedAt: now,
   };
@@ -1273,7 +1331,10 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const importFallback = isoOrNull(record.updatedAt) || isoOrNull(record.createdAt) || null;
+  const normalizedFallback = importFallback || '1970-01-01T00:00:00.000Z';
   const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
+  const evidencePins = normalizeCaseEvidencePins(record.evidencePins, normalizedFallback);
+  const pinIds = new Set(evidencePins.map((item) => item.id));
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
@@ -1281,6 +1342,9 @@ function extractImportPatch(raw: unknown): ImportPatch | null {
     disposition: importScalar(record.disposition, DISPOSITION_VALUES),
     source: importScalar(record.source, SOURCE_VALUES),
     evidenceHistory: normalizeEvidenceHistory(rawEvidence, { source: 'import', fallback: importFallback }),
+    evidencePins,
+    decisions: normalizeCaseDecisions(record.decisions, normalizedFallback, pinIds),
+    actions: normalizeCaseActions(record.actions, normalizedFallback),
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -1324,6 +1388,9 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     notes: patch.notes,
     source: patch.source ?? DEFAULT_SOURCE,
     evidenceHistory: patch.evidenceHistory,
+    evidencePins: patch.evidencePins,
+    decisions: patch.decisions,
+    actions: patch.actions,
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -1340,12 +1407,18 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
  */
 function applyImportPatch(local: CaseRecord, patch: ImportPatch): CaseRecord {
   const importNewer = patch.updatedAt !== null && Date.parse(patch.updatedAt) > Date.parse(local.updatedAt);
+  const fallback = patch.updatedAt || local.updatedAt;
+  const evidencePins = mergeCaseEvidencePins(local.evidencePins, patch.evidencePins, fallback);
+  const pinIds = new Set(evidencePins.map((item) => item.id));
   return {
     ...local,
     status: patch.status !== undefined && importNewer ? patch.status : local.status,
     disposition: patch.disposition !== undefined && importNewer ? patch.disposition : local.disposition,
     source: patch.source !== undefined && importNewer ? patch.source : local.source,
     evidenceHistory: mergeEvidenceHistories(local.evidenceHistory, patch.evidenceHistory),
+    evidencePins,
+    decisions: mergeCaseDecisions(local.decisions, patch.decisions, fallback, pinIds),
+    actions: mergeCaseActions(local.actions, patch.actions, fallback),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,

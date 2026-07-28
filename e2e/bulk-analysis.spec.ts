@@ -7,6 +7,23 @@ import { boundingBox, expectNoHorizontalOverflow, failBrowserLocalReads, migrate
 // local /api/lookup route before using domain-shaped values.
 const invalidDomains = (count: number) => Array.from({ length: count }, (_, i) => `bad-domain-${i + 1}`);
 
+async function captureDownloads(
+  page: import('@playwright/test').Page,
+  action: () => Promise<void>,
+  expectedCount = 3,
+) {
+  const downloads: import('@playwright/test').Download[] = [];
+  const listener = (download: import('@playwright/test').Download) => downloads.push(download);
+  page.on('download', listener);
+  try {
+    await action();
+    await expect.poll(() => downloads.length).toBe(expectedCount);
+    return downloads;
+  } finally {
+    page.off('download', listener);
+  }
+}
+
 // Only this spec legitimately produces Chrome's synthetic "responded with a
 // status of 400" console noise (one per deliberately-rejected domain in
 // runBulkScan) as expected, already-handled behavior - every other spec
@@ -374,26 +391,42 @@ test('risk model v6 exposes cross-family corroboration in Bulk triage', async ({
 
   await page.getByRole('button', { name: 'high risk' }).click();
   await expect(row).toBeVisible();
+  await row.locator('.star').click();
+  await row.getByRole('button', { name: /Create case/ }).click();
+  await row.locator('select.case-disp').selectOption('suspicious');
 
   await page.getByLabel('Defensive format').selectOption('hosts');
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export 1 high-risk indicator' }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.txt$/);
-  const path = await download.path();
+  const hostDownloads = await captureDownloads(page, async () => {
+    await page.getByRole('button', { name: 'Export 1 reviewed indicator' }).click();
+  });
+  const download = hostDownloads.find((item) => /\.txt$/u.test(item.suggestedFilename()));
+  expect(download).toBeDefined();
+  expect(download!.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.txt$/);
+  const path = await download!.path();
   expect(path).not.toBeNull();
   const content = await readFile(path!, 'utf8');
   expect(content).toContain('Review before use. Heuristic findings can include false positives.');
   expect(content).toContain('0.0.0.0 candidate.example');
   expect(content).not.toContain('official.example\n');
-  await expect(page.getByRole('status').filter({ hasText: 'Check for false positives before use' })).toBeVisible();
+  const manifestDownload = hostDownloads.find((item) => item.suggestedFilename().endsWith('.manifest.json'));
+  const rollbackDownload = hostDownloads.find((item) => item.suggestedFilename().endsWith('.rollback.json'));
+  expect(manifestDownload).toBeDefined();
+  expect(rollbackDownload).toBeDefined();
+  const manifest = JSON.parse(await readFile((await manifestDownload!.path())!, 'utf8'));
+  expect(manifest).toMatchObject({ reviewRequired: true, includeWildcards: false });
+  expect(manifest.entries).toHaveLength(1);
+  const rollback = JSON.parse(await readFile((await rollbackDownload!.path())!, 'utf8'));
+  expect(rollback.removes).toEqual([{ domain: 'candidate.example', includeWildcard: false, reason: expect.any(String) }]);
+  await expect(page.getByRole('status').filter({ hasText: 'a provenance manifest, and a rollback set' })).toBeVisible();
 
   await page.getByLabel('Defensive format').selectOption('stix');
-  const stixDownloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export 1 high-risk indicator' }).click();
-  const stixDownload = await stixDownloadPromise;
-  expect(stixDownload.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.stix\.json$/);
-  const stixPath = await stixDownload.path();
+  const stixDownloads = await captureDownloads(page, async () => {
+    await page.getByRole('button', { name: 'Export 1 reviewed indicator' }).click();
+  });
+  const stixDownload = stixDownloads.find((item) => item.suggestedFilename().endsWith('.stix.json'));
+  expect(stixDownload).toBeDefined();
+  expect(stixDownload!.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.stix\.json$/);
+  const stixPath = await stixDownload!.path();
   expect(stixPath).not.toBeNull();
   const bundle = JSON.parse(await readFile(stixPath!, 'utf8'));
   expect(bundle.type).toBe('bundle');
@@ -402,11 +435,13 @@ test('risk model v6 exposes cross-family corroboration in Bulk triage', async ({
   expect(JSON.stringify(bundle)).not.toContain('official.example');
 
   await page.getByLabel('Defensive format').selectOption('misp');
-  const mispDownloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export 1 high-risk indicator' }).click();
-  const mispDownload = await mispDownloadPromise;
-  expect(mispDownload.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.misp\.json$/);
-  const mispPath = await mispDownload.path();
+  const mispDownloads = await captureDownloads(page, async () => {
+    await page.getByRole('button', { name: 'Export 1 reviewed indicator' }).click();
+  });
+  const mispDownload = mispDownloads.find((item) => item.suggestedFilename().endsWith('.misp.json'));
+  expect(mispDownload).toBeDefined();
+  expect(mispDownload!.suggestedFilename()).toMatch(/^whoisleuth-defensive-domains-\d{4}-\d{2}-\d{2}\.misp\.json$/);
+  const mispPath = await mispDownload!.path();
   expect(mispPath).not.toBeNull();
   const event = JSON.parse(await readFile(mispPath!, 'utf8')).Event;
   expect(event.published).toBe(false);

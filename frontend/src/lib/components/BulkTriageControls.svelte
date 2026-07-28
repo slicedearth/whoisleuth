@@ -19,6 +19,9 @@
     setIndicatorFormat,
     exportIndicators,
     indicatorCount,
+    indicatorWildcards,
+    setIndicatorWildcards,
+    selectedIndicatorCount,
     mutationFilter,
     setMutationFilter,
     mutationOptions,
@@ -50,6 +53,9 @@
     setIndicatorFormat: (value: IndicatorFormat) => void;
     exportIndicators: () => void;
     indicatorCount: number;
+    indicatorWildcards: boolean;
+    setIndicatorWildcards: (value: boolean) => void;
+    selectedIndicatorCount: number;
     mutationFilter: string;
     setMutationFilter: (value: string) => void;
     mutationOptions: Array<{ value: string; label: string }>;
@@ -79,9 +85,11 @@
     {#if counts.errors}<button class="btn" onclick={retryErrors} disabled={running}>Retry errors</button>{/if}
     <button class="btn" onclick={exportCsv}>Export CSV</button>
     <label class="indicator-format">Defensive format<select value={indicatorFormat} onchange={(event) => setIndicatorFormat(event.currentTarget.value as IndicatorFormat)}><option value="domains">Domains</option><option value="hosts">Hosts file</option><option value="dnsmasq">dnsmasq</option><option value="rpz">RPZ</option><option value="stix">STIX 2.1</option><option value="misp">MISP event JSON</option></select></label>
-    <button class="btn" onclick={exportIndicators} disabled={!indicatorCount}>Export {indicatorCount} high-risk indicator{indicatorCount === 1 ? '' : 's'}</button>
+    {#if indicatorFormat === 'rpz'}<label class="wildcard-choice choice"><input type="checkbox" checked={indicatorWildcards} onchange={(event) => setIndicatorWildcards(event.currentTarget.checked)}><span>Include wildcard subdomains</span></label>{/if}
+    <button class="btn" onclick={exportIndicators} disabled={!indicatorCount}>Export {indicatorCount} reviewed indicator{indicatorCount === 1 ? '' : 's'}</button>
   </div>
 </div>
+<p class="review-note">Defensive exports use only shortlisted domains with a Suspicious or Confirmed abuse case disposition. {selectedIndicatorCount} shortlisted domain{selectedIndicatorCount === 1 ? ' is' : 's are'} in the current result set. A review manifest and rollback set are downloaded with the indicator file.</p>
 <div class="advanced-filters">
   <label class="field">Mutation<select value={mutationFilter} onchange={(event) => setMutationFilter(event.currentTarget.value)}><option value="">All mutations</option>{#each mutationOptions as mutation}<option value={mutation.value}>{mutation.label}</option>{/each}</select></label>
   <label class="field">Sort<select value={sortKey} onchange={(event) => setSortKey(event.currentTarget.value as BulkSortKey)}><option value="risk">Risk</option><option value="opportunity">Opportunity</option><option value="domain">Domain</option><option value="availability">Registration</option><option value="confidence">Confidence</option><option value="activity">Website</option><option value="registrar">Registrar</option><option value="mutation">Mutation</option></select></label>
@@ -102,6 +110,8 @@
   .indicator-format{display:flex;min-width:0;align-items:center;gap:6px;padding:0 4px 0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .indicator-format select{min-width:0;min-height:32px;border:0;background:var(--panel-raised);font-size:var(--text-2xs)}
   .indicator-status{color:var(--amber)!important}
+  .review-note{margin:10px 0 0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .05)}
+  .wildcard-choice{min-height:var(--control-h);padding:0 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font-size:var(--text-2xs)}
   .advanced-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .advanced-filters select{min-width:200px}
   .signal-filters{display:flex;flex-wrap:wrap;gap:5px}

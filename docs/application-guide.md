@@ -214,8 +214,11 @@ not prove common ownership or intent.
 
 Monitor contains Cases, Campaigns, Relationships, and Watchlists.
 
-- **Cases** retain analyst status, disposition, tags, notes, and a bounded
-  history of compact normalized evidence snapshots.
+- **Cases** retain analyst status, disposition, tags, notes, a bounded history
+  of compact normalized evidence snapshots, analyst-selected evidence pins,
+  decision rationales, and reviewed response actions with follow-up outcomes.
+  Pins, decisions, and actions stay separately typed so an analyst assertion is
+  never presented as collected evidence.
 - **Campaigns** group existing case domains without duplicating their evidence
   or implying attribution.
 - **Relationships** review analyst-selected Bulk observations and project
@@ -421,12 +424,21 @@ observations, or compact case history.
   expanded contacts.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
+- Build a case response packet only after recording the category, affected
+  party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
+  sourced contact routes. JSON, Markdown, and email-text outputs remain local,
+  require review, and do not submit anything.
+- Defensive domain lists require an explicit reviewed selection and eligible
+  analyst disposition. Review their exclusions, expiry, provenance manifest,
+  and paired rollback instructions before applying them. Wildcard RPZ coverage
+  is opt-in.
 - Review each file before sharing it.
 - Keep sensitive analyst notes out of reports unless needed.
 - Treat source timestamps and fingerprints as provenance and deduplication
   context, not proof of legal custody or ownership.
 - Do not confuse a whole-workspace archive with a single-case evidence report.
-- Do not treat a report draft as an automatically submitted abuse report.
+- Do not treat a response packet as a submitted abuse report or a defensive
+  export as an applied control.
 
 The synthetic demo has a separate export schema marked `synthetic: true`. It
 cannot be imported as live evidence.

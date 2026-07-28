@@ -29,6 +29,7 @@ export type BulkWorkflowState<Result> = {
   page: number;
   status: string;
   indicatorFormat: 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';
+  indicatorWildcards: boolean;
   watchlistName: string;
 };
 

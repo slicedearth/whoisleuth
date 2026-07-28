@@ -3,14 +3,14 @@
 
   type DraftAction = { email: string; body: string; mailto: string };
 
-  let { domain, record, note, caseStatus, draftStatus, outreach, abuse, setNote, createCase, addNote, copyDraft, statusLabel, dispositionLabel }: {
+  let { domain, record, note, caseStatus, draftStatus, outreach, abuseContactEmail, setNote, createCase, addNote, copyDraft, statusLabel, dispositionLabel }: {
     domain: string;
     record: CaseRecord | null;
     note: string;
     caseStatus: string;
     draftStatus: string;
     outreach: DraftAction | null;
-    abuse: DraftAction | null;
+    abuseContactEmail: string;
     setNote: (value: string) => void;
     createCase: () => void;
     addNote: () => void;
@@ -39,13 +39,13 @@
   </section>
 {/if}
 
-{#if outreach || abuse}
+{#if outreach || abuseContactEmail}
   <section class="response evidence-card card">
     <div class="section-head"><div><p class="eyebrow">Respond</p><h4>Human-reviewed drafts</h4></div></div>
     <p class="card-note">Nothing is sent automatically. Review and edit every message before sending it.</p>
     <div class="response-actions">
       {#if outreach}<article><strong>Acquisition outreach</strong><span>{outreach.email}</span><div><a class="btn small" href={outreach.mailto}>Open email draft</a><button class="btn small" onclick={() => copyDraft(outreach.body, 'outreach draft')}>Copy text</button></div></article>{/if}
-      {#if abuse}<article><strong>Abuse report</strong><span>{abuse.email}</span><div><a class="btn small danger" href={abuse.mailto}>Open report draft</a><button class="btn small" onclick={() => copyDraft(abuse.body, 'abuse report')}>Copy text</button></div></article>{/if}
+      {#if abuseContactEmail}<article><strong>Registrar abuse contact</strong><span>{abuseContactEmail}</span><p>Contact availability is not evidence of abuse. Create or open the case, then prepare a reviewed packet with the exact URLs, harm, timestamps, and selected evidence.</p>{#if record}<div><a class="btn small" href={`/monitor?case=${encodeURIComponent(record.id)}`}>Prepare reviewed packet</a></div>{/if}</article>{/if}
     </div>
     {#if draftStatus}<p class="draft-status" aria-live="polite">{draftStatus}</p>{/if}
   </section>
@@ -71,5 +71,6 @@
   .response-actions strong{font-size:var(--text-sm)}
   .response-actions span{margin-top:5px;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
   .response-actions article>div{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+  .response-actions p{margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .draft-status{margin:10px 0 0;font-size:var(--text-xs)}
 </style>

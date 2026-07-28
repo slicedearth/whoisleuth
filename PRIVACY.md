@@ -373,6 +373,11 @@ default (see the README), so many lookups return no personal data at all.
   Campaigns retain a bounded label, optional description, and normalized case
   domain membership only. They do not copy case evidence, notes, status, or
   disposition, and deriving or editing them makes no network request.
+  Cases can additionally retain bounded analyst-selected evidence pins,
+  decision rationales, contact routes, reviewed response actions, follow-up
+  dates, references, and outcomes. These analyst-authored records remain
+  separate from collected evidence snapshots and can contain sensitive
+  investigation context. Creating or editing them makes no network request.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword
@@ -441,14 +446,26 @@ default (see the README), so many lookups return no personal data at all.
   passphrase. Nothing is uploaded or retained by the server when you export or
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
+- **Reviewed response and defensive-control exports**: a case response packet
+  is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
+  UTC observation time, and separately attributed registrar, registry,
+  network/hosting, or security.txt contacts. JSON, Markdown, and email-text
+  outputs state that review is required and that no submission occurred.
+  Defensive domain exports require an explicit reviewed selection and eligible
+  analyst disposition. They exclude configured official, allowlisted, and
+  common-infrastructure domains, include an expiry and provenance manifest,
+  and create paired rollback instructions. Wildcard RPZ entries require a
+  separate opt-in. WHOISleuth does not send either export or modify a defensive
+  system.
 - **Official-domain posture audits**: handled per request and discarded. The
   server queries public DNS, the domain registry's RDAP service for DNSSEC
   delegation status, and (only when advertised) the official domain's own
   `mta-sts` HTTPS policy host. DKIM selector names saved in a Brand Profile
   are included in the request so those exact public DNS records can be checked.
-- **Outreach / abuse-report drafts**: build a `mailto:` link and copy
-  pre-filled text to your clipboard. Nothing is sent automatically; a
-  human reviews and sends each one from their own mail client.
+- **External response actions**: WHOISleuth records only analyst-authored
+  planned or completed actions in browser-local cases. It does not open a
+  pre-addressed mail client, send a report, contact a provider, change DNS, or
+  apply a block automatically.
 - **Optional distributed operation limits**: when the operator configures the
   shared REST counter provider, it receives only bounded operation classes,
   opaque random lease identifiers, expiry timestamps, and a one-way hash of
@@ -479,7 +496,7 @@ remain outside that measurement surface.
 ## Legal basis for processing
 
 Using this tool to monitor domains/brands you have a legitimate interest in
-(the **Report abuse** flow, watchlist monitoring) is generally supported by
+(reviewed case-response preparation, watchlist monitoring) is generally supported by
 "legitimate interest." Using the **outreach** (acquisition) flow to contact
 a registrant is closer to direct marketing and a weaker legitimate-interest
 case - keep it low-volume, human-reviewed (already enforced by the

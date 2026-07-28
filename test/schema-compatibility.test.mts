@@ -129,7 +129,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.schema, SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA);
     assert.equal(inventory.version, SCHEMA_COMPATIBILITY_INVENTORY_VERSION);
     assert.equal(inventory.generatedAt, NOW);
-    assert.equal(inventory.entries.length, 52);
+    assert.equal(inventory.entries.length, 53);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
       'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
     ]));
@@ -240,7 +240,8 @@ describe('schema compatibility inventory', () => {
 
     const caseReport = buildCaseReport({
       id: 'case-fixture', domain: 'schema.invalid', status: 'new', disposition: 'unreviewed',
-      tags: [], notes: [], source: 'manual', evidenceHistory: [], createdAt: NOW, updatedAt: NOW,
+      tags: [], notes: [], source: 'manual', evidenceHistory: [], evidencePins: [], decisions: [], actions: [],
+      createdAt: NOW, updatedAt: NOW,
     }, { generatedAt: NOW });
     assert.equal(byId(inventory, 'export.case-report').schema, caseReport.json.schema);
     assert.equal(byId(inventory, 'export.case-report').currentVersion, caseReport.json.schemaVersion);

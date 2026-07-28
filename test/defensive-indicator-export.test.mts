@@ -44,14 +44,25 @@ test('dnsmasq format emits one bounded address rule per domain', () => {
   assert.match(exported.content, /address=\/candidate\.invalid\/0\.0\.0\.0\n$/);
 });
 
-test('RPZ format uses absolute owners, wildcard coverage, and a valid 32-bit serial', () => {
+test('RPZ format uses absolute owners, excludes wildcard coverage by default, and uses a valid 32-bit serial', () => {
   const exported = buildDefensiveIndicatorExport([result('candidate.invalid')], { format: 'rpz', generatedAt: NOW });
   assert.match(exported.content, /@ IN SOA localhost\. root\.localhost\. \((\d+) 60 60 60 60\)/);
   const serial = Number(exported.content.match(/\((\d+) 60/)?.[1]);
   assert.ok(Number.isSafeInteger(serial) && serial >= 0 && serial <= 0xffffffff);
   assert.match(exported.content, /candidate\.invalid\. CNAME \./);
-  assert.match(exported.content, /\*\.candidate\.invalid\. CNAME \./);
+  assert.doesNotMatch(exported.content, /\*\.candidate\.invalid\. CNAME \./);
   assert.equal(exported.filename, 'whoisleuth-defensive-domains-2026-07-14.zone');
+});
+
+test('RPZ wildcard coverage requires an explicit opt-in and is recorded in the manifest and rollback', () => {
+  const exported = buildDefensiveIndicatorExport([result('candidate.invalid')], {
+    format: 'rpz',
+    generatedAt: NOW,
+    includeWildcards: true,
+  });
+  assert.match(exported.content, /\*\.candidate\.invalid\. CNAME \./);
+  assert.equal(JSON.parse(exported.manifestContent).includeWildcards, true);
+  assert.equal(JSON.parse(exported.rollbackContent).removes[0].includeWildcard, true);
 });
 
 test('riskScore is accepted as the stored-score field when risk is absent', () => {
@@ -78,6 +89,32 @@ test('empty exports remain reviewable and syntactically complete', () => {
   assert.deepEqual(exported.domains, []);
   assert.match(exported.content, /0 high-risk registered domains/);
   assert.ok(exported.content.endsWith('\n'));
+});
+
+test('reviewed export requires explicit selection and an analyst disposition when selection is supplied', () => {
+  const records = [
+    result('reviewed.invalid', { analystDisposition: 'suspicious' }),
+    result('unreviewed.invalid', { analystDisposition: 'unreviewed' }),
+    result('official.invalid', { analystDisposition: 'confirmed_abuse' }),
+    result('allowed.invalid', { analystDisposition: 'confirmed_abuse' }),
+  ];
+  const exported = buildDefensiveIndicatorExport(records, {
+    generatedAt: NOW,
+    selectedDomains: records.map((item) => item.domain),
+    officialDomains: ['official.invalid'],
+    allowlistedDomains: ['allowed.invalid'],
+  });
+  assert.deepEqual(exported.domains, ['reviewed.invalid']);
+  assert.equal(exported.explicitSelection, true);
+  assert.deepEqual(exported.exclusions, [
+    { domain: 'allowed.invalid', reason: 'allowlisted_domain' },
+    { domain: 'official.invalid', reason: 'official_domain' },
+    { domain: 'unreviewed.invalid', reason: 'unreviewed_disposition' },
+  ]);
+  const manifest = JSON.parse(exported.manifestContent);
+  assert.equal(manifest.reviewRequired, true);
+  assert.equal(manifest.entries[0].disposition, 'suspicious');
+  assert.equal(manifest.entries[0].expiresAt, exported.expiresAt);
 });
 
 test('rejects non-array input rather than traversing arbitrary objects', () => {

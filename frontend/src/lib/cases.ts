@@ -11,6 +11,19 @@ import {
   openOrCreateCase,
   updateCase,
 } from './analysis/case-model.ts';
+import type {
+  CaseActionRecord,
+  CaseDecisionRecord,
+  CaseEvidencePin,
+} from './analysis/case-response-model.ts';
+import type {
+  CaseEvidenceSnapshot as ModelCaseEvidenceSnapshot,
+  CaseInput as ModelCaseInput,
+  CaseNote as ModelCaseNote,
+  CasePatch as ModelCasePatch,
+  CaseRecord as ModelCaseRecord,
+  EvidenceFactor as ModelEvidenceFactor,
+} from './analysis/case-model.ts';
 import { browserLocalDataProvider } from './browser-local-data-service.ts';
 import { CASES_COLLECTION, LEGACY_CASES_KEY } from './browser-local-data-definitions.ts';
 
@@ -24,32 +37,25 @@ export {
   sourceLabel,
   statusLabel,
 } from './analysis/case-model.ts';
+export {
+  CASE_ACTION_STATES,
+  CASE_ACTION_TYPES,
+  CASE_PIN_COMPLETENESS,
+} from './analysis/case-response-model.ts';
+export type {
+  CaseActionRecord,
+  CaseDecisionRecord,
+  CaseEvidencePin,
+};
 
 export const CASES_KEY = LEGACY_CASES_KEY;
 
-export interface CaseNote { id: string; body: string; createdAt: string }
-export interface EvidenceFactor { label: string; points: number }
-export interface CaseEvidenceSnapshot {
-  id: string; fingerprint: string; firstCapturedAt: string; capturedAt: string; source: string; scanDepth: string;
-  availability: string | null; confidence: string | null;
-  riskModelVersion: number | null; riskScore: number | null; opportunityScore: number | null;
-  riskFactors: EvidenceFactor[]; opportunityFactors: EvidenceFactor[];
-  registrar: string | null; createdDate: string | null; expiryDate: string | null; nameservers: string[];
-  hasMx: boolean | null; hasSpf: boolean | null; hasDmarc: boolean | null;
-  activityStatus: string | null; websiteProbeDetail: string | null; pageTitle: string | null;
-  httpSummaryVersion: number | null; httpEvidenceStatus: string | null; httpFinalOrigin: string | null; httpResponseStatus: number | null;
-  httpTransportSecurity: string | null; httpRedirectCount: number | null;
-  httpCrossOriginRedirect: boolean | null; httpHttpsDowngrade: boolean | null; httpContentType: string | null;
-  httpSecurityHeaders: string[] | null;
-  faviconMatch: boolean | null; faviconNearMatch: boolean | null; reusesOfficialAssets: boolean | null; hasPasswordField: boolean | null;
-  phishingLanguageMatch: string | null;
-  mutationTypes: string[];
-}
-export interface CaseRecord { id: string; domain: string; status: string; disposition: string; tags: string[]; notes: CaseNote[]; source: string; evidenceHistory: CaseEvidenceSnapshot[]; createdAt: string; updatedAt: string }
-// Evidence input from Lookup/Bulk is a loose bag of result fields; the model's
-// snapshot normalizer keeps only the bounded, known ones.
-export interface CaseInput { domain: string; status?: string; disposition?: string; source?: string; tags?: string[]; evidence?: Record<string, unknown> | null; note?: string }
-export interface CasePatch { status?: string; disposition?: string; tags?: string[]; source?: string; evidence?: Record<string, unknown> | null; note?: string }
+export type CaseNote = ModelCaseNote;
+export type EvidenceFactor = ModelEvidenceFactor;
+export type CaseEvidenceSnapshot = ModelCaseEvidenceSnapshot;
+export type CaseRecord = ModelCaseRecord;
+export type CaseInput = ModelCaseInput;
+export type CasePatch = ModelCasePatch;
 
 export async function loadCases(): Promise<CaseRecord[]> {
   return (await browserLocalDataProvider()).read(CASES_COLLECTION) as Promise<CaseRecord[]>;
