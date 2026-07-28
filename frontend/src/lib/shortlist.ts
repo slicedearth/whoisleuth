@@ -3,6 +3,7 @@ import {
   MAX_SHORTLIST_ENTRIES,
   mergeShortlistStores,
   normalizeShortlistRecord,
+  setShortlistSelection as applyShortlistSelection,
   serializeShortlistStore,
   type ShortlistRecord,
 } from './analysis/shortlist-model.ts';
@@ -34,6 +35,21 @@ export async function toggleShortlist(raw: unknown): Promise<boolean> {
       records.push(record);
     }
     return { document: boundedShortlist(records), result: index < 0 };
+  });
+}
+
+export async function setShortlistSelection(raw: unknown[], selected: boolean) {
+  return (await browserLocalDataProvider()).update(SHORTLIST_COLLECTION, (current) => {
+    const result = applyShortlistSelection(current, raw, selected);
+    return {
+      document: boundedShortlist(result.entries),
+      result: {
+        added: result.added,
+        updated: result.updated,
+        removed: result.removed,
+        skipped: result.skipped,
+      },
+    };
   });
 }
 

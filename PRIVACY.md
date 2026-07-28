@@ -372,6 +372,13 @@ default (see the README), so many lookups return no personal data at all.
   registrant and abuse contacts, and Certificate Transparency rows. Saving and
   loading make no network request; an explicit resume sends only domains that
   had no settled row through the selected Bulk mode.
+  Bulk filters and group summaries are derived locally from the compact rows
+  already in memory. Explicit batch selection is stored in the same bounded
+  shortlist and does not make a request. A selected deep rescan sends only the
+  selected domains; selected case, disposition, export, and watchlist actions
+  operate only on that visible analyst-controlled set. Missing provider, ASN,
+  hosting, registration, or mail fields remain unavailable rather than being
+  converted into a negative conclusion.
   The appearance selector can also retain one bounded `dark`, `light`, or
   `system` preference under `whoisleuth:theme:v1`. It is never sent to the
   server. It is included only when you deliberately download a unified

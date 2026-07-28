@@ -64,6 +64,59 @@ test('a small scan completes and reports the correct error count', async ({ page
   await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill('unknown confidence'));
 });
 
+test('filters, groups, and selected-only actions use compact observed evidence', async ({ page }) => {
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') || '';
+    const limited = domain.startsWith('limited');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        availability: {
+          applicable: true,
+          domain,
+          state: limited ? 'registered' : 'available',
+          confidence: 'high',
+          registrar: limited ? { name: 'Example Registrar' } : null,
+          createdDate: limited ? '2026-07-20T00:00:00.000Z' : null,
+          nameservers: limited ? ['ns1.shared.example'] : [],
+          hasMx: limited,
+          hasSpf: limited,
+          hasDmarc: false,
+        },
+        diagnostics: {
+          version: 7,
+          rdap: { status: limited ? 'partial' : 'complete' },
+          whois: { status: 'skipped' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+  await runBulkScan(page, ['limited-one.example', 'available-two.example']);
+
+  await page.getByLabel('Source coverage').selectOption('limited');
+  await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
+  await expect(page.getByText('1 of 2 results matched')).toBeVisible();
+
+  await page.getByLabel('Group summary').selectOption('nameserver');
+  const groups = page.getByRole('region', { name: '1 observed group' });
+  await expect(groups).toContainText('ns1.shared.example');
+  await groups.getByRole('button', { name: 'Select group' }).click();
+  await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
+
+  const stored = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
+  expect(stored.records[0]?.value).toMatchObject({ domain: 'limited-one.example' });
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export selected CSV' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^whoisleuth-selected-/);
+  const content = await readFile((await download.path())!, 'utf8');
+  expect(content).toContain('limited-one.example');
+  expect(content).not.toContain('available-two.example');
+});
+
 test('a malformed successful response remains an explicit failure in exports and retained monitoring state', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

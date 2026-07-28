@@ -4,6 +4,7 @@
   import { getContext, onMount } from 'svelte';
   import BulkResultsTable from '$lib/components/BulkResultsTable.svelte';
   import BulkCoverage from '$lib/components/BulkCoverage.svelte';
+  import BulkGroupSummary from '$lib/components/BulkGroupSummary.svelte';
   import BulkTriagePlot from '$lib/components/BulkTriagePlot.svelte';
   import BulkRelationships from '$lib/components/BulkRelationships.svelte';
   import BulkScanQueue from '$lib/components/BulkScanQueue.svelte';
@@ -14,7 +15,7 @@
   import { activeProfile, isDomainAllowlisted, profileDomainKind, profileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { loadCandidateHandoff, type Candidate, type CandidateHandoff, type CertificateTransparencyProvenance } from '$lib/candidate-handoff';
   import { outreachAction, type AbuseEvidence, type Contact } from '$lib/drafts';
-  import { clearShortlist, exportShortlist, importShortlist, loadShortlist, MAX_SHORTLIST_IMPORT_BYTES, toggleShortlist, type ShortlistRecord } from '$lib/shortlist';
+  import { clearShortlist, exportShortlist, importShortlist, loadShortlist, MAX_SHORTLIST_IMPORT_BYTES, setShortlistSelection, toggleShortlist, type ShortlistRecord } from '$lib/shortlist';
   import { CASE_DISPOSITIONS, dispositionLabel, editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
   import type { WatchlistComparableRecord } from '$lib/analysis/watchlist-history.ts';
@@ -39,6 +40,17 @@
     type CompactLookupHttpResponse,
   } from '$lib/analysis/lookup-response.ts';
   import { defaultBulkSortDirection, sortBulkResults, type BulkSortDirection, type BulkSortKey } from '$lib/analysis/bulk-sort.ts';
+  import {
+    buildBulkTriageGroups,
+    bulkAdvancedFilterOptions,
+    matchesBulkAdvancedFilters,
+    type BulkAdvancedFilters,
+    type BulkAgeFilter,
+    type BulkGroupBy,
+    type BulkMailFilter,
+    type BulkSourceFilter,
+    type BulkTriageRow,
+  } from '$lib/analysis/bulk-triage.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
   import { readBulkWorkflowState, writeBulkWorkflowState } from '$lib/console-workflow-state.ts';
   import { loadInvestigationGuide, selectInvestigationGuideFocusDomain, selectInvestigationGuideReviewDomains } from '$lib/investigation-guide';
@@ -114,6 +126,7 @@
   let input = $state(''); let mode = $state<ScanMode>('fast'); let running = $state(false); let paused = $state(false);
   let completed = $state(0); let total = $state(0); let results = $state<ScanResult[]>([]); let filter = $state<Filter>('all');
   let mutationFilter=$state('');let signalFilters=$state<Set<string>>(new Set());let sortKey=$state<BulkSortKey>('risk');let sortDirection=$state<BulkSortDirection>(-1);let page=$state(1);
+  let sourceFilter=$state<BulkSourceFilter>('');let lifecycleFilter=$state('');let ageFilter=$state<BulkAgeFilter>('');let mailFilter=$state<BulkMailFilter>('');let registrarFilter=$state('');let caseDispositionFilter=$state('');let groupBy=$state<BulkGroupBy>('');
   let status = $state(''); let controller: AbortController|null = null; let pauseResolvers: Array<()=>void> = [];
   let activeScanSnapshot: (()=>ScanResult[])|null = null;
   let indicatorFormat=$state<'domains'|'hosts'|'dnsmasq'|'rpz'|'stix'|'misp'>('domains');let indicatorWildcards=$state(false);let indicatorStatus=$state('');
@@ -130,7 +143,11 @@
   const caseByDomain=$derived(new Map(cases.map(record=>[record.domain,record])));
   const mutationLabels=MUTATION_LABELS as Record<string,string>;
   const mutationOptions=$derived([...new Set(results.flatMap(row=>row.mutationTypes))].sort((a,b)=>(mutationLabels[a]||a).localeCompare(mutationLabels[b]||b)));
-  const filtered = $derived.by(()=>sortBulkResults(results.filter(matchesFilter),sortKey,sortDirection));
+  const triageRows=$derived(results.map(toBulkTriageRow));
+  const advancedFilters=$derived<BulkAdvancedFilters>({source:sourceFilter,lifecycle:lifecycleFilter,age:ageFilter,mail:mailFilter,registrar:registrarFilter,caseDisposition:caseDispositionFilter});
+  const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesFilter(row)&&matchesBulkAdvancedFilters(toBulkTriageRow(row),advancedFilters)),sortKey,sortDirection));
+  const advancedFilterOptions=$derived(bulkAdvancedFilterOptions(triageRows));
+  const groupSummary=$derived(buildBulkTriageGroups(filtered.map(toBulkTriageRow),groupBy));
   const shortlistedDomains=$derived(new Set(shortlist.map(item=>item.domain)));
   const reviewedIndicatorRows=$derived(filtered.map((row)=>({
     ...row,
@@ -143,6 +160,7 @@
   }));
   const indicatorCount=$derived(indicatorPreflight.domains.length);
   const selectedIndicatorCount=$derived(filtered.filter((row)=>shortlistedDomains.has(row.domain)).length);
+  const selectedRows=$derived(filtered.filter((row)=>shortlistedDomains.has(row.domain)));
   const counts = $derived.by(()=>{const next={all:results.length,available:0,registered:0,high_risk:0,trusted:0,errors:0};for(const row of results){if(row.availability==='available')next.available+=1;if(['registered','for_sale','expiring'].includes(row.availability))next.registered+=1;if((row.risk??-1)>=70&&!row.trusted)next.high_risk+=1;if(row.trusted)next.trusted+=1;if(row.status==='error')next.errors+=1;}return next;});
   const pageCount=$derived(Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)));
   const currentPage=$derived(Math.min(page,pageCount));
@@ -174,13 +192,13 @@
     const guideContext=investigationTarget&&activeGuide?.domain===investigationTarget?`${activeGuide.recipeId}\u0000${activeGuide.domain}\u0000${activeGuide.createdAt}`:investigationTarget?`target\u0000${investigationTarget}`:'';
     const candidateState=handoffNavigation?null:readBulkWorkflowState<ScanResult>();
     const restored=candidateState&&(!investigationTarget||candidateState.guideContext===guideContext)?candidateState:null;
-    if(restored){input=restored.input;mode=restored.mode;completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;indicatorWildcards=restored.indicatorWildcards===true;watchlistName=restored.watchlistName;}
+    if(restored){input=restored.input;mode=restored.mode;completed=restored.completed;total=restored.total;results=restored.results;filter=restored.filter;mutationFilter=restored.mutationFilter;signalFilters=new Set(restored.signalFilters);sourceFilter=restored.sourceFilter||'';lifecycleFilter=restored.lifecycleFilter||'';ageFilter=restored.ageFilter||'';mailFilter=restored.mailFilter||'';registrarFilter=restored.registrarFilter||'';caseDispositionFilter=restored.caseDispositionFilter||'';groupBy=restored.groupBy||'';sortKey=restored.sortKey;sortDirection=restored.sortDirection;page=restored.page;status=restored.status;indicatorFormat=restored.indicatorFormat;indicatorWildcards=restored.indicatorWildcards===true;watchlistName=restored.watchlistName;}
     void initializeLocalContext(handoffNavigation,investigationTarget,restored);
     return()=>{
       resume();
       controller?.abort();
       const retainedResults=activeScanSnapshot?.()||results;
-      writeBulkWorkflowState({guideContext,input,mode,completed,total,results:retainedResults,filter,mutationFilter,signalFilters:[...signalFilters],sortKey,sortDirection,page,status:running?`Stopped after ${completed} of ${total} lookups when you left Bulk. Completed results were retained.`:status,indicatorFormat,indicatorWildcards,watchlistName});
+      writeBulkWorkflowState({guideContext,input,mode,completed,total,results:retainedResults,filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,groupBy,sortKey,sortDirection,page,status:running?`Stopped after ${completed} of ${total} lookups when you left Bulk. Completed results were retained.`:status,indicatorFormat,indicatorWildcards,watchlistName});
     };
   });
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
@@ -196,10 +214,11 @@
   async function setRowDisposition(row:ScanResult,value:string){const record=caseByDomain.get(row.domain);if(!record)return;try{const{pruned}=await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${row.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the case.';}}
   function parseDomains(){return parsedInput.entries.map((value:string)=>value.toLowerCase());}
   function provenance(domain:string):Candidate|undefined{return provenanceByDomain.get(domain.toLowerCase());}
+  function toBulkTriageRow(row:ScanResult):BulkTriageRow{return{domain:row.domain,availability:row.availability,registrar:row.registrar,mutationTypes:row.mutationTypes,nameservers:row.nameservers,sourceCoverage:row.sourceCoverage,createdDate:row.saved.createdDate??null,hasMx:row.saved.hasMx??null,hasSpf:row.saved.hasSpf??null,hasDmarc:row.saved.hasDmarc??null,caseDisposition:caseByDomain.get(row.domain)?.disposition||'untracked'};}
   function matchesFilter(r:ScanResult){if(filter==='available'&&r.availability!=='available')return false;if(filter==='registered'&&!['registered','for_sale','expiring'].includes(r.availability))return false;if(filter==='high_risk'&&((r.risk??-1)<70||Boolean(r.trusted)))return false;if(filter==='trusted'&&!r.trusted)return false;if(filter==='errors'&&r.status!=='error')return false;if(mutationFilter&&!r.mutationTypes.includes(mutationFilter))return false;for(const signal of signalFilters){if(signal==='favicon'&&!r.faviconMatch&&!r.faviconNearMatch)return false;if(signal==='password'&&!r.hasPasswordField)return false;if(signal==='phishing'&&!r.phishingLanguageMatch)return false;if(signal==='asset_reuse'&&!r.reusesOfficialAssets)return false;if(signal==='idn'&&!r.idn?.mixedScript&&!r.idn?.referenceMatches?.length)return false;}return true;}
   function setFilter(next:Filter){filter=next;page=1;}
   function toggleSignal(signal:string){const next=new Set(signalFilters);next.has(signal)?next.delete(signal):next.add(signal);signalFilters=next;page=1;}
-  function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();page=1;}
+  function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();sourceFilter='';lifecycleFilter='';ageFilter='';mailFilter='';registrarFilter='';caseDispositionFilter='';page=1;}
   function setSort(key:BulkSortKey){if(sortKey===key)sortDirection=sortDirection===1?-1:1;else{sortKey=key;sortDirection=defaultBulkSortDirection(key);}page=1;}
   function setSortKey(key:BulkSortKey){if(sortKey!==key){sortKey=key;sortDirection=defaultBulkSortDirection(key);}page=1;}
   function setSortDirection(direction:BulkSortDirection){sortDirection=direction;page=1;}
@@ -221,6 +240,11 @@
   }
   function isShortlisted(domain:string){return shortlistedDomains.has(domain);}
   async function toggleSaved(row:ScanResult){try{const added=await toggleShortlist({...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()});shortlist=await loadShortlist();shortlistStatus=added?`Added ${row.domain} to the shortlist.`:`Removed ${row.domain} from the shortlist.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update shortlist.';}}
+  function shortlistPayload(row:ScanResult){return{...row.saved,riskScore:row.risk,opportunityScore:row.opportunity,savedAt:new Date().toISOString()};}
+  async function selectRows(rows:ScanResult[],selected=true){try{const result=await setShortlistSelection(rows.map(shortlistPayload),selected);shortlist=await loadShortlist();shortlistStatus=selected?`Selected ${result.added} new and refreshed ${result.updated} existing domain${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit row${result.skipped===1?'':'s'}`:''}.`:`Removed ${result.removed} domain${result.removed===1?'':'s'} from the shortlist.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not update the selection.';}}
+  async function selectDomains(domains:string[]){const wanted=new Set(domains);await selectRows(filtered.filter((row)=>wanted.has(row.domain)),true);}
+  async function selectFiltered(){await selectRows(filtered,true);}
+  async function clearFilteredSelection(){await selectRows(filtered,false);}
   async function removeAllShortlisted(){if(!shortlist.length||!confirm('Remove every domain from the shortlist?'))return;try{await clearShortlist();shortlist=[];shortlistStatus='Shortlist cleared.';}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not clear the shortlist.';}}
   async function downloadShortlist(){try{await exportShortlist();}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Could not export the shortlist.';}}
   function loadShortlisted(){loadDomains(shortlist.map(item=>item.domain));}
@@ -276,7 +300,12 @@
   }
   async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(currentBulkSessionId)bulkSessionName='';currentBulkSessionId='';scanStartedAt=new Date().toISOString();await run(parseDomains(),true);}
   async function retryErrors(){const domains=results.filter(r=>r.status==='error').map(r=>r.domain);results=results.filter(r=>r.status!=='error');await run(domains,false);}
-  function exportCsv(){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_status','registrar','activity','risk','risk_model_version','risk_factors','opportunity','mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=results.map(r=>[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',r.idn?.referenceMatches?.map((match)=>match.asciiDomain).join('|')||'',r.availability,r.confidence,r.trusted||'',r.registrar,r.activity,r.risk??'',r.saved.riskModelVersion??'',r.saved.riskFactors?.map((factor)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`).join('; ')||'',r.opportunity??'',r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records.a.join('|')||'',r.dns?.records.aaaa.join('|')||'',r.dns?.records.cname.join('|')||'',r.dns?.records.caa.map((item)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',...ctCsvFields(r.ct)]);const url=URL.createObjectURL(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-bulk-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
+  function exportRowsCsv(selected:ScanResult[],scope='bulk'){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_status','registrar','activity','risk','risk_model_version','risk_factors','opportunity','mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=selected.map(r=>[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',r.idn?.referenceMatches?.map((match)=>match.asciiDomain).join('|')||'',r.availability,r.confidence,r.trusted||'',r.registrar,r.activity,r.risk??'',r.saved.riskModelVersion??'',r.saved.riskFactors?.map((factor)=>`${factor.label} ${Number(factor.points)>=0?'+':''}${factor.points}`).join('; ')||'',r.opportunity??'',r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records.a.join('|')||'',r.dns?.records.aaaa.join('|')||'',r.dns?.records.cname.join('|')||'',r.dns?.records.caa.map((item)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',...ctCsvFields(r.ct)]);const url=URL.createObjectURL(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-${scope}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
+  function exportCsv(){exportRowsCsv(results);}
+  function exportSelectedCsv(){if(selectedRows.length)exportRowsCsv(selectedRows,'selected');}
+  async function deepRescanSelected(){const domains=selectedRows.slice(0,200).map((row)=>row.domain);if(!domains.length||running)return;mode='deep';results=results.filter((row)=>!domains.includes(row.domain));status=`Starting a deep rescan of ${domains.length} explicitly selected domain${domains.length===1?'':'s'}.`;await run(domains,false);}
+  async function createCasesSelected(){const rows=selectedRows.slice(0,50);if(!rows.length||!confirm(`Create or refresh cases for ${rows.length} selected domain${rows.length===1?'':'s'}?`))return;for(const row of rows)await trackCase(row);caseStatus=`Reviewed ${rows.length} selected domain${rows.length===1?'':'s'} for case creation${selectedRows.length>rows.length?'; the action was capped at 50':''}.`;}
+  async function setSelectedDisposition(value:string){const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);if(!records.length)return;for(const record of records)await editCase(record.id,{disposition:value});cases=await loadCases();caseStatus=`Marked ${records.length} selected case${records.length===1?'':'s'} as ${dispositionLabel(value)}${selectedRows.length>records.length?'; only existing cases were changed':''}.`;}
   function downloadText(content:string,filename:string,mimeType:string){const url=URL.createObjectURL(new Blob([content],{type:mimeType}));const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;anchor.click();URL.revokeObjectURL(url);}
   function exportDefensiveIndicators(){
     const reviewOptions={selectedDomains:[...shortlistedDomains],officialDomains:profile?.officialDomains||[],allowlistedDomains:profile?.allowlistedDomains||[],includeWildcards:indicatorWildcards};
@@ -290,6 +319,7 @@
     indicatorStatus=`Exported ${reviewed.domains.length} reviewed indicator${reviewed.domains.length===1?'':'s'}, a provenance manifest, and a rollback set${reviewed.exclusions.length?`; preflight excluded ${reviewed.exclusions.length} other selection${reviewed.exclusions.length===1?'':'s'}`:''}.`;
   }
   async function saveResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}const findings=results.filter(row=>!row.trusted);if(!findings.length){saveStatus='Every result is trusted by the active profile; nothing was added to Monitor.';return;}try{const changes=await saveWatchlist(name,findings.map(r=>r.saved),mode);const excluded=results.length-findings.length;saveStatus=changes.length?`Updated ${name} and recorded ${changes.length} material change${changes.length===1?'':'s'}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`:`Saved ${findings.length} result${findings.length===1?'':'s'} to ${name}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save watchlist.';}}
+  async function saveSelectedResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}const findings=selectedRows.filter((row)=>!row.trusted);if(!findings.length){saveStatus='Select at least one non-trusted result before saving to Monitor.';return;}try{await saveWatchlist(name,findings.map((row)=>row.saved),mode);saveStatus=`Saved ${findings.length} explicitly selected result${findings.length===1?'':'s'} to ${name}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save the selected results.';}}
 </script>
 
 <svelte:head><title>Bulk · WHOISleuth</title></svelte:head>
@@ -354,6 +384,21 @@
       mutationOptions={mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_',' ')}))}
       {signalFilters}
       {toggleSignal}
+      {sourceFilter}
+      setSourceFilter={(value)=>{sourceFilter=value;page=1;}}
+      {lifecycleFilter}
+      setLifecycleFilter={(value)=>{lifecycleFilter=value;page=1;}}
+      {ageFilter}
+      setAgeFilter={(value)=>{ageFilter=value;page=1;}}
+      {mailFilter}
+      setMailFilter={(value)=>{mailFilter=value;page=1;}}
+      {registrarFilter}
+      setRegistrarFilter={(value)=>{registrarFilter=value;page=1;}}
+      {caseDispositionFilter}
+      setCaseDispositionFilter={(value)=>{caseDispositionFilter=value;page=1;}}
+      {groupBy}
+      setGroupBy={(value)=>groupBy=value}
+      {advancedFilterOptions}
       {clearFilters}
       {sortKey}
       {sortDirection}
@@ -368,7 +413,16 @@
       {watchlistName}
       setWatchlistName={(value)=>watchlistName=value}
       {saveResults}
+      {saveSelectedResults}
       {saveStatus}
+      selectedCount={selectedRows.length}
+      {selectFiltered}
+      {clearFilteredSelection}
+      {exportSelectedCsv}
+      {deepRescanSelected}
+      {createCasesSelected}
+      {setSelectedDisposition}
+      caseOptions={CASE_DISPOSITIONS}
     />
     <BulkTriagePlot
       points={filtered.map((row)=>({
@@ -379,6 +433,15 @@
         trusted:Boolean(row.trusted),
       }))}
       matchedCount={filtered.length}
+    />
+    <BulkGroupSummary
+      {groupBy}
+      groups={groupSummary.groups}
+      excluded={groupSummary.excluded}
+      truncated={groupSummary.truncated}
+      overlapping={groupSummary.overlapping}
+      selectedDomains={shortlistedDomains}
+      {selectDomains}
     />
     <BulkResultsTable
       rows={resultDisplayRows()}
