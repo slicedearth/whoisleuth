@@ -40,6 +40,28 @@ export type EvidenceTopologyTarget = {
   status?: string;
 };
 
+export type LookupEvidenceTopologyInput = Readonly<{
+  availability?: unknown;
+  diagnostics?: unknown;
+  dnsEvidence?: unknown;
+  httpEvidence?: unknown;
+  httpResponse?: unknown;
+  observedNetworkContext?: unknown;
+  observedNetworkEndpoint?: unknown;
+  pageIdentity?: unknown;
+  registrarRdap?: unknown;
+  reverseDns?: unknown;
+  reverseDnsRecords?: unknown;
+  securityPosture?: unknown;
+  securityPostureSummary?: unknown;
+  securityTxt?: unknown;
+  structuredDataIdentity?: unknown;
+  targetType?: unknown;
+  technologyProfile?: unknown;
+  tlsAuthorization?: unknown;
+  tlsEvidence?: unknown;
+}>;
+
 type Point = { x: number; y: number };
 
 const WIDTH = 820;
@@ -68,6 +90,247 @@ function boundedId(value: unknown) {
 function boundedHref(value: unknown) {
   const href = boundedText(value, 96);
   return /^#[a-z][a-z0-9_-]{0,79}$/iu.test(href) ? href : '';
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function records(value: unknown, maximum: number): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.slice(0, maximum).map(record).filter((item) => Object.keys(item).length > 0)
+    : [];
+}
+
+function display(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (Array.isArray(value)) return value.map((item) => boundedText(item, 80)).filter(Boolean).join(', ') || '—';
+  if (typeof value === 'object') {
+    const item = record(value);
+    return display(item.name || item.org || item.handle || item.domain);
+  }
+  return boundedText(value, 160) || '—';
+}
+
+function diagnosticDetail(value: unknown): string {
+  const source = record(value);
+  const detail = [
+    boundedText(source.endpoint, 160),
+    source.transportSecurity === 'https' ? 'HTTPS' : source.transportSecurity === 'http' ? 'Cleartext HTTP' : '',
+    typeof source.httpStatus === 'number' ? `HTTP ${source.httpStatus}` : '',
+  ].filter(Boolean).join(' · ');
+  return detail || boundedText(source.status, 40).replaceAll('_', ' ') || 'unknown';
+}
+
+export function buildLookupEvidenceTopologyNodes(input: LookupEvidenceTopologyInput): EvidenceTopologyInput[] {
+  const targetType = boundedText(input.targetType, 20);
+  if (!targetType) return [];
+  const availability = record(input.availability);
+  const diagnostics = record(input.diagnostics);
+  const rdapDiagnostic = record(diagnostics.rdap);
+  const whoisDiagnostic = record(diagnostics.whois);
+  const registrarRdap = record(input.registrarRdap);
+  const observedNetworkContext = record(input.observedNetworkContext);
+  const observedNetworkEndpoint = record(input.observedNetworkEndpoint);
+  const dnsEvidence = record(input.dnsEvidence);
+  const reverseDns = record(input.reverseDns);
+  const reverseDnsRecords = record(input.reverseDnsRecords);
+  const httpEvidence = record(input.httpEvidence);
+  const httpResponse = record(input.httpResponse);
+  const tlsEvidence = record(input.tlsEvidence);
+  const tlsAuthorization = record(input.tlsAuthorization);
+  const pageIdentity = record(input.pageIdentity);
+  const structuredDataIdentity = record(input.structuredDataIdentity);
+  const securityTxt = record(input.securityTxt);
+  const technologyProfile = record(input.technologyProfile);
+  const securityPosture = record(input.securityPosture);
+  const securityPostureSummary = record(input.securityPostureSummary);
+  const nodes: EvidenceTopologyInput[] = [{
+    id: 'registry-rdap',
+    label: targetType === 'domain' ? 'Registry RDAP' : 'RDAP',
+    detail: diagnosticDetail(rdapDiagnostic),
+    status: normalizeEvidenceTopologyStatus(rdapDiagnostic.status),
+    href: '#evidence-registry',
+    side: 'left',
+    glyph: 'R',
+    family: 'registry',
+  }];
+  if (targetType === 'domain' || whoisDiagnostic.status) {
+    nodes.push({
+      id: 'whois',
+      label: 'WHOIS',
+      detail: diagnosticDetail(whoisDiagnostic),
+      status: normalizeEvidenceTopologyStatus(whoisDiagnostic.status),
+      href: '#evidence-registry',
+      side: 'left',
+      glyph: 'W',
+      family: 'registry',
+    });
+  }
+  if (registrarRdap.status) {
+    nodes.push({
+      id: 'registrar-rdap',
+      label: 'Registrar RDAP',
+      detail: display(registrarRdap.detail || registrarRdap.endpoint || registrarRdap.status),
+      status: normalizeEvidenceTopologyStatus(registrarRdap.status),
+      href: '#evidence-registry',
+      side: 'left',
+      glyph: 'RR',
+      family: 'registry',
+    });
+  }
+  if (observedNetworkContext.contextVersion === 1) {
+    nodes.push({
+      id: 'network',
+      label: 'Network context',
+      detail: display(observedNetworkEndpoint.address || observedNetworkContext.detail),
+      status: normalizeEvidenceTopologyStatus(observedNetworkContext.status),
+      href: '#evidence-network',
+      side: 'left',
+      glyph: 'N',
+      family: 'network',
+    });
+  }
+  if (dnsEvidence.source === 'dns') {
+    nodes.push({
+      id: 'dns',
+      label: 'DNS',
+      detail: dnsEvidence.complete === false ? 'Collection is explicitly partial' : 'Record families collected',
+      status: normalizeEvidenceTopologyStatus(dnsEvidence.status, {
+        complete: dnsEvidence.complete !== false,
+        truncated: dnsEvidence.truncated === true,
+      }),
+      href: '#evidence-dns',
+      side: 'right',
+      glyph: 'D',
+      family: 'network',
+    });
+  }
+  if (reverseDns.source === 'reverse_dns') {
+    const ptrCount = Array.isArray(reverseDnsRecords.ptr) ? reverseDnsRecords.ptr.length : 0;
+    nodes.push({
+      id: 'reverse-dns',
+      label: 'Reverse DNS',
+      detail: ptrCount ? `${ptrCount} PTR name${ptrCount === 1 ? '' : 's'}` : display(reverseDns.status),
+      status: normalizeEvidenceTopologyStatus(reverseDns.status, {
+        complete: reverseDns.complete !== false,
+        truncated: reverseDns.truncated === true,
+      }),
+      href: '#evidence-reverse-dns',
+      side: 'right',
+      glyph: 'D',
+      family: 'network',
+    });
+  }
+  if (httpEvidence.source === 'http') {
+    nodes.push({
+      id: 'http',
+      label: 'HTTP',
+      detail: httpResponse.status
+        ? `HTTP ${display(httpResponse.status)} · ${display(httpEvidence.transportSecurity)}`
+        : display(httpEvidence.status),
+      status: normalizeEvidenceTopologyStatus(httpEvidence.status, {
+        complete: httpEvidence.complete !== false,
+        truncated: httpEvidence.truncated === true,
+      }),
+      href: '#evidence-http',
+      side: 'right',
+      glyph: 'H',
+      family: 'web',
+    });
+  }
+  if (tlsEvidence.source === 'tls') {
+    nodes.push({
+      id: 'tls',
+      label: 'TLS',
+      detail: display(tlsEvidence.protocol || (tlsAuthorization.authorized === true ? 'Validated certificate' : tlsEvidence.status)),
+      status: normalizeEvidenceTopologyStatus(tlsEvidence.status, {
+        complete: tlsEvidence.complete !== false,
+        truncated: tlsEvidence.chainTruncated === true,
+      }),
+      href: '#evidence-tls',
+      side: 'right',
+      glyph: 'T',
+      family: 'web',
+    });
+  }
+  if (pageIdentity.source === 'html') {
+    nodes.push({
+      id: 'page',
+      label: 'Page identity',
+      detail: display(pageIdentity.title || availability.pageTitle || pageIdentity.status),
+      status: normalizeEvidenceTopologyStatus(pageIdentity.status, {
+        complete: pageIdentity.complete === true,
+        truncated: pageIdentity.truncated === true,
+      }),
+      href: '#evidence-page',
+      side: 'right',
+      glyph: 'P',
+      family: 'web',
+    });
+  }
+  if (structuredDataIdentity.source === 'html') {
+    const entityCount = records(structuredDataIdentity.entities, 16).length;
+    nodes.push({
+      id: 'structured-identity',
+      label: 'Structured identity',
+      detail: `${entityCount} publisher-declared entit${entityCount === 1 ? 'y' : 'ies'}`,
+      status: normalizeEvidenceTopologyStatus(structuredDataIdentity.status, {
+        complete: structuredDataIdentity.complete === true,
+        truncated: structuredDataIdentity.truncated === true,
+      }),
+      href: '#evidence-structured-identity',
+      side: 'right',
+      glyph: 'SI',
+      family: 'web',
+    });
+  }
+  if (securityTxt.securityTxtVersion === 1) {
+    nodes.push({
+      id: 'security-txt',
+      label: 'security.txt',
+      detail: display(securityTxt.detail || securityTxt.state),
+      status: normalizeEvidenceTopologyStatus(securityTxt.state),
+      href: '#evidence-security-txt',
+      side: 'right',
+      glyph: 'S',
+      family: 'web',
+    });
+  }
+  if (technologyProfile.source === 'derived') {
+    const findingCount = records(technologyProfile.findings, 24).length;
+    nodes.push({
+      id: 'technology',
+      label: 'Technology',
+      detail: `${findingCount} bounded indicator${findingCount === 1 ? '' : 's'}`,
+      status: normalizeEvidenceTopologyStatus(technologyProfile.status, {
+        complete: technologyProfile.complete === true,
+        truncated: technologyProfile.truncated === true,
+      }),
+      href: '#evidence-technology',
+      side: 'right',
+      provenance: 'derived',
+      glyph: 'TC',
+    });
+  }
+  if (securityPosture.source === 'derived') {
+    nodes.push({
+      id: 'posture',
+      label: 'Security posture',
+      detail: display(securityPostureSummary.label || securityPosture.status),
+      status: normalizeEvidenceTopologyStatus(securityPosture.status, {
+        complete: securityPosture.complete === true,
+        truncated: securityPosture.truncated === true,
+      }),
+      href: '#evidence-posture',
+      side: 'right',
+      provenance: 'derived',
+      glyph: 'SP',
+    });
+  }
+  return nodes;
 }
 
 function normalizeEvidenceTopologyFamily(

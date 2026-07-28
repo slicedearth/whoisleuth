@@ -44,8 +44,7 @@
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
   import {
-    normalizeEvidenceTopologyStatus,
-    type EvidenceTopologyInput,
+    buildLookupEvidenceTopologyNodes,
   } from '$lib/analysis/evidence-topology.ts';
   import {
     createLookupViewModel,
@@ -207,7 +206,27 @@
   const pageComparison=$derived(comparePageBaselines(profile?.pageBaseline,observedPageBaseline));
   const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||Boolean(abuseContactEmail));
-  const evidenceTopologyNodes=$derived(buildEvidenceTopologyNodes());
+  const evidenceTopologyNodes=$derived(buildLookupEvidenceTopologyNodes({
+    targetType:result?.type,
+    availability,
+    diagnostics,
+    registrarRdap,
+    observedNetworkContext,
+    observedNetworkEndpoint,
+    dnsEvidence,
+    reverseDns,
+    reverseDnsRecords,
+    httpEvidence,
+    httpResponse,
+    tlsEvidence,
+    tlsAuthorization,
+    pageIdentity,
+    structuredDataIdentity,
+    securityTxt,
+    technologyProfile,
+    securityPosture,
+    securityPostureSummary,
+  }));
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
     type:result?.type,
     query:result?.query,
@@ -695,112 +714,6 @@
     ...(hasCaseSection?[{href:'#case-response' as const,label:'Case & response'}]:[]),
     {href:'#raw-data',label:'Raw data'},
   ];}
-  function topologyStatus(value:unknown,complete=true,truncated=false){
-    return normalizeEvidenceTopologyStatus(value,{complete,truncated});
-  }
-  function topologyDiagnosticDetail(source:SourceStatus){
-    return[
-      source.endpoint,
-      source.transportSecurity==='https'?'HTTPS':source.transportSecurity==='http'?'Cleartext HTTP':null,
-      source.httpStatus?`HTTP ${source.httpStatus}`:null,
-    ].filter(Boolean).join(' · ')||diagnosticLabel(source);
-  }
-  function buildEvidenceTopologyNodes():EvidenceTopologyInput[]{
-    if(!result)return[];
-    const nodes:EvidenceTopologyInput[]=[];
-    const rdapDiagnostic=rec(diagnostics.rdap) as SourceStatus;
-    const whoisDiagnostic=rec(diagnostics.whois) as SourceStatus;
-    nodes.push({
-      id:'registry-rdap',label:result.type==='domain'?'Registry RDAP':'RDAP',
-      detail:topologyDiagnosticDetail(rdapDiagnostic),status:topologyStatus(rdapDiagnostic.status),
-      href:'#evidence-registry',side:'left',glyph:'R',family:'registry',
-    });
-    if(result.type==='domain'||whoisDiagnostic.status){
-      nodes.push({
-        id:'whois',label:'WHOIS',detail:topologyDiagnosticDetail(whoisDiagnostic),
-        status:topologyStatus(whoisDiagnostic.status),href:'#evidence-registry',side:'left',glyph:'W',family:'registry',
-      });
-    }
-    if(registrarRdap.status){
-      nodes.push({
-        id:'registrar-rdap',label:'Registrar RDAP',
-        detail:show(registrarRdap.detail||registrarRdap.endpoint||registrarRdap.status),
-        status:topologyStatus(registrarRdap.status),href:'#evidence-registry',side:'left',glyph:'RR',family:'registry',
-      });
-    }
-    if(observedNetworkContext.contextVersion===1){
-      nodes.push({
-        id:'network',label:'Network context',
-        detail:show(observedNetworkEndpoint.address||observedNetworkContext.detail),
-        status:topologyStatus(observedNetworkContext.status),href:'#evidence-network',side:'left',glyph:'N',family:'network',
-      });
-    }
-    if(dnsEvidence.source==='dns'){
-      nodes.push({
-        id:'dns',label:'DNS',detail:dnsEvidence.complete===false?'Collection is explicitly partial':'Record families collected',
-        status:topologyStatus(dnsEvidence.status,dnsEvidence.complete!==false,Boolean(dnsEvidence.truncated)),
-        href:'#evidence-dns',side:'right',glyph:'D',family:'network',
-      });
-    }
-    if(reverseDns.source==='reverse_dns'){
-      nodes.push({
-        id:'reverse-dns',label:'Reverse DNS',
-        detail:Array.isArray(reverseDnsRecords.ptr)&&reverseDnsRecords.ptr.length?`${reverseDnsRecords.ptr.length} PTR name${reverseDnsRecords.ptr.length===1?'':'s'}`:show(reverseDns.status),
-        status:topologyStatus(reverseDns.status,reverseDns.complete!==false,Boolean(reverseDns.truncated)),
-        href:'#evidence-reverse-dns',side:'right',glyph:'D',family:'network',
-      });
-    }
-    if(httpEvidence.source==='http'){
-      nodes.push({
-        id:'http',label:'HTTP',detail:httpResponse.status?`HTTP ${show(httpResponse.status)} · ${show(httpEvidence.transportSecurity)}`:show(httpEvidence.status),
-        status:topologyStatus(httpEvidence.status,httpEvidence.complete!==false,Boolean(httpEvidence.truncated)),
-        href:'#evidence-http',side:'right',glyph:'H',family:'web',
-      });
-    }
-    if(tlsEvidence.source==='tls'){
-      nodes.push({
-        id:'tls',label:'TLS',detail:show(tlsEvidence.protocol||(tlsAuthorization.authorized===true?'Validated certificate':tlsEvidence.status)),
-        status:topologyStatus(tlsEvidence.status,tlsEvidence.complete!==false,Boolean(tlsEvidence.chainTruncated)),
-        href:'#evidence-tls',side:'right',glyph:'T',family:'web',
-      });
-    }
-    if(pageIdentity.source==='html'){
-      nodes.push({
-        id:'page',label:'Page identity',detail:show(pageIdentity.title||availability.pageTitle||pageIdentity.status),
-        status:topologyStatus(pageIdentity.status,Boolean(pageIdentity.complete),Boolean(pageIdentity.truncated)),
-        href:'#evidence-page',side:'right',glyph:'P',family:'web',
-      });
-    }
-    if(structuredDataIdentity.source==='html'){
-      nodes.push({
-        id:'structured-identity',label:'Structured identity',
-        detail:`${structuredIdentityRows().length} publisher-declared entit${structuredIdentityRows().length===1?'y':'ies'}`,
-        status:topologyStatus(structuredDataIdentity.status,Boolean(structuredDataIdentity.complete),Boolean(structuredDataIdentity.truncated)),
-        href:'#evidence-structured-identity',side:'right',glyph:'SI',family:'web',
-      });
-    }
-    if(securityTxt.securityTxtVersion===1){
-      nodes.push({
-        id:'security-txt',label:'security.txt',detail:show(securityTxt.detail||securityTxt.state),
-        status:topologyStatus(securityTxt.state),href:'#evidence-security-txt',side:'right',glyph:'S',family:'web',
-      });
-    }
-    if(technologyProfile.source==='derived'){
-      nodes.push({
-        id:'technology',label:'Technology',detail:`${technologyFindingRows().length} bounded indicator${technologyFindingRows().length===1?'':'s'}`,
-        status:topologyStatus(technologyProfile.status,Boolean(technologyProfile.complete),Boolean(technologyProfile.truncated)),
-        href:'#evidence-technology',side:'right',provenance:'derived',glyph:'TC',
-      });
-    }
-    if(securityPosture.source==='derived'){
-      nodes.push({
-        id:'posture',label:'Security posture',detail:show(securityPostureSummary.label||securityPosture.status),
-        status:topologyStatus(securityPosture.status,Boolean(securityPosture.complete),Boolean(securityPosture.truncated)),
-        href:'#evidence-posture',side:'right',provenance:'derived',glyph:'SP',
-      });
-    }
-    return nodes;
-  }
   async function submit(event:SubmitEvent){
     event.preventDefault();
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
