@@ -5,6 +5,8 @@ import {
   normalizeLookupEvidenceDensity,
   normalizeLookupTaskView,
   prioritizeLookupSectionLinks,
+  readLookupPresentation,
+  writeLookupPresentation,
 } from '../frontend/src/lib/analysis/lookup-presentation.ts';
 
 const links = [
@@ -35,4 +37,22 @@ test('prioritizes navigation without changing or removing the shared evidence li
   ]);
   assert.deepEqual(new Set(acquisition), new Set(links));
   assert.notEqual(acquisition, links);
+});
+
+test('reads and writes a bounded versioned browser presentation preference', () => {
+  let stored = '';
+  const storage = {
+    getItem: () => stored || null,
+    setItem: (_key: string, value: string) => {
+      stored = value;
+    },
+  };
+  writeLookupPresentation(storage, { density: 'full', task: 'brand' });
+  assert.deepEqual(readLookupPresentation(storage), { density: 'full', task: 'brand' });
+
+  stored = JSON.stringify({ version: 2, density: 'summary', task: 'owned' });
+  assert.deepEqual(readLookupPresentation(storage), { density: 'standard', task: 'general' });
+
+  stored = '{"broken"';
+  assert.deepEqual(readLookupPresentation(storage), { density: 'standard', task: 'general' });
 });

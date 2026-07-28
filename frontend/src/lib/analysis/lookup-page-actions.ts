@@ -1,3 +1,9 @@
+import {
+  prioritizeLookupSectionLinks,
+  type LookupSectionLink,
+  type LookupTaskView,
+} from './lookup-presentation.ts';
+
 type LookupMode = 'fast' | 'deep';
 
 type LookupRequestSelection = Readonly<{
@@ -76,6 +82,16 @@ export function buildLookupSectionLinks(input: {
       : []),
     { href: '#raw-data', label: 'Raw data' },
   ];
+}
+
+export function buildLookupResultSectionLinks(input: {
+  hasWebEvidence: boolean;
+  domainResult: boolean;
+  hasExternalIntelligence: boolean;
+  hasCaseSection: boolean;
+  task: LookupTaskView;
+}): LookupSectionLink[] {
+  return prioritizeLookupSectionLinks(buildLookupSectionLinks(input), input.task);
 }
 
 export type { LookupMode, LookupRequestSelection };

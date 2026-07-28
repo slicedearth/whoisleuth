@@ -1,6 +1,14 @@
 export type LookupEvidenceDensity = 'summary' | 'standard' | 'full';
 export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
 export type LookupSectionLink = Readonly<{ href: `#${string}`; label: string }>;
+export type LookupPresentationState = Readonly<{
+  density: LookupEvidenceDensity;
+  task: LookupTaskView;
+}>;
+
+export type LookupPresentationStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+export const LOOKUP_PRESENTATION_STORAGE_KEY = 'whoisleuth:lookup-presentation:v1';
 
 export const LOOKUP_EVIDENCE_DENSITIES = Object.freeze([
   Object.freeze({ id: 'summary' as const, label: 'Summary', detail: 'Overview and source-state ledger, with detailed sections reduced to headings.' }),
@@ -29,6 +37,42 @@ export function normalizeLookupTaskView(value: unknown): LookupTaskView {
   return typeof value === 'string' && TASKS.has(value as LookupTaskView)
     ? value as LookupTaskView
     : 'general';
+}
+
+export function readLookupPresentation(
+  storage: Pick<LookupPresentationStorage, 'getItem'>,
+): LookupPresentationState {
+  try {
+    const stored = JSON.parse(storage.getItem(LOOKUP_PRESENTATION_STORAGE_KEY) || 'null') as {
+      version?: unknown;
+      density?: unknown;
+      task?: unknown;
+    } | null;
+    if (stored?.version === 1) {
+      return {
+        density: normalizeLookupEvidenceDensity(stored.density),
+        task: normalizeLookupTaskView(stored.task),
+      };
+    }
+  } catch {
+    // Invalid or unavailable browser storage falls back to the stable defaults.
+  }
+  return { density: 'standard', task: 'general' };
+}
+
+export function writeLookupPresentation(
+  storage: Pick<LookupPresentationStorage, 'setItem'>,
+  state: LookupPresentationState,
+): void {
+  try {
+    storage.setItem(LOOKUP_PRESENTATION_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      density: normalizeLookupEvidenceDensity(state.density),
+      task: normalizeLookupTaskView(state.task),
+    }));
+  } catch {
+    // The caller's in-memory selection remains valid when storage is unavailable.
+  }
 }
 
 const PRIORITY: Readonly<Record<LookupTaskView, readonly string[]>> = Object.freeze({

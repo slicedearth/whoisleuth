@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 
 import {
   buildLookupRequestUrl,
+  buildLookupResultSectionLinks,
   buildLookupSectionLinks,
 } from '../frontend/src/lib/analysis/lookup-page-actions.ts';
 
@@ -58,6 +59,26 @@ describe('lookup page actions', () => {
         { href: '#registry', label: 'Registry' },
         { href: '#case-response', label: 'Case & response' },
         { href: '#raw-data', label: 'Raw data' },
+      ],
+    );
+  });
+
+  test('exposes task-prioritized section navigation through one route facade', () => {
+    assert.deepEqual(
+      buildLookupResultSectionLinks({
+        hasWebEvidence: true,
+        domainResult: true,
+        hasExternalIntelligence: true,
+        hasCaseSection: true,
+        task: 'incident',
+      }).map((link) => link.href),
+      [
+        '#overview',
+        '#external-intelligence',
+        '#web-evidence',
+        '#registry',
+        '#case-response',
+        '#raw-data',
       ],
     );
   });
