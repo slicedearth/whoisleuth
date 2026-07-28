@@ -175,7 +175,7 @@ test('disabled hosted monitoring stays read-only and makes no management request
     return route.abort();
   });
 
-  await page.goto('/monitor');
+  await page.goto('/monitor?view=watchlists');
   const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
   await expect(hosted).toContainText('Disabled');
   await expect(hosted).toContainText('Ordinary watchlists stay in this browser');
@@ -189,7 +189,7 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   const mock = await installManagementMock(page);
   page.on('dialog', (dialog) => dialog.accept());
 
-  await page.goto('/monitor');
+  await page.goto('/monitor?view=watchlists');
   const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
   await expect(hosted).toContainText('No watchlists are scheduled');
   await hosted.getByLabel('Browser-local watchlist').selectOption('Priority domains');
@@ -234,7 +234,7 @@ test('hosted controls stay usable without horizontal overflow on a narrow mobile
   await seedLocalWatchlist(page);
   await mockCapability(page, 'supported');
   await installManagementMock(page, [hostedWatchlist()]);
-  await page.goto('/monitor');
+  await page.goto('/monitor?view=watchlists');
 
   const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
   await expect(hosted.getByRole('button', { name: 'Restore to browser' })).toBeVisible();

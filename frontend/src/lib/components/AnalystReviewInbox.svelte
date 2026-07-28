@@ -39,7 +39,7 @@
 </script>
 
 <section class="review-inbox card" aria-labelledby="review-inbox-title">
-  <div class="heading">
+  <div class="inbox-heading">
     <div>
       <p class="eyebrow">Analyst review</p>
       <h2 id="review-inbox-title">Review inbox</h2>
@@ -85,11 +85,11 @@
 
 <style>
   .review-inbox{padding:var(--card-pad)}
-  .heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
-  .heading h2,.heading p{margin:0}
-  .heading h2{margin-top:3px;font:700 var(--text-lg) var(--mono)}
-  .heading>div>p:last-child{margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
-  .heading>strong{color:var(--accent2);font:750 2rem var(--mono)}
+  .inbox-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+  .inbox-heading h2,.inbox-heading p{margin:0}
+  .inbox-heading h2{margin-top:3px;font:700 var(--text-lg) var(--mono)}
+  .inbox-heading>div>p:last-child{margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  .inbox-heading>strong{color:var(--accent2);font:750 2rem var(--mono)}
   .filters{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0}
   .filters button{display:flex;gap:7px;align-items:center;min-height:36px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:650 var(--text-xs) var(--mono)}
   .filters button.active{border-color:rgb(var(--accent2-rgb) / .55);background:rgb(var(--accent2-rgb) / .08);color:var(--accent2)}
@@ -108,5 +108,5 @@
   .empty,.warning,.limitations{color:var(--muted);font-size:var(--text-sm)}
   .warning{color:var(--warning)}
   .limitations{margin:18px 0 0;padding-left:20px}
-  @media(max-width:640px){.items li{display:grid}.items .btn{width:100%;text-align:center}.heading>strong{font-size:1.6rem}}
+  @media(max-width:640px){.items li{display:grid}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}}
 </style>
