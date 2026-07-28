@@ -71,7 +71,8 @@
           {#each visibleRows as row (row.domain)}
             <tr>
               <th scope="row">
-                <span class="selected" aria-label={selectedDomains.has(row.domain) ? 'Selected' : 'Not selected'}>{selectedDomains.has(row.domain) ? '●' : '○'}</span>
+                <span class="selected" aria-hidden="true">{selectedDomains.has(row.domain) ? '●' : '○'}</span>
+                <span class="sr-only">{selectedDomains.has(row.domain) ? 'Selected' : 'Not selected'}</span>
                 <a href={`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`}>{row.domain}</a>
                 <small>{row.mutationTypes.join(', ') || 'No mutation provenance recorded'}</small>
               </th>
@@ -111,6 +112,7 @@
   th small,td small{margin-top:4px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   td strong{font-size:var(--text-xs)}
   .selected{display:inline;margin-right:5px;color:var(--accent)}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .relation{display:inline-block;width:max-content;padding:3px 6px;border:1px solid var(--border);border-radius:999px;font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
   .relation.aligned{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));color:var(--accent)}
   .relation.review{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}

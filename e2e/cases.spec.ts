@@ -1176,7 +1176,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-cases-.*\.json$/);
-    expect(parsed.version).toBe(5);
+    expect(parsed.version).toBe(7);
     expect(parsed.cases).toEqual(expect.arrayContaining([
       expect.objectContaining({ domain: 'backup-test.invalid' }),
     ]));
