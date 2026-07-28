@@ -1,5 +1,6 @@
-// Stable case-domain facade. Record normalization and analyst operations are
-// kept separate from serialization, byte budgeting, and export shaping.
+// Stable case-domain facade. Records, migrations, and storage concerns remain
+// separate internally while callers retain one public contract.
 
 export * from './case-record-model.ts';
+export * from './case-migration-model.ts';
 export * from './case-storage-model.ts';

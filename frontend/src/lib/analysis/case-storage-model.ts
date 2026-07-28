@@ -1,10 +1,10 @@
 import {
   CASE_SCHEMA_VERSION,
   MAX_CASE_STORE_BYTES,
-  normalizeCaseStore,
   type CaseEvidenceSnapshot,
   type CaseRecord,
 } from './case-record-model.ts';
+import { normalizeCaseStore } from './case-migration-model.ts';
 
 /** The exact versioned string persisted by the browser storage adapter. */
 export function serializeCaseStore(cases: CaseRecord[]): string {
