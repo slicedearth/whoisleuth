@@ -69,6 +69,65 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('reports each planned deep source once without exposing or changing its raw result', async () => {
+    const settlements: Array<{
+      source: string;
+      state: string;
+      fragment: unknown;
+    }> = [];
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => null,
+      fetchRegistrarRdapRecord: async () => null,
+      buildWhoisChain: async () => [
+        { server: 'whois.iana.org', response: 'refer: whois.example\n' },
+        { server: 'whois.example', response: 'No match' },
+      ],
+      checkDomainAvailability: async () => ({
+        state: 'unknown',
+        confidence: 'low',
+        deepScanComplete: false,
+        privateDetail: 'must not enter the progress fragment',
+      }),
+      collectObservedNetworkContext: async () => null,
+      onSourceSettled(settlement: {
+        source: string;
+        state: string;
+        fragment: unknown;
+      }) {
+        settlements.push(settlement);
+      },
+    });
+
+    assert.equal(result.availability.state, 'unknown');
+    assert.deepEqual(
+      [...settlements.map((item) => item.source)].sort(),
+      ['domain_evidence', 'network_context', 'rdap', 'registrar_rdap', 'whois'],
+    );
+    assert.equal(new Set(settlements.map((item) => item.source)).size, settlements.length);
+    assert.equal(JSON.stringify(settlements).includes('privateDetail'), false);
+    assert.equal(
+      settlements.find((item) => item.source === 'domain_evidence')?.state,
+      'partial',
+    );
+  });
+
+  test('ignores presentation callback failures so evidence collection remains authoritative', async () => {
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => null,
+      fetchRegistrarRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({
+        state: 'registered',
+        confidence: 'medium',
+      }),
+      collectObservedNetworkContext: async () => null,
+      onSourceSettled() {
+        throw new Error('presentation callback failed');
+      },
+    });
+    assert.equal(result.availability.state, 'registered');
+  });
+
   test('fetches RDAP and WHOIS once and reuses both for availability', async () => {
     const rdapRecord = {
       rdapServer: 'https://rdap.example/domain/example.com',
@@ -254,6 +313,60 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result.availability, 'pageRoleProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'clientBehaviorProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
+  });
+
+  test('adds an exact local SSLBL comparison only to deep non-compact domain lookups', async () => {
+    let inspections = 0;
+    const inspector = (tls: unknown, options: { snapshot?: unknown; now?: unknown } = {}) => {
+      inspections += 1;
+      assert.deepEqual(tls, { certificate: { fingerprintSha1: 'a'.repeat(40) } });
+      assert.equal(options.snapshot, 'fixture-snapshot');
+      assert.equal(options.now, '2026-07-29T10:00:00.000Z');
+      return {
+        sslblVersion: 1 as const,
+        source: 'sslbl' as const,
+        status: 'success' as const,
+        verdict: 'listed' as const,
+        complete: true,
+        observedAt: '2026-07-29T10:00:00.000Z',
+        fingerprintSha1: 'a'.repeat(40),
+        referenceUrl: `https://sslbl.abuse.ch/ssl-certificates/sha1/${'a'.repeat(40)}/`,
+        snapshot: {
+          sourceUpdatedAt: '2026-07-29T08:00:00.000Z',
+          generatedAt: '2026-07-29T08:05:00.000Z',
+          ageSeconds: 7200,
+          entryCount: 1,
+          digestSha256: 'b'.repeat(64),
+        },
+        detail: 'Exact local match.',
+        limitations: ['A match is not attribution.'],
+      };
+    };
+    const common = {
+      fetchRdapRecord: async () => null,
+      fetchRegistrarRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({
+        state: 'registered',
+        confidence: 'medium',
+        tls: { certificate: { fingerprintSha1: 'a'.repeat(40) } },
+      }),
+      collectObservedNetworkContext: async () => null,
+      inspectSslblCertificate: inspector,
+      sslblSnapshot: 'fixture-snapshot',
+      sslblNow: '2026-07-29T10:00:00.000Z',
+    };
+    const deep = await runFullLookup(classifiedDomain, common);
+    assert.equal(deep.sslbl?.verdict, 'listed');
+    assert.equal(deep.diagnostics.sslbl?.status, 'success');
+
+    const fast = await runFullLookup(classifiedDomain, { ...common, fast: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...common, compact: true });
+    assert.equal(Object.hasOwn(fast, 'sslbl'), false);
+    assert.equal(Object.hasOwn(fast.diagnostics, 'sslbl'), false);
+    assert.equal(Object.hasOwn(compact, 'sslbl'), false);
+    assert.equal(Object.hasOwn(compact.diagnostics, 'sslbl'), false);
+    assert.equal(inspections, 1);
   });
 
   test('records bounded settle timing only for deep non-compact source branches', async () => {

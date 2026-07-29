@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage } from '../cli/errors.mts';
+import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -150,6 +151,59 @@ describe('installed CLI process boundary', () => {
     assert.equal(document.riskModelVersion, 6);
     assert.equal(document.interpretation.networkRequests, false);
     assert.match(document.interpretation.statement, /does not.*prove maliciousness or safety/i);
+  });
+
+  test('offline artifact verification checks integrity without printing artifact contents', async () => {
+    const unsigned = {
+      schema: 'whoisleuth.acquisition-decision',
+      version: 1,
+      generatedAt: '2026-07-29T00:00:00.000Z',
+      decision: {
+        domain: 'sensitive-target.invalid',
+        rationale: 'Analyst-only rationale that must not be echoed.',
+      },
+    };
+    const input = {
+      ...unsigned,
+      integrity: {
+        algorithm: 'SHA-256',
+        digestSha256: await sha256ArtifactDigest(unsigned),
+      },
+    };
+    const result = runBinary(['verify-artifact', '--json'], JSON.stringify(input));
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, '');
+    const document = JSON.parse(result.stdout);
+    assert.equal(document.schema, 'whoisleuth.offline-artifact-verification');
+    assert.equal(document.state, 'verified');
+    assert.equal(document.checks.contentIntegrity, 'verified');
+    assert.doesNotMatch(result.stdout, /sensitive-target|Analyst-only rationale/);
+  });
+
+  test('source reliability reporting aggregates operations without retaining targets or queries', () => {
+    const lookup = savedLookup();
+    const input = {
+      ...lookup,
+      diagnostics: {
+        ...lookup.diagnostics,
+        timing: {
+          version: 1,
+          sources: [{ source: 'rdap', durationMs: 125 }],
+        },
+      },
+    };
+    const result = runBinary(['source-report', '--json'], JSON.stringify(input));
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, '');
+    const document = JSON.parse(result.stdout);
+    assert.equal(document.schema, 'whoisleuth.source-reliability-report');
+    assert.equal(document.documentsReviewed, 1);
+    assert.deepEqual(document.privacy, {
+      targetsRetained: 0,
+      queriesRetained: 0,
+      rawEvidenceRetained: 0,
+    });
+    assert.doesNotMatch(result.stdout, /example\\.test|rdap\\.example|fixtureSecret/);
   });
 
   test('saved lookup comparison is a real-process offline transformation', () => {

@@ -20,6 +20,7 @@ type CacheEntry = {
 type CacheFactory<T = unknown> = () => T | Promise<T>;
 
 const TTL_MS = 3 * 60 * 1000; // 3 minutes
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 // Bounds worst-case memory regardless of the TTL/sweep - without this, a
 // single large fast scan (up to MAX_FAST_BULK_DOMAINS domains) landing
@@ -44,6 +45,7 @@ const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 
 const store = new Map<string, CacheEntry>();
 let totalBytes = 0;
+let nextSweepAt = 0;
 
 // Approximate, not exact (doesn't account for JS object/string overhead) -
 // good enough for a soft memory ceiling, and cheap since it only runs once
@@ -63,7 +65,16 @@ function deleteEntry(key: string): void {
   totalBytes -= entry.size;
 }
 
+function sweepExpiredEntries(now: number): void {
+  if (now < nextSweepAt) return;
+  nextSweepAt = now + SWEEP_INTERVAL_MS;
+  for (const [key, entry] of store) {
+    if (now > entry.expiresAt) deleteEntry(key);
+  }
+}
+
 function getCached(key: string): unknown | undefined {
+  sweepExpiredEntries(Date.now());
   const entry = store.get(key);
   if (!entry) return undefined;
   if (Date.now() > entry.expiresAt) {
@@ -74,6 +85,7 @@ function getCached(key: string): unknown | undefined {
 }
 
 function setCached(key: string, value: unknown): void {
+  sweepExpiredEntries(Date.now());
   deleteEntry(key); // avoid double-counting bytes if this key is already cached
   const size = approxByteSize(value);
   store.set(key, { value, expiresAt: Date.now() + TTL_MS, size });
@@ -118,16 +130,10 @@ async function cached<T>(key: string, factory: CacheFactory<T>): Promise<T> {
   return promise;
 }
 
-// Periodic sweep so a long-running process (server.mts) doesn't accumulate
-// one entry per distinct lookup forever - same pattern as the rate
-// limiter's bucket cleanup.
-const sweepInterval = setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (now > entry.expiresAt) deleteEntry(key);
-  }
-}, 5 * 60 * 1000);
-sweepInterval.unref();
+// Expired entries are swept lazily during cache activity. This preserves the
+// long-running Express cleanup behavior without creating an import-time timer,
+// which some request-scoped runtimes prohibit. Entry count and byte ceilings
+// remain the hard memory bounds between sweeps.
 
 function storeSize(): number {
   return store.size;

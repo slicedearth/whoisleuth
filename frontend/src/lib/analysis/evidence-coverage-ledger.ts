@@ -52,6 +52,7 @@ export type LookupEvidenceCoverageInput = Readonly<{
   reverseDns?: unknown;
   securityPosture?: unknown;
   securityTxt?: unknown;
+  sslbl?: unknown;
   technologyProfile?: unknown;
   threatIntelligenceProviders?: unknown;
   tlsEvidence?: unknown;
@@ -227,6 +228,7 @@ export function buildLookupEvidenceCoverageLedger(
   const technologyProfile = record(input.technologyProfile);
   const securityPosture = record(input.securityPosture);
   const securityTxt = record(input.securityTxt);
+  const sslbl = record(input.sslbl);
   const rdapParsed = record(input.rdapParsed);
   const whoisParsed = record(input.whoisParsed);
   const items: EvidenceCoverageInput[] = [
@@ -369,6 +371,16 @@ export function buildLookupEvidenceCoverageLedger(
       category: 'web',
       status: securityTxt.state,
       limitations: stringList(securityTxt.limitations),
+    });
+  }
+  if (sslbl.sslblVersion === 1) {
+    items.push({
+      id: 'sslbl-certificate',
+      label: 'SSLBL certificate comparison',
+      category: 'external',
+      status: sslbl.status,
+      complete: sslbl.complete,
+      limitations: stringList(sslbl.limitations),
     });
   }
 

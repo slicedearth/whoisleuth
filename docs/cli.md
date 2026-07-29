@@ -25,6 +25,13 @@ node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
+node bin/whoisleuth.mts verify-artifact workspace.json --json
+node bin/whoisleuth.mts verify-artifact workspace-encrypted.json --passphrase-file passphrase.txt --json
+node bin/whoisleuth.mts source-report lookup.json --json
+node bin/whoisleuth.mts inspect-archive workspace.json --json
+node bin/whoisleuth.mts inspect-archive workspace.json --search example.invalid --json
+node bin/whoisleuth.mts sign-artifact response-packet.json --private-key-file analyst-private.pem > response-packet.signed.json
+node bin/whoisleuth.mts verify-signature response-packet.signed.json --public-key-file analyst-public.pem
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -76,8 +83,9 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`risk-calibrate`, and `export` operations make no network requests and write
-their results only to local stdout unless the user redirects them to a file.
+`risk-calibrate`, `verify-artifact`, `source-report`, and `export` operations
+make no network requests and write their results only to local stdout unless
+the user redirects them to a file.
 
 ## Output
 
@@ -150,9 +158,9 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
-`http`, `tls`, `registry-support`, `risk-calibrate`, `compare`, and `export`.
-Additional export formats are added as separate bounded increments rather than
-exposing incomplete aliases.
+`http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
+`source-report`, `compare`, and `export`. Additional export formats are added
+as separate bounded increments rather than exposing incomplete aliases.
 
 ## Registry capability coverage
 
@@ -214,6 +222,96 @@ its record list at 100 while `--json` retains the complete bounded report,
 factor breakdowns, score bands, and per-threshold confusion metrics. Analyst
 dispositions and heuristic scores are review context: neither proves
 maliciousness or safety.
+
+The authenticated Monitor workspace can deliberately create the accepted
+dataset from explicitly selected cases. Selection is available only when a case
+has a reviewed disposition and retained normalized evidence. That local export
+contains the case ID, domain, disposition, and a bounded whitelist of current
+scoring inputs. It excludes notes, tags, assertions, actions, contacts, raw
+source data, provider payloads, and stored Risk scores. Before download, a local
+review step shows the selected, included, and excluded counts, the domains and
+dispositions that will be written, and the excluded evidence classes. The CLI
+still validates every exported record and never trains, tunes, or changes the
+Risk model.
+
+## Offline artifact verification
+
+`verify-artifact` validates a supported local artifact without printing its
+evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
+and encrypted workspace archives, case-response packets, acquisition-decision
+exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
+manifests.
+
+For an ordinary workspace archive, the command validates the versioned
+structure, section byte counts, record counts, and per-section checksums. For a
+supported signed review artifact, it validates the declared SHA-256 digest. An
+encrypted archive without `--passphrase-file` can establish only that the
+envelope is structurally valid; it reports `envelope_valid` and explicitly
+leaves authenticated encryption and inner checksums unchecked.
+
+Supplying a separate passphrase file, capped at 1 KiB, allows authenticated
+decryption followed by the ordinary workspace checks. The passphrase is never
+accepted as a command-line value, printed, or retained. Verification detects
+changes against the artifact's declared contract; it does not authenticate the
+analyst or establish that an observation was accurate or remains current.
+
+## Privacy-safe source reliability report
+
+`source-report` summarises source states, durations, truncation, and rate-limit
+counts from one version-1 CLI Lookup, Bulk, or Bulk-item document, a JSON array
+of up to 100 such documents, or an array containing only previously generated
+source-reliability reports. Lookup documents and reports cannot be mixed.
+Merged reports preserve exact state and sample totals and add bounded ranges
+for each input report's median and p95 duration, a bounded source timeline,
+fast/deep/unknown cohorts, and the earliest and latest valid report generation
+times. Exact duplicate reports are rejected so one saved report is not
+accidentally counted twice. Per-source failure, partial, truncation, and
+rate-limit rates remain separate. The command does not pretend that aggregate
+timing distributions can reconstruct the original target-level samples. Input
+is capped at 12 MiB and traversal, source, duration, and output counts are
+bounded.
+
+The report retains only fixed source identifiers and aggregate operational
+counts. It does not output targets, queries, endpoints, source limitations, raw
+evidence, or provider payloads. Observation-envelope duration and the
+potentially overlapping Lookup timing are reported separately and never added
+together. It is a local engineering diagnostic, not analytics, a source-quality
+score, or evidence that a collector is currently healthy.
+
+## Workspace archive inspection
+
+`inspect-archive` verifies an ordinary or encrypted workspace archive and then
+reports its versioned sections, counts, byte sizes, and checksum states without
+printing stored records. An encrypted archive requires
+`--passphrase-file`; passphrases are never accepted on the command line.
+
+An optional `--search` is exact and case-insensitive across a fixed allowlist
+of target fields. Default matches disclose only the section, field name, and a
+SHA-256 digest. `--reveal` must be selected explicitly to print the matched
+value. Notes, contacts, raw evidence, arbitrary object fields, and partial text
+search are excluded. Unicode domain searches are canonicalized to their
+DNS-safe ASCII form before exact comparison. `--require-match` makes a
+no-match result fail for automation and is valid only with `--search`.
+Traversal, input size, matches, depth, arrays, and strings are bounded.
+
+## Optional evidence-package signing
+
+`sign-artifact` signs a locally verified case-response packet or supported
+review manifest with an externally managed Ed25519 private key:
+
+```bash
+node bin/whoisleuth.mts sign-artifact packet.json --private-key-file analyst-private.pem > packet.signed.json
+node bin/whoisleuth.mts verify-signature packet.signed.json --public-key-file analyst-public.pem
+```
+
+The signed package embeds the public key, key identifier, signature time, and
+original artifact. Verification first checks the exact package field set and
+signature, then the artifact's own checksums or manifest. A result is reported
+as `signature_valid`; signer trust is separately reported as `trusted_key` or
+`embedded_key_only`. Without a separately supplied trusted public key,
+verification establishes only that the package is internally self-consistent.
+WHOISleuth does not generate, store, recover, rotate, publish, or establish
+trust in signing keys.
 
 ## Bulk lookup
 
@@ -401,7 +499,8 @@ The saved input is capped at 8 MiB and revalidated using the same schema,
 source-status, parsed-data, scalar, list, and event boundaries as `compare`.
 The export retains query context, source diagnostics, normalized registry data,
 raw registry RDAP JSON, the raw WHOIS referral chain, availability analysis,
-and the shared registry-source comparison. Version 21 adds the bounded registry
+and the shared registry-source comparison. Version 23 can add the exact local
+SSLBL comparison already represented by a deep full Lookup. Version 21 adds the bounded registry
 lifecycle, disclosure, publication-quality, reconciliation, and abuse-routing
 interpretation derived from the already-collected sources. Registrar RDAP raw
 data, contacts, entities, links, notices, and source-specific handles remain

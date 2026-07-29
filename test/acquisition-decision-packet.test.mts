@@ -6,6 +6,7 @@ import {
   buildAcquisitionDecisionPacket,
 } from '../frontend/src/lib/analysis/acquisition-decision-packet.ts';
 import { buildAcquisitionDueDiligence } from '../frontend/src/lib/analysis/acquisition-due-diligence.ts';
+import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 
 const NOW = '2026-07-29T00:00:00.000Z';
 
@@ -52,6 +53,9 @@ describe('acquisition decision packet', () => {
     assert.match(exported.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     assert.doesNotMatch(exported.content, /\u0000/u);
     assert.match(exported.content, /synthetic demonstration data/u);
+    const verification = await verifyOfflineArtifact(exported.content);
+    assert.equal(verification.artifact.schema, ACQUISITION_DECISION_PACKET_SCHEMA);
+    assert.equal(verification.state, 'verified');
   });
 
   test('keeps incomplete analyst work explicitly draft', async () => {

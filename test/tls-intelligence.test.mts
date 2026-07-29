@@ -30,6 +30,7 @@ type TestCertificate = {
   valid_from: string | null;
   valid_to: string | null;
   fingerprint256: string;
+  fingerprint?: string;
   bits: number;
   ca: boolean;
   raw?: Buffer;
@@ -68,6 +69,7 @@ function certificate(overrides: Partial<TestCertificate> = {}): TestCertificate 
     serialNumber: '00A1B2C3',
     valid_from: 'Jul  1 00:00:00 2026 GMT',
     valid_to: 'Aug  1 00:00:00 2026 GMT',
+    fingerprint: Array.from({ length: 20 }, () => 'AA').join(':'),
     fingerprint256: 'AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA',
     bits: 2048,
     ca: false,
@@ -174,6 +176,7 @@ describe('certificate profile normalization', () => {
     assert.equal(result.hostname.matches, true);
     assert.equal(result.validity.status, 'valid');
     const normalizedCertificate = requiredValue(result.certificate);
+    assert.equal(normalizedCertificate.fingerprintSha1, 'a'.repeat(40));
     assert.deepEqual(normalizedCertificate.subject.commonNames, ['login.example.test']);
     assert.deepEqual(requiredValue(normalizedCertificate.subjectAltNames).dnsNames, ['*.example.test', 'login.example.test']);
     assert.deepEqual(requiredValue(normalizedCertificate.subjectAltNames).ipAddresses, ['93.184.216.34']);
@@ -198,6 +201,7 @@ describe('certificate profile normalization', () => {
       now: NOW,
     });
     const normalizedCertificate = requiredValue(result.certificate);
+    assert.equal(normalizedCertificate.fingerprintSha1, 'a'.repeat(40));
     assert.deepEqual(normalizedCertificate.signature, {
       algorithm: 'sha256WithRSAEncryption',
       oid: '1.2.840.113549.1.1.11',

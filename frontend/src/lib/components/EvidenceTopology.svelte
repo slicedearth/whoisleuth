@@ -58,6 +58,7 @@
     page: 'var(--source-page)',
     'structured-identity': 'var(--source-structured)',
     'security-txt': 'var(--source-security)',
+    sslbl: 'var(--source-security)',
     technology: 'var(--source-technology)',
     posture: 'var(--source-posture)',
     analysis: 'var(--source-assessment)',
@@ -97,7 +98,7 @@
     if (sourceId === 'http' || sourceId === 'website') return 'http';
     if (sourceId === 'tls' || sourceId === 'certificate') return 'tls';
     if (sourceId === 'page') return 'page';
-    if (sourceId === 'security-txt') return 'security';
+    if (sourceId === 'security-txt' || sourceId === 'sslbl') return 'security';
     if (sourceId === 'technology') return 'technology';
     if (sourceId === 'posture' || sourceId === 'analysis' || sourceId === 'assessment') return 'analysis';
     return 'search';

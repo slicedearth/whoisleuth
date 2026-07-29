@@ -18,6 +18,12 @@ and bounding the fields used by WHOISleuth. Retire.js is licensed under the
 Apache License 2.0. See LICENSES/Retire.js-Apache-2.0.txt for the full licence
 text.
 
+The checked-in SSLBL certificate-fingerprint snapshot is derived from the
+SSLBL certificate blacklist published by abuse.ch under CC0. WHOISleuth stores
+only exact SHA-1 fingerprints plus source timestamps and integrity digests. It
+omits listing reasons and performs matching locally. Source:
+https://sslbl.abuse.ch/blacklist/
+
 The exact locked production-dependency inventory and the licence documents
 distributed by those packages are retained in
 frontend/static/third-party-notices.txt. The same file is served by the static

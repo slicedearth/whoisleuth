@@ -66,6 +66,100 @@ describe('CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['lookup', 'example.com', '--help']), /Help accepts/);
     assert.deepEqual(parseCliArguments(['--version']), { action: 'version' });
   });
+
+  test('parses bounded offline artifact verification inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'verify-artifact',
+      'workspace.json',
+      '--passphrase-file',
+      'passphrase.txt',
+      '--json',
+      '--no-color',
+    ]), {
+      action: 'verify-artifact',
+      source: 'workspace.json',
+      passphraseSource: 'passphrase.txt',
+      output: 'json',
+      quiet: false,
+      color: false,
+    });
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', '--passphrase-file']),
+      /requires one bounded UTF-8 file/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', 'one.json', 'two.json']),
+      /accepts one optional JSON file/u,
+    );
+  });
+
+  test('parses redacted archive inspection and explicit evidence-signing inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'inspect-archive',
+      'workspace.json',
+      '--passphrase-file',
+      'passphrase.txt',
+      '--search',
+      'review-target.invalid',
+      '--reveal',
+      '--json',
+    ]), {
+      action: 'inspect-archive',
+      source: 'workspace.json',
+      passphraseSource: 'passphrase.txt',
+      search: 'review-target.invalid',
+      reveal: true,
+      requireMatch: false,
+      output: 'json',
+      quiet: false,
+      color: true,
+    });
+    assert.deepEqual(parseCliArguments([
+      'sign-artifact',
+      'review.json',
+      '--private-key-file',
+      'private.pem',
+    ]), {
+      action: 'sign-artifact',
+      source: 'review.json',
+      privateKeySource: 'private.pem',
+    });
+    assert.deepEqual(parseCliArguments([
+      'verify-signature',
+      'signed.json',
+      '--public-key-file',
+      'public.pem',
+      '--json',
+    ]), {
+      action: 'verify-signature',
+      source: 'signed.json',
+      publicKeySource: 'public.pem',
+      output: 'json',
+      quiet: false,
+      color: true,
+    });
+    assert.throws(() => parseCliArguments(['inspect-archive', '--reveal']), /requires --search/iu);
+    assert.throws(() => parseCliArguments(['inspect-archive', '--require-match']), /requires --search/iu);
+    assert.throws(() => parseCliArguments(['sign-artifact']), /requires --private-key-file/iu);
+  });
+
+  test('parses privacy-safe source reliability report inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'source-report',
+      'lookups.json',
+      '--json',
+    ]), {
+      action: 'source-report',
+      source: 'lookups.json',
+      output: 'json',
+      quiet: false,
+      color: true,
+    });
+    assert.throws(
+      () => parseCliArguments(['source-report', 'one.json', 'two.json']),
+      /accepts one optional JSON file/u,
+    );
+  });
 });
 
 describe('bounded CLI stdin', () => {

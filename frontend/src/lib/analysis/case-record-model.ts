@@ -23,6 +23,79 @@ import {
   type CaseEvidencePin,
   type CaseManualTrailEvent,
 } from './case-response-model.ts';
+import {
+  CASE_DISPOSITIONS,
+  CASE_IMPORT_VERSIONS,
+  CASE_SCHEMA_VERSION,
+  CASE_SOURCES,
+  CASE_STATUSES,
+  DEFAULT_DISPOSITION,
+  DEFAULT_SOURCE,
+  DEFAULT_STATUS,
+  EVIDENCE_SOURCES,
+  MAX_CASES,
+  MAX_CASE_IMPORT_BYTES,
+  MAX_CASE_STORE_BYTES,
+  MAX_DOMAIN_LENGTH,
+  MAX_EVIDENCE_CHANGES,
+  MAX_EVIDENCE_DETAIL_LENGTH,
+  MAX_EVIDENCE_FACTORS,
+  MAX_EVIDENCE_MUTATIONS,
+  MAX_EVIDENCE_NAMESERVERS,
+  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
+  MAX_EVIDENCE_STRING_LENGTH,
+  MAX_EVIDENCE_TITLE_LENGTH,
+  MAX_NOTES_PER_CASE,
+  MAX_NOTE_LENGTH,
+  MAX_TAGS_PER_CASE,
+  MAX_TAG_LENGTH,
+  type CaseEvidenceMaterial,
+  type CaseEvidenceSnapshot,
+  type CaseInput,
+  type CaseNote,
+  type CasePatch,
+  type CaseRecord,
+  type CaseStore,
+  type CompareFieldSpec,
+  type EvidenceChange,
+  type EvidenceFactor,
+  type SnapshotOptions,
+} from './case-record-contracts.ts';
+
+export {
+  CASE_DISPOSITIONS,
+  CASE_IMPORT_VERSIONS,
+  CASE_SCHEMA_VERSION,
+  CASE_SOURCES,
+  CASE_STATUSES,
+  DEFAULT_DISPOSITION,
+  DEFAULT_SOURCE,
+  DEFAULT_STATUS,
+  EVIDENCE_SOURCES,
+  MAX_CASES,
+  MAX_CASE_IMPORT_BYTES,
+  MAX_CASE_STORE_BYTES,
+  MAX_DOMAIN_LENGTH,
+  MAX_EVIDENCE_CHANGES,
+  MAX_EVIDENCE_DETAIL_LENGTH,
+  MAX_EVIDENCE_FACTORS,
+  MAX_EVIDENCE_MUTATIONS,
+  MAX_EVIDENCE_NAMESERVERS,
+  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
+  MAX_EVIDENCE_STRING_LENGTH,
+  MAX_EVIDENCE_TITLE_LENGTH,
+  MAX_NOTES_PER_CASE,
+  MAX_NOTE_LENGTH,
+  MAX_TAGS_PER_CASE,
+  MAX_TAG_LENGTH,
+  type CaseEvidenceSnapshot,
+  type CaseInput,
+  type CaseNote,
+  type CasePatch,
+  type CaseRecord,
+  type CaseStore,
+  type EvidenceFactor,
+} from './case-record-contracts.ts';
 
 // Forward-version policy (two distinct guarantees):
 //   - A locally-stored envelope that declares a version greater than this is
@@ -32,62 +105,9 @@ import {
 //   - An IMPORT file that declares a greater version is never INTERPRETED at
 //     all: mergeCases rejects it up front so we don't merge data from a schema
 //     we don't understand.
-export const CASE_SCHEMA_VERSION = 7;
-export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, CASE_SCHEMA_VERSION] as const;
-
-export const MAX_CASES = 500;
-export const MAX_NOTES_PER_CASE = 50;
-export const MAX_NOTE_LENGTH = 2000;
-export const MAX_TAGS_PER_CASE = 20;
-export const MAX_TAG_LENGTH = 40;
-export const MAX_DOMAIN_LENGTH = 253;
-export const MAX_CASE_IMPORT_BYTES = 2 * 1024 * 1024;
-
-// Evidence-history bounds. Kept conservative so a case's timeline can never
-// dominate the store, and so a single imported snapshot cannot smuggle in an
-// unbounded string/array.
-export const MAX_EVIDENCE_SNAPSHOTS_PER_CASE = 25;
-export const MAX_EVIDENCE_FACTORS = 20; // per factor family (risk / opportunity)
-export const MAX_EVIDENCE_NAMESERVERS = 12;
-export const MAX_EVIDENCE_MUTATIONS = 20;
-export const MAX_EVIDENCE_STRING_LENGTH = 200;
-export const MAX_EVIDENCE_TITLE_LENGTH = 200;
-export const MAX_EVIDENCE_DETAIL_LENGTH = 200;
-export const MAX_EVIDENCE_CHANGES = 40;
-// Whole-store serialized byte budget. Four megabytes leaves headroom for the
-// other collections that share the origin's browser-storage quota.
-export const MAX_CASE_STORE_BYTES = 4 * 1024 * 1024;
-
-// Stable machine values are stored; labels are only ever used for display.
-export const CASE_STATUSES = [
-  { value: 'new', label: 'New' },
-  { value: 'reviewing', label: 'Reviewing' },
-  { value: 'monitoring', label: 'Monitoring' },
-  { value: 'escalated', label: 'Escalated' },
-  { value: 'resolved', label: 'Resolved' },
-];
-
-export const CASE_DISPOSITIONS = [
-  { value: 'unreviewed', label: 'Unreviewed' },
-  { value: 'suspicious', label: 'Suspicious' },
-  { value: 'confirmed_abuse', label: 'Confirmed abuse' },
-  { value: 'false_positive', label: 'False positive' },
-  { value: 'expected', label: 'Expected' },
-  { value: 'closed_no_action', label: 'Closed without action' },
-];
-
-export const CASE_SOURCES = [
-  { value: 'lookup', label: 'Lookup' },
-  { value: 'bulk', label: 'Bulk' },
-  { value: 'monitor', label: 'Monitor' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'unknown', label: 'Unknown' },
-];
-
 // The provenance recorded on an individual evidence snapshot. Distinct from a
 // case's `source`: a snapshot can be imported, and a case opened by hand
 // ('manual') has no snapshot provenance of its own.
-export const EVIDENCE_SOURCES = ['lookup', 'bulk', 'monitor', 'import', 'unknown'];
 const EVIDENCE_SOURCE_SET = new Set(EVIDENCE_SOURCES);
 const DEFAULT_EVIDENCE_SOURCE = 'unknown';
 // Deterministic "more informative source wins" order used when a materially
@@ -95,13 +115,9 @@ const DEFAULT_EVIDENCE_SOURCE = 'unknown';
 // a monitor bookmark beats a second-hand import beats unknown.
 const EVIDENCE_SOURCE_RANK = { lookup: 4, bulk: 4, monitor: 2, import: 1, unknown: 0 };
 
-export const DEFAULT_STATUS = 'new';
-export const DEFAULT_DISPOSITION = 'unreviewed';
-export const DEFAULT_SOURCE = 'unknown';
-
-const STATUS_VALUES = new Set(CASE_STATUSES.map((item) => item.value));
-const DISPOSITION_VALUES = new Set(CASE_DISPOSITIONS.map((item) => item.value));
-const SOURCE_VALUES = new Set(CASE_SOURCES.map((item) => item.value));
+const STATUS_VALUES: Set<string> = new Set(CASE_STATUSES.map((item) => item.value));
+const DISPOSITION_VALUES: Set<string> = new Set(CASE_DISPOSITIONS.map((item) => item.value));
+const SOURCE_VALUES: Set<string> = new Set(CASE_SOURCES.map((item) => item.value));
 
 const STATUS_LABELS = Object.fromEntries(CASE_STATUSES.map((item) => [item.value, item.label]));
 const DISPOSITION_LABELS = Object.fromEntries(CASE_DISPOSITIONS.map((item) => [item.value, item.label]));
@@ -115,98 +131,6 @@ const REGISTERED_LIKE = new Set(['registered', 'for_sale', 'expiring']);
 // URL/DOM/query-string-safe id shape. UUIDs satisfy this; anything else is
 // treated as untrusted and deterministically repaired.
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-
-export type CaseNote = { id: string; body: string; createdAt: string };
-export type EvidenceFactor = { label: string; points: number };
-export type CaseEvidenceSnapshot = {
-  id: string;
-  fingerprint: string;
-  firstCapturedAt: string;
-  capturedAt: string;
-  source: string;
-  scanDepth: string;
-  availability: string | null;
-  confidence: string | null;
-  riskModelVersion: number | null;
-  riskScore: number | null;
-  opportunityScore: number | null;
-  riskFactors: EvidenceFactor[];
-  opportunityFactors: EvidenceFactor[];
-  registrar: string | null;
-  createdDate: string | null;
-  expiryDate: string | null;
-  nameservers: string[];
-  hasMx: boolean | null;
-  hasSpf: boolean | null;
-  hasDmarc: boolean | null;
-  activityStatus: string | null;
-  websiteProbeDetail: string | null;
-  pageTitle: string | null;
-  httpSummaryVersion: number | null;
-  httpEvidenceStatus: string | null;
-  httpFinalOrigin: string | null;
-  httpResponseStatus: number | null;
-  httpTransportSecurity: string | null;
-  httpRedirectCount: number | null;
-  httpCrossOriginRedirect: boolean | null;
-  httpHttpsDowngrade: boolean | null;
-  httpContentType: string | null;
-  httpSecurityHeaders: string[] | null;
-  faviconMatch: boolean | null;
-  faviconNearMatch: boolean | null;
-  reusesOfficialAssets: boolean | null;
-  hasPasswordField: boolean | null;
-  phishingLanguageMatch: string | null;
-  mutationTypes: string[];
-};
-type CaseEvidenceMaterial = Omit<CaseEvidenceSnapshot, 'id' | 'fingerprint' | 'firstCapturedAt' | 'capturedAt' | 'source'>;
-export type CaseRecord = {
-  id: string;
-  domain: string;
-  status: string;
-  disposition: string;
-  tags: string[];
-  notes: CaseNote[];
-  source: string;
-  evidenceHistory: CaseEvidenceSnapshot[];
-  evidencePins: CaseEvidencePin[];
-  decisions: CaseDecisionRecord[];
-  actions: CaseActionRecord[];
-  assertions: CaseAssertionRecord[];
-  manualTrail: CaseManualTrailEvent[];
-  createdAt: string;
-  updatedAt: string;
-};
-export type CaseStore = { version: typeof CASE_SCHEMA_VERSION; cases: CaseRecord[] };
-export type CaseInput = {
-  domain: unknown;
-  status?: unknown;
-  disposition?: unknown;
-  source?: unknown;
-  tags?: unknown;
-  evidence?: unknown;
-  evidencePin?: unknown;
-  evidencePins?: unknown;
-  decision?: unknown;
-  action?: unknown;
-  actionUpdate?: unknown;
-  assertion?: unknown;
-  assertionUpdate?: unknown;
-  trailEvent?: unknown;
-  note?: unknown;
-};
-export type CasePatch = Omit<Partial<CaseInput>, 'domain'>;
-type SnapshotOptions = { source?: string; fallback?: string | null };
-type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
-type CompareFieldSpec = {
-  field: keyof CaseEvidenceSnapshot;
-  label: string;
-  type: string;
-  depthGate?: 'both-deep' | 'comparable';
-  modelGate?: 'risk';
-  direction?: 'risk';
-  emptyGuard?: boolean;
-};
 
 export function objectRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)

@@ -20,12 +20,23 @@ import { collectSecurityTxt, securityTxtUnavailable } from './security-txt.mts';
 import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import { FEATURE_DISABLED_ERROR_CODE, featureDecision, networkFeaturePolicy } from './feature-policy.mts';
-import { lookupUrlscanDomain, URLSCAN_PROVIDER } from './urlscan-intelligence.mts';
-import { lookupUrlhausDomain, URLHAUS_PROVIDER } from './urlhaus-intelligence.mts';
-import { lookupThreatfoxDomain, THREATFOX_PROVIDER } from './threatfox-intelligence.mts';
+import { lookupUrlscanDomain } from './urlscan-intelligence.mts';
+import { lookupUrlhausDomain } from './urlhaus-intelligence.mts';
+import { lookupThreatfoxDomain } from './threatfox-intelligence.mts';
+import {
+  THREATFOX_PROVIDER,
+  URLHAUS_PROVIDER,
+  URLSCAN_PROVIDER,
+} from './lookup-threat-provider-inventory.mts';
 import { createThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
+import { inspectSslblCertificate } from './sslbl-intelligence.mts';
+import {
+  normalizeLookupSourceSettlement,
+  plannedLookupProgressSources,
+  type LookupSourceSettlement,
+} from './lookup-source-progress.mts';
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;
@@ -38,6 +49,9 @@ type LookupOptions = {
   lookupUrlscanDomain?: typeof lookupUrlscanDomain;
   lookupUrlhausDomain?: typeof lookupUrlhausDomain;
   lookupThreatfoxDomain?: typeof lookupThreatfoxDomain;
+  inspectSslblCertificate?: typeof inspectSslblCertificate;
+  sslblSnapshot?: unknown;
+  sslblNow?: string | number | Date;
   fast?: boolean;
   compact?: boolean;
   externalIntelligence?: boolean;
@@ -46,6 +60,7 @@ type LookupOptions = {
   securityTxt?: boolean;
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
   now?: () => number;
+  onSourceSettled?: (settlement: LookupSourceSettlement) => void;
 };
 type RegistrarRdap = {
   status: string;
@@ -193,6 +208,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const fetchUrlscanIntelligence = options.lookupUrlscanDomain || lookupUrlscanDomain;
   const fetchUrlhausIntelligence = options.lookupUrlhausDomain || lookupUrlhausDomain;
   const fetchThreatfoxIntelligence = options.lookupThreatfoxDomain || lookupThreatfoxDomain;
+  const inspectCertificateWarningData = options.inspectSslblCertificate || inspectSslblCertificate;
   const fast = options.fast === true;
   const compact = options.compact === true;
   const externalIntelligence = options.externalIntelligence === true;
@@ -302,6 +318,54 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         () => fetchThreatfoxIntelligence(classified.registrableDomain || classified.value),
       )
     : null;
+
+  // Optional incremental presentation observes the same promises used by the
+  // ordinary Lookup result. It starts no additional collection and cannot
+  // alter, reject, or persist a source result. The callback receives only a
+  // bounded source-health summary; raw payloads remain inside the final
+  // response path.
+  if (!fast && !compact && options.onSourceSettled) {
+    const sourcePromises = new Map<
+      Parameters<typeof normalizeLookupSourceSettlement>[0],
+      Promise<unknown> | null
+    >([
+      ['rdap', rdapPromise],
+      ['whois', whoisPromise],
+      ['domain_evidence', availabilityPromise],
+      ['reverse_dns', reverseDnsPromise],
+      ['registrar_rdap', registrarRdapPromise],
+      ['network_context', networkContextPromise],
+      ['security_txt', securityTxtPromise],
+      ['external_intelligence', urlscanIntelligencePromise],
+      ['malware_host_intelligence', urlhausIntelligencePromise],
+      ['malware_ioc_intelligence', threatfoxIntelligencePromise],
+    ]);
+    const notify = (
+      source: Parameters<typeof normalizeLookupSourceSettlement>[0],
+      outcome: 'fulfilled' | 'rejected',
+      value: unknown,
+    ) => {
+      try {
+        options.onSourceSettled?.(
+          normalizeLookupSourceSettlement(source, outcome, value),
+        );
+      } catch {
+        // Presentation callbacks must never change evidence collection.
+      }
+    };
+    for (const source of plannedLookupProgressSources(classified, {
+      externalIntelligence,
+      malwareHostIntelligence,
+      malwareIocIntelligence,
+      securityTxt: securityTxtRequested,
+    })) {
+      const sourcePromise = sourcePromises.get(source) ?? null;
+      void Promise.resolve(sourcePromise).then(
+        (value) => notify(source, 'fulfilled', value),
+        (error) => notify(source, 'rejected', error),
+      );
+    }
+  }
 
   const [rdapResult, whoisResult, availabilityResult, reverseDnsResult, registrarRdapResult, networkContextResult, securityTxtResult, urlscanIntelligenceResult, urlhausIntelligenceResult, threatfoxIntelligenceResult] = await Promise.allSettled([
     rdapPromise,
@@ -455,6 +519,19 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
       ? securityTxtResult.value
       : securityTxtUnavailable(classified.inputHostname, securityTxtResult.reason)
     : null;
+  // SSLBL comparison is an exact, local, deep-only enrichment over the leaf
+  // certificate already observed by the bounded TLS collector. It performs no
+  // request, never contributes to availability, and is omitted from compact
+  // Bulk and monitoring responses.
+  const sslbl = classified.type === 'domain' && !fast && !compact
+    ? inspectCertificateWarningData(
+        availability && typeof availability.tls === 'object' ? availability.tls : null,
+        {
+          ...(options.sslblSnapshot === undefined ? {} : { snapshot: options.sslblSnapshot }),
+          ...(options.sslblNow === undefined ? {} : { now: options.sslblNow }),
+        },
+      )
+    : null;
   const networkContextRdap = networkContext && typeof networkContext.rdap === 'object' && networkContext.rdap
     ? networkContext.rdap as Record<string, unknown>
     : null;
@@ -539,6 +616,15 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         truncated: securityTxt.truncated,
       },
     } : {}),
+    ...(sslbl ? {
+      sslbl: {
+        status: sslbl.status,
+        verdict: sslbl.verdict,
+        observedAt: sslbl.observedAt,
+        complete: sslbl.complete,
+        snapshotUpdatedAt: sslbl.snapshot.sourceUpdatedAt,
+      },
+    } : {}),
   };
 
   // Bulk triage only consumes the derived availability evidence and source
@@ -617,6 +703,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ...(reverseDns ? { reverseDns } : {}),
     ...(networkContext ? { networkContext } : {}),
     ...(securityTxt ? { securityTxt } : {}),
+    ...(sslbl ? { sslbl } : {}),
     ...(threatIntelligence ? { threatIntelligence } : {}),
   };
 }
@@ -628,4 +715,8 @@ export {
   LOOKUP_TIMING_VERSION,
   MAX_LOOKUP_TIMING_MS,
   LOOKUP_ERROR_CODES,
+};
+export type {
+  LookupOptions,
+  LookupSourceSettlement,
 };

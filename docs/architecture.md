@@ -111,6 +111,16 @@ the current Express, static-frontend, and serverless adapters. The selected
 single-response design therefore improves progress and cancellation feedback
 without introducing a second orchestration path.
 
+The repository also contains deterministic offline transport and qualification
+tools for evaluating a possible future incremental contract. Source updates are
+explicitly non-persistable, and only a validated final Lookup envelope may
+become a result. The qualification suite covers chunking, proxy buffering,
+abort cancellation, a deliberately slow consumer, authentication expiry,
+duplicate events, timeout handling, and exact final-envelope equivalence.
+These are synthetic protocol checks. Neither Express nor Netlify exposes an
+incremental route, so no core deployment adapter is production-qualified for
+streaming.
+
 Diagnostics version 8 adds bounded settle timing and the optional separately
 attributed reverse-DNS diagnostic only to deep non-compact responses. Each
 recorded branch has a fulfilled or rejected promise outcome, duration, and

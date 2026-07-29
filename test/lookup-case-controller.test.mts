@@ -89,7 +89,7 @@ describe('Lookup case controller', () => {
       sourceSchema: {
         collection: 'lookup_result',
         schema: 'whoisleuth.lookup-evidence',
-        version: 22,
+        version: 23,
       },
     }], ['dns.mx']);
 

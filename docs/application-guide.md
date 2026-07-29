@@ -71,9 +71,14 @@ passive-posture, technology, TLS, and observed-network cards start collapsed.
 Their state and summary remain visible. Expand a section before relying on its
 evidence, collection time, or limitations.
 
-During collection, Lookup identifies the requested source families without
-pretending that any one source has completed before the bounded unified
-response arrives. It shows elapsed time and a 40-second browser deadline.
+During collection, Lookup identifies the requested source families and shows
+elapsed time plus a 40-second browser deadline. Every core Express and Netlify
+deployment currently uses one buffered response and keeps each source pending
+until the final envelope arrives. The repository has an offline incremental
+protocol and qualification harness, but no core deployment adapter enables it.
+If a future custom adapter passes the documented staging and proxy gates,
+bounded per-source updates would remain temporary display state, not saved
+evidence or claims that missing data is absent.
 **Cancel lookup** stops the browser from waiting and discards any incomplete
 response; already-admitted server work can still finish within its existing
 bounds. Leaving Lookup applies the same browser cancellation.
@@ -545,6 +550,11 @@ unsupported target contributes nothing.
 Always review the factor list and original evidence. A score does not establish
 maliciousness, ownership, safety, or intent. The [CLI guide](cli.md#offline-risk-calibration)
 documents deterministic offline calibration against analyst-labelled fixtures.
+Monitor can deliberately export explicitly selected cases with reviewed
+dispositions and retained normalized evidence into that same offline dataset
+contract. The export excludes notes, tags, assertions, actions, contacts, raw
+source data, provider payloads, and stored Risk scores. It does not train or
+change the model.
 
 ## Guided investigations
 
@@ -626,8 +636,9 @@ and does not synchronize across devices.
 Dashboard can create one deliberate workspace archive for the supported
 collections and preferences, including retained relationship observations and
 compact saved Bulk sessions. Version 2 added Bulk sessions, version 3 added
-website profile snapshots, and version 4 adds investigation templates.
-Versions 1 through 3 remain readable and do not invent missing later sections.
+website profile snapshots, version 4 added investigation templates, and version
+5 adds the current website-profile snapshot section contract. Versions 1
+through 4 remain readable and do not invent missing later sections.
 The recommended download wraps the ordinary checksummed archive in
 passphrase-based browser-local authenticated encryption. The passphrase is
 never stored or sent to the server and cannot be recovered. A separately
@@ -641,6 +652,11 @@ The active IndexedDB codec remains plaintext JSON. Archive encryption protects
 the downloaded file while locked, not an open Console or the active browser
 database. See [browser-local data architecture](browser-local-data.md) for the
 full threat model, migration, rollback, capacity, and encryption boundaries.
+The local CLI's `verify-artifact` command can check archive structure and
+checksums without displaying evidence. An encrypted archive requires a separate
+passphrase file before the command can authenticate its ciphertext and inspect
+the inner checksums; without one, only the envelope is checked. See
+[offline artifact verification](cli.md#offline-artifact-verification).
 
 ## Reports and exports
 
@@ -664,6 +680,11 @@ observations, or compact case history.
   analyst disposition. Review their exclusions, expiry, provenance manifest,
   and paired rollback instructions before applying them. Wildcard RPZ coverage
   is opt-in.
+- Export a selected reviewed-case calibration dataset only when the case
+  domains and dispositions are appropriate to include in an offline evaluation
+  corpus. Confirm the local review showing included and excluded counts, domain
+  names, dispositions, and excluded evidence classes before download. The file
+  is not anonymous and does not alter Risk automatically.
 - Review each file before sharing it.
 - Keep sensitive analyst notes out of reports unless needed.
 - Treat source timestamps and fingerprints as provenance and deduplication

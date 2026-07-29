@@ -165,6 +165,7 @@ live coverage or production-performance benchmark.
 ```bash
 npm run benchmark:technology
 npm run benchmark:technology -- --json
+npm run technology:signature-scaffold -- --id=example-platform --name="Example platform" --category="site builder" --source=generator
 ```
 
 Runs the versioned synthetic technology corpus through the same bounded
@@ -175,6 +176,126 @@ per-category expected, observed, missed, unexpected, overlap, collision, and
 false-positive metrics without copying fixture HTML, headers, generators, or
 resource origins into its output. It makes no network request and is a
 regression/calibration result rather than a live coverage claim.
+
+The scaffold emits a catalogue-entry template plus a required positive fixture
+and benign negative fixture. It accepts only bounded signature metadata, never
+raw pages or response headers. A proposed signature should not be merged until
+the benchmark reports no identifier, confidence, category, coverage, or
+collision error and its benign fixture does not create an unexpected match.
+
+Reviewed observations can be converted into a separately maintained minimized
+fixture with:
+
+```bash
+npm run technology:fixture-review -- reviewed-input.json
+```
+
+The contributor supplies only reviewed factual markers. The tool reconstructs
+a fixed safe subset of recognized static markers and approved shared vendor
+origins, rejects target-bearing or contact material, and verifies the expected
+catalogue result. The checked-in reviewed corpus starts empty, so it makes no
+claim about real-world coverage until reviewed contributions are added.
+
+### Incremental Lookup qualification
+
+```bash
+npm run lookup:transport-spike
+npm run lookup:transport-qualify
+```
+
+Both commands are offline. The qualification report exercises protocol
+chunking, buffering detection, slow-consumer handling, authentication expiry,
+duplicate events, timeout and abort cancellation, and final-envelope
+equivalence. A clean report is necessary but not sufficient for production.
+Each authenticated staging adapter and its real proxy or CDN must pass the same
+gates before that adapter can be marked qualified. Express and Netlify remain
+disabled and use the ordinary buffered response.
+
+### First-use analyst study
+
+`fixtures/first-use-analyst-study-tasks.mts` provides one repeatable desktop and
+mobile task script covering orientation, Lookup, Bulk, all three guided
+investigation recipes, a case decision, and archive verification. A moderator
+can aggregate bounded controlled observations with:
+
+```bash
+npm run study:first-use -- --template=desktop > desktop-session.json
+npm run study:first-use -- --template=mobile > mobile-session.json
+npm run study:first-use -- sessions.json
+```
+
+Session inputs contain task completion, duration, time to first useful pivot,
+error and backtrack counts, and controlled terminology issue identifiers. The
+generated templates are bound to the current task version and digest. The
+contract rejects participant identity, targets, queries, recordings, free-form
+notes, unknown fields, stale task definitions, repeated tasks, and duplicate
+canonical sessions. The result is a small-study diagnostic, not product
+analytics.
+
+### Local SSLBL snapshot maintenance
+
+Deep Lookup can compare the observed leaf-certificate SHA-1 fingerprint with a
+checked-in local SSLBL snapshot. Download the CSV deliberately, then validate
+it without changing the repository:
+
+```bash
+npm run sslbl:status
+npm run sslbl:check -- --input=sslblacklist.csv
+```
+
+The status command verifies the checked-in module and exits non-zero when its
+source date is stale, expired, or invalid. The feed check verifies the
+operator-supplied file shape, timestamps, digests, entry delta, and rollback and
+shrink safeguards. After reviewing the reported delta, regenerate the module
+with `npm run sslbl:snapshot -- --input=sslblacklist.csv`. A removal of more
+than 25 percent is rejected unless an operator separately reviews the feed and
+explicitly supplies `--allow-large-shrink`. None of these commands downloads
+the source.
+
+### Registry-fixture freshness
+
+```bash
+npm run registry:fixtures
+npm run registry:fixtures -- --json
+npm run registry:fixture-scaffold -- --profile nic-io-colon --suffix ac --scenario registered
+```
+
+The freshness check verifies each reviewed fixture file against its recorded
+SHA-256 digest and source-review date. It exits non-zero when a fixture changed,
+its review is older than the bounded threshold, or its provenance record cannot
+be verified. It does not contact the listed source or claim that the source is
+currently reachable.
+
+The scaffold produces a sanitised TypeScript fixture template using reserved
+example values. It does not ingest or transform raw registry responses. Before
+adding a fixture, remove personal data and tokens, retain only the minimum
+parser-relevant fields, add a provenance record, and run the full registry
+fixture suite.
+
+### Optional-provider conformance
+
+The automated suite runs every current optional-provider adapter through the
+shared fixture-only conformance harness. The harness covers neutral misses,
+rate limits, timeouts, malformed and oversized responses, truncation, and
+stable provider and observation provenance. It does not enable a provider,
+contact a provider, or permit arbitrary plugin code.
+
+### Incremental Lookup transport spike
+
+```bash
+npm run lookup:transport-spike
+```
+
+This command exercises the shared bounded NDJSON contract offline. Source
+updates remain explicitly non-persistable and only a validated final Lookup
+envelope can become a result.
+
+The spike is not connected to the frontend, an API route, or a hosting
+provider. Production adoption remains gated on a separately reviewed adapter,
+remote-runtime compatibility, deadline and cancellation behavior, buffering
+and fallback behavior, deployment-wide cost controls, a deployment-specific
+privacy review, and authenticated desktop and mobile smoke tests. The existing
+buffered Netlify and Express endpoint remains the only deployed contract.
 
 ### Unicode confusable audit
 
@@ -310,8 +431,9 @@ node bin/whoisleuth.mts --help
 
 The [CLI guide](cli.md) documents commands for Lookup, Bulk, Certificate
 Transparency, discovery, posture, HTTP and TLS intelligence, registry-source
-comparison, compatibility inspection, Risk calibration, and evidence export.
-It also defines output formats and exit codes.
+comparison, compatibility inspection, Risk calibration, artifact verification,
+privacy-safe source diagnostics, and evidence export. It also defines output
+formats and exit codes.
 
 The CLI is a local package boundary. It is not included in the static frontend
 or the Netlify function bundles unless a shared module is also used there.

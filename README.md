@@ -41,7 +41,7 @@ navigation without shortening the policy.
 | Area | Purpose | Important boundary |
 | --- | --- | --- |
 | **Dashboard** | Start or resume investigations, defensive reviews, comparisons, and case work. | Guided recipes require explicit approval before requests and cannot run arbitrary actions. |
-| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence. |
+| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. Deep domain results can compare the observed leaf certificate with a generated local SSLBL snapshot. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence, and no warning-list miss establishes safety. |
 | **Discover** | Generate bounded local lookalikes or review names observed in public certificate logs. | Local results initially surface visible review cues; certificate-log results initially use newest observation. Sorting does not change evidence or score. |
 | **Bulk** | Compare bounded domain sets with explicit request pacing, source-aware filters, compact Deep evidence, relationships, review actions, and resumable sessions. | Each domain is a separate request. Incomplete coverage, request failure, and missing evidence remain distinct. |
 | **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, and optional page-identity baselines. | Public observations and analyst attestations remain separate and browser-local. |
@@ -147,7 +147,7 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
 | [External findings and intelligence import](docs/external-findings-import.md) | Strict local findings schema plus bounded STIX 2.1 and MISP previews, source-file digests, exclusions, and explicit case-assertion merge behavior. |
 | [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
-| [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, and evidence exports. |
+| [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, artifact verification, source diagnostics, and evidence exports. |
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
 | [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
 
@@ -174,8 +174,16 @@ Additional offline or bounded maintainer checks include:
 
 ```bash
 npm run schema:inventory
+npm run registry:fixtures
 npm run benchmark:technology
+npm run technology:fixture-review -- reviewed-input.json
 npm run benchmark:workflow
+npm run lookup:transport-spike
+npm run lookup:transport-qualify
+npm run sslbl:status
+npm run sslbl:check -- --input=sslblacklist.csv
+npm run study:first-use -- --template=desktop
+npm run study:first-use -- sessions.json
 npm run platform:local-data
 npm run release:check
 npm run security:codeql
@@ -183,6 +191,13 @@ npm run registry:drift
 npm run deployment:self-check -- https://your-deployment.example
 ```
 
+`registry:fixtures`, the benchmarks, the reviewed-fixture tool, the first-use
+study template and aggregator, the local SSLBL snapshot check, the transport
+checks, and the local-data evaluation are
+deterministic offline checks. The transport qualification suite exercises
+buffering, cancellation, slow consumers, authentication expiry, duplicate
+events, timeouts, and final-response equivalence without enabling response
+streaming in any deployed adapter.
 The registry-drift and deployment checks make only their documented, fixed,
 bounded network requests. Automated unit and browser tests use deterministic
 fixtures and do not query live registries, domains, or providers.
@@ -193,7 +208,8 @@ Netlify reads `netlify.toml`, builds the static frontend, and packages the
 TypeScript functions. Before the first production deployment, set
 `SITE_PASSWORD` and a separate `SESSION_SECRET`. Optional providers, distributed
 operation controls, and encrypted scheduled monitoring remain disabled unless
-their complete configurations are supplied.
+their complete configurations are supplied. The existing Netlify or Express
+buffered Lookup remains the only production contract.
 
 Read [operations and deployment](docs/operations.md) before exposing a
 deployment publicly. It documents the shared-login boundary, reverse-proxy

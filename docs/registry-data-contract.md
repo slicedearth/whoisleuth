@@ -98,6 +98,19 @@ coverage for every signature and reports overlap, collision, missed-match, and
 false-positive metrics by category. Neither the profile nor its benchmark
 changes availability, Risk, or compact evidence.
 
+Reviewed registry fixtures have a separate versioned provenance manifest. Each
+record identifies the bounded fixture file, official source reference, source
+review date, and expected SHA-256 digest. `npm run registry:fixtures` verifies
+local integrity and review age without contacting the registry. A changed,
+stale, or unverifiable record fails the maintainer check but does not change
+runtime registry support, availability, or source-health conclusions.
+
+`npm run registry:fixture-scaffold` emits a reserved-value, sanitised fixture
+template for contributors. It deliberately does not accept a raw registry
+response. Contributor review must remove personal data and operational tokens,
+retain only parser-relevant fields, record provenance, and add deterministic
+parser and failure-state coverage before updating the manifest digest.
+
 The version-1 page-role and client-behaviour profiles share the existing
 bounded static-HTML tokenization pass. They retain fixed labels, fixed evidence
 descriptions, bounded counts, completeness, and limitations only. They do not
@@ -112,6 +125,12 @@ source has completed early. Analyst cancellation, navigation away, or the
 40-second browser deadline stops the local wait and retains no incomplete
 response. Work already admitted by the server may still finish within its
 existing source and operation bounds.
+
+The repository also contains a deterministic offline incremental-transport
+spike. Its bounded start, source-settled, and final NDJSON events reject
+duplicate or out-of-plan sources and prohibit persistence until the ordinary
+final Lookup envelope passes validation. It is not connected to a frontend,
+API route, deployment adapter, or hosting provider.
 
 For a deep, non-compact domain Lookup only, a successful registry RDAP object
 may publish a complete `rel="related"` HTTPS domain-object link at the
@@ -621,10 +640,14 @@ web-service activity when its body is unavailable for HTML inspection.
 
 ## Evidence export and privacy boundary
 
-Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `21`. It
+Lookup evidence uses schema `whoisleuth.lookup-evidence`, version `23`. It
 contains query context, diagnostics, normalized sources, raw RDAP data, the raw
 WHOIS referral chain, availability analysis, and the source-health-aware
-registry comparison. Version 21 adds bounded registry lifecycle, contact
+registry comparison. Version 23 can add an exact local SSLBL leaf-certificate
+comparison from an eligible deep non-compact domain Lookup. It retains the
+observed SHA-1 provider identifier, snapshot age and digest, exact verdict,
+source health, and limitations. It does not make another request, affect
+availability or Risk, or turn a miss into evidence of safety. Version 21 adds bounded registry lifecycle, contact
 disclosure, publication-quality, reconciliation, and abuse-routing
 interpretation derived from the already-collected registry sources. It
 preserves the raw source statuses and does not infer that partial or unavailable
@@ -693,7 +716,7 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalized routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 17 through 21 JSON retains a supported version-5, version-6, or version-7
+When schema-version 17 through 23 JSON retains a supported version-5, version-6, or version-7
 `diagnostics.registryAccess` object, both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
@@ -701,7 +724,7 @@ registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 17 through 22 can also retain the bounded normalized security.txt source
+Schema versions 17 through 23 can also retain the bounded normalized security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorization, availability, or Risk signal.
 

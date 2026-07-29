@@ -54,6 +54,7 @@ type LookupHttpResponse = JsonObject & {
   readonly reverseDns?: JsonObject;
   readonly networkContext?: JsonObject;
   readonly securityTxt?: JsonObject;
+  readonly sslbl?: JsonObject;
   readonly threatIntelligence?: JsonObject;
   readonly registryInsights?: JsonObject;
 };
@@ -104,6 +105,7 @@ type LookupViewModel = {
   readonly observedNetworkRdap: JsonObject;
   readonly observedNetwork: JsonObject;
   readonly securityTxt: JsonObject;
+  readonly sslbl: JsonObject;
   readonly threatIntelligence: JsonObject;
   readonly threatIntelligenceProviders: JsonObject[];
   readonly dnsEvidence: JsonObject;
@@ -280,7 +282,7 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
     return invalidLookupResponse();
   }
 
-  for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'threatIntelligence', 'registryInsights']) {
+  for (const key of ['reverseDns', 'networkContext', 'securityTxt', 'sslbl', 'threatIntelligence', 'registryInsights']) {
     const section = value[key];
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
   }
@@ -418,6 +420,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
   const observedNetworkContext = record(response?.networkContext);
   const registryInsights = record(response?.registryInsights);
   const securityTxt = record(response?.securityTxt);
+  const sslbl = record(response?.sslbl);
   const threatIntelligence = record(response?.threatIntelligence);
   const providers = Array.isArray(threatIntelligence.providers)
     ? threatIntelligence.providers
@@ -453,6 +456,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     observedNetworkRdap: record(observedNetworkContext.rdap),
     observedNetwork: record(observedNetworkContext.network),
     securityTxt,
+    sslbl,
     threatIntelligence,
     threatIntelligenceProviders: providers,
     dnsEvidence,

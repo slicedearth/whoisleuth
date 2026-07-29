@@ -747,7 +747,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(22);
+  expect(exported.schemaVersion).toBe(23);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -1425,13 +1425,41 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
           ],
         },
       },
+      sslbl: {
+        sslblVersion: 1,
+        source: 'sslbl',
+        status: 'success',
+        verdict: 'listed',
+        complete: true,
+        observedAt: '2026-07-13T00:00:00.000Z',
+        fingerprintSha1: '3'.repeat(40),
+        referenceUrl: `https://sslbl.abuse.ch/ssl-certificates/sha1/${'3'.repeat(40)}/`,
+        snapshot: {
+          sourceUpdatedAt: '2026-07-13T00:00:00.000Z',
+          generatedAt: '2026-07-13T00:05:00.000Z',
+          ageSeconds: 300,
+          entryCount: 10_000,
+          digestSha256: '4'.repeat(64),
+        },
+        detail: 'The observed leaf certificate appears in the local fixture snapshot.',
+        limitations: ['A match is a review lead and does not establish current activity or maliciousness.'],
+      },
       rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
-      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+      diagnostics: {
+        rdap: { status: 'success' },
+        whois: { status: 'partial' },
+        availability: { status: 'complete' },
+        sslbl: { status: 'success' },
+      },
     }),
   }));
 
   await page.locator('#query').fill('http-evidence.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  const sslblReviewLead = page.getByRole('complementary', { name: 'The observed leaf certificate matched the local SSLBL snapshot' });
+  await expect(sslblReviewLead).toBeVisible();
+  await expect(sslblReviewLead).toContainText('does not change Risk scoring');
+  await expect(sslblReviewLead.getByRole('link', { name: 'Review certificate evidence' })).toHaveAttribute('href', '#evidence-sslbl');
   const card = page.locator('.http-card');
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'HTTP intelligence' })).toBeVisible();

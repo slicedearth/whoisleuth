@@ -176,6 +176,91 @@ test('status and disposition edits persist across a reload', async ({ page }) =>
   await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
 });
 
+test('reviewed cases export an explicitly selected privacy-bounded Risk calibration dataset', async ({ page }) => {
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 2,
+      cases: [
+        caseRecord({
+          id: 'reviewed-calibration',
+          domain: 'reviewed-calibration.invalid',
+          disposition: 'confirmed_abuse',
+          notes: [{ createdAt: '2026-07-29T00:00:00.000Z', body: 'Private analyst note' }],
+          evidenceHistory: [snapshot({
+            id: 'reviewed-calibration-evidence',
+            riskScore: 75,
+            faviconMatch: true,
+            hasPasswordField: true,
+          })],
+        }),
+        caseRecord({
+          id: 'unreviewed-calibration',
+          domain: 'unreviewed-calibration.invalid',
+          disposition: 'unreviewed',
+          evidenceHistory: [snapshot({ id: 'unreviewed-calibration-evidence' })],
+        }),
+      ],
+    },
+  });
+  await page.getByRole('tab', { name: /Cases/ }).click();
+
+  const reviewed = page.getByRole('article').filter({
+    has: page.getByText('reviewed-calibration.invalid', { exact: true }),
+  });
+  const unreviewed = page.getByRole('article').filter({
+    has: page.getByText('unreviewed-calibration.invalid', { exact: true }),
+  });
+  const exportButton = page.getByRole('button', { name: 'Review calibration export (0)' });
+  await expect(exportButton).toBeDisabled();
+  await expect(unreviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' })).toBeDisabled();
+
+  await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).check();
+  await expect(page.getByRole('button', { name: 'Review calibration export (1)' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Review calibration export (1)' }).click();
+  const review = page.getByRole('dialog', { name: 'Confirm Risk calibration dataset' });
+  await expect(review).toContainText('1 selected');
+  await expect(review).toContainText('1 included');
+  await expect(review).toContainText('0 excluded');
+  await expect(review).toContainText('reviewed-calibration.invalid');
+  await expect(review).toContainText('Confirmed abuse');
+  await expect(review).toContainText('Notes, tags, assertions, actions, contacts, raw evidence');
+  const downloadPromise = page.waitForEvent('download');
+  await review.getByRole('button', { name: 'Confirm local export' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^whoisleuth-risk-calibration-\d{4}-\d{2}-\d{2}\.json$/);
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
+
+  expect(exported).toMatchObject({
+    schema: 'whoisleuth.risk-calibration-dataset',
+    version: 1,
+    records: [{
+      id: 'reviewed-calibration',
+      domain: 'reviewed-calibration.invalid',
+      analystDisposition: 'confirmed_abuse',
+      evidence: {
+        availability: 'registered',
+        faviconMatch: true,
+        hasPasswordField: true,
+      },
+    }],
+    export: { selected: 1, included: 1, excluded: 0 },
+  });
+  expect(JSON.stringify(exported)).not.toContain('Private analyst note');
+  expect(JSON.stringify(exported)).not.toContain('"riskScore"');
+  await expect(page.getByRole('status')).toContainText('No model setting was changed');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).uncheck();
+  await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).check();
+  await page.getByRole('button', { name: 'Review calibration export (1)' }).click();
+  await expect(page.getByRole('dialog', { name: 'Confirm Risk calibration dataset' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+});
+
 test('case tags offer bounded in-tab undo', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'undo-review.invalid');
