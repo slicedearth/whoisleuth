@@ -77,10 +77,10 @@
         {/each}
       </div>
     </div>
-    {#if chart.truncated}<p class="timing-limit">The visual is capped at {chart.sources.length} branches. The exact list remains complete below.</p>{/if}
+    {#if chart.truncated}<p class="timing-limit">The visual is capped at {chart.sources.length} branches. The complete timing list remains available to assistive technology.</p>{/if}
   {/if}
 
-  <ul>
+  <ul class="timing-data" aria-label="Exact collection timing data">
     {#each timing.sources as source}
       <li>
         <span class="source">{sourceLabels[source.source]}</span>
@@ -111,13 +111,7 @@
   .timing-source.rejected rect{fill:rgb(var(--danger-rgb) / .12);stroke:var(--danger)}
   .timing-source.rejected circle{fill:var(--danger)}
   .timing-limit{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs)}
-  ul{display:grid;gap:1px;margin:14px 0 0;padding:0;border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;list-style:none}
-  li{display:grid;grid-template-columns:minmax(140px,1.4fr) minmax(92px,.6fr) minmax(70px,.45fr) minmax(78px,.5fr);gap:10px;align-items:center;min-width:0;padding:9px 11px;background:rgb(var(--bg-rgb) / .42);font:650 var(--text-xs) var(--mono)}
-  li+li{border-top:1px solid var(--border)}
-  .source{min-width:0;overflow-wrap:anywhere;color:var(--text)}
-  .outcome{color:var(--accent);text-transform:capitalize}
-  .outcome.rejected{color:var(--danger)}
-  .duration,.settled{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+  .timing-data{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;list-style:none}
   @media(max-width:620px){
     .timing-chart{overflow:visible}
     .timing-chart svg{display:none}
@@ -128,8 +122,5 @@
     .mobile-timing-source>i{position:relative;grid-column:1/-1;height:10px;border:1px solid var(--border);border-radius:999px;background:rgb(var(--bg-rgb) / .5);overflow:hidden}
     .mobile-timing-source>i b{position:absolute;inset-block:1px;left:var(--timing-start);width:var(--timing-width);border-radius:999px;background:rgb(var(--accent-rgb) / .42);box-shadow:inset 0 0 0 1px var(--accent)}
     .mobile-timing-source.rejected>i b{background:rgb(var(--danger-rgb) / .22);box-shadow:inset 0 0 0 1px var(--danger)}
-    li{grid-template-columns:minmax(0,1fr) auto;gap:5px 10px}
-    .duration,.settled{text-align:left}
-    .settled{text-align:right}
   }
 </style>

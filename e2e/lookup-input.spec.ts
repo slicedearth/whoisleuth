@@ -154,9 +154,11 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   const timing = page.getByRole('region', { name: 'Collection timing' });
   await expect(timing).toBeVisible();
   await expect(timing.getByText('2.4 s total')).toBeVisible();
-  await expect(timing.getByText('request error')).toBeVisible();
-  await expect(timing.locator('li').getByText('WHOIS chain')).toBeVisible();
-  await expect(timing.locator('li').getByText('at +2.1 s')).toBeVisible();
+  const exactTiming = timing.locator('ul[aria-label="Exact collection timing data"]');
+  await expect(exactTiming).toHaveCSS('clip-path', 'inset(50%)');
+  await expect(exactTiming).toContainText('request error');
+  await expect(exactTiming).toContainText('WHOIS chain');
+  await expect(exactTiming).toContainText('at +2.1 s');
   await expect(timing.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 720 });
   await expectNoHorizontalOverflow(page);

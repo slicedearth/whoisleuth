@@ -38,7 +38,7 @@
     </div>
     <EvidenceTopology
       id="homepage-evidence-topology"
-      title="Synthetic lookup evidence topology"
+      title="Where this result comes from"
       target={{ label: selected.domain, detail: 'Domain lookup', status: selected.availability }}
       nodes={topologyNodes}
       embedded

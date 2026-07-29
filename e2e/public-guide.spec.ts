@@ -24,9 +24,10 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const goalBorders = await goalCards.evaluateAll((cards) => cards.map((card) => getComputedStyle(card).borderColor));
   expect(new Set(goalBorders).size).toBe(1);
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
-  const topology = page.getByRole('region', { name: 'Synthetic lookup evidence topology' });
+  const topology = page.getByRole('region', { name: 'Where this result comes from' });
   await expect(topology).toBeVisible();
-  await expect(topology.getByRole('img', { name: 'Synthetic lookup evidence topology visual overview' })).toBeVisible();
+  await expect(topology.locator('#homepage-evidence-topology-title')).toHaveCSS('clip-path', 'inset(50%)');
+  await expect(topology.getByRole('img', { name: 'Where this result comes from visual overview' })).toBeVisible();
   await expect(topology.getByRole('list', { name: 'Evidence source status' }).getByRole('listitem')).toHaveCount(5);
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
