@@ -260,14 +260,37 @@ test('projects retained evidence into a filterable source-aware timeline', async
         sources: [{ source: 'page', state: 'partial' }],
       }],
     },
+    'whoisleuth-bulk-sessions-v1': {
+      schema: 'whoisleuth.bulk-sessions',
+      version: 1,
+      sessions: [{
+        id: 'timeline-bulk-session',
+        name: 'Timeline Bulk review',
+        mode: 'deep',
+        state: 'partial',
+        inputDigest: `sha256:${'a'.repeat(64)}`,
+        domains: ['timeline-case.invalid'],
+        results: [],
+        startedAt: observedAt,
+        updatedAt: storedAt,
+        completedAt: observedAt,
+      }],
+    },
   });
 
   await expect(page.getByRole('tab', { name: /Timeline/ })).toHaveAttribute('aria-selected', 'true');
   const workspace = page.getByRole('region', { name: 'Investigation timeline' });
-  await expect(workspace.locator('.timeline-list article')).toHaveCount(4);
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(5);
   await expect(workspace).toContainText('Observed');
   await expect(workspace).toContainText('Stored');
   await expect(workspace).toContainText('Derived relationship');
+  await page.getByLabel('Area').selectOption('bulk');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
+  await expect(workspace).toContainText('Timeline Bulk review retained');
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByLabel('Freshness').selectOption('stale');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
   await page.getByLabel('Type').selectOption('change');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await expect(workspace).toContainText('watchlist change');

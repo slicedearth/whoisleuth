@@ -293,6 +293,13 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
   deliberately.
 
+The **Investigation timeline** projects deliberately retained Lookup website
+snapshots, saved Bulk sessions, watchlist checks, case evidence, individual
+pins, and relationships. Filter by area and freshness to find old observations
+across the workspace. The displayed age is measured from the retained
+observation time using an explicit bounded threshold. It does not perform a
+refresh or establish the current state of a domain.
+
 The **Review inbox** is a bounded local queue projected from retained cases,
 planned case actions, material watchlist changes, and incomplete saved Bulk
 sessions. Its filters and due-state labels help an analyst resume work; opening

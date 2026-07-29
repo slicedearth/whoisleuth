@@ -79,7 +79,7 @@
   let campaignCount=$state(0);
   let investigationProjection=$state<unknown>(null);
   let retainedRelationships=$state<RelationshipObservation[]>([]);
-  const retainedTimeline=$derived(buildRetainedEvidenceTimeline({cases,watchlists,relationships:retainedRelationships,websiteSnapshots}));
+  const retainedTimeline=$derived(buildRetainedEvidenceTimeline({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots}));
   let customRuleCount=$state(0);
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
   const relationshipClusters=$derived(buildCaseRelationshipClusters(relationshipSummary));
