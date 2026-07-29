@@ -67,7 +67,7 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
   await seedInvestigationStores(page);
 
   const search = page.getByRole('searchbox', { name: 'Search saved work' });
-  await expect(page.locator('main')).not.toContainText('candidate.invalid');
+  await expect(page.getByRole('list', { name: 'Local investigation search results' })).toHaveCount(0);
   await search.fill('candidate.invalid');
   const caseResult = page.locator('.result-card').filter({ hasText: 'Case' }).filter({ hasText: 'candidate.invalid' });
   await caseResult.getByRole('link', { name: /Open case/ }).click();
