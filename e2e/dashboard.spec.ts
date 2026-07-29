@@ -253,7 +253,7 @@ test('the focused comparison handoff requires exactly two domains and opens Bulk
   await expect(page.locator('.results-table')).toHaveCount(0);
 });
 
-test('the dashboard reports bounded browser-local counts without exposing stored values', async ({ page }) => {
+test('the dashboard reports bounded browser-local counts and recent saved work', async ({ page }) => {
   await page.goto('/dashboard');
   const stored = {
     cases: {
@@ -279,8 +279,11 @@ test('the dashboard reports bounded browser-local counts without exposing stored
   await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toContainText('2 total saved cases');
   await expect(page.locator('.summary-card', { hasText: 'Watchlists' }).locator('strong')).toHaveText('2');
   await expect(page.locator('.summary-card', { hasText: 'Brand profiles' }).locator('strong')).toHaveText('2');
-  await expect(page.locator('main')).not.toContainText('open.invalid');
-  await expect(page.locator('main')).not.toContainText('First profile');
+  const recentWork = page.getByRole('list', { name: 'Recent local investigation work' });
+  await expect(page.getByRole('heading', { name: 'Recent saved work' })).toBeVisible();
+  await expect(recentWork.locator(':scope > li')).toHaveCount(6);
+  await expect(recentWork).toContainText('open.invalid');
+  await expect(recentWork).toContainText('First profile');
 
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);

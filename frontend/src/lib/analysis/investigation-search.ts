@@ -19,6 +19,7 @@ export const MAX_INVESTIGATION_SEARCH_ENTITIES = 6000;
 export const MAX_INVESTIGATION_SEARCH_TERMS = 24000;
 export const MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY = 24;
 export const MAX_INVESTIGATION_SEARCH_LIMITATIONS = 20;
+export const MAX_RECENT_INVESTIGATION_RESULTS = 6;
 
 export type InvestigationSearchIndexState = 'ready' | 'invalid' | 'unsupported';
 export type InvestigationSearchState = 'idle' | 'invalid' | 'no_matches' | 'results';
@@ -613,4 +614,22 @@ export function searchInvestigationIndex(
       ? `Showing the first ${results.length} of ${matches.length} deterministic matches.`
       : `${matches.length} deterministic local match${matches.length === 1 ? '' : 'es'}.`,
   };
+}
+
+export function recentInvestigationResults(
+  index: InvestigationSearchIndex,
+): InvestigationSearchResult[] {
+  if (index.state !== 'ready') return [];
+  return [...index.entries]
+    .sort((left, right) => right.observedAt.localeCompare(left.observedAt)
+      || TYPE_PRIORITY[left.entityType] - TYPE_PRIORITY[right.entityType]
+      || left.label.localeCompare(right.label)
+      || left.entityId.localeCompare(right.entityId))
+    .slice(0, MAX_RECENT_INVESTIGATION_RESULTS)
+    .map(({ terms: _terms, termsTruncated: _termsTruncated, ...entry }) => ({
+      ...entry,
+      matchedField: 'canonical',
+      matchedValue: entry.canonical,
+      score: 0,
+    }));
 }

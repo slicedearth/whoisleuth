@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     MAX_INVESTIGATION_SEARCH_QUERY_LENGTH,
+    recentInvestigationResults,
     searchInvestigationIndex,
     type InvestigationSearchField,
     type InvestigationSearchIndex,
@@ -11,6 +12,7 @@
   let { index } = $props<{ index: InvestigationSearchIndex | null }>();
   let query = $state('');
   const response = $derived(index ? searchInvestigationIndex(index, query) : null);
+  const recentResults = $derived(index ? recentInvestigationResults(index) : []);
   const sourceWarnings = $derived.by(() => {
     if (!index) return [] as Array<[string, InvestigationSearchSourceSummary]>;
     return (Object.entries(index.sources) as Array<[string, InvestigationSearchSourceSummary]>)
@@ -63,6 +65,34 @@
   }
 </script>
 
+{#snippet resultCard(result: InvestigationSearchResult)}
+  <article class="result-card">
+    <div class="result-heading">
+      <div>
+        <span class="type-badge">{typeLabels[result.entityType]}</span>
+        <h3>{result.label}</h3>
+      </div>
+      <span class:partial={evidenceState(result) !== 'Complete'} class="evidence-state">{evidenceState(result)}</span>
+    </div>
+    <dl>
+      <div><dt>{fieldLabels[result.matchedField]}</dt><dd>{result.matchedValue}</dd></div>
+      <div><dt>Source</dt><dd>{storeLabels[result.sourceStore] || result.sourceStore} · {result.source}</dd></div>
+      {#if result.classification}<div><dt>Classification</dt><dd>{result.classification === 'derived' ? 'Derived observation' : 'Normalized observation'}</dd></div>{/if}
+      <div><dt>Observed</dt><dd>{formatDate(result.observedAt)}</dd></div>
+    </dl>
+    {#if result.limitations.length || result.truncated === true}
+      <details class="limitations">
+        <summary>Evidence limitations</summary>
+        <ul>
+          {#each result.limitations as limitation}<li>{limitation}</li>{/each}
+          {#if result.truncated === true}<li>The source observation reports truncated evidence.</li>{/if}
+        </ul>
+      </details>
+    {/if}
+    <a class="result-action" href={result.href}>{result.action} <span aria-hidden="true">→</span></a>
+  </article>
+{/snippet}
+
 <section class="investigation-search card" aria-labelledby="investigation-search-title">
   <div class="search-intro">
     <div>
@@ -114,36 +144,24 @@
       <p class:error={response.state === 'invalid'} class="result-status" role="status" aria-live="polite">{response.detail}</p>
     {/if}
 
+    {#if response?.state === 'idle' && recentResults.length}
+      <section class="recent-work" aria-labelledby="recent-work-title">
+        <div>
+          <h3 id="recent-work-title">Recent saved work</h3>
+          <p>Most recently observed items in the current bounded local index.</p>
+        </div>
+        <ol class="result-list" aria-label="Recent local investigation work">
+          {#each recentResults as result (result.entityId)}
+            <li>{@render resultCard(result)}</li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
+
     {#if response?.state === 'results'}
       <ol class="result-list" aria-label="Local investigation search results">
         {#each response.results as result (result.entityId)}
-          <li>
-            <article class="result-card">
-              <div class="result-heading">
-                <div>
-                  <span class="type-badge">{typeLabels[result.entityType]}</span>
-                  <h3>{result.label}</h3>
-                </div>
-                <span class:partial={evidenceState(result) !== 'Complete'} class="evidence-state">{evidenceState(result)}</span>
-              </div>
-              <dl>
-                <div><dt>{fieldLabels[result.matchedField]}</dt><dd>{result.matchedValue}</dd></div>
-                <div><dt>Source</dt><dd>{storeLabels[result.sourceStore] || result.sourceStore} · {result.source}</dd></div>
-                {#if result.classification}<div><dt>Classification</dt><dd>{result.classification === 'derived' ? 'Derived observation' : 'Normalized observation'}</dd></div>{/if}
-                <div><dt>Observed</dt><dd>{formatDate(result.observedAt)}</dd></div>
-              </dl>
-              {#if result.limitations.length || result.truncated === true}
-                <details class="limitations">
-                  <summary>Evidence limitations</summary>
-                  <ul>
-                    {#each result.limitations as limitation}<li>{limitation}</li>{/each}
-                    {#if result.truncated === true}<li>The source observation reports truncated evidence.</li>{/if}
-                  </ul>
-                </details>
-              {/if}
-              <a class="result-action" href={result.href}>{result.action} <span aria-hidden="true">→</span></a>
-            </article>
-          </li>
+          <li>{@render resultCard(result)}</li>
         {/each}
       </ol>
     {/if}
@@ -165,6 +183,9 @@
   summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}
   .source-warning ul,.index-limitations ul,.limitations ul{margin:8px 0 0;padding-left:20px;line-height:1.5}
   .result-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:0;list-style:none}
+  .recent-work{margin-top:18px;padding-top:15px;border-top:1px solid var(--border)}
+  .recent-work>div h3{margin:0;font:700 var(--text-sm) var(--mono)}
+  .recent-work>div p{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .result-card{height:100%;min-width:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);padding:15px}
   .result-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .type-badge{color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}
