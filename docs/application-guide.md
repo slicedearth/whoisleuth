@@ -380,6 +380,15 @@ eligibility, registrar terms, price, release timing, or acquisition success.
 Unavailable and partial source states remain visible rather than being
 converted into a clean finding.
 
+The **Analyst decision workspace** can download a versioned, integrity-stamped
+JSON review containing the bounded evidence projection, current analyst
+decision, short rationale, completed manual checks, outstanding checks, and
+explicit limitations. A packet remains `draft` while its decision is unresolved
+or any manual check is outstanding. A `reviewed` packet records checklist
+completion only. It does not verify a counterparty or external statement and
+does not reserve, value, purchase, submit, or transfer the domain. The public
+Demo marks its equivalent artifact as synthetic.
+
 A missing delegation, failed provider, absent website, or unavailable registrar
 source never means that a domain is available. Registry compatibility metadata
 also remains descriptive. Use the [registry compatibility catalogue](registry-compatibility.md)

@@ -15,6 +15,13 @@ export type BulkProgressEstimate = Readonly<{
   estimatedRemainingMs: number | null;
   label: string;
 }>;
+export type BulkProgressOutcomes = Readonly<{
+  settled: number;
+  complete: number;
+  limited: number;
+  failed: number;
+  pending: number;
+}>;
 
 export const BULK_PACING_OPTIONS: readonly BulkPacingOption[] = Object.freeze([
   Object.freeze({
@@ -42,6 +49,29 @@ export const BULK_PACING_OPTIONS: readonly BulkPacingOption[] = Object.freeze([
 
 const PACING_IDS = new Set<BulkPacing>(BULK_PACING_OPTIONS.map((option) => option.id));
 const MAX_ESTIMATE_MS = 24 * 60 * 60 * 1000;
+const LIMITED_SOURCE_STATES = new Set([
+  'error',
+  'failed',
+  'inconclusive',
+  'partial',
+  'rate_limited',
+  'unsupported',
+  'unavailable',
+]);
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function sourceStates(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, 32)
+    .map((item) => String(record(item).state ?? '').trim().toLowerCase())
+    .filter(Boolean);
+}
 
 export function normalizeBulkPacing(value: unknown): BulkPacing {
   return typeof value === 'string' && PACING_IDS.has(value as BulkPacing)
@@ -97,5 +127,39 @@ export function buildBulkProgressEstimate(
         : estimatedRemainingMs === null
           ? `${remaining} remaining`
           : `${remaining} remaining · ${durationLabel(estimatedRemainingMs)}`,
+  };
+}
+
+export function buildBulkProgressOutcomes(
+  rowsValue: unknown,
+  totalValue: unknown,
+): BulkProgressOutcomes {
+  const rows = Array.isArray(rowsValue) ? rowsValue.slice(0, 2_000).map(record) : [];
+  const total = Number.isSafeInteger(totalValue) && Number(totalValue) > 0
+    ? Math.min(Number(totalValue), 2_000)
+    : rows.length;
+  let complete = 0;
+  let limited = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const status = String(row.status ?? '').trim().toLowerCase();
+    if (status === 'error' || status === 'failed') {
+      failed += 1;
+      continue;
+    }
+    const states = sourceStates(row.sourceCoverage);
+    if (states.some((state) => LIMITED_SOURCE_STATES.has(state))) {
+      limited += 1;
+      continue;
+    }
+    complete += 1;
+  }
+  const settled = complete + limited + failed;
+  return {
+    settled,
+    complete,
+    limited,
+    failed,
+    pending: Math.max(0, total - settled),
   };
 }

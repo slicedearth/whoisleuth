@@ -77,6 +77,10 @@ test('a small scan completes and reports the correct error count', async ({ page
   await expect(page.locator('.filters button', { hasText: 'all' }).locator('span')).toHaveText(String(domains.length));
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText(String(domains.length));
   await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill('unknown confidence'));
+  const outcomes = page.locator('.outcomes');
+  await expect(outcomes).toHaveAttribute('aria-label', 'Settled scan outcomes');
+  await expect(outcomes.locator('div', { hasText: 'Failed' })).toContainText(String(domains.length));
+  await expect(outcomes.locator('div', { hasText: 'Pending' })).toContainText('0');
 });
 
 test('filters, groups, and selected-only actions use compact observed evidence', async ({ page }) => {

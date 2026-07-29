@@ -219,7 +219,7 @@
       />
     </div>
     <div class="shared-evidence visual-summary"><LookupLifecycle events={lookupLifecycleEvents} /></div>
-    {#if lookupAcquisitionReview}<div class="shared-evidence"><LookupAcquisitionDueDiligence review={lookupAcquisitionReview} /></div>{/if}
+    {#if lookupAcquisitionReview}<div class="shared-evidence"><LookupAcquisitionDueDiligence review={lookupAcquisitionReview} target={selected.domain} observedAt={null} synthetic /></div>{/if}
     <div class="shared-evidence" id="demo-evidence-registry"><LookupRegistrySources {...lookupView.registry} /></div>
     <div class="shared-evidence" id="demo-evidence-dns"><LookupDnsEvidence {...lookupView.dns} /></div>
     <div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidence {...lookupView.http} /></div>

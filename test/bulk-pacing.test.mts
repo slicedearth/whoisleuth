@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   BULK_PACING_OPTIONS,
   buildBulkProgressEstimate,
+  buildBulkProgressOutcomes,
   bulkConcurrency,
   normalizeBulkPacing,
 } from '../frontend/src/lib/analysis/bulk-pacing.ts';
@@ -33,4 +34,26 @@ test('derives a bounded progress estimate only from the current scan', () => {
   assert.equal(progress.label, '6 remaining · about 3s remaining');
   assert.equal(buildBulkProgressEstimate(10, 10, 5_000).label, 'Scan complete');
   assert.equal(buildBulkProgressEstimate(99, 10, Number.POSITIVE_INFINITY).completed, 10);
+});
+
+test('keeps complete, limited, failed, and pending Bulk outcomes distinct', () => {
+  assert.deepEqual(buildBulkProgressOutcomes([
+    { status: 'complete', sourceCoverage: [{ source: 'rdap', state: 'complete' }] },
+    { status: 'complete', sourceCoverage: [{ source: 'whois', state: 'partial' }] },
+    { status: 'error', sourceCoverage: [{ source: 'lookup', state: 'error' }] },
+    { status: 'complete', sourceCoverage: [{ source: 'dns', state: 'unavailable' }] },
+  ], 6), {
+    settled: 4,
+    complete: 1,
+    limited: 2,
+    failed: 1,
+    pending: 2,
+  });
+  assert.deepEqual(buildBulkProgressOutcomes('invalid', 0), {
+    settled: 0,
+    complete: 0,
+    limited: 0,
+    failed: 0,
+    pending: 0,
+  });
 });

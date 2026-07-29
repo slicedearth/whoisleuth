@@ -523,6 +523,14 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(acquisitionReview).toContainText('Transfer or update constraints observed');
   await expect(acquisitionReview).toContainText(/published escalation route/iu);
   await expect(acquisitionReview).toContainText('does not value a domain');
+  const acquisitionDecision = acquisitionReview.getByRole('region', { name: 'Analyst decision workspace' });
+  await acquisitionDecision.getByLabel('Current decision').selectOption('continue_manual_review');
+  await acquisitionDecision.getByLabel('Registry eligibility and current availability checked').check();
+  await acquisitionDecision.getByLabel('Rationale or unresolved questions').fill('Continue manual checks with the current evidence limitations.');
+  const acquisitionDownload = page.waitForEvent('download');
+  await acquisitionDecision.getByRole('button', { name: 'Download acquisition review' }).click();
+  await expect((await acquisitionDownload).suggestedFilename()).toMatch(/^whoisleuth-acquisition-review-.+\.json$/u);
+  await expect(acquisitionDecision.getByRole('status')).toContainText('draft acquisition review');
 
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
