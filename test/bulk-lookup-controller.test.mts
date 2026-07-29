@@ -10,6 +10,11 @@ import {
 
 function compactResponse(domain = 'example.test') {
   return {
+    query: domain,
+    type: 'domain',
+    inputHostname: domain,
+    registrableDomain: domain,
+    isSubdomain: false,
     availability: {
       applicable: true,
       domain,

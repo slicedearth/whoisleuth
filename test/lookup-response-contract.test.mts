@@ -292,6 +292,23 @@ describe('Lookup HTTP response contract', () => {
 });
 
 describe('compact Bulk Lookup HTTP response contract', () => {
+  test('accepts the metadata envelope added by the shared HTTP response adapter', () => {
+    const raw = createLookupHttpResponse(
+      'portal.example.test',
+      {
+        type: 'domain',
+        inputHostname: 'portal.example.test',
+        registrableDomain: 'example.test',
+        isSubdomain: true,
+      },
+      compactResponse(),
+    );
+    const parsed = parseCompactLookupHttpResponse(raw, 'portal.example.test');
+
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.value, raw);
+  });
+
   test('accepts current bounded compact evidence without copying or mutation', () => {
     const raw = compactResponse({
       availability: {
@@ -381,6 +398,11 @@ describe('compact Bulk Lookup HTTP response contract', () => {
           availability: { status: 'future_status' },
         },
       }),
+      compactResponse({ query: 'other.test' }),
+      compactResponse({ type: 'ipv4' }),
+      compactResponse({ inputHostname: 'other.test' }),
+      compactResponse({ registrableDomain: 'other.test' }),
+      compactResponse({ isSubdomain: 'yes' }),
     ];
 
     for (const value of invalid) {

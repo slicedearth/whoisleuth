@@ -66,6 +66,11 @@ type CompactLookupAvailabilityState =
   | 'unknown';
 type CompactLookupConfidence = 'high' | 'low' | 'medium';
 type CompactLookupHttpResponse = JsonObject & {
+  readonly query?: string;
+  readonly type?: 'domain';
+  readonly inputHostname?: string;
+  readonly registrableDomain?: string;
+  readonly isSubdomain?: boolean;
   readonly availability: JsonObject & {
     readonly applicable: true;
     readonly domain: string;
@@ -155,7 +160,7 @@ const MAX_LOOKUP_RESPONSE_QUERY_LENGTH = 4096;
 const MAX_LOOKUP_RESPONSE_HOST_LENGTH = 253;
 const MAX_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 32;
 const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
-const MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 4;
+const MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 8;
 const MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS = 128;
 const MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS = 16;
 const MAX_THREAT_INTELLIGENCE_PROVIDERS = 10;
@@ -303,6 +308,14 @@ function parseCompactLookupHttpResponse(
     || typeof availability.confidence !== 'string'
     || !COMPACT_CONFIDENCE_LEVELS.has(availability.confidence as CompactLookupConfidence)
     || (availability.deepScanComplete !== undefined && typeof availability.deepScanComplete !== 'boolean')
+    || (value.query !== undefined && !compactDomainMatches(value.query, expectedDomain))
+    || (value.type !== undefined && value.type !== 'domain')
+    || (value.inputHostname !== undefined && !compactDomainMatches(value.inputHostname, expectedDomain))
+    || (
+      value.registrableDomain !== undefined
+      && normalizedDomain(value.registrableDomain) !== normalizedDomain(availability.domain)
+    )
+    || (value.isSubdomain !== undefined && typeof value.isSubdomain !== 'boolean')
     || !isJsonObject(diagnostics)
     || Object.keys(diagnostics).length > MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS
     || diagnostics.version !== 7
