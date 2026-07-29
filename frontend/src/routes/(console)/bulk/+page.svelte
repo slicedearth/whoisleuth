@@ -167,7 +167,15 @@
   const selectedIndicatorCount=$derived(filtered.filter((row)=>shortlistedDomains.has(row.domain)).length);
   const selectedRows=$derived(filtered.filter((row)=>shortlistedDomains.has(row.domain)));
   const comparisonCandidates=$derived(selectedRows.length===2?selectedRows:results.length===2?results:[]);
-  const domainComparison=$derived(comparisonCandidates.length===2?buildBulkDomainComparison(toBulkSessionResult(comparisonCandidates[0]!),toBulkSessionResult(comparisonCandidates[1]!),scanStartedAt):null);
+  const domainComparison=$derived(comparisonCandidates.length===2?buildBulkDomainComparison(
+    toBulkSessionResult(comparisonCandidates[0]!),
+    toBulkSessionResult(comparisonCandidates[1]!),
+    scanStartedAt,
+    {
+      leftEvidenceHref:`#bulk-result-${results.indexOf(comparisonCandidates[0]!)}`,
+      rightEvidenceHref:`#bulk-result-${results.indexOf(comparisonCandidates[1]!)}`,
+    },
+  ):null);
   const retryCandidates=$derived(selectedRows.length?selectedRows:filtered);
   const retryPlan=$derived(buildBulkRetryPlan(retryCandidates.map(toBulkSessionResult),mode,scanStartedAt));
   const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;return{resultIndex:results.indexOf(row),domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewStateByDomain.get(row.domain)||'unreviewed',shortlisted:shortlistedDomains.has(row.domain),sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));

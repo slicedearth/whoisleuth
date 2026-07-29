@@ -96,17 +96,56 @@ describe('Bulk evidence review workflow', () => {
         pageTitle: null,
       }),
       OBSERVED_AT,
+      {
+        leftEvidenceHref: '#bulk-result-0',
+        rightEvidenceHref: '#bulk-result-1',
+        now: Date.parse(GENERATED_AT),
+      },
     );
     assert.ok(comparison);
+    assert.equal(comparison.version, 2);
     assert.equal(comparison.rows.find((row) => row.id === 'registrar')?.state, 'different');
-    assert.equal(comparison.rows.find((row) => row.id === 'dmarc')?.state, 'missing');
-    assert.equal(comparison.rows.find((row) => row.id === 'page-title')?.state, 'unavailable');
+    assert.equal(comparison.rows.find((row) => row.id === 'dmarc')?.state, 'not_recorded');
+    assert.equal(comparison.rows.find((row) => row.id === 'page-title')?.state, 'not_recorded');
+    assert.equal(comparison.rows.find((row) => row.id === 'technology')?.state, 'not_recorded');
+    assert.equal(comparison.rows.find((row) => row.id === 'registrar')?.leftEvidenceHref, '#bulk-result-0');
+    assert.equal(comparison.freshness.state, 'stale');
     assert.match(comparison.limitations.join(' '), /does not establish common ownership/i);
 
     const exported = await buildBulkDomainComparisonExport(comparison, GENERATED_AT);
     assert.match(exported.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     const repeated = await buildBulkDomainComparisonExport(comparison, GENERATED_AT);
     assert.equal(repeated.content, exported.content);
+  });
+
+  test('keeps conflicting, unavailable, and explicitly absent evidence distinct', () => {
+    const comparison = buildBulkDomainComparison(
+      result('left.example', {
+        availability: 'conflict',
+        hasMx: false,
+        sourceCoverage: [
+          { source: 'availability', state: 'complete' },
+          { source: 'dns', state: 'complete' },
+          { source: 'tls', state: 'unavailable' },
+        ],
+      }),
+      result('right.example', {
+        availability: 'registered',
+        hasMx: true,
+        sourceCoverage: [
+          { source: 'availability', state: 'complete' },
+          { source: 'dns', state: 'complete' },
+          { source: 'tls', state: 'error' },
+        ],
+      }),
+      OBSERVED_AT,
+      { now: Date.parse(OBSERVED_AT) },
+    );
+    assert.ok(comparison);
+    assert.equal(comparison.rows.find((row) => row.id === 'registration')?.state, 'conflicting');
+    assert.equal(comparison.rows.find((row) => row.id === 'mail')?.state, 'different');
+    assert.equal(comparison.rows.find((row) => row.id === 'certificate')?.state, 'unavailable');
+    assert.equal(comparison.freshness.state, 'current');
   });
 
   test('moves only between unresolved review rows and leaves a settled queue stable', () => {

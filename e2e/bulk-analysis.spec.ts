@@ -196,6 +196,10 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(comparison).toContainText('First Registrar');
   await expect(comparison).toContainText('Second Registrar');
   await expect(comparison.getByText('different', { exact: true }).first()).toBeVisible();
+  await expect(comparison.getByText('not recorded', { exact: true }).first()).toBeVisible();
+  await expect(comparison.getByText('Technology findings', { exact: true })).toBeVisible();
+  await expect(comparison.getByText('Evidence freshness')).toBeVisible();
+  await expect(comparison.getByRole('link', { name: 'View settled row' })).toHaveCount(52);
 
   const downloadPromise = page.waitForEvent('download');
   await comparison.getByRole('button', { name: 'Export comparison' }).click();
@@ -205,6 +209,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   expect(exported).toMatchObject({
     schema: 'whoisleuth.domain-comparison',
     comparison: {
+      version: 2,
       leftDomain: expect.any(String),
       rightDomain: expect.any(String),
     },
