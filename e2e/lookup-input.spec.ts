@@ -951,7 +951,10 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.getByText('Fixture malware-IOC records', { exact: true })).toBeVisible();
   await expect(section.getByText(/never affect availability/i)).toBeVisible();
   await expect(section.getByText(/2 independent publisher families contributed \+18 under model v6/i)).toBeVisible();
-  await page.getByText('Why the risk score is 28', { exact: true }).click();
+  const riskExplanation = page.getByText('Why the risk score is 28', { exact: true });
+  await riskExplanation.focus();
+  await expect(riskExplanation).toBeFocused();
+  await riskExplanation.press('Enter');
   await expect(page.getByText('Corroborated recent external phishing/malware records')).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(2);
