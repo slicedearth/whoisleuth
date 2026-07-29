@@ -82,22 +82,32 @@ After a successful deep full response, **Collection timing** reports total
 request time plus the duration and settle offset of each source branch that
 actually ran. Branches overlap, so their durations are not additive. A settled
 branch can still have a partial, unavailable, not-found, or error state; use
-the source card for that evidence status. Its waterfall is a summary of the
-exact timing list, not a progress trace. Fast and compact responses retain their
-existing diagnostics and omit this timing object.
+the source card for that evidence status. The waterfall shows the retained
+duration and settle offset without repeating the same rows below it; an
+equivalent exact list remains available to assistive technology. It is not a
+progress trace. Fast and compact responses retain their existing diagnostics
+and omit this timing object.
 
 Once a result is available, the sticky section rail tracks the current
 evidence group. The topology uses separate visual families for registry,
 network, web, derived, and analyst evidence, with an adjacent key. Shapes and
-icons identify those families; colour remains reserved for source status and
-interactive focus.
+icons identify those families, while a stable distinct colour marks each source
+inside the topology. Evidence cards retain neutral borders and headings so the
+source palette does not compete with the content. The palette uses cyan, blue,
+violet, magenta, and cool neutral tones with deliberately varied lightness.
+Red, amber, and green remain exclusive to semantic status. Source state remains
+a separate dot and text label, so colour does not replace success, partial,
+unavailable, or error semantics.
 
 Risk and Opportunity cards show signed factor bars beside their exact factor
-lists. Domain results can also show a registration-source agreement matrix,
-certificate validity and chain summary, and a bounded service and technology
-map. These visuals use only evidence already present in the response. Source
-tables, status labels, collection times, provenance, and limitations remain the
-complete review surface.
+lists. Domain results can also show a connected registration-source agreement
+plot, certificate validity and chain summary, and a bounded service and
+technology map. The agreement plot joins each compared field across
+publications and uses shape, glyph, and state colour together. Observed
+lifecycle events use individual colours while their shapes retain the event
+family. These visuals use only evidence already present in the response.
+Source tables, status labels, collection times, provenance, and limitations
+remain the complete review surface.
 
 **Evidence coverage** summarizes which requested source and analysis families
 completed and which remained limited, unavailable, skipped, unsupported,

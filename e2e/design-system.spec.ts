@@ -444,6 +444,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   await expect(visualKey).toContainText('Web');
   await expect(visualKey).toContainText('Derived');
   await expect(visualKey).toContainText('Analyst');
+  await expect(visualKey).toContainText('Colour distinguishes each source');
   await expect(visualKey).toContainText('Dot and label show source state');
   const topologyCopies = topology.locator('foreignObject.node-copy');
   await expect(topologyCopies.first()).toBeVisible();
@@ -452,6 +453,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
     const copyRect = copy.getBoundingClientRect();
     const nodeRect = copy.closest('g')?.querySelector(':scope > .node-surface')?.getBoundingClientRect();
     const styles = text ? getComputedStyle(text) : null;
+    const wrapped = copy.classList.contains('wrapped');
     return Boolean(
       text
       && nodeRect
@@ -460,8 +462,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
       && copyRect.top >= nodeRect.top - 0.5
       && copyRect.bottom <= nodeRect.bottom + 0.5
       && styles?.overflow === 'hidden'
-      && styles.textOverflow === 'ellipsis'
-      && styles.whiteSpace === 'nowrap'
+      && (wrapped
+        ? styles.textOverflow === 'clip'
+          && styles.whiteSpace === 'normal'
+          && text.scrollWidth <= text.clientWidth
+          && text.scrollHeight <= text.clientHeight
+        : styles.textOverflow === 'ellipsis'
+          && styles.whiteSpace === 'nowrap')
     );
   }))).toBe(true);
   const sourceRail = topology.getByRole('list', { name: 'Evidence source status' });
@@ -475,13 +482,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
       return element ? getComputedStyle(element)[property] : '';
     };
     return {
-      registryStroke: styleValue('.source-node.family-registry .node-surface', 'stroke'),
-      networkStroke: styleValue('.source-node.family-network .node-surface', 'stroke'),
+      sourceStrokes: [...region.querySelectorAll<SVGElement>('.source-node .node-surface')]
+        .map((element) => getComputedStyle(element).stroke),
       successFill: styleValue('.source-node.state-success .status-dot', 'fill'),
       partialFill: styleValue('.source-node.state-partial .status-dot', 'fill'),
     };
   });
-  expect(topologyPalette.registryStroke).toBe(topologyPalette.networkStroke);
+  expect(new Set(topologyPalette.sourceStrokes).size).toBe(topologyPalette.sourceStrokes.length);
   expect(topologyPalette.successFill).not.toBe(topologyPalette.partialFill);
   expect(await desktopSourceIcons.evaluateAll((icons) => icons.every((icon) => {
     const iconRect = icon.getBoundingClientRect();
@@ -521,7 +528,15 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   const lifecycle = page.getByRole('region', { name: 'Observed lifecycle' });
   await expect(lifecycle).toBeVisible();
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeVisible();
-  await expect(lifecycle.getByRole('list', { name: 'Lookup lifecycle events' })).toContainText('Domain created');
+  const lifecycleEventList = lifecycle.locator('ol[aria-label="Lookup lifecycle events"]');
+  await expect(lifecycleEventList).toContainText('Domain created');
+  await expect(lifecycleEventList).toHaveCSS('clip-path', 'inset(50%)');
+  const lifecycleColours = await lifecycle.locator('g.event').evaluateAll((events) => (
+    events.map((event) => getComputedStyle(event).getPropertyValue('--event-color').trim())
+  ));
+  expect(new Set(lifecycleColours).size).toBe(lifecycleColours.length);
+  await expect(lifecycle.locator('.event-shape')).toHaveCount(lifecycleColours.length);
+  await expect(lifecycle.locator('.registry-shape')).toHaveCount(lifecycleColours.length);
 
   const activationContext = page.getByRole('region', { name: 'Observed service relationship' });
   await expect(activationContext).toBeVisible();
@@ -637,7 +652,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   // The wide chronological plot becomes a connected vertical timeline on
   // narrow screens rather than requiring a nested horizontal scrollbar.
   await expect(lifecycle.getByRole('img', { name: 'Chronological lookup lifecycle overview' })).toBeHidden();
-  const mobileTimeline = lifecycle.getByRole('list', { name: 'Lookup lifecycle events' });
+  const mobileTimeline = lifecycle.locator('ol[aria-label="Lookup lifecycle events"]');
   await expect(mobileTimeline).toBeVisible();
   expect(await mobileTimeline.locator('li').evaluateAll((items) => items.every((item) => {
     const listRect = item.parentElement?.getBoundingClientRect();
@@ -783,6 +798,7 @@ test('every public and protected page renders without page-level overflow at nar
 });
 
 test('console and policy pages expose one consistent primary heading', async ({ page }) => {
+  test.slow();
   for (const [path, title, eyebrow] of [
     ['/dashboard', 'Dashboard', 'Console'],
     ['/lookup', 'Lookup', 'Investigate'],

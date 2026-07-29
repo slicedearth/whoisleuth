@@ -40,6 +40,22 @@
   --primary-hover-start: #8ccbff;
   --primary-hover-end: #5babf6;
   --theme-color: #0f1115;
+  --source-registry: #9500ff;
+  --source-registrar: #00aaff;
+  --source-whois: #ff0095;
+  --source-network: #006bd6;
+  --source-dns: #a3f7ff;
+  --source-reverse-dns: #aac4f8;
+  --source-http: #e65ff2;
+  --source-tls: #307fa6;
+  --source-page: #aa84f5;
+  --source-structured: #cf59a8;
+  --source-security: #f1b1f1;
+  --source-technology: #0055ff;
+  --source-posture: #c084fc;
+  --source-credential: #22d3ee;
+  --source-role: #7c8aa5;
+  --source-assessment: #8b5cf6;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
@@ -98,6 +114,22 @@
   --primary-hover-start: #0869aa;
   --primary-hover-end: #054f86;
   --theme-color: #edf2f7;
+  --source-registry: #c414ff;
+  --source-registrar: #1d99a5;
+  --source-whois: #ff149d;
+  --source-network: #144fff;
+  --source-dns: #000070;
+  --source-reverse-dns: #004170;
+  --source-http: #d912c8;
+  --source-tls: #3d8eff;
+  --source-page: #57193d;
+  --source-structured: #990073;
+  --source-security: #c269d3;
+  --source-technology: #1414ff;
+  --source-posture: #6b21a8;
+  --source-credential: #087e8b;
+  --source-role: #475569;
+  --source-assessment: #5b21b6;
 }
 
 html { color: var(--text); background: var(--bg); }

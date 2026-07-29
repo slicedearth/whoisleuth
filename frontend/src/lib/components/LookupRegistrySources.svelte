@@ -130,6 +130,39 @@
   function traceStateLabel(state: TraceState): string {
     return state === 'not_collected' ? 'Not collected' : state.replaceAll('_', ' ');
   }
+  type PlotCell = { x: number; width: number };
+  const PUBLICATION_COLOURS: Readonly<Record<string, string>> = Object.freeze({
+    'Registry RDAP': 'var(--source-registry)',
+    'Registrar RDAP': 'var(--source-registrar)',
+    WHOIS: 'var(--source-whois)',
+  });
+  const publicationColour = (source: string): string => PUBLICATION_COLOURS[source] ?? 'var(--source-structured)';
+  const markerX = (cell: PlotCell): number => cell.x + cell.width / 2;
+  const trackStart = (cells: readonly PlotCell[]): number => cells[0] ? markerX(cells[0]) : 210;
+  const trackEnd = (cells: readonly PlotCell[]): number => {
+    const cell = cells.at(-1);
+    return cell ? markerX(cell) : 870;
+  };
+  const diamondPoints = (x: number, y: number, radius = 7): string => (
+    `${x},${y - radius} ${x + radius},${y} ${x},${y + radius} ${x - radius},${y}`
+  );
+  const hexagonPoints = (x: number, y: number, radius = 8): string => (
+    [
+      [x - radius * 0.86, y - radius / 2],
+      [x, y - radius],
+      [x + radius * 0.86, y - radius / 2],
+      [x + radius * 0.86, y + radius / 2],
+      [x, y + radius],
+      [x - radius * 0.86, y + radius / 2],
+    ].map(([pointX, pointY]) => `${pointX},${pointY}`).join(' ')
+  );
+  const comparisonGlyph = (state: string): string => {
+    if (state === 'equal') return '=';
+    if (state === 'different' || state === 'partial') return '≠';
+    if (state === 'conflict') return '!';
+    if (state === 'observed') return '•';
+    return '?';
+  };
 </script>
 
 {#if resultType === 'domain'}
@@ -168,31 +201,63 @@
       <div>
         <p class="eyebrow">Publication comparison</p>
         <h4 id="registration-agreement-title">Registration source agreement</h4>
-        <p>Colour identifies the comparison state for each field and publication. Exact source values remain in the tables below.</p>
+        <p>Connected markers compare each field across separately attributed publications. Shape, glyph, and state colour reinforce the assessment; exact source values remain in the tables below.</p>
       </div>
       {#if comparisonMatrix.truncated}<span class="partial">Partial visual</span>{/if}
     </header>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable matrix must be keyboard reachable -->
-    <div class="matrix-frame" role="img" tabindex="0" aria-label={`Registration agreement matrix with ${comparisonMatrix.rows.length} fields`}>
+    <div class="matrix-frame" role="img" tabindex="0" aria-label={`Registration agreement plot with ${comparisonMatrix.rows.length} fields`}>
       <svg viewBox={`0 0 ${comparisonMatrix.width} ${comparisonMatrix.height}`} aria-hidden="true">
         {#each comparisonMatrix.columns as column}
-          <text x={column.x + column.width / 2} y="30" text-anchor="middle" class="column-label">{column.label}</text>
+          <g class="publication-header" style={`--publication-color:${publicationColour(column.label)}`}>
+            <line x1={column.x + column.width / 2} x2={column.x + column.width / 2} y1="44" y2={comparisonMatrix.height - 14} class="column-guide" />
+            <circle cx={column.x + column.width / 2} cy="17" r="5" class="publication-marker" />
+            <text x={column.x + column.width / 2} y="38" text-anchor="middle" class="column-label">{column.label}</text>
+          </g>
         {/each}
         {#each comparisonMatrix.rows as row}
+          <line x1={trackStart(row.cells)} x2={trackEnd(row.cells)} y1={row.y + row.height / 2} y2={row.y + row.height / 2} class="agreement-track" />
           <text x="8" y={row.y + row.height / 2 + 3} class="row-label">{row.label}</text>
           {#each row.cells as cell}
-            <rect x={cell.x} y={row.y} width={cell.width} height={row.height} rx="4" class={`matrix-cell state-${cell.state}`}>
+            <g class={`agreement-node state-${cell.state}`}>
               <title>{row.label}, {cell.column}: {cell.state.replaceAll('_', ' ')}{cell.detail ? ` — ${cell.detail}` : ''}</title>
-            </rect>
+              {#if cell.state === 'different' || cell.state === 'partial'}
+                <polygon points={diamondPoints(markerX(cell), row.y + row.height / 2)} class="agreement-marker" />
+              {:else if cell.state === 'conflict'}
+                <polygon points={hexagonPoints(markerX(cell), row.y + row.height / 2)} class="agreement-marker" />
+              {:else if cell.state === 'observed'}
+                <rect x={markerX(cell) - 7} y={row.y + row.height / 2 - 7} width="14" height="14" rx="3" class="agreement-marker" />
+              {:else}
+                <circle cx={markerX(cell)} cy={row.y + row.height / 2} r="7" class="agreement-marker" />
+              {/if}
+              <text x={markerX(cell)} y={row.y + row.height / 2 + 3} text-anchor="middle" class="agreement-glyph">{comparisonGlyph(cell.state)}</text>
+            </g>
           {/each}
         {/each}
       </svg>
     </div>
+    <div class="matrix-mobile" role="group" aria-label={`Registration agreement for ${comparisonMatrix.rows.length} fields`}>
+      {#each comparisonMatrix.rows as row}
+        <article>
+          <h5>{row.label}</h5>
+          <ul>
+            {#each row.cells as cell}
+              <li class={`state-${cell.state}`} style={`--publication-color:${publicationColour(cell.column)}`}>
+                <span class="mobile-publication">{cell.column}</span>
+                <span class="mobile-agreement-marker" aria-hidden="true">{comparisonGlyph(cell.state)}</span>
+                <span class="mobile-agreement-state">{cell.state.replaceAll('_', ' ')}</span>
+                {#if cell.detail}<small>{cell.detail}</small>{/if}
+              </li>
+            {/each}
+          </ul>
+        </article>
+      {/each}
+    </div>
     <ul class="matrix-legend" aria-label="Registration source comparison states">
-      <li class="state-equal"><span></span>Equivalent</li>
-      <li class="state-different"><span></span>Different</li>
-      <li class="state-conflict"><span></span>Conflict</li>
-      <li class="state-not_collected"><span></span>Not collected</li>
+      <li class="state-equal"><span>=</span>Equivalent</li>
+      <li class="state-different"><span>≠</span>Different</li>
+      <li class="state-conflict"><span>!</span>Conflict</li>
+      <li class="state-not_collected"><span>?</span>Not collected</li>
     </ul>
   </section>
 {/if}
@@ -307,19 +372,28 @@
   .matrix-frame{max-width:100%;margin-top:13px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
   .matrix-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .matrix-frame svg{display:block;width:100%;min-width:680px;height:auto}
+  .matrix-mobile{display:none}
   .column-label,.row-label{fill:var(--muted);font-family:var(--mono);font-size:9px}
+  .publication-marker{fill:var(--publication-color);stroke:color-mix(in srgb,var(--publication-color) 40%,var(--panel));stroke-width:3}
+  .column-guide{stroke:color-mix(in srgb,var(--publication-color) 14%,var(--border));stroke-width:1;stroke-dasharray:2 5}
   .row-label{fill:var(--text)}
-  .matrix-cell{fill:var(--panel);stroke:var(--border);stroke-width:1}
-  .matrix-cell.state-equal{fill:color-mix(in srgb,var(--success) 16%,var(--panel));stroke:var(--success)}
-  .matrix-cell.state-different,.matrix-cell.state-partial{fill:rgb(var(--amber-rgb) / .15);stroke:var(--amber)}
-  .matrix-cell.state-conflict{fill:rgb(var(--danger-rgb) / .13);stroke:var(--danger)}
-  .matrix-cell.state-observed{fill:rgb(var(--accent-rgb) / .14);stroke:var(--accent)}
-  .matrix-cell.state-not_collected,.matrix-cell.state-unavailable,.matrix-cell.state-unknown{fill:var(--panel);stroke:var(--muted);stroke-dasharray:3 3}
+  .agreement-track{stroke:var(--border-strong);stroke-width:1.5}
+  .agreement-marker{fill:var(--panel);stroke:var(--muted);stroke-width:1.7}
+  .agreement-glyph{fill:var(--muted);font:750 9px var(--mono);pointer-events:none}
+  .agreement-node.state-equal .agreement-marker{fill:color-mix(in srgb,var(--success) 16%,var(--panel));stroke:var(--success)}
+  .agreement-node.state-equal .agreement-glyph{fill:var(--success)}
+  .agreement-node.state-different .agreement-marker,.agreement-node.state-partial .agreement-marker{fill:rgb(var(--amber-rgb) / .15);stroke:var(--amber)}
+  .agreement-node.state-different .agreement-glyph,.agreement-node.state-partial .agreement-glyph{fill:var(--amber)}
+  .agreement-node.state-conflict .agreement-marker{fill:rgb(var(--danger-rgb) / .13);stroke:var(--danger);stroke-width:2}
+  .agreement-node.state-conflict .agreement-glyph{fill:var(--danger)}
+  .agreement-node.state-observed .agreement-marker{fill:rgb(var(--accent-rgb) / .14);stroke:var(--accent)}
+  .agreement-node.state-observed .agreement-glyph{fill:var(--accent)}
+  .agreement-node.state-not_collected .agreement-marker,.agreement-node.state-unavailable .agreement-marker,.agreement-node.state-unknown .agreement-marker{fill:var(--panel);stroke:var(--muted);stroke-dasharray:2 2}
   .matrix-legend{display:flex;flex-wrap:wrap;gap:7px 14px;margin:9px 0 0;padding:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);list-style:none}
-  .matrix-legend li{display:flex;align-items:center;gap:5px}.matrix-legend span{width:9px;height:9px;border:1px solid var(--border);border-radius:2px;background:var(--panel)}
-  .matrix-legend .state-equal span{border-color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel))}
-  .matrix-legend .state-different span{border-color:var(--amber);background:rgb(var(--amber-rgb) / .15)}
-  .matrix-legend .state-conflict span{border-color:var(--danger);background:rgb(var(--danger-rgb) / .13)}
+  .matrix-legend li{display:flex;align-items:center;gap:6px}.matrix-legend span{display:grid;width:16px;height:16px;place-items:center;border:1px solid var(--border);border-radius:50%;background:var(--panel);font:750 9px var(--mono)}
+  .matrix-legend .state-equal span{border-color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel));color:var(--success)}
+  .matrix-legend .state-different span{border-color:var(--amber);border-radius:0;background:rgb(var(--amber-rgb) / .15);color:var(--amber);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+  .matrix-legend .state-conflict span{border-color:var(--danger);background:rgb(var(--danger-rgb) / .13);color:var(--danger);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
   .matrix-legend .state-not_collected span{border-color:var(--muted);border-style:dashed}
   .authority-trace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .authority-trace h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
@@ -387,6 +461,22 @@
   @media(max-width:650px){
     .authority-trace>header{display:grid}.authority-trace>header>span{max-width:none;text-align:left}.trace-sources{grid-template-columns:1fr}
     .insight-grid,.publication-list{grid-template-columns:1fr}
+    .matrix-frame{display:none}
+    .matrix-mobile{display:grid;gap:8px;margin-top:13px}
+    .matrix-mobile article{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+    .matrix-mobile h5{margin:0;padding:9px 10px;border-bottom:1px solid var(--border);font:700 var(--text-xs) var(--mono)}
+    .matrix-mobile ul{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}
+    .matrix-mobile li{display:grid;grid-template-columns:minmax(0,1fr) 20px auto;gap:6px;align-items:center;min-width:0;padding:8px 9px;background:var(--panel)}
+    .mobile-publication{display:flex;align-items:center;gap:7px;min-width:0;overflow-wrap:anywhere;font:650 var(--text-2xs) var(--mono)}
+    .mobile-publication::before{content:"";flex:0 0 auto;width:7px;height:7px;border:2px solid var(--publication-color);border-radius:50%;background:var(--panel)}
+    .mobile-agreement-marker{display:grid;width:17px;height:17px;place-items:center;border:1.5px solid var(--muted);border-radius:50%;color:var(--muted);background:var(--panel);font:750 9px var(--mono)}
+    .mobile-agreement-state{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+    .matrix-mobile small{grid-column:1/-1;min-width:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
+    .matrix-mobile .state-equal .mobile-agreement-marker{border-color:var(--success);color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel))}
+    .matrix-mobile .state-different .mobile-agreement-marker,.matrix-mobile .state-partial .mobile-agreement-marker{border-color:var(--amber);border-radius:0;color:var(--amber);background:rgb(var(--amber-rgb) / .15);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);line-height:1}
+    .matrix-mobile .state-conflict .mobile-agreement-marker{border-color:var(--danger);color:var(--danger);background:rgb(var(--danger-rgb) / .13);clip-path:polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%)}
+    .matrix-mobile .state-observed .mobile-agreement-marker{border-color:var(--accent);border-radius:3px;color:var(--accent);background:rgb(var(--accent-rgb) / .14)}
+    .matrix-mobile .state-not_collected .mobile-agreement-marker,.matrix-mobile .state-unavailable .mobile-agreement-marker,.matrix-mobile .state-unknown .mobile-agreement-marker{border-style:dashed}
     dl{grid-template-columns:1fr;gap:4px}
     dt:not(:first-child){margin-top:7px}
   }

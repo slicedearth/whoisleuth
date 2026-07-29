@@ -42,9 +42,29 @@ test('completes the public synthetic workflow without investigation requests or 
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Synthetic evidence topology' })).toBeVisible();
+  const structuredIdentityNodeTitle = page.locator(
+    '.source-node[data-source-id="structured-identity"] .source-title-copy',
+  );
+  await expect(structuredIdentityNodeTitle).toHaveClass(/wrapped/);
+  await expect(structuredIdentityNodeTitle).toHaveText('Structured identity');
+  expect(await structuredIdentityNodeTitle.evaluate((copy) => {
+    const text = copy.firstElementChild;
+    return Boolean(
+      text
+      && text.scrollWidth <= text.clientWidth
+      && text.scrollHeight <= text.clientHeight
+    );
+  })).toBe(true);
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
+  await expect(page.locator('.registry-shape')).not.toHaveCount(0);
+  await expect(page.locator('.certificate-shape')).not.toHaveCount(0);
+  await expect(page.locator('.observation-shape')).not.toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Registration agreement matrix with 3 fields' })).toBeVisible();
+  const agreementPlot = page.getByRole('img', { name: 'Registration agreement plot with 3 fields' });
+  await expect(agreementPlot).toBeVisible();
+  await expect(agreementPlot.locator('.agreement-track')).toHaveCount(3);
+  await expect(agreementPlot.locator('.agreement-marker')).toHaveCount(6);
+  await expect(agreementPlot.locator('.matrix-cell')).toHaveCount(0);
   await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
   await page.locator('.dns-card > summary').click();
@@ -169,6 +189,11 @@ test('keeps the public demo usable without mobile overflow', async ({ page }) =>
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  await expect(page.locator('.matrix-frame')).toBeHidden();
+  const mobileAgreement = page.getByRole('group', { name: 'Registration agreement for 3 fields' });
+  await expect(mobileAgreement).toBeVisible();
+  await expect(mobileAgreement.locator('article')).toHaveCount(3);
+  await expect(mobileAgreement.locator('li')).toHaveCount(6);
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
