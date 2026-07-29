@@ -124,9 +124,9 @@
           <small>{current.caseRecord ? 'Updates this existing case only.' : 'Create a case before recording a disposition.'}</small>
         </label>
         <label>
-          <span>Watchlist name</span>
+          <span>Monitor list</span>
           <input
-            aria-label="Watchlist name"
+            aria-label="Current row monitor list"
             maxlength="100"
             placeholder="Focused review"
             value={watchlistName}

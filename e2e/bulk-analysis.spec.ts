@@ -195,7 +195,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(cockpit.getByLabel('Case disposition')).toBeEnabled();
   await cockpit.getByLabel('Case disposition').selectOption('suspicious');
   await expect(cockpit.getByRole('status')).toContainText('Marked right-review.example as Suspicious');
-  await cockpit.getByLabel('Watchlist name').fill('Focused review');
+  await cockpit.getByLabel('Current row monitor list').fill('Focused review');
   await cockpit.getByRole('button', { name: 'Save current to Monitor' }).click();
   await expect(cockpit.getByRole('status')).toContainText('Saved right-review.example to Focused review');
   const storedCase = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
