@@ -27,6 +27,7 @@
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.ts';
+  import { discoverReviewCues } from '$lib/analysis/discover-review-cues.ts';
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
@@ -45,7 +46,7 @@
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz' | 'all';
   type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
-  type CandidateSort = 'generated' | 'domain' | 'generation-paths' | 'reference' | 'mixed' | 'certificate-newest';
+  type CandidateSort = 'generated' | 'review-signals' | 'domain' | 'generation-paths' | 'reference' | 'mixed' | 'certificate-newest';
   type CandidateMetadata = {
     hasIdn: boolean;
     unicodeDomain: string;
@@ -135,6 +136,16 @@
     }
     return { unicode, mixed, reference, selected: selected.size };
   });
+  function candidateReviewCues(candidate: Candidate): string[] {
+    const metadata = candidateMetadata.get(candidate.domain);
+    return discoverReviewCues({
+      referenceMatch: Boolean(metadata?.referenceDomains.length),
+      mixedScript: Boolean(metadata?.mixedScript),
+      internationalized: Boolean(metadata?.hasIdn),
+      generationPathCount: candidate.mutationTypes.length,
+      certificateObserved: Boolean(candidate.certificateTransparency?.certificateCount),
+    });
+  }
   const visible = $derived.by(() => {
     const filtered = candidates.filter((candidate) => {
       const metadata = candidateMetadata.get(candidate.domain);
@@ -149,6 +160,11 @@
     if (candidateSort === 'generated') return filtered;
     return [...filtered].sort((left, right) => {
       if (candidateSort === 'domain') return left.domain.localeCompare(right.domain);
+      if (candidateSort === 'review-signals') {
+        return candidateReviewCues(right).length - candidateReviewCues(left).length
+          || right.mutationTypes.length - left.mutationTypes.length
+          || left.domain.localeCompare(right.domain);
+      }
       if (candidateSort === 'generation-paths') {
         return right.mutationTypes.length - left.mutationTypes.length || left.domain.localeCompare(right.domain);
       }
@@ -547,6 +563,7 @@
       return {
         domain: candidate.domain,
         mutationLabel: candidate.mutationTypes.map((type) => mutationLabels[type] || type.replaceAll('_', ' ')).join(' · '),
+        reviewCues: candidateReviewCues(candidate),
         selected: selected.has(candidate.domain),
         isNew: ctNewDomains.has(candidate.domain),
         unicodeDomain: metadata?.unicodeDomain || '',

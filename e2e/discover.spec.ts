@@ -154,6 +154,10 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(candidate).toContainText('Whole-label Unicode confusable');
   await expect(candidate).toContainText('Source or profile visual match');
   await expect(candidate).toContainText('Visual match: scope.invalid');
+  const reviewSignals = candidate.locator('.candidate-badge.review');
+  await expect(reviewSignals).toHaveText(/[2-5] review signals/u);
+  await expect(reviewSignals).toHaveAttribute('title', /source or profile character match/u);
+  await expect(page.getByText('Review signals count visible candidate cues only.')).toContainText('not a risk score');
   const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');
   const referenceScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="reference"]');
   await expect(unicodeScope).toHaveText(/Internationalised \([1-9]\d*\)/u);
@@ -163,9 +167,12 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(page.getByText('Visual matches use a bounded character comparison.')).toContainText('not proof of impersonation');
   await expect(page.getByRole('combobox', { name: 'Mutation family' }).locator('option[value="unicode_whole_label"]')).toHaveText('Whole-label Unicode confusable (1)');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most generation paths');
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most review signals');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Reference matches first');
 
   await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('reference');
+  await expect(candidate).toBeVisible();
+  await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('review-signals');
   await expect(candidate).toBeVisible();
   await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('domain');
   await expect(candidate).toBeVisible();
