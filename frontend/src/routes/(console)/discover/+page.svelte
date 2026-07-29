@@ -50,7 +50,7 @@
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz' | 'all';
-  type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
+  type CandidateScope = 'all' | 'review-cues' | 'unicode' | 'mixed' | 'reference' | 'selected';
   const DISCOVER_PAGE_SIZE = 100;
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
@@ -68,7 +68,7 @@
   let filter = $state('');
   let candidateScope = $state<CandidateScope>('all');
   let mutationFilter = $state('');
-  let candidateSort = $state<CandidateSort>('generated');
+  let candidateSort = $state<CandidateSort>('review-signals');
   let candidateMetadata = $state<Map<string, CandidateMetadata>>(new Map());
   let profile = $state<BrandProfile|null>(null);
   // Whether the current candidate set came from structured CT provenance.
@@ -122,16 +122,18 @@
       .sort((left, right) => left.label.localeCompare(right.label));
   });
   const candidateScopeCounts = $derived.by(() => {
+    let reviewCues = 0;
     let unicode = 0;
     let mixed = 0;
     let reference = 0;
     for (const candidate of candidates) {
       const metadata = candidateMetadata.get(candidate.domain);
+      if (candidateReviewCues(candidate).length) reviewCues += 1;
       if (metadata?.hasIdn) unicode += 1;
       if (metadata?.mixedScript) mixed += 1;
       if (metadata?.referenceDomains.length) reference += 1;
     }
-    return { unicode, mixed, reference, selected: selected.size };
+    return { reviewCues, unicode, mixed, reference, selected: selected.size };
   });
   function candidateReviewCues(candidate: Candidate): string[] {
     return buildCandidateReviewCues(candidate, candidateMetadata.get(candidate.domain));
@@ -141,6 +143,7 @@
       const metadata = candidateMetadata.get(candidate.domain);
       if (!ctCandidateMatchesFilter(candidate, filter) || (ctNewOnly && !ctNewDomains.has(candidate.domain))) return false;
       if (mutationFilter && !candidate.mutationTypes.includes(mutationFilter)) return false;
+      if (candidateScope === 'review-cues' && !candidateReviewCues(candidate).length) return false;
       if (candidateScope === 'unicode' && !metadata?.hasIdn) return false;
       if (candidateScope === 'mixed' && !metadata?.mixedScript) return false;
       if (candidateScope === 'reference' && !metadata?.referenceDomains.length) return false;
@@ -158,7 +161,7 @@
     Boolean(filter)
       || candidateScope !== 'all'
       || Boolean(mutationFilter)
-      || candidateSort !== 'generated'
+      || candidateSort !== (ctResultKind === 'structured' ? 'certificate-newest' : 'review-signals')
       || ctNewOnly,
   );
 
@@ -199,11 +202,11 @@
     return metadata;
   }
 
-  function resetCandidateView() {
+  function resetCandidateView(sort: CandidateSort = 'review-signals') {
     filter = '';
     candidateScope = 'all';
     mutationFilter = '';
-    candidateSort = 'generated';
+    candidateSort = sort;
     page = 1;
   }
 
@@ -317,14 +320,19 @@
       .flatMap((base) => selectedTlds.map((tld) => ({ domain: `${base}.${tld}`, source: seed.trim(), mutationTypes: ['keyword'] })));
   }
 
-  function setResults(next: Candidate[], message: string, context:Candidate[]=next) {
+  function setResults(
+    next: Candidate[],
+    message: string,
+    context: Candidate[] = next,
+    sort: CandidateSort = 'review-signals',
+  ) {
     candidates = next;
     generatedContext = context;
     selected = new Set();
     candidateMetadata = buildCandidateMetadata(next);
     status = message;
     error = '';
-    resetCandidateView();
+    resetCandidateView(sort);
   }
 
   function withoutAllowlisted(next: Candidate[]) {
@@ -428,7 +436,7 @@
       } catch (cause) {
         ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
       }
-      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${historySummary}`, next);
+      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${historySummary}`, next, 'certificate-newest');
     } catch (cause) {
       // A superseding search / mode switch (which aborts this fetch) owns the UI
       // state now; do nothing so we neither clear its results nor its loading flag.
@@ -490,7 +498,7 @@
   }
 
   function resetReviewControls() {
-    resetCandidateView();
+    resetCandidateView(ctResultKind === 'structured' ? 'certificate-newest' : 'review-signals');
     ctNewOnly = false;
   }
 

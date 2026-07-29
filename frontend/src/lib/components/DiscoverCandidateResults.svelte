@@ -57,7 +57,7 @@
     filter: string;
     setFilter: (value: string) => void;
     candidateScope: string;
-    scopeCounts: { unicode: number; mixed: number; reference: number; selected: number };
+    scopeCounts: { reviewCues: number; unicode: number; mixed: number; reference: number; selected: number };
     setCandidateScope: (value: string) => void;
     mutationFilter: string;
     mutationOptions: Array<{ value: string; label: string; count: number }>;
@@ -81,6 +81,23 @@
     setPage: (page: number) => void;
     toggleCandidate: (domain: string) => void;
   } = $props();
+
+  function candidateSortGuidance(sort: string, isStructured: boolean): string {
+    if (sort === 'review-signals') {
+      return `${isStructured ? 'Candidates' : 'Generated candidates'} are ordered by visible review cues, then generation paths and domain. Sorting changes presentation only.`;
+    }
+    if (sort === 'certificate-newest') {
+      return 'Certificate-log candidates are ordered by their latest retained observation, then domain. Sorting changes presentation only.';
+    }
+    if (sort === 'generated') {
+      return `${isStructured ? 'Candidates use their retained source order.' : 'Generated candidates use deterministic generator order.'} Sorting changes presentation only.`;
+    }
+    if (sort === 'domain') return 'Candidates are ordered alphabetically by domain. Sorting changes presentation only.';
+    if (sort === 'generation-paths') return 'Candidates with more generation paths appear first, then domains are ordered alphabetically. Sorting changes presentation only.';
+    if (sort === 'reference') return 'Candidates with a source or Brand Profile character match appear first. Sorting changes presentation only.';
+    if (sort === 'mixed') return 'Candidates using mixed writing scripts appear first. Sorting changes presentation only.';
+    return 'Sorting changes presentation only.';
+  }
 </script>
 
 <section class="results card">
@@ -90,6 +107,7 @@
     <label>Show
       <select value={candidateScope} onchange={(event) => setCandidateScope(event.currentTarget.value)} aria-label="Candidate scope">
         <option value="all">All candidates ({candidateCount})</option>
+        <option value="review-cues">Has review cues ({scopeCounts.reviewCues})</option>
         <option value="unicode">Internationalised ({scopeCounts.unicode})</option>
         <option value="mixed">Mixed writing scripts ({scopeCounts.mixed})</option>
         <option value="reference">Source or profile match ({scopeCounts.reference})</option>
@@ -105,7 +123,7 @@
     <label>Sort
       <select value={candidateSort} onchange={(event) => setCandidateSort(event.currentTarget.value)} aria-label="Candidate sort">
         <option value="generated">Generated order</option>
-        <option value="review-signals">Most review signals</option>
+        <option value="review-signals">Most review cues</option>
         <option value="domain">Domain A–Z</option>
         <option value="generation-paths">Most generation paths</option>
         {#if scopeCounts.reference}<option value="reference">Reference matches first</option>{/if}
@@ -118,6 +136,9 @@
     <button class="btn" onclick={() => selectMatching(false)} disabled={!selectedVisibleCount}>Clear filtered ({selectedVisibleCount})</button>
     {#if reviewControlsActive}<button class="btn" onclick={resetReviewControls}>Reset view</button>{/if}
   </div>
+  <p class="candidate-note sort-guidance" role="status" aria-live="polite" aria-atomic="true">
+    {candidateSortGuidance(candidateSort, structured)}
+  </p>
   <div class="candidate-list">
     {#each rows as candidate, index (candidate.domain)}
       <div class="candidate" class:has-ct={candidate.certificateEvidence}>
@@ -129,7 +150,7 @@
             <small>{candidate.mutationLabel}</small>
             {#if candidate.scripts.length}<span class="script-summary">Scripts: {candidate.scripts.join(', ')}</span>{/if}
             <span class="candidate-badges">
-              {#if candidate.reviewCues.length}<span class="candidate-badge review" title={candidate.reviewCues.join(' · ')}>{candidate.reviewCues.length} review signal{candidate.reviewCues.length === 1 ? '' : 's'}</span>{/if}
+              {#if candidate.reviewCues.length}<span class="candidate-badge review" title={candidate.reviewCues.join(' · ')}>{candidate.reviewCues.length} review cue{candidate.reviewCues.length === 1 ? '' : 's'}</span>{/if}
               {#if candidate.unicodeDomain}<span class="candidate-badge">Internationalised</span>{/if}
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
               {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
@@ -162,7 +183,7 @@
   {#if scopeCounts.reference}
     <p class="candidate-note">Visual matches use a bounded character comparison. They are review leads, not proof of impersonation.</p>
   {/if}
-  <p class="candidate-note">Review signals count visible candidate cues only. They are not a risk score or a claim of maliciousness.</p>
+  <p class="candidate-note">Review cues count visible candidate characteristics only. They are not a risk score or a claim of maliciousness.</p>
   {#if !selectedCount}
     <p class="candidate-note">Select individual candidates or the current filtered set before continuing to Bulk.</p>
   {/if}
@@ -181,7 +202,7 @@
   .results-toolbar label{display:grid;gap:4px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .results-toolbar select{min-width:0}
   .results-toolbar button{align-self:end}
-  .candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start}
+  .candidate-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:start;margin-top:12px}
   .candidate{display:flex;gap:10px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .candidate.has-ct{align-items:flex-start}
   .candidate input{margin-top:2px}
@@ -206,6 +227,7 @@
   .ct-hosts summary{color:var(--accent);cursor:pointer;font-size:var(--text-2xs)}
   .ct-host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
   .candidate-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .sort-guidance{margin-top:0}
   .page-summary{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
   @media(max-width:700px){
     .results-toolbar,.candidate-list{grid-template-columns:1fr}

@@ -40,150 +40,29 @@ navigation without shortening the policy.
 
 | Area | Purpose | Important boundary |
 | --- | --- | --- |
-| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration and supporting evidence. A domain result can also organize a bounded acquisition review and download a local integrity-stamped analyst decision artifact. | Deep is the default. Fast performs lower-request registration-first triage. Optional providers and security.txt run only when selected. Published response routes are resolved only from the collected result and must be deliberately recorded in a case. An acquisition artifact records the displayed evidence and manual checklist; it does not reserve, value, purchase, submit, or transfer a domain. |
-| **Discover** | Generate bounded typo, Unicode-confusable, keyboard, plural, separator, word-order, WWW-style, TLD, and dictionary candidates, including analyst-controlled token replacements and an opt-in two-character Unicode family, with optional Certificate Transparency discovery. Presets or an exact family selection control the local generator. | Candidate generation and optional custom dictionary input stay local. The advanced Unicode family is never preset-enabled. Confusability is a review lead, while certificate-log observations do not prove site activity or maliciousness. |
-| **Bulk** | Compare multiple domains with source-aware filters, observed-value grouping, an evidence-qualified two-domain comparison, explainable lookalike mail-exposure review, a focused review cockpit, operator-controlled request pacing, live complete/limited/failed/pending outcomes, progress estimates, explicit batch selection, score explanations, selected or complete CSV export, scan-local relationship evidence, and resumable saved sessions. | Each domain is a separate bounded lookup. Bulk Deep returns a compact evidence profile rather than the complete single-domain result. Gentle, Balanced, and Standard pacing change bounded parallelism, not the fields requested for each selected mode. Progress and outcome counts use only settled work in the current run and keep incomplete source coverage separate from request failures. The comparison keeps conflict, one-sided evidence, source unavailability, and fields excluded from compact retention distinct. The cockpit changes review state, case disposition, shortlist, or watchlist membership only through explicit actions. The mail review distinguishes receiving mail, null MX, no explicit MX, authentication gaps, and incomplete evidence without making SMTP connections. |
-| **Brands** | Save official domains, product names, allowlists, mail-posture settings, expiring protection attestations, and optional page-identity baselines. Audit bounded registration, delegation, mail-authentication, and external-dependency evidence. | Profiles and analyst attestations stay in the current browser unless deliberately exported. Public evidence and analyst statements remain separate and neither is a security guarantee. |
-| **Monitor** | Manage cases, evidence pins, analyst decisions, reviewed response actions and outcomes, response preflight, campaigns with latest-evidence review cues, relationship observations, watchlists, a unified retained-evidence and freshness timeline, and reports. | Ordinary investigation and response state is browser-local. Campaign cue counts are a transient projection from linked cases, not a stored score or attribution finding. The timeline projects deliberately retained Lookup, Bulk, watchlist, case, pinned-evidence, and relationship records without duplicating raw values. It keeps observation time separate from storage time and treats age as a review cue, not a claim about current live state. Preflight blocks incomplete incident facts and exposes cautions; it never sends a report. Optional hosted monitoring stores only encrypted compact scheduled-watchlist state. |
-| **Registry support** | Inspect fixture-backed parser coverage, documented registry access constraints, and the field-level Fast, Bulk Deep, and single Deep collection matrix. | Coverage metadata describes support and limitations. The collection matrix describes application intent, not whether an upstream source will publish or return a value. Neither decides availability. |
+| **Dashboard** | Start or resume investigations, defensive reviews, comparisons, and case work. | Guided recipes require explicit approval before requests and cannot run arbitrary actions. |
+| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence. |
+| **Discover** | Generate bounded local lookalikes or review names observed in public certificate logs. | Local results initially surface visible review cues; certificate-log results initially use newest observation. Sorting does not change evidence or score. |
+| **Bulk** | Compare bounded domain sets with explicit request pacing, source-aware filters, compact Deep evidence, relationships, review actions, and resumable sessions. | Each domain is a separate request. Incomplete coverage, request failure, and missing evidence remain distinct. |
+| **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, and optional page-identity baselines. | Public observations and analyst attestations remain separate and browser-local. |
+| **Monitor** | Retain cases, evidence pins, decisions, response actions, campaigns, watchlists, relationships, and review history. | Ordinary workspace state stays in IndexedDB. Response packets and defensive exports require human review and are never submitted automatically. |
+| **Registry support** | Inspect fixture-backed parser coverage, access constraints, and the fields attempted by each lookup profile. | Coverage describes support and limitations; it does not decide availability or promise that a source will publish a value. |
 
-Dashboard can download the bounded workspace as an encrypted portable backup.
-The passphrase and encryption work stay in the browser, and the ordinary
-versioned archive is still validated before any reviewed non-destructive
-import. This protects the downloaded file while locked; the active IndexedDB
-workspace remains plaintext and browser-local.
+The Console can export a versioned workspace archive or an encrypted portable
+backup. Encryption protects the downloaded file while locked; the active
+IndexedDB workspace remains plaintext and browser-local. Optional hosted
+monitoring retains only encrypted compact watchlist state.
 
-Dashboard also separates common intentions into investigation, owned-domain
-protection, candidate review, acquisition assessment, and case-work lanes. A
-two-domain comparison loads only the two validated domains into Bulk and does
-not start collection. Active guided work keeps the target, Brand Profile,
-matching case, retained-evidence freshness, and next manual action visible
-across Console tools. Its detailed work plan can be dismissed without losing
-that context. Changing the target requires confirmation and restarts the same
-recipe rather than carrying progress to a different domain. Analysts
-can save bounded local templates derived from the three standard guides,
-customise their guidance, omit allowlisted steps, and add approval gates.
-Templates cannot add arbitrary actions, execute code, start requests, submit
-evidence, or remove a mandatory request gate.
+Deep Lookup keeps source health and provenance visible while organizing long
+supporting evidence into a scannable result. Reports, retained facts, website
+profiles, acquisition checklists, external pivots, and visual summaries are
+analyst-controlled views over already collected evidence. They do not make an
+enforcement decision, prove ownership or safety, or silently start another
+request.
 
-Deep domain Lookup can combine:
-
-- IANA-bootstrap RDAP and bounded WHOIS referral-chain evidence;
-- separately attributed registrar RDAP when the registry publishes an eligible
-  HTTPS link;
-- bounded lifecycle, registration-lock, contact-disclosure,
-  publication-quality, source-reconciliation, and published abuse-route
-  interpretation derived from those already-collected registration sources;
-- authority-aware availability analysis;
-- DNS, including deep-only SOA zone context and HTTPS service-binding
-  publication, plus HTTP, favicon,
-  page-identity, bounded publisher-declared structured identity, mail, and
-  one-connection TLS evidence with bounded certificate signature, purpose,
-  subject-alternative-name class, and authority-information-access presence
-  metadata;
-- passive technology, browser-library catalogue, and response-scoped
-  security-posture indicators, including bounded policy-quality checks,
-  derived from the captured response without fetching referenced scripts or
-  performing vulnerability testing;
-- heuristic page-role labels and fixed static client-side behaviour indicators
-  from the same capped HTML parse, without executing code or retaining matched
-  page or script contents;
-- a privacy-minimized credential collection surface with fixed semantic input,
-  form-method, and action-relationship counts from the captured static HTML;
-- one observed public endpoint mapped to its IP RDAP network registration;
-- bounded reverse-DNS names for a directly entered public IP address;
-- optional security.txt and configured external intelligence sources;
-- a collapsed set of analyst-controlled links to relevant public registration,
-  certificate, routing, interconnection, history, and site-status tools.
-
-The completed result also offers task and density controls. Task selection
-reprioritises the section navigation for a general, acquisition, brand,
-incident, or owned-domain review. Summary, Standard, and Full density change
-only how much settled evidence is shown in the reading path. They do not start
-requests, omit evidence from exports, change source states, alter Risk or
-availability, or modify saved evidence.
-
-After reviewing a completed Deep Lookup, an analyst can explicitly save a
-compact website-profile snapshot. The browser-local record contains curated
-technology identifiers, passive posture states, identity digests, source
-health, timestamps, and completeness markers. It excludes raw lookup payloads,
-captured HTML, headers, contacts, and provider findings. Comparing two
-snapshots identifies added, removed, changed, unavailable, or incomparable
-fields as review leads; it does not infer compromise, ownership, intent, or
-maliciousness and never starts a lookup automatically.
-
-While a deep Lookup is pending, the Console shows elapsed time, the eligible
-source branches still awaiting the final response, a 40-second browser
-deadline, and a cancel action. It does not invent per-source completion.
-Successful deep full responses add bounded backend-reported settle timing for
-the branches that actually ran. Cancelling or leaving the page stops the
-browser from waiting but cannot recall work already admitted by the server;
-no incomplete response is retained or rendered.
-
-After a result arrives, **Download report** creates a bounded readable Markdown
-summary entirely in the browser. Domain reports record registry, registrar,
-WHOIS, lifecycle, Risk, and limitation context. IP reports present normalized
-network registration and reverse-DNS evidence, while ASN reports present the
-normalized routing registration fields returned by RDAP. Every report keeps
-source health, collection time, partial states, and limitations explicit. It
-does not include raw RDAP or WHOIS responses, expanded contacts, provider
-payloads, scripts, or remote assets. The separate JSON evidence export remains
-the full-fidelity option and can contain public registration contacts.
-
-For an open domain case, Lookup can also retain a deliberately selected
-field-level checkpoint. Each bounded fact keeps its source, observed time,
-collection depth, source state, completeness, truncation, schema version, and
-limitations. A later Lookup compares the same fields as equal, changed,
-missing, unavailable, conflicting, or not recorded; incomplete collection
-never overwrites the earlier checkpoint. The analyst can optionally declare
-each selected fact as preserve, change, or manual review before an acquisition
-transition. A later Lookup classifies only the observable comparison as
-verified, unexpected, not yet observed, or indeterminate; it does not claim
-that an acquisition or operational cutover succeeded.
-
-The external evidence pivots are ordinary links, not integrations. WHOISleuth
-does not prefetch them, call their APIs, cache or store their results, or use
-them for availability or scoring. Each link identifies the destination and
-exact domain, top-level domain, public address/prefix, or ASN that the browser
-will share only after the analyst opens it.
-
-Long source records and secondary Deep evidence start collapsed. Their status
-and summary remain visible so the page can be scanned before opening the
-evidence, provenance, and limitations that matter to the investigation. A
-separate Evidence coverage summary keeps complete, limited, unavailable,
-skipped, unsupported, unknown, and not-found states distinct without retrying
-sources or treating incomplete collection as a clean result. A
-collapsed acquisition workspace organizes the current authority-aware
-registration decision, lifecycle timing, transfer constraints, observed
-service dependencies, and published contact routes into a manual checklist. It
-also maps observed nameserver, web, mail, and TLS transition dependencies and
-prompts the analyst to confirm current registry and registrar policy rather
-than presenting policy assumptions as facts. It does not value a domain or
-establish eligibility, release timing, price, ownership, or acquisition
-success. The analyst can record a bounded decision, rationale, and five manual
-check states in a deliberately downloaded integrity-stamped JSON artifact.
-Draft and reviewed states describe checklist completion only, make no
-submission, and do not establish that an external statement is correct. An
-independent brand-mimicry review organizes official favicon,
-official-asset, page-component, credential-surface, and review-language cues
-without producing a combined mimicry or maliciousness score. A conservative
-service-dependency review surfaces observed CNAME and HTTPS alias targets for
-manual verification; it never follows a target or labels a dependency
-dangling, vulnerable, claimable, safe, or controlled. A
-bounded source map uses locally rendered D3 geometry to connect the target to
-separately attributed evidence and provide direct links to each visible source.
-Registry, network, web, derived, and analyst evidence retain consistent visual
-cues and an accompanying key without changing their status or authority. The
-in-result section rail
-tracks the current evidence family, while `Ctrl+K` or `Cmd+K` opens a
-keyboard-searchable Console destination palette.
-An ordered lifecycle view adds dated registry and certificate context without
-pretending that visual spacing represents elapsed duration. HTTP redirect paths,
-the Bulk Risk/Opportunity matrix, and retained watchlist activity use the same
-bounded local visual layer. Large Bulk sets use a deterministic capped plot
-while the table retains every result; watchlist activity covers retained history
-only. These visuals make no additional request and do not replace their
-accessible lists, tables, or source records.
+For field-level behavior, limits, result states, saved-work semantics, and
+complete workflows, use the [application guide](docs/application-guide.md).
+The public [Guide](https://whoisleuth.com/guide) is the shortest introduction.
 
 ## Design principles
 
@@ -208,27 +87,8 @@ accessible lists, tables, or source records.
   surfaces.
 - **Human-controlled action.** WHOISleuth does not send reports, submit targets,
   run takedowns, or turn a score into an enforcement decision automatically.
-  A 12-second, tab-memory undo is available only for the most common
-  analyst-owned edits: Bulk review state, shortlist membership, case tags, and
-  temporary evidence-cluster labels. It never replays collection, imports,
-  exports, confirmed deletion, source evidence, or network activity.
-  Case response packets expose required facts, evidence freshness, open
-  contradictions, recipient provenance, case disposition, action tracking,
-  and an audience-specific inclusion, exclusion, redaction, attachment, and
-  follow-up checklist before export. Defensive-control exports also require explicit review;
-  the latter include a provenance manifest, expiry, exclusions, and rollback
-  instructions. Wildcard blocking remains opt-in.
-
-Monitor also projects a bounded Review inbox from retained cases, planned
-actions, material watchlist changes, and incomplete saved Bulk sessions. It is
-a local resume queue, not an alert feed or automatic decision engine; opening
-an item does not run a lookup or change its analyst-owned state.
-
-The separate retained-evidence timeline can filter Lookup snapshots, saved
-Bulk sessions, watchlist checks, case evidence, individual pins, and
-relationships by observation age. Its area-specific freshness thresholds
-identify records worth revisiting; they do not refresh evidence, establish a
-domain's current state, or imply that a stale observation changed.
+  Common analyst-owned edits offer a short tab-memory undo; collection,
+  imports, exports, confirmed deletion, and source evidence never do.
 
 ## Quick start
 

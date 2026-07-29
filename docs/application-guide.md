@@ -166,15 +166,22 @@ readable Unicode form, observed scripts, and contextual mixed-script or
 source/profile visual-match badges. A matching candidate names up to three
 matched references and discloses any additional bounded matches without
 displaying the internal comparison skeleton. Candidate-scope options show
-complete-result counts. Candidate scope, mutation-family, text, and
-certificate-history filters operate on the complete bounded result, as do
-generated-order, alphabetical, and most-indicators sorting.
+complete-result counts, including a **Has review cues** scope for candidates
+with at least one visible contextual cue. Candidate scope, mutation-family,
+text, and certificate-history filters operate on the complete bounded result,
+as do generated-order, alphabetical, generation-path, reference, script, and
+review-cue sorting. Local candidate sets initially place visible review cues
+first, then use generation-path count and domain as deterministic tie-breakers.
+Sorting changes presentation only and does not change candidate generation,
+evidence, scoring, or selection.
 
 Certificate Transparency search is a separate hosted action. It groups
 observed hostnames by canonical registrable domain and retains bounded first
 and last observation times plus certificate counts. These timestamps describe
 public-log observations. They do not prove registration time, website activity,
-ownership, or maliciousness.
+ownership, or maliciousness. Structured certificate-log results initially sort
+by latest retained observation. **Reset view** restores that default for
+certificate-log results and restores review-cue ordering for local generation.
 
 Filtered and sorted candidate lists are paginated locally. Selecting all
 filtered entries operates on the complete bounded filtered set, not only the
