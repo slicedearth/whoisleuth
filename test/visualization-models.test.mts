@@ -6,13 +6,34 @@ import {
   MAX_LIFECYCLE_EVENTS,
   MAX_REDIRECT_NODES,
   MAX_TRIAGE_PLOT_POINTS,
+  MAX_COLLECTION_TIMING_SOURCES,
+  MAX_SCORE_FACTORS,
+  MAX_VISUAL_MATRIX_ROWS,
+  MAX_FORCE_GRAPH_NODES,
+  MAX_FORCE_GRAPH_LINKS,
+  MAX_COVERAGE_BAR_GROUPS,
+  MAX_TREND_POINTS,
+  MAX_MONITOR_TIMELINE_EVENTS,
+  MAX_MONITOR_TIMELINE_LANES,
   WATCHLIST_ACTIVITY_DAYS,
+  projectBoundedForceGraph,
+  projectCertificateValidity,
+  projectCollectionTiming,
+  projectCoverageBars,
+  projectEvidenceMatrix,
   projectLifecycleEvents,
+  projectMonitorTimeline,
   projectRedirectPath,
+  projectScoreFactors,
+  projectTrendPoints,
   projectTriagePoints,
   projectWatchlistActivity,
 } from '../frontend/src/lib/analysis/visualization-models.ts';
-import type { LifecycleEventInput } from '../frontend/src/lib/analysis/visualization-models.ts';
+import type {
+  ForceGraphLinkInput,
+  ForceGraphNodeInput,
+  LifecycleEventInput,
+} from '../frontend/src/lib/analysis/visualization-models.ts';
 
 describe('bounded visualization models', () => {
   test('orders and caps valid lifecycle events without treating spacing as duration', () => {
@@ -90,5 +111,168 @@ describe('bounded visualization models', () => {
     assert.ok(firstDay);
     assert.equal(firstDay?.checks, 2);
     assert.equal(firstDay?.changes, 3);
+  });
+
+  test('projects bounded source timings against the final completion time', () => {
+    const projected = projectCollectionTiming([
+      { source: 'registry', durationMs: 180, completedAfterMs: 220, outcome: 'fulfilled' },
+      { source: 'whois', durationMs: 0, completedAfterMs: 1_300, outcome: 'rejected' },
+      ...Array.from({ length: 20 }, (_, index) => ({
+        source: `source-${index}`,
+        durationMs: index * 50,
+        completedAfterMs: 1_500 + index * 50,
+        outcome: 'fulfilled',
+      })),
+    ], 2_500);
+
+    assert.equal(projected.sources.length, MAX_COLLECTION_TIMING_SOURCES);
+    assert.equal(projected.truncated, true);
+    assert.ok(projected.sources.every((source) => source.width >= 3));
+    assert.ok(projected.ticks.every((tick) => Number.isFinite(tick.x)));
+  });
+
+  test('bounds signed score factors around a shared zero axis', () => {
+    const projected = projectScoreFactors([
+      { label: 'Positive', delta: 18 },
+      { label: 'Negative', delta: -7 },
+      { label: 'Ignored', delta: 0 },
+      ...Array.from({ length: 20 }, (_, index) => ({ label: `Factor ${index}`, delta: index + 1 })),
+    ]);
+
+    assert.equal(projected.factors.length, MAX_SCORE_FACTORS);
+    assert.equal(projected.truncated, true);
+    assert.ok(projected.factors.every((factor) => factor.width >= 2));
+    const negative = projected.factors.find((factor) => factor.delta < 0);
+    assert.ok(negative);
+    assert.ok((negative?.x ?? 0) < projected.zeroX);
+  });
+
+  test('normalizes source-agreement states and caps matrix rows and columns', () => {
+    const projected = projectEvidenceMatrix(
+      ['Registry', 'Registrar', 'WHOIS', 'Page', 'DNS', 'TLS', 'Ignored'],
+      Array.from({ length: 30 }, (_, index) => ({
+        id: `field-${index}`,
+        label: `Field ${index}`,
+        cells: [
+          { column: 'Registry', state: index === 0 ? 'equivalent' : 'missing', detail: 'value' },
+          { column: 'WHOIS', state: index === 0 ? 'failed' : 'not_recorded' },
+        ],
+      })),
+    );
+
+    assert.equal(projected.columns.length, 6);
+    assert.equal(projected.rows.length, MAX_VISUAL_MATRIX_ROWS);
+    assert.equal(projected.truncated, true);
+    assert.equal(requiredValue(projected.rows[0]).cells[0]?.state, 'equal');
+    assert.equal(requiredValue(projected.rows[0]).cells[2]?.state, 'unavailable');
+    assert.equal(requiredValue(projected.rows[1]).cells[0]?.state, 'partial');
+  });
+
+  test('creates a deterministic bounded force layout without mutating caller inputs', () => {
+    const nodes: ForceGraphNodeInput[] = Array.from({ length: MAX_FORCE_GRAPH_NODES + 4 }, (_, index) => ({
+      id: `node-${index}`,
+      label: `Node ${index}`,
+      kind: index === 0 ? 'target' : 'domain',
+    }));
+    const links: ForceGraphLinkInput[] = Array.from({ length: MAX_FORCE_GRAPH_LINKS + 8 }, (_, index) => ({
+      id: `link-${index}`,
+      source: 'node-0',
+      target: `node-${(index % (MAX_FORCE_GRAPH_NODES - 1)) + 1}`,
+      kind: index % 2 ? 'observed' : 'derived',
+    }));
+    const original = structuredClone({ nodes, links });
+    const first = projectBoundedForceGraph(nodes, links);
+    const second = projectBoundedForceGraph([...nodes].reverse(), [...links].reverse());
+
+    assert.equal(first.nodes.length, MAX_FORCE_GRAPH_NODES);
+    assert.equal(first.links.length, MAX_FORCE_GRAPH_LINKS);
+    assert.equal(first.truncated, true);
+    assert.deepEqual(first, second);
+    assert.deepEqual({ nodes, links }, original);
+    assert.ok(first.nodes.every((node) => node.x >= 48 && node.x <= 852 && node.y >= 38 && node.y <= 402));
+  });
+
+  test('normalizes relationship kinds and rejects duplicate link keys', () => {
+    const projected = projectBoundedForceGraph([
+      { id: 'target', label: 'Target', kind: 'Target Node' },
+      { id: 'source', label: 'Source', kind: 'External Source' },
+    ], [
+      { id: 'shared-link', source: 'target', target: 'source', kind: 'Derived Finding' },
+      { id: 'shared-link', source: 'source', target: 'target', kind: 'Observed' },
+    ]);
+
+    assert.deepEqual(projected.nodes.map((node) => node.kind), ['external-source', 'target-node']);
+    assert.equal(projected.links.length, 1);
+    assert.equal(projected.links[0]?.kind, 'derived-finding');
+    assert.equal(projected.truncated, true);
+  });
+
+  test('projects capped defensive-coverage bars while preserving exact counts', () => {
+    const projected = projectCoverageBars(Array.from({ length: 22 }, (_, index) => ({
+      id: `group-${index}`,
+      label: `Group ${index}`,
+      protected: index,
+      registered: 2,
+      available: 3,
+      unknown: 1,
+    })));
+
+    assert.equal(projected.groups.length, MAX_COVERAGE_BAR_GROUPS);
+    assert.equal(projected.truncated, true);
+    assert.ok(projected.groups.every((group) =>
+      group.segments.reduce((total, segment) => total + segment.value, 0) === group.total));
+  });
+
+  test('orders and caps certificate-search trend points', () => {
+    const projected = projectTrendPoints([
+      ...Array.from({ length: 28 }, (_, index) => ({
+        id: `check-${index}`,
+        date: `2026-06-${String((index % 28) + 1).padStart(2, '0')}T00:00:00Z`,
+        total: index + 1,
+        added: index % 3,
+        partial: index === 20,
+      })),
+      { id: 'invalid', date: 'invalid', total: 999, added: 999 },
+    ]);
+
+    assert.equal(projected.points.length, MAX_TREND_POINTS);
+    assert.equal(projected.truncated, true);
+    assert.equal(requiredValue(projected.points.at(-1)).total, 28);
+  });
+
+  test('caps retained-monitor events and evidence lanes without erasing zero-change cells', () => {
+    const projected = projectMonitorTimeline(Array.from({ length: 16 }, (_, eventIndex) => ({
+      id: `event-${eventIndex}`,
+      checkedAt: `2026-07-${String(eventIndex + 1).padStart(2, '0')}T00:00:00Z`,
+      mode: 'deep',
+      groups: Array.from({ length: 8 }, (_, groupIndex) => ({
+        key: `group-${groupIndex}`,
+        label: `Group ${groupIndex}`,
+        changeCount: eventIndex === groupIndex ? 1 : 0,
+      })),
+    })));
+
+    assert.equal(projected.events.length, MAX_MONITOR_TIMELINE_EVENTS);
+    assert.equal(projected.lanes.length, MAX_MONITOR_TIMELINE_LANES);
+    assert.equal(projected.truncated, true);
+    assert.ok(projected.events.every((event) => event.cells.length === projected.lanes.length));
+  });
+
+  test('places a fixed observation within the certificate validity interval', () => {
+    const projected = projectCertificateValidity({
+      validFrom: '2026-07-01T00:00:00Z',
+      validTo: '2026-10-01T00:00:00Z',
+      observedAt: '2026-08-15T00:00:00Z',
+    });
+    assert.equal(projected.available, true);
+    if (!projected.available) return;
+    assert.equal(projected.hasObservation, true);
+    assert.equal(projected.observedWithinValidity, true);
+    assert.ok(projected.observedX > projected.fromX);
+    assert.ok(projected.observedX < projected.toX);
+    assert.deepEqual(
+      projectCertificateValidity({ validFrom: 'invalid', validTo: '2026-10-01T00:00:00Z' }),
+      { available: false, width: 900, height: 110 },
+    );
   });
 });

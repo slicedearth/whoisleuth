@@ -129,7 +129,7 @@
 
   {#if !compact}
     <div class="visual-key" role="group" aria-label="Evidence topology visual key">
-      <span class="key-intro">Shape and colour identify the evidence family:</span>
+      <span class="key-intro">Shape and icon identify the evidence family:</span>
       <span class="key-item family-registry"><i aria-hidden="true"></i>Registry</span>
       <span class="key-item family-network"><i aria-hidden="true"></i>Network</span>
       <span class="key-item family-web"><i aria-hidden="true"></i>Web</span>
@@ -302,11 +302,7 @@
   .visual-key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;margin-top:13px;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .key-intro{flex:0 0 auto}
   .key-item,.key-state{display:inline-flex;align-items:center;gap:5px}
-  .key-item{--key-color:var(--accent)}
-  .key-item.family-registry{--key-color:var(--accent2)}
-  .key-item.family-network{--key-color:var(--accent)}
-  .key-item.family-web{--key-color:var(--amber)}
-  .key-item.family-derived{--key-color:var(--violet)}
+  .key-item{--key-color:var(--muted)}
   .key-item.family-analyst{--key-color:var(--text)}
   .key-item i{display:inline-block;width:12px;height:9px;border:1.5px solid var(--key-color);border-radius:2px;background:color-mix(in srgb,var(--key-color) 7%,transparent)}
   .key-item.family-network i{clip-path:polygon(24% 0,76% 0,100% 50%,76% 100%,24% 100%,0 50%)}
@@ -332,19 +328,16 @@
   .node-copy{overflow:hidden}
   .node-copy div{display:block;min-width:0;overflow:hidden;color:var(--text);font-family:var(--mono);font-size:12px;font-weight:700;line-height:16px;text-overflow:ellipsis;white-space:nowrap}
   .node-copy .node-detail{color:var(--muted);font-size:9px;font-weight:400;line-height:14px}
-  .source-node{--family-color:var(--accent);transform-box:fill-box;transform-origin:center;transition:opacity .16s,filter .16s,transform .16s;animation:source-reveal .32s ease-out both}
+  .source-node{--family-color:var(--muted);transform-box:fill-box;transform-origin:center;transition:opacity .16s,filter .16s,transform .16s;animation:source-reveal .32s ease-out both}
   .source-nodes>g.linked{cursor:pointer}
-  .source-node.family-registry{--family-color:var(--accent2)}
-  .source-node.family-network{--family-color:var(--accent)}
-  .source-node.family-web{--family-color:var(--amber)}
-  .source-node.family-derived{--family-color:var(--violet)}
   .source-node.family-analyst{--family-color:var(--text)}
   .source-node .node-surface{fill:var(--panel);stroke:color-mix(in srgb,var(--family-color) 58%,var(--border));stroke-width:1.5}
   .source-node.family-derived .node-surface{stroke-dasharray:5 3}
   .source-node .glyph-disc{fill:color-mix(in srgb,var(--family-color) 9%,transparent);stroke:color-mix(in srgb,var(--family-color) 58%,var(--border))}
   .node-source-icon{color:var(--family-color)}
   :global(.source-icon){display:block;width:20px;min-width:0;max-width:20px;height:20px;max-height:20px;overflow:visible;color:var(--family-color)}
-  .source-node.active{filter:drop-shadow(0 0 7px color-mix(in srgb,var(--family-color) 55%,transparent));transform:translateY(-1px)}
+  .source-node.active .node-surface{stroke:var(--accent);stroke-width:2.5}
+  .source-node.active{filter:drop-shadow(0 0 7px rgb(var(--accent-rgb) / .4));transform:translateY(-1px)}
   .source-node.dimmed{opacity:.32}
   .source-node .status-dot{fill:var(--muted)}
   .source-node.state-success .status-dot{fill:var(--accent2)}
@@ -354,21 +347,17 @@
   .mobile-target{display:none}
   .source-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(138px,100%),1fr));gap:7px;margin:10px 0 0;padding:0;list-style:none}
   .source-rail li{min-width:0}
-  .source-rail li{--family-color:var(--accent)}
-  .source-rail li.family-registry{--family-color:var(--accent2)}
-  .source-rail li.family-network{--family-color:var(--accent)}
-  .source-rail li.family-web{--family-color:var(--amber)}
-  .source-rail li.family-derived{--family-color:var(--violet)}
+  .source-rail li{--family-color:var(--muted)}
   .source-rail li.family-analyst{--family-color:var(--text)}
   .source-rail a,.source-rail li>div{display:grid;grid-template-columns:26px minmax(0,1fr);gap:7px;align-items:center;min-height:42px;padding:6px 7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);text-decoration:none;transition:border-color .16s,background .16s,box-shadow .16s}
-  .source-rail a:hover,.source-rail a:focus-visible,.source-rail li.active a,.source-rail li.active>div{border-color:var(--family-color);background:color-mix(in srgb,var(--family-color) 5%,var(--panel));box-shadow:inset 2px 0 var(--family-color)}
+  .source-rail a:hover,.source-rail a:focus-visible,.source-rail li.active a,.source-rail li.active>div{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06);box-shadow:inset 2px 0 var(--accent)}
   .source-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid color-mix(in srgb,var(--family-color) 45%,var(--border));border-radius:50%;color:var(--family-color)}
   .source-glyph :global(.source-icon){width:16px;height:16px}
   .source-copy{min-width:0}
   .source-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .source-copy strong{font:650 var(--text-xs) var(--mono)}
   .source-copy small{display:none}
-  .source-family{display:block;color:var(--family-color);font:650 .5rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .source-family{display:block;color:var(--muted);font:650 .5rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
   .source-state{grid-column:2;padding:0;border:0;color:var(--muted);font:650 .55rem var(--mono);text-transform:uppercase}
   .state-success .source-state{color:var(--accent2)}
   .state-partial .source-state,.state-warning .source-state,.state-inconclusive .source-state,.state-rate_limited .source-state{color:var(--amber)}

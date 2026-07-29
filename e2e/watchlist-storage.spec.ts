@@ -141,6 +141,7 @@ test('watchlist history focuses one domain without implying complete coverage', 
   await expect(domainHistory).toContainText('Delegation');
   await expect(domainHistory).toContainText('Mail');
   await expect(domainHistory).toContainText('Risk');
+  await expect(domainHistory.getByRole('img', { name: 'Observed domain timeline with 2 checks and 3 evidence categories' })).toBeVisible();
   await expect(domainHistory).not.toContainText('other.invalid');
   await expect(domainHistory).toContainText('does not prove this domain was included in every check');
   await expect(domainHistory).toContainText('cannot be attributed reliably to this domain');

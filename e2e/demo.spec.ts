@@ -34,6 +34,7 @@ test('completes the public synthetic workflow without investigation requests or 
   await page.getByRole('button', { name: 'Load synthetic candidates' }).click();
   await page.getByRole('button', { name: 'Load related domains' }).click();
   await expect(page.locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
+  await expect(page.getByRole('img', { name: /Shared evidence relationships/u })).toBeVisible();
   await expect(page.locator('.candidate')).toHaveCount(2);
   await page.getByRole('button', { name: 'All candidates · 3' }).click();
   await page.getByRole('button', { name: 'High priority · 1' }).click();
@@ -42,6 +43,8 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Synthetic evidence topology' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Registration agreement matrix with 3 fields' })).toBeVisible();
   await expect(page.locator('a[href="#demo-evidence-registry"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'DNS intelligence' })).toBeVisible();
   await page.locator('.dns-card > summary').click();
@@ -76,6 +79,9 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(technology.getByRole('heading', { name: 'Example UI Library 1.2.3' })).toBeVisible();
   await expect(technology.getByText(/fixed synthetic component and advisory context/i)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TLS and certificate intelligence' })).toBeVisible();
+  const tls = page.locator('.tls-card');
+  await tls.locator(':scope > summary').click();
+  await expect(tls.getByRole('region', { name: 'Validity and chain' })).toBeVisible();
   const network = page.locator('.network-context');
   await expect(network).not.toHaveAttribute('open', '');
   await expect(network.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
@@ -109,6 +115,7 @@ test('completes the public synthetic workflow without investigation requests or 
   await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
   await expect(page.locator('#watchlist-activity .activity-summary')).toContainText(/2\s*retained checks/);
+  await expect(page.getByRole('img', { name: 'Observed domain timeline with 2 checks and 2 evidence categories' })).toBeVisible();
   await expect(page.locator('.timeline-entry')).toHaveCount(2);
   await expect(page.getByText(/First observed/)).toBeVisible();
   await page.getByRole('button', { name: 'Material changes only' }).click();

@@ -7,6 +7,7 @@
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
+  import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupHttpEvidence from '$lib/components/LookupHttpEvidence.svelte';
@@ -18,6 +19,7 @@
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
+  import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import {
@@ -77,6 +79,14 @@
     changeCount:entry.changes.length,
     resultCount:1,
     conclusiveCount:selected.availability==='Unknown'?0:1,
+  })):[]);
+  const monitorDomainTimeline=$derived(selected?syntheticDemoTimeline(selected.id,demoState.followUpReady).map((entry:{capturedAt:string;changes:unknown[]})=>({
+    checkedAt:entry.capturedAt,
+    mode:'deep',
+    groups:[
+      {key:'baseline',label:'Retained observation',changes:[]},
+      {key:'material',label:'Material evidence',changes:entry.changes},
+    ],
   })):[]);
   const relationshipGroups=$derived(syntheticDemoRelationshipGroups());
   const currentStageIndex=$derived(Math.max(0,SYNTHETIC_DEMO_STAGES.findIndex((stage)=>stage.id===view)));
@@ -209,6 +219,16 @@
     <p class="eyebrow">Lookup · Deep evidence review</p><h2 id="lookup-heading">{selected.domain}</h2>
     <p>The production Lookup components render the synthetic view model below, including its bounded source map, dated lifecycle summary, and manual acquisition review. The fixed scenario includes the explicitly selected security.txt action. Each source and derived view remains separately attributed, while inconclusive enrichment is never treated as evidence of absence or safety. Long source records and secondary Deep evidence start collapsed with their headings, states, and summaries still visible. Live Lookup can also show analyst-controlled external evidence links; they are omitted here so the public demo cannot send even a fictional target to another site.</p>
     <div class="shared-evidence" id="demo-assessment"><LookupAssessment {...lookupView.assessment} /></div>
+    <div class="shared-evidence"><LookupCollectionTiming timing={{
+      version: 1,
+      totalMs: 860,
+      sources: [
+        { source: 'rdap', outcome: 'fulfilled', durationMs: 240, completedAfterMs: 240 },
+        { source: 'whois', outcome: 'fulfilled', durationMs: 620, completedAfterMs: 690 },
+        { source: 'domain_evidence', outcome: 'fulfilled', durationMs: 740, completedAfterMs: 820 },
+        { source: 'network_context', outcome: 'fulfilled', durationMs: 210, completedAfterMs: 860 },
+      ],
+    }} /></div>
     <div class="shared-evidence visual-summary">
       <EvidenceTopology
         id="demo-evidence-topology"
@@ -241,6 +261,7 @@
     <div class="case-grid"><label>Status<select value={demoState.caseStatus} onchange={(event)=>updateCase({caseStatus:(event.currentTarget as HTMLSelectElement).value})}><option value="new">New</option><option value="reviewing">Reviewing</option><option value="monitoring">Monitoring</option></select></label><label>Analyst note<textarea maxlength={MAX_SYNTHETIC_DEMO_NOTE_LENGTH} value={demoState.note} oninput={(event)=>updateCase({note:(event.currentTarget as HTMLTextAreaElement).value},false)} placeholder="Optional synthetic note"></textarea></label></div>
     {#if !demoState.followUpReady}<div class="follow-up"><p>Load a fixed repeated observation and later material change to exercise the production evidence-history comparison.</p><button class="primary" type="button" onclick={loadFollowUp}>Load later synthetic observation</button></div>{/if}
     <div class="shared-timeline"><MonitorActivityHeatmap events={monitorActivity} /></div>
+    {#if demoState.followUpReady}<div class="shared-timeline"><MonitorDomainTimeline events={monitorDomainTimeline} {formatDate} /></div>{/if}
     <div class="shared-timeline">{#key `${caseRecord.id}:${caseRecord.evidenceHistory.length}`}<EvidenceTimeline record={caseRecord} />{/key}</div>
     {#if demoState.followUpReady}<div class="case-actions"><button class="primary" type="button" onclick={exportCase}>Export synthetic case report</button><button type="button" onclick={()=>view='lookup'}>Review Lookup evidence</button></div><p class="export-warning">Exports use a distinct schema, include <code>synthetic: true</code>, and must not be used as evidence or an abuse report.</p>{/if}
   </section>

@@ -1,5 +1,10 @@
 <script lang="ts">
   import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
+  import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
+  import type {
+    ForceGraphLinkInput,
+    ForceGraphNodeInput,
+  } from '$lib/analysis/visualization-models.ts';
 
   type RelationshipGroup = {
     type: string;
@@ -42,6 +47,32 @@
       official_asset: 'asset',
     } as Record<string, IntelligenceIconName>)[type] || 'network';
   }
+
+  const relationshipMap = $derived.by(() => {
+    const nodes = new Map<string, ForceGraphNodeInput>();
+    const links: ForceGraphLinkInput[] = [];
+    for (const [groupIndex, group] of groups.entries()) {
+      const relationshipId = `relationship-${groupIndex}`;
+      nodes.set(relationshipId, {
+        id: relationshipId,
+        label: group.label,
+        kind: 'relationship',
+        detail: group.value || group.method,
+      });
+      for (const [domainIndex, domain] of group.domains.entries()) {
+        const domainId = `domain-${domain.toLowerCase()}`;
+        nodes.set(domainId, { id: domainId, label: domain, kind: 'domain' });
+        links.push({
+          id: `${relationshipId}-${domainIndex}`,
+          source: relationshipId,
+          target: domainId,
+          kind: 'observed',
+          detail: group.method,
+        });
+      }
+    }
+    return { nodes: [...nodes.values()], links };
+  });
 </script>
 
 {#if groups.length}
@@ -51,6 +82,12 @@
       {#if truncated}<span class="partial">Partial result</span>{/if}
     </header>
     <p class="relationship-intro">Compare bounded observations already collected by this scan. These are investigation pivots, not ownership or maliciousness conclusions.</p>
+    <BoundedRelationshipMap
+      title="Shared evidence relationships"
+      description="Relationship nodes connect domains that share the exact bounded value described by the scan."
+      nodes={relationshipMap.nodes}
+      links={relationshipMap.links}
+    />
     <div class="relationship-list">
       {#each groups as relationship}
         <article>

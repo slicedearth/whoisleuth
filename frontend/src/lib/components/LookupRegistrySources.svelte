@@ -1,5 +1,9 @@
 <script lang="ts">
   import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
+  import {
+    projectEvidenceMatrix,
+    type MatrixInput,
+  } from '$lib/analysis/visualization-models.ts';
 
   type JsonRecord = Record<string, unknown>;
   type DisplayRow = { label: string; value: string; datetime?: string };
@@ -96,6 +100,32 @@
     : whoisRows.length
       ? 'complete'
       : 'not_collected');
+  const comparisonMatrix = $derived.by(() => {
+    const columns = ['Registry RDAP', 'WHOIS'];
+    if (registrar.comparisonRows?.length) columns.splice(1, 0, 'Registrar RDAP');
+    const rows = new Map<string, MatrixInput>();
+    const rowFor = (label: string) => {
+      const id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `field-${rows.size}`;
+      const current = rows.get(id) ?? { id, label, cells: [] };
+      rows.set(id, current);
+      return current;
+    };
+    for (const row of comparisonRows) {
+      const current = rowFor(row.label);
+      current.cells.push(
+        { column: 'Registry RDAP', state: row.status, detail: row.rdapValue },
+        { column: 'WHOIS', state: row.status, detail: row.whoisValue },
+      );
+    }
+    for (const row of registrar.comparisonRows ?? []) {
+      const current = rowFor(row.label);
+      current.cells.push(
+        { column: 'Registry RDAP', state: row.status, detail: row.registryValue },
+        { column: 'Registrar RDAP', state: row.status, detail: row.registrarValue },
+      );
+    }
+    return projectEvidenceMatrix(columns, [...rows.values()]);
+  });
 
   function traceStateLabel(state: TraceState): string {
     return state === 'not_collected' ? 'Not collected' : state.replaceAll('_', ' ');
@@ -129,6 +159,41 @@
       </article>
     </div>
     <p class="trace-limit">These roles describe how WHOISleuth interprets the named publications. Partial, unavailable, or conflicting fields remain visible and are never converted into absence.</p>
+  </section>
+{/if}
+
+{#if comparisonMatrix.rows.length}
+  <section class="agreement-matrix card" aria-labelledby="registration-agreement-title">
+    <header class="section-head">
+      <div>
+        <p class="eyebrow">Publication comparison</p>
+        <h4 id="registration-agreement-title">Registration source agreement</h4>
+        <p>Colour identifies the comparison state for each field and publication. Exact source values remain in the tables below.</p>
+      </div>
+      {#if comparisonMatrix.truncated}<span class="partial">Partial visual</span>{/if}
+    </header>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable matrix must be keyboard reachable -->
+    <div class="matrix-frame" role="img" tabindex="0" aria-label={`Registration agreement matrix with ${comparisonMatrix.rows.length} fields`}>
+      <svg viewBox={`0 0 ${comparisonMatrix.width} ${comparisonMatrix.height}`} aria-hidden="true">
+        {#each comparisonMatrix.columns as column}
+          <text x={column.x + column.width / 2} y="30" text-anchor="middle" class="column-label">{column.label}</text>
+        {/each}
+        {#each comparisonMatrix.rows as row}
+          <text x="8" y={row.y + row.height / 2 + 3} class="row-label">{row.label}</text>
+          {#each row.cells as cell}
+            <rect x={cell.x} y={row.y} width={cell.width} height={row.height} rx="4" class={`matrix-cell state-${cell.state}`}>
+              <title>{row.label}, {cell.column}: {cell.state.replaceAll('_', ' ')}{cell.detail ? ` — ${cell.detail}` : ''}</title>
+            </rect>
+          {/each}
+        {/each}
+      </svg>
+    </div>
+    <ul class="matrix-legend" aria-label="Registration source comparison states">
+      <li class="state-equal"><span></span>Equivalent</li>
+      <li class="state-different"><span></span>Different</li>
+      <li class="state-conflict"><span></span>Conflict</li>
+      <li class="state-not_collected"><span></span>Not collected</li>
+    </ul>
   </section>
 {/if}
 
@@ -236,6 +301,26 @@
 <style>
   .registry-insights,.comparison,.sources>details,.registrar-rdap{padding:0;overflow:hidden}
   .authority-trace{padding:var(--card-pad)}
+  .agreement-matrix{padding:var(--card-pad);margin-top:12px}
+  .agreement-matrix h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
+  .agreement-matrix .section-head p:not(.eyebrow){max-width:720px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .matrix-frame{max-width:100%;margin-top:13px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
+  .matrix-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .matrix-frame svg{display:block;width:100%;min-width:680px;height:auto}
+  .column-label,.row-label{fill:var(--muted);font-family:var(--mono);font-size:9px}
+  .row-label{fill:var(--text)}
+  .matrix-cell{fill:var(--panel);stroke:var(--border);stroke-width:1}
+  .matrix-cell.state-equal{fill:color-mix(in srgb,var(--success) 16%,var(--panel));stroke:var(--success)}
+  .matrix-cell.state-different,.matrix-cell.state-partial{fill:rgb(var(--amber-rgb) / .15);stroke:var(--amber)}
+  .matrix-cell.state-conflict{fill:rgb(var(--danger-rgb) / .13);stroke:var(--danger)}
+  .matrix-cell.state-observed{fill:rgb(var(--accent-rgb) / .14);stroke:var(--accent)}
+  .matrix-cell.state-not_collected,.matrix-cell.state-unavailable,.matrix-cell.state-unknown{fill:var(--panel);stroke:var(--muted);stroke-dasharray:3 3}
+  .matrix-legend{display:flex;flex-wrap:wrap;gap:7px 14px;margin:9px 0 0;padding:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);list-style:none}
+  .matrix-legend li{display:flex;align-items:center;gap:5px}.matrix-legend span{width:9px;height:9px;border:1px solid var(--border);border-radius:2px;background:var(--panel)}
+  .matrix-legend .state-equal span{border-color:var(--success);background:color-mix(in srgb,var(--success) 16%,var(--panel))}
+  .matrix-legend .state-different span{border-color:var(--amber);background:rgb(var(--amber-rgb) / .15)}
+  .matrix-legend .state-conflict span{border-color:var(--danger);background:rgb(var(--danger-rgb) / .13)}
+  .matrix-legend .state-not_collected span{border-color:var(--muted);border-style:dashed}
   .authority-trace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .authority-trace h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
   .authority-trace>header>span{max-width:230px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-align:right;text-transform:uppercase}

@@ -469,6 +469,20 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   const desktopSourceIcons = topology.locator('.node-source-icon .source-icon');
   await expect(desktopSourceIcons).toHaveCount(await sourceRail.locator('li').count());
   await expect(desktopSourceIcons.first()).toBeVisible();
+  const topologyPalette = await topology.evaluate((region) => {
+    const styleValue = (selector: string, property: 'fill' | 'stroke') => {
+      const element = region.querySelector<SVGElement>(selector);
+      return element ? getComputedStyle(element)[property] : '';
+    };
+    return {
+      registryStroke: styleValue('.source-node.family-registry .node-surface', 'stroke'),
+      networkStroke: styleValue('.source-node.family-network .node-surface', 'stroke'),
+      successFill: styleValue('.source-node.state-success .status-dot', 'fill'),
+      partialFill: styleValue('.source-node.state-partial .status-dot', 'fill'),
+    };
+  });
+  expect(topologyPalette.registryStroke).toBe(topologyPalette.networkStroke);
+  expect(topologyPalette.successFill).not.toBe(topologyPalette.partialFill);
   expect(await desktopSourceIcons.evaluateAll((icons) => icons.every((icon) => {
     const iconRect = icon.getBoundingClientRect();
     const discRect = icon.closest('.source-node')?.querySelector('.glyph-disc')?.getBoundingClientRect();
