@@ -1041,6 +1041,19 @@ test('published response routes can be recorded in a local case with their prove
       state: 'planned',
     }),
   ]);
+
+  const reviewPacket = response.getByRole('link', { name: 'Review response packet' });
+  const expectedCaseId = encodeURIComponent(String(stored?.id));
+  await expect(reviewPacket).toHaveAttribute(
+    'href',
+    `/monitor?view=cases&case=${expectedCaseId}#case-response-${expectedCaseId}`,
+  );
+  await reviewPacket.click();
+  await expect(page).toHaveURL(new RegExp(`/monitor\\?view=cases&case=${expectedCaseId}#case-response-${expectedCaseId}$`));
+  const responseWorkspace = page.locator(`#case-response-${expectedCaseId}`);
+  await expect(responseWorkspace).toBeVisible();
+  await expect(responseWorkspace).toBeFocused();
+  await expect(responseWorkspace.getByRole('heading', { name: 'Evidence, reasoning, and actions' })).toBeVisible();
 });
 
 test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async ({ page }) => {
