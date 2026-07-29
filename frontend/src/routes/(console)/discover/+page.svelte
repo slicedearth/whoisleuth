@@ -68,7 +68,7 @@
   let filter = $state('');
   let candidateScope = $state<CandidateScope>('all');
   let mutationFilter = $state('');
-  let candidateSort = $state<CandidateSort>('generated');
+  let candidateSort = $state<CandidateSort>('review-signals');
   let candidateMetadata = $state<Map<string, CandidateMetadata>>(new Map());
   let profile = $state<BrandProfile|null>(null);
   // Whether the current candidate set came from structured CT provenance.
@@ -158,7 +158,7 @@
     Boolean(filter)
       || candidateScope !== 'all'
       || Boolean(mutationFilter)
-      || candidateSort !== 'generated'
+      || candidateSort !== (ctResultKind === 'structured' ? 'certificate-newest' : 'review-signals')
       || ctNewOnly,
   );
 
@@ -199,11 +199,11 @@
     return metadata;
   }
 
-  function resetCandidateView() {
+  function resetCandidateView(sort: CandidateSort = 'review-signals') {
     filter = '';
     candidateScope = 'all';
     mutationFilter = '';
-    candidateSort = 'generated';
+    candidateSort = sort;
     page = 1;
   }
 
@@ -317,14 +317,19 @@
       .flatMap((base) => selectedTlds.map((tld) => ({ domain: `${base}.${tld}`, source: seed.trim(), mutationTypes: ['keyword'] })));
   }
 
-  function setResults(next: Candidate[], message: string, context:Candidate[]=next) {
+  function setResults(
+    next: Candidate[],
+    message: string,
+    context: Candidate[] = next,
+    sort: CandidateSort = 'review-signals',
+  ) {
     candidates = next;
     generatedContext = context;
     selected = new Set();
     candidateMetadata = buildCandidateMetadata(next);
     status = message;
     error = '';
-    resetCandidateView();
+    resetCandidateView(sort);
   }
 
   function withoutAllowlisted(next: Candidate[]) {
@@ -428,7 +433,7 @@
       } catch (cause) {
         ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
       }
-      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${historySummary}`, next);
+      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (result cap reached)' : ''}.${historySummary}`, next, 'certificate-newest');
     } catch (cause) {
       // A superseding search / mode switch (which aborts this fetch) owns the UI
       // state now; do nothing so we neither clear its results nor its loading flag.
@@ -490,7 +495,7 @@
   }
 
   function resetReviewControls() {
-    resetCandidateView();
+    resetCandidateView(ctResultKind === 'structured' ? 'certificate-newest' : 'review-signals');
     ctNewOnly = false;
   }
 

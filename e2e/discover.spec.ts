@@ -131,6 +131,7 @@ test('lookalike presets expose a live upper-bound estimate and clear stale resul
   await expect(page.locator('.status')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('generated');
   await expect(page.locator('.candidate strong', { hasText: /^loginacme\.com$/ })).toBeVisible();
   const expandedTerm = page.locator('.candidate').filter({
     has: page.locator('strong', { hasText: /^signin-acme\.com$/ }),
@@ -169,6 +170,7 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most generation paths');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most review signals');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Reference matches first');
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('review-signals');
 
   await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('reference');
   await expect(candidate).toBeVisible();
@@ -351,6 +353,7 @@ test('multi-word lookalikes retain separator and reordering provenance', async (
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('Acme Pay');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('generated');
 
   const hyphenated = page.locator('.candidate').filter({
     has: page.locator('strong', { hasText: /^acme-pay\.com$/ }),
@@ -378,6 +381,7 @@ test('domain seeds expand across selected TLDs with combined provenance', async 
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme.com');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('com, net');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('generated');
 
   const exactSubstitution = page.locator('.candidate').filter({
     has: page.locator('strong', { hasText: /^acme\.net$/ }),
@@ -412,6 +416,7 @@ test('structured CT matches render one candidate per canonical domain, newest fi
   await runCtSearch(page);
 
   await expect(page.locator('.candidate')).toHaveCount(2);
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('certificate-newest');
   // Newest last-observation first: other.invalid (2026-09) before example.invalid (2026-06).
   await expect(page.locator('.candidate strong')).toHaveText(['other.invalid', 'example.invalid']);
 
