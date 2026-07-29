@@ -20,6 +20,7 @@
     tone: string;
   };
   type ContactRole = { role: string; contacts: Array<{ identity: string; details: string[] }> };
+  type TraceState = 'complete' | 'partial' | 'unavailable' | 'not_collected';
   const asRecord = (value: unknown): JsonRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
   const asRecords = (value: unknown): JsonRecord[] => Array.isArray(value) ? value.filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [];
   const asStrings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -76,7 +77,60 @@
   const reconciliation = $derived(asRecord(insights.reconciliation));
   const publications = $derived(asRecords(insights.publications));
   const abuseRouting = $derived(asRecords(insights.abuseRouting));
+  const registryTraceState = $derived<TraceState>(rdapError
+    ? 'unavailable'
+    : rdapPartialDetail
+      ? 'partial'
+      : rdapRows.length || Object.keys(rdapParsed).length
+        ? 'complete'
+        : 'unavailable');
+  const registrarTraceState = $derived<TraceState>(!registrar.visible
+    ? 'not_collected'
+    : registrar.success
+      ? 'complete'
+      : registrar.error
+        ? 'unavailable'
+        : 'partial');
+  const whoisTraceState = $derived<TraceState>(whoisError
+    ? 'unavailable'
+    : whoisRows.length
+      ? 'complete'
+      : 'not_collected');
+
+  function traceStateLabel(state: TraceState): string {
+    return state === 'not_collected' ? 'Not collected' : state.replaceAll('_', ' ');
+  }
 </script>
+
+{#if resultType === 'domain'}
+  <section class="authority-trace card" aria-labelledby="registration-authority-trace-title">
+    <header>
+      <div>
+        <p class="eyebrow">Source authority</p>
+        <h4 id="registration-authority-trace-title">Registration authority trace</h4>
+      </div>
+      <span>Existence decisions remain registry-led</span>
+    </header>
+    <div class="trace-sources">
+      <article data-state={registryTraceState}>
+        <div><strong>Registry RDAP</strong><span class="trace-state">{traceStateLabel(registryTraceState)}</span></div>
+        <p><b>Authority:</b> primary publication for domain existence when the authoritative bootstrap route settles.</p>
+        <small>Primary for lifecycle, registry status, delegation, sponsoring registrar, and registry disclosure where published.</small>
+      </article>
+      <article data-state={registrarTraceState}>
+        <div><strong>Registrar RDAP</strong><span class="trace-state">{traceStateLabel(registrarTraceState)}</span></div>
+        <p><b>Authority:</b> separately attributed sponsoring-registrar publication. It cannot decide domain existence.</p>
+        <small>Useful for comparing registrar-maintained lifecycle, status, contact, and disclosure fields where advertised.</small>
+      </article>
+      <article data-state={whoisTraceState}>
+        <div><strong>WHOIS</strong><span class="trace-state">{traceStateLabel(whoisTraceState)}</span></div>
+        <p><b>Authority:</b> compatibility publication used as corroborating registration context. It cannot override an authoritative existence result.</p>
+        <small>Useful for source comparison, registry or registrar identifiers, lifecycle, status, delegation, and published contacts.</small>
+      </article>
+    </div>
+    <p class="trace-limit">These roles describe how WHOISleuth interprets the named publications. Partial, unavailable, or conflicting fields remain visible and are never converted into absence.</p>
+  </section>
+{/if}
 
 {#if insights.version === 1}
   <details class="registry-insights card">
@@ -181,6 +235,24 @@
 
 <style>
   .registry-insights,.comparison,.sources>details,.registrar-rdap{padding:0;overflow:hidden}
+  .authority-trace{padding:var(--card-pad)}
+  .authority-trace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .authority-trace h4{margin:2px 0 0;font:700 var(--text-md) var(--mono)}
+  .authority-trace>header>span{max-width:230px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-align:right;text-transform:uppercase}
+  .trace-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}
+  .trace-sources article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .trace-sources article[data-state='partial']{border-color:color-mix(in srgb,var(--amber) 45%,var(--border))}
+  .trace-sources article[data-state='unavailable'],.trace-sources article[data-state='not_collected']{border-style:dashed}
+  .trace-sources article>div{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .trace-sources strong{font:700 var(--text-xs) var(--mono)}
+  .trace-state{flex:none;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
+  [data-state='complete'] .trace-state{color:var(--success)}
+  [data-state='partial'] .trace-state{color:var(--amber)}
+  .trace-sources p,.trace-sources small,.trace-limit{color:var(--muted);font-size:var(--text-2xs);line-height:1.48}
+  .trace-sources p{margin:8px 0 0}
+  .trace-sources p b{color:var(--text)}
+  .trace-sources small{display:block;margin-top:6px}
+  .trace-limit{margin:10px 0 0}
   .registry-insights>summary{color:var(--accent)}
   .insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;padding:0 var(--card-pad) var(--card-pad);background:var(--border)}
   .insight-grid article{min-width:0;padding:12px;background:var(--panel)}
@@ -228,6 +300,7 @@
   .registrar-state{margin:0;padding:0 var(--card-pad) var(--card-pad);color:var(--muted);font-size:var(--text-xs)}
   .registrar-state.error{color:var(--danger)}
   @media(max-width:650px){
+    .authority-trace>header{display:grid}.authority-trace>header>span{max-width:none;text-align:left}.trace-sources{grid-template-columns:1fr}
     .insight-grid,.publication-list{grid-template-columns:1fr}
     dl{grid-template-columns:1fr;gap:4px}
     dt:not(:first-child){margin-top:7px}

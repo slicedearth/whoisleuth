@@ -619,7 +619,11 @@
 
       {#if result.type==='domain'}
         <LookupActivationContext context={activationContext} />
-        <LookupAcquisitionDueDiligence review={acquisitionDueDiligence} />
+        <LookupAcquisitionDueDiligence
+          review={acquisitionDueDiligence}
+          target={caseDomain}
+          observedAt={typeof result?.fetchedAt==='string'?result.fetchedAt:null}
+        />
       {/if}
 
       <LookupEvidenceCoverage ledger={evidenceCoverage} />

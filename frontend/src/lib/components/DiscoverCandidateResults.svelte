@@ -10,6 +10,7 @@
   type CandidateRow = {
     domain: string;
     mutationLabel: string;
+    reviewCues: string[];
     selected: boolean;
     isNew: boolean;
     unicodeDomain: string;
@@ -104,6 +105,7 @@
     <label>Sort
       <select value={candidateSort} onchange={(event) => setCandidateSort(event.currentTarget.value)} aria-label="Candidate sort">
         <option value="generated">Generated order</option>
+        <option value="review-signals">Most review signals</option>
         <option value="domain">Domain A–Z</option>
         <option value="generation-paths">Most generation paths</option>
         {#if scopeCounts.reference}<option value="reference">Reference matches first</option>{/if}
@@ -127,6 +129,7 @@
             <small>{candidate.mutationLabel}</small>
             {#if candidate.scripts.length}<span class="script-summary">Scripts: {candidate.scripts.join(', ')}</span>{/if}
             <span class="candidate-badges">
+              {#if candidate.reviewCues.length}<span class="candidate-badge review" title={candidate.reviewCues.join(' · ')}>{candidate.reviewCues.length} review signal{candidate.reviewCues.length === 1 ? '' : 's'}</span>{/if}
               {#if candidate.unicodeDomain}<span class="candidate-badge">Internationalised</span>{/if}
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
               {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
@@ -159,6 +162,7 @@
   {#if scopeCounts.reference}
     <p class="candidate-note">Visual matches use a bounded character comparison. They are review leads, not proof of impersonation.</p>
   {/if}
+  <p class="candidate-note">Review signals count visible candidate cues only. They are not a risk score or a claim of maliciousness.</p>
   {#if !selectedCount}
     <p class="candidate-note">Select individual candidates or the current filtered set before continuing to Bulk.</p>
   {/if}
@@ -189,6 +193,7 @@
   .script-summary{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-2xs)}
   .candidate-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
   .candidate-badge{display:inline-block;padding:3px 8px;border:1px solid rgb(var(--accent-rgb) / .35);border-radius:99px;color:var(--accent);font:600 var(--text-2xs) var(--mono)}
+  .candidate-badge.review{background:rgb(var(--accent-rgb) / .06)}
   .candidate-badge.warning{border-color:rgb(var(--amber-rgb) / .45);color:var(--amber)}
   .reference-summary{display:block;margin-top:6px;overflow-wrap:anywhere;color:var(--muted);font-size:var(--text-2xs)}
   .ct-new{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid rgb(var(--accent2-rgb) / .45);border-radius:99px;color:var(--accent2);font:600 var(--text-2xs) var(--mono)}

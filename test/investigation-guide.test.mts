@@ -222,7 +222,7 @@ test('stores one bounded analyst-selected focus domain without changing the offi
   assert.deepEqual(setInvestigationGuideFocusDomain(triage, 'candidate.example', OPENED_AT), triage);
 });
 
-test('carries a bounded canonical peer set for non-brand review without mutating the starting domain', () => {
+test('carries bounded canonical peer sets without mutating the starting domain', () => {
   const original = createInvestigationGuide('portal.example.test', 'new_domain_triage', STARTED_AT);
   const values = [
     'Peer.Example.',
@@ -242,7 +242,12 @@ test('carries a bounded canonical peer set for non-brand review without mutating
   assert.equal(updated.updatedAt, OPENED_AT);
 
   const brand = createInvestigationGuide('portal.example.test', 'brand_sweep', STARTED_AT);
-  assert.deepEqual(setInvestigationGuideReviewDomains(brand, values, OPENED_AT), brand);
+  const brandUpdated = setInvestigationGuideReviewDomains(brand, values, OPENED_AT);
+  assert.ok(brandUpdated);
+  assert.deepEqual(brandUpdated.reviewDomains.slice(0, 2), ['peer.example', 'portal.example.test']);
+  assert.equal(brandUpdated.reviewDomains.includes('portal.example.test'), true);
+  assert.equal(brandUpdated.reviewDomainsTruncated, true);
+  assert.equal(brandUpdated.updatedAt, OPENED_AT);
 });
 
 test('records opened stages separately from outcomes and does not mutate source state', () => {

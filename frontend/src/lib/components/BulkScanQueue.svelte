@@ -3,6 +3,7 @@
     BulkPacing,
     BulkPacingOption,
     BulkProgressEstimate,
+    BulkProgressOutcomes,
   } from '$lib/analysis/bulk-pacing.ts';
 
   type ScanMode = 'fast' | 'deep';
@@ -22,6 +23,7 @@
     pacingOptions,
     concurrency,
     progress,
+    outcomes,
     running,
     paused,
     entryCount,
@@ -48,6 +50,7 @@
     pacingOptions: readonly BulkPacingOption[];
     concurrency: number;
     progress: BulkProgressEstimate;
+    outcomes: BulkProgressOutcomes;
     running: boolean;
     paused: boolean;
     entryCount: number;
@@ -79,6 +82,14 @@
   <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, and mail signals for triage. Open a domain in Lookup for the complete source-level evidence and optional enrichments.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep enrichment.'} {pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Bounded request pacing'}; at most {concurrency} {concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.</p>
   {#if running || total}<div class="progress" role="progressbar" aria-label="Bulk scan progress" aria-valuemin="0" aria-valuemax={total} aria-valuenow={completed}><span style:width={`${total ? completed / total * 100 : 0}%`}></span></div>{/if}
   {#if running || total}<p class="progress-detail">{progress.completed} of {progress.total} settled · {progress.percent}% · {progress.label}</p>{/if}
+  {#if running || total}
+    <dl class="outcomes" aria-label="Settled scan outcomes">
+      <div><dt>Complete</dt><dd>{outcomes.complete}</dd></div>
+      <div class:attention={outcomes.limited > 0}><dt>Limited</dt><dd>{outcomes.limited}</dd></div>
+      <div class:error={outcomes.failed > 0}><dt>Failed</dt><dd>{outcomes.failed}</dd></div>
+      <div><dt>Pending</dt><dd>{outcomes.pending}</dd></div>
+    </dl>
+  {/if}
   <p class="status" role="status" aria-live="polite">{status}</p>
 </section>
 
@@ -98,6 +109,14 @@
   .progress span{display:block;height:100%;background:var(--accent);transition:width .15s}
   .status{margin-bottom:0}
   .progress-detail{margin:7px 0 0;color:var(--muted);font:600 var(--text-xs) var(--mono)}
+  .outcomes{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 0}
+  .outcomes div{display:flex;gap:5px;align-items:baseline;padding:4px 7px;border:1px solid var(--border);border-radius:99px;background:var(--panel)}
+  .outcomes dt{color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .outcomes dd{margin:0;color:var(--text);font:700 var(--text-xs) var(--mono)}
+  .outcomes div.attention{border-color:color-mix(in srgb,var(--amber) 42%,var(--border))}
+  .outcomes div.attention dd{color:var(--amber)}
+  .outcomes div.error{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}
+  .outcomes div.error dd{color:var(--danger)}
   .mode-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   @media(max-width:700px){
     .queue-label{align-items:flex-start;flex-direction:column;gap:8px}

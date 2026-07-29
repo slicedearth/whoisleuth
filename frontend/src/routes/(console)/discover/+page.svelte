@@ -27,24 +27,30 @@
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.ts';
+  import {
+    candidateReviewCues as buildCandidateReviewCues,
+    sortDiscoverCandidates,
+    type CandidateMetadata,
+    type CandidateSort,
+  } from '$lib/analysis/discover-candidate-sort.ts';
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
+  import {
+    MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS,
+    normalizeInvestigationGuideDomain,
+  } from '$lib/analysis/investigation-guide.ts';
+  import {
+    loadInvestigationGuide,
+    selectInvestigationGuideReviewDomains,
+    updateInvestigationGuideOutcome,
+  } from '$lib/investigation-guide';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz' | 'all';
   type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
-  type CandidateSort = 'generated' | 'domain' | 'generation-paths' | 'reference' | 'mixed' | 'certificate-newest';
-  type CandidateMetadata = {
-    hasIdn: boolean;
-    unicodeDomain: string;
-    scripts: string[];
-    mixedScript: boolean;
-    referenceDomains: string[];
-  };
   const DISCOVER_PAGE_SIZE = 100;
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
@@ -127,6 +133,9 @@
     }
     return { unicode, mixed, reference, selected: selected.size };
   });
+  function candidateReviewCues(candidate: Candidate): string[] {
+    return buildCandidateReviewCues(candidate, candidateMetadata.get(candidate.domain));
+  }
   const visible = $derived.by(() => {
     const filtered = candidates.filter((candidate) => {
       const metadata = candidateMetadata.get(candidate.domain);
@@ -138,26 +147,7 @@
       if (candidateScope === 'selected' && !selected.has(candidate.domain)) return false;
       return true;
     });
-    if (candidateSort === 'generated') return filtered;
-    return [...filtered].sort((left, right) => {
-      if (candidateSort === 'domain') return left.domain.localeCompare(right.domain);
-      if (candidateSort === 'generation-paths') {
-        return right.mutationTypes.length - left.mutationTypes.length || left.domain.localeCompare(right.domain);
-      }
-      if (candidateSort === 'reference') {
-        return Number(Boolean(candidateMetadata.get(right.domain)?.referenceDomains.length))
-          - Number(Boolean(candidateMetadata.get(left.domain)?.referenceDomains.length))
-          || left.domain.localeCompare(right.domain);
-      }
-      if (candidateSort === 'mixed') {
-        return Number(Boolean(candidateMetadata.get(right.domain)?.mixedScript))
-          - Number(Boolean(candidateMetadata.get(left.domain)?.mixedScript))
-          || left.domain.localeCompare(right.domain);
-      }
-      const leftObserved = left.certificateTransparency?.lastObservedAt || '';
-      const rightObserved = right.certificateTransparency?.lastObservedAt || '';
-      return rightObserved.localeCompare(leftObserved) || left.domain.localeCompare(right.domain);
-    });
+    return sortDiscoverCandidates(filtered, candidateSort, candidateMetadata);
   });
   const pageCount = $derived(Math.max(1, Math.ceil(visible.length / DISCOVER_PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
@@ -539,6 +529,7 @@
       return {
         domain: candidate.domain,
         mutationLabel: candidate.mutationTypes.map((type) => mutationLabels[type] || type.replaceAll('_', ' ')).join(' · '),
+        reviewCues: candidateReviewCues(candidate),
         selected: selected.has(candidate.domain),
         isNew: ctNewDomains.has(candidate.domain),
         unicodeDomain: metadata?.unicodeDomain || '',
@@ -558,6 +549,17 @@
   async function sendToBulk() {
     if (!selectedCandidates.length) return;
     saveCandidateHandoff(mode, selectedCandidates, generatedContext);
+    const guide = loadInvestigationGuide();
+    const discoverStage = guide?.stages.find((stage) => stage.id === 'discover');
+    if (guide?.recipeId === 'brand_sweep' && discoverStage?.outcome === 'pending') {
+      const selectedDomains = selectedCandidates.map((candidate) => candidate.domain);
+      const retainedGuide = selectInvestigationGuideReviewDomains(selectedDomains);
+      const expectedRetainedDomains = selectedDomains.slice(0, MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
+      const retainedSelectionMatches = retainedGuide?.reviewDomains.length === expectedRetainedDomains.length
+        && retainedGuide.reviewDomains.every((domain, index) => domain === expectedRetainedDomains[index])
+        && retainedGuide.reviewDomainsTruncated === (selectedDomains.length > MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
+      if (retainedSelectionMatches) updateInvestigationGuideOutcome('discover', 'complete');
+    }
     await goto('/bulk?source=discover');
   }
 </script>

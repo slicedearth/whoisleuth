@@ -23,6 +23,12 @@
     statusLabel: (value: CaseRecord['status']) => string;
     dispositionLabel: (value: CaseRecord['disposition']) => string;
   } = $props();
+
+  function caseWorkspaceHref(recordId: string, focusResponse = false): string {
+    const encodedId = encodeURIComponent(recordId);
+    const base = `/monitor?view=cases&case=${encodedId}`;
+    return focusResponse ? `${base}#case-response-${encodedId}` : base;
+  }
 </script>
 
 {#if domain}
@@ -33,7 +39,7 @@
         <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(); }}>
           <label class="field" for="case-note">Add note</label>
           <textarea id="case-note" value={note} oninput={(event) => setNote(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
-          <div class="case-actions"><button class="btn" type="submit" disabled={!note.trim()}>Add note</button><a href={`/monitor?case=${encodeURIComponent(record.id)}`}>Open in Monitor →</a></div>
+          <div class="case-actions"><button class="btn" type="submit" disabled={!note.trim()}>Add note</button><a href={caseWorkspaceHref(record.id)}>Open in Monitor →</a></div>
         </form>
         <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · manage status, disposition, and tags in Monitor. Cases are stored only in this browser.</p>
       </div>
@@ -58,7 +64,7 @@
           {#if route.limitations.length}<ul>{#each route.limitations.slice(0, 3) as limitation}<li>{limitation}</li>{/each}</ul>{/if}
           <div>
             <button class="btn small" type="button" onclick={() => void recordRecipient(route)} disabled={!record}>Record in case</button>
-            {#if record}<a class="btn small" href={`/monitor?case=${encodeURIComponent(record.id)}`}>Review response packet</a>{/if}
+            {#if record}<a class="btn small" href={caseWorkspaceHref(record.id, true)}>Review response packet</a>{/if}
           </div>
         </article>
       {/each}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   type RoleFinding = {
     role: string;
     label: string;
@@ -52,7 +53,7 @@
         <span class="evidence-summary-title" id="page-role-behavior-title" role="heading" aria-level="4">Page role and client behaviour</span>
         <span class="evidence-summary-detail">{primaryRole} · {indicators.length} static behaviour indicator{indicators.length === 1 ? '' : 's'}</span>
       </span>
-      <span class:partial={!roleComplete || !behaviorComplete} class="evidence-status">{roleStatus === behaviorStatus ? roleStatus : `${roleStatus} / ${behaviorStatus}`}</span>
+      <span class="evidence-status {evidenceStatusTone(roleStatus === behaviorStatus ? roleStatus : 'partial', { complete: roleComplete && behaviorComplete })}">{roleStatus === behaviorStatus ? roleStatus : `${roleStatus} / ${behaviorStatus}`}</span>
     </span>
   </summary>
 

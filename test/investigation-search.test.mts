@@ -7,8 +7,10 @@ import {
   INVESTIGATION_SEARCH_SCHEMA,
   INVESTIGATION_SEARCH_VERSION,
   MAX_INVESTIGATION_SEARCH_QUERY_LENGTH,
+  MAX_RECENT_INVESTIGATION_RESULTS,
   MAX_INVESTIGATION_SEARCH_RESULTS,
   MAX_INVESTIGATION_SEARCH_TOKENS,
+  recentInvestigationResults,
   searchInvestigationIndex,
   unavailableInvestigationSearchIndex,
 } from '../frontend/src/lib/analysis/investigation-search.ts';
@@ -108,6 +110,32 @@ describe('local investigation search index', () => {
     assert.equal(requiredValue(response.results[0]).canonical, 'portal.invalid');
     assert.equal(requiredValue(response.results[0]).matchedField, 'canonical');
     assert.equal(requiredValue(response.results[0]).score, 0);
+  });
+
+  test('projects a bounded recent-work list without requiring a search query', () => {
+    const index = indexFor(projectionInput({
+      cases: { version: CASE_SCHEMA_VERSION, cases: [
+        caseRecord('case-early', 'early.invalid', {
+          updatedAt: EARLY,
+          evidenceHistory: [snapshot({ capturedAt: EARLY })],
+        }),
+        caseRecord('case-late', 'late.invalid'),
+        ...Array.from({ length: 5 }, (_, position) => caseRecord(
+          `case-extra-${position}`,
+          `extra-${position}.invalid`,
+          { updatedAt: new Date(Date.parse(EARLY) + position * 1_000).toISOString() },
+        )),
+      ] },
+    }));
+    const recent = recentInvestigationResults(index);
+    assert.equal(recent.length, MAX_RECENT_INVESTIGATION_RESULTS);
+    assert.equal(recent[0]?.observedAt, LATE);
+    assert.ok(recent.every((result) => result.matchedField === 'canonical' && result.matchedValue === result.canonical));
+    assert.deepEqual(
+      recent.map((result) => result.observedAt),
+      [...recent].map((result) => result.observedAt).sort((left, right) => right.localeCompare(left)),
+    );
+    assert.deepEqual(recentInvestigationResults(unavailableInvestigationSearchIndex('Unavailable.')), []);
   });
 
   test('searches case domains and pivots to the exact source case without network work', () => {

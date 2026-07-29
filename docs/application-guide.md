@@ -282,7 +282,13 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   Pins, decisions, and actions stay separately typed so an analyst assertion is
   never presented as collected evidence.
 - **Campaigns** group existing case domains without duplicating their evidence
-  or implying attribution.
+  or implying attribution. An expanded campaign projects bounded counts for
+  password fields, official-identity relationships, redirect or transport
+  review, and mail routing from each linked case's latest retained snapshot.
+  It keeps unavailable cases, limited evidence, and unreviewed dispositions
+  visible. Cue overlap is expected and the projection is not a score,
+  ownership claim, campaign-attribution finding, or maliciousness
+  determination.
 - **Relationships** review analyst-selected Bulk observations and project
   typed, provenance-backed links across those records, stored case evidence,
   and campaign membership without another network request. The Evidence
@@ -379,6 +385,15 @@ extra request and does not determine valuation, legal rights, registry
 eligibility, registrar terms, price, release timing, or acquisition success.
 Unavailable and partial source states remain visible rather than being
 converted into a clean finding.
+
+The **Analyst decision workspace** can download a versioned, integrity-stamped
+JSON review containing the bounded evidence projection, current analyst
+decision, short rationale, completed manual checks, outstanding checks, and
+explicit limitations. A packet remains `draft` while its decision is unresolved
+or any manual check is outstanding. A `reviewed` packet records checklist
+completion only. It does not verify a counterparty or external statement and
+does not reserve, value, purchase, submit, or transfer the domain. The public
+Demo marks its equivalent artifact as synthetic.
 
 A missing delegation, failed provider, absent website, or unavailable registrar
 source never means that a domain is available. Registry compatibility metadata

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   import HttpRedirectPath from '$lib/components/HttpRedirectPath.svelte';
 
   type Row = { label: string; value: string; hash?: boolean };
@@ -34,7 +35,7 @@
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
       <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="http-title" role="heading" aria-level="4">HTTP intelligence</span><span class="evidence-summary-detail">Expand for response, redirect, provenance, and limitation detail</span></span>
-      <span class:partial={!complete} class="evidence-status">{status}</span>
+      <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>
   <div class="evidence-body">

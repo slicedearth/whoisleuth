@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   let {
     status,
     complete,
@@ -26,7 +27,7 @@
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
       <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="dns-title" role="heading" aria-level="4">{title}</span><span class="evidence-summary-detail">{summaryDetail}</span></span>
-      <span class:partial={!complete} class="evidence-status">{status}</span>
+      <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>
   <div class="evidence-body">

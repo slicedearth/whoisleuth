@@ -84,6 +84,11 @@ test('completes the public synthetic workflow without investigation requests or 
   await network.locator(':scope > summary').click();
   await expect(network.getByText('203.0.113.44', { exact: true })).toBeVisible();
   const registrySources = page.locator('.sources > details');
+  const authorityTrace = page.getByRole('region', { name: 'Registration authority trace' });
+  await expect(authorityTrace).toContainText('Registry RDAP');
+  await expect(authorityTrace).toContainText('primary publication for domain existence');
+  await expect(authorityTrace).toContainText('Registrar RDAP');
+  await expect(authorityTrace).toContainText('It cannot decide domain existence');
   await expect(registrySources).toHaveCount(2);
   await expect(registrySources.nth(0)).not.toHaveAttribute('open', '');
   await expect(registrySources.nth(1)).not.toHaveAttribute('open', '');

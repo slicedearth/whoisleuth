@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   type Row = { label: string; value: string; danger?: boolean };
   type FingerprintRow = Row & { detail?: string | null };
 
@@ -39,7 +40,7 @@
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
       <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="page-identity-title" role="heading" aria-level="4">Page identity</span><span class="evidence-summary-detail">{facts.length} summary field{facts.length === 1 ? '' : 's'} · Expand for page metadata, fingerprints, and limitations</span></span>
-      <span class:partial={!complete} class="evidence-status">{status}</span>
+      <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>
   <div class="evidence-body">

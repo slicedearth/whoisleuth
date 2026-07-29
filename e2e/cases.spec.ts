@@ -1242,7 +1242,19 @@ test.describe('browser-local campaigns', () => {
 
   test('creates a campaign, adds cases, persists details and opens a member', async ({ page }) => {
     await openCampaigns(page, [
-      caseRecord({ id: 'member-one', domain: 'member-one.invalid' }),
+      caseRecord({
+        id: 'member-one',
+        domain: 'member-one.invalid',
+        evidenceHistory: [snapshot({
+          hasPasswordField: true,
+          hasMx: true,
+          faviconMatch: true,
+          httpSummaryVersion: 1,
+          httpEvidenceStatus: 'success',
+          httpResponseStatus: 302,
+          httpCrossOriginRedirect: true,
+        })],
+      }),
       caseRecord({ id: 'member-two', domain: 'member-two.invalid' }),
     ]);
 
@@ -1255,6 +1267,13 @@ test.describe('browser-local campaigns', () => {
     await page.locator('.add-case select').selectOption('member-one.invalid');
     await page.getByRole('button', { name: 'Add case' }).click();
     await expect(page.locator('.members')).toContainText('member-one.invalid');
+    const reviewSummary = page.getByRole('region', { name: 'Campaign review cues' });
+    await expect(reviewSummary).toContainText('1/1 linked');
+    await expect(reviewSummary).toContainText('1 unreviewed');
+    await expect(reviewSummary.locator('article', { hasText: 'Password field observed' })).toContainText('1');
+    await expect(reviewSummary.locator('article', { hasText: 'Official identity relationship' })).toContainText('1');
+    await expect(reviewSummary.locator('article', { hasText: 'Redirect or transport review' })).toContainText('1');
+    await expect(reviewSummary.locator('article', { hasText: 'Mail exchanger observed' })).toContainText('1');
 
     await page.reload();
     await page.getByRole('tab', { name: /Campaigns/ }).click();

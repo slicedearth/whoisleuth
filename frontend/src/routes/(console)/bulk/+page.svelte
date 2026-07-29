@@ -102,6 +102,7 @@
   import {
     BULK_PACING_OPTIONS,
     buildBulkProgressEstimate,
+    buildBulkProgressOutcomes,
     bulkConcurrency,
     normalizeBulkPacing,
     type BulkPacing,
@@ -188,6 +189,7 @@
   const relationshipSummary=$derived(buildScanRelationships(running?[]:results));
   const parsedInput=$derived(parseDomainInput(input));
   const scanProgress=$derived(buildBulkProgressEstimate(completed,total,scanElapsedMs));
+  const scanOutcomes=$derived(buildBulkProgressOutcomes(results,total));
   const activeConcurrency=$derived(bulkConcurrency(mode,pacing));
   $effect(()=>{if(routePage.url.searchParams.has('investigation')&&!running&&results.length)selectInvestigationGuideReviewDomains(results.map((row)=>row.domain));});
   const coverage=$derived.by(()=>{if(!handoff||!['typosquat','keyword'].includes(handoff.source))return null;const generated=handoff.generatedCandidates||handoff.candidates;const trusted=new Set(generated.filter(candidate=>isDomainAllowlisted(candidate.domain,profile)).map(candidate=>candidate.domain));return buildCoverageReport(results.map(row=>({...row.saved,domain:row.domain,availability:row.availability,mutationTypes:row.mutationTypes})),generated,trusted,mutationLabels);});
@@ -372,6 +374,7 @@
   pacingOptions={BULK_PACING_OPTIONS}
   concurrency={activeConcurrency}
   progress={scanProgress}
+  outcomes={scanOutcomes}
   {running}
   {paused}
   entryCount={parsedInput.entries.length}

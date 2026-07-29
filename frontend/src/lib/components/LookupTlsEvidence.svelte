@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   type Row = { label: string; value: string; danger?: boolean; hash?: boolean };
   type Finding = { label: string; detail: string; tone: string };
   type ChainEntry = { label: string; subject: string; fingerprint: string };
@@ -36,7 +37,7 @@
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
       <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="tls-title" role="heading" aria-level="4">TLS and certificate intelligence</span><span class="evidence-summary-detail">Expand for certificate, validation, provenance, and limitation detail</span></span>
-      <span class:partial={!complete} class="evidence-status">{status}</span>
+      <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>
   <div class="evidence-body">
