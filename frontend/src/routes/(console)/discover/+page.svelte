@@ -31,7 +31,15 @@
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
+  import {
+    MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS,
+    normalizeInvestigationGuideDomain,
+  } from '$lib/analysis/investigation-guide.ts';
+  import {
+    loadInvestigationGuide,
+    selectInvestigationGuideReviewDomains,
+    updateInvestigationGuideOutcome,
+  } from '$lib/investigation-guide';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
@@ -558,6 +566,17 @@
   async function sendToBulk() {
     if (!selectedCandidates.length) return;
     saveCandidateHandoff(mode, selectedCandidates, generatedContext);
+    const guide = loadInvestigationGuide();
+    const discoverStage = guide?.stages.find((stage) => stage.id === 'discover');
+    if (guide?.recipeId === 'brand_sweep' && discoverStage?.outcome === 'pending') {
+      const selectedDomains = selectedCandidates.map((candidate) => candidate.domain);
+      const retainedGuide = selectInvestigationGuideReviewDomains(selectedDomains);
+      const expectedRetainedDomains = selectedDomains.slice(0, MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
+      const retainedSelectionMatches = retainedGuide?.reviewDomains.length === expectedRetainedDomains.length
+        && retainedGuide.reviewDomains.every((domain, index) => domain === expectedRetainedDomains[index])
+        && retainedGuide.reviewDomainsTruncated === (selectedDomains.length > MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS);
+      if (retainedSelectionMatches) updateInvestigationGuideOutcome('discover', 'complete');
+    }
     await goto('/bulk?source=discover');
   }
 </script>

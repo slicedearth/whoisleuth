@@ -92,6 +92,7 @@
       : investigationGuideHref(actionStage.id, guide.domain, guide.recipeId, guide.focusDomain)
     : '/dashboard');
   const candidateSelectionRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'lookup' && !guide.focusDomain));
+  const candidateHandoffRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'discover'));
   const handoffReadiness = $derived(buildInvestigationHandoffReadiness({
     caseRecord: contextCase,
     evidenceProjection: evidence,
@@ -484,6 +485,7 @@
             </section>
           </div>
           <div class="action-controls">
+            <p class="mobile-action-label"><span>Next action</span><strong>{actionStage.label}</strong></p>
             {#if actionStage.workspace === 'monitor'}
               <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
                 <div>
@@ -531,7 +533,9 @@
             {#if guide.status !== 'paused' && actionProgress.outcome === 'pending'}
               <div class="outcome-actions" role="group" aria-label={`Finish ${actionStage.label}`}>
                 <span>After doing the work above</span>
-                {#if actionProgress.openedAt}
+                {#if candidateHandoffRequired}
+                  <p class="candidate-note">Select the candidates worth checking, then use <strong>Continue to Bulk</strong> in the results. That handoff records the reviewed set and completes this step.</p>
+                {:else if actionProgress.openedAt}
                   <button class="primary compact" type="button" onclick={() => setOutcome(actionStage.id, 'complete')}>Mark reviewed</button>
                   <button class="btn compact" type="button" onclick={() => reviewOutcome('partial')}>Mark partial</button>
                 {/if}
@@ -676,6 +680,10 @@
   .completion-check dl{margin:0;padding:0;border:0}
   .action-controls{display:grid;gap:9px;align-content:start}
   .action-controls>a,.action-controls>button{text-align:center}
+  .mobile-action-label{display:none;margin:0}
+  .mobile-action-label span,.mobile-action-label strong{display:block}
+  .mobile-action-label span{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .mobile-action-label strong{margin-top:2px;font:700 var(--text-sm) var(--mono)}
   .request-review{display:grid;gap:7px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
   .request-review>strong{font:700 var(--text-xs) var(--mono)}
   .request-review p,.candidate-note,.outcome-state{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
@@ -748,6 +756,6 @@
   .guide-return small{color:var(--accent);font-weight:700}
   .guide-return:hover{border-color:var(--accent);background:var(--surface2)}
   @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:560px){.guide-heading{flex-wrap:wrap}.context-actions{width:100%;justify-content:flex-start}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}.target-edit{grid-template-columns:1fr}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
+  @media(max-width:560px){.guide-heading{flex-wrap:wrap}.context-actions{width:100%;justify-content:flex-start}.current-action>.action-copy{grid-row:2}.current-action>.action-controls{grid-row:1}.mobile-action-label{display:block}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}.target-edit{grid-template-columns:1fr}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
   @media(max-width:360px){.guide-controls{grid-template-columns:1fr}#investigation-plan>li summary{grid-template-columns:auto minmax(0,1fr) auto}.stage-state{grid-column:2;text-align:left}#investigation-plan>li summary::after{grid-column:3;grid-row:1}}
 </style>

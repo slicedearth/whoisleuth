@@ -321,7 +321,7 @@ test('returning to the same guided Bulk step keeps its peer set and completed re
   await expect(page.getByRole('status').filter({ hasText: 'Completed 2 of 2 lookups.' })).toBeVisible();
 });
 
-test('brand sweep carries the official domain into a profile and a selected candidate across every tool', async ({ page }) => {
+test('brand sweep carries the official domain and selected candidates across every tool', async ({ page }) => {
   test.slow();
   await installLookupFixture(page);
   await startRecipe(page, 'Brand sweep');
@@ -338,11 +338,22 @@ test('brand sweep carries the official domain into a profile and a selected cand
   await expect(page.locator('#discovery-seed')).toHaveValue('example.test');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
   await expect(page.locator('.candidate').first()).toBeVisible();
-  const candidate = (await page.locator('.candidate strong').first().textContent())?.trim() || '';
-  expect(candidate).not.toBe('');
-  await page.locator('.candidate input[type="checkbox"]').first().check();
-  await page.getByRole('button', { name: 'Continue to Bulk with 1' }).click();
-  await markReviewed(page, 'Discover candidates');
+  const candidates = (await page.locator('.candidate strong').evaluateAll((elements) => (
+    elements.slice(0, 2).map((element) => element.textContent?.trim() || '')
+  ))).filter(Boolean);
+  expect(candidates).toHaveLength(2);
+  const primaryCandidate = candidates[0];
+  if (!primaryCandidate) throw new Error('Expected at least one generated candidate.');
+  await page.locator('.candidate input[type="checkbox"]').nth(0).check();
+  await page.locator('.candidate input[type="checkbox"]').nth(1).check();
+  await page.getByRole('button', { name: 'Continue to Bulk with 2' }).click();
+  await expect(currentAction(page)).toContainText('Triage candidates');
+  const handedOffGuide = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
+  expect(handedOffGuide.reviewDomains).toEqual(candidates);
+  expect(handedOffGuide.stages.find((stage: { id: string }) => stage.id === 'discover')).toMatchObject({
+    outcome: 'complete',
+    reviewNote: null,
+  });
 
   await runBulkStep(page, 'Triage candidates');
   await expect(currentAction(page)).toContainText('Inspect priority domain');
@@ -350,8 +361,8 @@ test('brand sweep carries the official domain into a profile and a selected cand
   await expect(page.locator('#results')).toBeInViewport();
   await page.locator('.results-table tbody tr').first().getByRole('button', { name: 'Inspect' }).click();
   await expect(currentAction(page)).toContainText('Inspect priority domain');
-  await runLookupStep(page, 'Inspect priority domain', candidate);
-  await retainCases(page, 'Retain reviewed work', [candidate]);
+  await runLookupStep(page, 'Inspect priority domain', primaryCandidate);
+  await retainCases(page, 'Retain reviewed work', [primaryCandidate]);
   await expect(page.locator('.guide')).toContainText('5 of 5 steps reviewed');
 });
 
