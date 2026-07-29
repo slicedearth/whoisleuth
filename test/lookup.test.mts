@@ -315,6 +315,60 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
   });
 
+  test('adds an exact local SSLBL comparison only to deep non-compact domain lookups', async () => {
+    let inspections = 0;
+    const inspector = (tls: unknown, options: { snapshot?: unknown; now?: unknown } = {}) => {
+      inspections += 1;
+      assert.deepEqual(tls, { certificate: { fingerprintSha1: 'a'.repeat(40) } });
+      assert.equal(options.snapshot, 'fixture-snapshot');
+      assert.equal(options.now, '2026-07-29T10:00:00.000Z');
+      return {
+        sslblVersion: 1 as const,
+        source: 'sslbl' as const,
+        status: 'success' as const,
+        verdict: 'listed' as const,
+        complete: true,
+        observedAt: '2026-07-29T10:00:00.000Z',
+        fingerprintSha1: 'a'.repeat(40),
+        referenceUrl: `https://sslbl.abuse.ch/ssl-certificates/sha1/${'a'.repeat(40)}/`,
+        snapshot: {
+          sourceUpdatedAt: '2026-07-29T08:00:00.000Z',
+          generatedAt: '2026-07-29T08:05:00.000Z',
+          ageSeconds: 7200,
+          entryCount: 1,
+          digestSha256: 'b'.repeat(64),
+        },
+        detail: 'Exact local match.',
+        limitations: ['A match is not attribution.'],
+      };
+    };
+    const common = {
+      fetchRdapRecord: async () => null,
+      fetchRegistrarRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({
+        state: 'registered',
+        confidence: 'medium',
+        tls: { certificate: { fingerprintSha1: 'a'.repeat(40) } },
+      }),
+      collectObservedNetworkContext: async () => null,
+      inspectSslblCertificate: inspector,
+      sslblSnapshot: 'fixture-snapshot',
+      sslblNow: '2026-07-29T10:00:00.000Z',
+    };
+    const deep = await runFullLookup(classifiedDomain, common);
+    assert.equal(deep.sslbl?.verdict, 'listed');
+    assert.equal(deep.diagnostics.sslbl?.status, 'success');
+
+    const fast = await runFullLookup(classifiedDomain, { ...common, fast: true });
+    const compact = await runCompactLookup(classifiedDomain, { ...common, compact: true });
+    assert.equal(Object.hasOwn(fast, 'sslbl'), false);
+    assert.equal(Object.hasOwn(fast.diagnostics, 'sslbl'), false);
+    assert.equal(Object.hasOwn(compact, 'sslbl'), false);
+    assert.equal(Object.hasOwn(compact.diagnostics, 'sslbl'), false);
+    assert.equal(inspections, 1);
+  });
+
   test('records bounded settle timing only for deep non-compact source branches', async () => {
     let clock = 0;
     const now = () => {

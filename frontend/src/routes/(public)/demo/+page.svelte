@@ -16,6 +16,7 @@
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
   import LookupStructuredDataIdentity from '$lib/components/LookupStructuredDataIdentity.svelte';
+  import LookupSslblEvidence from '$lib/components/LookupSslblEvidence.svelte';
   import LookupTechnologyProfile from '$lib/components/LookupTechnologyProfile.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
   import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
@@ -46,6 +47,17 @@
       ?SYNTHETIC_DEMO_CANDIDATES.filter((candidate)=>relatedDomains.includes(candidate.domain))
       :SYNTHETIC_DEMO_CANDIDATES);
   const lookupView=$derived(selected?syntheticDemoLookupView(selected.id):null);
+  const demoSslbl=Object.freeze({
+    status:'success',verdict:'not_listed',complete:true,
+    detail:'The synthetic leaf certificate fingerprint was not present in the fixture snapshot.',
+    fingerprint:'1111111111111111111111111111111111111111',referenceUrl:'',
+    sourceUpdatedAt:'2026-07-20T00:00:00.000Z',generatedAt:'2026-07-20T01:00:00.000Z',
+    entryCount:12000,digest:'2'.repeat(64),
+    limitations:[
+      'This is fixed fictional demo evidence and was not compared with the live SSLBL feed.',
+      'No matching record is not evidence that a certificate, domain, or service is safe.',
+    ],
+  });
   const caseRecord=$derived(syntheticDemoCaseRecord(demoState));
   const lookupTopologyNodes=$derived(selected&&lookupView?[
     {id:'registry',label:'Registry',detail:selected.evidence.registry.status,status:lookupView.registry.rdapError?'partial':'success',href:'#demo-evidence-registry',side:'left' as const,glyph:'R',family:'registry' as const},
@@ -53,6 +65,7 @@
     {id:'network',label:'Network',detail:lookupView.network.status,status:lookupView.network.status,href:'#demo-evidence-network',side:'left' as const,glyph:'N',family:'network' as const},
     {id:'http',label:'HTTP',detail:lookupView.http.status,status:lookupView.http.status,href:'#demo-evidence-http',side:'right' as const,glyph:'H',family:'web' as const},
     {id:'tls',label:'TLS',detail:lookupView.tls.status,status:lookupView.tls.status,href:'#demo-evidence-tls',side:'right' as const,glyph:'T',family:'web' as const},
+    {id:'sslbl',label:'Certificate warning data',detail:demoSslbl.verdict,status:demoSslbl.status,href:'#demo-evidence-sslbl',side:'right' as const,glyph:'C',family:'web' as const},
     {id:'structured-identity',label:'Structured identity',detail:lookupView.structuredIdentity.status,status:lookupView.structuredIdentity.status,href:'#demo-evidence-structured-identity',side:'right' as const,glyph:'SI',family:'web' as const},
     {id:'technology',label:'Technology',detail:lookupView.technology.status,status:lookupView.technology.status,href:'#demo-evidence-technology',side:'right' as const,glyph:'W',provenance:'derived' as const},
     {id:'assessment',label:'Assessment',detail:`Risk ${selected.risk}`,status:'warning',href:'#demo-assessment',side:'right' as const,glyph:'A',provenance:'derived' as const},
@@ -249,6 +262,7 @@
     <div class="shared-evidence"><LookupSecurityPosture {...lookupView.securityPosture} /></div>
     <div class="shared-evidence" id="demo-evidence-technology"><LookupTechnologyProfile {...lookupView.technology} /></div>
     <div class="shared-evidence" id="demo-evidence-tls"><LookupTlsEvidence {...lookupView.tls} /></div>
+    <div class="shared-evidence" id="demo-evidence-sslbl"><LookupSslblEvidence {...demoSslbl} /></div>
     <div class="shared-evidence" id="demo-evidence-network"><LookupNetworkContext {...lookupView.network} /></div>
     {#if selected.relationship}<div class="limitation info"><strong>Relationship context</strong><p>{selected.relationship.label} <code>{selected.relationship.value}</code> appears in {selected.relationship.relatedCandidates} synthetic candidates. Shared infrastructure is not proof of common ownership.</p></div>{/if}
     <div class="limitation"><strong>Interpretation limit</strong><p>These values demonstrate source attribution and explainability only. A live result would still require analyst review.</p></div>

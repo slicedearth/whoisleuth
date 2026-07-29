@@ -87,7 +87,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.glossary-grid').getByText('PTR', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('SOA', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('Website profile snapshot', { exact: true })).toBeVisible();
-  await expect(page.locator('.faq-list details')).toHaveCount(19);
+  await expect(page.locator('.faq-list details')).toHaveCount(20);
 
   const question = page.getByText('Does WHOISleuth decide whether a domain is malicious?', { exact: true });
   await question.click();

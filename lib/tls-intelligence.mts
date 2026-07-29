@@ -49,6 +49,7 @@ type NormalizedCertificate = {
   serialNumber: string | null;
   validFrom: string | null;
   validTo: string | null;
+  fingerprintSha1: string | null;
   fingerprintSha256: string | null;
   isCertificateAuthority: boolean | null;
   subjectAltNames?: AltNames;
@@ -214,6 +215,19 @@ function normalizeFingerprint(value: unknown, state: Tracker): string | null {
   }
   const compact = value.replace(/:/g, '').toLowerCase();
   if (/^[0-9a-f]{64}$/.test(compact)) return compact;
+  if (value.trim()) state.discarded += 1;
+  return null;
+}
+
+function normalizeSha1Fingerprint(value: unknown, state: Tracker): string | null {
+  if (typeof value !== 'string') return null;
+  if (value.length > 96) {
+    state.truncated = true;
+    state.discarded += 1;
+    return null;
+  }
+  const compact = value.replace(/:/g, '').toLowerCase();
+  if (/^[0-9a-f]{40}$/.test(compact)) return compact;
   if (value.trim()) state.discarded += 1;
   return null;
 }
@@ -494,12 +508,17 @@ function normalizeCertificate(value: unknown, state: Tracker, options: { include
   const record = value as UnknownRecord;
   const parsedCertificate = options.includePublicKey === true ? x509Certificate(record.raw, state) : null;
   const fingerprintSha256 = hashRawCertificate(record.raw, state) || normalizeFingerprint(record.fingerprint256, state);
+  // Node's peer-certificate fingerprint is retained only as the provider
+  // identifier needed for exact SSLBL comparison. WHOISleuth does not compute
+  // or use SHA-1 for trust, signatures, uniqueness, or security decisions.
+  const fingerprintSha1 = normalizeSha1Fingerprint(record.fingerprint, state);
   const certificate: NormalizedCertificate = {
     subject: normalizeDistinguishedName(record.subject, state),
     issuer: normalizeDistinguishedName(record.issuer, state),
     serialNumber: normalizeSerial(record.serialNumber, state),
     validFrom: normalizeDate(record.valid_from, state),
     validTo: normalizeDate(record.valid_to, state),
+    fingerprintSha1,
     fingerprintSha256,
     isCertificateAuthority: typeof record.ca === 'boolean' ? record.ca : null,
   };

@@ -2,7 +2,7 @@ import { compareRdapPublications, compareRegistrySources } from './registry-comp
 import { buildRegistryInsights } from './registry-insights.mts';
 
 export const LOOKUP_EVIDENCE_SCHEMA = 'whoisleuth.lookup-evidence';
-export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 22;
+export const LOOKUP_EVIDENCE_SCHEMA_VERSION = 23;
 
 type UnknownRecord = Record<string, unknown>;
 type LookupEvidenceOptions = { generatedAt?: string; idnAnalysis?: unknown };
@@ -14,6 +14,8 @@ const NETWORK_CONTEXT_STATUSES = new Set(['success', 'partial', 'not_found', 'un
 const NETWORK_ADDRESS_SOURCES = new Set(['tls_connection', 'dns_a', 'dns_aaaa']);
 const REVERSE_DNS_STATUSES = new Set(['success', 'partial', 'not_found', 'unsupported', 'skipped', 'error']);
 const SECURITY_TXT_STATES = new Set(['present', 'stale', 'partial', 'absent', 'malformed', 'unsupported', 'unavailable']);
+const SSLBL_STATES = new Set(['success', 'stale', 'unavailable']);
+const SSLBL_VERDICTS = new Set(['listed', 'not_listed', 'inconclusive']);
 
 function recordOrNull(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
@@ -94,6 +96,31 @@ function boundedUriList(value: unknown, protocols: string[]): string[] {
     .filter((item): item is string => item !== null))];
 }
 
+function boundedSslblReferenceUrl(
+  value: unknown,
+  fingerprint: string | null,
+  verdict: string,
+): string | null {
+  if (!fingerprint || verdict !== 'listed') return null;
+  const text = boundedString(value, 2048);
+  if (!text) return null;
+  const expectedPath = `/ssl-certificates/sha1/${fingerprint}/`;
+  try {
+    const url = new URL(text);
+    if (url.protocol !== 'https:'
+      || url.hostname !== 'sslbl.abuse.ch'
+      || url.port
+      || url.username
+      || url.password
+      || url.pathname !== expectedPath) {
+      return null;
+    }
+    return `https://sslbl.abuse.ch${expectedPath}`;
+  } catch {
+    return null;
+  }
+}
+
 function securityTxtSource(value: unknown) {
   const source = recordOrNull(value);
   if (
@@ -127,6 +154,55 @@ function securityTxtSource(value: unknown) {
     encryption: boundedUriList(source.encryption, ['https:', 'dns:', 'openpgp4fpr:']),
     canonical: boundedUriList(source.canonical, ['https:']),
     preferredLanguages: boundedStringList(source.preferredLanguages, 10, 40),
+  };
+}
+
+function sslblSource(value: unknown) {
+  const source = recordOrNull(value);
+  if (!source
+    || source.sslblVersion !== 1
+    || source.source !== 'sslbl'
+    || typeof source.status !== 'string'
+    || !SSLBL_STATES.has(source.status)
+    || typeof source.verdict !== 'string'
+    || !SSLBL_VERDICTS.has(source.verdict)) {
+    return null;
+  }
+  const snapshot = recordOrNull(source.snapshot);
+  const rawFingerprint = boundedString(source.fingerprintSha1, 40);
+  const fingerprint = rawFingerprint && /^[a-f0-9]{40}$/u.test(rawFingerprint)
+    ? rawFingerprint
+    : null;
+  const validState = (source.verdict === 'not_listed'
+    && source.status === 'success'
+    && source.complete === true)
+    || (source.verdict === 'listed'
+      && (source.status === 'success' || source.status === 'stale')
+      && source.complete === (source.status === 'success'))
+    || (source.verdict === 'inconclusive'
+      && (source.status === 'stale' || source.status === 'unavailable')
+      && source.complete === false);
+  if (!validState) return null;
+  return {
+    sslblVersion: 1,
+    source: 'sslbl',
+    status: source.status,
+    verdict: source.verdict,
+    complete: source.complete === true,
+    observedAt: boundedTimestamp(source.observedAt),
+    fingerprintSha1: fingerprint,
+    referenceUrl: boundedSslblReferenceUrl(source.referenceUrl, fingerprint, source.verdict),
+    snapshot: snapshot ? {
+      sourceUpdatedAt: boundedTimestamp(snapshot.sourceUpdatedAt),
+      generatedAt: boundedTimestamp(snapshot.generatedAt),
+      ageSeconds: boundedInteger(snapshot.ageSeconds, 31_536_000),
+      entryCount: boundedInteger(snapshot.entryCount, 50_000),
+      digestSha256: /^[a-f0-9]{64}$/u.test(String(snapshot.digestSha256 || ''))
+        ? snapshot.digestSha256
+        : null,
+    } : null,
+    detail: boundedString(source.detail, 300),
+    limitations: boundedStringList(source.limitations, 10, 300),
   };
 }
 
@@ -345,6 +421,7 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
       reverseDns: reverseDnsSource(body.reverseDns),
       network: networkSource(body.networkContext),
       securityTxt: securityTxtSource(body.securityTxt),
+      sslbl: sslblSource(body.sslbl),
     },
     analysis: {
       availability: cloneJson(body.availability),

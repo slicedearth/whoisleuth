@@ -26,6 +26,7 @@
   import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
+  import LookupSslblEvidence from '$lib/components/LookupSslblEvidence.svelte';
   import LookupServiceDependencyReview from '$lib/components/LookupServiceDependencyReview.svelte';
   import LookupStructuredDataIdentity from '$lib/components/LookupStructuredDataIdentity.svelte';
   import LookupTlsEvidence from '$lib/components/LookupTlsEvidence.svelte';
@@ -169,6 +170,8 @@
   const observedNetworkRdap=$derived(lookupView.observedNetworkRdap);
   const observedNetwork=$derived(lookupView.observedNetwork);
   const securityTxt=$derived(lookupView.securityTxt);
+  const sslbl=$derived(lookupView.sslbl);
+  const sslblSnapshot=$derived(rec(sslbl.snapshot));
   const threatIntelligence=$derived(lookupView.threatIntelligence);
   const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders);
   const dnsEvidence=$derived(lookupView.dnsEvidence);
@@ -298,7 +301,7 @@
     hasPasswordField:availability.hasPasswordField,
     phishingLanguageMatch:availability.phishingLanguageMatch,
   }));
-  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||pageRoleProfile.source==='derived'||clientBehaviorProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||sslbl.sslblVersion===1||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||pageRoleProfile.source==='derived'||clientBehaviorProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||abuseRecipientResolution.recipients.length>0);
   const evidenceTopologyNodes=$derived(buildLookupEvidenceTopologyNodes({
     targetType:result?.type,
@@ -376,6 +379,7 @@
     technologyProfile,
     securityPosture,
     securityTxt,
+    sslbl,
     rdapParsed,
     whoisParsed,
     threatIntelligenceProviders,
@@ -601,6 +605,17 @@
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
+      {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
+        <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
+          <div>
+            <p class="eyebrow">Certificate review lead</p>
+            <h4 id="sslbl-review-lead-title">The observed leaf certificate matched the local SSLBL snapshot</h4>
+            <p>This is attributed warning data for analyst review. It does not establish current activity, ownership, or maliciousness and does not change Risk scoring.</p>
+          </div>
+          <a class="button secondary" href="#evidence-sslbl">Review certificate evidence</a>
+        </aside>
+      {/if}
+
       {#if lookupTiming}
         <LookupCollectionTiming timing={lookupTiming} />
       {/if}
@@ -689,6 +704,22 @@
 
       {#if tlsEvidence.source==='tls'}
         <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={typeof result.fetchedAt==='string'?result.fetchedAt:null} /></div>
+      {/if}
+
+      {#if sslbl.sslblVersion===1}
+        <div class="evidence-component" id="evidence-sslbl"><LookupSslblEvidence
+          status={boundedTechnologyText(sslbl.status||'unavailable',40)}
+          verdict={boundedTechnologyText(sslbl.verdict||'inconclusive',40)}
+          complete={sslbl.complete===true}
+          detail={boundedTechnologyText(sslbl.detail||'Certificate warning-data comparison was unavailable.',500)}
+          fingerprint={boundedTechnologyText(sslbl.fingerprintSha1,40)}
+          referenceUrl={boundedTechnologyText(sslbl.referenceUrl,2048)}
+          sourceUpdatedAt={dateTimeAttribute(sslblSnapshot.sourceUpdatedAt)||''}
+          generatedAt={dateTimeAttribute(sslblSnapshot.generatedAt)||''}
+          entryCount={Number.isSafeInteger(sslblSnapshot.entryCount)?Number(sslblSnapshot.entryCount):null}
+          digest={boundedTechnologyText(sslblSnapshot.digestSha256,64)}
+          limitations={stringList(sslbl.limitations).slice(0,8)}
+        /></div>
       {/if}
 
       {#if securityTxt.securityTxtVersion===1}
@@ -884,6 +915,11 @@
   .result-section>.card,.result-section>.evidence-component{margin-top:12px}
   .result-section>:nth-child(2){margin-top:0}
   .evidence-component[id]{position:relative;scroll-margin-top:var(--local-nav-anchor-offset,88px)}
+  .sslbl-review-lead{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:12px;padding:16px;border:1px solid color-mix(in srgb,var(--danger) 42%,var(--border));border-radius:var(--radius);background:color-mix(in srgb,var(--danger) 5%,var(--surface))}
+  .sslbl-review-lead .eyebrow{margin:0 0 5px;color:var(--danger)}
+  .sslbl-review-lead h4{margin:0;color:var(--text);font-size:var(--text-sm);line-height:1.35}
+  .sslbl-review-lead p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .sslbl-review-lead .button{flex:0 0 auto}
 
   .evidence-card{padding:var(--card-pad)}
   .evidence-card .section-head p:not(.eyebrow){margin:4px 0 0;color:var(--muted);font-size:var(--text-xs)}
@@ -899,4 +935,8 @@
 
   .raw pre{max-height:520px;overflow:auto;margin:0;padding:var(--card-pad);border-top:1px solid var(--border);font-size:var(--text-xs)}
 
+  @media(max-width:700px){
+    .sslbl-review-lead{align-items:stretch;flex-direction:column}
+    .sslbl-review-lead .button{width:100%}
+  }
 </style>

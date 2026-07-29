@@ -93,6 +93,56 @@ describe('CLI argument parsing', () => {
     );
   });
 
+  test('parses redacted archive inspection and explicit evidence-signing inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'inspect-archive',
+      'workspace.json',
+      '--passphrase-file',
+      'passphrase.txt',
+      '--search',
+      'review-target.invalid',
+      '--reveal',
+      '--json',
+    ]), {
+      action: 'inspect-archive',
+      source: 'workspace.json',
+      passphraseSource: 'passphrase.txt',
+      search: 'review-target.invalid',
+      reveal: true,
+      requireMatch: false,
+      output: 'json',
+      quiet: false,
+      color: true,
+    });
+    assert.deepEqual(parseCliArguments([
+      'sign-artifact',
+      'review.json',
+      '--private-key-file',
+      'private.pem',
+    ]), {
+      action: 'sign-artifact',
+      source: 'review.json',
+      privateKeySource: 'private.pem',
+    });
+    assert.deepEqual(parseCliArguments([
+      'verify-signature',
+      'signed.json',
+      '--public-key-file',
+      'public.pem',
+      '--json',
+    ]), {
+      action: 'verify-signature',
+      source: 'signed.json',
+      publicKeySource: 'public.pem',
+      output: 'json',
+      quiet: false,
+      color: true,
+    });
+    assert.throws(() => parseCliArguments(['inspect-archive', '--reveal']), /requires --search/iu);
+    assert.throws(() => parseCliArguments(['inspect-archive', '--require-match']), /requires --search/iu);
+    assert.throws(() => parseCliArguments(['sign-artifact']), /requires --private-key-file/iu);
+  });
+
   test('parses privacy-safe source reliability report inputs', () => {
     assert.deepEqual(parseCliArguments([
       'source-report',

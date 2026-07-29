@@ -1,5 +1,12 @@
 const MAX_CLI_ERROR_MESSAGE_LENGTH = 300;
 
+class CliUsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CliUsageError';
+  }
+}
+
 function errorMessage(error: unknown): unknown {
   if (error && typeof error === 'object' && 'message' in error) return error.message;
   return undefined;
@@ -14,4 +21,4 @@ function boundedCliErrorMessage(error: unknown, fallback = 'Unexpected command f
     .slice(0, MAX_CLI_ERROR_MESSAGE_LENGTH) || fallback;
 }
 
-export { MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage };
+export { CliUsageError, MAX_CLI_ERROR_MESSAGE_LENGTH, boundedCliErrorMessage };

@@ -11,6 +11,16 @@ import {
   assertCuratedConnectorDefinition,
   assertThreatIntelligenceProvider,
 } from './threat-intelligence-definition-registry.mts';
+import {
+  boundedHttpsUrl,
+  boundedInteger,
+  boundedString,
+  enumValue,
+  exactKeys,
+  isRecord,
+  isoTimestamp,
+  strictBoundedString,
+} from './bounded-contract-normalizers.mts';
 
 type ThreatIntelligenceTargetType = 'domain' | 'url';
 type ThreatIntelligenceTargetExposure = 'registrable_domain' | 'hostname' | 'origin' | 'full_url';
@@ -376,67 +386,8 @@ const NO_MATCH_LIMITATION = 'No matching provider record is not evidence that th
 const CONNECTOR_BASE_LIMITATION = 'Connector observations and relationships are attributed investigation pivots, not proof of ownership, coordination, activity, safety, or maliciousness.';
 const CONNECTOR_NO_MATCH_LIMITATION = 'No matching connector output is not evidence that an entity or relationship is absent or safe.';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function boundedString(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/u.test(value)) return null;
-  const normalized = value.trim().replace(/\s+/gu, ' ');
-  return normalized ? normalized.slice(0, maxLength) : null;
-}
-
-function strictBoundedString(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string'
-    || value.length > maxLength
-    || /[\u0000-\u001f\u007f]/u.test(value)) return null;
-  const normalized = value.trim().replace(/\s+/gu, ' ');
-  return normalized && normalized.length <= maxLength ? normalized : null;
-}
-
-function isoTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || /[\u0000-\u001f\u007f]/u.test(value)) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
-}
-
 function httpsUrl(value: unknown): string | null {
-  const raw = strictBoundedString(value, MAX_URL_LENGTH);
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'https:'
-      || parsed.username
-      || parsed.password) return null;
-    const normalized = parsed.toString();
-    return normalized.length <= MAX_URL_LENGTH ? normalized : null;
-  } catch {
-    return null;
-  }
-}
-
-function exactKeys(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-  label: string,
-): asserts value is Record<string, unknown> {
-  if (!isRecord(value)) {
-    throw new TypeError(`${label} must be an object`);
-  }
-  const unknown = Object.keys(value).find((key) => !allowed.has(key));
-  if (unknown) throw new TypeError(`${label} contains an unknown field: ${unknown}`);
-}
-
-function enumValue<T extends string>(value: unknown, allowed: ReadonlySet<T>, label: string): T {
-  if (typeof value !== 'string' || !allowed.has(value as T)) throw new TypeError(`${label} is invalid`);
-  return value as T;
-}
-
-function boundedInteger(value: unknown, minimum: number, maximum: number, label: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new TypeError(`${label} must be an integer between ${minimum} and ${maximum}`);
-  }
-  return value;
+  return boundedHttpsUrl(value, MAX_URL_LENGTH);
 }
 
 function normalizeCertificateFingerprint(value: unknown): string | null {

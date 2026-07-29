@@ -13,6 +13,8 @@ function lookupDocument(overrides: Record<string, unknown> = {}) {
   return {
     schema: 'whoisleuth.cli.lookup',
     version: 1,
+    mode: 'deep',
+    generatedAt: '2026-07-15T00:00:00.000Z',
     query: 'private-target.example',
     registrableDomain: 'private-target.example',
     diagnostics: {
@@ -20,6 +22,7 @@ function lookupDocument(overrides: Record<string, unknown> = {}) {
       rdap: { status: 'success', endpoint: 'https://registry.invalid/private-target.example' },
       whois: { status: 'partial' },
       availability: { status: 'complete' },
+      sslbl: { status: 'stale' },
       timing: {
         version: 1,
         totalMs: 400,
@@ -86,6 +89,12 @@ describe('privacy-safe source reliability report', () => {
       '2026-07-16T00:00:00.000Z',
     );
     assert.equal(report.documentsReviewed, 2);
+    assert.equal(report.reportsMerged, 0);
+    assert.deepEqual(report.cohorts.lookupModes, { fast: 0, deep: 2, unknown: 0 });
+    assert.deepEqual(report.sampleWindow, {
+      earliestGeneratedAt: '2026-07-15T00:00:00.000Z',
+      latestGeneratedAt: '2026-07-15T00:00:00.000Z',
+    });
     assert.equal(report.privacy.targetsRetained, 0);
     const rdap = report.sources.find((source) => source.source === 'rdap');
     assert.deepEqual(rdap?.states, { error: 1, success: 1 });
@@ -98,6 +107,9 @@ describe('privacy-safe source reliability report', () => {
     const dns = report.sources.find((source) => source.source === 'dns');
     assert.equal(dns?.truncationCount, 2);
     assert.equal(report.totals.rateLimits, 2);
+    assert.equal(rdap?.rates.failure, 0.5);
+    assert.equal(rdap?.rates.partial, 0);
+    assert.equal(report.sources.find((source) => source.source === 'sslbl')?.states.stale, 2);
     assert.match(report.limitations.join(' '), /overlap/iu);
   });
 
@@ -116,16 +128,117 @@ describe('privacy-safe source reliability report', () => {
     }
   });
 
+  test('merges target-free reports into exact state counts and report-level duration trends', () => {
+    const first = buildSourceReliabilityReport(
+      JSON.stringify(lookupDocument()),
+      '2026-07-16T00:00:00.000Z',
+    );
+    const second = buildSourceReliabilityReport(
+      JSON.stringify(lookupDocument({
+        diagnostics: {
+          ...lookupDocument().diagnostics,
+          timing: {
+            version: 1,
+            totalMs: 900,
+            sources: [
+              { source: 'rdap', outcome: 'fulfilled', durationMs: 800, completedAfterMs: 800 },
+            ],
+          },
+        },
+      })),
+      '2026-07-17T00:00:00.000Z',
+    );
+    const merged = buildSourceReliabilityReport(
+      JSON.stringify([first, second]),
+      '2026-07-18T00:00:00.000Z',
+    );
+    assert.equal(merged.reportsMerged, 2);
+    assert.equal(merged.documentsReviewed, 2);
+    assert.equal(merged.privacy.targetsRetained, 0);
+    assert.deepEqual(merged.sampleWindow, {
+      earliestGeneratedAt: '2026-07-15T00:00:00.000Z',
+      latestGeneratedAt: '2026-07-15T00:00:00.000Z',
+    });
+    const rdap = merged.sources.find((source) => source.source === 'rdap');
+    assert.deepEqual(rdap?.states, { success: 2 });
+    assert.equal(rdap?.durationMs.lookupTiming, null);
+    assert.deepEqual(rdap?.durationTrend.reportTimingMedian, {
+      minimum: 100,
+      median: 100,
+      p95: 800,
+      maximum: 800,
+    });
+    assert.deepEqual(rdap?.durationTimeline.map((point) => point.generatedAt), [
+      '2026-07-16T00:00:00.000Z',
+      '2026-07-17T00:00:00.000Z',
+    ]);
+    assert.deepEqual(merged.cohorts.lookupModes, { fast: 0, deep: 2, unknown: 0 });
+    assert.match(formatSourceReliabilityReport(merged), /Reports merged: 2/u);
+  });
+
   test('rejects unknown schemas and unbounded document collections', () => {
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify({ schema: 'unknown', version: 1 })),
-      /requires version 1 CLI lookup/iu,
+      /requires only version 1 CLI lookup/iu,
     );
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify(
         Array.from({ length: MAX_SOURCE_RELIABILITY_DOCUMENTS + 1 }, () => lookupDocument()),
       )),
       /supports 1 to/iu,
+    );
+    const report = buildSourceReliabilityReport(JSON.stringify(lookupDocument()));
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify([report, report])),
+      /duplicate report/iu,
+    );
+    type MutableReport = {
+      sources: Array<{
+        durationTimeline: Array<{
+          generatedAt: string;
+          observationMedian: number | null;
+          observationP95: number | null;
+          timingMedian: number | null;
+          timingP95: number | null;
+        }>;
+      }>;
+    };
+    const malformedTimeline = JSON.parse(JSON.stringify(report)) as MutableReport;
+    const malformedSource = malformedTimeline.sources[0];
+    assert.ok(malformedSource);
+    malformedSource.durationTimeline = [{
+      generatedAt: '2026-07-16T00:00:00.000Z',
+      observationMedian: null,
+      observationP95: 10,
+      timingMedian: null,
+      timingP95: null,
+    }];
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(malformedTimeline)),
+      /invalid .* duration pair/iu,
+    );
+    const oversizedTimeline = JSON.parse(JSON.stringify(report)) as MutableReport;
+    const oversizedSource = oversizedTimeline.sources[0];
+    assert.ok(oversizedSource);
+    oversizedSource.durationTimeline = Array.from(
+      { length: MAX_SOURCE_RELIABILITY_DOCUMENTS + 1 },
+      () => ({
+        generatedAt: '2026-07-16T00:00:00.000Z',
+        observationMedian: null,
+        observationP95: null,
+        timingMedian: null,
+        timingP95: null,
+      }),
+    );
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify(oversizedTimeline)),
+      /invalid .* duration timeline/iu,
+    );
+    const reorderedDuplicate = JSON.parse(JSON.stringify(report)) as Record<string, unknown>;
+    const reordered = Object.fromEntries(Object.entries(reorderedDuplicate).reverse());
+    assert.throws(
+      () => buildSourceReliabilityReport(JSON.stringify([report, reordered])),
+      /duplicate report/iu,
     );
   });
 

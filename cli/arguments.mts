@@ -1,3 +1,13 @@
+import {
+  parseInspectArchiveArguments,
+  parseSignArtifactArguments,
+  parseVerifySignatureArguments,
+  type InspectArchiveArguments,
+  type SignArtifactArguments,
+  type VerifySignatureArguments,
+} from './evidence-command-arguments.mts';
+import { CliUsageError } from './errors.mts';
+
 const MAX_CLI_ARGUMENTS = 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
 const CLI_COMMANDS = [
@@ -11,6 +21,9 @@ const CLI_COMMANDS = [
   'registry-support',
   'risk-calibrate',
   'verify-artifact',
+  'inspect-archive',
+  'sign-artifact',
+  'verify-signature',
   'source-report',
   'compare',
   'export',
@@ -35,16 +48,12 @@ type CliArguments =
   | ({ action: 'registry-support'; target: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | InspectArchiveArguments
+  | SignArtifactArguments
+  | VerifySignatureArguments
   | ({ action: 'source-report'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
-
-class CliUsageError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CliUsageError';
-  }
-}
 
 function boundedArgument(value: unknown): string {
   if (typeof value !== 'string' || value.length > MAX_CLI_ARGUMENT_LENGTH || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) {
@@ -88,6 +97,9 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
   if (command === 'registry-support') return parseRegistrySupportArguments(argv.slice(1));
   if (command === 'risk-calibrate') return parseRiskCalibrateArguments(argv.slice(1));
   if (command === 'verify-artifact') return parseVerifyArtifactArguments(argv.slice(1));
+  if (command === 'inspect-archive') return parseInspectArchiveArguments(argv.slice(1));
+  if (command === 'sign-artifact') return parseSignArtifactArguments(argv.slice(1));
+  if (command === 'verify-signature') return parseVerifySignatureArguments(argv.slice(1));
   if (command === 'source-report') return parseSourceReportArguments(argv.slice(1));
   if (command === 'compare') return parseCompareArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));

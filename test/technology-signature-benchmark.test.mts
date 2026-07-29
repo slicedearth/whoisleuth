@@ -40,13 +40,16 @@ describe('technology signature benchmark', () => {
     assert.equal(report.schema, TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA);
     assert.equal(report.version, TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION);
     assert.equal(report.generatedAt, GENERATED_AT);
-    assert.equal(report.mode, 'offline_synthetic');
+    assert.equal(report.mode, 'offline_fixture_corpora');
     assert.equal(report.summary.signatures, TECHNOLOGY_SIGNATURE_CATALOGUE.length);
     assert.equal(report.summary.fixtures, TECHNOLOGY_SIGNATURE_FIXTURES.length);
     assert.equal(report.summary.passedFixtures, report.summary.fixtures);
     assert.equal(report.summary.failedFixtures, 0);
     assert.equal(report.summary.lintErrors, 0);
     assert.equal(report.summary.ready, true);
+    assert.equal(report.summary.reviewedFixtures, 0);
+    assert.equal(report.summary.failedReviewedFixtures, 0);
+    assert.equal(report.summary.realWorldCoverageEstablished, false);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
     assert.equal(report.metrics.missedMatches, 0);
@@ -55,6 +58,8 @@ describe('technology signature benchmark', () => {
     assert.equal(report.metrics.collisionRate, 0);
     assert.equal(report.metrics.falsePositiveRate, 0);
     assert.equal(report.bounds.networkRequests, 0);
+    assert.ok(report.bounds.reviewedFixtureLimit > 0);
+    assert.deepEqual(report.reviewedFixtures, []);
     assert.equal(
       Object.values(report.metrics.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,

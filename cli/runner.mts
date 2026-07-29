@@ -12,7 +12,7 @@ import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor } from '../lib/reg
 import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
 import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
 import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
-import { CliUsageError, parseCliArguments } from './arguments.mts';
+import { parseCliArguments } from './arguments.mts';
 import type { CliCommand } from './arguments.mts';
 import {
   MAX_BULK_INPUT_BYTES,
@@ -33,7 +33,12 @@ import {
   normalizeDiscoveryTlds,
   readDiscoveryDictionaryBounded,
 } from './discover.mts';
-import { boundedCliErrorMessage } from './errors.mts';
+import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
+import {
+  evidenceCommandFailureLabel,
+  isEvidenceCommand,
+  runEvidenceCommand,
+} from './evidence-command-runner.mts';
 import { buildCliEvidenceExport, formatCliEvidenceExport } from './export-evidence.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { formatLookupEvidenceHtml } from './formatters/html.mts';
@@ -105,6 +110,9 @@ Usage:
   whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]
   whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]
   whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]
+  whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--json]
+  whoisleuth sign-artifact [artifact.json] --private-key-file <file>
+  whoisleuth verify-signature [package.json] [--public-key-file <file>] [--json] [--quiet] [--no-color]
   whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]
   whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]
   whoisleuth export [lookup.json] [--markdown|--html|--compact]
@@ -118,6 +126,8 @@ Machine-readable output is written to stdout; diagnostics are written to stderr.
 Registry support is an offline catalogue view and never tests live reachability.
 Risk calibration is an offline fixture replay and never changes the scoring model.
 Artifact verification is offline and prints contract and integrity results, not retained evidence contents.
+Archive inspection is offline, redacted by default, and requires an explicit flag to reveal exact search matches.
+Evidence signing accepts only reviewed packets or manifests and never creates, stores, or transmits signing keys.
 Source reports are local summaries that retain no targets, queries, endpoints, or raw evidence.
 
 Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
@@ -134,6 +144,9 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
   'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
+  'inspect-archive': 'whoisleuth inspect-archive [archive.json] [--passphrase-file <file>] [--search <value>] [--require-match] [--reveal] [--json]',
+  'sign-artifact': 'whoisleuth sign-artifact [artifact.json] --private-key-file <file>',
+  'verify-signature': 'whoisleuth verify-signature [package.json] [--public-key-file <file>] [--json] [--quiet] [--no-color]',
   'source-report': 'whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]',
   compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
@@ -175,6 +188,8 @@ type CliDependencies = {
   readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
   readArtifactInput?: (source?: string | null) => string | Promise<string>;
   readPassphraseFile?: (source: string) => string | Promise<string>;
+  readPrivateKeyFile?: (source: string) => string | Promise<string>;
+  readPublicKeyFile?: (source: string) => string | Promise<string>;
   readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
   now?: () => string;
   classifyQuery?: typeof classifyQuery;
@@ -324,6 +339,19 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
           : formatOfflineArtifactVerification(report));
       }
       return EXIT_CODES.SUCCESS;
+    }
+
+    if (isEvidenceCommand(args)) {
+      failureLabel = evidenceCommandFailureLabel(args.action);
+      return await runEvidenceCommand(args, {
+        stdout,
+        stdin: dependencies.stdin || process.stdin,
+        readArtifactInput: dependencies.readArtifactInput,
+        readPassphraseFile: dependencies.readPassphraseFile,
+        readPrivateKeyFile: dependencies.readPrivateKeyFile,
+        readPublicKeyFile: dependencies.readPublicKeyFile,
+        now: dependencies.now,
+      });
     }
 
     if (args.action === 'source-report') {

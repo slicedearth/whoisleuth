@@ -183,6 +183,75 @@ raw pages or response headers. A proposed signature should not be merged until
 the benchmark reports no identifier, confidence, category, coverage, or
 collision error and its benign fixture does not create an unexpected match.
 
+Reviewed observations can be converted into a separately maintained minimized
+fixture with:
+
+```bash
+npm run technology:fixture-review -- reviewed-input.json
+```
+
+The contributor supplies only reviewed factual markers. The tool reconstructs
+a fixed safe subset of recognized static markers and approved shared vendor
+origins, rejects target-bearing or contact material, and verifies the expected
+catalogue result. The checked-in reviewed corpus starts empty, so it makes no
+claim about real-world coverage until reviewed contributions are added.
+
+### Incremental Lookup qualification
+
+```bash
+npm run lookup:transport-spike
+npm run lookup:transport-qualify
+```
+
+Both commands are offline. The qualification report exercises protocol
+chunking, buffering detection, slow-consumer handling, authentication expiry,
+duplicate events, timeout and abort cancellation, and final-envelope
+equivalence. A clean report is necessary but not sufficient for production.
+Each authenticated staging adapter and its real proxy or CDN must pass the same
+gates before that adapter can be marked qualified. Express and Netlify remain
+disabled and use the ordinary buffered response.
+
+### First-use analyst study
+
+`fixtures/first-use-analyst-study-tasks.mts` provides one repeatable desktop and
+mobile task script covering orientation, Lookup, Bulk, all three guided
+investigation recipes, a case decision, and archive verification. A moderator
+can aggregate bounded controlled observations with:
+
+```bash
+npm run study:first-use -- --template=desktop > desktop-session.json
+npm run study:first-use -- --template=mobile > mobile-session.json
+npm run study:first-use -- sessions.json
+```
+
+Session inputs contain task completion, duration, time to first useful pivot,
+error and backtrack counts, and controlled terminology issue identifiers. The
+generated templates are bound to the current task version and digest. The
+contract rejects participant identity, targets, queries, recordings, free-form
+notes, unknown fields, stale task definitions, repeated tasks, and duplicate
+canonical sessions. The result is a small-study diagnostic, not product
+analytics.
+
+### Local SSLBL snapshot maintenance
+
+Deep Lookup can compare the observed leaf-certificate SHA-1 fingerprint with a
+checked-in local SSLBL snapshot. Download the CSV deliberately, then validate
+it without changing the repository:
+
+```bash
+npm run sslbl:status
+npm run sslbl:check -- --input=sslblacklist.csv
+```
+
+The status command verifies the checked-in module and exits non-zero when its
+source date is stale, expired, or invalid. The feed check verifies the
+operator-supplied file shape, timestamps, digests, entry delta, and rollback and
+shrink safeguards. After reviewing the reported delta, regenerate the module
+with `npm run sslbl:snapshot -- --input=sslblacklist.csv`. A removal of more
+than 25 percent is rejected unless an operator separately reviews the feed and
+explicitly supplies `--allow-large-shrink`. None of these commands downloads
+the source.
+
 ### Registry-fixture freshness
 
 ```bash

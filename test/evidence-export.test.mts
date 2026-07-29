@@ -105,6 +105,27 @@ function fixtureResponse(): Record<string, unknown> {
       canonical: ['https://login.example.com/.well-known/security.txt'], preferredLanguages: ['en'],
       rawBody: 'must-not-export-security-txt-body', unknownImportedField: 'must not export',
     },
+    sslbl: {
+      sslblVersion: 1,
+      source: 'sslbl',
+      status: 'success',
+      verdict: 'listed',
+      complete: true,
+      observedAt: '2026-07-11T01:02:08.000Z',
+      fingerprintSha1: '3'.repeat(40),
+      referenceUrl: `https://sslbl.abuse.ch/ssl-certificates/sha1/${'3'.repeat(40)}/?discard=yes`,
+      snapshot: {
+        sourceUpdatedAt: '2026-07-11T00:00:00.000Z',
+        generatedAt: '2026-07-11T00:05:00.000Z',
+        ageSeconds: 3600,
+        entryCount: 10_000,
+        digestSha256: '4'.repeat(64),
+        rawReasons: ['must-not-export'],
+      },
+      detail: 'The observed leaf certificate appears in the local snapshot.',
+      limitations: ['A match does not prove current activity.'],
+      unknownImportedField: 'must-not-export',
+    },
     availability: {
       applicable: true,
       domain: 'example.com',
@@ -324,6 +345,7 @@ describe('lookup evidence export', () => {
     const reverseDns = requiredValue(result.sources.reverseDns);
     const reverseDnsDiagnostics = requiredValue(reverseDns.diagnostics);
     const securityTxt = requiredValue(result.sources.securityTxt);
+    const sslbl = requiredValue(result.sources.sslbl);
     const availability = recordValue(result.analysis.availability);
     const http = recordValue(availability.http);
     const httpResponse = recordValue(http.response);
@@ -361,7 +383,7 @@ describe('lookup evidence export', () => {
     const registryInsights = requiredValue(result.analysis.registryInsights);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 22);
+    assert.equal(result.schemaVersion, 23);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(rdapDiagnostics.status, 'success');
@@ -394,6 +416,18 @@ describe('lookup evidence export', () => {
     assert.equal(securityTxt.finalUrl, 'https://login.example.com/.well-known/security.txt');
     assert.equal(JSON.stringify(securityTxt).includes('must-not-export-security-txt-body'), false);
     assert.equal(JSON.stringify(securityTxt).includes('javascript:'), false);
+    assert.equal(sslbl.verdict, 'listed');
+    assert.equal(sslbl.fingerprintSha1, '3'.repeat(40));
+    assert.equal(sslbl.referenceUrl, `https://sslbl.abuse.ch/ssl-certificates/sha1/${'3'.repeat(40)}/`);
+    assert.equal(requiredValue(sslbl.snapshot).digestSha256, '4'.repeat(64));
+    assert.equal(JSON.stringify(sslbl).includes('must-not-export'), false);
+    const unsafeResponse = fixtureResponse();
+    unsafeResponse.sslbl = {
+      ...recordValue(unsafeResponse.sslbl),
+      referenceUrl: `https://provider.invalid/ssl-certificates/sha1/${'3'.repeat(40)}/`,
+    };
+    const unsafeSslbl = evidence.buildLookupEvidence(unsafeResponse);
+    assert.equal(requiredValue(requiredValue(unsafeSslbl.sources).sslbl).referenceUrl, null);
     assert.equal(availability.hasMx, true);
     assert.equal(httpResponse.status, 200);
     assert.equal(bodyHash.value, 'a'.repeat(64));
@@ -451,7 +485,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 22);
+    assert.equal(result.schemaVersion, 23);
     const idn = recordValue(result.analysis.idn);
     assert.equal(idn.version, 1);
     assert.equal(idn.unicodeDomain, 'éxample.test');

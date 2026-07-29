@@ -41,7 +41,7 @@ navigation without shortening the policy.
 | Area | Purpose | Important boundary |
 | --- | --- | --- |
 | **Dashboard** | Start or resume investigations, defensive reviews, comparisons, and case work. | Guided recipes require explicit approval before requests and cannot run arbitrary actions. |
-| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence. |
+| **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. Deep domain results can compare the observed leaf certificate with a generated local SSLBL snapshot. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence, and no warning-list miss establishes safety. |
 | **Discover** | Generate bounded local lookalikes or review names observed in public certificate logs. | Local results initially surface visible review cues; certificate-log results initially use newest observation. Sorting does not change evidence or score. |
 | **Bulk** | Compare bounded domain sets with explicit request pacing, source-aware filters, compact Deep evidence, relationships, review actions, and resumable sessions. | Each domain is a separate request. Incomplete coverage, request failure, and missing evidence remain distinct. |
 | **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, and optional page-identity baselines. | Public observations and analyst attestations remain separate and browser-local. |
@@ -176,8 +176,14 @@ Additional offline or bounded maintainer checks include:
 npm run schema:inventory
 npm run registry:fixtures
 npm run benchmark:technology
+npm run technology:fixture-review -- reviewed-input.json
 npm run benchmark:workflow
 npm run lookup:transport-spike
+npm run lookup:transport-qualify
+npm run sslbl:status
+npm run sslbl:check -- --input=sslblacklist.csv
+npm run study:first-use -- --template=desktop
+npm run study:first-use -- sessions.json
 npm run platform:local-data
 npm run release:check
 npm run security:codeql
@@ -185,10 +191,13 @@ npm run registry:drift
 npm run deployment:self-check -- https://your-deployment.example
 ```
 
-`registry:fixtures`, the benchmarks, the transport spike, and the local-data
-evaluation are deterministic offline checks. The transport spike validates a
-portable bounded event contract without enabling response streaming in any
-deployed adapter.
+`registry:fixtures`, the benchmarks, the reviewed-fixture tool, the first-use
+study template and aggregator, the local SSLBL snapshot check, the transport
+checks, and the local-data evaluation are
+deterministic offline checks. The transport qualification suite exercises
+buffering, cancellation, slow consumers, authentication expiry, duplicate
+events, timeouts, and final-response equivalence without enabling response
+streaming in any deployed adapter.
 The registry-drift and deployment checks make only their documented, fixed,
 bounded network requests. Automated unit and browser tests use deterministic
 fixtures and do not query live registries, domains, or providers.

@@ -31,6 +31,7 @@ import {
 import { createThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import type { ThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
+import { inspectSslblCertificate } from './sslbl-intelligence.mts';
 import {
   normalizeLookupSourceSettlement,
   plannedLookupProgressSources,
@@ -48,6 +49,9 @@ type LookupOptions = {
   lookupUrlscanDomain?: typeof lookupUrlscanDomain;
   lookupUrlhausDomain?: typeof lookupUrlhausDomain;
   lookupThreatfoxDomain?: typeof lookupThreatfoxDomain;
+  inspectSslblCertificate?: typeof inspectSslblCertificate;
+  sslblSnapshot?: unknown;
+  sslblNow?: string | number | Date;
   fast?: boolean;
   compact?: boolean;
   externalIntelligence?: boolean;
@@ -204,6 +208,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const fetchUrlscanIntelligence = options.lookupUrlscanDomain || lookupUrlscanDomain;
   const fetchUrlhausIntelligence = options.lookupUrlhausDomain || lookupUrlhausDomain;
   const fetchThreatfoxIntelligence = options.lookupThreatfoxDomain || lookupThreatfoxDomain;
+  const inspectCertificateWarningData = options.inspectSslblCertificate || inspectSslblCertificate;
   const fast = options.fast === true;
   const compact = options.compact === true;
   const externalIntelligence = options.externalIntelligence === true;
@@ -514,6 +519,19 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
       ? securityTxtResult.value
       : securityTxtUnavailable(classified.inputHostname, securityTxtResult.reason)
     : null;
+  // SSLBL comparison is an exact, local, deep-only enrichment over the leaf
+  // certificate already observed by the bounded TLS collector. It performs no
+  // request, never contributes to availability, and is omitted from compact
+  // Bulk and monitoring responses.
+  const sslbl = classified.type === 'domain' && !fast && !compact
+    ? inspectCertificateWarningData(
+        availability && typeof availability.tls === 'object' ? availability.tls : null,
+        {
+          ...(options.sslblSnapshot === undefined ? {} : { snapshot: options.sslblSnapshot }),
+          ...(options.sslblNow === undefined ? {} : { now: options.sslblNow }),
+        },
+      )
+    : null;
   const networkContextRdap = networkContext && typeof networkContext.rdap === 'object' && networkContext.rdap
     ? networkContext.rdap as Record<string, unknown>
     : null;
@@ -598,6 +616,15 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         truncated: securityTxt.truncated,
       },
     } : {}),
+    ...(sslbl ? {
+      sslbl: {
+        status: sslbl.status,
+        verdict: sslbl.verdict,
+        observedAt: sslbl.observedAt,
+        complete: sslbl.complete,
+        snapshotUpdatedAt: sslbl.snapshot.sourceUpdatedAt,
+      },
+    } : {}),
   };
 
   // Bulk triage only consumes the derived availability evidence and source
@@ -676,6 +703,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ...(reverseDns ? { reverseDns } : {}),
     ...(networkContext ? { networkContext } : {}),
     ...(securityTxt ? { securityTxt } : {}),
+    ...(sslbl ? { sslbl } : {}),
     ...(threatIntelligence ? { threatIntelligence } : {}),
   };
 }

@@ -72,12 +72,13 @@ Their state and summary remain visible. Expand a section before relying on its
 evidence, collection time, or limitations.
 
 During collection, Lookup identifies the requested source families and shows
-elapsed time plus a 40-second browser deadline. Most deployments use one
-buffered response and keep every source pending until it arrives. If the
-operator has enabled and verified the optional incremental route, the trace can
-show bounded per-source settlement states before the same ordinary final
-response arrives. Those updates are temporary display state, not saved evidence
-or claims that missing data is absent.
+elapsed time plus a 40-second browser deadline. Every core Express and Netlify
+deployment currently uses one buffered response and keeps each source pending
+until the final envelope arrives. The repository has an offline incremental
+protocol and qualification harness, but no core deployment adapter enables it.
+If a future custom adapter passes the documented staging and proxy gates,
+bounded per-source updates would remain temporary display state, not saved
+evidence or claims that missing data is absent.
 **Cancel lookup** stops the browser from waiting and discards any incomplete
 response; already-admitted server work can still finish within its existing
 bounds. Leaving Lookup applies the same browser cancellation.

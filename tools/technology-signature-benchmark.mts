@@ -18,6 +18,11 @@ import {
   TECHNOLOGY_SIGNATURE_FIXTURE_VERSION,
   TECHNOLOGY_SIGNATURE_FIXTURES,
 } from '../fixtures/technology-signature-fixtures.mts';
+import {
+  TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
+  TECHNOLOGY_REVIEWED_FIXTURE_VERSION,
+  TECHNOLOGY_REVIEWED_FIXTURES,
+} from '../fixtures/technology-reviewed-fixtures.mts';
 
 type WritableLike = { write(value: string): unknown };
 type BenchmarkOptions = Readonly<{ now?: () => Date }>;
@@ -44,6 +49,7 @@ export const TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA = 'whoisleuth.technology-sign
 export const TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION = 1;
 export const MAX_TECHNOLOGY_BENCHMARK_SIGNATURES = 64;
 export const MAX_TECHNOLOGY_BENCHMARK_FIXTURES = 96;
+export const MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES = 96;
 export const MAX_TECHNOLOGY_BENCHMARK_IDS_PER_FIXTURE = 64;
 export const MAX_TECHNOLOGY_BENCHMARK_LINT_ERRORS = 100;
 export const MAX_TECHNOLOGY_BENCHMARK_LABEL_LENGTH = 120;
@@ -228,6 +234,24 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
   const fixtures = Object.freeze(
     TECHNOLOGY_SIGNATURE_FIXTURES.slice(0, MAX_TECHNOLOGY_BENCHMARK_FIXTURES).map(evaluateFixture),
   );
+  if (TECHNOLOGY_REVIEWED_FIXTURES.length > MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES) {
+    lintErrors.push(
+      `Reviewed corpus exceeds the ${MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES}-fixture bound.`,
+    );
+  }
+  const reviewedFixtures = Object.freeze(
+    TECHNOLOGY_REVIEWED_FIXTURES
+      .slice(0, MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES)
+      .map((fixture) => evaluateFixture({
+        id: fixture.id,
+        label: fixture.label,
+        kind: 'reviewed',
+        expectedIds: fixture.expectedIds,
+        negativeFor: [],
+        expectedStatus: 'success',
+        input: fixture.input,
+      })),
+  );
   const catalogueById = new Map(TECHNOLOGY_SIGNATURE_CATALOGUE.map((signature) => [signature.id, signature]));
   const categoryNames = [...CATEGORIES].sort();
   const byCategory = Object.freeze(Object.fromEntries(categoryNames.map((category) => {
@@ -281,6 +305,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
       ...fixture.forbiddenObservedIds,
     ]).size, 0);
   const failedFixtures = fixtures.filter((fixture) => fixture.status === 'fail').length;
+  const failedReviewedFixtures = reviewedFixtures.filter((fixture) => fixture.status === 'fail').length;
   const unknownObservedIds = fixtures
     .flatMap((fixture) => fixture.observedIds)
     .filter((id) => !catalogueById.has(id));
@@ -288,18 +313,29 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     schema: TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA,
     version: TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION,
     generatedAt: timestamp(options.now?.() || new Date()),
-    mode: 'offline_synthetic',
+    mode: 'offline_fixture_corpora',
     fixtureSource: Object.freeze({
       schema: TECHNOLOGY_SIGNATURE_FIXTURE_SCHEMA,
       version: TECHNOLOGY_SIGNATURE_FIXTURE_VERSION,
+    }),
+    reviewedFixtureSource: Object.freeze({
+      schema: TECHNOLOGY_REVIEWED_FIXTURE_SCHEMA,
+      version: TECHNOLOGY_REVIEWED_FIXTURE_VERSION,
     }),
     summary: Object.freeze({
       signatures: TECHNOLOGY_SIGNATURE_CATALOGUE.length,
       fixtures: fixtures.length,
       passedFixtures: fixtures.length - failedFixtures,
       failedFixtures,
+      reviewedFixtures: reviewedFixtures.length,
+      passedReviewedFixtures: reviewedFixtures.length - failedReviewedFixtures,
+      failedReviewedFixtures,
+      realWorldCoverageEstablished: reviewedFixtures.length > 0
+        && failedReviewedFixtures === 0,
       lintErrors: lintErrors.length,
-      ready: failedFixtures === 0 && lintErrors.length === 0,
+      ready: failedFixtures === 0
+        && failedReviewedFixtures === 0
+        && lintErrors.length === 0,
     }),
     metrics: Object.freeze({
       expectedMatches,
@@ -323,6 +359,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     bounds: Object.freeze({
       signatureLimit: MAX_TECHNOLOGY_BENCHMARK_SIGNATURES,
       fixtureLimit: MAX_TECHNOLOGY_BENCHMARK_FIXTURES,
+      reviewedFixtureLimit: MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES,
       idsPerFixture: MAX_TECHNOLOGY_BENCHMARK_IDS_PER_FIXTURE,
       evidencePerSignature: MAX_EVIDENCE_PER_TECHNOLOGY,
       fixedExplanationCharacters: MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH,
@@ -331,8 +368,12 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     lintErrors: Object.freeze(lintErrors),
     unknownObservedIds: Object.freeze(unknownObservedIds),
     fixtures,
+    reviewedFixtures,
     limitations: Object.freeze([
-      'This is an offline regression and calibration corpus, not a live technology-coverage measurement.',
+      'The synthetic corpus is an offline regression and calibration set, not a live technology-coverage measurement.',
+      reviewedFixtures.length
+        ? 'The reviewed corpus contains minimized contributor-reviewed observations, but its coverage remains selective and must not be generalized to the wider web.'
+        : 'The contributor-reviewed corpus is empty, so this report makes no claim about real-world technology coverage.',
       'A matched signature is an implementation clue from the selected response, not proof of ownership, safety, maliciousness, support status, or exploitability.',
       'Unmatched and truncated evidence remains inconclusive because technologies can be concealed, rendered by scripts, proxied, or absent from the captured prefix.',
       'The benchmark evaluates only the curated signature profile; the separate pinned browser-library advisory catalogue has its own tests and source-health contract.',
@@ -350,6 +391,7 @@ export function formatTechnologySignatureBenchmark(
   const lines = [
     'WHOISleuth technology-signature benchmark',
     `Summary: ${report.summary.passedFixtures}/${report.summary.fixtures} fixtures passed; ${report.summary.lintErrors} catalogue lint errors`,
+    `Reviewed observations: ${report.summary.passedReviewedFixtures}/${report.summary.reviewedFixtures} passed; real-world coverage ${report.summary.realWorldCoverageEstablished ? 'sampled' : 'not established'}`,
     `Coverage: ${report.metrics.positiveCoverage}/${report.summary.signatures} positive; ${report.metrics.negativeCoverage}/${report.summary.signatures} negative`,
     `Matches: ${report.metrics.expectedMatches} expected; ${report.metrics.missedMatches} missed; ${report.metrics.unexpectedMatches} unexpected`,
     `False-positive controls: ${report.metrics.falsePositiveMatches}/${report.metrics.deliberateNonmatches}`,
@@ -361,6 +403,14 @@ export function formatTechnologySignatureBenchmark(
       `  Missing: ${fixture.missingIds.join(', ') || 'none'}`,
       `  Unexpected: ${fixture.unexpectedIds.join(', ') || 'none'}`,
       `  Forbidden: ${fixture.forbiddenObservedIds.join(', ') || 'none'}`,
+      `  Status: expected ${fixture.expectedProfileStatus}; observed ${fixture.observedProfileStatus}`,
+    );
+  }
+  for (const fixture of report.reviewedFixtures.filter((item) => item.status === 'fail')) {
+    lines.push(
+      `REVIEWED FAIL ${fixture.label}`,
+      `  Missing: ${fixture.missingIds.join(', ') || 'none'}`,
+      `  Unexpected: ${fixture.unexpectedIds.join(', ') || 'none'}`,
       `  Status: expected ${fixture.expectedProfileStatus}; observed ${fixture.observedProfileStatus}`,
     );
   }
