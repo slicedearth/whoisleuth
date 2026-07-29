@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   type Row = { label: string; value: string; datetime?: string };
 
   let {
@@ -36,7 +37,7 @@
       <span class="evidence-summary-title" id="network-context-title" role="heading" aria-level="4">Observed network context</span>
       <span class="evidence-summary-detail">{detail}</span>
     </span>
-    <span class:partial={status === 'partial'} class:error={status === 'error'} class="evidence-status">{status}</span>
+    <span class="evidence-status {evidenceStatusTone(status)}">{status}</span>
     </span>
   </summary>
 

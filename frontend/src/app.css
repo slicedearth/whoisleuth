@@ -319,6 +319,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .evidence-status { flex: 0 0 auto; padding: 4px 8px; border: 1px solid rgb(var(--accent2-rgb) / .35); border-radius: 999px; background: rgb(var(--accent2-rgb) / .08); color: var(--accent2); font: 700 var(--text-2xs) var(--mono); text-transform: uppercase; }
 .evidence-status.partial { border-color: var(--border-strong); background: var(--panel); color: var(--amber); }
 .evidence-status.error { border-color: rgb(var(--danger-rgb) / .35); background: rgb(var(--danger-rgb) / .06); color: var(--danger); }
+.evidence-status.neutral { border-color: var(--border-strong); background: var(--surface); color: var(--muted); }
 .evidence-body { margin: 0 var(--card-pad) var(--card-pad); padding-top: 14px; border-top: 1px solid var(--border); }
 @media (max-width: 650px) {
   .evidence-summary-row { display: inline-grid; gap: 10px; }

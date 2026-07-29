@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   type Finding = {
     id: string;
     category: string;
@@ -38,7 +39,7 @@
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
       <span class="evidence-summary-copy"><span class="eyebrow">Derived deep-scan analysis</span><span class="evidence-summary-title" id="security-posture-title" role="heading" aria-level="4">Passive security posture</span><span class="evidence-summary-detail">Observed {summary.observed} · Review {summary.potentialExposure} · Not observed {summary.observedAbsence} · Unavailable {summary.unavailable}</span></span>
-      <span class:partial={!complete} class="evidence-status">{status}</span>
+      <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>
 
@@ -69,17 +70,17 @@
 </details>
 
 <style>
-  .posture-summary .review strong{color:var(--danger)}
+  .posture-summary .review strong{color:var(--amber)}
   .posture-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:10px;margin-top:14px}
   .posture-grid>article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-soft)}
-  .posture-grid>article.review{border-color:color-mix(in srgb,var(--danger) 42%,var(--border))}
+  .posture-grid>article.review{border-color:color-mix(in srgb,var(--amber) 45%,var(--border))}
   .posture-grid>article.configured{border-color:color-mix(in srgb,var(--success) 34%,var(--border))}
   .finding-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .finding-head>div{min-width:0}
   .finding-head p{margin:0 0 3px;color:var(--muted);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.04em}
   .finding-head h5{margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}
   .state{flex:0 0 auto;padding:3px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.04em}
-  .state-review{border-color:color-mix(in srgb,var(--danger) 42%,var(--border));color:var(--danger)}
+  .state-review{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
   .state-configured{border-color:color-mix(in srgb,var(--success) 40%,var(--border));color:var(--success)}
   .detail{margin:9px 0 0;font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
   .evidence{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}

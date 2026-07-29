@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   type CategoryCounts = {
     password: number;
     email: number;
@@ -84,7 +85,7 @@
           · Expand for fixed counts and limitations
         </span>
       </span>
-      <span class:partial={!complete} class:neutral={noMatches} class="evidence-status">
+      <span class="evidence-status {evidenceStatusTone(status, { complete, neutral: noMatches })}">
         {noMatches ? 'No recognised inputs' : status}
       </span>
     </span>
@@ -135,7 +136,6 @@
   dd.review{color:var(--warning)}
   .callout{margin-top:12px}
   .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
-  .evidence-status.neutral{border-color:var(--border-strong);color:var(--muted);background:var(--surface)}
   @media(max-width:780px){.profile-grid{grid-template-columns:1fr}}
   @media(max-width:520px){.headline-grid{grid-template-columns:1fr}}
 </style>
