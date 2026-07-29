@@ -360,6 +360,11 @@ test('brand sweep carries the official domain and selected candidates across eve
   await currentAction(page).getByRole('link', { name: 'Choose a Bulk candidate' }).click();
   await expect(page.locator('#results')).toBeInViewport();
   await page.locator('.results-table tbody tr').first().getByRole('button', { name: 'Inspect' }).click();
+  await expect(page).toHaveURL(new RegExp(`/lookup\\?q=${primaryCandidate.replaceAll('.', '\\.')}.*depth=deep`));
+  await expect.poll(async () => page.evaluate((key) => {
+    const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
+    return stored?.focusDomain || null;
+  }, GUIDE_KEY)).toBe(primaryCandidate);
   await expect(currentAction(page)).toContainText('Inspect priority domain');
   await runLookupStep(page, 'Inspect priority domain', primaryCandidate);
   await retainCases(page, 'Retain reviewed work', [primaryCandidate]);
