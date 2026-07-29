@@ -98,7 +98,7 @@
   .diagnostics .error-state{color:var(--danger)}
   .diagnostics .limited-state{color:var(--amber)}
   .fact-inspector,.source-inspector{margin-top:9px;border-top:1px solid var(--border)}
-  .fact-inspector>summary,.source-inspector>summary{padding:8px 0 0;color:var(--accent);font:650 var(--text-2xs) var(--mono);cursor:pointer}
+  .fact-inspector>summary,.source-inspector>summary{min-height:32px;padding:8px 0;box-sizing:border-box;color:var(--accent);font:650 var(--text-2xs) var(--mono);cursor:pointer}
   .fact-inspector>summary:focus-visible,.source-inspector>summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   dl{display:grid;gap:6px;margin:9px 0 0}
   dl div{min-width:0}
