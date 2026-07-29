@@ -80,6 +80,7 @@ function cockpitRow(domain: string, reviewState: string): BulkReviewCockpitRow {
     registrar: 'Example Registrar',
     reviewState,
     shortlisted: false,
+    trusted: false,
     sourceCoverage: [],
     error: '',
     caseRecord: null,

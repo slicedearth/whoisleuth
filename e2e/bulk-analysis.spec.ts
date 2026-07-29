@@ -191,6 +191,17 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await cockpit.getByRole('button', { name: 'Next unresolved' }).click();
   await expect(cockpit.getByRole('heading', { level: 3 })).toHaveText('right-review.example');
   await expect(cockpit.getByText('Evidence freshness')).toBeVisible();
+  await cockpit.getByRole('button', { name: 'Create case' }).click();
+  await expect(cockpit.getByLabel('Case disposition')).toBeEnabled();
+  await cockpit.getByLabel('Case disposition').selectOption('suspicious');
+  await expect(cockpit.getByRole('status')).toContainText('Marked right-review.example as Suspicious');
+  await cockpit.getByLabel('Watchlist name').fill('Focused review');
+  await cockpit.getByRole('button', { name: 'Save current to Monitor' }).click();
+  await expect(cockpit.getByRole('status')).toContainText('Saved right-review.example to Focused review');
+  const storedCase = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
+  expect(storedCase).toMatchObject({ domain: 'right-review.example', disposition: 'suspicious' });
+  const storedWatchlist = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(storedWatchlist.records[0]?.value?.results?.[0]).toMatchObject({ domain: 'right-review.example' });
 
   const comparison = page.getByRole('region', { name: 'Two-domain comparison' });
   await expect(comparison).toContainText('First Registrar');

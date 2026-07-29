@@ -178,7 +178,7 @@
   ):null);
   const retryCandidates=$derived(selectedRows.length?selectedRows:filtered);
   const retryPlan=$derived(buildBulkRetryPlan(retryCandidates.map(toBulkSessionResult),mode,scanStartedAt));
-  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;return{resultIndex:results.indexOf(row),domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewStateByDomain.get(row.domain)||'unreviewed',shortlisted:shortlistedDomains.has(row.domain),sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
+  const cockpitRows=$derived<BulkReviewCockpitRow[]>(filtered.map((row)=>{const caseRecord=caseByDomain.get(row.domain)||null;return{resultIndex:results.indexOf(row),domain:row.domain,availability:row.availability,confidence:row.confidence,risk:row.risk,opportunity:row.opportunity,activity:row.activity,registrar:row.registrar,reviewState:bulkReviewStateByDomain.get(row.domain)||'unreviewed',shortlisted:shortlistedDomains.has(row.domain),trusted:Boolean(row.trusted),sourceCoverage:row.sourceCoverage,error:row.error,caseRecord:caseRecord?{id:caseRecord.id,disposition:caseRecord.disposition}:null};}));
   const counts=$derived(countBulkRouteFilters(results));
   const pageCount=$derived(Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)));
   const currentPage=$derived(Math.min(page,pageCount));
@@ -283,9 +283,22 @@
   async function downloadBulkSessions(){try{await exportBulkSessions();bulkSessionStatus=`Exported ${bulkSessions.length} saved session${bulkSessions.length===1?'':'s'}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not export saved Bulk sessions.';}}
   function resultAt(index:number){return index>=0&&index<results.length?results[index]:null;}
   function toggleSavedAt(index:number){const row=resultAt(index);if(row)toggleSaved(row);}
-  function trackCaseAt(index:number){const row=resultAt(index);if(row)trackCase(row);}
-  function setDispositionAt(index:number,value:string){const row=resultAt(index);if(row)setRowDisposition(row,value);}
+  async function trackCaseAt(index:number){const row=resultAt(index);if(row)await trackCase(row);}
+  async function setDispositionAt(index:number,value:string){const row=resultAt(index);if(row)await setRowDisposition(row,value);}
   function setReviewStateAt(index:number,value:string){const row=resultAt(index);if(row)void setBulkReviewState(row,value);}
+  async function saveCurrentResultAt(index:number){
+    const row=resultAt(index);
+    const name=watchlistName.trim();
+    if(!row){saveStatus='The current review row is no longer available.';return;}
+    if(!name){saveStatus='Enter a watchlist name.';return;}
+    if(row.trusted){saveStatus='Domains trusted by the active Brand Profile are excluded from watchlists.';return;}
+    try{
+      const changes=await saveWatchlist(name,[row.saved],mode);
+      saveStatus=changes.length
+        ? `Updated ${name} with ${row.domain} and recorded ${changes.length} material change${changes.length===1?'':'s'}.`
+        : `Saved ${row.domain} to ${name}.`;
+    }catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save the current result.';}
+  }
   async function inspectAt(index:number){const row=resultAt(index);if(!row)return;selectInvestigationGuideFocusDomain(row.domain);await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);}
   async function run(domains:string[],replace=true,preservePrior=false):Promise<string[]>{
     const limit=mode==='fast'?2000:200;
@@ -483,6 +496,12 @@
       setReviewState={setReviewStateAt}
       toggleSaved={toggleSavedAt}
       trackCase={trackCaseAt}
+      caseOptions={CASE_DISPOSITIONS}
+      setDisposition={setDispositionAt}
+      {watchlistName}
+      setWatchlistName={(value)=>watchlistName=value}
+      saveToWatchlist={saveCurrentResultAt}
+      actionStatus={saveStatus||caseStatus}
       inspectDomain={inspectAt}
       executeRetry={executeReviewedRetry}
     />

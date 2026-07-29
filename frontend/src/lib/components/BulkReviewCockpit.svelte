@@ -12,6 +12,12 @@
     setReviewState,
     toggleSaved,
     trackCase,
+    caseOptions,
+    setDisposition,
+    watchlistName,
+    setWatchlistName,
+    saveToWatchlist,
+    actionStatus,
     inspectDomain,
     executeRetry,
   }: {
@@ -20,7 +26,13 @@
     retryStatus: string;
     setReviewState: (resultIndex: number, state: string) => void;
     toggleSaved: (resultIndex: number) => void;
-    trackCase: (resultIndex: number) => void;
+    trackCase: (resultIndex: number) => void | Promise<void>;
+    caseOptions: readonly { value: string; label: string }[];
+    setDisposition: (resultIndex: number, value: string) => void | Promise<void>;
+    watchlistName: string;
+    setWatchlistName: (value: string) => void;
+    saveToWatchlist: (resultIndex: number) => void | Promise<void>;
+    actionStatus: string;
     inspectDomain: (resultIndex: number) => void | Promise<void>;
     executeRetry: () => void | Promise<void>;
   } = $props();
@@ -97,6 +109,37 @@
         {#if current.caseRecord}<a class="btn" href={`/monitor?case=${encodeURIComponent(current.caseRecord.id)}`}>Open case</a>{:else}<button class="btn" type="button" onclick={() => trackCase(current.resultIndex)}>Create case</button>{/if}
         <button class="btn accent" type="button" aria-keyshortcuts="Alt+I" onclick={() => inspectDomain(current.resultIndex)}>Inspect in Lookup</button>
       </div>
+      <div class="handoffs">
+        <label>
+          <span>Case disposition</span>
+          <select
+            aria-label="Case disposition"
+            disabled={!current.caseRecord}
+            value={current.caseRecord?.disposition ?? ''}
+            onchange={(event) => setDisposition(current.resultIndex, event.currentTarget.value)}
+          >
+            {#if !current.caseRecord}<option value="">Create a case first</option>{/if}
+            {#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}
+          </select>
+          <small>{current.caseRecord ? 'Updates this existing case only.' : 'Create a case before recording a disposition.'}</small>
+        </label>
+        <label>
+          <span>Watchlist name</span>
+          <input
+            aria-label="Watchlist name"
+            maxlength="100"
+            placeholder="Focused review"
+            value={watchlistName}
+            oninput={(event) => setWatchlistName(event.currentTarget.value)}
+          >
+          <small>Saves only the current settled row. No scan is started.</small>
+        </label>
+        <button class="btn" type="button" disabled={!watchlistName.trim() || Boolean(current.trusted)} onclick={() => saveToWatchlist(current.resultIndex)}>
+          Save current to Monitor
+        </button>
+      </div>
+      {#if current.trusted}<p class="action-note">Domains trusted by the active Brand Profile are excluded from watchlists.</p>{/if}
+      {#if actionStatus}<p class="action-status" role="status" aria-live="polite">{actionStatus}</p>{/if}
       {#if enabled}<p class="shortcut-note">Shortcuts: Alt + ←/→ moves between unresolved rows, Alt + R reviews, Alt + D defers, Alt + S toggles shortlist, and Alt + I opens Lookup. Shortcuts are ignored while editing controls.</p>{/if}
     </article>
   {:else}
@@ -149,7 +192,15 @@
   dd.error{color:var(--danger)}
   .navigation,.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
   .actions .accent{border-color:color-mix(in srgb,var(--accent) 50%,var(--border));color:var(--accent)}
-  .shortcut-note,.empty,.retry-plan p,.retry-plan li,.retry-status{color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .handoffs{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(220px,1fr) auto;gap:8px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+  .handoffs label{display:grid;gap:5px;min-width:0}
+  .handoffs label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .handoffs input,.handoffs select{width:100%;min-height:38px}
+  .handoffs small{color:var(--muted);font-size:var(--text-2xs);line-height:1.35}
+  .handoffs>.btn{min-height:38px}
+  .shortcut-note,.action-note,.action-status,.empty,.retry-plan p,.retry-plan li,.retry-status{color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .action-note,.action-status{margin-top:8px}
+  .action-status{color:var(--accent)}
   .shortcut-note{margin-top:10px}
   .freshness{display:flex;align-items:center;gap:8px;margin-top:12px;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);font:var(--text-2xs) var(--mono)}
   .freshness span,.freshness small{color:var(--muted)}
@@ -168,6 +219,8 @@
     dl{grid-template-columns:1fr}
     .navigation,.actions{display:grid;grid-template-columns:1fr}
     .navigation>*,.actions>*{width:100%}
+    .handoffs{grid-template-columns:1fr}
+    .handoffs>.btn{width:100%}
     .freshness{align-items:flex-start;flex-wrap:wrap}
     .freshness small{width:100%;margin-left:0;text-align:left}
   }
