@@ -98,6 +98,19 @@ coverage for every signature and reports overlap, collision, missed-match, and
 false-positive metrics by category. Neither the profile nor its benchmark
 changes availability, Risk, or compact evidence.
 
+Reviewed registry fixtures have a separate versioned provenance manifest. Each
+record identifies the bounded fixture file, official source reference, source
+review date, and expected SHA-256 digest. `npm run registry:fixtures` verifies
+local integrity and review age without contacting the registry. A changed,
+stale, or unverifiable record fails the maintainer check but does not change
+runtime registry support, availability, or source-health conclusions.
+
+`npm run registry:fixture-scaffold` emits a reserved-value, sanitised fixture
+template for contributors. It deliberately does not accept a raw registry
+response. Contributor review must remove personal data and operational tokens,
+retain only parser-relevant fields, record provenance, and add deterministic
+parser and failure-state coverage before updating the manifest digest.
+
 The version-1 page-role and client-behaviour profiles share the existing
 bounded static-HTML tokenization pass. They retain fixed labels, fixed evidence
 descriptions, bounded counts, completeness, and limitations only. They do not
@@ -112,6 +125,12 @@ source has completed early. Analyst cancellation, navigation away, or the
 40-second browser deadline stops the local wait and retains no incomplete
 response. Work already admitted by the server may still finish within its
 existing source and operation bounds.
+
+The repository also contains a deterministic offline incremental-transport
+spike. Its bounded start, source-settled, and final NDJSON events reject
+duplicate or out-of-plan sources and prohibit persistence until the ordinary
+final Lookup envelope passes validation. It is not connected to a frontend,
+API route, deployment adapter, or hosting provider.
 
 For a deep, non-compact domain Lookup only, a successful registry RDAP object
 may publish a complete `rel="related"` HTTPS domain-object link at the

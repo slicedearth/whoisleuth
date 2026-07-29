@@ -513,6 +513,12 @@ default (see the README), so many lookups return no personal data at all.
   formats are downloaded directly to your device. Campaign exports
   contain campaign labels, descriptions, domain membership, timestamps, and
   stated interpretation limits; they do not include case evidence or notes.
+  A deliberate Risk calibration export includes only explicitly selected case
+  IDs, domains, reviewed dispositions, and a bounded whitelist of normalized
+  scoring inputs from the latest retained evidence. It excludes notes, tags,
+  assertions, actions, contacts, raw source data, provider payloads, and stored
+  Risk scores. The export is not anonymous, is not uploaded, and does not train,
+  tune, or change the Risk model.
   Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
   registry-published contact data. The separate Lookup Markdown reports are
@@ -544,6 +550,16 @@ default (see the README), so many lookups return no personal data at all.
   passphrase. Nothing is uploaded or retained by the server when you export or
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
+- **Offline CLI verification and diagnostics**: `verify-artifact` reads one
+  local supported archive, packet, or signed review artifact and reports only
+  its contract, integrity state, and bounded size or count metadata by default.
+  An encrypted archive passphrase is accepted only through a separate bounded
+  local file and is not printed or retained. `source-report` reads bounded local
+  CLI Lookup or Bulk documents and reports only fixed source identifiers with
+  aggregate states, durations, truncation, and rate-limit counts. It does not
+  retain or output targets, queries, endpoints, source limitations, raw
+  evidence, or provider payloads. Neither command makes a network request or
+  uploads its input.
 - **In-tab undo**: the Console's 12-second undo notice is held only in the
   current tab's runtime memory. It can restore a prior Bulk review state,
   shortlist membership, case-tag set, or temporary evidence-cluster label by

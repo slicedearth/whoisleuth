@@ -69,6 +69,65 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('reports each planned deep source once without exposing or changing its raw result', async () => {
+    const settlements: Array<{
+      source: string;
+      state: string;
+      fragment: unknown;
+    }> = [];
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => null,
+      fetchRegistrarRdapRecord: async () => null,
+      buildWhoisChain: async () => [
+        { server: 'whois.iana.org', response: 'refer: whois.example\n' },
+        { server: 'whois.example', response: 'No match' },
+      ],
+      checkDomainAvailability: async () => ({
+        state: 'unknown',
+        confidence: 'low',
+        deepScanComplete: false,
+        privateDetail: 'must not enter the progress fragment',
+      }),
+      collectObservedNetworkContext: async () => null,
+      onSourceSettled(settlement: {
+        source: string;
+        state: string;
+        fragment: unknown;
+      }) {
+        settlements.push(settlement);
+      },
+    });
+
+    assert.equal(result.availability.state, 'unknown');
+    assert.deepEqual(
+      [...settlements.map((item) => item.source)].sort(),
+      ['domain_evidence', 'network_context', 'rdap', 'registrar_rdap', 'whois'],
+    );
+    assert.equal(new Set(settlements.map((item) => item.source)).size, settlements.length);
+    assert.equal(JSON.stringify(settlements).includes('privateDetail'), false);
+    assert.equal(
+      settlements.find((item) => item.source === 'domain_evidence')?.state,
+      'partial',
+    );
+  });
+
+  test('ignores presentation callback failures so evidence collection remains authoritative', async () => {
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => null,
+      fetchRegistrarRdapRecord: async () => null,
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => ({
+        state: 'registered',
+        confidence: 'medium',
+      }),
+      collectObservedNetworkContext: async () => null,
+      onSourceSettled() {
+        throw new Error('presentation callback failed');
+      },
+    });
+    assert.equal(result.availability.state, 'registered');
+  });
+
   test('fetches RDAP and WHOIS once and reuses both for availability', async () => {
     const rdapRecord = {
       rdapServer: 'https://rdap.example/domain/example.com',

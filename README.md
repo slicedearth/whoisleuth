@@ -147,7 +147,7 @@ deployment parity, see the [architecture orientation](docs/architecture.md).
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, rollback, capacity, and the separate encryption decision. |
 | [External findings and intelligence import](docs/external-findings-import.md) | Strict local findings schema plus bounded STIX 2.1 and MISP previews, source-file digests, exclusions, and explicit case-assertion merge behavior. |
 | [Dependency maintenance](docs/dependency-maintenance.md) | Low-noise updates, human review, and GitHub dependency-graph SPDX export. |
-| [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, and evidence exports. |
+| [CLI guide](docs/cli.md) | Commands, output formats, exit codes, offline calibration, artifact verification, source diagnostics, and evidence exports. |
 | [Engineering case study](docs/engineering-case-study.md) | Constraints, representative decisions, hard problems, and review entry points. |
 | [Privacy notice](PRIVACY.md) | Collection, browser storage, optional hosted processing, retention, export, and deletion. |
 
@@ -174,8 +174,10 @@ Additional offline or bounded maintainer checks include:
 
 ```bash
 npm run schema:inventory
+npm run registry:fixtures
 npm run benchmark:technology
 npm run benchmark:workflow
+npm run lookup:transport-spike
 npm run platform:local-data
 npm run release:check
 npm run security:codeql
@@ -183,6 +185,10 @@ npm run registry:drift
 npm run deployment:self-check -- https://your-deployment.example
 ```
 
+`registry:fixtures`, the benchmarks, the transport spike, and the local-data
+evaluation are deterministic offline checks. The transport spike validates a
+portable bounded event contract without enabling response streaming in any
+deployed adapter.
 The registry-drift and deployment checks make only their documented, fixed,
 bounded network requests. Automated unit and browser tests use deterministic
 fixtures and do not query live registries, domains, or providers.
@@ -193,7 +199,8 @@ Netlify reads `netlify.toml`, builds the static frontend, and packages the
 TypeScript functions. Before the first production deployment, set
 `SITE_PASSWORD` and a separate `SESSION_SECRET`. Optional providers, distributed
 operation controls, and encrypted scheduled monitoring remain disabled unless
-their complete configurations are supplied.
+their complete configurations are supplied. The existing Netlify or Express
+buffered Lookup remains the only production contract.
 
 Read [operations and deployment](docs/operations.md) before exposing a
 deployment publicly. It documents the shared-login boundary, reverse-proxy

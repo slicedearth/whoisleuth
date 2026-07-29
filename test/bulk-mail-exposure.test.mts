@@ -6,6 +6,7 @@ import {
   buildBulkMailExposureReport,
 } from '../frontend/src/lib/analysis/bulk-mail-exposure.ts';
 import type { BulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
+import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 
 const OBSERVED_AT = '2026-07-29T01:00:00.000Z';
 
@@ -151,5 +152,8 @@ describe('Bulk lookalike mail exposure', () => {
     assert.match(first.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     assert.equal(first.content.includes('private@example.test'), false);
     assert.equal(first.content.includes('excluded'), false);
+    const verification = await verifyOfflineArtifact(first.content);
+    assert.equal(verification.artifact.schema, 'whoisleuth.bulk-mail-exposure');
+    assert.equal(verification.state, 'verified');
   });
 });

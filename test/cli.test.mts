@@ -66,6 +66,50 @@ describe('CLI argument parsing', () => {
     assert.throws(() => parseCliArguments(['lookup', 'example.com', '--help']), /Help accepts/);
     assert.deepEqual(parseCliArguments(['--version']), { action: 'version' });
   });
+
+  test('parses bounded offline artifact verification inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'verify-artifact',
+      'workspace.json',
+      '--passphrase-file',
+      'passphrase.txt',
+      '--json',
+      '--no-color',
+    ]), {
+      action: 'verify-artifact',
+      source: 'workspace.json',
+      passphraseSource: 'passphrase.txt',
+      output: 'json',
+      quiet: false,
+      color: false,
+    });
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', '--passphrase-file']),
+      /requires one bounded UTF-8 file/u,
+    );
+    assert.throws(
+      () => parseCliArguments(['verify-artifact', 'one.json', 'two.json']),
+      /accepts one optional JSON file/u,
+    );
+  });
+
+  test('parses privacy-safe source reliability report inputs', () => {
+    assert.deepEqual(parseCliArguments([
+      'source-report',
+      'lookups.json',
+      '--json',
+    ]), {
+      action: 'source-report',
+      source: 'lookups.json',
+      output: 'json',
+      quiet: false,
+      color: true,
+    });
+    assert.throws(
+      () => parseCliArguments(['source-report', 'one.json', 'two.json']),
+      /accepts one optional JSON file/u,
+    );
+  });
 });
 
 describe('bounded CLI stdin', () => {

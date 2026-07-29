@@ -111,6 +111,12 @@ the current Express, static-frontend, and serverless adapters. The selected
 single-response design therefore improves progress and cancellation feedback
 without introducing a second orchestration path.
 
+The repository also contains a deterministic offline transport spike for
+evaluating a possible future incremental contract. Its source updates are
+explicitly non-persistable, and only a validated final Lookup envelope may
+become a result. No deployed adapter or route enables that design, and no
+hosting provider has been selected for it.
+
 Diagnostics version 8 adds bounded settle timing and the optional separately
 attributed reverse-DNS diagnostic only to deep non-compact responses. Each
 recorded branch has a fulfilled or rejected promise outcome, duration, and

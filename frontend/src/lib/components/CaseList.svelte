@@ -21,6 +21,8 @@
     setTagDraft,
     noteDraft,
     setNoteDraft,
+    calibrationCaseIds,
+    toggleCalibrationCase,
     expand,
     setStatus,
     setDisposition,
@@ -41,6 +43,8 @@
     setTagDraft: (value: string) => void;
     noteDraft: string;
     setNoteDraft: (value: string) => void;
+    calibrationCaseIds: string[];
+    toggleCalibrationCase: (record: CaseRecord, selected: boolean) => void;
     expand: (record: CaseRecord) => void;
     setStatus: (record: CaseRecord, value: string) => void;
     setDisposition: (record: CaseRecord, value: string) => void;
@@ -59,6 +63,15 @@
 <section class="case-list">
   {#each records as record (record.id)}
     <article class="case card" class:open={expandedId === record.id}>
+      <label class="calibration-select" class:unavailable={record.disposition === 'unreviewed' || !record.evidenceHistory.length}>
+        <input
+          type="checkbox"
+          checked={calibrationCaseIds.includes(record.id)}
+          disabled={record.disposition === 'unreviewed' || !record.evidenceHistory.length}
+          onchange={(event) => toggleCalibrationCase(record, event.currentTarget.checked)}
+        >
+        Include in offline Risk calibration export
+      </label>
       <button id={`case-head-${record.id}`} class="case-head" aria-expanded={expandedId === record.id} aria-controls={`case-body-${record.id}`} onclick={() => expand(record)}>
         <span class="case-domain"><strong>{record.domain}</strong>{#if record.notes.length}<small>{record.notes.length} note{record.notes.length === 1 ? '' : 's'}</small>{/if}</span>
         <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
@@ -100,6 +113,9 @@
   .case-list{display:grid;gap:10px}
   .case{padding:0;overflow:hidden}
   .case.open{border-color:var(--accent)}
+  .calibration-select{display:flex;align-items:center;gap:8px;padding:9px 18px 0;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .calibration-select input{width:16px;height:16px}
+  .calibration-select.unavailable{opacity:.6}
   .case-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left;cursor:pointer}
   .case-head:hover .case-domain strong{color:var(--accent)}
   .case-domain{display:flex;flex-direction:column;gap:3px;min-width:0}

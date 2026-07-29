@@ -10,6 +10,8 @@ const CLI_COMMANDS = [
   'tls',
   'registry-support',
   'risk-calibrate',
+  'verify-artifact',
+  'source-report',
   'compare',
   'export',
 ] as const;
@@ -32,6 +34,8 @@ type CliArguments =
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'registry-support'; target: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'source-report'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | { action: 'export'; source: string | null; format: 'json' | 'markdown' | 'html'; compact: boolean };
 
@@ -83,6 +87,8 @@ function parseCliArguments(rawArgv: unknown): CliArguments {
   if (command === 'tls') return parseTlsArguments(argv.slice(1));
   if (command === 'registry-support') return parseRegistrySupportArguments(argv.slice(1));
   if (command === 'risk-calibrate') return parseRiskCalibrateArguments(argv.slice(1));
+  if (command === 'verify-artifact') return parseVerifyArtifactArguments(argv.slice(1));
+  if (command === 'source-report') return parseSourceReportArguments(argv.slice(1));
   if (command === 'compare') return parseCompareArguments(argv.slice(1));
   if (command === 'export') return parseExportArguments(argv.slice(1));
   let query: string | null = null;
@@ -371,6 +377,54 @@ function parseRiskCalibrateArguments(argv: string[]): Extract<CliArguments, { ac
   }
   if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
   return { action: 'risk-calibrate', source, output, quiet, color };
+}
+
+function parseVerifyArtifactArguments(argv: string[]): Extract<CliArguments, { action: 'verify-artifact' }> {
+  let source: string | null = null;
+  let passphraseSource: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === undefined) break;
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--passphrase-file') {
+      if (passphraseSource !== null) throw new CliUsageError('--passphrase-file may be supplied only once.');
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) {
+        throw new CliUsageError('--passphrase-file requires one bounded UTF-8 file.');
+      }
+      passphraseSource = value;
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('verify-artifact accepts one optional JSON file. Otherwise pipe one artifact on stdin.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'verify-artifact', source, passphraseSource, output, quiet, color };
+}
+
+function parseSourceReportArguments(argv: string[]): Extract<CliArguments, { action: 'source-report' }> {
+  let source: string | null = null;
+  let output: 'terminal' | 'json' = 'terminal';
+  let quiet = false;
+  let color = true;
+  for (const argument of argv) {
+    if (argument === '--json') {
+      if (output !== 'terminal') throw new CliUsageError('--json may be supplied only once.');
+      output = 'json';
+    } else if (argument === '--quiet') quiet = true;
+    else if (argument === '--no-color') color = false;
+    else if (argument.startsWith('-')) throw new CliUsageError(`Unknown option "${argument}".`);
+    else if (source === null) source = argument;
+    else throw new CliUsageError('source-report accepts one optional JSON file. Otherwise pipe lookup documents on stdin.');
+  }
+  if (quiet && output !== 'terminal') throw new CliUsageError('--quiet cannot be combined with machine-readable output.');
+  return { action: 'source-report', source, output, quiet, color };
 }
 
 function parseExportArguments(argv: string[]): Extract<CliArguments, { action: 'export' }> {

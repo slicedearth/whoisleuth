@@ -6,6 +6,7 @@
   import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
+  import CalibrationExportReview from '$lib/components/CalibrationExportReview.svelte';
   import ExternalFindingsImport from '$lib/components/ExternalFindingsImport.svelte';
   import GuidedCaseQueue from '$lib/components/GuidedCaseQueue.svelte';
   import CaseFilters from '$lib/components/CaseFilters.svelte';
@@ -29,7 +30,8 @@
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import {
     addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES, deleteCase, dispositionLabel, editCase, exportCases,
-    importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase, statusLabel, type CaseRecord
+    exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES, openCase,
+    previewRiskCalibrationDataset, statusLabel, type CaseRecord, type RiskCalibrationExportPreview
   } from '$lib/cases';
   import { loadCampaigns } from '$lib/campaigns';
   import { loadDetectionRules } from '$lib/detection-rules';
@@ -86,6 +88,9 @@
   const relationshipCount=$derived(relationshipSummary.groups.length+retainedRelationships.length);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
+  let calibrationCaseIds=$state<string[]>([]);
+  let calibrationReview=$state<RiskCalibrationExportPreview|null>(null);
+  let calibrationExportBusy=$state(false);
   let guidedDomains=$state<string[]>([]);let guidedDomainsTruncated=$state(false);
   const existingCaseDomains=$derived(new Set(cases.map((record)=>record.domain)));
   const statusOrder=new Map(CASE_STATUSES.map((item,index)=>[item.value,index]));
@@ -117,7 +122,7 @@
       caseMessage=`Deleted the retained relationship observation. Source cases and watchlists were not changed.`;
     }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the retained relationship observation.';}
   }
-  async function refreshCases(){cases=await loadCases();await refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
+  async function refreshCases(){cases=await loadCases();calibrationCaseIds=calibrationCaseIds.filter(id=>cases.some(record=>record.id===id));await refreshRelationships();if(expandedId&&!cases.some(record=>record.id===expandedId))expandedId='';}
   function expand(record:CaseRecord){if(expandedId===record.id){expandedId='';return;}showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';}
   function openRelatedCase(record:CaseRecord){view='cases';showCasePage(record);if(expandedId!==record.id)expand(record);}
   async function focusCase(record:CaseRecord){
@@ -148,6 +153,9 @@
   async function saveTags(record:CaseRecord){const previous=[...record.tags];const next=tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean);if(previous.join('\\0')===next.join('\\0'))return;try{const{pruned}=await editCase(record.id,{tags:next});await refreshCases();showCasePage(record);caseMessage=`Updated tags for ${record.domain}.${prunedNote(pruned)}`;registerAnalystUndo({kind:'case_tags',action:'Case tags updated',affectedRecord:record.domain,undo:async()=>{await editCase(record.id,{tags:previous});await refreshCases();const restored=cases.find((item)=>item.id===record.id);if(restored&&expandedId===record.id)tagDraft=restored.tags.join(', ');return `Restored the previous tags for ${record.domain}.`;}});}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
   async function addNote(record:CaseRecord){const body=noteDraft.trim();if(!body){caseMessage='A note cannot be empty.';return;}try{const{pruned}=await addCaseNote(record.id,body);await refreshCases();showCasePage(record);noteDraft='';caseMessage=`Added a note to ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';}}
   async function downloadCases(){try{await exportCases();}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export cases.';}}
+  function toggleCalibrationCase(record:CaseRecord,selected:boolean){calibrationReview=null;calibrationCaseIds=selected?[...new Set([...calibrationCaseIds,record.id])]:calibrationCaseIds.filter(id=>id!==record.id);}
+  async function reviewCalibrationDataset(){try{calibrationReview=await previewRiskCalibrationDataset(calibrationCaseIds);}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not review the Risk calibration dataset.';}}
+  async function downloadCalibrationDataset(){calibrationExportBusy=true;try{const result=await exportRiskCalibrationDataset(calibrationCaseIds);calibrationReview=null;caseMessage=`Exported ${result.included} reviewed case${result.included===1?'':'s'} for offline Risk calibration${result.excluded?`; excluded ${result.excluded} incompatible selection${result.excluded===1?'':'s'}`:''}. No model setting was changed.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export the Risk calibration dataset.';}finally{calibrationExportBusy=false;}}
   async function removeCase(record:CaseRecord){if(!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))return;try{await deleteCase(record.id);if(expandedId===record.id)expandedId='';await refreshCases();caseMessage=`Deleted the case for ${record.domain}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the case.';}}
   function clearCaseFilters(){statusFilter='';dispositionFilter='';caseSearch='';}
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=await importCases(JSON.parse(await file.text()));await refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
@@ -231,13 +239,21 @@
 {#if view==='cases'}
 <div id="panel-cases" role="tabpanel" aria-labelledby="tab-cases">
   {#if guidedDomains.length}<GuidedCaseQueue domains={guidedDomains} existingDomains={existingCaseDomains} truncated={guidedDomainsTruncated} openDomain={openGuidedCase} />{/if}
-  <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} {downloadCases} {importCaseFile} message={caseMessage} />
+  <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} calibrationSelectedCount={calibrationCaseIds.length} {downloadCases} {reviewCalibrationDataset} {importCaseFile} message={caseMessage} />
+  {#if calibrationReview}
+    <CalibrationExportReview
+      preview={calibrationReview}
+      busy={calibrationExportBusy}
+      confirm={downloadCalibrationDataset}
+      cancel={() => { if (!calibrationExportBusy) calibrationReview=null; }}
+    />
+  {/if}
   <ExternalFindingsImport {cases} oncomplete={refreshCases} onmessage={(value)=>caseMessage=value} />
 
   {#if cases.length}
     <CaseFilters status={statusFilter} setStatus={(value)=>{statusFilter=value;casePage=1;}} disposition={dispositionFilter} setDisposition={(value)=>{dispositionFilter=value;casePage=1;}} search={caseSearch} setSearch={(value)=>{caseSearch=value;casePage=1;}} sort={caseSort} setSort={(value)=>{caseSort=value;casePage=1;}} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={()=>{clearCaseFilters();casePage=1;}} matchedCount={filteredCases.length} totalCount={cases.length} />
 
-    <CaseList records={pagedCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} {expand} {setStatus} {setDisposition} {saveTags} {addNote} {removeCase} {refreshCases} setMessage={(value)=>caseMessage=value} formatDate={date} currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />
+    <CaseList records={pagedCases} allRecords={cases} {expandedId} {tagDraft} setTagDraft={(value)=>tagDraft=value} {noteDraft} setNoteDraft={(value)=>noteDraft=value} calibrationCaseIds={calibrationCaseIds} {toggleCalibrationCase} {expand} {setStatus} {setDisposition} {saveTags} {addNote} {removeCase} {refreshCases} setMessage={(value)=>caseMessage=value} formatDate={date} currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />
   {:else}
     <section class="empty-state card"><h2>No cases yet</h2><p>Open a case from a Lookup result, a Bulk row, or the form above to start a documented investigation record.</p><a href="/lookup">Open Lookup →</a></section>
   {/if}

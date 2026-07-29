@@ -24,9 +24,20 @@ type RateLimitDecision = {
 };
 
 const buckets = new Map<string, RateLimitBucket>();
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+let nextSweepAt = 0;
+
+function sweepExpiredBuckets(now: number): void {
+  if (now < nextSweepAt) return;
+  nextSweepAt = now + SWEEP_INTERVAL_MS;
+  for (const [key, bucket] of buckets) {
+    if (now >= bucket.resetAt) buckets.delete(key);
+  }
+}
 
 function checkRateLimit(key: string, { limit, windowMs }: RateLimitConfig): RateLimitDecision {
   const now = Date.now();
+  sweepExpiredBuckets(now);
   const bucket = buckets.get(key);
 
   if (!bucket || now >= bucket.resetAt) {
@@ -42,15 +53,9 @@ function checkRateLimit(key: string, { limit, windowMs }: RateLimitConfig): Rate
   return { allowed: true };
 }
 
-// Periodic sweep so a long-running process (server.mts) doesn't accumulate
-// one entry per distinct IP forever.
-const sweepInterval = setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of buckets) {
-    if (now >= bucket.resetAt) buckets.delete(key);
-  }
-}, 5 * 60 * 1000);
-sweepInterval.unref();
+// Expired buckets are swept lazily during rate-limit checks. This avoids an
+// import-time timer in request-scoped runtimes while preserving the same
+// five-minute cleanup cadence during active use.
 
 // Best-effort client IP for keying buckets. Forwarded-IP headers are only
 // trusted when there's actually a reason to trust them - either Netlify's

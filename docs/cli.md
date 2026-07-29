@@ -25,6 +25,9 @@ node bin/whoisleuth.mts http example.com --json
 node bin/whoisleuth.mts tls example.com --json
 node bin/whoisleuth.mts registry-support example.uk --json
 node bin/whoisleuth.mts risk-calibrate calibration.json --json
+node bin/whoisleuth.mts verify-artifact workspace.json --json
+node bin/whoisleuth.mts verify-artifact workspace-encrypted.json --passphrase-file passphrase.txt --json
+node bin/whoisleuth.mts source-report lookup.json --json
 node bin/whoisleuth.mts lookup example.com --deep --json > lookup.json
 node bin/whoisleuth.mts compare lookup.json --json
 node bin/whoisleuth.mts export lookup.json > evidence.json
@@ -76,8 +79,9 @@ Commands that query RDAP, WHOIS, DNS, HTTP, TLS, or Certificate Transparency do
 so directly from the machine running the CLI. They do not use the hosted login,
 hosted session, or deployment usage controls; upstream providers can see and
 rate-limit the local machine's network address. Offline `discover`, `compare`,
-`risk-calibrate`, and `export` operations make no network requests and write
-their results only to local stdout unless the user redirects them to a file.
+`risk-calibrate`, `verify-artifact`, `source-report`, and `export` operations
+make no network requests and write their results only to local stdout unless
+the user redirects them to a file.
 
 ## Output
 
@@ -150,9 +154,9 @@ machine access is not evidence that a domain is unregistered or safe.
 | 70 | Unexpected CLI bootstrap failure. |
 
 This release supports `lookup`, `bulk`, `ct-search`, `discover`, `posture`,
-`http`, `tls`, `registry-support`, `risk-calibrate`, `compare`, and `export`.
-Additional export formats are added as separate bounded increments rather than
-exposing incomplete aliases.
+`http`, `tls`, `registry-support`, `risk-calibrate`, `verify-artifact`,
+`source-report`, `compare`, and `export`. Additional export formats are added
+as separate bounded increments rather than exposing incomplete aliases.
 
 ## Registry capability coverage
 
@@ -214,6 +218,52 @@ its record list at 100 while `--json` retains the complete bounded report,
 factor breakdowns, score bands, and per-threshold confusion metrics. Analyst
 dispositions and heuristic scores are review context: neither proves
 maliciousness or safety.
+
+The authenticated Monitor workspace can deliberately create the accepted
+dataset from explicitly selected cases. Selection is available only when a case
+has a reviewed disposition and retained normalized evidence. That local export
+contains the case ID, domain, disposition, and a bounded whitelist of current
+scoring inputs. It excludes notes, tags, assertions, actions, contacts, raw
+source data, provider payloads, and stored Risk scores. Before download, a local
+review step shows the selected, included, and excluded counts, the domains and
+dispositions that will be written, and the excluded evidence classes. The CLI
+still validates every exported record and never trains, tunes, or changes the
+Risk model.
+
+## Offline artifact verification
+
+`verify-artifact` validates a supported local artifact without printing its
+evidence contents. Input is capped at 15 MiB. It currently recognises ordinary
+and encrypted workspace archives, case-response packets, acquisition-decision
+exports, domain-comparison exports, Bulk mail-exposure exports, and Bulk review
+manifests.
+
+For an ordinary workspace archive, the command validates the versioned
+structure, section byte counts, record counts, and per-section checksums. For a
+supported signed review artifact, it validates the declared SHA-256 digest. An
+encrypted archive without `--passphrase-file` can establish only that the
+envelope is structurally valid; it reports `envelope_valid` and explicitly
+leaves authenticated encryption and inner checksums unchecked.
+
+Supplying a separate passphrase file, capped at 1 KiB, allows authenticated
+decryption followed by the ordinary workspace checks. The passphrase is never
+accepted as a command-line value, printed, or retained. Verification detects
+changes against the artifact's declared contract; it does not authenticate the
+analyst or establish that an observation was accurate or remains current.
+
+## Privacy-safe source reliability report
+
+`source-report` summarises source states, durations, truncation, and rate-limit
+counts from one version-1 CLI Lookup, Bulk, or Bulk-item document, or a JSON
+array of up to 100 such documents. Input is capped at 12 MiB and traversal,
+source, duration, and output counts are bounded.
+
+The report retains only fixed source identifiers and aggregate operational
+counts. It does not output targets, queries, endpoints, source limitations, raw
+evidence, or provider payloads. Observation-envelope duration and the
+potentially overlapping Lookup timing are reported separately and never added
+together. It is a local engineering diagnostic, not analytics, a source-quality
+score, or evidence that a collector is currently healthy.
 
 ## Bulk lookup
 

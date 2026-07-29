@@ -8,6 +8,7 @@ import { nextBulkReviewIndex, type BulkReviewCockpitRow } from '../frontend/src/
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
 import { buildBulkRetryPlan, preservePriorBulkResult } from '../frontend/src/lib/analysis/bulk-retry-plan.ts';
 import type { BulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
+import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const GENERATED_AT = '2026-07-28T00:00:00.000Z';
@@ -117,6 +118,9 @@ describe('Bulk evidence review workflow', () => {
     assert.match(exported.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     const repeated = await buildBulkDomainComparisonExport(comparison, GENERATED_AT);
     assert.equal(repeated.content, exported.content);
+    const verification = await verifyOfflineArtifact(exported.content);
+    assert.equal(verification.artifact.schema, 'whoisleuth.domain-comparison');
+    assert.equal(verification.state, 'verified');
   });
 
   test('keeps conflicting, unavailable, and explicitly absent evidence distinct', () => {
@@ -231,5 +235,8 @@ describe('Bulk evidence review workflow', () => {
     assert.match(manifest.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     assert.equal(manifest.content.includes('private@example.test'), false);
     assert.equal(manifest.content.includes('excluded raw record'), false);
+    const verification = await verifyOfflineArtifact(manifest.content);
+    assert.equal(verification.artifact.schema, 'whoisleuth.bulk-review-manifest');
+    assert.equal(verification.state, 'verified');
   });
 });

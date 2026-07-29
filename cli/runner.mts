@@ -67,6 +67,17 @@ import { buildHttpProbeResult } from './http.mts';
 import { normalizePostureSelectors } from './posture.mts';
 import { buildRegistrySupportDocument } from './registry-support.mts';
 import {
+  MAX_OFFLINE_ARTIFACT_BYTES,
+  MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
+  formatOfflineArtifactVerification,
+  verifyOfflineArtifact,
+} from './artifact-verify.mts';
+import {
+  MAX_SOURCE_RELIABILITY_INPUT_BYTES,
+  buildSourceReliabilityReport,
+  formatSourceReliabilityReport,
+} from './source-reliability.mts';
+import {
   MAX_RISK_CALIBRATION_INPUT_BYTES,
   buildRiskCalibrationReport,
   parseRiskCalibrationDataset,
@@ -93,6 +104,8 @@ Usage:
   whoisleuth tls <hostname> [--json] [--quiet] [--no-color]
   whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]
   whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]
+  whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]
+  whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]
   whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]
   whoisleuth export [lookup.json] [--markdown|--html|--compact]
   whoisleuth --help
@@ -104,6 +117,8 @@ through the shared bounded pipeline.
 Machine-readable output is written to stdout; diagnostics are written to stderr.
 Registry support is an offline catalogue view and never tests live reachability.
 Risk calibration is an offline fixture replay and never changes the scoring model.
+Artifact verification is offline and prints contract and integrity results, not retained evidence contents.
+Source reports are local summaries that retain no targets, queries, endpoints, or raw evidence.
 
 Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
 Source and licence: https://github.com/slicedearth/whoisleuth
@@ -118,6 +133,8 @@ const COMMAND_USAGE: Readonly<Record<CliCommand, string>> = Object.freeze({
   tls: 'whoisleuth tls <hostname> [--json] [--quiet] [--no-color]',
   'registry-support': 'whoisleuth registry-support <domain|suffix> [--json] [--quiet] [--no-color]',
   'risk-calibrate': 'whoisleuth risk-calibrate [dataset.json] [--json] [--quiet] [--no-color]',
+  'verify-artifact': 'whoisleuth verify-artifact [artifact.json] [--passphrase-file <file>] [--json] [--quiet] [--no-color]',
+  'source-report': 'whoisleuth source-report [lookup.json] [--json] [--quiet] [--no-color]',
   compare: 'whoisleuth compare [lookup.json] [--json] [--quiet] [--no-color]',
   export: 'whoisleuth export [lookup.json] [--markdown|--html|--compact]',
 });
@@ -156,6 +173,9 @@ type CliDependencies = {
   readDiscoveryDictionary?: (source: string) => string | Promise<string>;
   readExportInput?: (source?: string | null) => string | Promise<string>;
   readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
+  readArtifactInput?: (source?: string | null) => string | Promise<string>;
+  readPassphraseFile?: (source: string) => string | Promise<string>;
+  readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
   now?: () => string;
   classifyQuery?: typeof classifyQuery;
   runUnifiedLookup?: LookupDependency;
@@ -253,6 +273,85 @@ async function runCli(argv: unknown, dependencies: CliDependencies = {}): Promis
         reviewThreshold: dependencies.riskReviewThreshold || RISK_REVIEW_THRESHOLD,
       });
       if (!args.quiet) write(stdout, args.output === 'json' ? formatJsonDocument(report) : formatTerminalRiskCalibration(report));
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'verify-artifact') {
+      failureLabel = 'Artifact verification';
+      let input: string;
+      try {
+        input = dependencies.readArtifactInput
+          ? await dependencies.readArtifactInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_OFFLINE_ARTIFACT_BYTES,
+              label: 'Artifact input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read artifact input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('verify-artifact requires one JSON file or an artifact on stdin.');
+
+      let passphrase: string | null = null;
+      if (args.passphraseSource) {
+        let passphraseText: string;
+        try {
+          passphraseText = dependencies.readPassphraseFile
+            ? await dependencies.readPassphraseFile(args.passphraseSource)
+            : await readSavedLookupInputBounded(
+              createReadStream(args.passphraseSource, { highWaterMark: MAX_OFFLINE_PASSPHRASE_FILE_BYTES }),
+              {
+                limit: MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
+                label: 'Passphrase file',
+              },
+            );
+        } catch (error) {
+          if (error instanceof CliUsageError) throw error;
+          throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`);
+        }
+        passphrase = passphraseText.replace(/\r?\n$/u, '');
+        if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
+          throw new CliUsageError('Passphrase file must contain exactly one non-empty UTF-8 line.');
+        }
+      }
+
+      const report = await verifyOfflineArtifact(input, { passphrase });
+      if (!args.quiet) {
+        write(stdout, args.output === 'json'
+          ? formatJsonDocument(report)
+          : formatOfflineArtifactVerification(report));
+      }
+      return EXIT_CODES.SUCCESS;
+    }
+
+    if (args.action === 'source-report') {
+      failureLabel = 'Source reliability report';
+      let input: string;
+      try {
+        input = dependencies.readSourceReliabilityInput
+          ? await dependencies.readSourceReliabilityInput(args.source)
+          : await readSavedLookupInputBounded(args.source
+            ? createReadStream(args.source, { highWaterMark: 64 * 1024 })
+            : dependencies.stdin || process.stdin, {
+              limit: MAX_SOURCE_RELIABILITY_INPUT_BYTES,
+              label: 'Source reliability input',
+            });
+      } catch (error) {
+        if (error instanceof CliUsageError) throw error;
+        throw new CliUsageError(`Could not read source reliability input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      }
+      if (!input.trim()) throw new CliUsageError('source-report requires one JSON file or lookup documents on stdin.');
+      const report = buildSourceReliabilityReport(
+        input,
+        dependencies.now ? dependencies.now() : new Date().toISOString(),
+      );
+      if (!args.quiet) {
+        write(stdout, args.output === 'json'
+          ? formatJsonDocument(report)
+          : formatSourceReliabilityReport(report));
+      }
       return EXIT_CODES.SUCCESS;
     }
 

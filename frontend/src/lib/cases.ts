@@ -27,6 +27,17 @@ import {
   mergeExternalIntelligenceIntoCase,
   type ExternalIntelligencePreview,
 } from './analysis/external-intelligence-import.ts';
+import { buildRiskCalibrationDatasetExport } from './analysis/risk-calibration-export.ts';
+
+export type RiskCalibrationExportPreview = Readonly<{
+  selected: number;
+  included: number;
+  excluded: number;
+  records: readonly Readonly<{
+    domain: string;
+    analystDisposition: string;
+  }>[];
+}>;
 
 export {
   CASE_DISPOSITIONS,
@@ -217,4 +228,43 @@ export async function exportCases(): Promise<void> {
   anchor.download = `whoisleuth-cases-${new Date().toISOString().slice(0, 10)}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export async function exportRiskCalibrationDataset(
+  selectedCaseIds: readonly string[],
+): Promise<{ included: number; excluded: number }> {
+  if (!selectedCaseIds.length) throw new Error('Select at least one reviewed case for calibration export.');
+  const payload = buildRiskCalibrationDatasetExport(await loadCases(), selectedCaseIds);
+  if (!payload.records.length) {
+    throw new Error('The selected cases do not contain reviewed dispositions with compatible retained evidence.');
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `whoisleuth-risk-calibration-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  return { included: payload.records.length, excluded: payload.export.excluded };
+}
+
+export async function previewRiskCalibrationDataset(
+  selectedCaseIds: readonly string[],
+): Promise<RiskCalibrationExportPreview> {
+  if (!selectedCaseIds.length) {
+    throw new Error('Select at least one reviewed case for calibration export.');
+  }
+  const payload = buildRiskCalibrationDatasetExport(await loadCases(), selectedCaseIds);
+  if (!payload.records.length) {
+    throw new Error('The selected cases do not contain reviewed dispositions with compatible retained evidence.');
+  }
+  return Object.freeze({
+    selected: payload.export.selected,
+    included: payload.records.length,
+    excluded: payload.export.excluded,
+    records: Object.freeze(payload.records.map((record) => Object.freeze({
+      domain: record.domain,
+      analystDisposition: record.analystDisposition,
+    }))),
+  });
 }

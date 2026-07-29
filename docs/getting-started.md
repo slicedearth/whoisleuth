@@ -165,6 +165,7 @@ live coverage or production-performance benchmark.
 ```bash
 npm run benchmark:technology
 npm run benchmark:technology -- --json
+npm run technology:signature-scaffold -- --id=example-platform --name="Example platform" --category="site builder" --source=generator
 ```
 
 Runs the versioned synthetic technology corpus through the same bounded
@@ -175,6 +176,57 @@ per-category expected, observed, missed, unexpected, overlap, collision, and
 false-positive metrics without copying fixture HTML, headers, generators, or
 resource origins into its output. It makes no network request and is a
 regression/calibration result rather than a live coverage claim.
+
+The scaffold emits a catalogue-entry template plus a required positive fixture
+and benign negative fixture. It accepts only bounded signature metadata, never
+raw pages or response headers. A proposed signature should not be merged until
+the benchmark reports no identifier, confidence, category, coverage, or
+collision error and its benign fixture does not create an unexpected match.
+
+### Registry-fixture freshness
+
+```bash
+npm run registry:fixtures
+npm run registry:fixtures -- --json
+npm run registry:fixture-scaffold -- --profile nic-io-colon --suffix ac --scenario registered
+```
+
+The freshness check verifies each reviewed fixture file against its recorded
+SHA-256 digest and source-review date. It exits non-zero when a fixture changed,
+its review is older than the bounded threshold, or its provenance record cannot
+be verified. It does not contact the listed source or claim that the source is
+currently reachable.
+
+The scaffold produces a sanitised TypeScript fixture template using reserved
+example values. It does not ingest or transform raw registry responses. Before
+adding a fixture, remove personal data and tokens, retain only the minimum
+parser-relevant fields, add a provenance record, and run the full registry
+fixture suite.
+
+### Optional-provider conformance
+
+The automated suite runs every current optional-provider adapter through the
+shared fixture-only conformance harness. The harness covers neutral misses,
+rate limits, timeouts, malformed and oversized responses, truncation, and
+stable provider and observation provenance. It does not enable a provider,
+contact a provider, or permit arbitrary plugin code.
+
+### Incremental Lookup transport spike
+
+```bash
+npm run lookup:transport-spike
+```
+
+This command exercises the shared bounded NDJSON contract offline. Source
+updates remain explicitly non-persistable and only a validated final Lookup
+envelope can become a result.
+
+The spike is not connected to the frontend, an API route, or a hosting
+provider. Production adoption remains gated on a separately reviewed adapter,
+remote-runtime compatibility, deadline and cancellation behavior, buffering
+and fallback behavior, deployment-wide cost controls, a deployment-specific
+privacy review, and authenticated desktop and mobile smoke tests. The existing
+buffered Netlify and Express endpoint remains the only deployed contract.
 
 ### Unicode confusable audit
 
@@ -310,8 +362,9 @@ node bin/whoisleuth.mts --help
 
 The [CLI guide](cli.md) documents commands for Lookup, Bulk, Certificate
 Transparency, discovery, posture, HTTP and TLS intelligence, registry-source
-comparison, compatibility inspection, Risk calibration, and evidence export.
-It also defines output formats and exit codes.
+comparison, compatibility inspection, Risk calibration, artifact verification,
+privacy-safe source diagnostics, and evidence export. It also defines output
+formats and exit codes.
 
 The CLI is a local package boundary. It is not included in the static frontend
 or the Netlify function bundles unless a shared module is also used there.
