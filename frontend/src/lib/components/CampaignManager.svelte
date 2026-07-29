@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import type { CaseRecord } from '$lib/cases';
+  import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
   import {
     addCampaignDomain,
     createCampaign,
@@ -38,6 +39,7 @@
   const memberPageCount=$derived(Math.max(1,Math.ceil((expanded?.domains.length??0)/MEMBER_PAGE_SIZE)));
   const currentMemberPage=$derived(Math.min(memberPage,memberPageCount));
   const pagedMembers=$derived((expanded?.domains??[]).slice((currentMemberPage-1)*MEMBER_PAGE_SIZE,currentMemberPage*MEMBER_PAGE_SIZE));
+  const reviewSummary=$derived(buildCampaignReviewSummary(expanded?.domains??[],records));
 
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   function setMemberPage(value:number){memberPage=Math.min(memberPageCount,Math.max(1,Math.trunc(value)));}
@@ -128,6 +130,28 @@
               {:else}<p>No cases have been added to this campaign.</p>{/if}
             </section>
 
+            <section class="review-summary" aria-labelledby={`campaign-review-${campaign.id}`}>
+              <header>
+                <div><p class="eyebrow">Latest retained evidence</p><h3 id={`campaign-review-${campaign.id}`}>Campaign review cues</h3></div>
+                <span>{reviewSummary.linkedCaseCount}/{reviewSummary.memberCount} linked</span>
+              </header>
+              <div class="review-health">
+                <span><strong>{reviewSummary.unreviewedCaseCount}</strong> unreviewed</span>
+                <span><strong>{reviewSummary.limitedEvidenceCount}</strong> limited evidence</span>
+                <span><strong>{reviewSummary.unavailableCaseCount}</strong> unavailable cases</span>
+              </div>
+              <div class="cue-grid">
+                {#each reviewSummary.cues as cue}
+                  <article>
+                    <strong>{cue.caseCount}</strong>
+                    <span>{cue.label}</span>
+                    <p>{cue.detail}</p>
+                  </article>
+                {/each}
+              </div>
+              <details><summary>Interpretation limits</summary><ul>{#each reviewSummary.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
+            </section>
+
             <form class="add-case" onsubmit={(event)=>{event.preventDefault();add(campaign);}}>
               <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>
               <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={!selectedDomain}>Add case</button></div>
@@ -145,6 +169,6 @@
 {/if}
 
 <style>
-  .campaign-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end;padding:16px}.campaign-toolbar form label,.campaign-edit>label,.add-case>label{display:block;margin-bottom:5px;color:var(--text);font:600 var(--text-xs) var(--mono)}.campaign-toolbar form>div,.add-case>div{display:flex;flex-wrap:wrap;gap:8px}.campaign-toolbar input,.campaign-edit input{min-height:42px}.add-case select{min-height:var(--control-h)}.message{color:var(--accent);font-size:var(--text-sm)}.summary{margin:12px 2px 2px;color:var(--muted);font-size:var(--text-xs)}.privacy-note{margin:0 2px 12px;color:var(--muted);font-size:var(--text-xs)}.campaign-list{display:grid;gap:10px}.campaign{padding:0;overflow:hidden}.campaign.open{border-color:var(--accent)}.campaign-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left;cursor:pointer}.campaign-head:hover strong{color:var(--accent)}.campaign-head>span:first-child{display:grid;gap:3px;min-width:0}.campaign-head strong,.campaign-head small{overflow-wrap:anywhere}.campaign-head strong{font:700 var(--text-md) var(--mono)}.campaign-head small,.campaign-head>span:last-child{color:var(--muted);font-size:var(--text-2xs)}.campaign-body{display:grid;gap:16px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}.campaign-edit{display:grid;gap:7px}.campaign-edit textarea{resize:vertical}.campaign-edit button{justify-self:start}.members{padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm)}.members h3{margin:0;font-size:var(--text-md)}.members ul{display:grid;gap:7px;margin:11px 0 0;padding:0;list-style:none}.members li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.members li>div:first-child{display:grid;gap:2px;min-width:0}.members li strong{overflow-wrap:anywhere;font-size:var(--text-sm)}.members li small,.members>p,details p{color:var(--muted);font-size:var(--text-xs)}.members li>div:last-child{display:flex;flex-wrap:wrap;gap:6px}.add-case select{min-width:0;max-width:100%}details summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}details p{max-width:80ch}.delete{justify-self:start}
-  @media(max-width:700px){.campaign-toolbar{align-items:stretch;flex-direction:column}.campaign-toolbar form>div,.add-case>div{display:grid}.campaign-toolbar input,.campaign-toolbar button,.top-actions>:global(*),.add-case select{width:100%}.campaign-head{grid-template-columns:1fr}.members li{align-items:stretch;flex-direction:column}.members li>div:last-child button{flex:1}.campaign-edit button,.delete{width:100%}}
+  .campaign-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end;padding:16px}.campaign-toolbar form label,.campaign-edit>label,.add-case>label{display:block;margin-bottom:5px;color:var(--text);font:600 var(--text-xs) var(--mono)}.campaign-toolbar form>div,.add-case>div{display:flex;flex-wrap:wrap;gap:8px}.campaign-toolbar input,.campaign-edit input{min-height:42px}.add-case select{min-height:var(--control-h)}.message{color:var(--accent);font-size:var(--text-sm)}.summary{margin:12px 2px 2px;color:var(--muted);font-size:var(--text-xs)}.privacy-note{margin:0 2px 12px;color:var(--muted);font-size:var(--text-xs)}.campaign-list{display:grid;gap:10px}.campaign{padding:0;overflow:hidden}.campaign.open{border-color:var(--accent)}.campaign-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left;cursor:pointer}.campaign-head:hover strong{color:var(--accent)}.campaign-head>span:first-child{display:grid;gap:3px;min-width:0}.campaign-head strong,.campaign-head small{overflow-wrap:anywhere}.campaign-head strong{font:700 var(--text-md) var(--mono)}.campaign-head small,.campaign-head>span:last-child{color:var(--muted);font-size:var(--text-2xs)}.campaign-body{display:grid;gap:16px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}.campaign-edit{display:grid;gap:7px}.campaign-edit textarea{resize:vertical}.campaign-edit button{justify-self:start}.members,.review-summary{padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm)}.members h3,.review-summary h3{margin:0;font-size:var(--text-md)}.members ul{display:grid;gap:7px;margin:11px 0 0;padding:0;list-style:none}.members li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.members li>div:first-child{display:grid;gap:2px;min-width:0}.members li strong{overflow-wrap:anywhere;font-size:var(--text-sm)}.members li small,.members>p,details p{color:var(--muted);font-size:var(--text-xs)}.members li>div:last-child{display:flex;flex-wrap:wrap;gap:6px}.review-summary>header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.review-summary>header>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.review-health{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.review-health span{padding:4px 7px;border:1px solid var(--border);border-radius:99px;color:var(--muted);font-size:var(--text-2xs)}.review-health strong{color:var(--text)}.cue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.cue-grid article{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.cue-grid article>strong{display:block;color:var(--accent);font:700 var(--text-lg) var(--mono)}.cue-grid article>span{font-weight:700;font-size:var(--text-xs)}.cue-grid article>p{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.review-summary details{margin-top:10px}.review-summary details ul{margin:7px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.add-case select{min-width:0;max-width:100%}details summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}details p{max-width:80ch}.delete{justify-self:start}
+  @media(max-width:700px){.campaign-toolbar{align-items:stretch;flex-direction:column}.campaign-toolbar form>div,.add-case>div{display:grid}.campaign-toolbar input,.campaign-toolbar button,.top-actions>:global(*),.add-case select{width:100%}.campaign-head{grid-template-columns:1fr}.members li,.review-summary>header{align-items:stretch;flex-direction:column}.members li>div:last-child button{flex:1}.cue-grid{grid-template-columns:minmax(0,1fr)}.campaign-edit button,.delete{width:100%}}
 </style>

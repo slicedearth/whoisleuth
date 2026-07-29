@@ -282,7 +282,13 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   Pins, decisions, and actions stay separately typed so an analyst assertion is
   never presented as collected evidence.
 - **Campaigns** group existing case domains without duplicating their evidence
-  or implying attribution.
+  or implying attribution. An expanded campaign projects bounded counts for
+  password fields, official-identity relationships, redirect or transport
+  review, and mail routing from each linked case's latest retained snapshot.
+  It keeps unavailable cases, limited evidence, and unreviewed dispositions
+  visible. Cue overlap is expected and the projection is not a score,
+  ownership claim, campaign-attribution finding, or maliciousness
+  determination.
 - **Relationships** review analyst-selected Bulk observations and project
   typed, provenance-backed links across those records, stored case evidence,
   and campaign membership without another network request. The Evidence

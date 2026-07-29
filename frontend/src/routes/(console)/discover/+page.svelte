@@ -27,7 +27,12 @@
   import { activeProfile, isDomainAllowlisted, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import { normalizeCtResponse, ctCandidateMatchesFilter } from '$lib/analysis/ct-results.ts';
-  import { discoverReviewCues } from '$lib/analysis/discover-review-cues.ts';
+  import {
+    candidateReviewCues as buildCandidateReviewCues,
+    sortDiscoverCandidates,
+    type CandidateMetadata,
+    type CandidateSort,
+  } from '$lib/analysis/discover-candidate-sort.ts';
   import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
@@ -46,14 +51,6 @@
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz' | 'all';
   type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
-  type CandidateSort = 'generated' | 'review-signals' | 'domain' | 'generation-paths' | 'reference' | 'mixed' | 'certificate-newest';
-  type CandidateMetadata = {
-    hasIdn: boolean;
-    unicodeDomain: string;
-    scripts: string[];
-    mixedScript: boolean;
-    referenceDomains: string[];
-  };
   const DISCOVER_PAGE_SIZE = 100;
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
@@ -137,14 +134,7 @@
     return { unicode, mixed, reference, selected: selected.size };
   });
   function candidateReviewCues(candidate: Candidate): string[] {
-    const metadata = candidateMetadata.get(candidate.domain);
-    return discoverReviewCues({
-      referenceMatch: Boolean(metadata?.referenceDomains.length),
-      mixedScript: Boolean(metadata?.mixedScript),
-      internationalized: Boolean(metadata?.hasIdn),
-      generationPathCount: candidate.mutationTypes.length,
-      certificateObserved: Boolean(candidate.certificateTransparency?.certificateCount),
-    });
+    return buildCandidateReviewCues(candidate, candidateMetadata.get(candidate.domain));
   }
   const visible = $derived.by(() => {
     const filtered = candidates.filter((candidate) => {
@@ -157,31 +147,7 @@
       if (candidateScope === 'selected' && !selected.has(candidate.domain)) return false;
       return true;
     });
-    if (candidateSort === 'generated') return filtered;
-    return [...filtered].sort((left, right) => {
-      if (candidateSort === 'domain') return left.domain.localeCompare(right.domain);
-      if (candidateSort === 'review-signals') {
-        return candidateReviewCues(right).length - candidateReviewCues(left).length
-          || right.mutationTypes.length - left.mutationTypes.length
-          || left.domain.localeCompare(right.domain);
-      }
-      if (candidateSort === 'generation-paths') {
-        return right.mutationTypes.length - left.mutationTypes.length || left.domain.localeCompare(right.domain);
-      }
-      if (candidateSort === 'reference') {
-        return Number(Boolean(candidateMetadata.get(right.domain)?.referenceDomains.length))
-          - Number(Boolean(candidateMetadata.get(left.domain)?.referenceDomains.length))
-          || left.domain.localeCompare(right.domain);
-      }
-      if (candidateSort === 'mixed') {
-        return Number(Boolean(candidateMetadata.get(right.domain)?.mixedScript))
-          - Number(Boolean(candidateMetadata.get(left.domain)?.mixedScript))
-          || left.domain.localeCompare(right.domain);
-      }
-      const leftObserved = left.certificateTransparency?.lastObservedAt || '';
-      const rightObserved = right.certificateTransparency?.lastObservedAt || '';
-      return rightObserved.localeCompare(leftObserved) || left.domain.localeCompare(right.domain);
-    });
+    return sortDiscoverCandidates(filtered, candidateSort, candidateMetadata);
   });
   const pageCount = $derived(Math.max(1, Math.ceil(visible.length / DISCOVER_PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
