@@ -88,6 +88,8 @@ test('lookalike generation discloses its limits and paginates every retained can
   await expect(page.locator('.candidate')).toHaveCount(100);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="all"]')).toHaveText('All candidates (2000)');
+  await expect(page.locator('.sort-guidance')).toContainText('Generated candidates are ordered by visible review cues');
+  await expect(page.locator('.sort-guidance')).toContainText('Sorting changes presentation only');
 
   const pagination = page.getByRole('navigation', { name: 'Discover candidate pages' });
   await expect(pagination).toContainText('Page 1 of 20');
@@ -108,6 +110,8 @@ test('lookalike generation discloses its limits and paginates every retained can
   await page.getByRole('button', { name: 'Reset view' }).click();
   await expect(page.locator('.candidate')).toHaveCount(100);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Candidate scope' })).toHaveValue('all');
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('review-signals');
   await page.getByRole('button', { name: 'Clear filtered (1)' }).click();
   await expect(page.getByRole('heading', { name: '0 selected of 2000' })).toBeVisible();
 });
@@ -156,28 +160,35 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(candidate).toContainText('Source or profile visual match');
   await expect(candidate).toContainText('Visual match: scope.invalid');
   const reviewSignals = candidate.locator('.candidate-badge.review');
-  await expect(reviewSignals).toHaveText(/[2-5] review signals/u);
+  await expect(reviewSignals).toHaveText(/[2-5] review cues/u);
   await expect(reviewSignals).toHaveAttribute('title', /source or profile character match/u);
-  await expect(page.getByText('Review signals count visible candidate cues only.')).toContainText('not a risk score');
+  await expect(page.getByText('Review cues count visible candidate characteristics only.')).toContainText('not a risk score');
+  const reviewCueScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="review-cues"]');
   const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');
   const referenceScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="reference"]');
+  await expect(reviewCueScope).toHaveText(/Has review cues \([1-9]\d*\)/u);
   await expect(unicodeScope).toHaveText(/Internationalised \([1-9]\d*\)/u);
   await expect(referenceScope).toHaveText(/Source or profile match \([1-9]\d*\)/u);
+  expect(Number((await reviewCueScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
   expect(Number((await unicodeScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
   expect(Number((await referenceScope.textContent())?.match(/\((\d+)\)/u)?.[1] || 0)).toBeGreaterThan(1);
   await expect(page.getByText('Visual matches use a bounded character comparison.')).toContainText('not proof of impersonation');
   await expect(page.getByRole('combobox', { name: 'Mutation family' }).locator('option[value="unicode_whole_label"]')).toHaveText('Whole-label Unicode confusable (1)');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most generation paths');
-  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most review signals');
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Most review cues');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toContainText('Reference matches first');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('review-signals');
+  await expect(page.locator('.sort-guidance')).toContainText('Generated candidates are ordered by visible review cues');
 
+  await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('review-cues');
+  await expect(candidate).toBeVisible();
   await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('reference');
   await expect(candidate).toBeVisible();
   await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('review-signals');
   await expect(candidate).toBeVisible();
   await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('domain');
   await expect(candidate).toBeVisible();
+  await expect(page.locator('.sort-guidance')).toContainText('ordered alphabetically by domain');
 
   const checkbox = candidate.locator('input[type="checkbox"]');
   await checkbox.check();
@@ -417,7 +428,14 @@ test('structured CT matches render one candidate per canonical domain, newest fi
 
   await expect(page.locator('.candidate')).toHaveCount(2);
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('certificate-newest');
+  await expect(page.locator('.sort-guidance')).toContainText('Certificate-log candidates are ordered by their latest retained observation');
   // Newest last-observation first: other.invalid (2026-09) before example.invalid (2026-06).
+  await expect(page.locator('.candidate strong')).toHaveText(['other.invalid', 'example.invalid']);
+
+  await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('domain');
+  await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('certificate-newest');
   await expect(page.locator('.candidate strong')).toHaveText(['other.invalid', 'example.invalid']);
 
   // Observed hostnames are provenance (rendered as <code>), never separate

@@ -50,7 +50,7 @@
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency';
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';
   type KeyboardLayoutId = 'qwerty' | 'azerty' | 'qwertz' | 'all';
-  type CandidateScope = 'all' | 'unicode' | 'mixed' | 'reference' | 'selected';
+  type CandidateScope = 'all' | 'review-cues' | 'unicode' | 'mixed' | 'reference' | 'selected';
   const DISCOVER_PAGE_SIZE = 100;
   let mode = $state<Mode>('typosquat');
   let generationPreset = $state<GenerationPresetId>(DEFAULT_GENERATION_PRESET as GenerationPresetId);
@@ -122,16 +122,18 @@
       .sort((left, right) => left.label.localeCompare(right.label));
   });
   const candidateScopeCounts = $derived.by(() => {
+    let reviewCues = 0;
     let unicode = 0;
     let mixed = 0;
     let reference = 0;
     for (const candidate of candidates) {
       const metadata = candidateMetadata.get(candidate.domain);
+      if (candidateReviewCues(candidate).length) reviewCues += 1;
       if (metadata?.hasIdn) unicode += 1;
       if (metadata?.mixedScript) mixed += 1;
       if (metadata?.referenceDomains.length) reference += 1;
     }
-    return { unicode, mixed, reference, selected: selected.size };
+    return { reviewCues, unicode, mixed, reference, selected: selected.size };
   });
   function candidateReviewCues(candidate: Candidate): string[] {
     return buildCandidateReviewCues(candidate, candidateMetadata.get(candidate.domain));
@@ -141,6 +143,7 @@
       const metadata = candidateMetadata.get(candidate.domain);
       if (!ctCandidateMatchesFilter(candidate, filter) || (ctNewOnly && !ctNewDomains.has(candidate.domain))) return false;
       if (mutationFilter && !candidate.mutationTypes.includes(mutationFilter)) return false;
+      if (candidateScope === 'review-cues' && !candidateReviewCues(candidate).length) return false;
       if (candidateScope === 'unicode' && !metadata?.hasIdn) return false;
       if (candidateScope === 'mixed' && !metadata?.mixedScript) return false;
       if (candidateScope === 'reference' && !metadata?.referenceDomains.length) return false;
