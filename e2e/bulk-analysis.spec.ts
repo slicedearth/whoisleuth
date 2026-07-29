@@ -208,6 +208,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   expect(storedWatchlist.records[0]?.value?.results?.[0]).toMatchObject({ domain: 'right-review.example' });
 
   const comparison = page.getByRole('region', { name: 'Two-domain comparison' });
+  await expect(comparison.getByRole('img', { name: 'Two-domain evidence comparison matrix. Exact values and limitations are in the following table.' })).toBeVisible();
   await expect(comparison).toContainText('First Registrar');
   await expect(comparison).toContainText('Second Registrar');
   await expect(comparison.getByText('different', { exact: true }).first()).toBeVisible();
@@ -877,13 +878,15 @@ test('deep results present bounded relationship evidence including exact native 
 
   const section = page.getByRole('region', { name: '6 observed relationships' });
   await expect(section).toBeVisible();
-  await expect(section.getByText('Shared nameserver set', { exact: true })).toBeVisible();
-  await expect(section.getByText('Shared IP address', { exact: true })).toBeVisible();
-  await expect(section.getByText('Shared TLS certificate', { exact: true })).toBeVisible();
-  await expect(section.getByText('Exact leaf-certificate SHA-256', { exact: true })).toBeVisible();
-  await expect(section.getByText('Shared tracking identifier', { exact: true })).toBeVisible();
-  await expect(section.getByText('Similar favicon', { exact: true })).toBeVisible();
-  await expect(section.getByText('Official asset relationship', { exact: true })).toBeVisible();
+  await expect(section.getByRole('img', { name: /Shared evidence relationships/u })).toBeVisible();
+  const relationshipList = section.locator('.relationship-list');
+  await expect(relationshipList.getByText('Shared nameserver set', { exact: true })).toBeVisible();
+  await expect(relationshipList.getByText('Shared IP address', { exact: true })).toBeVisible();
+  await expect(relationshipList.getByText('Shared TLS certificate', { exact: true })).toBeVisible();
+  await expect(relationshipList.getByText('Exact leaf-certificate SHA-256', { exact: true })).toBeVisible();
+  await expect(relationshipList.getByText('Shared tracking identifier', { exact: true })).toBeVisible();
+  await expect(relationshipList.getByText('Similar favicon', { exact: true })).toBeVisible();
+  await expect(relationshipList.getByText('Official asset relationship', { exact: true })).toBeVisible();
   await expect(section.locator('.relationship-glyph svg')).toHaveCount(6);
   await expect(section.locator('article', { hasText: 'Shared nameserver set' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
   await expect(section.locator('article', { hasText: 'Shared TLS certificate' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'tls');
@@ -958,7 +961,9 @@ test('candidate handoff presents defensive coverage actions and export', async (
   await expect(coverage).toContainText('Generated 2');
   await expect(coverage).toContainText('Registered 1');
   await expect(coverage).toContainText('Available 1');
-  await expect(coverage.getByText('Impersonation term', { exact: true })).toBeVisible();
+  await expect(coverage.getByRole('cell', { name: 'Impersonation term', exact: true }).first()).toBeVisible();
+  await expect(coverage.getByRole('img', { name: 'Mutation-family coverage. Exact counts are in the following table.' })).toBeVisible();
+  await expect(coverage.getByRole('img', { name: 'TLD coverage. Exact counts are in the following table.' })).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await coverage.getByRole('button', { name: 'Export coverage CSV' }).click();

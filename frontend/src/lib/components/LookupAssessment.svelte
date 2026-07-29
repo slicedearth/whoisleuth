@@ -1,5 +1,6 @@
 <script lang="ts">
   import { riskTone, scoreTone } from '$lib/analysis/scoring.ts';
+  import { projectScoreFactors } from '$lib/analysis/visualization-models.ts';
 
   type ScoreExplanation = {
     score: number;
@@ -28,6 +29,33 @@
       .join('\n');
   }
 </script>
+
+{#snippet FactorChart(score: NonNullable<ScoreExplanation>, label: string)}
+  {@const chart = projectScoreFactors(score.factors)}
+  {#if chart.factors.length}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable contribution chart must be keyboard reachable -->
+    <div class="factor-chart" role="img" tabindex="0" aria-label={`${label} score contribution chart with ${chart.factors.length} non-zero factors`}>
+      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
+        <line x1={chart.zeroX} x2={chart.zeroX} y1="8" y2={chart.height - 8} class="zero-line" />
+        {#each chart.factors as factor}
+          <g class:negative={factor.delta < 0} class="factor">
+            <text x="8" y={factor.y + 12}>{factor.label}</text>
+            <rect x={factor.x} y={factor.y} width={factor.width} height="16" rx="3">
+              <title>{factor.label}: {factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</title>
+            </rect>
+            <text
+              x={factor.delta < 0 ? factor.x - 7 : factor.x + factor.width + 7}
+              y={factor.y + 12}
+              text-anchor={factor.delta < 0 ? 'end' : 'start'}
+              class="factor-value"
+            >{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</text>
+          </g>
+        {/each}
+      </svg>
+    </div>
+    {#if chart.truncated}<p class="factor-limit">The chart is capped at {chart.factors.length} factors. The exact list below remains complete.</p>{/if}
+  {/if}
+{/snippet}
 
 <section class="availability card">
   <header class="section-head">
@@ -66,12 +94,14 @@
     {#if risk}
       <details class="disclosure">
         <summary>Why the risk score is {risk.score}</summary>
+        {@render FactorChart(risk, 'Risk')}
         <ul>{#each risk.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
       </details>
     {/if}
     {#if opportunity}
       <details class="disclosure">
         <summary>Why the opportunity score is {opportunity.score}</summary>
+        {@render FactorChart(opportunity, 'Opportunity')}
         <ul>{#each opportunity.factors as factor}<li><span>{factor.label}</span><strong>{factor.delta >= 0 ? '+' : ''}{Math.round(factor.delta)}</strong></li>{/each}</ul>
       </details>
     {/if}
@@ -93,6 +123,15 @@
   .signals .chip{white-space:normal}
   .score-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
   .score-details details{margin-top:0}
+  .factor-chart{max-width:100%;margin:10px 12px 0;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overscroll-behavior-x:contain}
+  .factor-chart:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .factor-chart svg{display:block;width:100%;min-width:620px;height:auto}
+  .zero-line{stroke:var(--border-strong);stroke-width:1.5}
+  .factor text{fill:var(--muted);font-family:var(--mono);font-size:9px}
+  .factor rect{fill:rgb(var(--violet-rgb) / .22);stroke:var(--violet)}
+  .factor.negative rect{fill:rgb(var(--accent-rgb) / .2);stroke:var(--accent)}
+  .factor .factor-value{fill:var(--text);font-weight:700}
+  .factor-limit{margin:7px 12px 0;color:var(--muted);font-size:var(--text-2xs)}
   .score-details ul{display:grid;gap:6px;margin:10px 12px;padding:0;list-style:none}
   .score-details li{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:var(--text-xs)}
   .score-details li strong{color:var(--text)}

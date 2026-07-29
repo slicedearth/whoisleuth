@@ -1,5 +1,6 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
+  import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
   import {
     fieldLabels,
     formatValue,
@@ -112,6 +113,7 @@
         {#if domainHistory.omittedChanges}<p class="partial">This watchlist omitted {domainHistory.omittedChanges} additional change{domainHistory.omittedChanges === 1 ? '' : 's'} across retained checks. They cannot be attributed reliably to this domain, so this view may be incomplete.</p>{/if}
 
         {#if domainHistory.events.length}
+          <MonitorDomainTimeline events={domainHistory.events} {formatDate} />
           <div class="domain-events">
             {#each [...domainHistory.events].reverse() as event}
               <article>

@@ -74,9 +74,24 @@
     ? `${Math.max(0, Math.round(loadingElapsedMs))} ms elapsed`
     : `${(loadingElapsedMs / 1_000).toFixed(1)} s elapsed`);
   const deadlineLabel = $derived(`${Math.round(loadingDeadlineMs / 1_000)} s browser deadline`);
+  let formElement: HTMLFormElement | undefined;
+
+  function handleQueryKeydown(event: KeyboardEvent) {
+    if (
+      event.key !== 'Enter'
+      || (!event.metaKey && !event.ctrlKey)
+      || event.isComposing
+      || event.repeat
+      || loading
+      || !entryCount
+      || lookupDisabled
+    ) return;
+    event.preventDefault();
+    formElement?.requestSubmit();
+  }
 </script>
 
-<form class="search card" {onsubmit}>
+<form class="search card" {onsubmit} bind:this={formElement}>
   {#if lookupDisabled}
     <p class="feature-disabled" role="note">{lookupDisabled.reason || 'Lookup is disabled by deployment policy.'}</p>
   {/if}
@@ -87,10 +102,10 @@
   <label class="search-label" for="query">Domain, IP address, ASN, or domain list</label>
   <div class="input-row">
     <div class="query-field">
-      <textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2"></textarea>
+      <textarea id="query" bind:value={query} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2" onkeydown={handleQueryKeydown}></textarea>
       {#if query}<button type="button" class="clear" aria-label="Clear query" onclick={() => query = ''}>×</button>{/if}
     </div>
-    <button class="primary" disabled={loading || !entryCount || Boolean(lookupDisabled)}>
+    <button class="primary" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={loading || !entryCount || Boolean(lookupDisabled)}>
       {loading ? 'Looking up…' : entryCount > 1 ? `Open ${Math.min(entryCount, entryLimit)} in Bulk` : 'Run lookup'}
     </button>
   </div>
@@ -98,6 +113,7 @@
     {entryCount > 1
       ? `${entryCount} unique entries detected. Multiple entries continue in Bulk${duplicateCount ? `; ${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} removed` : ''}.`
       : 'Separate multiple domains with commas, semicolons, tabs, or new lines.'}
+    <span>Press Ctrl+Enter or ⌘+Enter to run.</span>
   </p>
 
   <fieldset class="lookup-mode" disabled={loading}>
@@ -168,6 +184,7 @@
   .query-field textarea{display:block;width:100%;min-height:54px;padding:14px 48px 10px 12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
   .clear{position:absolute;right:7px;top:9px;width:34px;height:34px;border:0;background:none;font-size:1.25rem}
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .input-help span{display:inline-block;margin-left:6px;color:var(--muted-subtle);font-family:var(--mono)}
   .lookup-mode{margin:14px 0 0;padding:0;border:0}
   .lookup-mode legend{margin-bottom:8px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-width:520px}

@@ -20,6 +20,45 @@ test('a single domain can be entered normally', async ({ page }) => {
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
   await expect(page.getByRole('radio', { name: /Fast/u })).not.toBeChecked();
   await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
+  await expect(page.getByText('Press Ctrl+Enter or ⌘+Enter to run.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run lookup' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
+});
+
+test('the query keyboard shortcut uses the validated lookup submission', async ({ page }) => {
+  let lookupRequests = 0;
+  await page.route('**/api/lookup?*', async (route) => {
+    lookupRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'shortcut.example.test',
+        type: 'domain',
+        registrableDomain: 'example.test',
+        availability: {
+          applicable: true,
+          state: 'registered',
+          confidence: 'medium',
+          domain: 'example.test',
+          deepScanComplete: true,
+        },
+        rdap: { error: 'Fixture source unavailable' },
+        whois: { parsed: {}, chain: [] },
+        diagnostics: {
+          version: 8,
+          rdap: { status: 'error' },
+          whois: { status: 'partial' },
+          availability: { status: 'complete' },
+        },
+      }),
+    });
+  });
+
+  const query = page.locator('#query');
+  await query.fill('shortcut.example.test');
+  await query.press('Control+Enter');
+  await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  expect(lookupRequests).toBe(1);
 });
 
 test('fast lookup mode is explicit and sends the fast contract parameter', async ({ page }) => {
@@ -116,8 +155,9 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(timing).toBeVisible();
   await expect(timing.getByText('2.4 s total')).toBeVisible();
   await expect(timing.getByText('request error')).toBeVisible();
-  await expect(timing.getByText('WHOIS chain')).toBeVisible();
-  await expect(timing.getByText('at +2.1 s')).toBeVisible();
+  await expect(timing.locator('li').getByText('WHOIS chain')).toBeVisible();
+  await expect(timing.locator('li').getByText('at +2.1 s')).toBeVisible();
+  await expect(timing.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 720 });
   await expectNoHorizontalOverflow(page);
 });
@@ -955,7 +995,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();
   await riskExplanation.press('Enter');
-  await expect(page.getByText('Corroborated recent external phishing/malware records')).toBeVisible();
+  await expect(page.locator('.score-details ul').getByText('Corroborated recent external phishing/malware records')).toBeVisible();
   await expect(section.getByText('phishing', { exact: true })).toBeVisible();
   await expect(section.getByText('malware', { exact: true })).toHaveCount(2);
   for (const link of await section.getByRole('link', { name: 'View attributed provider record' }).all()) {

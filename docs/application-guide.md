@@ -62,6 +62,8 @@ evidence separately attributed. Deep domain Lookup can add the zone's bounded
 SOA publication and HTTPS service-binding records published for the origin.
 Deep public-IP Lookup can add separately attributed PTR names. None of these
 sources decides domain availability, Risk, ownership, or hosting control.
+Press **Ctrl+Enter** or **Command+Enter** in the query field to start the same
+validated submission as the Run lookup button.
 
 The primary assessment, source health, and material registration conflicts
 remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
@@ -80,13 +82,22 @@ After a successful deep full response, **Collection timing** reports total
 request time plus the duration and settle offset of each source branch that
 actually ran. Branches overlap, so their durations are not additive. A settled
 branch can still have a partial, unavailable, not-found, or error state; use
-the source card for that evidence status. Fast and compact responses retain
-their existing diagnostics and omit this timing object.
+the source card for that evidence status. Its waterfall is a summary of the
+exact timing list, not a progress trace. Fast and compact responses retain their
+existing diagnostics and omit this timing object.
 
 Once a result is available, the sticky section rail tracks the current
 evidence group. The topology uses separate visual families for registry,
-network, web, derived, and analyst evidence, with an adjacent key; source
-status remains an independent label and colour.
+network, web, derived, and analyst evidence, with an adjacent key. Shapes and
+icons identify those families; colour remains reserved for source status and
+interactive focus.
+
+Risk and Opportunity cards show signed factor bars beside their exact factor
+lists. Domain results can also show a registration-source agreement matrix,
+certificate validity and chain summary, and a bounded service and technology
+map. These visuals use only evidence already present in the response. Source
+tables, status labels, collection times, provenance, and limitations remain the
+complete review surface.
 
 **Evidence coverage** summarizes which requested source and analysis families
 completed and which remained limited, unavailable, skipped, unsupported,
@@ -221,6 +232,8 @@ current scan. It can highlight exact nameserver sets, addresses, tracking
 identifiers, favicons, official asset hosts, and native certificate hashes. A
 shared observation is a pivot for investigation, not proof of common ownership,
 control, intent, coordination, or abuse.
+The bounded relationship map summarizes those same groups and member domains;
+the exact normalized values and methods remain in the cards beneath it.
 
 Relationship groups remain transient with the Bulk result unless the analyst
 selects **Retain observation**. That action saves only the normalized value,
@@ -234,6 +247,10 @@ relationship graph when at least two member domains also have local cases.
 Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered
 exposures, available gaps, and unknown results without making extra requests.
+Stacked bars summarize the same exact counts retained in the accompanying
+tables. The two-domain workspace similarly adds a field matrix while preserving
+source state, values, evidence links, conflicts, one-sided evidence, and
+limitations in its table.
 
 ### Brands
 
@@ -304,7 +321,9 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   Split, merge, label, and dismiss controls alter only the current review view;
   export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
-  deliberately.
+  deliberately. A selected domain can show a capped evidence-category timeline
+  across retained checks; the exact before and after values remain listed below
+  it.
 
 The **Investigation timeline** projects deliberately retained Lookup website
 snapshots, saved Bulk sessions, watchlist checks, case evidence, individual

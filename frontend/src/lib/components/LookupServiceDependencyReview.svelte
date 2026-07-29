@@ -1,7 +1,83 @@
 <script lang="ts">
   import type { ServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
+  import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
+  import type {
+    ForceGraphLinkInput,
+    ForceGraphNodeInput,
+  } from '$lib/analysis/visualization-models.ts';
 
-  let { review }: { review: ServiceDependencyReview } = $props();
+  type TechnologyFinding = { id: string; name: string; category: string; confidence: string };
+  type LibraryFinding = { id: string; name: string; version: string };
+
+  let {
+    review,
+    target = 'Lookup target',
+    technologies = [],
+    libraries = [],
+  }: {
+    review: ServiceDependencyReview;
+    target?: string;
+    technologies?: TechnologyFinding[];
+    libraries?: LibraryFinding[];
+  } = $props();
+
+  const dependencyMap = $derived.by(() => {
+    const rootId = 'lookup-target';
+    const nodes = new Map<string, ForceGraphNodeInput>([[
+      rootId,
+      { id: rootId, label: target || 'Lookup target', kind: 'target' },
+    ]]);
+    const links: ForceGraphLinkInput[] = [];
+    for (const [index, dependency] of review.dependencies.entries()) {
+      const id = `dependency-${index}`;
+      nodes.set(id, {
+        id,
+        label: dependency.target,
+        kind: 'dependency',
+        detail: `${dependency.recordType} ${dependency.relation}`,
+      });
+      links.push({
+        id: `dependency-link-${index}`,
+        source: rootId,
+        target: id,
+        kind: 'observed',
+        detail: dependency.provenance,
+      });
+    }
+    for (const [index, technology] of technologies.entries()) {
+      const id = `technology-${technology.id || index}`;
+      nodes.set(id, {
+        id,
+        label: technology.name,
+        kind: 'technology',
+        detail: `${technology.category} · ${technology.confidence} confidence`,
+      });
+      links.push({
+        id: `technology-link-${index}`,
+        source: rootId,
+        target: id,
+        kind: 'derived',
+        detail: 'Derived from already-collected static page and response evidence.',
+      });
+    }
+    for (const [index, library] of libraries.entries()) {
+      const id = `library-${library.id || index}`;
+      nodes.set(id, {
+        id,
+        label: `${library.name} ${library.version}`.trim(),
+        kind: 'technology',
+        detail: 'Passive component catalogue match',
+      });
+      links.push({
+        id: `library-link-${index}`,
+        source: rootId,
+        target: id,
+        kind: 'derived',
+        detail: 'Derived from already-captured bounded script evidence.',
+      });
+    }
+    return { nodes: [...nodes.values()], links };
+  });
 </script>
 
 <details class="dependency-review card">
@@ -11,6 +87,12 @@
   </summary>
   <div class="body">
     <p class="intro">Surface observed DNS aliases for a conservative manual dangling-service check. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
+    <BoundedRelationshipMap
+      title="Observed services and technology"
+      description="The target is connected to observed DNS dependencies and separately derived static technology indicators. Dashed lines identify derived indicators."
+      nodes={dependencyMap.nodes}
+      links={dependencyMap.links}
+    />
     {#if review.dependencies.length}
       <div class="dependency-grid">
         {#each review.dependencies as dependency}

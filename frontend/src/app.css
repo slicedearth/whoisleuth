@@ -16,6 +16,8 @@
   --accent-rgb: 94 179 255;
   --accent2: #7ee0a8;
   --accent2-rgb: 126 224 168;
+  --success: var(--accent2);
+  --focus: var(--accent);
   --danger: #ff6b6b;
   --danger-rgb: 255 107 107;
   --amber: #f2b84b;

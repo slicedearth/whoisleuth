@@ -563,6 +563,10 @@ test('a complete CT baseline persists across reload and labels newly observed do
   await expect(page.locator('.status')).toContainText('1 new since the previous complete search');
   await expect(page.locator('.ct-new')).toHaveCount(1);
   await expect(page.locator('.candidate', { has: page.locator('.ct-new') }).locator('strong')).toHaveText('other.invalid');
+  const history = page.locator('details.ct-history');
+  await history.locator(':scope > summary').click();
+  await history.locator('.ct-checks > summary').click();
+  await expect(history.getByRole('img', { name: 'Certificate search trend across 2 retained checks' })).toBeVisible();
 
   const newOnly = page.getByRole('button', { name: 'New only · 1' });
   await newOnly.click();

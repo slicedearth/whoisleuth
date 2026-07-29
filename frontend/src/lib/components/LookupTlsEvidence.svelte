@@ -1,5 +1,6 @@
 <script lang="ts">
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import { projectCertificateValidity } from '$lib/analysis/visualization-models.ts';
   type Row = { label: string; value: string; danger?: boolean; hash?: boolean };
   type Finding = { label: string; detail: string; tone: string };
   type ChainEntry = { label: string; subject: string; fingerprint: string };
@@ -16,6 +17,9 @@
     chainTruncated,
     validationDetails,
     limitations,
+    validFrom = null,
+    validTo = null,
+    observedAt = null,
     initiallyExpanded = false,
   }: {
     status: string;
@@ -29,8 +33,13 @@
     chainTruncated: boolean;
     validationDetails: Row[];
     limitations: string[];
+    validFrom?: string | null;
+    validTo?: string | null;
+    observedAt?: string | null;
     initiallyExpanded?: boolean;
   } = $props();
+
+  const validity = $derived(projectCertificateValidity({ validFrom, validTo, observedAt }));
 </script>
 
 <details class="tls-card evidence-card card" aria-labelledby="tls-title" open={initiallyExpanded}>
@@ -46,6 +55,36 @@
     </div>
     {#if findings.length}
       <ul class="finding-list tls-findings">{#each findings as finding}<li class="callout {finding.tone === 'warning' ? 'warn' : 'info'}"><strong>{finding.label}</strong><span>{finding.detail}</span></li>{/each}</ul>
+    {/if}
+    {#if validity.available || chain.length}
+      <section class="certificate-visual" aria-labelledby="certificate-visual-title">
+        <div><p class="eyebrow">Certificate structure</p><h5 id="certificate-visual-title">Validity and chain</h5></div>
+        {#if validity.available}
+          <div class="validity-chart" role="img" aria-label={`Certificate validity from ${validity.validFrom} to ${validity.validTo}${validity.hasObservation ? `, observed ${validity.observedAt}` : ''}`}>
+            <svg viewBox={`0 0 ${validity.width} ${validity.height}`} aria-hidden="true">
+              <line x1={validity.fromX} x2={validity.toX} y1="54" y2="54" class="validity-line"></line>
+              <circle cx={validity.fromX} cy="54" r="7" class="validity-bound"></circle>
+              <circle cx={validity.toX} cy="54" r="7" class="validity-bound"></circle>
+              {#if validity.hasObservation}
+                <line x1={validity.observedX} x2={validity.observedX} y1="24" y2="84" class:outside={!validity.observedWithinValidity} class="observed-line"></line>
+                <text x={validity.observedX} y="17" text-anchor="middle">Observed</text>
+              {/if}
+              <text x={validity.fromX} y="93" text-anchor="middle">{validity.validFrom.slice(0, 10)}</text>
+              <text x={validity.toX} y="93" text-anchor="middle">{validity.validTo.slice(0, 10)}</text>
+            </svg>
+          </div>
+        {/if}
+        {#if chain.length}
+          <ol class="chain-flow" aria-label="Observed certificate chain">
+            {#each chain as certificate, index}
+              <li>
+                <span>{index + 1}</span>
+                <div><strong>{certificate.label}</strong><small>{certificate.subject}</small></div>
+              </li>
+            {/each}
+          </ol>
+        {/if}
+      </section>
     {/if}
     {#if leafCertificate.length}
       <details class="tls-detail http-detail disclosure"><summary>Leaf certificate</summary><dl>{#each leafCertificate as row}<dt>{row.label}</dt><dd class:http-hash={row.hash}>{row.value}</dd>{/each}</dl></details>
@@ -71,6 +110,21 @@
   .finding-list .callout{margin:0}
   .finding-list strong{display:block;color:var(--text);font-size:var(--text-xs)}
   .finding-list span{display:block;margin-top:3px}
+  .certificate-visual{margin-top:13px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .certificate-visual h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
+  .validity-chart{max-width:100%;margin-top:9px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .validity-chart svg{display:block;width:100%;min-width:560px;height:auto}
+  .validity-line{stroke:var(--accent);stroke-width:5;stroke-linecap:round}
+  .validity-bound{fill:var(--panel);stroke:var(--accent);stroke-width:3}
+  .observed-line{stroke:var(--success);stroke-width:3}
+  .observed-line.outside{stroke:var(--danger)}
+  .validity-chart text{fill:var(--muted);font:600 9px var(--mono)}
+  .chain-flow{display:flex;gap:0;margin:12px 0 0;padding:0;overflow-x:auto;list-style:none}
+  .chain-flow li{display:grid;position:relative;flex:1 0 180px;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:center;padding:9px 14px 9px 0}
+  .chain-flow li:not(:last-child)::after{position:absolute;right:3px;width:8px;height:8px;border-top:1px solid var(--muted);border-right:1px solid var(--muted);transform:rotate(45deg);content:""}
+  .chain-flow li>span{display:grid;width:26px;height:26px;place-items:center;border:1px solid var(--border-strong);border-radius:50%;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
+  .chain-flow strong,.chain-flow small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chain-flow strong{font-size:var(--text-xs)}.chain-flow small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
   .disclosure ol,.disclosure ul{display:grid;gap:7px;margin:10px 12px;padding-left:18px}
   .disclosure li{font-size:var(--text-xs);overflow-wrap:anywhere}
   .disclosure li strong,.disclosure li b,.disclosure li small{display:block;margin-top:2px;font-weight:400}
