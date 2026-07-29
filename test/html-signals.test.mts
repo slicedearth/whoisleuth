@@ -287,6 +287,8 @@ describe('pageIdentity', () => {
     assert.equal(result.credentialSurfaceProfile, null);
     assert.equal(result.structuredDataIdentity, null);
     assert.equal(result.technologyProfile, null);
+    assert.equal(result.pageRoleProfile, null);
+    assert.equal(result.clientBehaviorProfile, null);
     assert.equal(result.pageTitle, 'Example');
     assert.equal(result.hasPasswordField, true);
   });
@@ -299,6 +301,21 @@ describe('pageIdentity', () => {
     assert.deepEqual(technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
     assert.equal(technologyProfile.source, 'derived');
     assert.equal(technologyProfile.observedAt, observedAt);
+  });
+
+  test('derives page-role and static behaviour profiles from the shared parse', () => {
+    const result = extractHtmlSignals(`
+      <main><form class="login"><input type="password"></form></main>
+      <script>localStorage.setItem('private-key', 'private-value')</script>
+    `, 'example.com', { observedAt });
+
+    const role = requiredValue(result.pageRoleProfile);
+    const behavior = requiredValue(result.clientBehaviorProfile);
+    assert.equal(role.primaryRole, 'authentication');
+    assert.equal(role.observedAt, observedAt);
+    assert.deepEqual(behavior.indicators.map((item) => item.id), ['browser_storage']);
+    assert.equal(behavior.observedAt, observedAt);
+    assert.doesNotMatch(JSON.stringify({ role, behavior }), /private-key|private-value|class="login"/u);
   });
 
   test('derives structured identity from the same captured HTML', () => {

@@ -94,13 +94,20 @@ unknown, or not found. It preserves those states separately, lists retained
 limitations, and never retries a source or converts incomplete collection into
 a clean finding.
 
-After a successful single-domain Lookup, **Download report** creates a readable
-Markdown summary locally in the browser. It includes registry, registrar, and
-WHOIS source health and collection time, normalized findings, the explainable
-Risk assessment, and limitations. It deliberately excludes raw RDAP and WHOIS
-responses, expanded contacts, provider payloads, scripts, and remote assets.
-IP and ASN results retain the JSON evidence action but do not offer this first
-domain-focused readable report.
+After a successful Lookup, **Download report** creates a readable Markdown
+summary locally in the browser. Domain reports include registry, registrar,
+WHOIS, Risk, and limitation context. IP reports include normalized network
+registration and reverse-DNS evidence. ASN reports include normalized routing
+registration evidence. Each report preserves source health, collection time,
+partial states, and limitations while deliberately excluding raw RDAP and
+WHOIS responses, expanded contacts, provider payloads, scripts, and remote
+assets.
+
+When a domain case is open, **Retain selected normalized facts** lets you save
+only the fields needed for later review. Each field keeps source, observation
+time, collection depth, source state, completeness, truncation, schema version,
+and limitations. A later Lookup compares those fields without converting an
+unavailable or incomplete source into a change or an absent finding.
 
 **Export evidence JSON** remains the separate full-fidelity option. It can
 include normalized and raw registration sources, supporting observations,
@@ -189,6 +196,19 @@ never reached a settled row. Saving never retains raw source payloads or
 expanded contact records, and resuming does not repeat failed rows unless the
 analyst separately selects **Retry failed**.
 
+The lookalike mail-exposure review groups the currently filtered compact rows
+without another request. It keeps receiving mail with SPF and DMARC, receiving
+mail with an authentication gap, incomplete authentication evidence, null MX,
+no explicit MX, and incomplete DNS evidence separate. When a Brand Profile is
+active, the review compares those observations with its configured standard,
+defensive-no-mail, or parked mail posture. That profile is analyst-configured
+context rather than a live observation. The review never opens an SMTP
+connection, sends a message, tests a mailbox or catch-all behavior, or treats
+mail configuration as evidence of use, control, intent, safety, or abuse.
+Selecting one classification adds only those visible domains to the existing
+browser-local selection so the ordinary reviewed export, case, disposition,
+rescan, and Monitor actions remain explicit.
+
 Bulk relationship evidence compares only observations already collected in the
 current scan. It can highlight exact nameserver sets, addresses, tracking
 identifiers, favicons, official asset hosts, and native certificate hashes. A
@@ -265,9 +285,20 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   or implying attribution.
 - **Relationships** review analyst-selected Bulk observations and project
   typed, provenance-backed links across those records, stored case evidence,
-  and campaign membership without another network request.
+  and campaign membership without another network request. The Evidence
+  clusters review layer groups connected cases, keeps every contributing
+  relationship inspectable, and qualifies common shared infrastructure.
+  Split, merge, label, and dismiss controls alter only the current review view;
+  export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
   deliberately.
+
+The **Investigation timeline** projects deliberately retained Lookup website
+snapshots, saved Bulk sessions, watchlist checks, case evidence, individual
+pins, and relationships. Filter by area and freshness to find old observations
+across the workspace. The displayed age is measured from the retained
+observation time using an explicit bounded threshold. It does not perform a
+refresh or establish the current state of a domain.
 
 The **Review inbox** is a bounded local queue projected from retained cases,
 planned case actions, material watchlist changes, and incomplete saved Bulk
@@ -285,6 +316,14 @@ submits a report or treats a planned action as completed.
 The complete evidence timeline remains depth-aware. A Fast observation does
 not erase last-known Deep-only evidence, and score changes are compared only
 when their explicit model versions match.
+
+An open domain case can also turn a selected Lookup checkpoint into a reviewed
+acquisition-transition plan. Mark each fact as expected to stay the same,
+expected to change, or requiring manual review. After a later Lookup, the
+comparison keeps unavailable, conflicting, missing, and uncollected evidence
+indeterminate instead of presenting it as successful change. The plan verifies
+only the selected observable facts and does not establish acquisition,
+ownership, service health, or cutover completion.
 
 ## Fast and Deep collection
 
@@ -359,6 +398,9 @@ Deep single Lookup can derive several views from one bounded homepage response:
 - fixed semantic input-purpose, form-method, and action-relationship counts
   that describe a credential collection surface without retaining field
   metadata or complete form destinations;
+- explainable page-role labels and fixed client-side behaviour indicators
+  derived from capped static HTML and inline-script prefixes, without fetching
+  referenced scripts, executing code, or retaining matched source;
 - curated technology indicators for common content, commerce, site-building,
   framework, server, and delivery products;
 - apparent browser-library versions and bounded advisory references inferred
@@ -380,6 +422,12 @@ does not fetch referenced scripts.
 A browser-library advisory match is a lead for review, not proof that the
 component is loaded, reachable, vulnerable in context, or exploitable. A
 non-match does not establish that no vulnerable component exists.
+
+Page-role and client-behaviour profiles are similarly review aids. A role is a
+bounded heuristic, and an observed browser API can be normal application
+behaviour. Neither profile establishes page purpose, legitimacy, tracking,
+credential theft, vulnerability, execution, ownership, intent, safety, or
+maliciousness.
 
 After a completed Deep Lookup, **Save current snapshot** creates one bounded
 browser-local website profile only when the analyst chooses it. The snapshot
@@ -474,6 +522,13 @@ decision, supporting evidence pins, and explicit unresolved unknowns or
 contradictions. This checklist measures workflow structure only. It does not
 validate an analyst conclusion or make a claim about the target.
 
+The Console also offers a short in-tab undo after changing a Bulk review state,
+shortlist membership, case tags, or a temporary evidence-cluster label. The
+notice identifies the action and affected record and expires after 12 seconds.
+Undo never starts a request, reverses an import or export, restores a confirmed
+deletion, changes case disposition, or rewrites collected source evidence.
+Reloading the page clears the pending undo action.
+
 Dashboard also provides a browser-local template manager. A custom template
 must start from one of the three standard guides. It can rename instructions,
 clarify expected evidence and completion criteria, omit an existing step, or
@@ -487,6 +542,25 @@ Investigation templates are stored in the current browser's IndexedDB
 collection. They can be exported or imported as a strict versioned JSON
 document and are included in the deliberate workspace archive. They contain
 analyst-authored workflow guidance, so review them before sharing.
+
+Monitor's **Timeline** view combines a bounded projection of deliberately
+retained case snapshots, evidence pins and checkpoint facts, website-profile
+snapshots, watchlist checks, and relationship observations. Filters cover
+entity, case, source, evidence versus change, and observation age. Every event
+shows observation time separately from browser storage time, preserves
+completeness, truncation, derivation, and source state, and links back to its
+owning record. The projection does not copy raw payloads, pin values, analyst
+notes, or relationship values, and it never starts collection.
+
+The Cases view also accepts the strict WHOISleuth external-findings schema and
+bounded STIX 2.1 or MISP event JSON. Every file is validated and previewed
+locally before a merge. STIX and MISP previews separate accepted claims,
+duplicates, conflicting identifiers, and exclusions, then require an existing
+case to be selected. Merged claims become external `unknown` assertions with
+their source-file SHA-256 digest, publisher, external identifier, timestamps,
+confidence, labels, and markings. They do not become collected evidence and do
+not create cases, start collection, change scores, publish events, or enable
+correlation. See [External findings and intelligence import](external-findings-import.md).
 
 ## Browser-local storage and archives
 
@@ -523,15 +597,18 @@ Exports are created locally and only after an explicit action. Depending on the
 workflow they can contain public registration contacts, analyst notes, source
 observations, or compact case history.
 
-- Use a domain Lookup Markdown report for a bounded readable registry,
-  registrar, and WHOIS source summary. It omits raw registration payloads and
-  expanded contacts.
+- Use a Lookup Markdown report for a bounded readable domain, IP, or ASN
+  summary. It omits raw registration payloads and expanded contacts.
 - Use the Lookup JSON evidence package when complete captured source material
   is required, and treat it as potentially containing public contact data.
 - Build a case response packet only after recording the category, affected
   party, exact HTTP(S) URLs, observed harm, UTC observation time, and separately
-  sourced contact routes. JSON, Markdown, and email-text outputs remain local,
-  require review, and do not submit anything.
+  sourced contact routes. Select the intended audience first: the local preview
+  identifies included and excluded evidence, required redactions, expected
+  attachments, recipient gaps, and follow-up fields for registrar, registry,
+  hosting/network, security-contact, browser/blocklist, or internal-SOC review.
+  JSON, Markdown, and email-text outputs remain local, require review, and do
+  not submit anything.
 - Defensive domain lists require an explicit reviewed selection and eligible
   analyst disposition. Review their exclusions, expiry, provenance manifest,
   and paired rollback instructions before applying them. Wildcard RPZ coverage

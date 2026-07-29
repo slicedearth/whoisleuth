@@ -35,6 +35,7 @@ function result(domain = 'priority.invalid', overrides: Record<string, unknown> 
     expiryDate: LATER,
     nameservers: ['ns1.priority.invalid'],
     hasMx: true,
+    hasNullMx: false,
     hasSpf: true,
     hasDmarc: false,
     activityStatus: 'active',

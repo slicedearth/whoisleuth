@@ -83,7 +83,7 @@
   }
 </script>
 
-<section class="snapshot-manager card" aria-labelledby="website-snapshot-title">
+<section id="website-profile-snapshots" class="snapshot-manager card" aria-labelledby="website-snapshot-title">
   <header>
     <div><p class="eyebrow">Analyst-selected history</p><h3 id="website-snapshot-title">Website profile snapshots</h3></div>
     <div class="toolbar">

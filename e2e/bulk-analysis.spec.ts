@@ -44,6 +44,21 @@ test('the scan button only takes the high-contrast primary treatment once ready'
   expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('gradient');
 });
 
+test('offers bounded request pacing and preserves the operator choice during console navigation', async ({ page }) => {
+  const pacing = page.getByLabel('Request pacing');
+  await expect(pacing).toHaveValue('standard');
+  await expect(page.locator('.mode-help')).toContainText('at most 12 lookups run in parallel');
+
+  await pacing.selectOption('gentle');
+  await expect(page.locator('.mode-help')).toContainText('at most 2 lookups run in parallel');
+  await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByLabel('Request pacing')).toHaveValue('gentle');
+
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await expect(page.locator('.mode-help')).toContainText('at most 1 lookup runs in parallel');
+});
+
 test('keeps the Bulk queue available when browser-local context cannot be loaded', async ({ page }) => {
   await expect(page.locator('#domains')).toBeEditable();
   await failBrowserLocalReads(page);
@@ -107,6 +122,10 @@ test('filters, groups, and selected-only actions use compact observed evidence',
 
   const stored = await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
   expect(stored.records[0]?.value).toMatchObject({ domain: 'limited-one.example' });
+  await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByText('0 selected in the filtered set')).toBeVisible();
+  await groups.getByRole('button', { name: 'Select group' }).click();
+  await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
 
   const downloads = await captureDownloads(
     page,
@@ -146,8 +165,13 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
           registrar: { name: left ? 'First Registrar' : 'Second Registrar' },
           nameservers: left ? ['ns1.shared.example'] : ['ns2.separate.example'],
           hasMx: left,
+          hasNullMx: !left,
           hasSpf: left,
           hasDmarc: false,
+          dns: {
+            status: 'success',
+            records: { a: [], aaaa: [], cname: [], caa: [] },
+          },
         },
         diagnostics: {
           version: 7,
@@ -158,6 +182,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
       }),
     });
   });
+  await page.getByLabel('Scan mode').selectOption('deep');
   await runBulkScan(page, ['left-review.example', 'right-review.example']);
 
   const cockpit = page.getByRole('region', { name: 'Bulk review cockpit' });
@@ -166,11 +191,26 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await cockpit.getByRole('button', { name: 'Next unresolved' }).click();
   await expect(cockpit.getByRole('heading', { level: 3 })).toHaveText('right-review.example');
   await expect(cockpit.getByText('Evidence freshness')).toBeVisible();
+  await cockpit.getByRole('button', { name: 'Create case' }).click();
+  await expect(cockpit.getByLabel('Case disposition')).toBeEnabled();
+  await cockpit.getByLabel('Case disposition').selectOption('suspicious');
+  await expect(cockpit.getByRole('status')).toContainText('Marked right-review.example as Suspicious');
+  await cockpit.getByLabel('Current row monitor list').fill('Focused review');
+  await cockpit.getByRole('button', { name: 'Save current to Monitor' }).click();
+  await expect(cockpit.getByRole('status')).toContainText('Saved right-review.example to Focused review');
+  const storedCase = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
+  expect(storedCase).toMatchObject({ domain: 'right-review.example', disposition: 'suspicious' });
+  const storedWatchlist = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(storedWatchlist.records[0]?.value?.results?.[0]).toMatchObject({ domain: 'right-review.example' });
 
   const comparison = page.getByRole('region', { name: 'Two-domain comparison' });
   await expect(comparison).toContainText('First Registrar');
   await expect(comparison).toContainText('Second Registrar');
   await expect(comparison.getByText('different', { exact: true }).first()).toBeVisible();
+  await expect(comparison.getByText('not recorded', { exact: true }).first()).toBeVisible();
+  await expect(comparison.getByText('Technology findings', { exact: true })).toBeVisible();
+  await expect(comparison.getByText('Evidence freshness')).toBeVisible();
+  await expect(comparison.getByRole('link', { name: 'View settled row' })).toHaveCount(52);
 
   const downloadPromise = page.waitForEvent('download');
   await comparison.getByRole('button', { name: 'Export comparison' }).click();
@@ -180,11 +220,32 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   expect(exported).toMatchObject({
     schema: 'whoisleuth.domain-comparison',
     comparison: {
+      version: 2,
       leftDomain: expect.any(String),
       rightDomain: expect.any(String),
     },
   });
   expect(exported.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
+
+  const mailReview = page.getByRole('region', { name: 'Lookalike mail exposure' });
+  await expect(mailReview.getByText('Authentication gap', { exact: true })).toBeVisible();
+  await expect(mailReview.getByText('Null MX', { exact: true })).toBeVisible();
+  await expect(mailReview).toContainText('No SMTP connection');
+  const mailDownloadPromise = page.waitForEvent('download');
+  await mailReview.getByRole('button', { name: 'Export review' }).click();
+  const mailDownload = await mailDownloadPromise;
+  expect(mailDownload.suggestedFilename()).toMatch(/^whoisleuth-mail-exposure-/u);
+  const mailExport = JSON.parse(await readFile((await mailDownload.path())!, 'utf8'));
+  expect(mailExport).toMatchObject({
+    schema: 'whoisleuth.bulk-mail-exposure',
+    report: {
+      counts: {
+        mail_auth_gap: 1,
+        null_mx: 1,
+      },
+    },
+  });
+  expect(mailExport.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
@@ -214,6 +275,10 @@ test('persists named review views and per-domain review state without restarting
   });
   await runBulkScan(page, ['limited-review.example', 'complete-review.example']);
 
+  await page.getByLabel('Review state for limited-review.example').selectOption('reviewing');
+  await expect(page.getByRole('region', { name: 'Undo analyst change' })).toContainText('limited-review.example');
+  await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByLabel('Review state for limited-review.example')).toHaveValue('unreviewed');
   await page.getByLabel('Review state for limited-review.example').selectOption('reviewing');
   await page.getByLabel('Source coverage').selectOption('limited');
   await page.getByLabel('Filter by review state').selectOption('reviewing');

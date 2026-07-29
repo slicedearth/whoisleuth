@@ -1,8 +1,9 @@
 <script lang="ts">
-  type View = 'inbox' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
+  type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   type Counts = Record<View, number>;
   const tabs: Array<{ view: View; label: string }> = [
     { view: 'inbox', label: 'Inbox' },
+    { view: 'timeline', label: 'Timeline' },
     { view: 'cases', label: 'Cases' },
     { view: 'campaigns', label: 'Campaigns' },
     { view: 'relationships', label: 'Relationships' },

@@ -130,6 +130,8 @@ type LookupViewModel = {
   readonly credentialSurfaceProfile: JsonObject;
   readonly structuredDataIdentity: JsonObject;
   readonly technologyProfile: JsonObject;
+  readonly pageRoleProfile: JsonObject;
+  readonly clientBehaviorProfile: JsonObject;
   readonly securityPosture: JsonObject;
   readonly securityPostureSummary: JsonObject;
 };
@@ -469,6 +471,8 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     credentialSurfaceProfile: record(availability.credentialSurfaceProfile),
     structuredDataIdentity: record(availability.structuredDataIdentity),
     technologyProfile: record(availability.technologyProfile),
+    pageRoleProfile: record(availability.pageRoleProfile),
+    clientBehaviorProfile: record(availability.clientBehaviorProfile),
     securityPosture,
     securityPostureSummary: record(securityPosture.summary),
   };

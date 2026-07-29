@@ -18,3 +18,9 @@ The response-policy export uses a 60-second TTL and a bounded 32-bit serial deri
 STIX exports intentionally omit a confidence value and malicious-activity classification. Risk scores are included only as custom heuristic provenance. An Observed Data object represents the domain result separately from its inferred Indicator, and the timestamp basis states whether the time came from the scan or from export generation.
 
 MISP event JSON exports use undefined threat level, initial analysis state, organization-only distribution, and `published: false`. Domain attributes inherit the event distribution but set `to_ids: false` and disable correlation. The attribute comment carries bounded heuristic provenance and the same timestamp-basis disclosure. Importing the file does not publish it; a MISP analyst must still review local sharing, correlation, and IDS settings before changing them.
+
+The Cases view can also preview bounded STIX 2.1 bundles and MISP events as
+external intelligence. A local import does not restore Bulk results or treat
+the exported heuristic as confirmed maliciousness. It requires an existing
+case and stores supported claims as separately attributed assertions. See
+[External findings and intelligence import](external-findings-import.md).

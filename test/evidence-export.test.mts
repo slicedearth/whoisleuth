@@ -361,7 +361,7 @@ describe('lookup evidence export', () => {
     const registryInsights = requiredValue(result.analysis.registryInsights);
 
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 21);
+    assert.equal(result.schemaVersion, 22);
     assert.equal(result.query.submitted, 'login.example.com');
     assert.equal(result.query.registrableDomain, 'example.com');
     assert.equal(rdapDiagnostics.status, 'success');
@@ -451,7 +451,7 @@ describe('lookup evidence export', () => {
       },
     });
 
-    assert.equal(result.schemaVersion, 21);
+    assert.equal(result.schemaVersion, 22);
     const idn = recordValue(result.analysis.idn);
     assert.equal(idn.version, 1);
     assert.equal(idn.unicodeDomain, 'éxample.test');

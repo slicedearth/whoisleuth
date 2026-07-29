@@ -97,6 +97,7 @@ export type BulkSessionResult = {
   expiryDate: string | null;
   nameservers: string[];
   hasMx: boolean | null;
+  hasNullMx: boolean | null;
   hasSpf: boolean | null;
   hasDmarc: boolean | null;
   activityStatus: string | null;
@@ -314,6 +315,7 @@ export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | 
     expiryDate: boundedText(item.expiryDate, 64) || null,
     nameservers: boundedStrings(item.nameservers, 20),
     hasMx: nullableBoolean(item.hasMx),
+    hasNullMx: nullableBoolean(item.hasNullMx),
     hasSpf: nullableBoolean(item.hasSpf),
     hasDmarc: nullableBoolean(item.hasDmarc),
     activityStatus: boundedText(item.activityStatus, 40) || null,

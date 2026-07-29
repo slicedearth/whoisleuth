@@ -5,7 +5,7 @@ import type { CaseRecord } from './case-model.ts';
 import { buildCaseActionOutcomeSummary } from './case-response-model.ts';
 
 export const CASE_RESPONSE_PACKET_SCHEMA = 'whoisleuth.case-response-packet';
-export const CASE_RESPONSE_PACKET_VERSION = 4;
+export const CASE_RESPONSE_PACKET_VERSION = 5;
 export const MAX_ABUSIVE_URLS = 20;
 export const MAX_RESPONSE_CONTACTS = 12;
 export const MAX_RESPONSE_ACTION_HISTORY = 20;
@@ -22,6 +22,118 @@ export const RESPONSE_CONTACT_KINDS = [
 ] as const;
 export type ResponseContactKind = typeof RESPONSE_CONTACT_KINDS[number];
 
+export const RESPONSE_PACKET_PROFILE_IDS = [
+  'registrar',
+  'registry',
+  'network_hosting',
+  'security_contact',
+  'browser_blocklist',
+  'internal_soc',
+] as const;
+export type ResponsePacketProfileId = typeof RESPONSE_PACKET_PROFILE_IDS[number];
+
+export type ResponsePacketProfile = Readonly<{
+  id: ResponsePacketProfileId;
+  label: string;
+  audience: string;
+  subjectPrefix: string;
+  requiredContactKind: ResponseContactKind | null;
+  checklist: readonly string[];
+  evidenceOrder: readonly string[];
+  includedEvidence: readonly string[];
+  excludedEvidence: readonly string[];
+  redactions: readonly string[];
+  attachments: readonly string[];
+  followUpFields: readonly string[];
+}>;
+
+export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object.freeze([
+  {
+    id: 'registrar',
+    label: 'Registrar review',
+    audience: 'Domain registrar abuse or compliance team',
+    subjectPrefix: 'Reviewed domain abuse report',
+    requiredContactKind: 'registrar',
+    checklist: ['Confirm registrar of record', 'Include exact URLs and observation time', 'Review registrant-data necessity before sharing'],
+    evidenceOrder: ['Incident facts', 'Registration evidence', 'Selected observations', 'Action history'],
+    includedEvidence: ['Exact URLs', 'Observation time', 'Case disposition', 'Selected evidence pins', 'Registrar contact provenance'],
+    excludedEvidence: ['Raw WHOIS or RDAP payloads', 'Unselected contacts', 'Provider secrets', 'Unrelated analyst notes'],
+    redactions: ['Remove unnecessary personal registration data', 'Remove credentials, tokens, and URL fragments'],
+    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    followUpFields: ['Registrar reference', 'Acknowledgement time', 'Resolution or transfer outcome'],
+  },
+  {
+    id: 'registry',
+    label: 'Registry review',
+    audience: 'Domain registry abuse or compliance team',
+    subjectPrefix: 'Reviewed registry abuse report',
+    requiredContactKind: 'registry',
+    checklist: ['Confirm the registry is an appropriate escalation route', 'Include registrar response or reference when available', 'Disclose contradictory evidence'],
+    evidenceOrder: ['Incident facts', 'Registry publication', 'Prior escalation', 'Selected observations'],
+    includedEvidence: ['Exact URLs', 'Observation time', 'Registry contact provenance', 'Selected evidence pins', 'Prior action references'],
+    excludedEvidence: ['Raw registry payloads', 'Unselected contacts', 'Secrets', 'Unsupported ownership claims'],
+    redactions: ['Remove unnecessary personal registration data', 'Remove credentials, tokens, and URL fragments'],
+    attachments: ['Reviewed response packet', 'Optional normalized case report', 'Optional registrar reference'],
+    followUpFields: ['Registry reference', 'Registrar referral', 'Delegation or status outcome'],
+  },
+  {
+    id: 'network_hosting',
+    label: 'Hosting or network review',
+    audience: 'Hosting provider, CDN, network, or infrastructure operator',
+    subjectPrefix: 'Reviewed hosted-content abuse report',
+    requiredContactKind: 'network_hosting',
+    checklist: ['Confirm the observed endpoint and collection time', 'Avoid claiming the observed edge is the origin', 'Include exact affected URLs'],
+    evidenceOrder: ['Incident facts', 'Observed endpoint context', 'Selected web evidence', 'Action history'],
+    includedEvidence: ['Exact URLs', 'Observation time', 'Selected HTTP, TLS, DNS, or page-identity pins', 'Contact provenance'],
+    excludedEvidence: ['Raw response bodies', 'Cookies', 'Secrets', 'Unproven origin-host claims'],
+    redactions: ['Remove credentials, query secrets, fragments, cookies, and unrelated contacts'],
+    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    followUpFields: ['Provider ticket', 'Content status', 'Infrastructure change outcome'],
+  },
+  {
+    id: 'security_contact',
+    label: 'Security contact review',
+    audience: 'Published security contact or affected service security team',
+    subjectPrefix: 'Reviewed security finding',
+    requiredContactKind: 'security_txt',
+    checklist: ['Confirm the contact policy covers this report', 'Respect the published communication policy', 'Separate observed facts from hypotheses'],
+    evidenceOrder: ['Incident facts', 'Selected observations', 'Analyst reasoning', 'Action history'],
+    includedEvidence: ['Exact URLs', 'Observation time', 'Selected evidence pins', 'Contact source and limitations'],
+    excludedEvidence: ['Raw upstream payloads', 'Secrets', 'Unselected case notes', 'Legal conclusions'],
+    redactions: ['Remove credentials, tokens, personal data, and unrelated identifiers'],
+    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    followUpFields: ['Security reference', 'Triage acknowledgement', 'Remediation outcome'],
+  },
+  {
+    id: 'browser_blocklist',
+    label: 'Browser or blocklist review',
+    audience: 'Browser-safety, reputation, or blocklist reviewer',
+    subjectPrefix: 'Reviewed unsafe-site report',
+    requiredContactKind: null,
+    checklist: ['Use the recipient submission form or documented route manually', 'Include exact URLs and current observation time', 'Disclose source gaps and false-positive context'],
+    evidenceOrder: ['Exact URLs', 'Observed behavior', 'Selected corroborating evidence', 'Limitations'],
+    includedEvidence: ['Exact URLs', 'Observation time', 'Observed harm', 'Selected evidence pins', 'Contradictions and cautions'],
+    excludedEvidence: ['Raw provider payloads', 'Secrets', 'Unselected personal data', 'Automated maliciousness claims'],
+    redactions: ['Remove credentials, tokens, URL fragments, and unrelated contacts'],
+    attachments: ['Reviewed response packet', 'Optional normalized case report'],
+    followUpFields: ['Submission reference', 'Review state', 'Listing or delisting outcome'],
+  },
+  {
+    id: 'internal_soc',
+    label: 'Internal SOC handoff',
+    audience: 'Internal security operations or incident-response team',
+    subjectPrefix: 'Reviewed domain investigation handoff',
+    requiredContactKind: null,
+    checklist: ['Identify the internal owner', 'Separate verified facts, hypotheses, unknowns, and contradictions', 'Record the next reviewed action'],
+    evidenceOrder: ['Decision packet', 'Selected evidence', 'Incident facts', 'Action and investigation trail'],
+    includedEvidence: ['Case disposition', 'Selected evidence pins', 'Analyst decisions and assertions', 'Action history', 'Exact URLs when relevant'],
+    excludedEvidence: ['Raw upstream payloads', 'Secrets', 'Unselected personal data', 'Unsupported attribution'],
+    redactions: ['Remove credentials, tokens, and personal data not required for the internal decision'],
+    attachments: ['Reviewed response packet', 'Normalized case report when required by internal policy'],
+    followUpFields: ['Internal owner', 'Due date', 'Decision', 'Control or escalation outcome'],
+  },
+]);
+
 export type ResponseContactInput = {
   kind?: unknown;
   contact?: unknown;
@@ -30,6 +142,7 @@ export type ResponseContactInput = {
 };
 
 export type CaseResponsePacketInput = {
+  profile?: unknown;
   category?: unknown;
   affectedParty?: unknown;
   abusiveUrls?: unknown;
@@ -60,6 +173,19 @@ export type CaseResponsePacket = {
   generatedAt: string;
   reviewRequired: true;
   submissionPerformed: false;
+  profile: {
+    id: ResponsePacketProfileId;
+    label: string;
+    audience: string;
+    subject: string;
+    checklist: string[];
+    evidenceOrder: string[];
+    includedEvidence: string[];
+    excludedEvidence: string[];
+    redactions: string[];
+    attachments: string[];
+    followUpFields: string[];
+  };
   case: {
     id: string;
     domain: string;
@@ -112,6 +238,7 @@ export type CaseResponsePacket = {
 };
 
 const CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS);
+const RESPONSE_PROFILE_IDS = new Set<string>(RESPONSE_PACKET_PROFILE_IDS);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 
@@ -194,6 +321,44 @@ function normalizeContacts(value: unknown): CaseResponsePacket['contacts'] {
   return contacts;
 }
 
+export function responsePacketProfile(value: unknown): ResponsePacketProfile {
+  const id = typeof value === 'string' && RESPONSE_PROFILE_IDS.has(value)
+    ? value as ResponsePacketProfileId
+    : 'internal_soc';
+  return RESPONSE_PACKET_PROFILES.find((profile) => profile.id === id) ?? RESPONSE_PACKET_PROFILES.at(-1)!;
+}
+
+export function buildResponsePacketProfilePreview(
+  caseRecord: CaseRecord,
+  input: CaseResponsePacketInput,
+): CaseResponsePacket['profile'] & { missingEvidence: string[] } {
+  const profile = responsePacketProfile(input.profile);
+  const contacts = normalizeContacts(input.contacts);
+  const missingEvidence = [
+    ...(!normalizeUrls(input.abusiveUrls).length ? ['At least one exact HTTP(S) URL'] : []),
+    ...(!timestamp(input.observedAt) && !caseRecord.evidenceHistory.at(-1)?.capturedAt ? ['Observation time'] : []),
+    ...(!caseRecord.evidencePins.length ? ['Analyst-selected evidence pin'] : []),
+    ...(profile.requiredContactKind && !contacts.some((contact) => contact.kind === profile.requiredContactKind)
+      ? [`${contactLabel(profile.requiredContactKind)} contact route`]
+      : []),
+  ];
+  const category = text(input.category, MAX_ABUSE_CATEGORY_LENGTH) || 'domain activity';
+  return {
+    id: profile.id,
+    label: profile.label,
+    audience: profile.audience,
+    subject: `${profile.subjectPrefix}: ${caseRecord.domain} (${category})`,
+    checklist: [...profile.checklist],
+    evidenceOrder: [...profile.evidenceOrder],
+    includedEvidence: [...profile.includedEvidence],
+    excludedEvidence: [...profile.excludedEvidence],
+    redactions: [...profile.redactions],
+    attachments: [...profile.attachments],
+    followUpFields: [...profile.followUpFields],
+    missingEvidence,
+  };
+}
+
 export function buildCaseResponsePreflight(
   caseRecord: CaseRecord,
   input: CaseResponsePacketInput,
@@ -216,6 +381,7 @@ export function buildCaseResponsePreflight(
     .filter((item) => item.kind === 'contradiction' && item.state === 'open')
     .length;
   const actionSummary = buildCaseActionOutcomeSummary(caseRecord.actions, normalizedGeneratedAt);
+  const profile = responsePacketProfile(input.profile);
   const checks: CaseResponsePreflightCheck[] = [
     {
       id: 'required_incident_fields',
@@ -248,6 +414,18 @@ export function buildCaseResponsePreflight(
       detail: contacts.length
         ? `${contacts.length} separately attributed contact route${contacts.length === 1 ? ' is' : 's are'} included.`
         : 'No contact route is included; identify and review the intended recipient before sending.',
+    },
+    {
+      id: 'profile_recipient',
+      label: 'Audience-specific recipient',
+      state: profile.requiredContactKind
+        ? contacts.some((contact) => contact.kind === profile.requiredContactKind) ? 'pass' : 'caution'
+        : 'pass',
+      detail: profile.requiredContactKind
+        ? contacts.some((contact) => contact.kind === profile.requiredContactKind)
+          ? `The ${contactLabel(profile.requiredContactKind)} route required by the ${profile.label.toLowerCase()} is present.`
+          : `The ${profile.label.toLowerCase()} expects a separately attributed ${contactLabel(profile.requiredContactKind)} route.`
+        : `${profile.label} has no fixed external contact-kind requirement; confirm the intended manual destination.`,
     },
     {
       id: 'case_disposition',
@@ -383,6 +561,7 @@ export async function buildCaseResponsePacket(
   const escalationHistory = normalizeActionHistory(caseRecord);
   const age = observationAge(observedAt, normalizedGeneratedAt);
   const preflight = buildCaseResponsePreflight(caseRecord, input, normalizedGeneratedAt);
+  const profile = buildResponsePacketProfilePreview(caseRecord, input);
   const limitations = [
     'This packet contains analyst-selected facts and must be reviewed before submission.',
     'WHOISleuth did not submit this packet or verify that any listed contact is monitored.',
@@ -395,6 +574,19 @@ export async function buildCaseResponsePacket(
     generatedAt: normalizedGeneratedAt,
     reviewRequired: true,
     submissionPerformed: false,
+    profile: {
+      id: profile.id,
+      label: profile.label,
+      audience: profile.audience,
+      subject: profile.subject,
+      checklist: profile.checklist,
+      evidenceOrder: profile.evidenceOrder,
+      includedEvidence: profile.includedEvidence,
+      excludedEvidence: profile.excludedEvidence,
+      redactions: profile.redactions,
+      attachments: profile.attachments,
+      followUpFields: profile.followUpFields,
+    },
     case: {
       id: caseRecord.id,
       domain: caseRecord.domain,
@@ -433,13 +625,15 @@ export async function buildCaseResponsePacket(
   };
 
   const lines = [
-    '# Reviewed abuse evidence packet',
+    `# ${escapeMarkdown(profile.label)} packet`,
     '',
     `**Domain:** ${escapeMarkdown(caseRecord.domain)}`,
     `**Category:** ${escapeMarkdown(category)}`,
     `**Affected party:** ${escapeMarkdown(affectedParty)}`,
     `**Observed at (UTC):** ${observedAt}`,
     `**Generated at (UTC):** ${normalizedGeneratedAt}`,
+    `**Audience:** ${escapeMarkdown(profile.audience)}`,
+    `**Suggested subject:** ${escapeMarkdown(profile.subject)}`,
     '',
     '## Observed harm',
     '',
@@ -482,10 +676,19 @@ export async function buildCaseResponsePacket(
     `- Observation-age band at export: ${age.band.replaceAll('_', ' ')}`,
     `- Canonical packet SHA-256: ${digestSha256}`,
     '- Digest scope: canonical sorted JSON packet excluding the integrity object',
+    '',
+    '## Audience profile',
+    '',
+    ...profile.checklist.map((item) => `- Checklist: ${escapeMarkdown(item)}`),
+    ...profile.includedEvidence.map((item) => `- Included: ${escapeMarkdown(item)}`),
+    ...profile.excludedEvidence.map((item) => `- Excluded: ${escapeMarkdown(item)}`),
+    ...profile.redactions.map((item) => `- Redaction: ${escapeMarkdown(item)}`),
+    ...profile.attachments.map((item) => `- Attachment expectation: ${escapeMarkdown(item)}`),
+    ...profile.followUpFields.map((item) => `- Follow-up field: ${escapeMarkdown(item)}`),
   ];
   const markdown = `${lines.join('\n').trim()}\n`;
   const email = [
-    `Subject: Reviewed ${category} report for ${caseRecord.domain}`,
+    `Subject: ${profile.subject}`,
     '',
     'Hello,',
     '',

@@ -186,6 +186,8 @@ export function buildLookupPageDisplay(input: {
   structuredDataIdentity: JsonRecord;
   technologyProfile: JsonRecord;
   browserLibraryProfile: JsonRecord;
+  pageRoleProfile: JsonRecord;
+  clientBehaviorProfile: JsonRecord;
   observedNetworkContext: JsonRecord;
   observedNetworkEndpoint: JsonRecord;
   observedNetwork: JsonRecord;
@@ -208,6 +210,8 @@ export function buildLookupPageDisplay(input: {
     structuredDataIdentity,
     technologyProfile,
     browserLibraryProfile,
+    pageRoleProfile,
+    clientBehaviorProfile,
     observedNetworkContext,
     observedNetworkEndpoint,
     observedNetwork,
@@ -216,6 +220,7 @@ export function buildLookupPageDisplay(input: {
     pageComparison,
   } = input;
   const credentialSurfaceForms = rec(credentialSurfaceProfile.forms);
+  const clientScriptSummary = rec(clientBehaviorProfile.scriptSummary);
   const credentialSurfaceMethods = rec(credentialSurfaceForms.methods);
   const credentialSurfaceActions = rec(credentialSurfaceForms.actions);
   const credentialSurfaceInputs = rec(credentialSurfaceProfile.inputs);
@@ -313,6 +318,17 @@ export function buildLookupPageDisplay(input: {
           .filter(Boolean),
       };
     });
+  const pageRoles = records(pageRoleProfile.findings)
+    .slice(0, 4)
+    .map((finding) => ({
+      role: boundedTechnologyText(finding.role, 40),
+      label: boundedTechnologyText(finding.label || 'Unclassified', 80),
+      confidence: statusLabel(boundedTechnologyText(finding.confidence || 'low', 20)),
+      evidence: stringList(finding.evidence)
+        .slice(0, 4)
+        .map((item) => boundedTechnologyText(item, 180))
+        .filter(Boolean),
+    }));
 
   return {
     pageIdentityFacts: [
@@ -455,6 +471,33 @@ export function buildLookupPageDisplay(input: {
       .filter(Boolean),
     technologyFindings,
     technologyLimitations: stringList(technologyProfile.limitations)
+      .slice(0, 10)
+      .map((item) => boundedTechnologyText(item, 300))
+      .filter(Boolean),
+    pageRoles,
+    primaryPageRole: pageRoles.find((role) => role.role === pageRoleProfile.primaryRole)?.label
+      || pageRoles[0]?.label
+      || 'Unclassified',
+    pageRoleLimitations: stringList(pageRoleProfile.limitations)
+      .slice(0, 10)
+      .map((item) => boundedTechnologyText(item, 300))
+      .filter(Boolean),
+    clientScriptSummary: {
+      elementsObserved: boundedCredentialCount(clientScriptSummary.elementsObserved),
+      referencedScripts: boundedCredentialCount(clientScriptSummary.referencedScripts),
+      inlineScripts: boundedCredentialCount(clientScriptSummary.inlineScripts),
+      moduleScripts: boundedCredentialCount(clientScriptSummary.moduleScripts),
+    },
+    clientBehaviorIndicators: records(clientBehaviorProfile.indicators)
+      .slice(0, 12)
+      .map((indicator) => ({
+        id: boundedTechnologyText(indicator.id, 80),
+        label: boundedTechnologyText(indicator.label || 'Static indicator', 120),
+        evidenceClass: statusLabel(boundedTechnologyText(indicator.evidenceClass || 'static evidence', 40)),
+        occurrences: boundedCredentialCount(indicator.occurrences, 999),
+        explanation: boundedTechnologyText(indicator.explanation || 'Static indicator observed.', 240),
+      })),
+    clientBehaviorLimitations: stringList(clientBehaviorProfile.limitations)
       .slice(0, 10)
       .map((item) => boundedTechnologyText(item, 300))
       .filter(Boolean),

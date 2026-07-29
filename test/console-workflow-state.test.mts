@@ -15,7 +15,7 @@ const lookupState = Object.freeze({
   includeSecurityTxt: false, error: '', result: null,
 });
 const bulkState = Object.freeze({
-  guideContext: '', input: 'example.test', mode: 'fast', completed: 1, total: 1, results: [], filter: 'all',
+  guideContext: '', input: 'example.test', mode: 'fast', pacing: 'balanced', completed: 1, total: 1, results: [], filter: 'all',
   mutationFilter: '', signalFilters: [], sortKey: 'risk', sortDirection: -1, page: 1,
   status: 'Complete', indicatorFormat: 'domains', indicatorWildcards: false, watchlistName: '',
 });

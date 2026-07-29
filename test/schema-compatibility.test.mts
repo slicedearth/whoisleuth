@@ -158,7 +158,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.cases').currentVersion, CASE_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.lookup-evidence').schema, LOOKUP_EVIDENCE_SCHEMA);
     assert.equal(byId(inventory, 'export.lookup-evidence').currentVersion, LOOKUP_EVIDENCE_SCHEMA_VERSION);
-    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [2, 3, 4, 5]);
     assert.equal(byId(inventory, 'export.relationship-graph').schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
     assert.equal(byId(inventory, 'export.relationship-graph').currentVersion, RELATIONSHIP_GRAPH_EXPORT_VERSION);
@@ -178,7 +178,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [1, 2, 3, 4, 5]);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
-    assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [1, 2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [1, 2, 3, 4, 5]);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').schema, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').currentVersion, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').byteBudget, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);

@@ -13,13 +13,17 @@
   import WatchlistWorkspace from '$lib/components/WatchlistWorkspace.svelte';
   import HostedWatchlistManager from '$lib/components/HostedWatchlistManager.svelte';
   import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
+  import RetainedEvidenceTimeline from '$lib/components/RetainedEvidenceTimeline.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
   import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
+  import CaseRelationshipClusters from '$lib/components/CaseRelationshipClusters.svelte';
+  import { registerAnalystUndo } from '$lib/analyst-undo';
   import DetectionRuleManager from '$lib/components/DetectionRuleManager.svelte';
   import RetainedRelationshipObservations from '$lib/components/RetainedRelationshipObservations.svelte';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.ts';
+  import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { loadLocalCaseInvestigationProjection } from '$lib/investigation-search';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
@@ -39,8 +43,10 @@
   import { loadBulkSessions } from '$lib/bulk-sessions';
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
   import { buildAnalystReviewInbox } from '$lib/analysis/analyst-review-inbox.ts';
+  import { buildRetainedEvidenceTimeline } from '$lib/analysis/retained-evidence-timeline.ts';
+  import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '$lib/website-snapshots';
 
-  type View = 'inbox' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
+  type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
   const CASE_PAGE_SIZE=25;
   let view=$state<View>('inbox');
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
@@ -67,13 +73,16 @@
   // --- Cases ---
   let cases=$state<CaseRecord[]>([]);
   let bulkSessions=$state<BulkSession[]>([]);
+  let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
   const reviewInbox=$derived(buildAnalystReviewInbox({cases,watchlists,bulkSessions}));
   let casePage=$state(1);
   let campaignCount=$state(0);
   let investigationProjection=$state<unknown>(null);
   let retainedRelationships=$state<RelationshipObservation[]>([]);
+  const retainedTimeline=$derived(buildRetainedEvidenceTimeline({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots}));
   let customRuleCount=$state(0);
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
+  const relationshipClusters=$derived(buildCaseRelationshipClusters(relationshipSummary));
   const relationshipCount=$derived(relationshipSummary.groups.length+retainedRelationships.length);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
@@ -136,7 +145,7 @@
   async function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=await openCase({domain,source:'monitor'});await refreshCases();newDomain='';showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function setStatus(record:CaseRecord,value:string){try{const{pruned}=await editCase(record.id,{status:value});await refreshCases();showCasePage(record);caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
   async function setDisposition(record:CaseRecord,value:string){try{const{pruned}=await editCase(record.id,{disposition:value});await refreshCases();showCasePage(record);caseMessage=`Marked ${record.domain} as ${dispositionLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
-  async function saveTags(record:CaseRecord){try{const{pruned}=await editCase(record.id,{tags:tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean)});await refreshCases();showCasePage(record);caseMessage=`Updated tags for ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
+  async function saveTags(record:CaseRecord){const previous=[...record.tags];const next=tagDraft.split(/[,\n]+/).map(value=>value.trim()).filter(Boolean);if(previous.join('\\0')===next.join('\\0'))return;try{const{pruned}=await editCase(record.id,{tags:next});await refreshCases();showCasePage(record);caseMessage=`Updated tags for ${record.domain}.${prunedNote(pruned)}`;registerAnalystUndo({kind:'case_tags',action:'Case tags updated',affectedRecord:record.domain,undo:async()=>{await editCase(record.id,{tags:previous});await refreshCases();const restored=cases.find((item)=>item.id===record.id);if(restored&&expandedId===record.id)tagDraft=restored.tags.join(', ');return `Restored the previous tags for ${record.domain}.`;}});}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update tags.';}}
   async function addNote(record:CaseRecord){const body=noteDraft.trim();if(!body){caseMessage='A note cannot be empty.';return;}try{const{pruned}=await addCaseNote(record.id,body);await refreshCases();showCasePage(record);noteDraft='';caseMessage=`Added a note to ${record.domain}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not add the note.';}}
   async function downloadCases(){try{await exportCases();}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not export cases.';}}
   async function removeCase(record:CaseRecord){if(!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))return;try{await deleteCase(record.id);if(expandedId===record.id)expandedId='';await refreshCases();caseMessage=`Deleted the case for ${record.domain}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the case.';}}
@@ -144,15 +153,20 @@
   async function importCaseFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_CASE_IMPORT_BYTES)throw new Error('Case imports are limited to 2 MB.');const result=await importCases(JSON.parse(await file.text()));await refreshCases();caseMessage=`Imported ${result.added} new and ${result.updated} merged cases${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}${prunedNote(result.pruned)}.`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Case import failed';}finally{input.value='';}}
 
   onMount(()=>{void (async()=>{
-    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships(),loadBulkSessions().then((records)=>{bulkSessions=records;})]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
+    await Promise.all([refresh(),refreshCases(),refreshRetainedRelationships(),loadBulkSessions().then((records)=>{bulkSessions=records;}),loadWebsiteSnapshots().then((records)=>{websiteSnapshots=records;})]);[campaignCount,customRuleCount]=await Promise.all([loadCampaigns().then(records=>records.length),loadDetectionRules().then(records=>records.length)]);
     const focus=page.url.searchParams.get('case');
     if(focus){view='cases';const target=cases.find(record=>record.id===focus);if(target){showCasePage(target);expandedId=focus;tagDraft=target.tags.join(', ');await tick();const workspace=document.getElementById(`case-response-${target.id}`);if(page.url.hash===`#case-response-${encodeURIComponent(target.id)}`&&workspace){workspace.scrollIntoView({block:'start'});workspace.focus({preventScroll:true});}else await focusCase(target);}}
     else if(page.url.searchParams.get('view')==='inbox')view='inbox';
+    else if(page.url.searchParams.get('view')==='timeline')view='timeline';
     else if(page.url.searchParams.get('view')==='watchlists')view='watchlists';
     else if(page.url.searchParams.get('view')==='cases')view='cases';
     else if(page.url.searchParams.get('view')==='campaigns')view='campaigns';
     else if(page.url.searchParams.get('view')==='relationships')view='relationships';
     else if(page.url.searchParams.get('view')==='rules')view='rules';
+    if(view==='watchlists'){
+      const requestedWatchlist=page.url.searchParams.get('watchlist');
+      if(requestedWatchlist&&watchlists[requestedWatchlist])selected=requestedWatchlist;
+    }
     const guideDomain=parseDomainInput(page.url.searchParams.get('domain')||'').entries[0]||'';
     const investigationRoute=page.url.searchParams.get('investigation')==='1';
     if(investigationRoute){
@@ -175,11 +189,17 @@
 <svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Track findings" title="Monitor" description="Review retained work, organize cases, inspect relationships, and compare watchlist changes over time." />
 
-<MonitorViewTabs {view} counts={{inbox:reviewInbox.counts.all,cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
+<MonitorViewTabs {view} counts={{inbox:reviewInbox.counts.all,timeline:retainedTimeline.counts.all,cases:cases.length,campaigns:campaignCount,relationships:relationshipCount,rules:customRuleCount,watchlists:names.length}} setView={(value)=>view=value} />
 
 {#if view==='inbox'}
 <div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} />
+</div>
+{/if}
+
+{#if view==='timeline'}
+<div id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline">
+  <RetainedEvidenceTimeline timeline={retainedTimeline} />
 </div>
 {/if}
 
@@ -196,6 +216,7 @@
     focusId={page.url.searchParams.get('observation')||''}
     ondelete={removeRetainedRelationship}
   />
+  <CaseRelationshipClusters summary={relationshipClusters} />
   <CaseRelationshipGraph records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
   <CaseRelationshipTable records={cases} summary={relationshipSummary} onselect={openRelatedCase} />
 </div>
@@ -211,7 +232,7 @@
 <div id="panel-cases" role="tabpanel" aria-labelledby="tab-cases">
   {#if guidedDomains.length}<GuidedCaseQueue domains={guidedDomains} existingDomains={existingCaseDomains} truncated={guidedDomainsTruncated} openDomain={openGuidedCase} />{/if}
   <CaseWorkspaceToolbar domain={newDomain} setDomain={(value)=>newDomain=value} {trackDomain} caseCount={cases.length} {downloadCases} {importCaseFile} message={caseMessage} />
-  <ExternalFindingsImport oncomplete={refreshCases} onmessage={(value)=>caseMessage=value} />
+  <ExternalFindingsImport {cases} oncomplete={refreshCases} onmessage={(value)=>caseMessage=value} />
 
   {#if cases.length}
     <CaseFilters status={statusFilter} setStatus={(value)=>{statusFilter=value;casePage=1;}} disposition={dispositionFilter} setDisposition={(value)=>{dispositionFilter=value;casePage=1;}} search={caseSearch} setSearch={(value)=>{caseSearch=value;casePage=1;}} sort={caseSort} setSort={(value)=>{caseSort=value;casePage=1;}} statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS} clear={()=>{clearCaseFilters();casePage=1;}} matchedCount={filteredCases.length} totalCount={cases.length} />

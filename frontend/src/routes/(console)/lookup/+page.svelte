@@ -20,8 +20,10 @@
   import LookupOverviewFacts from '$lib/components/LookupOverviewFacts.svelte';
   import LookupPageComparison from '$lib/components/LookupPageComparison.svelte';
   import LookupPageIdentity from '$lib/components/LookupPageIdentity.svelte';
+  import LookupPageRoleBehavior from '$lib/components/LookupPageRoleBehavior.svelte';
   import LookupRegistrySources from '$lib/components/LookupRegistrySources.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
+  import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import LookupSecurityPosture from '$lib/components/LookupSecurityPosture.svelte';
   import LookupSecurityTxt from '$lib/components/LookupSecurityTxt.svelte';
   import LookupServiceDependencyReview from '$lib/components/LookupServiceDependencyReview.svelte';
@@ -31,10 +33,11 @@
   import WebsiteSnapshotManager from '$lib/components/WebsiteSnapshotManager.svelte';
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
+  import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
-  import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord } from '$lib/cases';
+  import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { outreachAction, type Contact } from '$lib/drafts';
   import { buildLookupEvidence, evidenceFilename } from '$lib/analysis/evidence-export.ts';
@@ -47,6 +50,7 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import { buildLookupCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
   import {
@@ -76,8 +80,17 @@
   } from '$lib/analysis/lookup-request.ts';
   import {
     buildLookupRequestUrl,
-    buildLookupSectionLinks,
+    buildLookupResultSectionLinks,
   } from '$lib/analysis/lookup-page-actions.ts';
+  import {
+    normalizeLookupEvidenceDensity,
+    normalizeLookupTaskView,
+    readLookupPresentation,
+    writeLookupPresentation,
+    type LookupEvidenceDensity,
+    type LookupTaskView,
+  } from '$lib/analysis/lookup-presentation.ts';
+  import { buildLookupWebsiteSnapshot } from '$lib/analysis/lookup-snapshot-input.ts';
   import {
     buildLookupReadableReport,
     lookupReadableReportFilename,
@@ -113,6 +126,8 @@
   let profile=$state<BrandProfile|null>(null);
   let draftStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let evidenceDensity=$state<LookupEvidenceDensity>('standard');
+  let taskView=$state<LookupTaskView>('general');
   let pageActive=false;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
@@ -185,6 +200,8 @@
   const credentialSurfaceProfile=$derived(lookupView.credentialSurfaceProfile);
   const structuredDataIdentity=$derived(lookupView.structuredDataIdentity);
   const technologyProfile=$derived(lookupView.technologyProfile);
+  const pageRoleProfile=$derived(lookupView.pageRoleProfile);
+  const clientBehaviorProfile=$derived(lookupView.clientBehaviorProfile);
   const browserLibraryProfile=$derived(rec(technologyProfile.browserLibraryProfile));
   const securityPosture=$derived(lookupView.securityPosture);
   const securityPostureSummary=$derived(lookupView.securityPostureSummary);
@@ -264,6 +281,8 @@
     structuredDataIdentity,
     technologyProfile,
     browserLibraryProfile,
+    pageRoleProfile,
+    clientBehaviorProfile,
     observedNetworkContext,
     observedNetworkEndpoint,
     observedNetwork,
@@ -279,7 +298,7 @@
     hasPasswordField:availability.hasPasswordField,
     phishingLanguageMatch:availability.phishingLanguageMatch,
   }));
-  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
+  const hasWebEvidence=$derived(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns'||httpEvidence.source==='http'||tlsEvidence.source==='tls'||pageIdentity.source==='html'||credentialSurfaceProfile.source==='html'||structuredDataIdentity.source==='html'||technologyProfile.source==='derived'||pageRoleProfile.source==='derived'||clientBehaviorProfile.source==='derived'||securityPosture.source==='derived'||securityTxt.securityTxtVersion===1||Boolean(pageComparison)||Boolean(profile?.pageBaseline&&result?.type==='domain'));
   const hasCaseSection=$derived(Boolean(caseDomain)||Boolean(outreach)||abuseRecipientResolution.recipients.length>0);
   const evidenceTopologyNodes=$derived(buildLookupEvidenceTopologyNodes({
     targetType:result?.type,
@@ -352,6 +371,8 @@
     httpResponse,
     tlsEvidence,
     pageIdentity,
+    pageRoleProfile,
+    clientBehaviorProfile,
     technologyProfile,
     securityPosture,
     securityTxt,
@@ -401,6 +422,9 @@
     ...compactHttpSummary,
     mutationTypes:[]
   });
+  const checkpointFacts=$derived(result?.type==='domain'
+    ? buildLookupCheckpointFacts(result,{collectionDepth:lookupEvidenceDepth})
+    : []);
 
   async function refreshProfileContext(){
     try{profile=await activeProfile();}
@@ -427,9 +451,25 @@
     caseRecord=next.record;
     caseStatus=next.status;
   }
+  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){
+    const next=await lookupCaseController.recordCheckpoint(caseRecord,checkpointFacts,selectedFields,transitionExpectations);
+    caseRecord=next.record;
+    caseStatus=next.status;
+  }
   function cancelLookup(){lookupRequestController.cancel();}
+  function setEvidenceDensity(value:LookupEvidenceDensity){
+    evidenceDensity=normalizeLookupEvidenceDensity(value);
+    writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
+  }
+  function setTaskView(value:LookupTaskView){
+    taskView=normalizeLookupTaskView(value);
+    writeLookupPresentation(localStorage,{density:evidenceDensity,task:taskView});
+  }
   onMount(()=>{
     pageActive=true;
+    const presentation=readLookupPresentation(localStorage);
+    evidenceDensity=presentation.density;
+    taskView=presentation.task;
     const restored=readLookupWorkflowState();
     if(restored){query=restored.query;lookupMode=restored.lookupMode;includeExternalIntelligence=restored.includeExternalIntelligence;includeMalwareHostIntelligence=restored.includeMalwareHostIntelligence;includeMalwareIocIntelligence=restored.includeMalwareIocIntelligence;includeSecurityTxt=restored.includeSecurityTxt;error=restored.error;result=restored.result;}
     const q=page.url.searchParams.get('q');
@@ -449,39 +489,30 @@
 
   function websiteSnapshotInput(){
     const now=new Date().toISOString();
-    const observedAt=typeof result?.fetchedAt==='string'?result.fetchedAt:now;
-    const baseline=observedPageBaseline;
-    const sourceNames=['rdap','whois','availability','dns','http','tls'];
-    return{
+    return buildLookupWebsiteSnapshot({
       id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       domain:caseDomain,
-      observedAt,
+      observedAt:typeof result?.fetchedAt==='string'?result.fetchedAt:now,
       savedAt:now,
-      complete:lookupEvidenceDepth==='deep'&&technologyProfile.complete===true&&securityPosture.complete===true&&Boolean(baseline?.complete),
-      truncated:Boolean(technologyProfile.truncated||securityPosture.truncated||baseline?.truncated),
-      technologies:pageDisplay.technologyFindings.map(({id,name,category,confidence})=>({id,name,category,confidence})),
-      posture:pageDisplay.securityPostureFindings.map(({id,state})=>({id,state})),
-      identity:{
-        normalizedHtml:baseline?.normalizedHtml.value??null,
-        visibleText:baseline?.visibleText?.value??null,
-        domStructure:baseline?.domStructure.value??null,
-        formStructure:baseline?.formStructure?.value??null,
-        resourceHosts:baseline?.resourceHosts.value??null,
-        trackingIdentifiers:baseline?.trackingIdentifiers.value??null,
-        faviconHash:baseline?.faviconHash??null,
-      },
-      sources:sourceNames.flatMap((source)=>{const state=boundedTechnologyText(rec(diagnostics[source]).status,40);return state?[{source,state}]:[];}),
-    };
+      lookupEvidenceDepth,
+      technologyProfile,
+      securityPosture,
+      baseline:observedPageBaseline,
+      technologyFindings:pageDisplay.technologyFindings,
+      securityPostureFindings:pageDisplay.securityPostureFindings,
+      diagnostics,
+    });
   }
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
-  function resultSectionLinks():Array<{href:`#${string}`;label:string}>{return buildLookupSectionLinks({
-    hasWebEvidence,
-    domainResult:result?.type==='domain',
-    hasExternalIntelligence:threatIntelligenceProviders.length>0,
-    hasCaseSection,
-  });}
+  function resultSectionLinks(){return buildLookupResultSectionLinks({
+      hasWebEvidence,
+      domainResult:result?.type==='domain',
+      hasExternalIntelligence:threatIntelligenceProviders.length>0,
+      hasCaseSection,
+      task:taskView,
+    });}
   async function submit(event:SubmitEvent){
     event.preventDefault();
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
@@ -556,10 +587,13 @@
 
 {#if result}
   <section class="result-root" id="result">
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={result.type==='domain'?downloadReadableReport:null} />
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} />
+
+    <LookupPresentationControls density={evidenceDensity} task={taskView} setDensity={setEvidenceDensity} setTask={setTaskView} />
 
     <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent />
 
+    <div class="evidence-density density-{evidenceDensity}">
     <section class="result-section family-overview" id="overview" aria-labelledby="overview-title">
       <h3 id="overview-title">Overview</h3>
 
@@ -731,6 +765,21 @@
         /></div>
       {/if}
 
+      {#if pageRoleProfile.source==='derived' && clientBehaviorProfile.source==='derived'}
+        <div class="evidence-component" id="evidence-page-role"><LookupPageRoleBehavior
+          roleStatus={statusLabel(show(pageRoleProfile.status))}
+          roleComplete={Boolean(pageRoleProfile.complete)}
+          primaryRole={pageDisplay.primaryPageRole}
+          roles={pageDisplay.pageRoles}
+          roleLimitations={pageDisplay.pageRoleLimitations}
+          behaviorStatus={statusLabel(show(clientBehaviorProfile.status))}
+          behaviorComplete={Boolean(clientBehaviorProfile.complete)}
+          scripts={pageDisplay.clientScriptSummary}
+          indicators={pageDisplay.clientBehaviorIndicators}
+          behaviorLimitations={pageDisplay.clientBehaviorLimitations}
+        /></div>
+      {/if}
+
       {#if pageComparison || (profile?.pageBaseline && result.type==='domain')}
         <div class="evidence-component"><LookupPageComparison comparison={pageDisplay.pageComparison} unavailable={Boolean(!pageComparison&&profile?.pageBaseline&&result.type==='domain')} /></div>
       {/if}
@@ -791,6 +840,9 @@
         <h3 id="case-response-title">Case and response</h3>
 
         <LookupCaseResponse domain={caseDomain} record={caseRecord} note={caseNote} {caseStatus} {draftStatus} {outreach} recipientResolution={abuseRecipientResolution} setNote={(value) => caseNote = value} createCase={openLookupCase} addNote={addLookupNote} recordRecipient={recordAbuseRecipient} {copyDraft} statusLabel={caseStatusLabel} dispositionLabel={caseDispositionLabel} />
+        {#if caseRecord && checkpointFacts.length}
+          <LookupEvidenceCheckpoint facts={checkpointFacts} pins={caseRecord.evidencePins} onsave={saveEvidenceCheckpoint} />
+        {/if}
       </section>
     {/if}
 
@@ -798,11 +850,19 @@
       <h3 id="raw-data-title">Raw evidence</h3>
       <details class="raw card"><summary>Raw unified response</summary><pre>{JSON.stringify(result,null,2)}</pre></details>
     </section>
+    </div>
   </section>
 {/if}
 
 <style>
   .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
+  .evidence-density{display:contents}
+  .density-standard .family-raw>:not(h3){display:none}
+  .density-standard .family-raw{min-height:34px;margin-top:14px}
+  .density-standard .family-raw>h3{margin-bottom:0}
+  .density-summary>.result-section:not(.family-overview)>:not(h3){display:none}
+  .density-summary>.result-section:not(.family-overview){min-height:34px;margin-top:14px}
+  .density-summary>.result-section:not(.family-overview)>h3{margin-bottom:0}
   .result-section{--section-accent:var(--accent2);margin-top:26px}
   .result-section.family-web{--section-accent:var(--amber)}
   .result-section.family-registry{--section-accent:var(--accent2)}

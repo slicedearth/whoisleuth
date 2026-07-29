@@ -5,6 +5,7 @@ import {
   appendCaseAssertion,
   appendCaseDecision,
   appendCaseEvidencePin,
+  appendCaseEvidencePins,
   appendCaseManualTrailEvent,
   buildCaseActionOutcomeSummary,
   buildCaseInvestigationTrail,
@@ -48,6 +49,46 @@ describe('case response record normalization', () => {
       evidencePinIds: [pin.id, 'missing-pin'],
     }, NOW, new Set([pin.id]));
     assert.deepEqual(requiredValue(decisions[0]).evidencePinIds, [pin.id]);
+  });
+
+  test('checkpoints append bounded selected facts with typed provenance metadata', () => {
+    const pins = appendCaseEvidencePins([], [
+      {
+        checkpointId: 'checkpoint-one',
+        field: 'dns.mx',
+        category: 'dns',
+        label: 'MX hosts',
+        value: 'mx.response.example',
+        source: 'DNS',
+        sourceState: 'success',
+        sourceSchema: {
+          collection: 'lookup_result',
+          schema: 'whoisleuth.lookup-evidence',
+          version: 21,
+        },
+        observedAt: NOW,
+        collectionDepth: 'deep',
+        completeness: 'complete',
+        truncated: false,
+      },
+      {
+        checkpointId: 'checkpoint-one',
+        field: 'tls.protocol',
+        category: 'tls',
+        label: 'TLS protocol',
+        value: 'TLSv1.3',
+        source: 'TLS',
+        sourceState: 'partial',
+        observedAt: NOW,
+        collectionDepth: 'deep',
+        completeness: 'partial',
+        truncated: true,
+      },
+    ], NOW);
+    assert.equal(pins.length, 2);
+    assert.equal(pins[0]?.field, 'dns.mx');
+    assert.equal(pins[0]?.sourceSchema?.version, 21);
+    assert.equal(pins[1]?.truncated, true);
   });
 
   test('actions keep contact provenance and can record a later outcome', () => {

@@ -30,6 +30,7 @@ function sessionResult(overrides: Partial<BulkSessionResult> = {}): BulkSessionR
     expiryDate: null,
     nameservers: ['ns1.example.test'],
     hasMx: true,
+    hasNullMx: false,
     hasSpf: null,
     hasDmarc: false,
     activityStatus: 'active',

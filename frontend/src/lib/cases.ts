@@ -23,6 +23,10 @@ import {
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
 } from './analysis/external-findings-import.ts';
+import {
+  mergeExternalIntelligenceIntoCase,
+  type ExternalIntelligencePreview,
+} from './analysis/external-intelligence-import.ts';
 
 export {
   CASE_DISPOSITIONS,
@@ -50,12 +54,18 @@ export {
   MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
   parseExternalFindingsDocument,
 } from './analysis/external-findings-import.ts';
+export {
+  MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
+  parseExternalIntelligenceDocument,
+} from './analysis/external-intelligence-import.ts';
 export type {
   CaseActionRecord,
+  CaseAssertionExternalProvenance,
   CaseAssertionRecord,
   CaseDecisionRecord,
   CaseEvidencePin,
   CaseManualTrailEvent,
+  CaseTransitionExpectation,
 } from './analysis/case-response-model.ts';
 export type {
   CaseEvidenceSnapshot,
@@ -70,6 +80,11 @@ export type {
   ExternalFindingsDocument,
   ExternalFindingsMergeResult,
 } from './analysis/external-findings-import.ts';
+export type {
+  ExternalIntelligenceItem,
+  ExternalIntelligenceMergeResult,
+  ExternalIntelligencePreview,
+} from './analysis/external-intelligence-import.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
 
@@ -160,6 +175,33 @@ export async function importExternalFindings(
         casesUpdated: merged.casesUpdated,
         findingsAdded: merged.findingsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
+        pruned,
+      },
+    };
+  });
+}
+
+export async function importExternalIntelligence(
+  caseId: string,
+  preview: ExternalIntelligencePreview,
+): Promise<{
+  record: CaseRecord;
+  assertionsAdded: number;
+  duplicatesSkipped: number;
+  capacitySkipped: number;
+  pruned: number;
+}> {
+  return (await browserLocalDataProvider()).update(CASES_COLLECTION, (current) => {
+    const merged = mergeExternalIntelligenceIntoCase(current, caseId, preview);
+    const { cases, pruned } = boundedCases(merged.cases);
+    const record = cases.find((item) => item.id === merged.record.id) ?? merged.record;
+    return {
+      document: cases,
+      result: {
+        record,
+        assertionsAdded: merged.assertionsAdded,
+        duplicatesSkipped: merged.duplicatesSkipped,
+        capacitySkipped: merged.capacitySkipped,
         pruned,
       },
     };

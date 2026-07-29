@@ -87,6 +87,7 @@ export interface WatchlistDomainHistoryEvent {
 const CONCLUSIVE_AVAILABILITY = new Set(['available', 'registered', 'for_sale', 'expiring']);
 const DEEP_FIELDS = new Set([
   'hasMx',
+  'hasNullMx',
   'hasSpf',
   'hasDmarc',
   'activityStatus',
@@ -118,6 +119,7 @@ const FIELD_LABELS: Record<string, string> = {
   createdDate: 'Creation date',
   expiryDate: 'Expiry date',
   privacyProtected: 'WHOIS privacy',
+  hasNullMx: 'Null MX',
   hasMx: 'MX',
   hasSpf: 'SPF',
   hasDmarc: 'DMARC',

@@ -280,7 +280,7 @@ export function mergeCases(
   if (importedVersion !== null && Number.isInteger(importedVersion) && importedVersion > CASE_SCHEMA_VERSION) {
     throw new Error(`This case file was exported by a newer version of WHOISleuth (schema ${importedVersion}). Update the app before importing it.`);
   }
-  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | typeof CASE_SCHEMA_VERSION)
+  if (!CASE_IMPORT_VERSIONS.includes(importedVersion as 3 | 4 | 5 | 6 | typeof CASE_SCHEMA_VERSION)
     || !importedRaw || typeof importedRaw !== 'object'
     || !Array.isArray(objectRecord(importedRaw).cases)) {
     throw new Error(`Expected a WHOISleuth case export using schema ${CASE_IMPORT_VERSIONS.join(' or ')}.`);

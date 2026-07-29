@@ -705,7 +705,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
-  expect(exported.schemaVersion).toBe(21);
+  expect(exported.schemaVersion).toBe(22);
   expect(exported.analysis.registrarPublicationComparison.counts.conflict).toBe(1);
   expect(exported.analysis.registrarPublicationComparison.counts.equivalent).toBe(7);
   expect(exported.sources.network.endpoint.address).toBe('93.184.216.34');
@@ -734,6 +734,26 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(report).not.toContain('stat.ripe.net');
 
   await page.setViewportSize({ width: 360, height: 780 });
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Create case' }).click();
+  const checkpoint = page.locator('.checkpoint');
+  await expect(checkpoint.getByRole('heading', { name: 'Retain selected normalized facts' })).toBeVisible();
+  await checkpoint.getByRole('checkbox', { name: /Registrar/u }).check();
+  await checkpoint.getByRole('checkbox', { name: /Registration statuses/u }).check();
+  await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved 2 analyst-selected checkpoint facts');
+  await checkpoint.getByText(/Compare with latest saved checkpoint/u).click();
+  await expect(checkpoint).toContainText('equal');
+  await checkpoint.getByRole('checkbox', { name: /Plan an acquisition transition/u }).check();
+  await checkpoint.getByRole('checkbox', { name: /Registrar/u }).check();
+  await checkpoint.getByRole('checkbox', { name: /Registration statuses/u }).check();
+  await checkpoint.getByLabel('Transition expectation for Registration statuses').selectOption('change');
+  await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
+  await expect(page.getByRole('status')).toContainText('with a reviewed transition plan');
+  await expect(checkpoint.getByRole('heading', { name: 'Reviewed transition plan' })).toBeVisible();
+  await expect(checkpoint).toContainText('verified preserved');
+  await expect(checkpoint).toContainText('change not observed');
   await expectNoHorizontalOverflow(page);
 });
 
@@ -1309,6 +1329,31 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
             }],
           },
         },
+        pageRoleProfile: {
+          pageRoleProfileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
+          limitations: ['Fixture roles are heuristic review labels.'],
+          diagnostics: { rolesObserved: 2, formsObserved: 2, tagsExamined: 20 },
+          primaryRole: 'authentication',
+          findings: [
+            { role: 'authentication', label: 'Authentication', confidence: 'high', evidence: ['Password-purpose input observed'] },
+            { role: 'support_contact', label: 'Support or contact', confidence: 'low', evidence: ['Static support or contact marker observed'] },
+          ],
+        },
+        clientBehaviorProfile: {
+          clientBehaviorProfileVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
+          limitations: ['Referenced scripts were not fetched or executed.'],
+          diagnostics: { indicatorsObserved: 1, scriptElementsExamined: 2, inlineCharactersExamined: 120 },
+          scriptSummary: { elementsObserved: 2, referencedScripts: 1, inlineScripts: 1, moduleScripts: 1 },
+          indicators: [{
+            id: 'browser_storage',
+            label: 'Browser storage access',
+            evidenceClass: 'inline_script',
+            occurrences: 2,
+            explanation: 'Inline script references a browser-local storage API.',
+          }],
+        },
         securityPosture: {
           postureVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
@@ -1379,6 +1424,15 @@ test('HTTP intelligence presents bounded redirect provenance and response metada
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
   await expect(pageCard.getByText(/normalized markup, and visible text are not retained/i)).toBeVisible();
+
+  const roleBehaviorCard = page.locator('details').filter({ has: page.getByRole('heading', { name: 'Page role and client behaviour' }) });
+  await expect(roleBehaviorCard).not.toHaveAttribute('open', '');
+  await expect(roleBehaviorCard.locator(':scope > summary')).toContainText('Authentication · 1 static behaviour indicator');
+  await roleBehaviorCard.locator(':scope > summary').click();
+  await expect(roleBehaviorCard.getByText('Password-purpose input observed', { exact: true })).toBeVisible();
+  await expect(roleBehaviorCard.getByText('Browser storage access', { exact: true })).toBeVisible();
+  await expect(roleBehaviorCard.getByText('Inline script references a browser-local storage API.', { exact: true })).toBeVisible();
+  await expect(roleBehaviorCard).not.toContainText('private');
 
   const structuredCard = page.locator('.structured-card');
   await expect(structuredCard).not.toHaveAttribute('open', '');
@@ -1655,7 +1709,7 @@ test('IP results use network-specific RDAP labels instead of domain fields', asy
   await reverseDnsCard.locator(':scope > summary').click();
   await expect(reverseDnsCard.getByText('edge.example.test', { exact: true })).toBeVisible();
   await expect(reverseDnsCard.getByText(/does not prove hosting control/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download report' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download report' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
@@ -1688,7 +1742,7 @@ test('ASN results retain allocation status and lifecycle metadata at narrow widt
   await expect(rdapSection.getByText('active', { exact: true })).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2003-04-05T06:07:08.000Z"]')).toBeVisible();
   await expect(rdapSection.locator('time[datetime="2024-05-06T07:08:09.000Z"]')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download report' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download report' })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

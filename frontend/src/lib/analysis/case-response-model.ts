@@ -4,6 +4,7 @@
 // action records a reviewed external or internal follow-up.
 
 export const MAX_CASE_EVIDENCE_PINS = 40;
+export const MAX_CASE_CHECKPOINT_FACTS = 20;
 export const MAX_CASE_DECISIONS = 30;
 export const MAX_CASE_ACTIONS = 50;
 export const MAX_CASE_ASSERTIONS = 50;
@@ -17,9 +18,14 @@ export const MAX_RESPONSE_LIMITATIONS = 8;
 export const MAX_RESPONSE_LIMITATION_LENGTH = 240;
 export const MAX_DECISION_PIN_REFERENCES = 20;
 export const MAX_TRAIL_TARGET_LENGTH = 500;
+export const MAX_ASSERTION_PROVENANCE_LABELS = 20;
+export const MAX_ASSERTION_PROVENANCE_MARKINGS = 12;
 
 export const CASE_PIN_COMPLETENESS = ['complete', 'partial', 'inconclusive', 'unknown'] as const;
 export type CasePinCompleteness = typeof CASE_PIN_COMPLETENESS[number];
+
+export const CASE_TRANSITION_EXPECTATIONS = ['preserve', 'change', 'review'] as const;
+export type CaseTransitionExpectation = typeof CASE_TRANSITION_EXPECTATIONS[number];
 
 export const CASE_ACTION_TYPES = [
   'registrar_report',
@@ -53,16 +59,59 @@ export type CaseAssertionKind = typeof CASE_ASSERTION_KINDS[number];
 export const CASE_ASSERTION_STATES = ['open', 'resolved'] as const;
 export type CaseAssertionState = typeof CASE_ASSERTION_STATES[number];
 
+export const CASE_ASSERTION_EXTERNAL_FORMATS = ['stix', 'misp'] as const;
+export type CaseAssertionExternalFormat = typeof CASE_ASSERTION_EXTERNAL_FORMATS[number];
+
+export const CASE_ASSERTION_EXTERNAL_ENTITY_TYPES = [
+  'asn',
+  'certificate',
+  'domain',
+  'hostname',
+  'ipv4',
+  'ipv6',
+  'url',
+] as const;
+export type CaseAssertionExternalEntityType = typeof CASE_ASSERTION_EXTERNAL_ENTITY_TYPES[number];
+
+export type CaseAssertionExternalProvenance = {
+  origin: 'external_import';
+  format: CaseAssertionExternalFormat;
+  sourceName: string;
+  sourceDigestSha256: string;
+  publisher: string | null;
+  externalId: string | null;
+  entityType: CaseAssertionExternalEntityType;
+  entityValue: string;
+  observedAt: string | null;
+  createdAt: string | null;
+  modifiedAt: string | null;
+  confidence: number | null;
+  labels: string[];
+  markings: string[];
+};
+
 export const CASE_MANUAL_TRAIL_KINDS = ['pivot', 'review', 'handoff'] as const;
 export type CaseManualTrailKind = typeof CASE_MANUAL_TRAIL_KINDS[number];
 
 export type CaseEvidencePin = {
   id: string;
+  checkpointId: string | null;
+  field: string | null;
+  category: string | null;
   label: string;
   value: string;
   source: string;
+  sourceState: string | null;
+  sourceSchema: {
+    collection: string;
+    schema: string;
+    version: number;
+  } | null;
   observedAt: string;
+  collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: CasePinCompleteness;
+  truncated: boolean | null;
+  transitionExpectation: CaseTransitionExpectation | null;
   limitations: string[];
   createdAt: string;
 };
@@ -99,6 +148,7 @@ export type CaseAssertionRecord = {
   state: CaseAssertionState;
   createdAt: string;
   updatedAt: string;
+  provenance?: CaseAssertionExternalProvenance;
 };
 
 export type CaseManualTrailEvent = {
@@ -140,10 +190,13 @@ const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/u;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
 const COMPLETENESS = new Set<string>(CASE_PIN_COMPLETENESS);
+const TRANSITION_EXPECTATIONS = new Set<string>(CASE_TRANSITION_EXPECTATIONS);
 const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
 const ASSERTION_KINDS = new Set<string>(CASE_ASSERTION_KINDS);
 const ASSERTION_STATES = new Set<string>(CASE_ASSERTION_STATES);
+const ASSERTION_EXTERNAL_FORMATS = new Set<string>(CASE_ASSERTION_EXTERNAL_FORMATS);
+const ASSERTION_EXTERNAL_ENTITY_TYPES = new Set<string>(CASE_ASSERTION_EXTERNAL_ENTITY_TYPES);
 const TRAIL_KINDS = new Set<string>(CASE_MANUAL_TRAIL_KINDS);
 
 function record(value: unknown): Record<string, unknown> {
@@ -206,6 +259,19 @@ function limitations(value: unknown): string[] {
   return [...unique];
 }
 
+function sourceSchema(value: unknown): CaseEvidencePin['sourceSchema'] {
+  const item = record(value);
+  const collection = text(item.collection, 80);
+  const schema = text(item.schema, 120);
+  const version = typeof item.version === 'number'
+    && Number.isSafeInteger(item.version)
+    && item.version > 0
+    && item.version <= 10_000
+    ? item.version
+    : null;
+  return collection && schema && version !== null ? { collection, schema, version } : null;
+}
+
 function uniqueIds(value: unknown, validIds?: ReadonlySet<string>): string[] {
   if (!Array.isArray(value)) return [];
   const unique = new Set<string>();
@@ -225,13 +291,28 @@ function normalizePin(raw: unknown, fallback: string): CaseEvidencePin | null {
   const createdAt = iso(item.createdAt, fallback);
   return {
     id: safeId(item.id, 'pin', { label, value, createdAt }),
+    checkpointId: typeof item.checkpointId === 'string' && SAFE_ID_RE.test(item.checkpointId)
+      ? item.checkpointId
+      : null,
+    field: text(item.field, 120) || null,
+    category: text(item.category, 80) || null,
     label,
     value,
     source: text(item.source, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_selected',
+    sourceState: text(item.sourceState, 40) || null,
+    sourceSchema: sourceSchema(item.sourceSchema),
     observedAt: iso(item.observedAt, createdAt),
+    collectionDepth: item.collectionDepth === 'deep' || item.collectionDepth === 'fast'
+      ? item.collectionDepth
+      : 'unknown',
     completeness: typeof item.completeness === 'string' && COMPLETENESS.has(item.completeness)
       ? item.completeness as CasePinCompleteness
       : 'unknown',
+    truncated: typeof item.truncated === 'boolean' ? item.truncated : null,
+    transitionExpectation: typeof item.transitionExpectation === 'string'
+      && TRANSITION_EXPECTATIONS.has(item.transitionExpectation)
+      ? item.transitionExpectation as CaseTransitionExpectation
+      : null,
     limitations: limitations(item.limitations),
     createdAt,
   };
@@ -258,6 +339,22 @@ export function appendCaseEvidencePin(
   const created = normalizePin({ ...item, id: freshId('pin'), createdAt: now }, now);
   if (!created) throw new Error('An evidence pin requires a label and value.');
   return normalizeCaseEvidencePins([...current, created], now);
+}
+
+export function appendCaseEvidencePins(
+  current: readonly CaseEvidencePin[],
+  raw: unknown,
+  now: string,
+): CaseEvidencePin[] {
+  if (!Array.isArray(raw) || !raw.length) throw new Error('An evidence checkpoint requires at least one selected fact.');
+  let output = [...current];
+  let added = 0;
+  for (const item of raw.slice(0, MAX_CASE_CHECKPOINT_FACTS)) {
+    output = appendCaseEvidencePin(output, item, now);
+    added += 1;
+  }
+  if (!added) throw new Error('An evidence checkpoint requires at least one valid selected fact.');
+  return output;
 }
 
 function normalizeDecision(
@@ -432,6 +529,58 @@ export function mergeCaseActions(
   return normalizeCaseActions([...local, ...imported], fallback);
 }
 
+function assertionProvenanceList(value: unknown, maximum: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const output = new Set<string>();
+  for (const item of value.slice(0, maximum * 2)) {
+    const normalized = text(item, MAX_RESPONSE_LIMITATION_LENGTH);
+    if (normalized) output.add(normalized);
+    if (output.size >= maximum) break;
+  }
+  return [...output];
+}
+
+function normalizeAssertionProvenance(value: unknown): CaseAssertionExternalProvenance | null {
+  const item = record(value);
+  const sourceName = text(item.sourceName, 120);
+  const sourceDigestSha256 = text(item.sourceDigestSha256, 64).toLowerCase();
+  const entityValue = text(item.entityValue, MAX_RESPONSE_VALUE_LENGTH);
+  if (
+    item.origin !== 'external_import'
+    || typeof item.format !== 'string'
+    || !ASSERTION_EXTERNAL_FORMATS.has(item.format)
+    || typeof item.entityType !== 'string'
+    || !ASSERTION_EXTERNAL_ENTITY_TYPES.has(item.entityType)
+    || !sourceName
+    || !/^[0-9a-f]{64}$/u.test(sourceDigestSha256)
+    || !entityValue
+  ) {
+    return null;
+  }
+  const confidence = typeof item.confidence === 'number'
+    && Number.isInteger(item.confidence)
+    && item.confidence >= 0
+    && item.confidence <= 100
+    ? item.confidence
+    : null;
+  return {
+    origin: 'external_import',
+    format: item.format as CaseAssertionExternalFormat,
+    sourceName,
+    sourceDigestSha256,
+    publisher: text(item.publisher, 160) || null,
+    externalId: text(item.externalId, 200) || null,
+    entityType: item.entityType as CaseAssertionExternalEntityType,
+    entityValue,
+    observedAt: optionalIso(item.observedAt),
+    createdAt: optionalIso(item.createdAt),
+    modifiedAt: optionalIso(item.modifiedAt),
+    confidence,
+    labels: assertionProvenanceList(item.labels, MAX_ASSERTION_PROVENANCE_LABELS),
+    markings: assertionProvenanceList(item.markings, MAX_ASSERTION_PROVENANCE_MARKINGS),
+  };
+}
+
 function normalizeAssertion(
   raw: unknown,
   fallback: string,
@@ -441,6 +590,7 @@ function normalizeAssertion(
   const statement = text(item.statement, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!statement) return null;
   const createdAt = iso(item.createdAt, fallback);
+  const provenance = normalizeAssertionProvenance(item.provenance);
   return {
     id: safeId(item.id, 'assertion', { statement, createdAt }),
     kind: typeof item.kind === 'string' && ASSERTION_KINDS.has(item.kind)
@@ -454,6 +604,7 @@ function normalizeAssertion(
       : 'open',
     createdAt,
     updatedAt: iso(item.updatedAt, createdAt),
+    ...(provenance ? { provenance } : {}),
   };
 }
 

@@ -16,6 +16,7 @@
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
+  import AnalystUndo from '$lib/components/AnalystUndo.svelte';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
   import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
   import {
@@ -254,6 +255,7 @@
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
     <main id="main-content" tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if InvestigationGuideView}<InvestigationGuideView revealOnMount={revealInvestigationGuideOnMount} />{/if}{@render children()}<SiteFooter console /></main>
+    <div inert={navOpen||commandOpen}><AnalystUndo /></div>
     {#if commandOpen}<CommandPalette commands={consoleCommands} onclose={closeCommandPalette} />{/if}
   </div>
 {/if}

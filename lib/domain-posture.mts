@@ -58,6 +58,7 @@ type RegistryPostureEvidence = {
   statuses: string[];
   nameservers: string[];
   dsRecordCount: number;
+  dsDataTruncated?: boolean;
   error: string | null;
 };
 type CheckStatus = 'pass' | 'warning' | 'danger' | 'info';
@@ -333,6 +334,55 @@ function dnssecCheck(input: DnssecQuery): PostureCheck {
   }
   return check('dnssec', 'DNSSEC', 'info', 'Delegation status is unavailable', {
     detail: 'The registry record did not expose a conclusive DNSSEC delegation state.',
+  });
+}
+
+function dnssecDelegationConsistencyCheck(
+  input: DnssecQuery,
+  registry: RegistryPostureEvidence,
+): PostureCheck {
+  if (registry.error) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'Registry evidence is unavailable', {
+      detail: 'DNSSEC delegation and retained DS records could not be compared because normalized registry evidence was unavailable.',
+    });
+  }
+  if (input.error) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'DNSSEC state is unavailable', {
+      detail: 'The registry DNSSEC state and retained DS record count could not be compared.',
+    });
+  }
+
+  const value = String(input.value || '').toLowerCase();
+  const hasDsRecords = registry.dsRecordCount > 0;
+  if (value === 'signed' && hasDsRecords) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'pass', 'Signed state and retained DS records agree', {
+      detail: `${registry.dsRecordCount} registry DS record${registry.dsRecordCount === 1 ? '' : 's'} retained.`,
+    });
+  }
+  if (value === 'unsigned' && !hasDsRecords) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'pass', 'Unsigned state and no retained DS records agree', {
+      detail: 'This is a consistency result, not a recommendation to leave DNSSEC disabled.',
+    });
+  }
+  if (registry.dsDataTruncated) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'Retained DS evidence is incomplete', {
+      detail: 'The normalized registry response reported truncated DS data, so apparent disagreement is inconclusive.',
+    });
+  }
+  if (value === 'signed' && !hasDsRecords) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'warning', 'Signed state reported without retained DS records', {
+      detail: 'This can reflect registry publication differences or incomplete upstream data and should be reviewed before changing delegation.',
+      remediation: 'Confirm the intended DS publication with the registrar, registry, and authoritative DNS provider.',
+    });
+  }
+  if (value === 'unsigned' && hasDsRecords) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'warning', 'Retained DS records conflict with the unsigned state', {
+      detail: `${registry.dsRecordCount} registry DS record${registry.dsRecordCount === 1 ? '' : 's'} retained. The difference can be transient or source-limited.`,
+      remediation: 'Confirm the live delegation and DS publication before changing DNSSEC configuration.',
+    });
+  }
+  return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'DNSSEC consistency is inconclusive', {
+    detail: `${registry.dsRecordCount} registry DS record${registry.dsRecordCount === 1 ? '' : 's'} retained, but the registry DNSSEC state was not conclusive.`,
   });
 }
 
@@ -633,6 +683,7 @@ function buildPostureReport(domain: string, input: PostureInput) {
     dmarcCheck(input.dmarc, input.dmarcAuthorizations),
     mxCheck(input.mx),
     dnssecCheck(input.dnssec),
+    ...(input.registry ? [dnssecDelegationConsistencyCheck(input.dnssec, input.registry)] : []),
     caaCheck(input.caa),
     mtaStsCheck(input.mtaStsDns, input.mtaStsPolicy, input.mx),
     tlsRptCheck(input.tlsRpt, input.mx),
@@ -752,12 +803,14 @@ async function checkDomainPosture(
         statuses: parsedDomain.statuses,
         nameservers: parsedDomain.nameservers,
         dsRecordCount: parsedDomain.dsData.length,
+        dsDataTruncated: parsedDomain.dsDataTruncated,
         error: null,
       }
     : {
         statuses: [],
         nameservers: [],
         dsRecordCount: 0,
+        dsDataTruncated: false,
         error: rdap && 'error' in rdap ? rdap.error : 'RDAP did not return normalized domain evidence.',
       };
   const externalDependencies: ExternalDependency[] = buildExternalDependencies({

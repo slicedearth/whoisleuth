@@ -229,6 +229,8 @@ describe('website activity classification', () => {
     const forms = recordValue(pageIdentity.forms);
     const technologyProfile = recordValue(availability.technologyProfile);
     const technologyFindings = arrayValue(technologyProfile.findings).map(recordValue);
+    const pageRoleProfile = recordValue(availability.pageRoleProfile);
+    const clientBehaviorProfile = recordValue(availability.clientBehaviorProfile);
     const securityPosture = recordValue(availability.securityPosture);
     const securityFindings = arrayValue(securityPosture.findings).map(recordValue);
     assert.equal(homepageCalls, 1);
@@ -244,6 +246,11 @@ describe('website activity classification', () => {
     assert.equal(technologyProfile.status, 'partial');
     assert.deepEqual(technologyFindings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
     assert.doesNotMatch(JSON.stringify(technologyProfile), /token=|key=|secret|submit|0\.1/);
+    assert.equal(pageRoleProfile.source, 'derived');
+    assert.equal(pageRoleProfile.status, 'partial');
+    assert.equal(clientBehaviorProfile.source, 'derived');
+    assert.equal(clientBehaviorProfile.status, 'partial');
+    assert.doesNotMatch(JSON.stringify({ pageRoleProfile, clientBehaviorProfile }), /token=|key=|secret|submit/);
     assert.equal(securityPosture.postureVersion, 2);
     assert.equal(securityPosture.source, 'derived');
     assert.equal(securityPosture.status, 'partial');

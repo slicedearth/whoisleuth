@@ -160,7 +160,13 @@ default (see the README), so many lookups return no personal data at all.
   tokens. Monitor can derive a capped relationship graph and table from the
   typed projection of bounded final-origin and nameserver-set observations
   already retained in browser-local case histories. That automatic projection
-  makes no request and saves no separate relationship record. A deliberate
+  makes no request and saves no separate relationship record. A bounded
+  connected-cluster view can be labelled, split, merged, or dismissed in the
+  current browser view without changing any case or source observation. Its
+  deliberate JSON export contains the reviewed cluster projection, exact
+  contributing relationship values, case domains, provenance, completeness,
+  and limitations, but excludes case notes, contacts, raw upstream responses,
+  credentials, and unrelated case fields. A deliberate
   local graph download can
   include the filtered case domains, exact retained relationship values,
   method, classification, source, observation time, completeness, truncation,
@@ -355,6 +361,21 @@ default (see the README), so many lookups return no personal data at all.
   copied into compact browser-local cases, watchlists, profiles, or Bulk
   results. An unmatched signature is not evidence that a technology or
   browser library is absent.
+- **Page role and client-side behaviour**: a requested deep Lookup can derive
+  fixed, explainable page-role labels and client-side behaviour indicators from
+  the same capped static HTML tokenizer pass. Role evidence uses only fixed
+  descriptions derived from semantic form declarations, selected static
+  markers, the bounded page title, and existing parked-page classification.
+  Behaviour evidence uses only fixed indicators and bounded counts for inline
+  handlers and selected browser APIs in retained inline-script prefixes.
+  Referenced scripts are not fetched, code is not executed, and no script
+  contents, references, paths, queries, hashes, page text, arbitrary
+  attributes, or matched source fragments are retained. These heuristic
+  profiles do not establish purpose, legitimacy, tracking, credential theft,
+  vulnerability, reachability, execution, ownership, intent, safety, or
+  maliciousness. They are excluded from compact Bulk results and ordinary
+  browser-local case, watchlist, and profile records, but can appear in a
+  deliberate full Lookup evidence export.
 - **Passive security posture**: a requested deep Lookup can interpret the
   existing HTTP response, bounded static form and resource summaries, one TLS
   handshake, DNSSEC publication, and CAA query as a separate versioned posture
@@ -396,6 +417,15 @@ default (see the README), so many lookups return no personal data at all.
   registrant and abuse contacts, and Certificate Transparency rows. Saving and
   loading make no network request; an explicit resume sends only domains that
   had no settled row through the selected Bulk mode.
+  Compact Deep rows and saved Bulk sessions can retain one nullable null-MX
+  observation alongside the existing MX, SPF, and DMARC booleans. The local
+  lookalike mail-exposure review uses those bounded fields, source coverage,
+  mutation provenance, registration state, and the active Brand Profile's
+  configured mail posture. It makes no additional request and never connects
+  to SMTP, sends a message, tests a mailbox or catch-all behavior, or retains
+  message data. Its optional JSON export is generated locally, includes an
+  integrity digest and stated limitations, and excludes raw DNS responses,
+  contacts, scripts, and provider payloads.
   Website profile snapshots are retained only after an analyst explicitly
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,
@@ -485,12 +515,14 @@ default (see the README), so many lookups return no personal data at all.
   stated interpretation limits; they do not include case evidence or notes.
   Single-lookup
   evidence JSON includes the raw RDAP and WHOIS responses, so it may contain
-  registry-published contact data. The separate single-domain Markdown report
-  is generated from a bounded known-field projection in the browser. It
-  includes registry, registrar, and WHOIS source states, collection time,
-  normalized findings, Risk
-  explanation, and limitations while excluding raw RDAP and WHOIS responses,
-  expanded contacts, provider payloads, scripts, and remote assets. A
+  registry-published contact data. The separate Lookup Markdown reports are
+  generated from bounded known-field projections in the browser. Domain
+  reports include registry, registrar, WHOIS, Risk, and limitation context; IP
+  reports include normalized network registration and bounded reverse-DNS
+  context when collected; ASN reports include normalized routing registration
+  evidence. All preserve source states and collection time while excluding raw
+  RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
+  remote assets. A
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
   detection rules, retained relationship observations, compact saved Bulk
@@ -512,10 +544,34 @@ default (see the README), so many lookups return no personal data at all.
   passphrase. Nothing is uploaded or retained by the server when you export or
   import. From that point on, the file is yours to manage, so store it
   appropriately and delete it once you no longer need it.
+- **In-tab undo**: the Console's 12-second undo notice is held only in the
+  current tab's runtime memory. It can restore a prior Bulk review state,
+  shortlist membership, case-tag set, or temporary evidence-cluster label by
+  using the same browser-local write path as the original edit. The pending
+  action is not serialized, exported, uploaded, or retained after reload. It
+  cannot replay collection or reverse imports, exports, confirmed deletions,
+  case disposition changes, or source evidence.
+- **Retained-evidence timeline**: Monitor can project bounded metadata from
+  deliberately retained case snapshots, evidence pins and checkpoint facts,
+  website-profile snapshots, watchlist checks, and relationship observations.
+  The projection stays in browser memory, links to the owning browser-local
+  record, and keeps observation time separate from storage time. It does not
+  duplicate raw payloads, pin values, relationship values, analyst notes, or
+  page content, and does not start collection.
+- **External intelligence import**: a selected local STIX 2.1 or MISP JSON file
+  is decoded, hashed with SHA-256, normalized, previewed, and merged entirely in
+  the browser. Only the bounded supported entity claim and provenance metadata
+  are retained on an explicitly selected existing case. Unsupported attribute
+  values, raw files, descriptions, MISP comments, and provider payloads are not
+  stored. The importer makes no network request, does not create a case, and
+  does not start collection, scoring, publication, correlation, or reporting.
 - **Reviewed response and defensive-control exports**: a case response packet
   is built locally from analyst-entered incident facts, exact HTTP(S) URLs,
   UTC observation time, and separately attributed registrar, registry,
-  network/hosting, or security.txt contacts. Its local preflight blocks export
+  network/hosting, or security.txt contacts. The analyst selects a bounded
+  registrar, registry, network/hosting, security-contact, browser/blocklist, or
+  internal-SOC profile that states included and excluded evidence, expected
+  redactions and attachments, and follow-up fields. Its local preflight blocks export
   when required incident facts are incomplete and identifies review cautions
   for missing pins, decisions, recipient routes, disposition, stale evidence,
   contradictions, or action tracking. JSON, Markdown, and email-text outputs
@@ -527,6 +583,20 @@ default (see the README), so many lookups return no personal data at all.
   and create paired rollback instructions. Wildcard RPZ entries require a
   separate opt-in. WHOISleuth does not send either export or modify a defensive
   system.
+- **Field-level case checkpoints and readable reports**: an analyst can
+  deliberately save up to 20 normalized facts from a completed domain Lookup
+  into an open browser-local case. A fact retains its source, observation time,
+  collection depth, source state, completeness, truncation, schema version, and
+  limitations. Raw registration payloads, expanded contacts, HTML, scripts,
+  provider payloads, and unselected fields are not copied by this action. A
+  later Lookup compares the same fields while keeping changed, missing,
+  unavailable, conflicting, and not-recorded states distinct. Domain, IP, and
+  ASN readable Markdown reports are generated locally from bounded known fields
+  and keep partial source states explicit. A checkpoint can additionally retain
+  one analyst-declared transition expectation per selected fact: preserve,
+  change, or manual review. Post-transition comparison remains local and treats
+  unavailable, conflicting, missing, or uncollected evidence as indeterminate.
+  It does not establish ownership, acquisition completion, or service health.
 - **Official-domain posture audits**: handled per request and discarded. The
   server queries public DNS, the domain registry's RDAP service for status,
   nameserver, DS, and DNSSEC delegation evidence, and (only when advertised)

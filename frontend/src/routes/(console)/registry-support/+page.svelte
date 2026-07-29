@@ -12,8 +12,16 @@
     registrySupportLabel,
     sortRegistrySupportRows,
   } from '$lib/analysis/registry-support.ts';
+  import {
+    lookupCapabilityRows,
+    lookupCapabilityStateLabel,
+    LOOKUP_CAPABILITY_MATRIX_VERSION,
+    type LookupCapabilityState,
+    type LookupCapabilityTarget,
+  } from '$lib/analysis/lookup-capability-matrix.ts';
 
   const PAGE_SIZE = 50;
+  type CapabilityTargetFilter = 'all' | LookupCapabilityTarget;
   const catalogue = registrySupportCatalogue();
   const standards = catalogue.standardsCoverage;
   let query = $state('');
@@ -25,6 +33,7 @@
   let inspectedValue = $state('');
   let inspectionActive = $state(false);
   let hydrated = $state(false);
+  let capabilityTarget = $state<CapabilityTargetFilter>('all');
   const filteredRows = $derived(filterRegistrySupportRows(catalogue.rows, query, coverage));
   const sortedRows = $derived(sortRegistrySupportRows(filteredRows, sortKey, sortDirection));
   const pageCount = $derived(Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE)));
@@ -33,6 +42,7 @@
   const firstVisibleRow = $derived(sortedRows.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0);
   const lastVisibleRow = $derived((currentPage - 1) * PAGE_SIZE + visibleRows.length);
   const inspection = $derived(inspectRegistrySupport(inspectedValue));
+  const capabilityRows = $derived(lookupCapabilityRows(capabilityTarget));
 
   onMount(() => {
     hydrated = true;
@@ -52,6 +62,10 @@
     inspectionInput = '';
     inspectedValue = '';
     inspectionActive = false;
+  }
+
+  function capabilityStateClass(state: LookupCapabilityState): string {
+    return state.replace('_', '-');
   }
 </script>
 
@@ -108,6 +122,49 @@
     </div>
     <p>{standards.interpretation}</p>
   </div>
+</section>
+
+<section class="capability-section" aria-labelledby="capability-title">
+  <header class="section-intro capability-intro">
+    <div>
+      <p class="eyebrow">Lookup contract</p>
+      <h2 id="capability-title">Field-level collection matrix</h2>
+      <p>Compare what Fast, Bulk Deep, and single-domain Deep lookups collect. Conditional means the field depends on target type, source publication, source health, or an explicit operator choice.</p>
+    </div>
+    <span class="version">Matrix v{LOOKUP_CAPABILITY_MATRIX_VERSION}</span>
+  </header>
+
+  <fieldset class="capability-filter card">
+    <legend>Filter by target type</legend>
+    {#each [
+      { id: 'all', label: 'All' },
+      { id: 'domain', label: 'Domain' },
+      { id: 'ip', label: 'IP address' },
+      { id: 'asn', label: 'ASN' },
+    ] as option}
+      <label><input type="radio" name="capability-target" value={option.id} checked={capabilityTarget === option.id} onchange={() => capabilityTarget = option.id as CapabilityTargetFilter}>{option.label}</label>
+    {/each}
+  </fieldset>
+
+  <div class="capability-table-wrap">
+    <table class="capability-table">
+      <caption>Lookup field collection by target and scan profile</caption>
+      <thead><tr><th>Field</th><th>Source</th><th>Fast</th><th>Bulk Deep</th><th>Single Deep</th><th>Limitation</th></tr></thead>
+      <tbody>
+        {#each capabilityRows as row}
+          <tr>
+            <td data-label="Field"><strong>{row.field}</strong><small>{row.targets.map((target) => target.toUpperCase()).join(' · ')}</small></td>
+            <td data-label="Source">{row.source}</td>
+            <td data-label="Fast"><span class="capability-state {capabilityStateClass(row.fast)}">{lookupCapabilityStateLabel(row.fast)}</span></td>
+            <td data-label="Bulk Deep"><span class="capability-state {capabilityStateClass(row.bulkDeep)}">{lookupCapabilityStateLabel(row.bulkDeep)}</span></td>
+            <td data-label="Single Deep"><span class="capability-state {capabilityStateClass(row.singleDeep)}">{lookupCapabilityStateLabel(row.singleDeep)}</span></td>
+            <td data-label="Limitation">{row.limitation}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+  <p class="matrix-note">This matrix describes the current application contract. It does not promise that a registry, registrar, DNS resolver, host, or optional provider will return a value.</p>
 </section>
 
 <section class="inspector-section" aria-labelledby="inspector-title">
@@ -256,6 +313,7 @@
   .summary-grid strong{grid-row:1 / span 2;grid-column:2;color:var(--accent2);font:750 1.55rem var(--mono)}
   .summary-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
   .standards-section{margin-top:34px}.standards-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.standards-grid article{display:grid;gap:6px;padding:16px}.standards-grid span{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.standards-grid strong{color:var(--accent2);font:750 1.2rem var(--mono);overflow-wrap:anywhere}.standards-grid p{margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}.standards-notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:8px;padding:16px}.standards-notes h3{margin:0 0 6px;font:700 var(--text-sm) var(--mono)}.standards-notes p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.standards-notes code{color:var(--accent)}
+  .capability-section{margin-top:34px}.capability-intro{display:flex;max-width:none;gap:16px;align-items:end;justify-content:space-between}.capability-intro>div{max-width:840px}.capability-filter{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 10px;padding:12px 15px}.capability-filter legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.capability-filter label{display:flex;gap:7px;align-items:center;font-size:var(--text-xs)}.capability-filter input{margin:0}.capability-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.capability-table{min-width:1040px}.capability-table td{min-width:120px;max-width:290px;line-height:1.45}.capability-table td:first-child{min-width:190px}.capability-table td:last-child{min-width:260px;color:var(--muted)}.capability-table td>strong{font-size:var(--text-xs)}.capability-table td>small{color:var(--muted);font:600 var(--text-2xs) var(--mono)}.capability-state{display:inline-block!important;width:max-content;max-width:100%;margin:0!important;border:1px solid var(--border);border-radius:999px;padding:4px 7px;color:var(--muted)!important;font:700 var(--text-2xs) var(--mono);white-space:nowrap}.capability-state.collected{border-color:color-mix(in srgb,var(--accent2) 42%,var(--border));color:var(--accent2)!important}.capability-state.conditional{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)!important}.capability-state.not-collected,.capability-state.not-applicable{color:var(--muted)!important}.matrix-note{margin:9px 2px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .catalogue-section{margin-top:34px}
   .inspector-section{margin-top:34px}
   .section-intro{max-width:840px;margin-bottom:14px}.section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}.section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
@@ -274,6 +332,6 @@
   .profile-detail dl{display:grid;gap:7px;margin:0}.profile-detail dl>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px}.profile-detail dt{color:var(--muted);font:600 var(--text-2xs) var(--mono)}.profile-detail dd{min-width:0;margin:0;overflow-wrap:anywhere}.profile-detail h3{margin:0 0 5px;font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.profile-detail ul{display:grid;gap:4px;margin:0;padding-left:18px}.profile-detail a{color:var(--accent);overflow-wrap:anywhere}.reference{display:block;max-width:100%;color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}.limitation{margin:0;color:var(--muted);line-height:1.5}.limitation strong{color:var(--text)}
   .interpretation{display:grid;grid-template-columns:minmax(190px,.7fr) minmax(0,1.3fr);gap:14px 28px;margin-top:24px;padding:18px}.interpretation h2{margin:3px 0 0;font:700 var(--text-md) var(--mono)}.interpretation p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation p:last-child{grid-column:2}.interpretation code{color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-  @media(max-width:900px){.summary-grid,.standards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.standards-notes{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}.table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}.interpretation{grid-template-columns:1fr}.interpretation p:last-child{grid-column:1}}
-  @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
+  @media(max-width:900px){.summary-grid,.standards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.standards-notes{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}.table-wrap,.capability-table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}.capability-table{min-width:0}.capability-table td{max-width:none}.capability-table td:first-child,.capability-table td:last-child{min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}.interpretation{grid-template-columns:1fr}.interpretation p:last-child{grid-column:1}}
+  @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.capability-intro{align-items:start;flex-direction:column}.capability-filter{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
 </style>

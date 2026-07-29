@@ -1,9 +1,16 @@
-# External findings import
+# External findings and intelligence import
 
 The Cases view can import a deliberately small JSON document containing findings
 collected outside WHOISleuth. The import is local-only and inert: WHOISleuth
 validates and previews the complete document before it can add evidence pins to
 browser-local cases.
+
+The same control accepts bounded STIX 2.1 bundles and MISP event JSON. These
+formats follow a stricter merge path: supported claims can be added only to an
+existing case selected by the analyst. They become separately labelled case
+assertions rather than collected evidence, and the importer never creates a
+case, starts a lookup, enriches an entity, changes a score, publishes an event,
+or enables MISP correlation or IDS use.
 
 An imported finding is not treated as a WHOISleuth observation. Its source,
 observation time, completeness, and limitations remain attached to a separately
@@ -79,3 +86,36 @@ Imported summaries, references, and limitations become browser-local case data.
 They are therefore included in deliberate case or workspace exports. Avoid
 including raw provider payloads, expanded registration contacts, credentials,
 tokens, or unnecessary URL paths and query strings.
+
+## STIX 2.1 and MISP preview
+
+The local file is limited to 512 KiB, 500 STIX objects or MISP attributes, a
+maximum nesting depth of 12, and 8,000 traversed JSON nodes. At most 100
+normalized claims are retained in a preview. The preview reports accepted
+claims, exact duplicates, conflicting external identifiers, unsupported or
+malformed exclusions, and whether a bound truncated the result before an
+analyst can select an existing case and merge.
+
+The supported entity subset is:
+
+- STIX `domain-name`, `url`, `ipv4-addr`, `ipv6-addr`,
+  `autonomous-system`, and `x509-certificate` objects;
+- simple exact-match STIX Indicators for those same entity types;
+- MISP `domain`, `hostname`, `url`, `ip-src`, `ip-dst`, `AS`, and
+  `x509-fingerprint-sha256` attributes.
+
+Complex STIX patterns, unsupported object and attribute types, deleted MISP
+attributes, malformed entity values, and STIX objects outside version 2.1 are
+not reinterpreted. Unsupported values are not copied into the exclusions list.
+
+For every merged assertion, WHOISleuth stores the normalized entity, source-file
+SHA-256 digest, format, source name, publisher when declared, external
+identifier, external timestamps, confidence when declared, labels, and
+markings. The source digest identifies the exact local file used for the
+review; it is not a signature or proof that the publisher created the file.
+Repeated merges from the same normalized source claim are idempotent.
+
+Imported claims use the `unknown` assertion class because the file is an
+external assertion, not a WHOISleuth observation or an analyst-verified fact.
+Open the owning case to review provenance and decide whether later independent
+collection supports, contradicts, or leaves the claim unresolved.

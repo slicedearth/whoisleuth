@@ -506,7 +506,7 @@ test.describe('CT provenance badge in Bulk results', () => {
     await page.getByRole('button', { name: /^Scan 2 domains$/ }).click();
     await expect(page.locator('.status')).toHaveText('Completed 2 of 2 lookups.', { timeout: 20_000 });
 
-    const exampleRow = page.locator('tbody tr', { hasText: 'example.invalid' }).first();
+    const exampleRow = page.locator('.results-table tbody tr', { hasText: 'example.invalid' }).first();
     const ctDetails = exampleRow.locator('details.ct-source');
     await expect(ctDetails.locator('summary')).toHaveText('Certificate Transparency');
     await ctDetails.locator('summary').click();

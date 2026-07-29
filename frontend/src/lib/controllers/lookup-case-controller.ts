@@ -6,6 +6,11 @@ import {
   type CaseRecord,
 } from '../cases.ts';
 import type { ResolvedAbuseRecipient } from '../analysis/abuse-recipient-resolver.ts';
+import {
+  checkpointPinInputs,
+  type CheckpointFact,
+} from '../analysis/case-evidence-checkpoint.ts';
+import type { CaseTransitionExpectation } from '../analysis/case-response-model.ts';
 
 type CaseEvidenceInput = Record<string, unknown>;
 
@@ -155,6 +160,41 @@ export class LookupCaseController {
           cause instanceof Error
             ? cause.message
             : 'Could not record the response route.',
+      };
+    }
+  }
+
+  async recordCheckpoint(
+    record: CaseRecord | null,
+    facts: readonly CheckpointFact[],
+    selectedFields: readonly string[],
+    transitionExpectations: Readonly<Record<string, CaseTransitionExpectation>> = {},
+  ): Promise<LookupCaseActionResult> {
+    if (!record) {
+      return {
+        record: null,
+        status: 'Create or open the analyst case before saving an evidence checkpoint.',
+      };
+    }
+    const evidencePins = checkpointPinInputs(facts, selectedFields, { transitionExpectations });
+    if (!evidencePins.length) {
+      return {
+        record,
+        status: 'Select at least one currently observed fact before saving a checkpoint.',
+      };
+    }
+    try {
+      const updated = await this.#api.edit(record.id, { evidencePins });
+      return {
+        record: updated.record,
+        status: `Saved ${evidencePins.length} analyst-selected checkpoint fact${evidencePins.length === 1 ? '' : 's'}${evidencePins.some((pin) => pin.transitionExpectation) ? ' with a reviewed transition plan' : ''}.${pruneSuffix(updated.pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record,
+        status: cause instanceof Error
+          ? cause.message
+          : 'Could not save the evidence checkpoint.',
       };
     }
   }

@@ -36,6 +36,7 @@ export interface SavedScanRecord extends WatchlistComparableRecord {
   expiryDate?: string | null;
   privacyProtected?: boolean | null;
   hasMx?: boolean | null;
+  hasNullMx?: boolean | null;
   hasSpf?: boolean | null;
   hasDmarc?: boolean | null;
   activityStatus?: string | null;
@@ -207,6 +208,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     expiryDate: row.saved.expiryDate ?? null,
     nameservers: row.nameservers,
     hasMx: row.saved.hasMx ?? null,
+    hasNullMx: row.saved.hasNullMx ?? null,
     hasSpf: row.saved.hasSpf ?? null,
     hasDmarc: row.saved.hasDmarc ?? null,
     activityStatus: row.saved.activityStatus ?? null,
@@ -240,6 +242,7 @@ export function fromBulkSessionResult(
     createdDate: row.createdDate,
     expiryDate: row.expiryDate,
     hasMx: row.hasMx,
+    hasNullMx: row.hasNullMx,
     hasSpf: row.hasSpf,
     hasDmarc: row.hasDmarc,
     activityStatus: row.activityStatus,

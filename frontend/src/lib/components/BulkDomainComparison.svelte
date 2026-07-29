@@ -21,6 +21,15 @@
         <p class="eyebrow">Settled evidence</p>
         <h2 id="domain-comparison-title">Two-domain comparison</h2>
         <p>{comparison.leftDomain} and {comparison.rightDomain} are compared field by field. Missing evidence remains different from an observed difference.</p>
+        <p class="freshness" data-state={comparison.freshness.state}>
+          Evidence freshness: <strong>{comparison.freshness.state}</strong>
+          {#if comparison.observedAt}
+            · observed <time datetime={comparison.observedAt}>{comparison.observedAt.slice(0, 10)}</time>
+            {#if comparison.freshness.ageDays !== null} · {comparison.freshness.ageDays} day{comparison.freshness.ageDays === 1 ? '' : 's'} ago{/if}
+          {:else}
+            · no reliable observation time recorded
+          {/if}
+        </p>
       </div>
       <button class="btn" type="button" onclick={exportComparison}>Export comparison</button>
     </header>
@@ -28,6 +37,8 @@
       <span><strong>{comparison.counts.equal}</strong> equal</span>
       <span><strong>{comparison.counts.different}</strong> different</span>
       <span><strong>{comparison.counts.missing}</strong> one-sided</span>
+      <span><strong>{comparison.counts.conflicting}</strong> conflicting</span>
+      <span><strong>{comparison.counts.not_recorded}</strong> not recorded</span>
       <span><strong>{comparison.counts.unavailable}</strong> unavailable</span>
     </div>
     <div class="table-wrap">
@@ -37,10 +48,18 @@
           {#each comparison.rows as row (row.id)}
             <tr class:different={row.state === 'different'}>
               <th scope="row"><span>{category(row.category)}</span><strong>{row.label}</strong><small>{row.method}</small></th>
-              <td data-label={comparison.leftDomain}>{row.left}</td>
-              <td data-label={comparison.rightDomain}>{row.right}</td>
+              <td data-label={comparison.leftDomain}>
+                {row.left}
+                <small>{row.source} · {row.leftSourceState.replaceAll('_', ' ')}</small>
+                {#if row.leftEvidenceHref}<a class="evidence-link" href={row.leftEvidenceHref}>View settled row</a>{/if}
+              </td>
+              <td data-label={comparison.rightDomain}>
+                {row.right}
+                <small>{row.source} · {row.rightSourceState.replaceAll('_', ' ')}</small>
+                {#if row.rightEvidenceHref}<a class="evidence-link" href={row.rightEvidenceHref}>View settled row</a>{/if}
+              </td>
               <td data-label="Assessment">
-                <span class={`chip state-${row.state}`}>{row.state}</span>
+                <span class={`chip state-${row.state}`}>{row.state.replaceAll('_', ' ')}</span>
                 {#each row.limitations as limitation}<small>{limitation}</small>{/each}
               </td>
             </tr>
@@ -57,6 +76,8 @@
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   h2,p{margin:0}h2{margin-top:4px;font:700 var(--text-lg) var(--mono)}
   header p:not(.eyebrow){max-width:760px;margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  header .freshness{font-size:var(--text-2xs);font-family:var(--mono)}
+  .freshness strong{color:var(--accent);text-transform:capitalize}.freshness[data-state="stale"] strong{color:var(--amber)}
   .comparison-summary{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0}
   .comparison-summary span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:var(--text-2xs) var(--mono)}
   .comparison-summary strong{color:var(--accent);font-size:var(--text-sm)}
@@ -69,7 +90,9 @@
   .chip{display:inline-block;text-transform:capitalize}
   .state-equal{color:var(--accent)}
   .state-different{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
-  .state-missing,.state-unavailable{color:var(--muted)}
+  .state-conflicting{color:var(--danger)}
+  .state-missing,.state-not_recorded,.state-unavailable{color:var(--muted)}
+  .evidence-link{display:inline-block;margin-top:4px;color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   .limitations{margin:12px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:700px){
     header{align-items:stretch;flex-direction:column}

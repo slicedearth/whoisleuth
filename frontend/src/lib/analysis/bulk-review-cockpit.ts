@@ -9,6 +9,7 @@ export type BulkReviewCockpitRow = Readonly<{
   registrar: string;
   reviewState: string;
   shortlisted: boolean;
+  trusted: boolean;
   sourceCoverage: readonly { source: string; state: string }[];
   error: string;
   caseRecord: { id: string; disposition: string } | null;

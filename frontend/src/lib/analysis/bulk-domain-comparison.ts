@@ -1,20 +1,34 @@
 import {
   normalizeBulkSessionResult,
+  type BulkSessionDnsEvidence,
   type BulkSessionResult,
+  type BulkSessionSourceState,
 } from './bulk-session-model.ts';
 import { sha256ArtifactDigest } from './artifact-integrity.ts';
+import { BULK_REVIEW_STALE_AFTER_DAYS } from './bulk-retry-plan.ts';
 
 export const BULK_DOMAIN_COMPARISON_SCHEMA = 'whoisleuth.domain-comparison';
-export const BULK_DOMAIN_COMPARISON_VERSION = 1;
+export const BULK_DOMAIN_COMPARISON_VERSION = 2;
 
-export type BulkDomainComparisonState = 'different' | 'equal' | 'missing' | 'unavailable';
+export type BulkDomainComparisonState =
+  | 'conflicting'
+  | 'different'
+  | 'equal'
+  | 'missing'
+  | 'not_recorded'
+  | 'unavailable';
 export type BulkDomainComparisonCategory =
+  | 'certificate'
+  | 'dns'
   | 'identity'
   | 'infrastructure'
+  | 'lifecycle'
   | 'mail'
   | 'registration'
   | 'source'
+  | 'technology'
   | 'web';
+export type BulkDomainComparisonSourceState = BulkSessionSourceState | 'not_recorded';
 
 export type BulkDomainComparisonRow = Readonly<{
   id: string;
@@ -24,20 +38,35 @@ export type BulkDomainComparisonRow = Readonly<{
   right: string;
   state: BulkDomainComparisonState;
   method: string;
+  source: string;
+  leftSourceState: BulkDomainComparisonSourceState;
+  rightSourceState: BulkDomainComparisonSourceState;
+  observedAt: string | null;
+  leftEvidenceHref: string;
+  rightEvidenceHref: string;
   limitations: readonly string[];
 }>;
 
 export type BulkDomainComparison = Readonly<{
-  version: 1;
+  version: 2;
   leftDomain: string;
   rightDomain: string;
   observedAt: string | null;
+  freshness: Readonly<{
+    state: 'current' | 'stale' | 'unknown';
+    ageDays: number | null;
+  }>;
   rows: readonly BulkDomainComparisonRow[];
   counts: Readonly<Record<BulkDomainComparisonState, number>>;
   limitations: readonly string[];
 }>;
 
 type ComparableValue = boolean | number | string | null | readonly string[];
+type ComparisonOptions = Readonly<{
+  leftEvidenceHref?: unknown;
+  now?: number;
+  rightEvidenceHref?: unknown;
+}>;
 
 function text(value: unknown, maximum = 500): string {
   return typeof value === 'string'
@@ -81,14 +110,54 @@ function display(value: ComparableValue): string {
   return values.join(', ') || 'Not observed';
 }
 
-function state(left: ComparableValue, right: ComparableValue): BulkDomainComparisonState {
+function sourceState(
+  value: BulkSessionResult,
+  sources: readonly string[],
+): BulkDomainComparisonSourceState {
+  if (sources.length === 0) {
+    return value.sourceCoverage.length > 0 ? 'complete' : 'not_recorded';
+  }
+  for (const source of sources) {
+    const observed = value.sourceCoverage.find((item) => item.source === source);
+    if (observed) return observed.state;
+  }
+  return 'not_recorded';
+}
+
+function unavailableSource(state: BulkDomainComparisonSourceState): boolean {
+  return ['error', 'partial', 'skipped', 'unavailable', 'unsupported'].includes(state);
+}
+
+function state(
+  left: ComparableValue,
+  right: ComparableValue,
+  leftSourceState: BulkDomainComparisonSourceState,
+  rightSourceState: BulkDomainComparisonSourceState,
+  options: Readonly<{ conflicting?: boolean; retained?: boolean }> = {},
+): BulkDomainComparisonState {
+  if (options.retained === false) return 'not_recorded';
+  if (options.conflicting) return 'conflicting';
   const leftValue = normalized(left);
   const rightValue = normalized(right);
   const leftMissing = leftValue === null || (Array.isArray(leftValue) && leftValue.length === 0);
   const rightMissing = rightValue === null || (Array.isArray(rightValue) && rightValue.length === 0);
-  if (leftMissing && rightMissing) return 'unavailable';
-  if (leftMissing || rightMissing) return 'missing';
+  if (leftMissing || rightMissing) {
+    if (
+      (leftMissing && leftSourceState === 'not_recorded')
+      || (rightMissing && rightSourceState === 'not_recorded')
+    ) return 'not_recorded';
+    if (
+      (leftMissing && unavailableSource(leftSourceState))
+      || (rightMissing && unavailableSource(rightSourceState))
+    ) return 'unavailable';
+    if (leftMissing && rightMissing) return 'unavailable';
+    return 'missing';
+  }
   return JSON.stringify(leftValue) === JSON.stringify(rightValue) ? 'equal' : 'different';
+}
+
+function evidenceHref(value: unknown): string {
+  return typeof value === 'string' && /^#bulk-result-\d{1,4}$/u.test(value) ? value : '';
 }
 
 function row(
@@ -98,16 +167,31 @@ function row(
   left: ComparableValue,
   right: ComparableValue,
   method: string,
+  context: Readonly<{
+    leftEvidenceHref: string;
+    leftSourceState: BulkDomainComparisonSourceState;
+    observedAt: string | null;
+    rightEvidenceHref: string;
+    rightSourceState: BulkDomainComparisonSourceState;
+    source: string;
+  }>,
   limitations: readonly string[] = [],
+  options: Readonly<{ conflicting?: boolean; retained?: boolean }> = {},
 ): BulkDomainComparisonRow {
   return {
     id,
     category,
     label,
-    left: display(left),
-    right: display(right),
-    state: state(left, right),
+    left: options.retained === false ? 'Not recorded in compact Bulk evidence' : display(left),
+    right: options.retained === false ? 'Not recorded in compact Bulk evidence' : display(right),
+    state: state(left, right, context.leftSourceState, context.rightSourceState, options),
     method: text(method, 320),
+    source: text(context.source, 80),
+    leftSourceState: context.leftSourceState,
+    rightSourceState: context.rightSourceState,
+    observedAt: context.observedAt,
+    leftEvidenceHref: context.leftEvidenceHref,
+    rightEvidenceHref: context.rightEvidenceHref,
     limitations: limitations.map((item) => text(item, 320)).filter(Boolean).slice(0, 6),
   };
 }
@@ -119,35 +203,96 @@ function sourceSummary(value: BulkSessionResult): string[] {
     .slice(0, 20);
 }
 
+function dnsValues(value: BulkSessionResult, type: keyof BulkSessionDnsEvidence['records']): string[] {
+  if (!value.dns) return [];
+  const records = value.dns.records[type];
+  return type === 'caa'
+    ? (records as Array<{ critical: number | string; tag: string; value: string }>)
+      .map((item) => `${item.critical} ${item.tag} ${item.value}`)
+    : records as string[];
+}
+
+function context(
+  left: BulkSessionResult,
+  right: BulkSessionResult,
+  source: string,
+  sources: readonly string[],
+  observedAt: string | null,
+  options: ComparisonOptions,
+) {
+  return {
+    source,
+    leftSourceState: sourceState(left, sources),
+    rightSourceState: sourceState(right, sources),
+    observedAt,
+    leftEvidenceHref: evidenceHref(options.leftEvidenceHref),
+    rightEvidenceHref: evidenceHref(options.rightEvidenceHref),
+  };
+}
+
+function freshness(
+  observedAt: string | null,
+  now: number,
+): BulkDomainComparison['freshness'] {
+  if (!observedAt) return { state: 'unknown', ageDays: null };
+  const ageDays = Math.max(0, Math.floor((now - Date.parse(observedAt)) / 86_400_000));
+  return {
+    state: ageDays >= BULK_REVIEW_STALE_AFTER_DAYS ? 'stale' : 'current',
+    ageDays,
+  };
+}
+
 export function buildBulkDomainComparison(
   leftRaw: unknown,
   rightRaw: unknown,
   observedAtRaw: unknown = null,
+  options: ComparisonOptions = {},
 ): BulkDomainComparison | null {
   const left = normalizeBulkSessionResult(leftRaw);
   const right = normalizeBulkSessionResult(rightRaw);
   if (!left || !right || left.domain === right.domain) return null;
+  const observedAt = timestamp(observedAtRaw);
+  const registry = context(left, right, 'Registry and registrar evidence', ['rdap', 'availability'], observedAt, options);
+  const dns = context(left, right, 'DNS evidence', ['dns'], observedAt, options);
+  const http = context(left, right, 'HTTP and static page evidence', ['http'], observedAt, options);
+  const tls = context(left, right, 'TLS evidence', ['tls'], observedAt, options);
+  const source = context(left, right, 'Recorded source coverage', [], observedAt, options);
+  const registrationConflicting = [left.availability, right.availability]
+    .some((value) => ['conflict', 'conflicting'].includes(value.toLowerCase()));
   const rows = [
-    row('registration', 'registration', 'Registration', left.availability, right.availability, 'Stable compact availability state'),
-    row('registrar', 'registration', 'Registrar', left.registrar, right.registrar, 'Normalized registrar display identity'),
-    row('created', 'registration', 'Created', left.createdDate, right.createdDate, 'Source-reported lifecycle date'),
-    row('expires', 'registration', 'Expires', left.expiryDate, right.expiryDate, 'Source-reported lifecycle date'),
-    row('nameservers', 'infrastructure', 'Nameservers', left.nameservers, right.nameservers, 'Normalized exact set comparison'),
-    row('ip-addresses', 'infrastructure', 'Observed IP addresses', left.relationship.ipAddresses, right.relationship.ipAddresses, 'Normalized exact set comparison', ['Shared hosting and CDNs are common and do not prove common control.']),
-    row('certificate', 'infrastructure', 'Leaf certificate fingerprint', left.relationship.certificateFingerprint, right.relationship.certificateFingerprint, 'Exact SHA-256 comparison', ['Multi-domain certificates and managed hosting are common.']),
-    row('mail', 'mail', 'MX observed', left.hasMx, right.hasMx, 'Compact Deep DNS observation'),
-    row('spf', 'mail', 'SPF observed', left.hasSpf, right.hasSpf, 'Compact Deep DNS observation'),
-    row('dmarc', 'mail', 'DMARC observed', left.hasDmarc, right.hasDmarc, 'Compact Deep DNS observation'),
-    row('website', 'web', 'Website activity', left.activityStatus, right.activityStatus, 'Bounded homepage observation'),
-    row('page-title', 'identity', 'Page title', left.pageTitle, right.pageTitle, 'Normalized bounded title equality'),
-    row('favicon', 'identity', 'Favicon fingerprint', left.faviconHash, right.faviconHash, 'Exact SHA-256 comparison'),
-    row('tracking', 'identity', 'Tracking identifiers', left.relationship.trackingIdentifiers, right.relationship.trackingIdentifiers, 'Normalized exact set comparison', ['Shared identifiers are an investigative lead, not proof of ownership.']),
-    row('source-health', 'source', 'Recorded source coverage', sourceSummary(left), sourceSummary(right), 'Source-by-source compact state comparison', ['A source-state difference can reflect collection conditions rather than a domain change.']),
+    row('registration', 'registration', 'Registration', left.availability, right.availability, 'Authority-aware compact availability state', registry, [], { conflicting: registrationConflicting }),
+    row('registrar', 'registration', 'Registrar', left.registrar, right.registrar, 'Normalized registrar display identity', registry),
+    row('created', 'lifecycle', 'Created', left.createdDate, right.createdDate, 'Source-reported lifecycle date', registry),
+    row('expires', 'lifecycle', 'Expires', left.expiryDate, right.expiryDate, 'Source-reported lifecycle date', registry),
+    row('nameservers', 'infrastructure', 'Nameservers', left.nameservers, right.nameservers, 'Normalized exact set comparison', registry),
+    row('dns-a', 'dns', 'A records', dnsValues(left, 'a'), dnsValues(right, 'a'), 'Normalized exact retained DNS answer set', dns),
+    row('dns-aaaa', 'dns', 'AAAA records', dnsValues(left, 'aaaa'), dnsValues(right, 'aaaa'), 'Normalized exact retained DNS answer set', dns),
+    row('dns-cname', 'dns', 'CNAME records', dnsValues(left, 'cname'), dnsValues(right, 'cname'), 'Normalized exact retained DNS answer set', dns),
+    row('dns-caa', 'dns', 'CAA records', dnsValues(left, 'caa'), dnsValues(right, 'caa'), 'Normalized exact retained DNS answer set', dns),
+    row('dnssec', 'dns', 'DNSSEC state', left.dnssec, right.dnssec, 'Separately attributed compact DNSSEC observation', dns),
+    row('ip-addresses', 'infrastructure', 'Observed IP addresses', left.relationship.ipAddresses, right.relationship.ipAddresses, 'Normalized exact set comparison', dns, ['Shared hosting and CDNs are common and do not prove common control.']),
+    row('tls-source', 'certificate', 'TLS collection', tls.leftSourceState, tls.rightSourceState, 'Retained compact source-state comparison', tls),
+    row('certificate', 'certificate', 'Leaf certificate fingerprint', left.relationship.certificateFingerprint, right.relationship.certificateFingerprint, 'Exact SHA-256 comparison', tls, ['Multi-domain certificates and managed hosting are common.']),
+    row('mail', 'mail', 'MX observed', left.hasMx, right.hasMx, 'Compact Deep DNS observation', dns),
+    row('null-mx', 'mail', 'Null MX observed', left.hasNullMx, right.hasNullMx, 'Compact Deep DNS observation', dns),
+    row('spf', 'mail', 'SPF observed', left.hasSpf, right.hasSpf, 'Compact Deep DNS observation', dns),
+    row('dmarc', 'mail', 'DMARC observed', left.hasDmarc, right.hasDmarc, 'Compact Deep DNS observation', dns),
+    row('website', 'web', 'Website activity', left.activityStatus, right.activityStatus, 'Bounded homepage observation', http),
+    row('page-title', 'identity', 'Page title', left.pageTitle, right.pageTitle, 'Normalized bounded title equality', http),
+    row('favicon', 'identity', 'Favicon fingerprint', left.faviconHash, right.faviconHash, 'Exact SHA-256 comparison', http),
+    row('tracking', 'identity', 'Tracking identifiers', left.relationship.trackingIdentifiers, right.relationship.trackingIdentifiers, 'Normalized exact set comparison', http, ['Shared identifiers are an investigative lead, not proof of ownership.']),
+    row('password-field', 'identity', 'Password field', left.hasPasswordField, right.hasPasswordField, 'Bounded static form observation', http),
+    row('phishing-language', 'identity', 'Phishing-language indicator', left.phishingLanguageMatch, right.phishingLanguageMatch, 'Bounded explainable page-language signal', http, ['A wording match is a review lead, not proof of malicious intent.']),
+    row('official-assets', 'identity', 'Official asset reuse', left.reusesOfficialAssets, right.reusesOfficialAssets, 'Configured Brand Profile comparison', http),
+    row('technology', 'technology', 'Technology findings', null, null, 'Technology details are deliberately excluded from compact Bulk retention', http, ['Open each domain in Deep Lookup to collect and compare current technology evidence explicitly.'], { retained: false }),
+    row('source-health', 'source', 'Recorded source coverage', sourceSummary(left), sourceSummary(right), 'Source-by-source compact state comparison', source, ['A source-state difference can reflect collection conditions rather than a domain change.']),
   ];
   const counts: Record<BulkDomainComparisonState, number> = {
+    conflicting: 0,
     different: 0,
     equal: 0,
     missing: 0,
+    not_recorded: 0,
     unavailable: 0,
   };
   for (const comparisonRow of rows) counts[comparisonRow.state] += 1;
@@ -155,7 +300,8 @@ export function buildBulkDomainComparison(
     version: BULK_DOMAIN_COMPARISON_VERSION,
     leftDomain: left.domain,
     rightDomain: right.domain,
-    observedAt: timestamp(observedAtRaw),
+    observedAt,
+    freshness: freshness(observedAt, options.now ?? Date.now()),
     rows,
     counts,
     limitations: [

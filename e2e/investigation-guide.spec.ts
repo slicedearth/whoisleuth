@@ -187,7 +187,12 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   await expect(context.getByText('portal.example.test', { exact: true })).toBeVisible();
   await expect(context.getByText('None active', { exact: true })).toBeVisible();
   await expect(context.getByText('Not retained', { exact: true })).toBeVisible();
+  await expect(context.getByText('No retained evidence', { exact: true })).toBeVisible();
   await expect(context.getByText('Confirm brand profile', { exact: true })).toBeVisible();
+  await guide.getByRole('button', { name: 'Dismiss details' }).click();
+  await expect(currentAction(page)).toHaveCount(0);
+  await expect(context).toBeVisible();
+  await guide.getByRole('button', { name: 'Show work plan' }).click();
   await expect(currentAction(page)).toContainText('Step 1 of 5');
   await expect(currentAction(page)).toContainText('Confirm brand profile');
   await expect(currentAction(page).getByRole('heading', { name: 'What to do' })).toBeVisible();
@@ -207,6 +212,35 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   const stored = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
   expect(stored).toMatchObject({ version: 4, recipeId: 'brand_sweep', template: null, domain: 'portal.example.test', focusDomain: null, status: 'active' });
   expect(stored.stages.every((stage: Record<string, unknown>) => stage.outcome === 'pending' && stage.openedAt === null)).toBe(true);
+});
+
+test('active context can change its target only through an explicit guide restart', async ({ page }) => {
+  const analysisRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/\/api\/(?:lookup|rdap|whois|availability|ct-search)(?:\?|$)/u.test(request.url())) analysisRequests.push(request.url());
+  });
+  await startRecipe(page, 'New-domain triage');
+
+  const guide = page.locator('.guide');
+  await guide.getByText('Guide options', { exact: true }).click();
+  await guide.getByRole('button', { name: 'Change target' }).click();
+  const target = guide.getByRole('textbox', { name: 'Investigation target' });
+  await target.fill('replacement.example.test');
+  await guide.getByRole('button', { name: 'Review target change' }).click();
+  await expect(guide.getByRole('status')).toContainText('Changing the target restarts this guide');
+  expect((await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY)).domain).toBe('portal.example.test');
+
+  await guide.getByRole('button', { name: 'Confirm and restart guide' }).click();
+  await expect(guide).toContainText('New-domain triage: replacement.example.test');
+  await expect(guide.locator('.context-tray')).toContainText('replacement.example.test');
+  await expect(currentAction(page)).toContainText('Step 1 of 3');
+  const stored = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
+  expect(stored.domain).toBe('replacement.example.test');
+  expect(stored.stages.every((stage: Record<string, unknown>) => stage.outcome === 'pending' && stage.openedAt === null)).toBe(true);
+  expect(analysisRequests).toEqual([]);
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await expectNoHorizontalOverflow(page);
 });
 
 test('an analyst can save and run a bounded local guide template without removing request gates', async ({ page }) => {

@@ -237,6 +237,8 @@ describe('runUnifiedLookup', () => {
           credentialSurfaceProfile: { source: 'html', inputs: { classifiedCount: 1 } },
           structuredDataIdentity: { source: 'html', entities: [{ name: 'must be omitted' }] },
           technologyProfile: { source: 'derived', findings: [{ name: 'must be omitted' }] },
+          pageRoleProfile: { source: 'derived', primaryRole: 'authentication' },
+          clientBehaviorProfile: { source: 'derived', indicators: [{ id: 'browser_storage' }] },
           securityPosture: { source: 'derived', findings: [{ label: 'must be omitted' }] },
         };
       },
@@ -249,6 +251,8 @@ describe('runUnifiedLookup', () => {
     assert.equal(Object.hasOwn(result.availability, 'technologyProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'credentialSurfaceProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'structuredDataIdentity'), false);
+    assert.equal(Object.hasOwn(result.availability, 'pageRoleProfile'), false);
+    assert.equal(Object.hasOwn(result.availability, 'clientBehaviorProfile'), false);
     assert.equal(Object.hasOwn(result.availability, 'securityPosture'), false);
   });
 

@@ -202,7 +202,7 @@ describe('lookup evidence export conversion', () => {
       '2026-07-14T09:00:00.000Z'
     );
     assert.equal(result.schema, 'whoisleuth.lookup-evidence');
-    assert.equal(result.schemaVersion, 21);
+    assert.equal(result.schemaVersion, 22);
     assert.equal(result.generatedAt, '2026-07-14T09:00:00.000Z');
     const query = recordValue(result.query);
     const sources = recordValue(result.sources);

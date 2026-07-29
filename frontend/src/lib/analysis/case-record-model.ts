@@ -8,6 +8,7 @@ import {
   appendCaseAssertion,
   appendCaseDecision,
   appendCaseEvidencePin,
+  appendCaseEvidencePins,
   appendCaseManualTrailEvent,
   normalizeCaseActions,
   normalizeCaseAssertions,
@@ -31,8 +32,8 @@ import {
 //   - An IMPORT file that declares a greater version is never INTERPRETED at
 //     all: mergeCases rejects it up front so we don't merge data from a schema
 //     we don't understand.
-export const CASE_SCHEMA_VERSION = 4;
-export const CASE_IMPORT_VERSIONS = [3, CASE_SCHEMA_VERSION] as const;
+export const CASE_SCHEMA_VERSION = 7;
+export const CASE_IMPORT_VERSIONS = [3, 4, 5, 6, CASE_SCHEMA_VERSION] as const;
 
 export const MAX_CASES = 500;
 export const MAX_NOTES_PER_CASE = 50;
@@ -185,6 +186,7 @@ export type CaseInput = {
   tags?: unknown;
   evidence?: unknown;
   evidencePin?: unknown;
+  evidencePins?: unknown;
   decision?: unknown;
   action?: unknown;
   actionUpdate?: unknown;
@@ -1122,9 +1124,11 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       source: inferCaptureSource(source),
       fallback: now,
     }),
-    evidencePins: input.evidencePin !== undefined
-      ? appendCaseEvidencePin([], input.evidencePin, now)
-      : [],
+    evidencePins: input.evidencePins !== undefined
+      ? appendCaseEvidencePins([], input.evidencePins, now)
+      : input.evidencePin !== undefined
+        ? appendCaseEvidencePin([], input.evidencePin, now)
+        : [],
     decisions: input.decision !== undefined
       ? appendCaseDecision([], input.decision, now)
       : [],
@@ -1205,8 +1209,11 @@ export function updateCase(
     );
   }
   let evidencePins = current.evidencePins;
+  if (patch.evidencePins !== undefined) {
+    evidencePins = appendCaseEvidencePins(evidencePins, patch.evidencePins, now);
+  }
   if (patch.evidencePin !== undefined) {
-    evidencePins = appendCaseEvidencePin(current.evidencePins, patch.evidencePin, now);
+    evidencePins = appendCaseEvidencePin(evidencePins, patch.evidencePin, now);
   }
   const pinIds = new Set(evidencePins.map((item) => item.id));
   let decisions = current.decisions;

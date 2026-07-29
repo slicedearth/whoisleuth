@@ -176,6 +176,133 @@ test('status and disposition edits persist across a reload', async ({ page }) =>
   await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
 });
 
+test('case tags offer bounded in-tab undo', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'undo-review.invalid');
+
+  const tags = page.getByLabel('Tags');
+  await tags.fill('review, phishing');
+  await page.getByRole('button', { name: 'Save tags' }).click();
+  await expect(page.getByRole('region', { name: 'Undo analyst change' })).toContainText('undo-review.invalid');
+  await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(tags).toHaveValue('');
+});
+
+test('projects retained evidence into a filterable source-aware timeline', async ({ page }) => {
+  await page.goto('/monitor?view=timeline');
+  const observedAt = '2026-07-20T00:00:00.000Z';
+  const storedAt = '2026-07-21T00:00:00.000Z';
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 2,
+      cases: [caseRecord({
+        id: 'timeline-case',
+        domain: 'timeline-case.invalid',
+        updatedAt: storedAt,
+        evidenceHistory: [snapshot({ id: 'timeline-snapshot', capturedAt: observedAt })],
+      })],
+    },
+    'whois-rdap-watchlist-v1': {
+      schema: 'whoisleuth.watchlists',
+      version: 2,
+      watchlists: {
+        'Timeline watchlist': {
+          updatedAt: storedAt,
+          results: [],
+          baseline: [],
+          history: [{
+            checkedAt: observedAt,
+            mode: 'deep',
+            resultCount: 1,
+            conclusiveCount: 1,
+            changeCount: 1,
+            omittedChanges: 0,
+            changes: [{ domain: 'timeline-case.invalid', field: 'availability', before: 'available', after: 'registered', kind: 'new_registration', tone: 'danger' }],
+          }],
+        },
+      },
+    },
+    'whoisleuth-relationship-observations-v1': {
+      schema: 'whoisleuth.relationship-observations',
+      version: 1,
+      observations: [{
+        id: 'relationship-timeline-fixture',
+        type: 'ip_address',
+        label: 'Shared IP address',
+        method: 'Exact normalized address',
+        normalizedValue: '192.0.2.40',
+        displayValue: '192.0.2.40',
+        domains: ['timeline-case.invalid', 'timeline-related.invalid'],
+        description: 'Bounded relationship fixture.',
+        classification: 'derived',
+        source: 'bulk_relationship_analysis',
+        sourceVersion: 1,
+        observedAt,
+        retainedAt: storedAt,
+        complete: true,
+        truncated: false,
+        limitations: ['Shared infrastructure is not proof of common control.'],
+      }],
+    },
+    'whoisleuth-website-snapshots-v1': {
+      schema: 'whoisleuth.website-profile-snapshots',
+      version: 1,
+      snapshots: [{
+        id: 'timeline-website-snapshot',
+        domain: 'timeline-case.invalid',
+        observedAt,
+        savedAt: storedAt,
+        complete: false,
+        truncated: true,
+        technologies: [],
+        posture: [],
+        identity: {},
+        sources: [{ source: 'page', state: 'partial' }],
+      }],
+    },
+    'whoisleuth-bulk-sessions-v1': {
+      schema: 'whoisleuth.bulk-sessions',
+      version: 1,
+      sessions: [{
+        id: 'timeline-bulk-session',
+        name: 'Timeline Bulk review',
+        mode: 'deep',
+        state: 'partial',
+        inputDigest: `sha256:${'a'.repeat(64)}`,
+        domains: ['timeline-case.invalid'],
+        results: [],
+        startedAt: observedAt,
+        updatedAt: storedAt,
+        completedAt: observedAt,
+      }],
+    },
+  });
+
+  await expect(page.getByRole('tab', { name: /Timeline/ })).toHaveAttribute('aria-selected', 'true');
+  const workspace = page.getByRole('region', { name: 'Investigation timeline' });
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(5);
+  await expect(workspace).toContainText('Observed');
+  await expect(workspace).toContainText('Stored');
+  await expect(workspace).toContainText('Derived relationship');
+  await page.getByLabel('Area').selectOption('bulk');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
+  await expect(workspace).toContainText('Timeline Bulk review retained');
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByLabel('Freshness').selectOption('stale');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByLabel('Type').selectOption('change');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
+  await expect(workspace).toContainText('watchlist change');
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByLabel('Entity').selectOption('timeline-related.invalid');
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
+  await expect(workspace.getByRole('link', { name: /Open Retained relationship/ })).toHaveAttribute('href', /view=relationships/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
@@ -300,6 +427,11 @@ test('reviewed response records persist and produce a local non-submitted packet
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
+  await expect(packet.getByLabel('Audience profile')).toHaveValue('internal_soc');
+  await expect(packet).toContainText('Internal security operations or incident-response team');
+  await packet.getByLabel('Audience profile').selectOption('registrar');
+  await expect(packet).toContainText('Domain registrar abuse or compliance team');
+  await expect(packet).toContainText('Raw WHOIS or RDAP payloads');
   await packet.getByLabel('Abuse category').fill('Credential phishing');
   await packet.getByLabel('Affected party').fill('Example service');
   await packet.getByLabel('Observed at').fill('2026-07-28T10:00');
@@ -319,7 +451,11 @@ test('reviewed response records persist and produce a local non-submitted packet
     schema: 'whoisleuth.case-response-packet',
     reviewRequired: true,
     submissionPerformed: false,
-    schemaVersion: 4,
+    schemaVersion: 5,
+    profile: {
+      id: 'registrar',
+      audience: 'Domain registrar abuse or compliance team',
+    },
     incident: {
       category: 'Credential phishing',
       affectedParty: 'Example service',
@@ -389,6 +525,58 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
   await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 decisions');
+});
+
+test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }) => {
+  await openCasesView(page);
+  await createCase(page, 'intelligence-case.invalid');
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const payload = JSON.stringify({
+    type: 'bundle',
+    id: 'bundle--00000000-0000-4000-8000-000000000101',
+    objects: [
+      {
+        type: 'identity',
+        spec_version: '2.1',
+        id: 'identity--00000000-0000-4000-8000-000000000102',
+        name: 'External review source',
+      },
+      {
+        type: 'indicator',
+        spec_version: '2.1',
+        id: 'indicator--00000000-0000-4000-8000-000000000103',
+        created_by_ref: 'identity--00000000-0000-4000-8000-000000000102',
+        pattern_type: 'stix',
+        pattern: "[domain-name:value = 'reported.invalid']",
+        valid_from: '2026-07-28T01:00:00.000Z',
+        labels: ['analyst-review'],
+        confidence: 60,
+      },
+    ],
+  });
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'external-review.stix.json',
+    mimeType: 'application/stix+json',
+    buffer: Buffer.from(payload),
+  });
+
+  await expect(externalImport.getByRole('heading', { name: /bundle--/ })).toBeVisible();
+  await expect(externalImport).toContainText('1 accepted');
+  await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
+  await externalImport.getByLabel('Merge into existing case').selectOption({ label: 'intelligence-case.invalid' });
+  await externalImport.getByRole('button', { name: 'Merge assertions into case' }).click();
+  await expect(page.getByRole('status')).toContainText('Merged 1 external assertion');
+
+  const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
+  if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
+  const response = page.locator('.response-workspace');
+  await expect(response).toContainText('0 pins · 0 decisions · 1 assertion');
+  await response.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
+  await expect(response).toContainText('external import · open');
+  await expect(response).toContainText('External review source');
+  await expect(response).toContainText('File SHA-256');
+  await expect(response).toContainText('WHOISleuth did not collect or independently verify this claim');
 });
 
 test('deleting a case removes it after confirmation', async ({ page }) => {
@@ -1011,7 +1199,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-cases-.*\.json$/);
-    expect(parsed.version).toBe(4);
+    expect(parsed.version).toBe(7);
     expect(parsed.cases).toEqual(expect.arrayContaining([
       expect.objectContaining({ domain: 'backup-test.invalid' }),
     ]));
@@ -1452,6 +1640,36 @@ test.describe('accessible cross-case relationship table', () => {
     await direction.click();
     await expect(page.getByRole('button', { name: 'Descending, switch to ascending' })).toHaveText('Descending');
     await expect(rows.nth(1)).toContainText('3 cases');
+  });
+
+  test('reviews connected evidence clusters without changing source relationships', async ({ page }) => {
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'cluster-a', domain: 'cluster-a.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-a.invalid'] })] }),
+      caseRecord({ id: 'cluster-b', domain: 'cluster-b.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-a.invalid'] })] }),
+      caseRecord({ id: 'cluster-c', domain: 'cluster-c.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-b.invalid'] })] }),
+      caseRecord({ id: 'cluster-d', domain: 'cluster-d.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.cluster-b.invalid'] })] }),
+    ]);
+
+    const workspace = page.getByRole('region', { name: 'Evidence clusters' });
+    await expect(workspace).toBeVisible();
+    await expect(workspace.locator('article')).toHaveCount(2);
+    const label = workspace.getByLabel('Analyst label').first();
+    await label.fill('Related review set');
+    await label.press('Tab');
+    await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(label).toHaveValue('');
+    await label.fill('Related review set');
+    await label.press('Tab');
+    await workspace.getByLabel('Select cluster').nth(0).check();
+    await workspace.getByLabel('Select cluster').nth(1).check();
+    await workspace.getByRole('button', { name: 'Merge selected' }).click();
+    await expect(workspace.locator('article')).toHaveCount(1);
+    await expect(workspace).toContainText('4');
+    await workspace.getByRole('button', { name: 'Split cluster-a.invalid from this review cluster' }).click();
+    await expect(workspace.locator('.cases')).not.toContainText('cluster-a.invalid');
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toContainText('cluster-a.invalid');
+    await workspace.getByRole('button', { name: 'Reset' }).click();
+    await expect(workspace.locator('article')).toHaveCount(2);
   });
 
   test('keeps long observed values readable beside long case pivots on desktop', async ({ page }) => {
