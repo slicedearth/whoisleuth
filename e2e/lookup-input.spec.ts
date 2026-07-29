@@ -1074,7 +1074,9 @@ test('published response routes can be recorded in a local case with their prove
   await expect(response.getByRole('heading', { name: 'Published routes and reviewed drafts' })).toBeVisible();
   await expect(response).toContainText('abuse@example.test');
   await page.getByRole('button', { name: 'Create case' }).click();
-  await response.getByRole('button', { name: 'Record in case' }).click();
+  const recordRoute = response.getByRole('button', { name: 'Record in case' });
+  await expect(recordRoute).toBeEnabled();
+  await recordRoute.click();
   await expect(page.locator('.case-status')).toContainText('Recorded the registrar route');
 
   const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
