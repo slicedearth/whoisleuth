@@ -442,11 +442,17 @@ when their explicit model versions match.
 
 Monitor's custom-rule view includes optional reviewed static page-pattern
 packs. The packs are fixed sets of the same bounded, inspectable rule
-conditions available to an analyst. They use retained password-field, favicon,
-official-asset, language, mail, and availability cues; contribute no custom
-score by default; and create review tags rather than maliciousness findings.
-Installing a pack makes a browser-local copy that can be inspected, disabled,
-edited, exported, or deleted.
+conditions available to an analyst. They keep generic patterns separate from
+brand-relative comparisons and can use retained password-field, off-origin
+form-action, favicon, official-asset, urgent-language, wallet-prompt, mail, and
+availability cues. Only the boolean existence of an external form action is
+copied into compact case evidence, not its destination. Packs contribute no
+custom score and create review tags rather than maliciousness findings.
+Built-in packs pass duplicate-id and equivalent-logic lint plus benign and
+held-out fixtures. A local JSON pack must use the same bounded validator,
+allowlisted fields and operators, zero-score contract, and declarative rule
+format; it cannot execute code. Installing a pack makes a browser-local rule
+copy that can be inspected, disabled, edited, exported, or deleted.
 
 An open domain case can also turn a selected Lookup checkpoint into a reviewed
 acquisition-transition plan. Mark each fact as expected to stay the same,

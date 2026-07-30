@@ -51,6 +51,7 @@ const FIELD_LABELS = {
   faviconNearMatch: 'Official favicon near-match',
   reusesOfficialAssets: 'Official asset reuse',
   hasPasswordField: 'Password form',
+  hasExternalFormAction: 'External form action',
   phishingLanguageMatch: 'Phishing language',
   mutationTypes: 'Mutation types',
 };
@@ -91,7 +92,7 @@ const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
   },
   {
     name: 'Impersonation',
-    fields: ['faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'phishingLanguageMatch', 'mutationTypes'],
+    fields: ['faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch', 'mutationTypes'],
   },
 ];
 

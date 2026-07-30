@@ -47,6 +47,7 @@ export interface SavedScanRecord extends WatchlistComparableRecord {
   faviconNearMatch?: boolean;
   reusesOfficialAssets?: boolean;
   hasPasswordField?: boolean | null;
+  hasExternalFormAction?: boolean | null;
   phishingLanguageMatch?: string | null;
   riskFactors: Array<{ label: string; points: number }>;
   mutationTypes: string[];
@@ -73,6 +74,7 @@ export interface ScanResult {
   faviconNearMatch: boolean;
   reusesOfficialAssets: boolean;
   hasPasswordField: boolean;
+  hasExternalFormAction: boolean | null;
   phishingLanguageMatch: string | null;
   registrant: BulkContact | null;
   abuseEvidence: BulkAbuseEvidence | null;
@@ -219,6 +221,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     faviconNearMatch: row.faviconNearMatch,
     reusesOfficialAssets: row.reusesOfficialAssets,
     hasPasswordField: row.hasPasswordField,
+    hasExternalFormAction: row.hasExternalFormAction,
     phishingLanguageMatch: row.phishingLanguageMatch,
     riskModelVersion: row.saved.riskModelVersion ?? null,
     riskFactors: row.saved.riskFactors,
@@ -253,6 +256,7 @@ export function fromBulkSessionResult(
     faviconNearMatch: row.faviconNearMatch,
     reusesOfficialAssets: row.reusesOfficialAssets,
     hasPasswordField: row.hasPasswordField,
+    hasExternalFormAction: row.hasExternalFormAction,
     phishingLanguageMatch: row.phishingLanguageMatch,
     riskModelVersion: row.riskModelVersion,
     riskScore: row.risk,
@@ -280,6 +284,7 @@ export function fromBulkSessionResult(
     faviconNearMatch: row.faviconNearMatch,
     reusesOfficialAssets: row.reusesOfficialAssets,
     hasPasswordField: row.hasPasswordField,
+    hasExternalFormAction: row.hasExternalFormAction,
     phishingLanguageMatch: row.phishingLanguageMatch,
     registrant: null,
     abuseEvidence: null,

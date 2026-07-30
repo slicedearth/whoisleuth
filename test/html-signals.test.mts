@@ -55,6 +55,25 @@ describe('pageTitle', () => {
   });
 });
 
+describe('reviewed static page-pattern inputs', () => {
+  test('retains a bounded wallet prompt through the existing language cue', () => {
+    const result = extractHtmlSignals('<main><p>Enter your recovery phrase to continue</p></main>', 'example.test');
+    assert.equal(result.phishingLanguageMatch, 'Enter your recovery phrase');
+  });
+
+  test('retains only whether a static form points off-origin', () => {
+    const result = extractHtmlSignals(
+      '<form method="post" action="https://collector.test/private?token=secret"><input type="password"></form>',
+      'example.test',
+      { baseUrl: 'https://example.test/' },
+    );
+    assert.equal(result.hasExternalFormAction, true);
+    assert.doesNotMatch(JSON.stringify({
+      hasExternalFormAction: result.hasExternalFormAction,
+    }), /collector|private|token|secret/u);
+  });
+});
+
 describe('hasPasswordField', () => {
   test('detects a password input regardless of attribute order/quoting', () => {
     assert.equal(extractHtmlSignals('<input type="password" name="pw">', 'example.com').hasPasswordField, true);

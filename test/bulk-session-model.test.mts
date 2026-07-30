@@ -46,6 +46,7 @@ function result(domain = 'priority.invalid', overrides: Record<string, unknown> 
     faviconNearMatch: false,
     reusesOfficialAssets: false,
     hasPasswordField: true,
+    hasExternalFormAction: true,
     phishingLanguageMatch: null,
     riskModelVersion: 5,
     riskFactors: [{ label: 'Credential input observed', points: 15 }],

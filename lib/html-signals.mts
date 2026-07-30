@@ -70,7 +70,7 @@ const PASSWORD_FIELD_RE = /<input\b[^>]*\btype\s*=\s*["']?password["']?/i;
 // several, not a verdict on its own (same framing as FOR_SALE_TEXT_RE in
 // availability.js).
 const PHISHING_LANGUAGE_RE =
-  /(verify your account|confirm your identity|unusual (?:sign-?in|login) activity|account has been (?:suspended|limited|locked|restricted)|your account will be (?:suspended|closed|locked|terminated)|click here to (?:verify|confirm|update|restore)|security alert|immediate action required|re-?activate your account|unauthorized access detected|update your (?:payment|billing) (?:information|details)|confirm your password|your password (?:has expired|will expire soon))/i;
+  /(verify your account|confirm your identity|unusual (?:sign-?in|login) activity|account has been (?:suspended|limited|locked|restricted)|your account will be (?:suspended|closed|locked|terminated)|click here to (?:verify|confirm|update|restore)|security alert|immediate action required|re-?activate your account|unauthorized access detected|update your (?:payment|billing) (?:information|details)|confirm your password|your password (?:has expired|will expire soon)|connect your wallet|enter your (?:seed|recovery) phrase|verify your (?:seed|recovery) phrase|enter your private key)/i;
 
 // <img>/<script>/<link> tags loading a resource from an absolute, external
 // URL - a common phishing-kit tell is hotlinking the real brand's own logo/
@@ -624,6 +624,9 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
     pageTitle: extractPageTitle(html),
     hasPasswordField: PASSWORD_FIELD_RE.test(html),
     phishingLanguageMatch: phishingMatch ? boundedHtmlText(phishingMatch[0], MAX_PHISHING_MATCH_LENGTH) : null,
+    hasExternalFormAction: pageIdentity
+      ? pageIdentity.forms.externalActionOrigins.length > 0
+      : null,
     externalAssetHosts: extractExternalAssetHosts(html, domain),
     pageIdentity,
     credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({

@@ -407,7 +407,7 @@ const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
   'hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'pageTitle', 'websiteProbeDetail',
   'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
   'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
-  'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'phishingLanguageMatch',
+  'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch',
 ];
 
 // Ordered list of the fields that make up a snapshot's *material* identity -
@@ -423,7 +423,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'activityStatus', 'websiteProbeDetail', 'pageTitle',
   'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount',
   'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
-  'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'phishingLanguageMatch',
+  'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch',
   'mutationTypes',
 ];
 
@@ -545,6 +545,7 @@ function buildSnapshot(
     faviconNearMatch: boolOrNull(record.faviconNearMatch),
     reusesOfficialAssets: boolOrNull(record.reusesOfficialAssets),
     hasPasswordField: boolOrNull(record.hasPasswordField),
+    hasExternalFormAction: boolOrNull(record.hasExternalFormAction),
     phishingLanguageMatch: evidenceString(record.phishingLanguageMatch),
     mutationTypes: normalizeMutationList(record.mutationTypes),
   };
@@ -575,6 +576,7 @@ function buildSnapshot(
       faviconNearMatch: null,
       reusesOfficialAssets: null,
       hasPasswordField: null,
+      hasExternalFormAction: null,
       phishingLanguageMatch: null,
     });
   }
@@ -743,6 +745,7 @@ const COMPARE_FIELDS: CompareFieldSpec[] = [
   { field: 'faviconNearMatch', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
   { field: 'reusesOfficialAssets', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
   { field: 'hasPasswordField', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasExternalFormAction', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
   { field: 'phishingLanguageMatch', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
   { field: 'mutationTypes', label: 'Mutation types', type: 'set' },
 ];

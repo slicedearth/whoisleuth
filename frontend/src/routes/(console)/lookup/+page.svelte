@@ -443,6 +443,7 @@
     pageTitle:availability.pageTitle??null,
     faviconMatch:profileSignals.faviconMatch??null,faviconNearMatch:profileSignals.faviconNearMatch??null,
     reusesOfficialAssets:profileSignals.reusesOfficialAssets??null,hasPasswordField:availability.hasPasswordField??null,
+    hasExternalFormAction:availability.hasExternalFormAction??null,
     phishingLanguageMatch:availability.phishingLanguageMatch??null,
     ...compactHttpSummary,
     mutationTypes:[]

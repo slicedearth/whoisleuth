@@ -108,6 +108,7 @@ export type BulkSessionResult = {
   faviconNearMatch: boolean;
   reusesOfficialAssets: boolean;
   hasPasswordField: boolean;
+  hasExternalFormAction: boolean | null;
   phishingLanguageMatch: string | null;
   riskModelVersion: number | null;
   riskFactors: BulkSessionRiskFactor[];
@@ -326,6 +327,7 @@ export function normalizeBulkSessionResult(value: unknown): BulkSessionResult | 
     faviconNearMatch: item.faviconNearMatch === true,
     reusesOfficialAssets: item.reusesOfficialAssets === true,
     hasPasswordField: item.hasPasswordField === true,
+    hasExternalFormAction: nullableBoolean(item.hasExternalFormAction),
     phishingLanguageMatch: boundedText(item.phishingLanguageMatch, 300) || null,
     riskModelVersion: nullableVersion(item.riskModelVersion),
     riskFactors: normalizeRiskFactors(item.riskFactors),

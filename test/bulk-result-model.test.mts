@@ -41,6 +41,7 @@ function sessionResult(overrides: Partial<BulkSessionResult> = {}): BulkSessionR
     faviconNearMatch: false,
     reusesOfficialAssets: false,
     hasPasswordField: false,
+    hasExternalFormAction: null,
     phishingLanguageMatch: null,
     riskModelVersion: 6,
     riskFactors: [{ label: 'Example factor', points: 20 }],

@@ -214,6 +214,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     faviconNearMatch: false,
     reusesOfficialAssets: false,
     hasPasswordField: value.id === 'credential-lure',
+    hasExternalFormAction: value.id === 'credential-lure',
     phishingLanguageMatch: value.id === 'credential-lure' ? 'Sign in to continue' : null,
     mutationTypes: [value.mutation],
   };

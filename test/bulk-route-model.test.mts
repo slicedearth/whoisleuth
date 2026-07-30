@@ -43,6 +43,7 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
     faviconNearMatch: false,
     reusesOfficialAssets: false,
     hasPasswordField: false,
+    hasExternalFormAction: null,
     phishingLanguageMatch: null,
     registrant: null,
     abuseEvidence: null,

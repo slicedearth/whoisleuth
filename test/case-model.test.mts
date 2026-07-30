@@ -931,6 +931,7 @@ describe('rejects unsupported future-schema imports', () => {
     assert.equal(model.mergeCases(local, { version: 4, cases: [{ domain: 'v4.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 5, cases: [{ domain: 'v5.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: 6, cases: [{ domain: 'v6.example', updatedAt: ISO }] }).added, 1);
+    assert.equal(model.mergeCases(local, { version: 7, cases: [{ domain: 'v7.example', updatedAt: ISO }] }).added, 1);
     assert.equal(model.mergeCases(local, { version: model.CASE_SCHEMA_VERSION, cases: [{ domain: 'current.example', updatedAt: ISO }] }).added, 1);
   });
 });

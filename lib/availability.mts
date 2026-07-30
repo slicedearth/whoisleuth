@@ -683,6 +683,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     pageTitle: null,
     hasPasswordField: false,
     phishingLanguageMatch: null,
+    hasExternalFormAction: null,
     externalAssetHosts: [],
     pageIdentity: null,
     credentialSurfaceProfile: null,
