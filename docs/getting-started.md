@@ -196,6 +196,18 @@ origins, rejects target-bearing or contact material, and verifies the expected
 catalogue result. The checked-in reviewed corpus starts empty, so it makes no
 claim about real-world coverage until reviewed contributions are added.
 
+Use the separate coverage gate when deciding whether the reviewed corpus is
+complete enough to support a catalogue-wide coverage claim:
+
+```bash
+npm run technology:coverage-check
+```
+
+This command intentionally fails while any catalogue signature lacks a passing,
+minimized contributor-reviewed observation. The ordinary synthetic benchmark
+continues to measure deterministic signature behavior and collision controls;
+it does not become a proxy for real-world coverage.
+
 ### Incremental Lookup qualification
 
 ```bash

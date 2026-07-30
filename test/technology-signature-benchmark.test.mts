@@ -49,6 +49,7 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.ready, true);
     assert.equal(report.summary.reviewedFixtures, 0);
     assert.equal(report.summary.failedReviewedFixtures, 0);
+    assert.equal(report.summary.reviewedSignatureCoverage, 0);
     assert.equal(report.summary.realWorldCoverageEstablished, false);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
@@ -117,10 +118,17 @@ describe('technology signature benchmark', () => {
     const output = formatTechnologySignatureBenchmark(report);
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
+    assert.match(output, /0\/\d+ signatures sampled/);
+    assert.match(output, /Real-world coverage gate: not established/);
     assert.match(output, /network requests: 0/);
-    assert.deepEqual(parseArguments([]), { json: false });
-    assert.deepEqual(parseArguments(['--json']), { json: true });
+    assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });
+    assert.deepEqual(parseArguments(['--json']), { json: true, requireReviewed: false });
+    assert.deepEqual(parseArguments(['--require-reviewed']), { json: false, requireReviewed: true });
     assert.throws(() => parseArguments(['--json', '--json']), /only once/);
+    assert.throws(
+      () => parseArguments(['--require-reviewed', '--require-reviewed']),
+      /only once/,
+    );
     assert.throws(() => parseArguments(['--unknown']), /Unknown option/);
 
     const stdout = capture();
@@ -132,5 +140,13 @@ describe('technology signature benchmark', () => {
     }), 0);
     assert.equal(JSON.parse(stdout.value()).summary.ready, true);
     assert.equal(stderr.value(), '');
+
+    const coverageStdout = capture();
+    assert.equal(main(['--require-reviewed'], {
+      stdout: coverageStdout.stream,
+      stderr: stderr.stream,
+      now: () => new Date(GENERATED_AT),
+    }), 1);
+    assert.match(coverageStdout.value(), /Real-world coverage gate: not established/);
   });
 });
