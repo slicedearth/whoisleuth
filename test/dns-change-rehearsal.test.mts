@@ -2,16 +2,27 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA,
   MAX_REHEARSAL_NAMESERVERS,
   buildDnsChangeRehearsal,
+  buildDnsChangeRehearsalExport,
 } from '../frontend/src/lib/analysis/dns-change-rehearsal.ts';
 
 const BASE = {
   domain: 'example.test',
   currentNameservers: ['ns1.example.net', 'ns2.example.net'],
   registryNameservers: ['ns1.example.net', 'ns2.example.net'],
+  currentGlue: [],
+  currentDs: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'a'.repeat(64) }],
+  currentMx: [{ priority: 10, exchange: 'mail.example.net' }],
+  currentCaa: [{ critical: 0, tag: 'issue', value: 'ca.example' }],
+  currentCriticalAddresses: [{ hostname: 'www.example.test', addresses: ['192.0.2.20'] }],
   proposedNameservers: 'ns3.example.net\nns4.example.net',
   proposedGlue: '',
+  proposedDs: `12345 13 2 ${'a'.repeat(64)}`,
+  proposedMx: '10 mail.example.net',
+  proposedCaa: '0 issue ca.example',
+  proposedCriticalAddresses: 'www.example.test 192.0.2.20',
   dnssecChange: 'unchanged' as const,
   ttlLowered: true,
   zonePrepublished: true,
@@ -22,7 +33,7 @@ describe('DNS change rehearsal', () => {
   test('builds a ready local sequence without claiming a successful change', () => {
     const result = buildDnsChangeRehearsal(BASE);
     assert.equal(result.ready, true);
-    assert.deepEqual(result.proposedNameservers, ['ns3.example.net', 'ns4.example.net']);
+    assert.deepEqual(result.proposed.nameservers, ['ns3.example.net', 'ns4.example.net']);
     assert.match(result.sequence.join(' '), /submit the parent nameserver change/i);
     assert.match(result.limitations.join(' '), /does not change DNS/i);
     assert.match(result.limitations.join(' '), /does not guarantee/i);
@@ -62,8 +73,30 @@ describe('DNS change rehearsal', () => {
       proposedNameservers,
       currentEvidenceComplete: false,
     });
-    assert.equal(result.proposedNameservers.length, MAX_REHEARSAL_NAMESERVERS);
+    assert.equal(result.proposed.nameservers.length, MAX_REHEARSAL_NAMESERVERS);
     assert.equal(result.ready, false);
     assert.equal(result.findings.find((item) => item.id === 'current_evidence')?.state, 'unknown');
+  });
+
+  test('keeps desired records separate, reports contradictory sets, and exports a reviewed checklist', () => {
+    const result = buildDnsChangeRehearsal({
+      ...BASE,
+      proposedMx: '20 replacement.example.net',
+      proposedCaa: '',
+    });
+    assert.equal(result.observed.mx[0], '10 mail.example.net');
+    assert.equal(result.proposed.mx[0], '20 replacement.example.net');
+    assert.equal(result.findings.find((item) => item.id === 'mx')?.state, 'review');
+    assert.equal(result.findings.find((item) => item.id === 'caa')?.state, 'unknown');
+    assert.match(result.unknowns.join(' '), /CAA policy/i);
+
+    const exported = buildDnsChangeRehearsalExport(result, {
+      domain: 'example.test',
+      generatedAt: '2026-07-30T00:00:00Z',
+    });
+    assert.equal(exported.schema, DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA);
+    assert.equal(exported.reviewState, 'unresolved');
+    assert.notDeepEqual(exported.observed.mx, exported.analystProposed.mx);
+    assert.equal(exported.generatedAt, '2026-07-30T00:00:00.000Z');
   });
 });

@@ -508,11 +508,15 @@ default (see the README), so many lookups return no personal data at all.
   a local Lookup link after discarding credentials, port, path, query, and
   fragment. The preview and link stay in browser memory, and opening it fills
   Lookup without starting collection or saving the target.
-  A local DNS change rehearsal can compare an analyst-entered intended
-  nameserver set, optional glue, DNSSEC change type, and readiness confirmations
-  with the displayed bounded delegation evidence. It makes no request, saves
-  nothing automatically, changes no DNS or registry state, verifies no
-  authorization, and cannot guarantee a safe or successful change.
+  A local DNS change rehearsal can compare analyst-entered intended nameserver,
+  glue, DS, MX, CAA, and critical address sets plus a DNSSEC change type and
+  readiness confirmations with displayed bounded DNS and registry evidence.
+  Proposed values remain separate from observed records. It makes no request,
+  saves nothing automatically, and changes no DNS or registry state. A
+  deliberate checklist download includes the domain, proposed and observed
+  normalized sets, findings, unknowns, sequence, rollback steps, and
+  limitations. It verifies no authorization and cannot guarantee a safe or
+  successful change.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword

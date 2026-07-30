@@ -8,6 +8,7 @@
     failureDetail,
     truncated,
     delegation = null,
+    rehearsalEvidence = {},
     domain = '',
     allowRehearsal = false,
     initiallyExpanded = false,
@@ -44,6 +45,13 @@
       }[];
       limitations: readonly string[];
     } | null;
+    rehearsalEvidence?: {
+      currentGlue?: readonly unknown[];
+      currentDs?: readonly unknown[];
+      currentMx?: readonly unknown[];
+      currentCaa?: readonly unknown[];
+      currentCriticalAddresses?: readonly unknown[];
+    };
     domain?: string;
     allowRehearsal?: boolean;
     initiallyExpanded?: boolean;
@@ -107,6 +115,11 @@
             {domain}
             currentNameservers={delegation.parentNameservers}
             registryNameservers={delegation.registryNameservers}
+            currentGlue={rehearsalEvidence.currentGlue ?? []}
+            currentDs={rehearsalEvidence.currentDs ?? []}
+            currentMx={rehearsalEvidence.currentMx ?? []}
+            currentCaa={rehearsalEvidence.currentCaa ?? []}
+            currentCriticalAddresses={rehearsalEvidence.currentCriticalAddresses ?? []}
             evidenceComplete={delegation.complete}
           />
         {/if}

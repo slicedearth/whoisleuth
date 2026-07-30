@@ -239,6 +239,19 @@
     tlsValidity,
     tlsDiagnostics,
   }));
+  const dnsRehearsalEvidence=$derived({
+    currentGlue:records(rec(rec(dnsEvidence.delegation).registry).nameserverDetails),
+    currentDs:records(rdapParsed.dsData),
+    currentMx:records(dnsRecords.mx),
+    currentCaa:records(dnsRecords.caa),
+    currentCriticalAddresses:[{
+      hostname:String(availability.domain||result?.registrableDomain||'').trim().toLowerCase(),
+      addresses:[
+        ...(Array.isArray(dnsRecords.a)?dnsRecords.a.map(String):[]),
+        ...(Array.isArray(dnsRecords.aaaa)?dnsRecords.aaaa.map(String):[]),
+      ],
+    }],
+  });
   const registryDisplay=$derived(buildLookupRegistryDisplay({
     result,
     rdapParsed,
@@ -698,6 +711,7 @@
           failureDetail={networkDisplay.dnsQueryFailures}
           truncated={Boolean(dnsEvidence.truncated)}
           delegation={networkDisplay.dnsDelegation}
+          rehearsalEvidence={dnsRehearsalEvidence}
           domain={caseDomain}
           allowRehearsal={result?.type === 'domain'}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."

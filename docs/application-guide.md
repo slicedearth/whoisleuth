@@ -330,12 +330,16 @@ unavailable.
 
 **DNS change rehearsal** is available under a completed authoritative DNS
 health result in Deep Lookup. Enter the complete intended nameserver set,
-optional in-bailiwick glue, the DNSSEC change type, and reviewed readiness
-confirmations. The local planner highlights unresolved current disagreement,
-missing glue, unprepared authorities, TTL preparation, and DNSSEC ordering,
-then presents an ordered change and rollback checklist. Entered values remain
-analyst assertions. The rehearsal makes no request, changes no DNS or registry
-state, and cannot guarantee propagation or correctness.
+optional in-bailiwick glue, intended DS, MX, CAA and critical address sets, the
+DNSSEC change type, and reviewed readiness confirmations. The local planner
+keeps proposed values separate from the current observation, highlights
+unresolved evidence, set changes, missing glue, unprepared authorities, TTL
+preparation, and DNSSEC ordering, then presents an ordered change and rollback
+checklist. A deliberate JSON download preserves the reviewed comparison,
+unknowns, provenance boundary, and limitations. Entered values remain analyst
+assertions. Nothing is saved automatically. The rehearsal makes no request,
+changes no DNS or registry state, and cannot guarantee propagation or
+correctness.
 
 ### Monitor
 

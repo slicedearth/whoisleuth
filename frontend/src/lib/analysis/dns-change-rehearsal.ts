@@ -1,6 +1,8 @@
 export const DNS_CHANGE_REHEARSAL_VERSION = 1;
+export const DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA = 'whoisleuth.dns-change-rehearsal';
 export const MAX_REHEARSAL_NAMESERVERS = 8;
 export const MAX_REHEARSAL_GLUE = 16;
+export const MAX_REHEARSAL_RECORDS = 32;
 
 export type DnssecChange = 'unchanged' | 'enable' | 'rotate' | 'disable';
 export type DnsChangeFinding = Readonly<{
@@ -12,21 +14,47 @@ export type DnsChangeFinding = Readonly<{
 export type DnsChangeRehearsal = Readonly<{
   version: 1;
   ready: boolean;
-  currentNameservers: readonly string[];
-  proposedNameservers: readonly string[];
-  glue: readonly { nameserver: string; addresses: readonly string[] }[];
+  observed: Readonly<{
+    nameservers: readonly string[];
+    registryNameservers: readonly string[];
+    glue: readonly { nameserver: string; addresses: readonly string[] }[];
+    ds: readonly string[];
+    mx: readonly string[];
+    caa: readonly string[];
+    criticalAddresses: readonly { hostname: string; addresses: readonly string[] }[];
+    complete: boolean;
+  }>;
+  proposed: Readonly<{
+    nameservers: readonly string[];
+    glue: readonly { nameserver: string; addresses: readonly string[] }[];
+    ds: readonly string[];
+    mx: readonly string[];
+    caa: readonly string[];
+    criticalAddresses: readonly { hostname: string; addresses: readonly string[] }[];
+    dnssecChange: DnssecChange;
+  }>;
   findings: readonly DnsChangeFinding[];
   sequence: readonly string[];
   rollback: readonly string[];
+  unknowns: readonly string[];
   limitations: readonly string[];
 }>;
 
-type Input = Readonly<{
+export type DnsChangeRehearsalInput = Readonly<{
   domain: string;
   currentNameservers: readonly string[];
   registryNameservers: readonly string[];
+  currentGlue?: readonly unknown[];
+  currentDs?: readonly unknown[];
+  currentMx?: readonly unknown[];
+  currentCaa?: readonly unknown[];
+  currentCriticalAddresses?: readonly unknown[];
   proposedNameservers: string;
   proposedGlue: string;
+  proposedDs?: string;
+  proposedMx?: string;
+  proposedCaa?: string;
+  proposedCriticalAddresses?: string;
   dnssecChange: DnssecChange;
   ttlLowered: boolean;
   zonePrepublished: boolean;
@@ -82,6 +110,143 @@ function glueRows(value: string): Array<{ nameserver: string; addresses: string[
     .map(([nameserver, values]) => ({ nameserver, addresses: [...values] }));
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function boundedLine(value: unknown, maximum = 500): string {
+  if (typeof value !== 'string' || CONTROL.test(value) || value.length > maximum * 2) return '';
+  return value.replace(/\s+/gu, ' ').trim().slice(0, maximum);
+}
+
+function boundedRecordLines(value: string | readonly unknown[] | undefined): string[] {
+  const values: readonly unknown[] = typeof value === 'string'
+    ? value.split(/\r?\n/u)
+    : Array.isArray(value)
+      ? value
+      : [];
+  return [...new Set(values
+    .slice(0, MAX_REHEARSAL_RECORDS * 3)
+    .map((item) => {
+      if (typeof item === 'string') return boundedLine(item);
+      const candidate = record(item);
+      return boundedLine(
+        candidate.value
+        ?? candidate.record
+        ?? candidate.raw
+        ?? '',
+      );
+    })
+    .filter(Boolean))]
+    .sort()
+    .slice(0, MAX_REHEARSAL_RECORDS);
+}
+
+function dsRecords(value: string | readonly unknown[] | undefined): string[] {
+  const values: readonly unknown[] = typeof value === 'string'
+    ? value.split(/\r?\n/u)
+    : Array.isArray(value)
+      ? value
+      : [];
+  const output = new Set<string>();
+  for (const item of values.slice(0, MAX_REHEARSAL_RECORDS * 3)) {
+    if (typeof item === 'string') {
+      const normalized = boundedLine(item);
+      if (/^\d{1,5}\s+\d{1,3}\s+\d{1,3}\s+[a-f0-9]{16,256}$/iu.test(normalized)) output.add(normalized.toLowerCase());
+    } else {
+      const candidate = record(item);
+      const keyTag = Number(candidate.keyTag);
+      const algorithm = Number(candidate.algorithm);
+      const digestType = Number(candidate.digestType);
+      const digest = boundedLine(candidate.digest, 256).toLowerCase();
+      if (
+        Number.isInteger(keyTag) && keyTag >= 0 && keyTag <= 65_535
+        && Number.isInteger(algorithm) && algorithm >= 0 && algorithm <= 255
+        && Number.isInteger(digestType) && digestType >= 0 && digestType <= 255
+        && /^[a-f0-9]{16,256}$/u.test(digest)
+      ) {
+        output.add(`${keyTag} ${algorithm} ${digestType} ${digest}`);
+      }
+    }
+    if (output.size >= MAX_REHEARSAL_RECORDS) break;
+  }
+  return [...output].sort();
+}
+
+function mxRecords(value: string | readonly unknown[] | undefined): string[] {
+  const values: readonly unknown[] = typeof value === 'string'
+    ? value.split(/\r?\n/u)
+    : Array.isArray(value)
+      ? value
+      : [];
+  const output = new Set<string>();
+  for (const item of values.slice(0, MAX_REHEARSAL_RECORDS * 3)) {
+    const candidate = record(item);
+    const raw = typeof item === 'string'
+      ? boundedLine(item)
+      : `${candidate.priority ?? ''} ${candidate.exchange ?? ''}`.trim();
+    const match = raw.match(/^(\d{1,5})\s+(.+)$/u);
+    const exchange = hostname(match?.[2] ?? '');
+    const priority = Number(match?.[1]);
+    if (exchange && Number.isInteger(priority) && priority >= 0 && priority <= 65_535) {
+      output.add(`${priority} ${exchange}`);
+    }
+    if (output.size >= MAX_REHEARSAL_RECORDS) break;
+  }
+  return [...output].sort((left, right) => Number(left.split(' ')[0]) - Number(right.split(' ')[0]) || left.localeCompare(right));
+}
+
+function caaRecords(value: string | readonly unknown[] | undefined): string[] {
+  const values: readonly unknown[] = typeof value === 'string'
+    ? value.split(/\r?\n/u)
+    : Array.isArray(value)
+      ? value
+      : [];
+  const output = new Set<string>();
+  for (const item of values.slice(0, MAX_REHEARSAL_RECORDS * 3)) {
+    const candidate = record(item);
+    const raw = typeof item === 'string'
+      ? boundedLine(item)
+      : `${candidate.critical ?? ''} ${candidate.tag ?? ''} ${candidate.value ?? ''}`.trim();
+    const match = raw.match(/^([01])\s+(issue|issuewild|iodef)\s+(.{1,300})$/iu);
+    if (match && !CONTROL.test(match[3] ?? '')) {
+      output.add(`${match[1]} ${match[2]?.toLowerCase()} ${match[3]?.trim()}`);
+    }
+    if (output.size >= MAX_REHEARSAL_RECORDS) break;
+  }
+  return [...output].sort();
+}
+
+function addressRows(value: string | readonly unknown[] | undefined): Array<{ hostname: string; addresses: string[] }> {
+  if (typeof value === 'string') {
+    return glueRows(value).map((row) => ({ hostname: row.nameserver, addresses: row.addresses }));
+  }
+  const byHost = new Map<string, Set<string>>();
+  for (const item of (Array.isArray(value) ? value : []).slice(0, MAX_REHEARSAL_RECORDS * 3)) {
+    const candidate = record(item);
+    const host = hostname(String(candidate.hostname ?? candidate.name ?? ''));
+    if (!host) continue;
+    const values = Array.isArray(candidate.addresses) ? candidate.addresses : [];
+    const current = byHost.get(host) ?? new Set<string>();
+    for (const itemAddress of values.slice(0, 4)) {
+      const normalized = address(String(itemAddress));
+      if (normalized) current.add(normalized);
+      if (current.size >= 2) break;
+    }
+    byHost.set(host, current);
+    if (byHost.size >= MAX_REHEARSAL_RECORDS) break;
+  }
+  return [...byHost.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([rowHostname, addresses]) => ({ hostname: rowHostname, addresses: [...addresses].sort() }));
+}
+
+function glueInputRows(value: string | readonly unknown[] | undefined): Array<{ nameserver: string; addresses: string[] }> {
+  return addressRows(value).map((row) => ({ nameserver: row.hostname, addresses: row.addresses }));
+}
+
 function sameSet(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -95,12 +260,38 @@ function finding(
   return { id, state, label, detail };
 }
 
-export function buildDnsChangeRehearsal(input: Input): DnsChangeRehearsal {
+function recordSetFinding(
+  id: string,
+  label: string,
+  observed: readonly string[],
+  proposed: readonly string[],
+): DnsChangeFinding {
+  if (!proposed.length) {
+    return finding(id, 'unknown', `${label} is not represented`, `No intended ${label.toLowerCase()} set was entered. An empty field is not interpreted as a request to remove current records.`);
+  }
+  if (!observed.length) {
+    return finding(id, 'unknown', `Current ${label.toLowerCase()} is unavailable`, `The intended set contains ${proposed.length} record${proposed.length === 1 ? '' : 's'}, but no compatible current observation was retained for comparison.`);
+  }
+  return sameSet(observed, proposed)
+    ? finding(id, 'ready', `${label} is unchanged`, `The intended and observed sets contain the same ${proposed.length} normalized record${proposed.length === 1 ? '' : 's'}.`)
+    : finding(id, 'review', `${label} change proposed`, `Observed: ${observed.join(' | ')}. Intended: ${proposed.join(' | ')}.`);
+}
+
+export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChangeRehearsal {
   const domain = hostname(input.domain);
   const current = nameservers(input.currentNameservers);
   const registry = nameservers(input.registryNameservers);
   const proposed = nameservers(input.proposedNameservers);
+  const currentGlue = glueInputRows(input.currentGlue);
   const glue = glueRows(input.proposedGlue);
+  const currentDs = dsRecords(input.currentDs);
+  const proposedDs = dsRecords(input.proposedDs);
+  const currentMx = mxRecords(input.currentMx);
+  const proposedMx = mxRecords(input.proposedMx);
+  const currentCaa = caaRecords(input.currentCaa);
+  const proposedCaa = caaRecords(input.proposedCaa);
+  const currentCriticalAddresses = addressRows(input.currentCriticalAddresses);
+  const proposedCriticalAddresses = addressRows(input.proposedCriticalAddresses);
   const inBailiwick = proposed.filter((item) => item === domain || item.endsWith(`.${domain}`));
   const missingGlue = inBailiwick.filter((item) => !glue.some((row) => (
     row.nameserver === item && row.addresses.length > 0
@@ -137,6 +328,12 @@ export function buildDnsChangeRehearsal(input: Input): DnsChangeRehearsal {
   } else {
     findings.push(finding('dnssec', 'ready', 'No DNSSEC publication change declared', 'This rehearsal assumes the current DNSSEC relationship remains unchanged.'));
   }
+  findings.push(recordSetFinding('ds', 'DS publication', currentDs, proposedDs));
+  findings.push(recordSetFinding('mx', 'MX routing', currentMx, proposedMx));
+  findings.push(recordSetFinding('caa', 'CAA policy', currentCaa, proposedCaa));
+  const observedAddressSet = currentCriticalAddresses.flatMap((row) => row.addresses.map((itemAddress) => `${row.hostname} ${itemAddress}`)).sort();
+  const proposedAddressSet = proposedCriticalAddresses.flatMap((row) => row.addresses.map((itemAddress) => `${row.hostname} ${itemAddress}`)).sort();
+  findings.push(recordSetFinding('critical_addresses', 'Critical address', observedAddressSet, proposedAddressSet));
 
   const ready = proposed.length > 0 && !findings.some((item) => item.state === 'blocked' || item.state === 'unknown');
   const sequence = [
@@ -152,13 +349,33 @@ export function buildDnsChangeRehearsal(input: Input): DnsChangeRehearsal {
     ...(changingNameservers ? ['Submit the parent nameserver change only after all readiness gates are reviewed.'] : []),
     'Re-run a complete external check after the change and keep failed or location-dependent observations inconclusive.',
   ];
+  const unknowns = findings
+    .filter((item) => item.state === 'unknown')
+    .map((item) => `${item.label}: ${item.detail}`)
+    .slice(0, 12);
 
   return {
     version: DNS_CHANGE_REHEARSAL_VERSION,
     ready,
-    currentNameservers: current,
-    proposedNameservers: proposed,
-    glue,
+    observed: {
+      nameservers: current,
+      registryNameservers: registry,
+      glue: currentGlue,
+      ds: currentDs,
+      mx: currentMx,
+      caa: currentCaa,
+      criticalAddresses: currentCriticalAddresses,
+      complete: input.currentEvidenceComplete,
+    },
+    proposed: {
+      nameservers: proposed,
+      glue,
+      ds: proposedDs,
+      mx: proposedMx,
+      caa: proposedCaa,
+      criticalAddresses: proposedCriticalAddresses,
+      dnssecChange: input.dnssecChange,
+    },
     findings,
     sequence,
     rollback: [
@@ -167,11 +384,37 @@ export function buildDnsChangeRehearsal(input: Input): DnsChangeRehearsal {
       'Restore the last reviewed parent and DNSSEC publication only through the registry or DNS provider control plane.',
       'Verify the rolled-back state directly and through recursive observations; cached disagreement can persist temporarily.',
     ],
+    unknowns,
     limitations: [
       'This is a local planning aid. It does not change DNS, query a provider account, submit a registry update, or verify authorization.',
       'Entered nameservers and glue are analyst assertions, not observed evidence.',
       'Point-in-time observations and generic sequencing cannot replace the registry, DNS operator, and DNSSEC rollover procedures for the affected zone.',
       'A ready rehearsal means the entered gates are represented; it does not guarantee propagation, correctness, availability, or a successful change.',
     ],
+  };
+}
+
+export function buildDnsChangeRehearsalExport(
+  rehearsal: DnsChangeRehearsal,
+  input: Readonly<{ domain: unknown; generatedAt?: unknown }>,
+) {
+  const domain = hostname(String(input.domain ?? ''));
+  if (!domain) throw new Error('A valid rehearsal domain is required.');
+  const generatedAtValue = typeof input.generatedAt === 'string' && Number.isFinite(Date.parse(input.generatedAt))
+    ? new Date(Date.parse(input.generatedAt)).toISOString()
+    : new Date().toISOString();
+  return {
+    schema: DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA,
+    schemaVersion: DNS_CHANGE_REHEARSAL_VERSION,
+    generatedAt: generatedAtValue,
+    domain,
+    reviewState: rehearsal.ready ? 'ready_for_procedural_review' : 'unresolved',
+    observed: rehearsal.observed,
+    analystProposed: rehearsal.proposed,
+    findings: rehearsal.findings,
+    sequence: rehearsal.sequence,
+    rollback: rehearsal.rollback,
+    unknowns: rehearsal.unknowns,
+    limitations: rehearsal.limitations,
   };
 }
