@@ -325,11 +325,16 @@ score, and common infrastructure, templates, libraries, or analytics can
 produce legitimate relationships.
 
 **Service dependency review** reuses current DNS evidence to surface CNAME and
-HTTPS alias-mode targets. External targets are manual review leads. WHOISleuth
-does not follow them, query provider accounts, test claimability, or label a
-service dangling or vulnerable. Complete current DNS evidence with no alias is
-reported only as a point-in-time non-observation; incomplete DNS remains
-unavailable.
+HTTPS alias-mode targets. A fixed, bounded local catalogue can label recognized
+service families without making another request. Analysts can optionally enter
+reviewed expected targets or parent namespaces for the current Lookup view;
+matching and outside-scope aliases remain manual review leads. The scope input
+is not retained. WHOISleuth does not follow targets, query provider accounts,
+test claimability, or label a service dangling or vulnerable. A catalogue or
+scope match does not verify provider configuration, account ownership, service
+assignment, abandonment, or claimability. Complete current DNS evidence with
+no alias is reported only as a point-in-time non-observation; incomplete DNS
+remains unavailable.
 
 **DNS change rehearsal** is available under a completed authoritative DNS
 health result in Deep Lookup. Enter the complete intended nameserver set,

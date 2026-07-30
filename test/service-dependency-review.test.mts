@@ -34,6 +34,39 @@ describe('service dependency review projection', () => {
     assert.match(review.limitations.join(' '), /not evidence that it is dangling, vulnerable/u);
   });
 
+  test('classifies reviewed scope and bounded service signatures without testing claimability', () => {
+    const review = buildServiceDependencyReview({
+      domain: 'example.test',
+      authorizedScope: 'expected.service.test\nbad target\nEXPECTED.SERVICE.TEST.',
+      signatures: [{
+        id: 'fixture-hosting',
+        label: 'Fixture hosting service',
+        targetSuffixes: ['service.test'],
+      }],
+      dnsEvidence: {
+        source: 'dns',
+        complete: true,
+        diagnostics: {
+          cname: { status: 'success' },
+          https: { status: 'not_found' },
+        },
+      },
+      dnsRecords: {
+        cname: ['tenant.expected.service.test', 'other.external.test'],
+        https: [],
+      },
+    });
+
+    assert.ok(review);
+    assert.deepEqual(review.authorizedScope, ['expected.service.test']);
+    assert.equal(review.dependencies[0]?.scope, 'authorized');
+    assert.equal(review.dependencies[0]?.signatureId, 'fixture-hosting');
+    assert.equal(review.dependencies[0]?.serviceFamily, 'Fixture hosting service');
+    assert.equal(review.dependencies[1]?.scope, 'outside');
+    assert.doesNotMatch(JSON.stringify(review.dependencies), /claimable|vulnerable/iu);
+    assert.match(review.limitations.join(' '), /local comparison aids only/u);
+  });
+
   test('reports complete point-in-time non-observation without calling it safe', () => {
     const review = buildServiceDependencyReview({
       domain: 'example.test',

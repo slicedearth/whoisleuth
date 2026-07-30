@@ -14,11 +14,13 @@
     target = 'Lookup target',
     technologies = [],
     libraries = [],
+    authorizedScope = $bindable(''),
   }: {
     review: ServiceDependencyReview;
     target?: string;
     technologies?: TechnologyFinding[];
     libraries?: LibraryFinding[];
+    authorizedScope?: string;
   } = $props();
 
   const dependencyMap = $derived.by(() => {
@@ -34,7 +36,12 @@
         id,
         label: dependency.target,
         kind: 'dependency',
-        detail: `${dependency.recordType} ${dependency.relation}`,
+        detail: [
+          dependency.recordType,
+          dependency.relation,
+          dependency.serviceFamily,
+          dependency.scope === 'authorized' ? 'within reviewed scope' : dependency.scope === 'outside' ? 'outside reviewed scope' : '',
+        ].filter(Boolean).join(' · '),
       });
       links.push({
         id: `dependency-link-${index}`,
@@ -87,6 +94,17 @@
   </summary>
   <div class="body">
     <p class="intro">Surface observed DNS aliases for a conservative manual dangling-service check. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
+    <label class="scope-control">
+      <span>Reviewed service scope <small>Optional, local to this Lookup view</small></span>
+      <textarea
+        bind:value={authorizedScope}
+        rows="2"
+        maxlength="1200"
+        placeholder="Expected service target or namespace, one per line"
+        aria-describedby="dependency-scope-help"
+      ></textarea>
+      <small id="dependency-scope-help">Enter only targets or parent namespaces you have independently confirmed as expected. A match organises review; it does not verify an account or service assignment.</small>
+    </label>
     <BoundedRelationshipMap
       title="Observed services and technology"
       description="The target is connected to observed DNS dependencies and separately derived static technology indicators. Dashed lines identify derived indicators."
@@ -99,6 +117,12 @@
           <article class:attention={dependency.state === 'review'}>
             <header><span>{dependency.recordType}</span><strong>{dependency.relation === 'external' ? 'External' : 'In domain'}</strong></header>
             <code>{dependency.target}</code>
+            {#if dependency.serviceFamily}<p class="classification">{dependency.serviceFamily}</p>{/if}
+            {#if dependency.scope !== 'unspecified'}
+              <p class:scope-match={dependency.scope === 'authorized'} class="scope-state">
+                {dependency.scope === 'authorized' ? 'Within reviewed scope' : 'Outside reviewed scope'}
+              </p>
+            {/if}
             <p>{dependency.detail}</p>
             <small>{dependency.provenance}</small>
           </article>
@@ -125,6 +149,12 @@
   .dependency-review>summary span.unavailable{color:var(--muted)}
   .body{display:grid;gap:11px;padding:0 var(--card-pad) var(--card-pad);border-top:1px solid var(--border)}
   .intro{max-width:820px;margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .scope-control{display:grid;gap:6px;max-width:760px;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .scope-control>span{font:700 var(--text-xs) var(--mono)}
+  .scope-control>span small{margin-left:6px;color:var(--muted);font:var(--text-2xs) var(--sans)}
+  .scope-control textarea{min-width:0;width:100%;resize:vertical;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--text);font:var(--text-xs) var(--mono);line-height:1.5;padding:8px}
+  .scope-control textarea:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .scope-control>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .dependency-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   article{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   article.attention{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
@@ -134,6 +164,9 @@
   article.attention header strong{color:var(--amber)}
   article code{display:block;margin-top:7px;color:var(--text);font-size:var(--text-xs);overflow-wrap:anywhere}
   article p{margin:6px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  article p.classification{color:var(--accent-soft);font-weight:700}
+  article p.scope-state{color:var(--amber);font-family:var(--mono);text-transform:uppercase}
+  article p.scope-state.scope-match{color:var(--cyan)}
   article small{display:block;margin-top:7px;color:var(--muted);font:var(--text-2xs) var(--mono)}
   .next-steps{padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .next-steps h5{margin:0;font:700 var(--text-xs) var(--mono)}
