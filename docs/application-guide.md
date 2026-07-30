@@ -500,7 +500,10 @@ Deep single Lookup can derive several views from one bounded homepage response:
 Technology indicators are evidence-backed clues, not a complete software
 inventory. The bounded catalogue uses generator metadata and tokenized live
 elements, attributes, static-asset paths, resource origins, and selected server
-headers. Static collection does not execute JavaScript, and sites can conceal
+headers. It also compares an allowlist of already-observed passive response
+headers against fixed runtime, framework, commerce, and delivery signatures;
+only the curated match and evidence class survive, not the header value.
+Static collection does not execute JavaScript, and sites can conceal
 or remove distinctive indicators. Site-builder and commerce signatures do not
 identify the host platform from a retained third-party resource origin alone;
 they require a page, generator, or additional storefront marker. Delivery

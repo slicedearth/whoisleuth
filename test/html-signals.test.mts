@@ -295,12 +295,15 @@ describe('pageIdentity', () => {
 
   test('derives bounded technology indicators from the same captured HTML', () => {
     const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1"><astro-island></astro-island>', 'example.com', {
-      httpServer: 'Caddy', observedAt,
+      httpServer: 'Caddy',
+      responseHeaders: { 'x-powered-by': 'Express', 'x-private': 'discarded' },
+      observedAt,
     });
     const technologyProfile = requiredValue(result.technologyProfile);
-    assert.deepEqual(technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
+    assert.deepEqual(technologyProfile.findings.map((item) => item.id), ['hugo', 'astro', 'express', 'caddy']);
     assert.equal(technologyProfile.source, 'derived');
     assert.equal(technologyProfile.observedAt, observedAt);
+    assert.doesNotMatch(JSON.stringify(technologyProfile), /x-private|discarded/);
   });
 
   test('derives page-role and static behaviour profiles from the shared parse', () => {

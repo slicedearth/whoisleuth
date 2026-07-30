@@ -57,6 +57,7 @@ type HomepageResult = {
   detail: string;
   http: HttpObservation;
   responsePolicy?: ResponsePolicyAnalysis | null;
+  technologyHeaders?: Record<string, string>;
 };
 type HomepageFailure = { url: string; error: string };
 type HomepageFetchDetail = {
@@ -312,6 +313,16 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
           status: 'fetched',
           detail: `Homepage responded over ${scheme.toUpperCase()} (HTTP ${res.status}).`,
           responsePolicy: analyzeResponsePolicyHeaders(res.headers),
+          technologyHeaders: {
+            'cf-ray': res.headers.get('cf-ray') || '',
+            'x-drupal-cache': res.headers.get('x-drupal-cache') || '',
+            'x-fastly-request-id': res.headers.get('x-fastly-request-id') || '',
+            'x-generator': res.headers.get('x-generator') || '',
+            'x-powered-by': res.headers.get('x-powered-by') || '',
+            'x-shopify-stage': res.headers.get('x-shopify-stage') || '',
+            'x-sorting-hat-podid': res.headers.get('x-sorting-hat-podid') || '',
+            'x-vercel-id': res.headers.get('x-vercel-id') || '',
+          },
           http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
             previousAttempts: failures,
             capturedBodyBytes: body.bytesRead,
@@ -698,6 +709,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
         exactBodyHash: homepage.http?.response?.bodyHash,
         httpServer: homepage.http?.response?.server,
+        responseHeaders: homepage.technologyHeaders,
         activityStatus,
         includePageIdentity: pageIdentityEligible,
         ...(options.includeCredentialSurfaceProfile !== undefined

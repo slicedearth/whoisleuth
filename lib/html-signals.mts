@@ -23,6 +23,7 @@ type HtmlSignalOptions = {
   sourceTruncated?: boolean;
   exactBodyHash?: unknown;
   httpServer?: unknown;
+  responseHeaders?: unknown;
   observedAt?: string;
   includePageIdentity?: boolean;
   includeCredentialSurfaceProfile?: boolean;
@@ -640,6 +641,7 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
       htmlAnalysis,
       generator: pageIdentity.generator,
       httpServer: options.httpServer,
+      responseHeaders: options.responseHeaders,
       resourceOrigins: pageIdentity.resources.externalOrigins,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,

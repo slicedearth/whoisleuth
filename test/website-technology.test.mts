@@ -124,6 +124,31 @@ describe('website technology profile', () => {
     assert.doesNotMatch(JSON.stringify(result), /1\.27\.0|private-build/);
   });
 
+  test('recognizes allowlisted passive response headers without retaining their values', () => {
+    const result = analyze({
+      html: '<main>Fixture</main>',
+      responseHeaders: {
+        'x-powered-by': 'PHP/8.4 private-build',
+        'x-vercel-id': 'private-request-value',
+        'x-unrelated-secret': 'must-not-be-evaluated',
+      },
+    });
+    assert.deepEqual(result.findings.map((item) => item.id), ['php', 'vercel']);
+    assert.ok(result.findings.every((item) => item.evidence[0]?.source === 'passive response header'));
+    assert.equal(result.diagnostics.passiveHeadersEvaluated, 2);
+    assert.doesNotMatch(JSON.stringify(result), /8\\.4|private-build|private-request-value|must-not-be-evaluated/);
+  });
+
+  test('requires exact allowlisted header value signatures for runtime indicators', () => {
+    const result = analyze({
+      html: '<main>Fixture</main>',
+      responseHeaders: {
+        'x-powered-by': 'A private application mentions PHP',
+      },
+    });
+    assert.equal(result.findings.find((item) => item.id === 'php'), undefined);
+  });
+
   test('recognizes an expanded set of generator-declared platforms', () => {
     const cases = [
       ['Craft CMS 5.0', 'craft-cms', 'content management'],

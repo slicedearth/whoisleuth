@@ -16,6 +16,7 @@ import {
 } from './static-html-analysis.mts';
 
 type TechnologyCategory =
+  | 'application runtime'
   | 'content management'
   | 'commerce'
   | 'site builder'
@@ -24,7 +25,7 @@ type TechnologyCategory =
   | 'web server'
   | 'delivery platform';
 type TechnologyConfidence = 'high' | 'medium';
-type TechnologyEvidenceSource = 'generator metadata' | 'static HTML' | 'resource origin' | 'HTTP server header';
+type TechnologyEvidenceSource = 'generator metadata' | 'static HTML' | 'resource origin' | 'HTTP server header' | 'passive response header';
 type TechnologyEvidence = { source: TechnologyEvidenceSource; description: string };
 type TechnologyFinding = {
   id: string;
@@ -38,6 +39,7 @@ type TechnologyInput = {
   generator?: unknown;
   httpServer?: unknown;
   resourceOrigins?: unknown;
+  responseHeaders?: unknown;
   htmlAnalysis?: StaticHtmlAnalysis;
   observedAt?: unknown;
   sourceTruncated?: unknown;
@@ -47,6 +49,7 @@ type MatchContext = {
   generator: string;
   httpServer: string;
   resourceHosts: Set<string>;
+  responseHeaders: ReadonlyMap<string, string>;
 };
 type SignatureEvidence = TechnologyEvidence & {
   confidence: TechnologyConfidence;
@@ -69,7 +72,7 @@ type TechnologySignatureDescriptor = Readonly<{
   evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
 }>;
 
-const TECHNOLOGY_PROFILE_VERSION = 5;
+const TECHNOLOGY_PROFILE_VERSION = 6;
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_TECHNOLOGY_FINDINGS = 24;
@@ -77,6 +80,7 @@ const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 const MAX_RESOURCE_ORIGINS = 30;
 const MAX_GENERATOR_INPUT = 160;
 const MAX_SERVER_INPUT = 240;
+const MAX_PASSIVE_RESPONSE_HEADERS = 8;
 const MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH = 180;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
 
@@ -98,6 +102,33 @@ function normalizedResourceHosts(value: unknown): Set<string> {
     }
   }
   return hosts;
+}
+
+const PASSIVE_HEADER_NAMES = new Set([
+  'cf-ray',
+  'x-drupal-cache',
+  'x-fastly-request-id',
+  'x-generator',
+  'x-powered-by',
+  'x-shopify-stage',
+  'x-sorting-hat-podid',
+  'x-vercel-id',
+]);
+
+function normalizedResponseHeaders(value: unknown): ReadonlyMap<string, string> {
+  const input = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const output = new Map<string, string>();
+  for (const [rawName, rawValue] of Object.entries(input).slice(0, MAX_PASSIVE_RESPONSE_HEADERS * 4)) {
+    const name = rawName.trim().toLowerCase();
+    if (!PASSIVE_HEADER_NAMES.has(name) || typeof rawValue !== 'string') continue;
+    const normalized = boundedLowercase(rawValue, 240);
+    if (!normalized) continue;
+    output.set(name, normalized);
+    if (output.size >= MAX_PASSIVE_RESPONSE_HEADERS) break;
+  }
+  return output;
 }
 
 function generatorEvidence(pattern: RegExp, description: string): SignatureEvidence {
@@ -145,6 +176,23 @@ function serverEvidence(pattern: RegExp, description: string, confidence: Techno
   };
 }
 
+function responseHeaderEvidence(
+  name: string,
+  pattern: RegExp | null,
+  description: string,
+  confidence: TechnologyConfidence = 'high',
+): SignatureEvidence {
+  return {
+    source: 'passive response header',
+    description,
+    confidence,
+    matches: ({ responseHeaders }) => {
+      if (!responseHeaders.has(name)) return false;
+      return pattern ? pattern.test(responseHeaders.get(name) ?? '') : true;
+    },
+  };
+}
+
 const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'wordpress', name: 'WordPress', category: 'content management',
@@ -158,6 +206,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     evidence: [
       generatorEvidence(/^drupal(?:\s|$)/i, 'Generator metadata identifies Drupal.'),
       htmlEvidence(['data-drupal-selector=', 'data-drupal-link-system-path=', 'drupal-settings-json'], 'Static markup contains Drupal-specific attributes.'),
+      responseHeaderEvidence('x-drupal-cache', null, 'A Drupal-specific cache response header was observed.', 'medium'),
     ],
   },
   {
@@ -185,7 +234,21 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     evidence: [
       htmlEvidence(['shopify-section', 'shopify.theme'], 'Static markup contains Shopify-specific storefront markers.'),
       resourceEvidence(['cdn.shopify.com'], 'A retained resource origin uses the Shopify content network.'),
+      responseHeaderEvidence('x-shopify-stage', null, 'A Shopify-specific platform response header was observed.', 'medium'),
+      responseHeaderEvidence('x-sorting-hat-podid', null, 'A Shopify-specific routing response header was observed.', 'medium'),
     ],
+  },
+  {
+    id: 'php', name: 'PHP', category: 'application runtime',
+    evidence: [responseHeaderEvidence('x-powered-by', /^php(?:\s|$|\/)/i, 'The passive X-Powered-By response header identifies PHP.')],
+  },
+  {
+    id: 'aspnet', name: 'ASP.NET', category: 'web framework',
+    evidence: [responseHeaderEvidence('x-powered-by', /^asp\.net(?:\s|$|\/)/i, 'The passive X-Powered-By response header identifies ASP.NET.')],
+  },
+  {
+    id: 'express', name: 'Express', category: 'web framework',
+    evidence: [responseHeaderEvidence('x-powered-by', /^express(?:\s|$|\/)/i, 'The passive X-Powered-By response header identifies Express.')],
   },
   {
     id: 'adobe-commerce-magento', name: 'Adobe Commerce / Magento Open Source', category: 'commerce',
@@ -313,7 +376,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'cloudflare', name: 'Cloudflare', category: 'delivery platform',
-    evidence: [serverEvidence(/^cloudflare(?:\s|$|\/)/i, 'The selected response server header identifies Cloudflare.')],
+    evidence: [
+      serverEvidence(/^cloudflare(?:\s|$|\/)/i, 'The selected response server header identifies Cloudflare.'),
+      responseHeaderEvidence('cf-ray', null, 'A Cloudflare request-trace response header was observed.', 'medium'),
+    ],
   },
   {
     id: 'cloudfront', name: 'Amazon CloudFront', category: 'delivery platform',
@@ -328,7 +394,14 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'vercel', name: 'Vercel', category: 'delivery platform',
-    evidence: [serverEvidence(/^vercel(?:\s|$|\/)/i, 'The selected response server header identifies Vercel.')],
+    evidence: [
+      serverEvidence(/^vercel(?:\s|$|\/)/i, 'The selected response server header identifies Vercel.'),
+      responseHeaderEvidence('x-vercel-id', null, 'A Vercel request-trace response header was observed.', 'medium'),
+    ],
+  },
+  {
+    id: 'fastly', name: 'Fastly', category: 'delivery platform',
+    evidence: [responseHeaderEvidence('x-fastly-request-id', null, 'A Fastly request identifier response header was observed.', 'medium')],
   },
   {
     id: 'nginx', name: 'nginx', category: 'web server',
@@ -379,6 +452,7 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
     generator: boundedLowercase(input.generator, MAX_GENERATOR_INPUT),
     httpServer: boundedLowercase(input.httpServer, MAX_SERVER_INPUT),
     resourceHosts: normalizedResourceHosts(input.resourceOrigins),
+    responseHeaders: normalizedResponseHeaders(input.responseHeaders),
   };
   const findings: TechnologyFinding[] = [];
 
@@ -427,6 +501,7 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
         generatorEvaluated: Boolean(context.generator),
         serverEvaluated: Boolean(context.httpServer),
         resourceOriginsEvaluated: context.resourceHosts.size,
+        passiveHeadersEvaluated: context.responseHeaders.size,
         tagLimitReached: htmlAnalysis.tagLimitReached,
       },
     }),
