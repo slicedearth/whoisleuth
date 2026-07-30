@@ -459,7 +459,8 @@ when their explicit model versions match.
 Monitor's custom-rule view includes optional reviewed static page-pattern
 packs. The packs are fixed sets of the same bounded, inspectable rule
 conditions available to an analyst. They keep generic patterns separate from
-brand-relative comparisons and can use retained password-field, off-origin
+brand-relative comparisons, explicitly label confidence as **review
+required**, and can use retained password-field, off-origin
 form-action, favicon, official-asset, urgent-language, wallet-prompt, mail, and
 availability cues. Only the boolean existence of an external form action is
 copied into compact case evidence, not its destination. Packs contribute no

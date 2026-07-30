@@ -104,7 +104,7 @@
       </button>
     {/each}
   </div>
-  <div class="detail-filters" aria-label="Review inbox detail filters">
+  <div class="detail-filters" role="group" aria-label="Review inbox detail filters">
     <label>Source
       <select bind:value={sourceFilter} onchange={() => { page = 1; }}>
         <option value="">All sources</option>

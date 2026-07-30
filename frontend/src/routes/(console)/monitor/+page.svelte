@@ -240,6 +240,7 @@
 {#if view==='inbox'}
 <div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} ondismiss={dismissEvidenceGap} />
+  {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   <CaseLifecycleReview records={cases} />
 </div>
 {/if}
@@ -310,4 +311,5 @@
 
 <style>
   :global(#watchlist-activity){margin-bottom:16px}
+  .case-message{margin:12px 2px;color:var(--accent);font-size:var(--text-sm)}
 </style>

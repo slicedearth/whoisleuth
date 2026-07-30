@@ -119,7 +119,7 @@
   <div class="pack-grid">
     {#each REVIEWED_STATIC_PAGE_PATTERN_PACKS as pack}
       <article>
-        <div><strong>{pack.label}</strong><span>v{STATIC_PAGE_PATTERN_PACK_VERSION} · {pack.relationship === 'brand_relative' ? 'brand-relative' : 'generic'} · {pack.rules.length} rule{pack.rules.length === 1 ? '' : 's'}</span></div>
+        <div><strong>{pack.label}</strong><span>v{STATIC_PAGE_PATTERN_PACK_VERSION} · {pack.relationship === 'brand_relative' ? 'brand-relative' : 'generic'} · review required · {pack.rules.length} rule{pack.rules.length === 1 ? '' : 's'}</span></div>
         <p>{pack.description}</p>
         <small>{pack.evidenceBoundary}</small>
         <button type="button" class="btn" onclick={() => void installPack(pack)}>{packInstalled(pack) ? 'Restore reviewed pack' : 'Install reviewed pack'}</button>

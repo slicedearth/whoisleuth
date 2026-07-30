@@ -18,6 +18,7 @@ export type StaticPagePatternPack = Readonly<{
   description: string;
   evidenceBoundary: string;
   relationship: 'generic' | 'brand_relative';
+  confidence: 'review_required';
   rules: readonly DetectionRule[];
 }>;
 
@@ -28,6 +29,7 @@ export const REVIEWED_STATIC_PAGE_PATTERN_PACKS: readonly StaticPagePatternPack[
     description: 'Queues reviewed pages that combine a password field with an exact official favicon or retained official asset reuse.',
     evidenceBoundary: 'Requires compact case evidence already retained from a reviewed scan. A match is a triage prompt, not a phishing finding.',
     relationship: 'brand_relative',
+    confidence: 'review_required',
     rules: [
       {
         id: 'pack-credential-favicon-v1',
@@ -61,6 +63,7 @@ export const REVIEWED_STATIC_PAGE_PATTERN_PACKS: readonly StaticPagePatternPack[
     description: 'Queues pages with a password field and a similar favicon, or a retained phishing-language cue and exact favicon match.',
     evidenceBoundary: 'The rules use separately retained visual and text cues. Similarity, copied assets, and language do not establish intent or control.',
     relationship: 'brand_relative',
+    confidence: 'review_required',
     rules: [
       {
         id: 'pack-credential-near-favicon-v1',
@@ -94,6 +97,7 @@ export const REVIEWED_STATIC_PAGE_PATTERN_PACKS: readonly StaticPagePatternPack[
     description: 'Queues registered domains where mail publication and a password field are both present.',
     evidenceBoundary: 'Mail and login capability are common legitimate features. This pattern exists only to focus manual review.',
     relationship: 'generic',
+    confidence: 'review_required',
     rules: [
       {
         id: 'pack-mail-login-v1',
@@ -116,6 +120,7 @@ export const REVIEWED_STATIC_PAGE_PATTERN_PACKS: readonly StaticPagePatternPack[
     description: 'Queues credential pages where the bounded static-language matcher observed a reviewed urgency or account-warning phrase.',
     evidenceBoundary: 'Legitimate support and identity pages can use similar wording. The retained phrase is a review cue, not a deception finding.',
     relationship: 'generic',
+    confidence: 'review_required',
     rules: [
       {
         id: 'pack-urgent-account-language-v1',
@@ -137,6 +142,7 @@ export const REVIEWED_STATIC_PAGE_PATTERN_PACKS: readonly StaticPagePatternPack[
     description: 'Queues reviewed static phrases that request a wallet connection, recovery phrase, seed phrase, or private key.',
     evidenceBoundary: 'A phrase match may describe legitimate wallet software, support content, or a warning. It does not establish credential collection or intent.',
     relationship: 'generic',
+    confidence: 'review_required',
     rules: [
       {
         id: 'pack-wallet-connect-v1',
@@ -182,6 +188,7 @@ export const REVIEWED_STATIC_PAGE_PATTERN_PACKS: readonly StaticPagePatternPack[
     description: 'Queues password forms whose already-observed static action points to a different origin.',
     evidenceBoundary: 'External form providers and federated identity flows are common. Only a compact boolean is retained, and a match is not a vulnerability or phishing finding.',
     relationship: 'generic',
+    confidence: 'review_required',
     rules: [
       {
         id: 'pack-password-external-form-v1',
@@ -223,7 +230,8 @@ export function validateStaticPagePatternPack(raw: unknown): StaticPagePatternPa
   const description = text(item.description, 500);
   const evidenceBoundary = text(item.evidenceBoundary, 800);
   const relationship = item.relationship === 'brand_relative' ? 'brand_relative' : item.relationship === 'generic' ? 'generic' : null;
-  if (!SAFE_PACK_ID_RE.test(id) || !label || !description || !evidenceBoundary || !relationship) {
+  const confidence = item.confidence === 'review_required' ? 'review_required' : null;
+  if (!SAFE_PACK_ID_RE.test(id) || !label || !description || !evidenceBoundary || !relationship || !confidence) {
     throw new Error('The page-pattern pack metadata is incomplete or invalid.');
   }
   if (!Array.isArray(item.rules) || !item.rules.length || item.rules.length > MAX_STATIC_PAGE_PATTERN_PACK_RULES) {
@@ -246,6 +254,7 @@ export function validateStaticPagePatternPack(raw: unknown): StaticPagePatternPa
     description,
     evidenceBoundary,
     relationship,
+    confidence,
     rules: merged.rules,
   };
 }
@@ -292,6 +301,7 @@ export function buildStaticPagePatternPackDocument(pack: StaticPagePatternPack):
   description: string;
   evidenceBoundary: string;
   relationship: StaticPagePatternPack['relationship'];
+  confidence: StaticPagePatternPack['confidence'];
   rules: DetectionRule[];
 } {
   return {
@@ -302,6 +312,7 @@ export function buildStaticPagePatternPackDocument(pack: StaticPagePatternPack):
     description: pack.description,
     evidenceBoundary: pack.evidenceBoundary,
     relationship: pack.relationship,
+    confidence: pack.confidence,
     rules: pack.rules.map((rule) => ({
       ...rule,
       conditions: rule.conditions.map((condition) => ({ ...condition })),

@@ -158,6 +158,62 @@ test('a case created from Monitor persists across a reload', async ({ page }) =>
   await expect(page.locator('.case-head', { hasText: 'tracked.invalid' })).toBeVisible();
 });
 
+test('the evidence-gap inbox filters and dismisses a stale failed source on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 700 });
+  await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': {
+      version: 8,
+      cases: [{
+        ...caseRecord({
+          id: 'case-gap-mobile',
+          domain: 'gap-mobile.invalid',
+          status: 'reviewing',
+          disposition: 'suspicious',
+          updatedAt: '2026-05-01T00:00:00.000Z',
+        }),
+        evidencePins: [{
+          id: 'pin-gap-mobile',
+          checkpointId: null,
+          field: 'whois.registrar',
+          category: 'registration',
+          label: 'WHOIS registrar',
+          value: 'Unavailable',
+          source: 'whois',
+          sourceState: 'failed',
+          sourceSchema: null,
+          observedAt: '2026-05-01T00:00:00.000Z',
+          collectionDepth: 'deep',
+          completeness: 'partial',
+          truncated: false,
+          transitionExpectation: null,
+          limitations: ['The source did not answer.'],
+          createdAt: '2026-05-01T00:00:00.000Z',
+        }],
+        decisions: [],
+        actions: [],
+        assertions: [],
+        manualTrail: [],
+      }],
+    },
+  });
+
+  await page.getByLabel('Review inbox detail filters').getByLabel('Source').selectOption('whois');
+  await page.getByLabel('Review inbox detail filters').getByLabel('Age').selectOption('stale');
+  await page.getByLabel('Review inbox detail filters').getByLabel('Case').fill('gap-mobile');
+  await page.getByLabel('Review inbox detail filters').getByLabel('Severity').selectOption('high');
+  await page.getByLabel('Review inbox detail filters').getByLabel('Next action').selectOption('refresh');
+  const item = page.locator('.review-inbox .items li', { hasText: 'gap-mobile.invalid' });
+  await expect(item).toBeVisible();
+  await expect(item).toContainText('stale');
+  await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep');
+  await item.getByRole('combobox').selectOption('accepted_limitation');
+  await item.getByRole('button', { name: 'Dismiss gap' }).click();
+  await expect(item).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Recorded the reviewed evidence-gap dismissal');
+  await expectNoHorizontalOverflow(page);
+});
+
 test('status and disposition edits persist across a reload', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'triage.invalid');

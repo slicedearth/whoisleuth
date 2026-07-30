@@ -84,6 +84,7 @@ describe('reviewed static page-pattern packs', () => {
       assert.equal(merged.skipped, 0);
       assert.equal(merged.added, pack.rules.length);
       assert.ok(merged.rules.every((rule) => rule.riskDelta === 0));
+      assert.equal(pack.confidence, 'review_required');
     }
   });
 
@@ -100,6 +101,7 @@ describe('reviewed static page-pattern packs', () => {
     const source = REVIEWED_STATIC_PAGE_PATTERN_PACKS[0]!;
     const validated = validateStaticPagePatternPack(buildStaticPagePatternPackDocument(source));
     assert.equal(validated.id, source.id);
+    assert.equal(validated.confidence, 'review_required');
     assert.throws(() => validateStaticPagePatternPack({
       ...buildStaticPagePatternPackDocument(source),
       rules: [{ ...source.rules[0], riskDelta: 4 }],
