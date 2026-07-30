@@ -20,6 +20,7 @@ const profile = {
     { control: 'registrar_mfa', state: 'observed', assertedAt: '2026-01-01T00:00:00.000Z', expiresAt: '2027-01-01T00:00:00.000Z', note: '' },
     { control: 'registry_lock', state: 'needs_confirmation', assertedAt: '2026-01-01T00:00:00.000Z', expiresAt: '2026-02-01T00:00:00.000Z', note: '' },
   ],
+  desiredPostureBaselines: [],
   trademarkOwner: '',
   trademarkRegistration: '',
   officialFaviconHash: '',
@@ -66,5 +67,75 @@ describe('owned-domain posture review', () => {
     assert.equal(review.dependencyCounts.unavailable, 1);
     assert.equal(review.dependencies[1]?.review, 'needs_evidence');
     assert.doesNotMatch(JSON.stringify(review.dependencies), /dangling|claimable|abandoned/);
+  });
+
+  test('compares configured desired records without treating incomplete fields as aligned', () => {
+    const configured = {
+      ...profile,
+      desiredPostureBaselines: [{
+        version: 1 as const,
+        domain: 'example.test',
+        nameservers: ['ns1.example.test'],
+        ds: ['12345 13 2 abcdef'],
+        mx: ['10 mail.example.test'],
+        caa: [],
+        tlsIssuer: 'Example issuer',
+        tlsSpkiSha256: '',
+        registrarLock: 'required' as const,
+        renewalReviewAt: '2027-01-01T00:00:00.000Z',
+        suppressions: [{ field: 'mx', reason: 'Reviewed mail transition.', expiresAt: null }],
+        note: '',
+        previousObservation: {
+          observedAt: '2026-05-01T00:00:00.000Z',
+          checks: [{ id: 'registration_lock', status: 'warning' as const, records: [] }],
+        },
+        updatedAt: '2026-05-01T00:00:00.000Z',
+      }],
+    } satisfies BrandProfile;
+    const withRecords = {
+      ...report,
+      checks: [
+        ...report.checks.map((check) => check.id === 'mx'
+          ? { ...check, records: ['20 other-mail.example.test'] }
+          : check),
+        { id: 'nameservers', label: 'Nameservers', status: 'pass' as const, summary: 'Observed', detail: '', records: ['ns1.example.test'], remediation: '' },
+      ],
+    } satisfies DomainPostureHttpResponse;
+    const review = buildOwnedDomainPostureReview(configured, withRecords, '2026-06-01T00:00:00.000Z');
+    assert.equal(review.baselineComparisons.find((item) => item.field === 'nameservers')?.state, 'aligned');
+    assert.equal(review.baselineComparisons.find((item) => item.field === 'mx')?.state, 'suppressed');
+    assert.equal(review.baselineComparisons.find((item) => item.field === 'ds')?.state, 'unsupported');
+    assert.equal(review.baselineComparisons.find((item) => item.field === 'registrarLock')?.state, 'aligned');
+    assert.equal(review.previousChanges.find((item) => item.checkId === 'registration_lock')?.state, 'changed');
+  });
+
+  test('preserves unknown current evidence instead of reporting drift', () => {
+    const configured = {
+      ...profile,
+      desiredPostureBaselines: [{
+        version: 1 as const,
+        domain: 'example.test',
+        nameservers: [],
+        ds: [],
+        mx: ['10 mail.example.test'],
+        caa: [],
+        tlsIssuer: '',
+        tlsSpkiSha256: '',
+        registrarLock: 'unconfigured' as const,
+        renewalReviewAt: null,
+        suppressions: [],
+        note: '',
+        previousObservation: null,
+        updatedAt: '2026-05-01T00:00:00.000Z',
+      }],
+    } satisfies BrandProfile;
+    const unavailable = {
+      ...report,
+      checks: report.checks.map((check) => check.id === 'mx'
+        ? { ...check, status: 'info' as const, records: [], summary: 'Unavailable' }
+        : check),
+    } satisfies DomainPostureHttpResponse;
+    const review = buildOwnedDomainPostureReview(configured, unavailable);
+    assert.equal(review.baselineComparisons.find((item) => item.field === 'mx')?.state, 'unknown');
   });
 });

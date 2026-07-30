@@ -3,12 +3,13 @@
   import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
   import { buildOwnedDomainPostureReview } from '$lib/analysis/owned-domain-posture-review.ts';
   type AuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string };
-  let { active, disabledReason, auditing, results, audit }: {
+  let { active, disabledReason, auditing, results, audit, retainObservation }: {
     active: BrandProfile;
     disabledReason: string;
     auditing: boolean;
     results: AuditResult[];
     audit: () => void | Promise<void>;
+    retainObservation: (report: DomainPostureHttpResponse) => void | Promise<void>;
   } = $props();
 </script>
 
@@ -49,6 +50,41 @@
                 {/each}
               </div>
               <p class="limitation">{review.limitations[0]}</p>
+            </section>
+            <section class="baseline-review" aria-label={`Baseline comparison for ${item.domain}`}>
+              <header>
+                <div>
+                  <strong>Reviewed baseline comparison</strong>
+                  <span>{review.baseline ? `${review.baselineComparisons.filter((entry) => entry.state === 'drift').length} drift · ${review.baselineComparisons.filter((entry) => entry.state === 'unknown' || entry.state === 'unsupported').length} incomplete` : 'Not configured'}</span>
+                </div>
+                {#if review.baseline}<button class="btn compact" onclick={() => retainObservation(item.report!)}>Retain this observation</button>{/if}
+              </header>
+              {#if review.baseline}
+                <div class="comparison-grid">
+                  {#each review.baselineComparisons as comparison}
+                    <article class={`comparison-${comparison.state}`}>
+                      <div><strong>{comparison.label}</strong><span>{comparison.state.replaceAll('_', ' ')}</span></div>
+                      <p>{comparison.explanation}</p>
+                      {#if comparison.desired.length}<small><b>Desired:</b> {comparison.desired.join(' · ')}</small>{/if}
+                      {#if comparison.observed.length}<small><b>Observed:</b> {comparison.observed.join(' · ')}</small>{/if}
+                      {#if comparison.suppressionReason}<small><b>Suppression:</b> {comparison.suppressionReason}</small>{/if}
+                    </article>
+                  {/each}
+                </div>
+                {#if review.previousChanges.length}
+                  <details>
+                    <summary>Changes since retained observation <strong>{review.previousChanges.filter((entry) => entry.state === 'changed').length}</strong></summary>
+                    <ul>
+                      {#each review.previousChanges as change}
+                        <li><code>{change.checkId}</code> · {change.state}</li>
+                      {/each}
+                    </ul>
+                  </details>
+                {/if}
+                <p class="limitation">Retaining an observation is explicit and local. Incomplete evidence remains unknown and does not replace the desired baseline.</p>
+              {:else}
+                <p>No desired posture has been configured for this domain. Use the baseline editor below to record reviewed expectations.</p>
+              {/if}
             </section>
             <div class="checks">
               {#each item.report.checks as check}
@@ -157,11 +193,21 @@
   .desired-groups article>div{display:flex;justify-content:space-between;gap:8px}.desired-groups article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .desired-groups article.state-action>div span{color:var(--danger)}.desired-groups article.state-review>div span{color:var(--warning)}.desired-groups article.state-aligned>div span{color:var(--accent2)}
   .desired-groups p,.desired-groups small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.desired-groups p{margin:5px 0}.desired-groups small{overflow-wrap:anywhere}
+  .baseline-review{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .baseline-review>header{display:flex;align-items:start;justify-content:space-between;gap:10px}
+  .baseline-review>header>div{display:grid;gap:2px}.baseline-review>header span{color:var(--muted);font-size:var(--text-2xs)}
+  .baseline-review>p,.baseline-review li{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .baseline-review details{font-size:var(--text-xs)}.baseline-review ul{margin-bottom:0;padding-left:20px}
+  .comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .comparison-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .comparison-grid article>div{display:flex;justify-content:space-between;gap:8px}.comparison-grid article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .comparison-grid article.comparison-drift>div span{color:var(--danger)}.comparison-grid article.comparison-suppressed>div span{color:var(--warning)}.comparison-grid article.comparison-aligned>div span{color:var(--accent2)}
+  .comparison-grid p,.comparison-grid small{display:block;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}.comparison-grid p{margin:5px 0}
   .dependency-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
   .dependency-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .dependency-grid article>span,.dependency-grid article>small{display:block;margin-top:3px;color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}
   .dependency-grid article>p{margin:5px 0;color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .dependency-grid article>small.needs-evidence{color:var(--warning)}
   @media(max-width:750px){.checks{grid-template-columns:1fr}.audit .section-head{display:block}.audit .section-head button{margin-top:12px}}
-  @media(max-width:620px){.desired-groups,.dependency-grid{grid-template-columns:1fr}}
+  @media(max-width:620px){.desired-groups,.dependency-grid,.comparison-grid{grid-template-columns:1fr}.baseline-review>header{display:grid}}
 </style>

@@ -683,7 +683,14 @@ default (see the README), so many lookups return no personal data at all.
   DKIM public keys are parsed transiently for supported algorithm and size
   evidence and are not retained by the server. Registry and resolver failures,
   exhausted traversal bounds, and unsupported policy targets remain explicit
-  incomplete states.
+  incomplete states. A Brand Profile can separately retain analyst-authored
+  desired nameserver, DS, MX, CAA, TLS issuer or public-key digest,
+  transfer-lock, and renewal-review values; reviewed suppressions; and one
+  explicitly selected compact prior posture observation per official domain.
+  Those local values are not sent with a posture request, do not change
+  infrastructure, and appear only in deliberate profile, baseline, or
+  workspace exports. Incomplete or unsupported public evidence never becomes
+  an aligned result.
 - **External response actions**: WHOISleuth records only analyst-authored
   planned or completed actions in browser-local cases. It does not open a
   pre-addressed mail client, send a report, contact a provider, change DNS, or

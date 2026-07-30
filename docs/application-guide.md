@@ -716,6 +716,17 @@ observed and unavailable dependencies distinct. It never tests provider
 accounts or claimability and never labels a dependency dangling, abandoned,
 vulnerable, safe, or controlled by another party.
 
+The **Owned-domain baseline** editor can additionally retain analyst-authored
+expectations for nameservers, DS records, MX records, CAA policy, a reviewed
+TLS issuer or public-key digest, transfer-lock intent, and a renewal review
+date. Later posture audits label each configured field as aligned, drifted,
+unknown, unsupported, suppressed, or not configured. The analyst must
+explicitly retain an audit before it becomes the previous comparison point.
+Suppressions require a reason and can expire. Desired state and retained
+observations are included in deliberate Brand Profile, workspace, or
+single-baseline exports; they are never applied to registrar, DNS, mail, or
+certificate-provider accounts.
+
 ## Browser-local storage and archives
 
 Cases, campaigns, Brand Profiles, watchlists, shortlist entries, Certificate

@@ -8,7 +8,7 @@ import type { PageBaseline } from './page-baseline.ts';
 import { isInformativeFaviconHash } from './utils.ts';
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
-export const BRAND_PROFILE_SCHEMA_VERSION = 3;
+export const BRAND_PROFILE_SCHEMA_VERSION = 4;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
 export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
@@ -22,6 +22,9 @@ export const MAX_PROFILE_TLD_LENGTH = 63;
 export const MAX_DKIM_SELECTOR_LENGTH = 253;
 export const MAX_DKIM_SELECTORS = 10;
 export const MAX_PROTECTION_ATTESTATIONS = 6;
+export const MAX_DESIRED_POSTURE_BASELINES = 20;
+export const MAX_DESIRED_POSTURE_RECORDS = 32;
+export const MAX_DESIRED_POSTURE_SUPPRESSIONS = 12;
 
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const SHA256_RE = /^[a-f0-9]{64}$/i;
@@ -44,6 +47,17 @@ const PROTECTION_ATTESTATION_STATES = new Set([
   'unavailable',
   'not_applicable',
 ]);
+const DESIRED_POSTURE_FIELDS = new Set([
+  'nameservers',
+  'ds',
+  'mx',
+  'caa',
+  'tls_issuer',
+  'tls_spki',
+  'registrar_lock',
+  'renewal_review',
+]);
+const POSTURE_CHECK_STATUSES = new Set(['danger', 'info', 'pass', 'warning']);
 
 export type MailProtectionProfile = 'defensive_no_mail' | 'parked' | 'standard';
 export type ProtectionAttestationControl = typeof PROTECTION_ATTESTATION_CONTROLS[number];
@@ -60,6 +74,35 @@ export type ProtectionAttestation = {
   expiresAt: string | null;
   note: string;
 };
+export type DesiredPostureSuppression = {
+  field: string;
+  reason: string;
+  expiresAt: string | null;
+};
+export type DesiredPostureObservation = {
+  observedAt: string;
+  checks: Array<{
+    id: string;
+    status: 'danger' | 'info' | 'pass' | 'warning';
+    records: string[];
+  }>;
+};
+export type DesiredPostureBaseline = {
+  version: 1;
+  domain: string;
+  nameservers: string[];
+  ds: string[];
+  mx: string[];
+  caa: string[];
+  tlsIssuer: string;
+  tlsSpkiSha256: string;
+  registrarLock: 'required' | 'not_required' | 'unconfigured';
+  renewalReviewAt: string | null;
+  suppressions: DesiredPostureSuppression[];
+  note: string;
+  previousObservation: DesiredPostureObservation | null;
+  updatedAt: string;
+};
 
 export type BrandProfile = {
   id: string;
@@ -74,6 +117,7 @@ export type BrandProfile = {
   retiredDkimSelectors: string[];
   mailProtectionProfile: MailProtectionProfile;
   protectionAttestations: ProtectionAttestation[];
+  desiredPostureBaselines: DesiredPostureBaseline[];
   trademarkOwner: string;
   trademarkRegistration: string;
   officialFaviconHash: string;
@@ -203,6 +247,101 @@ export function normalizeProtectionAttestations(value: unknown): ProtectionAttes
   return output;
 }
 
+function normalizeDesiredPostureRecords(value: unknown, normalizer?: (value: unknown) => string): string[] {
+  if (!Array.isArray(value)) return [];
+  const output = new Set<string>();
+  for (const item of value.slice(0, MAX_DESIRED_POSTURE_RECORDS * 4)) {
+    const candidate = normalizer
+      ? normalizer(item)
+      : boundedText(item, 500);
+    if (candidate) output.add(candidate);
+    if (output.size >= MAX_DESIRED_POSTURE_RECORDS) break;
+  }
+  return [...output].sort();
+}
+
+function normalizeDesiredPostureObservation(value: unknown): DesiredPostureObservation | null {
+  const candidate = record(value);
+  const observedAt = timestamp(candidate.observedAt, null);
+  if (!observedAt || !Array.isArray(candidate.checks)) return null;
+  const checks: DesiredPostureObservation['checks'] = [];
+  const seen = new Set<string>();
+  for (const item of candidate.checks.slice(0, 64)) {
+    const check = record(item);
+    const id = boundedText(check.id, 64);
+    if (
+      !id
+      || seen.has(id)
+      || typeof check.status !== 'string'
+      || !POSTURE_CHECK_STATUSES.has(check.status)
+    ) continue;
+    seen.add(id);
+    checks.push({
+      id,
+      status: check.status as DesiredPostureObservation['checks'][number]['status'],
+      records: normalizeDesiredPostureRecords(check.records),
+    });
+    if (checks.length >= 32) break;
+  }
+  return checks.length ? { observedAt, checks } : null;
+}
+
+export function normalizeDesiredPostureBaselines(
+  value: unknown,
+  officialDomains: readonly string[],
+  fallbackNow: unknown = new Date().toISOString(),
+): DesiredPostureBaseline[] {
+  if (!Array.isArray(value)) return [];
+  const allowedDomains = new Set(officialDomains);
+  const output: DesiredPostureBaseline[] = [];
+  const seen = new Set<string>();
+  const fallback = timestamp(fallbackNow, new Date(0).toISOString());
+  for (const item of value.slice(0, MAX_DESIRED_POSTURE_BASELINES * 4)) {
+    const candidate = record(item);
+    const domain = normalizeDomain(candidate.domain);
+    if (!domain || !allowedDomains.has(domain) || seen.has(domain)) continue;
+    const suppressions: DesiredPostureSuppression[] = [];
+    const suppressionFields = new Set<string>();
+    for (const rawSuppression of (Array.isArray(candidate.suppressions) ? candidate.suppressions : [])
+      .slice(0, MAX_DESIRED_POSTURE_SUPPRESSIONS * 4)) {
+      const suppression = record(rawSuppression);
+      const field = boundedText(suppression.field, 40);
+      const reason = boundedText(suppression.reason, MAX_PROFILE_TEXT_LENGTH);
+      if (!DESIRED_POSTURE_FIELDS.has(field) || !reason || suppressionFields.has(field)) continue;
+      suppressionFields.add(field);
+      suppressions.push({
+        field,
+        reason,
+        expiresAt: timestamp(suppression.expiresAt, null),
+      });
+      if (suppressions.length >= MAX_DESIRED_POSTURE_SUPPRESSIONS) break;
+    }
+    seen.add(domain);
+    output.push({
+      version: 1,
+      domain,
+      nameservers: normalizeDesiredPostureRecords(candidate.nameservers, (entry) => normalizeDomain(entry)),
+      ds: normalizeDesiredPostureRecords(candidate.ds),
+      mx: normalizeDesiredPostureRecords(candidate.mx),
+      caa: normalizeDesiredPostureRecords(candidate.caa),
+      tlsIssuer: boundedText(candidate.tlsIssuer, MAX_PROFILE_TEXT_LENGTH),
+      tlsSpkiSha256: typeof candidate.tlsSpkiSha256 === 'string' && SHA256_RE.test(candidate.tlsSpkiSha256)
+        ? candidate.tlsSpkiSha256.toLowerCase()
+        : '',
+      registrarLock: ['required', 'not_required'].includes(String(candidate.registrarLock))
+        ? candidate.registrarLock as DesiredPostureBaseline['registrarLock']
+        : 'unconfigured',
+      renewalReviewAt: timestamp(candidate.renewalReviewAt, null),
+      suppressions,
+      note: boundedText(candidate.note, MAX_PROFILE_TEXT_LENGTH),
+      previousObservation: normalizeDesiredPostureObservation(candidate.previousObservation),
+      updatedAt: timestamp(candidate.updatedAt, fallback),
+    });
+    if (output.length >= MAX_DESIRED_POSTURE_BASELINES) break;
+  }
+  return output;
+}
+
 function normalizeFaviconHash(value: unknown): string {
   return typeof value === 'string' && SHA256_RE.test(value) ? value.toLowerCase() : '';
 }
@@ -245,6 +384,11 @@ export function normalizeBrandProfile(
       .filter((selector) => !dkimSelectors.includes(selector)),
     mailProtectionProfile: normalizeMailProtectionProfile(value.mailProtectionProfile),
     protectionAttestations: normalizeProtectionAttestations(value.protectionAttestations),
+    desiredPostureBaselines: normalizeDesiredPostureBaselines(
+      value.desiredPostureBaselines,
+      officialDomains,
+      now,
+    ),
     trademarkOwner: boundedText(value.trademarkOwner),
     trademarkRegistration: boundedText(value.trademarkRegistration),
     officialFaviconHash: normalizeFaviconHash(value.officialFaviconHash),
@@ -312,8 +456,8 @@ export function mergeBrandProfiles(
   if (importedVersion !== null && importedVersion > BRAND_PROFILE_SCHEMA_VERSION) {
     throw new Error(`This Brand Profile file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
-  if (importedVersion !== 2 && importedVersion !== BRAND_PROFILE_SCHEMA_VERSION) {
-    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2 or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
+  if (![2, 3, BRAND_PROFILE_SCHEMA_VERSION].includes(importedVersion ?? 0)) {
+    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2, 3, or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
   }
   const local = normalizeBrandProfileStore(localRaw).profiles;
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));

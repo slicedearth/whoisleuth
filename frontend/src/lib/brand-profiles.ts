@@ -8,6 +8,7 @@ import {
   MAX_PROFILE_VALUES,
 } from './analysis/brand-profile-model.ts';
 import type {
+  DesiredPostureBaseline,
   MailProtectionProfile,
   ProtectionAttestation,
 } from './analysis/brand-profile-model.ts';
@@ -33,6 +34,7 @@ export interface BrandProfile {
   retiredDkimSelectors: string[];
   mailProtectionProfile: MailProtectionProfile;
   protectionAttestations: ProtectionAttestation[];
+  desiredPostureBaselines: DesiredPostureBaseline[];
   trademarkOwner: string;
   trademarkRegistration: string;
   officialFaviconHash: string;
