@@ -15,12 +15,14 @@
     technologies = [],
     libraries = [],
     authorizedScope = $bindable(''),
+    falsePositiveTargets = $bindable(''),
   }: {
     review: ServiceDependencyReview;
     target?: string;
     technologies?: TechnologyFinding[];
     libraries?: LibraryFinding[];
     authorizedScope?: string;
+    falsePositiveTargets?: string;
   } = $props();
 
   const dependencyMap = $derived.by(() => {
@@ -105,6 +107,17 @@
       ></textarea>
       <small id="dependency-scope-help">Enter only targets or parent namespaces you have independently confirmed as expected. A match organises review; it does not verify an account or service assignment.</small>
     </label>
+    <label class="scope-control">
+      <span>Reviewed false positives <small>Optional, local to this Lookup view</small></span>
+      <textarea
+        bind:value={falsePositiveTargets}
+        rows="2"
+        maxlength="1200"
+        placeholder="Exact observed target, one per line"
+        aria-describedby="dependency-false-positive-help"
+      ></textarea>
+      <small id="dependency-false-positive-help">Exclude only a target you have reviewed. This changes the local review label without deleting or rewriting the observed DNS or HTTP evidence.</small>
+    </label>
     <BoundedRelationshipMap
       title="Observed services and technology"
       description="The target is connected to observed DNS dependencies and separately derived static technology indicators. Dashed lines identify derived indicators."
@@ -114,8 +127,8 @@
     {#if review.dependencies.length}
       <div class="dependency-grid">
         {#each review.dependencies as dependency}
-          <article class:attention={dependency.state === 'review'}>
-            <header><span>{dependency.recordType}</span><strong>{dependency.relation === 'external' ? 'External' : 'In domain'}</strong></header>
+          <article class:attention={dependency.state === 'candidate' || dependency.state === 'unresolved'}>
+            <header><span>{dependency.recordType}</span><strong>{dependency.state.replaceAll('_', ' ')}</strong></header>
             <code>{dependency.target}</code>
             {#if dependency.serviceFamily}<p class="classification">{dependency.serviceFamily}</p>{/if}
             {#if dependency.scope !== 'unspecified'}

@@ -131,6 +131,7 @@
   let evidenceDensity=$state<LookupEvidenceDensity>('standard');
   let taskView=$state<LookupTaskView>('general');
   let serviceDependencyScope=$state('');
+  let serviceDependencyFalsePositives=$state('');
   let pageActive=false;
   const lookupRequestController=new LookupRequestController();
   const lookupCaseController=new LookupCaseController();
@@ -377,7 +378,9 @@
     domain:caseDomain,
     dnsEvidence,
     dnsRecords,
+    httpEvidence,
     authorizedScope:serviceDependencyScope,
+    falsePositiveTargets:serviceDependencyFalsePositives,
   }));
   const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
     targetType:result?.type,
@@ -551,7 +554,7 @@
       return;
     }
 
-    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';
+    loading=true;loadingElapsedMs=0;error='';result=null;caseRecord=null;caseNote='';caseStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';
     const target=entries[0];if(!target)return;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
@@ -727,6 +730,7 @@
             technologies={pageDisplay.technologyFindings}
             libraries={pageDisplay.browserLibraries}
             bind:authorizedScope={serviceDependencyScope}
+            bind:falsePositiveTargets={serviceDependencyFalsePositives}
           /></div>
         {/if}
       {/if}
