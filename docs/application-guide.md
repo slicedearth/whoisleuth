@@ -400,7 +400,11 @@ planned case actions, material watchlist changes, and incomplete saved Bulk
 sessions. Its filters and due-state labels help an analyst resume work; opening
 an item does not start collection, change a disposition, submit a response, or
 claim that the underlying evidence is complete. Evidence-gap items link both
-to the owning case and to a prefilled Deep Lookup refresh. An analyst can
+to the owning case and to a prefilled Deep Lookup refresh. Detail filters can
+narrow the transient projection by retained source, observation age, case
+domain, priority, and next manual action. Every row states why it received its
+position in the deterministic overdue, due-date, priority, observation-time,
+and stable-identity order. An analyst can
 dismiss the exact current gap only after choosing a fixed review outcome. The
 dismissal is recorded in the case investigation trail; it does not resolve or
 delete a pin or assertion. A changed gap receives a new fingerprint and returns
@@ -706,9 +710,11 @@ document and are included in the deliberate workspace archive. They contain
 analyst-authored workflow guidance, so review them before sharing.
 
 Monitor's **Inbox** projects one evidence-gap item per unresolved case when
-that case retains an explicit partial, inconclusive, unknown, or truncated
-evidence pin or an open analyst-authored unknown or contradiction. It does not
-infer facts that were never saved. Resolving the queue requires reviewing the
+that case retains an explicit partial, failed, stale, inconclusive, or
+truncated evidence pin or an open analyst-authored unknown or contradiction.
+It does not infer facts that were never saved. A fixed 7-day aging threshold
+and 30-day stale threshold organise only the review queue; they do not assert
+that the underlying fact changed. Resolving the queue requires reviewing the
 owning case rather than treating a source failure as absence.
 
 Monitor's **Timeline** view combines a bounded projection of deliberately

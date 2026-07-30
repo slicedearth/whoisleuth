@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { buildAnalystReviewInbox, MAX_ANALYST_REVIEW_ITEMS } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
+import {
+  buildAnalystReviewInbox,
+  filterAnalystReviewItems,
+  MAX_ANALYST_REVIEW_ITEMS,
+} from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import type { WatchlistCollection } from '../frontend/src/lib/analysis/watchlist-store.ts';
@@ -125,9 +129,50 @@ describe('analyst review inbox', () => {
     assert.equal(inbox.counts.evidence_gap, 1);
     assert.equal(gap.completeness, 'inconclusive');
     assert.match(gap.detail, /1 open unknown · 1 limited evidence pin/i);
+    assert.deepEqual(gap.sourceIds, ['analyst_assertion', 'whois']);
+    assert.equal(gap.caseDomain, 'review.invalid');
+    assert.equal(gap.age, 'current');
+    assert.equal(gap.nextAction, 'refresh');
+    assert.match(gap.rankingReason, /high priority/i);
     assert.match(gap.href, /case-response-case-one$/);
     assert.equal(gap.retryHref, '/lookup?q=review.invalid&depth=deep');
     assert.match(gap.dismissalTarget ?? '', /^evidence-gap-review:case-one:/u);
+  });
+
+  test('filters the queue by source, age, case, severity, and next action', () => {
+    const record = caseRecord();
+    record.disposition = 'suspicious';
+    record.updatedAt = '2026-06-01T08:00:00.000Z';
+    record.evidencePins = [{
+      id: 'pin-failed',
+      checkpointId: null,
+      field: 'whois.registrar',
+      category: 'registration',
+      label: 'WHOIS registrar',
+      value: 'Unavailable',
+      source: 'whois',
+      sourceState: 'failed',
+      sourceSchema: null,
+      observedAt: '2026-06-01T08:00:00.000Z',
+      collectionDepth: 'deep',
+      completeness: 'complete',
+      truncated: false,
+      transitionExpectation: null,
+      limitations: ['The source did not answer.'],
+      createdAt: '2026-06-01T08:00:00.000Z',
+    }];
+    const inbox = buildAnalystReviewInbox({ cases: [record], bulkSessions: [bulkSession()] }, NOW);
+    const matches = filterAnalystReviewItems(inbox.items, {
+      source: 'whois',
+      age: 'stale',
+      caseQuery: 'REVIEW.',
+      priority: 'high',
+      nextAction: 'refresh',
+    });
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0]?.kind, 'evidence_gap');
+    assert.match(matches[0]?.detail ?? '', /stale observation/u);
+    assert.deepEqual(filterAnalystReviewItems(inbox.items, { source: 'bulk' }).map((item) => item.kind), ['bulk_session']);
   });
 
   test('hides only an explicitly reviewed gap fingerprint and restores a changed gap', () => {
