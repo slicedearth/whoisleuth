@@ -4,9 +4,8 @@
 // must declare exact input exposure, reviewed terms, and bounded request and
 // output budgets before producing separately attributed normalized evidence.
 
-import { classifyQuery } from './classify.mts';
 import { createObservation } from './observation.mts';
-import type { Observation, ObservationStatus } from './observation.mts';
+import type { ObservationStatus } from './observation.mts';
 import {
   assertCuratedConnectorDefinition,
   assertThreatIntelligenceProvider,
@@ -15,234 +14,55 @@ import {
   boundedHttpsUrl,
   boundedInteger,
   boundedString,
-  enumValue,
-  exactKeys,
   isRecord,
   isoTimestamp,
   strictBoundedString,
 } from './bounded-contract-normalizers.mts';
-
-type ThreatIntelligenceTargetType = 'domain' | 'url';
-type ThreatIntelligenceTargetExposure = 'registrable_domain' | 'hostname' | 'origin' | 'full_url';
-type ThreatIntelligenceCapability = 'domain_lookup' | 'url_lookup' | 'indicator_search';
-type ThreatIntelligenceCategory = 'phishing' | 'malware' | 'spam' | 'suspicious' | 'abuse' | 'unknown';
-type ThreatIntelligenceSeverity = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
-type ThreatIntelligenceConfidence = 'high' | 'medium' | 'low' | 'unknown';
-type ThreatIntelligenceCommercialUse = 'allowed' | 'restricted' | 'unknown';
-type ThreatIntelligenceAttribution = 'required' | 'not_required' | 'unknown';
-type ThreatIntelligenceCaching = 'prohibited' | 'transient' | 'bounded' | 'provider_defined' | 'unknown';
-type ThreatIntelligenceQueryRetention = 'none' | 'limited' | 'provider_defined' | 'unknown';
-type ThreatIntelligenceRedistribution = 'allowed' | 'restricted' | 'prohibited' | 'unknown';
-type ThreatIntelligenceResultState =
-  | 'success'
-  | 'partial'
-  | 'not_found'
-  | 'unsupported'
-  | 'skipped'
-  | 'rate_limited'
-  | 'unavailable'
-  | 'error';
-
-type ThreatIntelligenceProviderTargets = Readonly<{
-  domain?: 'registrable_domain';
-  url?: ThreatIntelligenceTargetExposure;
-}>;
-
-type ThreatIntelligenceProviderTerms = Readonly<{
-  reviewedAt: string;
-  termsUrl: string;
-  privacyUrl: string | null;
-  commercialUse: ThreatIntelligenceCommercialUse;
-  attribution: ThreatIntelligenceAttribution;
-  caching: ThreatIntelligenceCaching;
-  queryRetention: ThreatIntelligenceQueryRetention;
-  redistribution: ThreatIntelligenceRedistribution;
-}>;
-
-type ThreatIntelligenceProviderLimits = Readonly<{
-  timeoutMs: number;
-  maxResponseBytes: number;
-  cacheTtlMs: number;
-  concurrency: number;
-  dailyRequests: number;
-  monthlyRequests: number;
-}>;
-
-type ThreatIntelligenceProviderDefinition = Readonly<{
-  version: number;
-  id: string;
-  label: string;
-  capabilities: readonly ThreatIntelligenceCapability[];
-  targets: ThreatIntelligenceProviderTargets;
-  interaction: 'lookup_only';
-  terms: ThreatIntelligenceProviderTerms;
-  limits: ThreatIntelligenceProviderLimits;
-}>;
-
-type ThreatIntelligenceTarget = Readonly<{
-  type: ThreatIntelligenceTargetType;
-  value: string;
-  exposure: ThreatIntelligenceTargetExposure;
-}>;
-
-type ThreatIntelligenceFinding = {
-  id: string | null;
-  category: ThreatIntelligenceCategory;
-  severity: ThreatIntelligenceSeverity;
-  confidence: ThreatIntelligenceConfidence;
-  providerVerdict: string | null;
-  detail: string | null;
-  firstObservedAt: string | null;
-  lastObservedAt: string | null;
-  referenceUrl: string | null;
-  tags: string[];
-};
-
-type ThreatIntelligenceResult = {
-  schema: string;
-  version: number;
-  provider: { id: string; label: string };
-  target: ThreatIntelligenceTarget;
-  state: ThreatIntelligenceResultState;
-  detail: string | null;
-  upstreamStatus: number | null;
-  retryAfterSeconds: number | null;
-  findings: ThreatIntelligenceFinding[];
-  observation: Observation;
-};
-
-type ThreatIntelligenceProviderMatrixEntry = {
-  id: string;
-  label: string;
-  capabilities: ThreatIntelligenceCapability[];
-  targets: { domain?: 'registrable_domain'; url?: ThreatIntelligenceTargetExposure };
-  interaction: 'lookup_only';
-  terms: ThreatIntelligenceProviderTerms;
-  limits: ThreatIntelligenceProviderLimits;
-};
-
-type CuratedConnectorKind = 'discovery' | 'enrichment';
-type CuratedConnectorCollection = 'passive' | 'active' | 'third_party';
-type CuratedConnectorCredentialMode = 'none' | 'optional' | 'required';
-type CuratedConnectorEntityType =
-  | 'domain'
-  | 'hostname'
-  | 'url'
-  | 'ipv4'
-  | 'ipv6'
-  | 'asn'
-  | 'certificate';
-type CuratedConnectorTargetExposure =
-  | 'registrable_domain'
-  | 'hostname'
-  | 'origin'
-  | 'full_url'
-  | 'ip_address'
-  | 'asn'
-  | 'certificate_fingerprint';
-type CuratedConnectorRelationshipType =
-  | 'domain_resolves_to_ip'
-  | 'domain_uses_nameserver'
-  | 'domain_uses_mail_server'
-  | 'domain_presented_certificate'
-  | 'certificate_names_domain'
-  | 'ip_hosts_domain'
-  | 'domain_related_to_domain';
-type CuratedConnectorRelationshipClassification = 'direct' | 'normalized' | 'derived';
-
-type CuratedConnectorInput = Readonly<{
-  type: CuratedConnectorEntityType;
-  exposure: CuratedConnectorTargetExposure;
-}>;
-
-type CuratedConnectorOutputs = Readonly<{
-  entities: readonly CuratedConnectorEntityType[];
-  relationships: readonly CuratedConnectorRelationshipType[];
-}>;
-
-type CuratedConnectorCredentials = Readonly<{
-  mode: CuratedConnectorCredentialMode;
-  scopes: readonly string[];
-}>;
-
-type CuratedConnectorLimits = ThreatIntelligenceProviderLimits & Readonly<{
-  maxEntities: number;
-  maxRelationships: number;
-}>;
-
-type CuratedConnectorDefinition = Readonly<{
-  version: number;
-  id: string;
-  label: string;
-  kinds: readonly CuratedConnectorKind[];
-  inputs: readonly CuratedConnectorInput[];
-  outputs: CuratedConnectorOutputs;
-  collection: CuratedConnectorCollection;
-  credentials: CuratedConnectorCredentials;
-  terms: ThreatIntelligenceProviderTerms;
-  limits: CuratedConnectorLimits;
-  enabledByDefault: false;
-}>;
-
-type CuratedConnectorTarget = Readonly<{
-  type: CuratedConnectorEntityType;
-  value: string;
-  exposure: CuratedConnectorTargetExposure;
-}>;
-
-type CuratedConnectorEntity = {
-  id: string;
-  type: CuratedConnectorEntityType;
-  canonical: string;
-  label: string;
-  attributes: Record<string, string | number | boolean>;
-};
-
-type CuratedConnectorRelationship = {
-  id: string;
-  type: CuratedConnectorRelationshipType;
-  from: string;
-  to: string;
-  classification: CuratedConnectorRelationshipClassification;
-  method: string;
-  firstObservedAt: string | null;
-  lastObservedAt: string | null;
-  complete: boolean | null;
-  truncated: boolean | null;
-  limitations: string[];
-};
-
-type CuratedConnectorResult = {
-  schema: string;
-  version: number;
-  connector: {
-    id: string;
-    label: string;
-    kinds: CuratedConnectorKind[];
-    collection: CuratedConnectorCollection;
-  };
-  target: CuratedConnectorTarget;
-  state: ThreatIntelligenceResultState;
-  detail: string | null;
-  upstreamStatus: number | null;
-  retryAfterSeconds: number | null;
-  entities: CuratedConnectorEntity[];
-  relationships: CuratedConnectorRelationship[];
-  observation: Observation;
-};
-
-type CuratedConnectorMatrixEntry = {
-  id: string;
-  label: string;
-  kinds: CuratedConnectorKind[];
-  inputs: CuratedConnectorInput[];
-  outputs: { entities: CuratedConnectorEntityType[]; relationships: CuratedConnectorRelationshipType[] };
-  collection: CuratedConnectorCollection;
-  credentials: { mode: CuratedConnectorCredentialMode; scopes: string[] };
-  terms: ThreatIntelligenceProviderTerms;
-  limits: CuratedConnectorLimits;
-  enabledByDefault: false;
-};
+import {
+  CURATED_CONNECTOR_ENTITY_TYPES,
+  MAX_THREAT_INTELLIGENCE_URL_LENGTH,
+  normalizeCuratedConnectorTarget,
+  normalizeThreatIntelligenceTarget,
+} from './threat-intelligence-targets.mts';
+import type {
+  CuratedConnectorCollection,
+  CuratedConnectorCredentialMode,
+  CuratedConnectorCredentials,
+  CuratedConnectorDefinition,
+  CuratedConnectorEntity,
+  CuratedConnectorEntityType,
+  CuratedConnectorInput,
+  CuratedConnectorKind,
+  CuratedConnectorLimits,
+  CuratedConnectorMatrixEntry,
+  CuratedConnectorOutputs,
+  CuratedConnectorRelationship,
+  CuratedConnectorRelationshipClassification,
+  CuratedConnectorRelationshipType,
+  CuratedConnectorResult,
+  CuratedConnectorTarget,
+  CuratedConnectorTargetExposure,
+  ThreatIntelligenceCapability,
+  ThreatIntelligenceCaching,
+  ThreatIntelligenceCategory,
+  ThreatIntelligenceCommercialUse,
+  ThreatIntelligenceConfidence,
+  ThreatIntelligenceFinding,
+  ThreatIntelligenceProviderDefinition,
+  ThreatIntelligenceProviderLimits,
+  ThreatIntelligenceProviderMatrixEntry,
+  ThreatIntelligenceProviderTargets,
+  ThreatIntelligenceProviderTerms,
+  ThreatIntelligenceQueryRetention,
+  ThreatIntelligenceRedistribution,
+  ThreatIntelligenceResult,
+  ThreatIntelligenceResultState,
+  ThreatIntelligenceSeverity,
+  ThreatIntelligenceTarget,
+  ThreatIntelligenceTargetExposure,
+  ThreatIntelligenceTargetType,
+  ThreatIntelligenceAttribution,
+} from './threat-intelligence-types.mts';
 
 const THREAT_INTELLIGENCE_CONTRACT_VERSION = 1;
 const THREAT_INTELLIGENCE_SCHEMA = 'whoisleuth.threat-intelligence-result';
@@ -266,31 +86,9 @@ const TERMINAL_STATES_WITHOUT_FINDINGS = new Set<ThreatIntelligenceResultState>(
   'unavailable',
   'error',
 ]);
-const TARGET_EXPOSURES: Readonly<Record<ThreatIntelligenceTargetType, ReadonlySet<ThreatIntelligenceTargetExposure>>> = Object.freeze({
-  domain: new Set<ThreatIntelligenceTargetExposure>(['registrable_domain']),
-  url: new Set<ThreatIntelligenceTargetExposure>(['registrable_domain', 'hostname', 'origin', 'full_url']),
-});
-const CAPABILITIES = new Set<ThreatIntelligenceCapability>(['domain_lookup', 'url_lookup', 'indicator_search']);
 const CATEGORIES = new Set<ThreatIntelligenceCategory>(['phishing', 'malware', 'spam', 'suspicious', 'abuse', 'unknown']);
 const SEVERITIES = new Set<ThreatIntelligenceSeverity>(['critical', 'high', 'medium', 'low', 'unknown']);
 const CONFIDENCES = new Set<ThreatIntelligenceConfidence>(['high', 'medium', 'low', 'unknown']);
-const COMMERCIAL_USE = new Set<ThreatIntelligenceCommercialUse>(['allowed', 'restricted', 'unknown']);
-const ATTRIBUTION = new Set<ThreatIntelligenceAttribution>(['required', 'not_required', 'unknown']);
-const CACHING = new Set<ThreatIntelligenceCaching>(['prohibited', 'transient', 'bounded', 'provider_defined', 'unknown']);
-const QUERY_RETENTION = new Set<ThreatIntelligenceQueryRetention>(['none', 'limited', 'provider_defined', 'unknown']);
-const REDISTRIBUTION = new Set<ThreatIntelligenceRedistribution>(['allowed', 'restricted', 'prohibited', 'unknown']);
-const CONNECTOR_KINDS = new Set<CuratedConnectorKind>(['discovery', 'enrichment']);
-const CONNECTOR_COLLECTIONS = new Set<CuratedConnectorCollection>(['passive', 'active', 'third_party']);
-const CONNECTOR_CREDENTIAL_MODES = new Set<CuratedConnectorCredentialMode>(['none', 'optional', 'required']);
-const CONNECTOR_ENTITY_TYPES = new Set<CuratedConnectorEntityType>([
-  'domain',
-  'hostname',
-  'url',
-  'ipv4',
-  'ipv6',
-  'asn',
-  'certificate',
-]);
 const CONNECTOR_RELATIONSHIP_TYPES = new Set<CuratedConnectorRelationshipType>([
   'domain_resolves_to_ip',
   'domain_uses_nameserver',
@@ -341,21 +139,11 @@ const CONNECTOR_RELATIONSHIP_ENDPOINTS: Readonly<Record<
     to: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
   },
 });
-const CONNECTOR_TARGET_EXPOSURES: Readonly<Record<CuratedConnectorEntityType, ReadonlySet<CuratedConnectorTargetExposure>>> = Object.freeze({
-  domain: new Set<CuratedConnectorTargetExposure>(['registrable_domain']),
-  hostname: new Set<CuratedConnectorTargetExposure>(['hostname']),
-  url: new Set<CuratedConnectorTargetExposure>(['registrable_domain', 'hostname', 'origin', 'full_url']),
-  ipv4: new Set<CuratedConnectorTargetExposure>(['ip_address']),
-  ipv6: new Set<CuratedConnectorTargetExposure>(['ip_address']),
-  asn: new Set<CuratedConnectorTargetExposure>(['asn']),
-  certificate: new Set<CuratedConnectorTargetExposure>(['certificate_fingerprint']),
-});
 
 // createObservation() retains at most 40 source characters, so provider IDs use
 // the same ceiling and can never be truncated at the provenance boundary.
 const MAX_PROVIDER_ID_LENGTH = 40;
 const MAX_PROVIDER_LABEL_LENGTH = 100;
-const MAX_URL_LENGTH = 2048;
 const MAX_DETAIL_LENGTH = 500;
 const MAX_FINDING_ID_LENGTH = 160;
 const MAX_VERDICT_LENGTH = 160;
@@ -369,15 +157,12 @@ const MAX_INPUT_FINDINGS = 500;
 const MAX_TIMEOUT_MS = 15_000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const MAX_REQUEST_BUDGET = 1_000_000;
 const MAX_CONNECTOR_ENTITIES = 200;
 const MAX_CONNECTOR_RELATIONSHIPS = 400;
 const MAX_CONNECTOR_INPUT_ENTITIES = 800;
 const MAX_CONNECTOR_INPUT_RELATIONSHIPS = 1_600;
 const MAX_CONNECTOR_ATTRIBUTES = 20;
 const MAX_CONNECTOR_ATTRIBUTE_LENGTH = 300;
-const MAX_CONNECTOR_SCOPES = 20;
-const MAX_CONNECTOR_SCOPE_LENGTH = 80;
 const MAX_CONNECTOR_METHOD_LENGTH = 160;
 const MAX_CONNECTOR_KEY_LENGTH = 80;
 
@@ -387,101 +172,7 @@ const CONNECTOR_BASE_LIMITATION = 'Connector observations and relationships are 
 const CONNECTOR_NO_MATCH_LIMITATION = 'No matching connector output is not evidence that an entity or relationship is absent or safe.';
 
 function httpsUrl(value: unknown): string | null {
-  return boundedHttpsUrl(value, MAX_URL_LENGTH);
-}
-
-function normalizeCertificateFingerprint(value: unknown): string | null {
-  const raw = strictBoundedString(value, 128);
-  if (!raw || !/^[0-9a-f:]+$/iu.test(raw)) return null;
-  const canonical = raw.replace(/:/gu, '').toLowerCase();
-  return /^[0-9a-f]{64}$/u.test(canonical) ? canonical : null;
-}
-
-function normalizeCuratedConnectorTarget(
-  input: unknown,
-  exposure: unknown,
-): CuratedConnectorTarget {
-  exactKeys(input, new Set(['type', 'value']), 'Connector target');
-  const type = enumValue(input.type, CONNECTOR_ENTITY_TYPES, 'Connector target type');
-  const normalizedExposure = enumValue(exposure, CONNECTOR_TARGET_EXPOSURES[type], 'Connector target exposure');
-
-  if (type === 'url') {
-    const normalized = normalizeThreatIntelligenceTarget({ type: 'url', value: input.value }, normalizedExposure);
-    return Object.freeze({ type, value: normalized.value, exposure: normalizedExposure });
-  }
-  if (type === 'certificate') {
-    const value = normalizeCertificateFingerprint(input.value);
-    if (!value) throw new TypeError('Connector certificate target is invalid');
-    return Object.freeze({ type, value, exposure: normalizedExposure });
-  }
-
-  const raw = strictBoundedString(input.value, MAX_URL_LENGTH);
-  if (!raw) throw new TypeError('Connector target value is invalid');
-  let classified;
-  try {
-    classified = classifyQuery(raw);
-  } catch {
-    classified = null;
-  }
-  if (!classified) throw new TypeError('Connector target value is invalid');
-  if (type === 'domain' && classified.type === 'domain') {
-    return Object.freeze({ type, value: classified.registrableDomain, exposure: normalizedExposure });
-  }
-  if (type === 'hostname' && classified.type === 'domain') {
-    return Object.freeze({ type, value: classified.inputHostname, exposure: normalizedExposure });
-  }
-  if ((type === 'ipv4' || type === 'ipv6') && classified.type === type) {
-    return Object.freeze({ type, value: classified.value, exposure: normalizedExposure });
-  }
-  if (type === 'asn' && classified.type === 'asn') {
-    return Object.freeze({ type, value: classified.value, exposure: normalizedExposure });
-  }
-  throw new TypeError('Connector target type and value are incompatible');
-}
-
-function normalizeThreatIntelligenceTarget(input: unknown, exposure: unknown): ThreatIntelligenceTarget {
-  exactKeys(input, new Set(['type', 'value']), 'Threat-intelligence target');
-  const type = input.type;
-  if ((type !== 'domain' && type !== 'url')
-    || typeof exposure !== 'string'
-    || !TARGET_EXPOSURES[type].has(exposure as ThreatIntelligenceTargetExposure)) {
-    throw new TypeError('Threat-intelligence target exposure is invalid');
-  }
-  if (type === 'domain') {
-    const classified = classifyQuery(String(input.value ?? ''));
-    if (classified.type !== 'domain') throw new TypeError('Threat-intelligence domain target is invalid');
-    return Object.freeze({
-      type: 'domain',
-      value: classified.registrableDomain,
-      exposure: exposure as ThreatIntelligenceTargetExposure,
-    });
-  }
-
-  const raw = strictBoundedString(input.value, MAX_URL_LENGTH);
-  let parsed;
-  try {
-    parsed = raw ? new URL(raw) : null;
-  } catch {
-    parsed = null;
-  }
-  if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
-    throw new TypeError('Threat-intelligence URL target is invalid');
-  }
-  const classified = classifyQuery(parsed.hostname);
-  if (classified.type !== 'domain') throw new TypeError('Threat-intelligence URL target must use a registrable domain');
-  const registrableDomain = classified.registrableDomain || classified.value;
-  const inputHostname = classified.inputHostname || parsed.hostname.toLowerCase();
-  parsed.hash = '';
-  let value = parsed.toString();
-  if (exposure === 'registrable_domain') value = registrableDomain;
-  else if (exposure === 'hostname') value = inputHostname;
-  else if (exposure === 'origin') value = parsed.origin;
-  if (value.length > MAX_URL_LENGTH) throw new TypeError('Threat-intelligence URL target exceeds the canonical length limit');
-  return Object.freeze({
-    type: 'url',
-    value,
-    exposure: exposure as ThreatIntelligenceTargetExposure,
-  });
+  return boundedHttpsUrl(value, MAX_THREAT_INTELLIGENCE_URL_LENGTH);
 }
 
 function connectorEntityExposure(type: CuratedConnectorEntityType): CuratedConnectorTargetExposure {
@@ -552,7 +243,7 @@ function normalizeConnectorEntity(
   if (!isRecord(value)
     || !hasOnlyKeys(value, new Set(['key', 'type', 'value', 'label', 'attributes']))) return null;
   const key = strictBoundedString(value.key, MAX_CONNECTOR_KEY_LENGTH);
-  const type = typeof value.type === 'string' && CONNECTOR_ENTITY_TYPES.has(value.type as CuratedConnectorEntityType)
+  const type = typeof value.type === 'string' && CURATED_CONNECTOR_ENTITY_TYPES.has(value.type as CuratedConnectorEntityType)
     ? value.type as CuratedConnectorEntityType
     : null;
   if (!key || !/^[a-z0-9][a-z0-9._:-]*$/iu.test(key) || !type || !allowedTypes.has(type)) return null;
@@ -863,7 +554,7 @@ function createCuratedConnectorResult(
   if (!normalizedObservedAt) throw new TypeError('Connector observation timestamp is invalid');
   const targetType = isRecord(target)
     && typeof target.type === 'string'
-    && CONNECTOR_ENTITY_TYPES.has(target.type as CuratedConnectorEntityType)
+    && CURATED_CONNECTOR_ENTITY_TYPES.has(target.type as CuratedConnectorEntityType)
     ? target.type as CuratedConnectorEntityType
     : null;
   const inputDeclaration = targetType
