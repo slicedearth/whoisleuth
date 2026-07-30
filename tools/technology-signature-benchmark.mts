@@ -57,6 +57,7 @@ export const MAX_TECHNOLOGY_BENCHMARK_LABEL_LENGTH = 120;
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const CATEGORIES = new Set([
+  'application runtime',
   'content management',
   'commerce',
   'site builder',
@@ -66,7 +67,13 @@ const CATEGORIES = new Set([
   'delivery platform',
 ]);
 const CONFIDENCE_LEVELS = new Set(['high', 'medium']);
-const EVIDENCE_SOURCES = new Set(['generator metadata', 'static HTML', 'resource origin', 'HTTP server header']);
+const EVIDENCE_SOURCES = new Set([
+  'generator metadata',
+  'static HTML',
+  'resource origin',
+  'HTTP server header',
+  'passive response header',
+]);
 const FIXTURE_KINDS = new Set(['positive', 'negative', 'overlap', 'truncation']);
 
 function record(value: unknown): UnknownRecord {

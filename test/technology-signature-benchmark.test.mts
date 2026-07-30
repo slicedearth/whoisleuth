@@ -77,7 +77,7 @@ describe('technology signature benchmark', () => {
     const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
     const serialized = JSON.stringify(report);
     assert.doesNotMatch(serialized, /__NEXT_DATA__|data-mage-init|wixstatic|private-build|WordPress 7\.1/);
-    assert.doesNotMatch(serialized, /"resourceOrigins"|"httpServer"|"generator"|"html"|fixture-input/);
+    assert.doesNotMatch(serialized, /"resourceOrigins"|"responseHeaders"|"httpServer"|"generator"|"html"|fixture-input/);
   });
 
   test('catalogue lint rejects duplicate ids, missing fixtures, invalid confidence, and uncapped evidence', () => {
