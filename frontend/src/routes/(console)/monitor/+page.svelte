@@ -48,7 +48,11 @@
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
   import { buildAnalystReviewInbox } from '$lib/analysis/analyst-review-inbox.ts';
   import { buildRetainedEvidenceTimeline } from '$lib/analysis/retained-evidence-timeline.ts';
-  import { buildWebsiteProfileClusters } from '$lib/analysis/website-profile-clusters.ts';
+  import {
+    buildWebsiteClusterAssertion,
+    buildWebsiteProfileClusters,
+    type WebsiteProfileCluster,
+  } from '$lib/analysis/website-profile-clusters.ts';
   import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '$lib/website-snapshots';
 
   type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
@@ -150,6 +154,16 @@
       await focusCase(record);
     }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the guided case.';}
   }
+  async function recordWebsiteClusterLead(cluster:WebsiteProfileCluster,domain:string){
+    const{record}=await openCase({domain,source:'website-profile-cluster'});
+    const assertion=buildWebsiteClusterAssertion(cluster,domain);
+    if(record.assertions.some((item)=>item.statement===assertion.statement&&item.state==='open')){
+      throw new Error(`That website-profile review lead is already open for ${domain}.`);
+    }
+    await editCase(record.id,{assertion});
+    await refreshCases();
+    caseMessage=`Recorded a separately typed website-profile review lead for ${domain}.`;
+  }
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=await openCase({domain,source:'monitor'});await refreshCases();newDomain='';showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function setStatus(record:CaseRecord,value:string){try{const{pruned}=await editCase(record.id,{status:value});await refreshCases();showCasePage(record);caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
@@ -224,7 +238,7 @@
 
 {#if view==='relationships'}
 <div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
-  <WebsiteProfileClusters summary={websiteProfileClusters} />
+  <WebsiteProfileClusters summary={websiteProfileClusters} onpin={recordWebsiteClusterLead} />
   <RetainedRelationshipObservations
     records={retainedRelationships}
     focusId={page.url.searchParams.get('observation')||''}

@@ -453,11 +453,17 @@ default (see the README), so many lookups return no personal data at all.
   saves a completed Deep Lookup. Each bounded record contains the canonical
   domain, observation and save times, collection completeness and truncation,
   curated technology identifiers, passive posture states, selected
-  page-identity digests, and source-health states. It excludes raw RDAP,
-  WHOIS, HTTP, HTML, contact, credential, and provider payloads. Snapshot
-  comparison, deletion, import, and export happen locally and make no request.
-  A changed or unavailable field is a review lead, not evidence of compromise,
-  ownership, intent, safety, or maliciousness.
+  page-identity digests, up to 30 normalized resource hosts and tracking
+  identifiers, up to 20 external form-action origins, and source-health states.
+  It excludes complete URLs, form paths and queries, raw RDAP, WHOIS, HTTP,
+  HTML, contact, credential, and provider payloads. Snapshot comparison,
+  deletion, import, and export happen locally and make no request. Monitor can
+  derive exact historical clusters and explainable weighted relationships from
+  compatible saved components. A deliberate action records a selected cluster
+  as a separately typed analyst assertion in one browser-local case. A changed,
+  shared, similar, or unavailable field is a review lead, not evidence of
+  compromise, ownership, authorship, coordination, intent, safety, or
+  maliciousness.
   Investigation templates retain only allowlisted guide-stage identities,
   bounded analyst-authored labels and instructions, expected evidence,
   completion criteria, and optional additional request gates. They cannot add

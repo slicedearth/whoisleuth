@@ -363,11 +363,16 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   and campaign membership without another network request. The Evidence
   clusters review layer groups connected cases, keeps every contributing
   relationship inspectable, and qualifies common shared infrastructure.
-  A separate website-profile view groups exact curated technology identifiers
-  and page-identity digests across the latest explicitly saved compact
-  snapshot for each domain. It can be searched by domain or evidence type and
-  keeps partial snapshots visible. Common software, templates, placeholders,
-  and copied content mean these groups are pivots rather than attribution.
+  A separate website-profile view groups exact curated technology identifiers,
+  identity digests, normalized resource hosts, tracking identifiers, and
+  external form-action origins across explicitly saved compact observations.
+  It also calculates bounded weighted relationships from compatible latest
+  snapshots while listing every contributing field and weight. First and last
+  dates describe only browser-local saved history. It can be searched by
+  domain or evidence type, keeps partial snapshots visible, and can record a
+  selected cluster as a separately typed analyst assertion in one case.
+  Common software, services, templates, placeholders, trackers, and copied
+  content mean these groups are pivots rather than attribution.
   Split, merge, label, and dismiss controls alter only the current review view;
   export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
@@ -548,12 +553,16 @@ maliciousness.
 After a completed Deep Lookup, **Save current snapshot** creates one bounded
 browser-local website profile only when the analyst chooses it. The snapshot
 keeps curated technology identifiers, posture states, page-identity digests,
-source health, collection completeness, and timestamps. It excludes raw RDAP,
-WHOIS, HTTP, HTML, contact, and provider payloads. Select an earlier and later
-snapshot of the same domain to review added, removed, changed, unavailable, or
-incomparable fields. Differences are leads for review, not evidence of
-compromise, ownership, intent, or maliciousness. Saving, comparing, deleting,
-exporting, and importing snapshots make no network request.
+bounded resource hosts, tracking identifiers, external form-action origins,
+source health, collection completeness, and timestamps. It excludes form
+paths and queries, raw RDAP, WHOIS, HTTP, HTML, contact, and provider payloads.
+Select an earlier and later snapshot of the same domain to review added,
+removed, changed, unavailable, or incomparable fields. Monitor can search
+exact historical relationships and explainable weighted latest-snapshot
+relationships across domains. Differences and similarity are leads for
+review, not evidence of compromise, ownership, coordination, intent, or
+maliciousness. Saving, comparing, clustering, deleting, exporting, and
+importing snapshots make no network request.
 
 Response-policy checks use the same selected homepage response and make no
 extra request. They retain fixed finding identifiers and bounded counts rather

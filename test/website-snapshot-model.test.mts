@@ -42,6 +42,12 @@ function snapshot(
       faviconHash: null,
       rawHtml: '<html>excluded</html>',
     },
+    identityValues: {
+      resourceHosts: ['assets.snapshot.invalid', 'not a host'],
+      trackingIdentifiers: [{ type: 'analytics', value: 'TRACK-1' }, { type: 'invalid!', value: 'drop' }],
+      formActionOrigins: ['https://forms.snapshot.invalid', 'https://forms.snapshot.invalid/path?secret=1'],
+      rawAction: 'excluded',
+    },
     sources: [{ source: 'page', state: 'success', response: 'excluded' }],
     rawWhois: 'excluded',
     ...overrides,
@@ -62,6 +68,11 @@ describe('website profile snapshots', () => {
     }]);
     assert.deepEqual(normalized.posture, [{ id: 'https', state: 'observed' }]);
     assert.deepEqual(normalized.sources, [{ source: 'page', state: 'success' }]);
+    assert.deepEqual(normalized.identityValues, {
+      resourceHosts: ['assets.snapshot.invalid'],
+      trackingIdentifiers: [{ type: 'analytics', value: 'TRACK-1' }],
+      formActionOrigins: ['https://forms.snapshot.invalid'],
+    });
     assert.equal(JSON.stringify(normalized).includes('rawWhois'), false);
     assert.equal(JSON.stringify(normalized).includes('rawHtml'), false);
     assert.equal(JSON.stringify(normalized).includes('response'), false);
@@ -83,6 +94,11 @@ describe('website profile snapshots', () => {
           trackingIdentifiers: null,
           faviconHash: null,
         },
+        identityValues: {
+          resourceHosts: ['new.snapshot.invalid'],
+          trackingIdentifiers: [],
+          formActionOrigins: [],
+        },
       }),
     );
 
@@ -92,6 +108,7 @@ describe('website profile snapshots', () => {
     assert.ok(result.changes.some((change) => change.field === 'posture.https' && change.state === 'changed'));
     assert.ok(result.changes.some((change) => change.field === 'source.page' && change.state === 'changed'));
     assert.ok(result.changes.some((change) => change.field === 'identity.visibleText' && change.state === 'unavailable'));
+    assert.ok(result.changes.some((change) => change.field === 'identityValues.resourceHosts.assets.snapshot.invalid' && change.state === 'removed'));
   });
 
   test('reports different domains and collection completeness as incomparable', () => {

@@ -521,6 +521,7 @@
       technologyProfile,
       securityPosture,
       baseline:observedPageBaseline,
+      pageIdentity,
       technologyFindings:pageDisplay.technologyFindings,
       securityPostureFindings:pageDisplay.securityPostureFindings,
       diagnostics,

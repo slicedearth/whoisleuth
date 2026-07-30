@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  buildWebsiteClusterAssertion,
   buildWebsiteProfileClusters,
   filterWebsiteProfileClusters,
 } from '../frontend/src/lib/analysis/website-profile-clusters.ts';
@@ -32,6 +33,11 @@ function snapshot(
       trackingIdentifiers: null,
       faviconHash: null,
     },
+    identityValues: {
+      resourceHosts: [],
+      trackingIdentifiers: [],
+      formActionOrigins: [],
+    },
     sources: [{ source: 'http', state: 'success' }],
   };
 }
@@ -46,7 +52,9 @@ describe('website-profile clusters', () => {
     assert.equal(summary.domainsReviewed, 2);
     assert.equal(summary.clusters.some((item) => item.kind === 'technology' && item.domains.length === 2), true);
     assert.equal(summary.clusters.some((item) => item.kind === 'identity' && item.domains.length === 2), true);
-    assert.equal(summary.clusters.some((item) => item.label === 'old'), false);
+    const identity = summary.clusters.find((item) => item.kind === 'identity');
+    assert.equal(identity?.firstObservedAt, '2026-02-01T00:00:00.000Z');
+    assert.equal(identity?.lastObservedAt, '2026-02-02T00:00:00.000Z');
   });
 
   test('does not create a cross-domain cluster from repeated snapshots of one domain', () => {
@@ -75,5 +83,42 @@ describe('website-profile clusters', () => {
     ]);
     assert.equal(summary.clusters.every((item) => item.complete === false), true);
     assert.match(summary.limitations.join(' '), /not converted into absence/i);
+  });
+
+  test('builds explainable weighted relationships from compatible latest components', () => {
+    const first = snapshot('one.example', 'one', '2026-02-01T00:00:00.000Z');
+    const second = {
+      ...snapshot('two.example', 'two', '2026-02-02T00:00:00.000Z', 'different', 'b'.repeat(64)),
+      identity: {
+        ...snapshot('two.example', 'two', '2026-02-02T00:00:00.000Z').identity,
+        normalizedHtml: 'c'.repeat(64),
+        faviconHash: 'd'.repeat(64),
+        formStructure: 'e'.repeat(64),
+      },
+      identityValues: {
+        resourceHosts: ['shared-cdn.example'],
+        trackingIdentifiers: [{ type: 'analytics', value: 'TRACK-1' }],
+        formActionOrigins: ['https://forms.example'],
+      },
+    };
+    const withValues = {
+      ...first,
+      identity: { ...first.identity, faviconHash: 'd'.repeat(64), formStructure: 'e'.repeat(64) },
+      identityValues: {
+        resourceHosts: ['shared-cdn.example'],
+        trackingIdentifiers: [{ type: 'analytics', value: 'TRACK-1' }],
+        formActionOrigins: ['https://forms.example'],
+      },
+    };
+    const summary = buildWebsiteProfileClusters([withValues, second]);
+    const weighted = summary.clusters.find((item) => item.kind === 'similarity');
+    assert.ok(weighted);
+    assert.ok((weighted.score ?? 0) >= 30);
+    assert.equal(weighted.contributingFields.some((item) => item.field === 'identityValues.formActionOrigins'), true);
+    assert.match(weighted.limitations.join(' '), /does not prove ownership/i);
+
+    const assertion = buildWebsiteClusterAssertion(weighted, 'one.example');
+    assert.equal(assertion.kind, 'hypothesis');
+    assert.match(assertion.rationale, /review lead only/i);
   });
 });

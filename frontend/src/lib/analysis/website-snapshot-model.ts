@@ -1,7 +1,7 @@
 import { normalizeDomain } from './case-model.ts';
 
 export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
-export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 1;
+export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 2;
 export const MAX_WEBSITE_SNAPSHOTS = 60;
 export const MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN = 12;
 export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
@@ -24,6 +24,11 @@ export type WebsiteIdentityDigests = Readonly<{
   trackingIdentifiers: string | null;
   faviconHash: string | null;
 }>;
+export type WebsiteIdentityValues = Readonly<{
+  resourceHosts: readonly string[];
+  trackingIdentifiers: readonly { type: string; value: string }[];
+  formActionOrigins: readonly string[];
+}>;
 export type WebsiteProfileSnapshot = Readonly<{
   id: string;
   domain: string;
@@ -34,6 +39,7 @@ export type WebsiteProfileSnapshot = Readonly<{
   technologies: WebsiteSnapshotTechnology[];
   posture: WebsiteSnapshotPosture[];
   identity: WebsiteIdentityDigests;
+  identityValues: WebsiteIdentityValues;
   sources: WebsiteSnapshotSource[];
 }>;
 export type WebsiteSnapshotChange = Readonly<{
@@ -112,6 +118,39 @@ function identity(value: unknown): WebsiteIdentityDigests {
   };
 }
 
+function origin(value: unknown): string {
+  const candidate = text(value, 500);
+  if (!candidate) return '';
+  try {
+    const parsed = new URL(candidate);
+    return ['http:', 'https:'].includes(parsed.protocol)
+      && !parsed.username
+      && !parsed.password
+      && parsed.pathname === '/'
+      && !parsed.search
+      && !parsed.hash
+      ? parsed.origin.toLowerCase()
+      : '';
+  } catch {
+    return '';
+  }
+}
+
+function identityValues(value: unknown): WebsiteIdentityValues {
+  const item = record(value);
+  const resourceHosts = values(item?.resourceHosts, 30, (candidate) => normalizeDomain(candidate)) as string[];
+  const trackingIdentifiers = values(item?.trackingIdentifiers, 30, (candidate) => {
+    const tracker = record(candidate);
+    const type = text(tracker?.type, 40).toLowerCase();
+    const trackerValue = text(tracker?.value, 64).toUpperCase();
+    return /^[a-z-]{1,40}$/u.test(type) && /^[A-Z0-9-]{1,64}$/u.test(trackerValue)
+      ? { type, value: trackerValue }
+      : null;
+  }) as Array<{ type: string; value: string }>;
+  const formActionOrigins = values(item?.formActionOrigins, 20, origin) as string[];
+  return { resourceHosts, trackingIdentifiers, formActionOrigins };
+}
+
 export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSnapshot | null {
   const value = record(raw);
   const domain = normalizeDomain(value?.domain);
@@ -129,6 +168,7 @@ export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSna
     technologies: values(value?.technologies, 40, technology) as WebsiteSnapshotTechnology[],
     posture: values(value?.posture, 40, posture) as WebsiteSnapshotPosture[],
     identity: identity(value?.identity),
+    identityValues: identityValues(value?.identityValues),
     sources: values(value?.sources, 16, source) as WebsiteSnapshotSource[],
   };
 }
@@ -224,6 +264,23 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
     if (left === right) continue;
     changes.push({ field: `identity.${key}`, state: left === null || right === null ? 'unavailable' : 'changed', before: left, after: right });
   }
+  changes.push(
+    ...compareMap(
+      'identityValues.resourceHosts',
+      new Map(before.identityValues.resourceHosts.map((item) => [item, item])),
+      new Map(after.identityValues.resourceHosts.map((item) => [item, item])),
+    ),
+    ...compareMap(
+      'identityValues.trackingIdentifiers',
+      new Map(before.identityValues.trackingIdentifiers.map((item) => [`${item.type}:${item.value}`, item.value])),
+      new Map(after.identityValues.trackingIdentifiers.map((item) => [`${item.type}:${item.value}`, item.value])),
+    ),
+    ...compareMap(
+      'identityValues.formActionOrigins',
+      new Map(before.identityValues.formActionOrigins.map((item) => [item, item])),
+      new Map(after.identityValues.formActionOrigins.map((item) => [item, item])),
+    ),
+  );
   if (before.complete !== after.complete || before.truncated !== after.truncated) {
     changes.push({ field: 'completeness', state: 'incomparable', before: `${before.complete}/${before.truncated}`, after: `${after.complete}/${after.truncated}` });
   }
