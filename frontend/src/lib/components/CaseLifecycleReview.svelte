@@ -29,7 +29,7 @@
     <div>
       <p class="eyebrow">Follow-up controls</p>
       <h2 id="lifecycle-review-title">Contact and lifecycle review</h2>
-      <p>Review saved reporting routes and export dated case actions as a local calendar.</p>
+      <p>Review saved reporting routes and export dated actions, domain expiry, or explicitly pinned certificate and disclosure expiry evidence as a local calendar.</p>
     </div>
     <button type="button" class="btn" onclick={downloadCalendar} disabled={!events.length}>Export review calendar ({events.length})</button>
   </header>

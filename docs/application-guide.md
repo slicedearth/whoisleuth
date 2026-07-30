@@ -406,9 +406,18 @@ Below the inbox, **Contact and lifecycle review** projects reporting routes
 only from deliberately saved case actions. A due label means the saved due or
 follow-up date has arrived; it does not prove that a route is reachable,
 monitored, suitable, or responsible. The local iCalendar export contains
-bounded action-review and observed-expiry review dates without case notes or
-recipient values. An observed expiry date remains point-in-time evidence, not
-a release, deletion, availability, or acquisition forecast.
+bounded action-review and observed domain-expiry dates plus certificate and
+security.txt expiry dates only when the analyst explicitly selected those
+facts as case evidence pins. It excludes case notes, recipient values, and
+other evidence values. Every observed expiry date remains point-in-time
+evidence, not a current-state guarantee, release, deletion, availability, or
+acquisition forecast.
+
+When a selected Lookup includes security.txt, its disclosure-health summary
+organizes retained contact, policy, encryption, language, and expiry coverage.
+Expired, expiring, partial, and unavailable states remain distinct. The summary
+performs no reachability check and does not prove that a published contact is
+monitored, suitable, responsive, or responsible.
 
 Inside an expanded case, the response workspace keeps evidence pins, observed
 facts, analyst assertions, decisions, actions, and manual investigation steps

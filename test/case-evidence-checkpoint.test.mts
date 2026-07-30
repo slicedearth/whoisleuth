@@ -63,6 +63,7 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
         certificate: {
           fingerprintSha256: 'a'.repeat(64),
           issuer: { name: 'Example CA' },
+          validTo: '2026-12-01T00:00:00.000Z',
         },
         limitations: ['The certificate chain was incomplete.'],
       },
@@ -81,6 +82,14 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
         name: 'Example Network',
         cidrs: ['192.0.2.0/24'],
       },
+    },
+    securityTxt: {
+      securityTxtVersion: 1,
+      state: 'present',
+      observedAt: OBSERVED_AT,
+      expiresAt: '2026-10-01T00:00:00.000Z',
+      contacts: ['mailto:security@checkpoint.example'],
+      limitations: ['Publication does not prove reachability.'],
     },
     diagnostics: {
       version: 8,
@@ -107,6 +116,9 @@ describe('case evidence checkpoints', () => {
     assert.equal(byField.get('http.final_origin')?.value, 'https://checkpoint.example');
     assert.equal(byField.get('page.password_field')?.value, 'Observed');
     assert.equal(byField.get('tls.protocol')?.completeness, 'partial');
+    assert.equal(byField.get('tls.valid_to')?.value, '2026-12-01T00:00:00.000Z');
+    assert.equal(byField.get('disclosure.security_txt_expires')?.value, '2026-10-01T00:00:00.000Z');
+    assert.equal(byField.get('disclosure.security_txt_contacts')?.value, 'mailto:security@checkpoint.example');
     assert.equal(byField.get('registration.registrar')?.sourceSchema.version, 23);
     assert.equal(JSON.stringify(facts).includes('secret=discard'), false);
   });

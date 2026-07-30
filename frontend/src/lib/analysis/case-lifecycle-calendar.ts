@@ -7,7 +7,7 @@ export type CaseLifecycleCalendarEvent = Readonly<{
   uid: string;
   caseId: string;
   domain: string;
-  kind: 'action_due' | 'action_follow_up' | 'domain_expiry_review';
+  kind: 'action_due' | 'action_follow_up' | 'certificate_expiry_review' | 'disclosure_expiry_review' | 'domain_expiry_review';
   startsAt: string;
   summary: string;
   description: string;
@@ -85,6 +85,36 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
         startsAt: addDays(expiry, -30),
         summary: `Review observed expiry evidence for ${record.domain}`,
         description: 'The retained expiry date is point-in-time evidence, not a guarantee of deletion, availability, release, or acquisition eligibility.',
+      });
+    }
+    const latestPins = new Map<string, typeof record.evidencePins[number]>();
+    for (const pin of record.evidencePins) {
+      if (pin.field === 'tls.valid_to' || pin.field === 'disclosure.security_txt_expires') {
+        latestPins.set(pin.field, pin);
+      }
+    }
+    const certificateExpiry = timestamp(latestPins.get('tls.valid_to')?.value);
+    if (certificateExpiry) {
+      events.push({
+        uid: `${record.id}-${certificateExpiry.slice(0, 10)}-certificate-review`,
+        caseId: record.id,
+        domain: record.domain,
+        kind: 'certificate_expiry_review',
+        startsAt: addDays(certificateExpiry, -30),
+        summary: `Review retained certificate expiry for ${record.domain}`,
+        description: 'This date came from an analyst-selected TLS evidence pin. Recollect before interpreting current certificate state.',
+      });
+    }
+    const disclosureExpiry = timestamp(latestPins.get('disclosure.security_txt_expires')?.value);
+    if (disclosureExpiry) {
+      events.push({
+        uid: `${record.id}-${disclosureExpiry.slice(0, 10)}-disclosure-review`,
+        caseId: record.id,
+        domain: record.domain,
+        kind: 'disclosure_expiry_review',
+        startsAt: addDays(disclosureExpiry, -14),
+        summary: `Review retained security.txt expiry for ${record.domain}`,
+        description: 'This date came from an analyst-selected disclosure evidence pin. Publication and contact reachability must be reviewed again.',
       });
     }
   }

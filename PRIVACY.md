@@ -518,6 +518,13 @@ default (see the README), so many lookups return no personal data at all.
   authorization data, request bodies, complete URLs, paths, queries,
   fragments, and arbitrary fields. WHOISleuth does not collect or
   independently verify the imported observation.
+  A selected security.txt result can be organized transiently into disclosure
+  health using only its retained contact, policy, encryption, language, expiry,
+  and source state. This adds no request and does not test contact
+  reachability. Certificate and security.txt expiry dates enter the local
+  review calendar only when the analyst explicitly pins those facts to a case.
+  The calendar excludes the pinned values themselves, recipient values, notes,
+  and source payloads.
   A hostname-only browser handoff can turn a pasted domain or HTTP(S) URL into
   a local Lookup link after discarding credentials, port, path, query, and
   fragment. The preview and link stay in browser memory, and opening it fills

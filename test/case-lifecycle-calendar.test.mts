@@ -35,10 +35,51 @@ describe('case lifecycle calendar', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       }],
+      evidencePins: [{
+        id: 'pin-tls-expiry',
+        checkpointId: 'checkpoint-1',
+        field: 'tls.valid_to',
+        category: 'tls',
+        label: 'TLS certificate expiry',
+        value: '2026-09-01T00:00:00.000Z',
+        source: 'TLS certificate',
+        sourceState: 'success',
+        sourceSchema: null,
+        observedAt: '2026-06-01T00:00:00.000Z',
+        collectionDepth: 'deep',
+        completeness: 'complete',
+        truncated: null,
+        transitionExpectation: null,
+        limitations: [],
+        createdAt: '2026-06-01T00:00:00.000Z',
+      }, {
+        id: 'pin-disclosure-expiry',
+        checkpointId: 'checkpoint-1',
+        field: 'disclosure.security_txt_expires',
+        category: 'disclosure',
+        label: 'security.txt expiry',
+        value: '2026-08-01T00:00:00.000Z',
+        source: 'security.txt',
+        sourceState: 'present',
+        sourceSchema: null,
+        observedAt: '2026-06-01T00:00:00.000Z',
+        collectionDepth: 'deep',
+        completeness: 'complete',
+        truncated: null,
+        transitionExpectation: null,
+        limitations: [],
+        createdAt: '2026-06-01T00:00:00.000Z',
+      }],
     });
     assert.ok(record);
     const events = buildCaseLifecycleEvents(record ? [record] : []);
-    assert.deepEqual(events.map((event) => event.kind), ['action_due', 'action_follow_up', 'domain_expiry_review']);
+    assert.deepEqual(events.map((event) => event.kind), [
+      'action_due',
+      'action_follow_up',
+      'disclosure_expiry_review',
+      'certificate_expiry_review',
+      'domain_expiry_review',
+    ]);
     const calendar = serializeCaseLifecycleCalendar(record ? [record] : [], '2026-06-01T00:00:00.000Z');
     assert.match(calendar, /BEGIN:VCALENDAR/);
     assert.match(calendar, /X-WHOISLEUTH-SCHEMA:whoisleuth\.case-review-calendar/);
