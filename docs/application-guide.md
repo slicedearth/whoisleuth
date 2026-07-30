@@ -91,6 +91,15 @@ evidence or claims that missing data is absent.
 response; already-admitted server work can still finish within its existing
 bounds. Leaving Lookup applies the same browser cancellation.
 
+If a completed result contains limited Registry RDAP, WHOIS, or domain-evidence
+states, **Evidence coverage** offers an explicit source-family refresh. Results
+are normalized into a short transient health summary, with a 2 MiB response
+bound, and are not merged into the original envelope. A result that is at
+least seven days old can offer the same reviewed refreshes for otherwise
+complete sources. Run a complete Lookup before saving, comparing, or exporting
+replacement evidence so observations collected at different times are not
+silently combined.
+
 After a successful deep full response, **Collection timing** reports total
 request time plus the duration and settle offset of each source branch that
 actually ran. Branches overlap, so their durations are not additive. A settled

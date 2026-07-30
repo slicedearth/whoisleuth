@@ -51,6 +51,7 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import { buildLookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
   import { buildLookupCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
   import { calibrateExternalIntelligenceRisk } from '$lib/analysis/external-intelligence-risk.ts';
@@ -385,6 +386,10 @@
     whoisParsed,
     threatIntelligenceProviders,
   }));
+  const lookupSourceRefreshPlan=$derived(buildLookupSourceRefreshPlan(
+    evidenceCoverage,
+    result?.fetchedAt,
+  ));
   const lookupSummary=$derived(buildLookupSummaryModel({
     availability,
     rdapParsed,
@@ -642,7 +647,12 @@
         />
       {/if}
 
-      <LookupEvidenceCoverage ledger={evidenceCoverage} />
+      <LookupEvidenceCoverage
+        ledger={evidenceCoverage}
+        refreshPlan={lookupSourceRefreshPlan}
+        query={String(result?.query || caseDomain)}
+        depth={lookupEvidenceDepth}
+      />
 
       <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />
 

@@ -1,7 +1,19 @@
 <script lang="ts">
   import type { EvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import type { LookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
+  import LookupSourceRefresh from '$lib/components/LookupSourceRefresh.svelte';
 
-  let { ledger }: { ledger: EvidenceCoverageLedger } = $props();
+  let {
+    ledger,
+    refreshPlan,
+    query,
+    depth,
+  }: {
+    ledger: EvidenceCoverageLedger;
+    refreshPlan: LookupSourceRefreshPlan;
+    query: string;
+    depth: 'deep' | 'fast';
+  } = $props();
 
   function categoryLabel(value: string) {
     return value.charAt(0).toUpperCase() + value.slice(1);
@@ -44,6 +56,7 @@
         {/each}
       </ul>
       <p class="coverage-note">Bullets identify source-specific limitations, not general descriptions, so a complete source may have none. Limited, unavailable, skipped, unsupported, unknown, and not-found states remain distinct. No source is retried automatically from this view.</p>
+      <LookupSourceRefresh plan={refreshPlan} {query} {depth} />
     </details>
   </section>
 {/if}
