@@ -509,10 +509,13 @@ default (see the README), so many lookups return no personal data at all.
   import happen locally before that ordinary reviewed case import. Row
   conversion reports accepted, rejected, duplicate, and truncated counts
   without retaining excluded values. Capture summaries retain only normalized
-  domains and HTTP(S) origins, bounded titles, technology labels, network
-  origins, screenshot SHA-256 digests, timestamps, completeness, limitations,
-  and optional source references. They reject raw HTML, screenshot bytes,
-  cookies, authorization data, request bodies, complete URLs, paths, queries,
+  domains and HTTP(S) origins, bounded titles, technology labels, request
+  domains, screenshot or DOM-digest plain file names, MIME types, declared
+  sizes, dimensions where applicable, SHA-256 digests, timestamps,
+  completeness, limitations, and optional source references. Artifact bytes
+  are not imported or independently verified. These schemas reject raw HTML,
+  screenshot bytes, archives, decompression fields, path traversal, cookies,
+  authorization data, request bodies, complete URLs, paths, queries,
   fragments, and arbitrary fields. WHOISleuth does not collect or
   independently verify the imported observation.
   A hostname-only browser handoff can turn a pasted domain or HTTP(S) URL into

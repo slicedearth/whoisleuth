@@ -89,6 +89,24 @@ reason, not rejected values. The converter does not autodetect arbitrary
 third-party files, fetch records, or treat imported values as independently
 verified observations.
 
+## Sanitised capture artifact manifest
+
+`whoisleuth.web-capture-manifest` version 1 imports reviewed metadata for a
+sanitised screenshot and optional DOM digest without importing either
+artifact's bytes. Each capture declares a domain, capture time, completeness,
+optional page title and final HTTP(S) origin, up to 30 request domains, up to 20
+technology labels, limitations, and one or two artifact metadata records.
+
+A screenshot record contains a plain file name, PNG, JPEG, or WebP MIME type,
+SHA-256 digest, declared byte size up to 10 MiB, and dimensions up to
+10,000 by 10,000. A DOM-digest record contains a plain file name,
+`application/json` MIME type, SHA-256 digest, and declared byte size up to
+1 MiB. The importer does not read or verify referenced files. It rejects
+embedded bytes, archive or decompression fields, path separators, parent-path
+names, URL credentials, paths, queries, fragments, duplicate artifact kinds,
+unsupported MIME types, and arbitrary fields. The resulting case finding says
+that the metadata was imported and unverified.
+
 ## Bounds and merge behavior
 
 - Maximum file size: 384 KiB.

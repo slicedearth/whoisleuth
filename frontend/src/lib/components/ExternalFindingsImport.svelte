@@ -23,6 +23,8 @@
   } from '$lib/analysis/external-findings-converters.ts';
   import {
     WEB_CAPTURE_SUMMARY_SCHEMA,
+    WEB_CAPTURE_MANIFEST_SCHEMA,
+    parseWebCaptureManifest,
     parseWebCaptureSummary,
   } from '$lib/analysis/web-capture-import.ts';
 
@@ -133,6 +135,19 @@
         value
         && typeof value === 'object'
         && !Array.isArray(value)
+        && (value as Record<string, unknown>).schema === WEB_CAPTURE_MANIFEST_SCHEMA
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Sanitised web-capture manifests are limited to 384 KiB.');
+        }
+        const document = parseWebCaptureManifest(value);
+        preview = { kind: 'findings', document };
+        const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
+        onmessage(`Validated ${document.findings.length} sanitised web-capture manifest finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Artifact bytes were not imported. Review before importing.`);
+      } else if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
         && (value as Record<string, unknown>).schema === WEB_CAPTURE_SUMMARY_SCHEMA
       ) {
         if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
@@ -181,7 +196,7 @@
 <details class="external-import card">
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code> or sanitised <code>whoisleuth.web-capture-summary</code> schema, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
+    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artifact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, accept archive contents, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
     <label class="btn file-btn">Choose JSON or CSV<input type="file" accept="application/json,text/csv,.json,.csv" onchange={selectFile}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
