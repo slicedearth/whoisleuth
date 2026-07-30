@@ -1264,6 +1264,26 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
             cname: { status: 'error', error: 'resolver timed out' },
             soa: { status: 'success' },
             https: { status: 'success' },
+            delegation: { status: 'partial', truncated: false, count: 2 },
+          },
+          delegation: {
+            delegationHealthVersion: 1, version: 1, status: 'partial',
+            observedAt: '2026-07-30T02:03:04.000Z', scanMode: 'deep', source: 'dns_delegation',
+            durationMs: 125, complete: false, truncated: false,
+            detail: 'The delegation-health collection is partial; review each source state before changing DNS.',
+            limitations: [
+              'DNS health does not decide registration availability, ownership, control, intent, safety, or maliciousness.',
+            ],
+            parent: { state: 'success', nameservers: ['ns1.example', 'ns2.example'], error: null },
+            registry: { nameservers: ['ns1.example', 'ns3.example'], nameserverDetails: [], delegationSigned: true, dsRecordCount: 1, truncated: false },
+            authorities: [
+              { nameserver: 'ns1.example', addressSource: 'registry_glue', addresses: ['192.0.2.53'], state: 'success', nameservers: ['ns1.example', 'ns2.example'], soaPrimary: 'ns1.example', attempts: [] },
+              { nameserver: 'ns2.example', addressSource: 'recursive_address', addresses: [], state: 'unreachable', nameservers: [], soaPrimary: null, attempts: [] },
+            ],
+            findings: [
+              { id: 'parent_registry_ns', label: 'Parent and registry nameservers', state: 'warning', summary: 'Parent view and registry publication differ', detail: 'Parent view: ns1.example, ns2.example. Registry publication: ns1.example, ns3.example.', remediation: 'Confirm the intended delegation before changing nameservers.' },
+              { id: 'authority_reachability', label: 'Direct nameserver reachability', state: 'warning', summary: '1 nameserver could not be confirmed', detail: 'Successful: 1. Lame or refused: 0. Unreachable or unresolved: 1.', remediation: 'Restore authoritative service on every delegated nameserver.' },
+            ],
           },
         },
       },
@@ -1287,6 +1307,12 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(card.getByText(/does not follow or connect to them/i)).toBeVisible();
   await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
   await expect(card.getByText(/does not prove common ownership or maliciousness/i)).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'Authoritative DNS health' })).toBeVisible();
+  await expect(card.getByText('Parent view and registry publication differ', { exact: true })).toBeVisible();
+  await expect(card.getByText('1 nameserver could not be confirmed', { exact: true })).toBeVisible();
+  await card.getByText('Direct nameserver observations', { exact: true }).click();
+  await expect(card.getByText('ns2.example', { exact: true }).last()).toBeVisible();
+  await expect(card.getByText(/does not decide registration availability/i)).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

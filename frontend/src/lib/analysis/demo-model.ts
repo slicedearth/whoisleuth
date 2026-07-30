@@ -573,6 +573,26 @@ export function syntheticDemoLookupView(id: string) {
       ],
       failureDetail: conclusive ? '' : 'the synthetic DNS collection was not evaluated',
       truncated: false,
+      delegation: conclusive ? {
+        status: 'Success',
+        complete: true,
+        detail: 'The bounded synthetic delegation-health collection completed.',
+        parentNameservers: dns.nameservers,
+        registryNameservers: dns.nameservers,
+        findings: [
+          { id: 'parent_registry_ns', label: 'Parent and registry nameservers', state: 'healthy', summary: 'Parent view and registry publication agree', detail: 'The fixed nameserver sets are equivalent.', remediation: '' },
+          { id: 'authority_reachability', label: 'Direct nameserver reachability', state: 'healthy', summary: 'Selected nameservers answered direct NS and SOA queries', detail: 'Synthetic fixture only; no DNS query occurred.', remediation: '' },
+        ],
+        authorities: dns.nameservers.slice(0, 2).map((nameserver) => ({
+          nameserver,
+          state: 'success',
+          addressSource: 'Registry glue',
+          addresses: ['192.0.2.53'],
+          nameservers: dns.nameservers,
+          soaPrimary: dns.nameservers[0] || '',
+        })),
+        limitations: ['Synthetic delegation evidence demonstrates the layout only and is not a live DNS-health finding.'],
+      } : null,
     },
     http: {
       status: /inconclusive/i.test(website.status) ? 'Partial' : 'Success',

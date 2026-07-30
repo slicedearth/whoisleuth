@@ -409,6 +409,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   let registrationSource: RegistrationSource = null;
   let registrationConfidence: RegistrationConfidence = 'high';
   let dnssec: string | null = null;
+  let registryDnsEvidence: unknown = null;
 
   if (rdapEnabled) {
     try {
@@ -437,6 +438,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         }
         const parsed = errorRecord(record.parsed);
         if (Object.keys(parsed).length) {
+          registryDnsEvidence = parsed;
           statuses = Array.isArray(parsed.statuses)
             ? parsed.statuses.filter((status: unknown): status is string => typeof status === 'string').map((status: string) => status.toLowerCase())
             : [];
@@ -647,7 +649,10 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       http: skippedHttpObservation(),
     }),
     dnsIntelligenceEnabled
-      ? collectDns(domain, { includeExtendedContext: options.includeExtendedDnsContext === true })
+      ? collectDns(domain, {
+          includeExtendedContext: options.includeExtendedDnsContext === true,
+          registryEvidence: registryDnsEvidence,
+        })
       : Promise.resolve(skippedDnsIntelligence(
           'DNS intelligence is disabled by deployment policy.',
           { includeExtendedContext: options.includeExtendedDnsContext === true },

@@ -7,6 +7,11 @@ import { promises as dns } from 'node:dns';
 import * as net from 'node:net';
 
 import { classifyMxRecords } from './dns-mx.mts';
+import {
+  collectDnsDelegationHealth,
+  skippedDnsDelegationHealth,
+  type AuthorityQuery,
+} from './dns-delegation-health.mts';
 import { createObservation } from './observation.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 import { resolveServiceBindingRecords } from './service-binding-dns.mts';
@@ -31,6 +36,8 @@ type DnsIntelligenceOptions = {
   timeoutMs?: number;
   now?: () => number;
   observedAt?: () => string;
+  registryEvidence?: unknown;
+  queryAuthority?: AuthorityQuery;
 };
 type ReverseDnsIntelligenceOptions = {
   resolver?: DnsResolver;
@@ -103,6 +110,9 @@ function skippedDnsIntelligence(
     mxHosts: [],
     hasSpf: null,
     hasDmarc: null,
+    delegation: includeExtendedContext
+      ? skippedDnsDelegationHealth(detail)
+      : null,
   };
 }
 
@@ -457,28 +467,50 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
   const now = options.now || Date.now;
   const started = now();
   const invoke = (name: string, fallback: DnsResolver, value = domain) => () => (resolvers[name] || fallback)(value);
-  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, soa, https] = await Promise.all([
-    query(invoke('resolve4', dns.resolve4), (records) => normalizeAddresses(records, 4), timeoutMs),
-    query(invoke('resolve6', dns.resolve6), (records) => normalizeAddresses(records, 6), timeoutMs),
-    query(invoke('resolveCname', dns.resolveCname), normalizeHostnames, timeoutMs),
-    query(invoke('resolveNs', dns.resolveNs), normalizeHostnames, timeoutMs),
-    query(invoke('resolveMx', dns.resolveMx), normalizeMx, timeoutMs),
-    query(invoke('resolveTxt', dns.resolveTxt), (records) => normalizeTxtPolicies(records, 'v=spf1'), timeoutMs),
-    query(invoke('resolveTxt', dns.resolveTxt, `_dmarc.${domain}`), (records) => normalizeTxtPolicies(records, 'v=dmarc1'), timeoutMs),
-    query(invoke('resolveCaa', dns.resolveCaa), normalizeCaa, timeoutMs),
-    includeExtendedContext
-      ? query(invoke('resolveSoa', dns.resolveSoa), normalizeSoa, timeoutMs)
-      : Promise.resolve(null),
-    includeExtendedContext
-      ? query(
-          invoke(
-            'resolveHttps',
-            (value) => resolveServiceBindingRecords(value, 'HTTPS', { timeoutMs }),
-          ),
-          normalizeServiceBindings,
-          timeoutMs,
-        )
-      : Promise.resolve(null),
+  const aPromise = query(invoke('resolve4', dns.resolve4), (records) => normalizeAddresses(records, 4), timeoutMs);
+  const aaaaPromise = query(invoke('resolve6', dns.resolve6), (records) => normalizeAddresses(records, 6), timeoutMs);
+  const cnamePromise = query(invoke('resolveCname', dns.resolveCname), normalizeHostnames, timeoutMs);
+  const nsPromise = query(invoke('resolveNs', dns.resolveNs), normalizeHostnames, timeoutMs);
+  const mxPromise = query(invoke('resolveMx', dns.resolveMx), normalizeMx, timeoutMs);
+  const spfPromise = query(invoke('resolveTxt', dns.resolveTxt), (records) => normalizeTxtPolicies(records, 'v=spf1'), timeoutMs);
+  const dmarcPromise = query(invoke('resolveTxt', dns.resolveTxt, `_dmarc.${domain}`), (records) => normalizeTxtPolicies(records, 'v=dmarc1'), timeoutMs);
+  const caaPromise = query(invoke('resolveCaa', dns.resolveCaa), normalizeCaa, timeoutMs);
+  const soaPromise = includeExtendedContext
+    ? query(invoke('resolveSoa', dns.resolveSoa), normalizeSoa, timeoutMs)
+    : Promise.resolve(null);
+  const httpsPromise = includeExtendedContext
+    ? query(
+        invoke(
+          'resolveHttps',
+          (value) => resolveServiceBindingRecords(value, 'HTTPS', { timeoutMs }),
+        ),
+        normalizeServiceBindings,
+        timeoutMs,
+      )
+    : Promise.resolve(null);
+  const delegationPromise = includeExtendedContext
+    ? nsPromise.then((parentNameservers) => collectDnsDelegationHealth(domain, parentNameservers, {
+        registryEvidence: options.registryEvidence,
+        resolve4: (resolvers.resolve4 || dns.resolve4) as (hostname: string) => Promise<unknown>,
+        resolve6: (resolvers.resolve6 || dns.resolve6) as (hostname: string) => Promise<unknown>,
+        ...(options.queryAuthority ? { queryAuthority: options.queryAuthority } : {}),
+        timeoutMs,
+        now,
+        ...(options.observedAt ? { observedAt: options.observedAt } : {}),
+      }))
+    : Promise.resolve(null);
+  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, soa, https, delegation] = await Promise.all([
+    aPromise,
+    aaaaPromise,
+    cnamePromise,
+    nsPromise,
+    mxPromise,
+    spfPromise,
+    dmarcPromise,
+    caaPromise,
+    soaPromise,
+    httpsPromise,
+    delegationPromise,
   ]);
   const queries = {
     a, aaaa, cname, ns, mx, spf, dmarc, caa,
@@ -487,9 +519,12 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
   };
   const values = Object.values(queries);
   const errorCount = values.filter((item) => item.status === 'error').length;
-  const truncated = values.some((item) => item.truncated);
+  const truncated = values.some((item) => item.truncated) || delegation?.truncated === true;
   const discardedCount = values.reduce((sum, item) => sum + item.discarded, 0);
-  const incomplete = errorCount > 0 || truncated || discardedCount > 0;
+  const incomplete = errorCount > 0
+    || truncated
+    || discardedCount > 0
+    || (delegation !== null && delegation.status !== 'success');
   const classifiedMx = mx.status === 'error' ? null : classifyMxRecords(mx.records);
 
   return {
@@ -510,13 +545,23 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
         'HTTPS service-binding records are published connection hints. WHOISleuth does not follow their aliases or connect to their targets, ports, or address hints.',
         'SVCB uses protocol-specific underscored query names. The domain lookup therefore queries the HTTPS-compatible record only; the shared resolver supports SVCB for explicit future service queries.',
       ] : []),
+      ...(delegation ? ['Delegation health compares separately attributed registry, recursive parent-view, and direct nameserver evidence and never decides domain availability.'] : []),
     ],
-    diagnostics: Object.fromEntries(Object.entries(queries).map(([name, item]) => [name, {
-      status: item.status,
-      error: item.error,
-      truncated: item.truncated,
-      discarded: item.discarded,
-    }])),
+    diagnostics: {
+      ...Object.fromEntries(Object.entries(queries).map(([name, item]) => [name, {
+        status: item.status,
+        error: item.error,
+        truncated: item.truncated,
+        discarded: item.discarded,
+      }])),
+      ...(delegation ? {
+        delegation: {
+          status: delegation.status,
+          truncated: delegation.truncated,
+          count: delegation.authorities.length,
+        },
+      } : {}),
+    },
     }),
     records: {
       a: a.records,
@@ -535,6 +580,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     mxHosts: classifiedMx ? classifiedMx.mxHosts : [],
     hasSpf: spf.status === 'error' ? null : spf.records.length > 0,
     hasDmarc: dmarc.status === 'error' ? null : dmarc.records.length > 0,
+    delegation,
   };
 }
 

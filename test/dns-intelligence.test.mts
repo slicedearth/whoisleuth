@@ -118,7 +118,9 @@ test('collector returns deterministic bounded evidence and compatible mail signa
   let clock = 100;
   const result = await collectDnsIntelligence('example.test', {
     resolvers: resolvers({
-      resolve4: async () => ['192.0.2.2', '192.0.2.1'],
+      resolve4: async (name: string) => name === 'example.test'
+        ? ['192.0.2.2', '192.0.2.1']
+        : ['93.184.216.34'],
       resolve6: async () => ['2001:db8::1'],
       resolveCname: missing,
       resolveNs: async () => ['ns2.example.', 'ns1.example.'],
@@ -162,6 +164,21 @@ test('collector returns deterministic bounded evidence and compatible mail signa
       }),
     }),
     includeExtendedContext: true,
+    registryEvidence: {
+      nameservers: ['ns1.example', 'ns2.example'],
+      nameserverDetails: [
+        { name: 'ns1.example', addresses: ['93.184.216.34'] },
+        { name: 'ns2.example', addresses: ['1.1.1.1'] },
+      ],
+      delegationSigned: false,
+      dsData: [],
+    },
+    queryAuthority: async () => ({
+      nameservers: ['ns1.example', 'ns2.example'],
+      soaPrimary: 'ns1.example',
+      errorCode: null,
+      error: null,
+    }),
     now: () => clock += 5,
     observedAt: () => '2026-07-13T00:00:00.000Z',
   });
@@ -169,7 +186,7 @@ test('collector returns deterministic bounded evidence and compatible mail signa
   assert.equal(result.status, 'success');
   assert.equal(result.complete, true);
   assert.equal(result.observedAt, '2026-07-13T00:00:00.000Z');
-  assert.equal(result.durationMs, 5);
+  assert.equal(result.durationMs, 15);
   assert.deepEqual(result.records.a, ['192.0.2.1', '192.0.2.2']);
   assert.deepEqual(result.records.ns, ['ns1.example', 'ns2.example']);
   assert.deepEqual(result.records.spf, ['v=spf1 -all']);
@@ -185,6 +202,8 @@ test('collector returns deterministic bounded evidence and compatible mail signa
   assert.equal(recordValue(result.diagnostics.cname).status, 'not_found');
   assert.equal(recordValue(result.diagnostics.soa).status, 'success');
   assert.equal(recordValue(result.diagnostics.https).status, 'success');
+  assert.equal(recordValue(result.diagnostics.delegation).status, 'success');
+  assert.equal(requiredValue(result.delegation).status, 'success');
 });
 
 test('extended SOA and HTTPS work is omitted unless the deep single-lookup caller requests it', async () => {

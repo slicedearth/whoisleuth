@@ -6,6 +6,7 @@
     rows,
     failureDetail,
     truncated,
+    delegation = null,
     initiallyExpanded = false,
     title = 'DNS intelligence',
     summaryDetail = 'Expand for observed records, provenance, and limitations',
@@ -16,6 +17,30 @@
     rows: Array<{ label: string; value: string }>;
     failureDetail: string;
     truncated: boolean;
+    delegation?: {
+      status: string;
+      complete: boolean;
+      detail: string;
+      parentNameservers: readonly string[];
+      registryNameservers: readonly string[];
+      findings: readonly {
+        id: string;
+        label: string;
+        state: string;
+        summary: string;
+        detail: string;
+        remediation: string;
+      }[];
+      authorities: readonly {
+        nameserver: string;
+        state: string;
+        addressSource: string;
+        addresses: readonly string[];
+        nameservers: readonly string[];
+        soaPrimary: string;
+      }[];
+      limitations: readonly string[];
+    } | null;
     initiallyExpanded?: boolean;
     title?: string;
     summaryDetail?: string;
@@ -37,10 +62,74 @@
     {#if failureDetail}
       <p class="callout warn dns-warning">Partial observation: {failureDetail}. A resolver failure is not evidence that a record is absent.</p>
     {/if}
+    {#if delegation}
+      <section class="delegation" aria-labelledby="delegation-title">
+        <div class="delegation-head">
+          <div><p class="eyebrow">Delegation review</p><h5 id="delegation-title">Authoritative DNS health</h5></div>
+          <span class="evidence-status {evidenceStatusTone(delegation.status, { complete: delegation.complete })}">{delegation.status}</span>
+        </div>
+        <p class="delegation-detail">{delegation.detail}</p>
+        <div class="delegation-sources">
+          <article><small>Parent resolver view</small><strong>{delegation.parentNameservers.join(' · ') || 'Unavailable'}</strong></article>
+          <article><small>Registry publication</small><strong>{delegation.registryNameservers.join(' · ') || 'Unavailable'}</strong></article>
+        </div>
+        <div class="delegation-findings">
+          {#each delegation.findings as finding}
+            <article class={`delegation-finding state-${finding.state}`}>
+              <div><strong>{finding.label}</strong><span>{finding.state}</span></div>
+              <p>{finding.summary}</p>
+              <small>{finding.detail}</small>
+              {#if finding.state !== 'healthy'}<b>Review: {finding.remediation}</b>{/if}
+            </article>
+          {/each}
+        </div>
+        {#if delegation.authorities.length}
+          <details class="authority-detail">
+            <summary>Direct nameserver observations</summary>
+            <div>
+              {#each delegation.authorities as authority}
+                <article>
+                  <div><strong>{authority.nameserver}</strong><span class={`authority-state state-${authority.state}`}>{authority.state}</span></div>
+                  <p>{authority.addresses.join(' · ') || 'No eligible public address'} · {authority.addressSource}</p>
+                  <small>NS answer: {authority.nameservers.join(' · ') || 'Unavailable'} · SOA primary: {authority.soaPrimary || 'Unavailable'}</small>
+                </article>
+              {/each}
+            </div>
+          </details>
+        {/if}
+        {#each delegation.limitations as limitation}<p class="delegation-limitation">{limitation}</p>{/each}
+      </section>
+    {/if}
     <p class="card-note">{note}{truncated ? ' Some record inventories were capped.' : ''}</p>
   </div>
 </details>
 
 <style>
   .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .delegation{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+  .delegation-head,.delegation-finding>div,.authority-detail article>div{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .delegation-head h5{margin:2px 0 0;font-size:var(--text-md)}
+  .delegation-detail,.delegation-limitation{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .delegation-sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+  .delegation-sources article,.delegation-finding,.authority-detail article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .delegation-sources small,.delegation-sources strong{display:block}
+  .delegation-sources small,.delegation-finding small,.authority-detail small,.authority-detail p{color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
+  .delegation-sources strong{margin-top:5px;font:600 var(--text-xs) var(--mono);overflow-wrap:anywhere}
+  .delegation-findings{display:grid;gap:7px;margin-top:8px}
+  .delegation-finding{border-left:3px solid var(--border)}
+  .delegation-finding.state-healthy{border-left-color:var(--accent)}
+  .delegation-finding.state-warning{border-left-color:var(--amber)}
+  .delegation-finding.state-danger{border-left-color:var(--danger)}
+  .delegation-finding>div span,.authority-state{text-transform:uppercase;font:650 var(--text-2xs) var(--mono);letter-spacing:.04em}
+  .delegation-finding p{margin:6px 0 0;font-size:var(--text-xs)}
+  .delegation-finding small{display:block;margin-top:5px}
+  .delegation-finding b{display:block;margin-top:7px;color:var(--muted);font-size:var(--text-2xs);font-weight:500;line-height:1.5}
+  .authority-detail{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .authority-detail>summary{padding:9px 11px;cursor:pointer;font:600 var(--text-xs) var(--mono)}
+  .authority-detail>div{display:grid;gap:7px;padding:0 8px 8px}
+  .authority-detail p{margin:5px 0 0;overflow-wrap:anywhere}
+  .authority-state.state-success{color:var(--accent)}
+  .authority-state.state-lame{color:var(--danger)}
+  .authority-state.state-unreachable{color:var(--amber)}
+  @media(max-width:640px){.delegation-sources{grid-template-columns:1fr}}
 </style>

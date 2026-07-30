@@ -955,6 +955,39 @@ export function buildLookupNetworkDisplay(input: {
   if (Array.isArray(dnsRecords.https) || rec(dnsEvidence.diagnostics).https) {
     dnsRows.push({ label: 'HTTPS service binding', value: dnsDisplay('https') });
   }
+  const delegation = rec(dnsEvidence.delegation);
+  const delegationFindings = records(delegation.findings).slice(0, 8).map((item) => ({
+    id: boundedTechnologyText(item.id, 80),
+    label: boundedTechnologyText(item.label, 120),
+    state: ['healthy', 'warning', 'danger', 'unknown'].includes(String(item.state))
+      ? String(item.state)
+      : 'unknown',
+    summary: boundedTechnologyText(item.summary, 240),
+    detail: boundedTechnologyText(item.detail, 800),
+    remediation: boundedTechnologyText(item.remediation, 400),
+  }));
+  const delegationAuthorities = records(delegation.authorities).slice(0, 4).map((item) => ({
+    nameserver: boundedTechnologyText(item.nameserver, 253),
+    state: ['success', 'lame', 'unreachable'].includes(String(item.state))
+      ? String(item.state)
+      : 'unreachable',
+    addressSource: item.addressSource === 'registry_glue' ? 'Registry glue' : 'Recursive address',
+    addresses: stringList(item.addresses).slice(0, 2),
+    nameservers: stringList(item.nameservers).slice(0, 16),
+    soaPrimary: boundedTechnologyText(item.soaPrimary, 253),
+  }));
+  const dnsDelegation = delegation.delegationHealthVersion === 1
+    ? {
+        status: statusLabel(show(delegation.status)),
+        complete: delegation.complete === true,
+        detail: boundedTechnologyText(delegation.detail, 300),
+        parentNameservers: stringList(rec(delegation.parent).nameservers).slice(0, 16),
+        registryNameservers: stringList(rec(delegation.registry).nameservers).slice(0, 16),
+        findings: delegationFindings,
+        authorities: delegationAuthorities,
+        limitations: stringList(delegation.limitations).slice(0, 8),
+      }
+    : null;
   const httpSecurityRows: Array<[string, unknown]> = [
     ['HSTS', httpSecurityHeaders.strictTransportSecurity],
     ['Content Security Policy', httpSecurityHeaders.contentSecurityPolicy],
@@ -1091,6 +1124,7 @@ export function buildLookupNetworkDisplay(input: {
 
   return {
     dnsRows,
+    dnsDelegation,
     dnsQueryFailures: Object.entries(rec(dnsEvidence.diagnostics))
       .filter(([, item]) => rec(item).status === 'error')
       .map(([name, item]) => `${name.toUpperCase()}: ${rec(item).error || 'query failed'}`)
