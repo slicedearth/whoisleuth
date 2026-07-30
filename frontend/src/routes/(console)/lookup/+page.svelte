@@ -262,6 +262,7 @@
     registryInsights,
     availabilityAbuse:availability.abuse,
     securityTxt,
+    networkContext:observedNetworkContext,
   }));
   const sourceOnlyCount=$derived(comparison.counts.rdap_only+comparison.counts.whois_only);
   const redactedComparisonCount=$derived(comparison.counts.rdap_redacted+comparison.counts.whois_redacted);

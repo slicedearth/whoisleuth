@@ -120,7 +120,7 @@ function recipient(
 
 function registryRecipients(registryInsightsRaw: unknown): ResolvedAbuseRecipient[] {
   const registryInsights = record(registryInsightsRaw);
-  return records(registryInsights.abuseRouting).flatMap((route) => {
+  return records(registryInsights.abuseRouting).slice(0, MAX_RECIPIENTS).flatMap((route) => {
     const kind = route.kind === 'registry' ? 'registry' : route.kind === 'registrar' ? 'registrar' : null;
     if (!kind) return [];
     const resolved = recipient(
@@ -169,23 +169,64 @@ function securityTxtRecipients(securityTxtRaw: unknown): ResolvedAbuseRecipient[
     });
 }
 
+function networkRecipients(networkContextRaw: unknown): ResolvedAbuseRecipient[] {
+  const networkContext = record(networkContextRaw);
+  if (networkContext.contextVersion !== 1) return [];
+  return records(networkContext.abuseRouting).slice(0, MAX_RECIPIENTS).flatMap((route) => {
+    const selectedAddress = text(route.selectedAddress, 64);
+    const observedAt = text(route.observedAt, 64);
+    const endpoint = text(route.rdapEndpoint, 320);
+    const routeLimitations = Array.isArray(route.limitations)
+      ? route.limitations.map((item) => text(item, 240))
+      : [];
+    const resolved = recipient(
+      'network_hosting',
+      route.contact,
+      route.source,
+      route.channel,
+      [
+        ...routeLimitations,
+        ...(selectedAddress ? [`Selected endpoint address: ${selectedAddress}.`] : []),
+        ...(observedAt ? [`IP RDAP observed at ${observedAt}.`] : []),
+        ...(endpoint ? [`IP RDAP source endpoint: ${endpoint}.`] : []),
+        ...(route.complete === false || route.truncated === true
+          ? ['The network observation was incomplete; other published routes may exist.']
+          : []),
+      ],
+    );
+    return resolved ? [resolved] : [];
+  });
+}
+
 export function resolveAbuseRecipients(input: Readonly<{
   registryInsights?: unknown;
   availabilityAbuse?: unknown;
   securityTxt?: unknown;
+  networkContext?: unknown;
 }>): AbuseRecipientResolution {
   const byId = new Map<string, ResolvedAbuseRecipient>();
   for (const item of [
     ...registryRecipients(input.registryInsights),
     ...fallbackRegistrarRecipient(input.availabilityAbuse),
     ...securityTxtRecipients(input.securityTxt),
+    ...networkRecipients(input.networkContext),
   ]) {
     if (!byId.has(item.id)) byId.set(item.id, item);
-    if (byId.size >= MAX_RECIPIENTS) break;
   }
-  const recipients = [...byId.values()];
+  const candidates = [...byId.values()];
+  const recipients: ResolvedAbuseRecipient[] = [];
+  for (const kind of KINDS) {
+    const item = candidates.find((candidate) => candidate.kind === kind);
+    if (item) recipients.push(item);
+  }
+  for (const item of candidates) {
+    if (recipients.some((candidate) => candidate.id === item.id)) continue;
+    recipients.push(item);
+    if (recipients.length >= MAX_RECIPIENTS) break;
+  }
   const registryInsights = record(input.registryInsights);
   const securityTxt = record(input.securityTxt);
+  const networkContext = record(input.networkContext);
   const coverage = KINDS.map((kind) => {
     const count = recipients.filter((item) => item.kind === kind).length;
     if (count) return {
@@ -195,8 +236,12 @@ export function resolveAbuseRecipients(input: Readonly<{
     };
     if (kind === 'network_hosting') return {
       kind,
-      state: 'not_collected' as const,
-      detail: 'No verified hosting-provider abuse route is collected by the current Lookup contract.',
+      state: networkContext.contextVersion === 1 ? 'unavailable' as const : 'not_collected' as const,
+      detail: networkContext.contextVersion === 1
+        ? networkContext.status === 'partial' || networkContext.truncated === true
+          ? 'The IP RDAP observation was incomplete and contained no usable bounded abuse route.'
+          : 'No usable published network-registration route was present in the selected endpoint IP RDAP evidence.'
+        : 'IP RDAP network contact evidence was not collected for this lookup.',
     };
     if (kind === 'security_txt' && securityTxt.securityTxtVersion !== 1) return {
       kind,
@@ -221,6 +266,7 @@ export function resolveAbuseRecipients(input: Readonly<{
     limitations: [
       'Recipient resolution uses only already-collected publication fields and performs no contact discovery or reachability check.',
       'A published route does not prove responsibility, ownership, monitoring, policy scope, or that a report should be sent.',
+      'An IP RDAP route belongs to the registered network of one observed endpoint and does not establish hosting responsibility or identify an origin server.',
       'Select and record a route in a case before preparing a human-reviewed response packet.',
     ],
   };

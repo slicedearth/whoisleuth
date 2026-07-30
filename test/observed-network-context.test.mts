@@ -53,6 +53,20 @@ function ipRdap(overrides = {}) {
         handle: 'ORG-EXAMPLE', name: 'Example Network Holder',
         email: 'contact@example.test', addresses: ['private contact data'],
       },
+      entitiesByRole: {
+        abuse: [{
+          handle: 'ABUSE-EXAMPLE',
+          email: 'Abuse@network.example',
+          emails: ['abuse@network.example', 'secondary@network.example'],
+          phone: '+61 3 0000 0000',
+          phones: ['+61 3 0000 0000'],
+        }],
+      },
+      abuse: {
+        handle: 'ABUSE-EXAMPLE',
+        emails: ['abuse@network.example', 'secondary@network.example'],
+        phones: ['+61 3 0000 0000'],
+      },
       serverTruncated: false,
       cidrsTruncated: false,
       entitiesTruncated: false,
@@ -135,12 +149,65 @@ describe('observed network context', () => {
       networkType: 'DIRECT ALLOCATION',
       databaseUpdatedAt: '2026-07-21T12:00:00.000Z',
     });
+    assert.deepEqual(result.abuseRouting, [
+      {
+        kind: 'network_hosting',
+        channel: 'email',
+        contact: 'abuse@network.example',
+        source: 'IP RDAP abuse entity',
+        rdapEndpoint: `https://rdap.registry.test/ip/${IPV4}`,
+        observedAt: OBSERVED_AT,
+        selectedAddress: IPV4,
+        selectedFrom: 'tls_connection',
+        complete: true,
+        truncated: false,
+        limitations: [
+          'The route is published for the registered network of one observed endpoint address.',
+          'Network registration does not prove that the recipient hosts the site, controls its origin, or is responsible for the reported content.',
+          'Publication does not verify that the destination is monitored, reachable, or appropriate for this incident.',
+        ],
+      },
+      {
+        kind: 'network_hosting',
+        channel: 'email',
+        contact: 'secondary@network.example',
+        source: 'IP RDAP abuse entity',
+        rdapEndpoint: `https://rdap.registry.test/ip/${IPV4}`,
+        observedAt: OBSERVED_AT,
+        selectedAddress: IPV4,
+        selectedFrom: 'tls_connection',
+        complete: true,
+        truncated: false,
+        limitations: [
+          'The route is published for the registered network of one observed endpoint address.',
+          'Network registration does not prove that the recipient hosts the site, controls its origin, or is responsible for the reported content.',
+          'Publication does not verify that the destination is monitored, reachable, or appropriate for this incident.',
+        ],
+      },
+      {
+        kind: 'network_hosting',
+        channel: 'phone',
+        contact: '+61 3 0000 0000',
+        source: 'IP RDAP abuse entity',
+        rdapEndpoint: `https://rdap.registry.test/ip/${IPV4}`,
+        observedAt: OBSERVED_AT,
+        selectedAddress: IPV4,
+        selectedFrom: 'tls_connection',
+        complete: true,
+        truncated: false,
+        limitations: [
+          'The route is published for the registered network of one observed endpoint address.',
+          'Network registration does not prove that the recipient hosts the site, controls its origin, or is responsible for the reported content.',
+          'Publication does not verify that the destination is monitored, reachable, or appropriate for this incident.',
+        ],
+      },
+    ]);
     const rdap = recordValue(result.rdap);
     assert.equal(rdap.endpoint, `https://rdap.registry.test/ip/${IPV4}`);
     assert.equal(rdap.fetchedAt, OBSERVED_AT);
     assert.equal(result.diagnostics.requestCount, 1);
     assert.equal(result.diagnostics.addressSource, 'tls_connection');
-    assert.doesNotMatch(JSON.stringify(result), /privateRawPayload|contact@example|private contact data/);
+    assert.doesNotMatch(JSON.stringify(result), /privateRawPayload|contact@example|private contact data|ABUSE-EXAMPLE/);
     assert.match(result.limitations.join(' '), /not a definitive origin host/i);
   });
 
@@ -156,6 +223,12 @@ describe('observed network context', () => {
     assert.equal(result.complete, false);
     assert.equal(result.truncated, true);
     assert.equal(arrayValue(recordValue(result.network).cidrs).length, MAX_NETWORK_CIDRS);
+    assert.equal(recordValue(requiredValue(result.abuseRouting[0])).complete, false);
+    assert.equal(recordValue(requiredValue(result.abuseRouting[0])).truncated, true);
+    assert.match(
+      arrayValue(recordValue(requiredValue(result.abuseRouting[0])).limitations).join(' '),
+      /incomplete or truncated/i,
+    );
     assert.match(result.limitations.join(' '), /server declared/i);
     assert.match(result.limitations.join(' '), /local retention limit/i);
   });
@@ -169,6 +242,7 @@ describe('observed network context', () => {
     assert.equal(calls, 0);
     assert.equal(result.status, 'unsupported');
     assert.equal(result.endpoint, null);
+    assert.deepEqual(result.abuseRouting, []);
     assert.equal(result.diagnostics.requestCount, 0);
     assert.match(result.detail, /no validated public endpoint/i);
   });
@@ -183,6 +257,7 @@ describe('observed network context', () => {
     assert.equal(result.status, 'unsupported');
     assert.equal(result.complete, false);
     assert.equal(result.network, null);
+    assert.deepEqual(result.abuseRouting, []);
     assert.match(result.limitations.join(' '), /not identify a definitive origin host/i);
   });
 

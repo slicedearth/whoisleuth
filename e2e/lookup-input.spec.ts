@@ -643,6 +643,18 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
           cidrs: ['93.184.216.0/24'], startAddress: '93.184.216.0', endAddress: '93.184.216.255',
           country: 'AU', networkType: 'ALLOCATED', databaseUpdatedAt: '2026-07-13T00:00:00.000Z',
         },
+        abuseRouting: [{
+          kind: 'network_hosting', channel: 'email', contact: 'abuse@network.example',
+          source: 'IP RDAP abuse entity',
+          rdapEndpoint: 'https://network.example/rdap/ip/93.184.216.34/',
+          observedAt: '2026-07-14T01:02:04.000Z',
+          selectedAddress: '93.184.216.34', selectedFrom: 'tls_connection',
+          complete: true, truncated: false,
+          limitations: [
+            'The route is published for the registered network of one observed endpoint address.',
+            'Network registration does not prove hosting responsibility.',
+          ],
+        }],
       },
       rdap: {
         upstreamStatus: 200,
@@ -751,6 +763,11 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(network.getByText(/does not prove hosting control, ownership, intent, or maliciousness/i)).toBeVisible();
   await network.getByText('IP RDAP source', { exact: true }).click();
   await expect(network.getByText(/deliberately-long-provenance-segment-for-wrapping/)).toBeVisible();
+  const responseRoutes = page.locator('.response');
+  await expect(responseRoutes.getByText('network hosting route', { exact: true })).toBeVisible();
+  await expect(responseRoutes.getByText('abuse@network.example', { exact: true })).toBeVisible();
+  await expect(responseRoutes.getByText(/does not prove hosting responsibility/i)).toBeVisible();
+  await expect(responseRoutes.getByRole('button', { name: 'Record in case' })).toBeDisabled();
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export evidence JSON' }).click();
@@ -765,6 +782,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   expect(exported.sources.network.network.holder).toBe('Example network holder');
   expect(JSON.stringify(exported)).not.toContain('registrar-object-handle');
   expect(JSON.stringify(exported)).not.toContain('abuse@registrar.example');
+  expect(JSON.stringify(exported)).not.toContain('abuse@network.example');
   expect(JSON.stringify(exported)).not.toContain('stat.ripe.net');
 
   const reportDownloadPromise = page.waitForEvent('download');
@@ -778,6 +796,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const report = await readFile(reportPath!, 'utf8');
   expect(report).toContain('# Lookup evidence report');
   expect(report).toContain('### Registrar RDAP');
+  expect(report).not.toContain('abuse@network.example');
   expect(report).toContain('## Registry / registrar RDAP comparison');
   expect(report).toContain('Example network holder');
   expect(report).toContain('Risk score:');

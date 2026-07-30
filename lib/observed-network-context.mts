@@ -34,9 +34,13 @@ type ObservedNetworkContextOptions = {
 const OBSERVED_NETWORK_CONTEXT_VERSION = 1;
 const MAX_NETWORK_CIDRS = 16;
 const MAX_NETWORK_ATTEMPTS = 3;
+const MAX_NETWORK_ABUSE_ROUTES = 6;
 const MAX_ENDPOINT_LENGTH = 2048;
 const MAX_DETAIL_LENGTH = 240;
 const MAX_NAME_LENGTH = 300;
+const MAX_CONTACT_LENGTH = 320;
+const EMAIL_RE = /^[^\s@/:]+@[^\s@/:]+\.[^\s@/:]+$/u;
+const PHONE_RE = /^[+\d][\d ().-]{4,63}$/u;
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -149,6 +153,85 @@ function networkHolder(value: unknown): string | null {
     || boundedString(holder.handle, 200);
 }
 
+function normalizedAbuseContact(value: unknown, channel: 'email' | 'phone'): string | null {
+  const contact = boundedString(value, MAX_CONTACT_LENGTH);
+  if (!contact) return null;
+  if (channel === 'email') return EMAIL_RE.test(contact) ? contact.toLowerCase() : null;
+  return PHONE_RE.test(contact) ? contact : null;
+}
+
+function networkAbuseEntities(parsed: UnknownRecord): UnknownRecord[] {
+  const entitiesByRole = record(parsed.entitiesByRole);
+  const roleEntities = Array.isArray(entitiesByRole.abuse) ? entitiesByRole.abuse : [];
+  const fallback = parsed.abuse && typeof parsed.abuse === 'object' && !Array.isArray(parsed.abuse)
+    ? [parsed.abuse]
+    : [];
+  return [...roleEntities, ...fallback]
+    .filter((item): item is UnknownRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    .slice(0, MAX_NETWORK_ABUSE_ROUTES);
+}
+
+function projectNetworkAbuseRoutes(parsed: UnknownRecord, provenance: {
+  endpoint: string | null;
+  observedAt: string;
+  selection: AddressSelection;
+  complete: boolean;
+  truncated: boolean;
+}) {
+  const routes = new Map<string, {
+    kind: 'network_hosting';
+    channel: 'email' | 'phone';
+    contact: string;
+    source: string;
+    rdapEndpoint: string | null;
+    observedAt: string;
+    selectedAddress: string;
+    selectedFrom: AddressSource;
+    complete: boolean;
+    truncated: boolean;
+    limitations: string[];
+  }>();
+  for (const entity of networkAbuseEntities(parsed)) {
+    const emails = Array.isArray(entity.emails) ? entity.emails : [];
+    const phones = Array.isArray(entity.phones) ? entity.phones : [];
+    const candidates: Array<{ channel: 'email' | 'phone'; value: unknown }> = [
+      { channel: 'email', value: entity.email },
+      ...emails.slice(0, MAX_NETWORK_ABUSE_ROUTES).map((value) => ({ channel: 'email' as const, value })),
+      { channel: 'phone', value: entity.phone },
+      ...phones.slice(0, MAX_NETWORK_ABUSE_ROUTES).map((value) => ({ channel: 'phone' as const, value })),
+    ];
+    for (const candidate of candidates) {
+      const contact = normalizedAbuseContact(candidate.value, candidate.channel);
+      if (!contact) continue;
+      const key = `${candidate.channel}:${contact.toLowerCase()}`;
+      if (!routes.has(key)) {
+        routes.set(key, {
+          kind: 'network_hosting',
+          channel: candidate.channel,
+          contact,
+          source: 'IP RDAP abuse entity',
+          rdapEndpoint: provenance.endpoint,
+          observedAt: provenance.observedAt,
+          selectedAddress: provenance.selection.address,
+          selectedFrom: provenance.selection.selectedFrom,
+          complete: provenance.complete,
+          truncated: provenance.truncated,
+          limitations: [
+            'The route is published for the registered network of one observed endpoint address.',
+            'Network registration does not prove that the recipient hosts the site, controls its origin, or is responsible for the reported content.',
+            'Publication does not verify that the destination is monitored, reachable, or appropriate for this incident.',
+            ...(provenance.truncated
+              ? ['The IP RDAP observation was incomplete or truncated; other routes may exist.']
+              : []),
+          ],
+        });
+      }
+      if (routes.size >= MAX_NETWORK_ABUSE_ROUTES) return [...routes.values()];
+    }
+  }
+  return [...routes.values()];
+}
+
 function networkSummary(parsedValue: unknown, family: 4 | 6) {
   const parsed = record(parsedValue);
   const lifecycle = record(parsed.lifecycle);
@@ -193,6 +276,7 @@ function baseContext(selection: AddressSelection | null, input: {
   detail: string;
   rdap?: unknown;
   network?: unknown;
+  abuseRouting?: unknown;
 }) {
   return {
     contextVersion: OBSERVED_NETWORK_CONTEXT_VERSION,
@@ -211,6 +295,7 @@ function baseContext(selection: AddressSelection | null, input: {
     endpoint: selection,
     rdap: input.rdap || null,
     network: input.network || null,
+    abuseRouting: Array.isArray(input.abuseRouting) ? input.abuseRouting : [],
   };
 }
 
@@ -271,9 +356,17 @@ async function collectObservedNetworkContext(
     if (rdap.httpStatus !== 200 || !Object.keys(parsed).length) throw new Error('IP RDAP returned no usable normalized object');
     const summary = networkSummary(parsed, selection.family);
     const partial = summary.truncated;
+    const sourceObservedAt = rdap.fetchedAt || observedAt();
+    const abuseRouting = projectNetworkAbuseRoutes(parsed, {
+      endpoint: rdap.endpoint,
+      observedAt: sourceObservedAt,
+      selection,
+      complete: !partial,
+      truncated: partial,
+    });
     return baseContext(selection, {
       status: partial ? 'partial' : 'success',
-      observedAt: rdap.fetchedAt || observedAt(),
+      observedAt: sourceObservedAt,
       durationMs,
       complete: !partial,
       truncated: partial,
@@ -293,6 +386,7 @@ async function collectObservedNetworkContext(
       },
       rdap,
       network: summary.value,
+      abuseRouting,
     });
   } catch (error) {
     const durationMs = Math.max(0, now() - started);
@@ -317,6 +411,7 @@ function sourceCidrsWereCapped(parsed: UnknownRecord): boolean {
 
 export {
   MAX_NETWORK_ATTEMPTS,
+  MAX_NETWORK_ABUSE_ROUTES,
   MAX_NETWORK_CIDRS,
   OBSERVED_NETWORK_CONTEXT_VERSION,
   collectObservedNetworkContext,
