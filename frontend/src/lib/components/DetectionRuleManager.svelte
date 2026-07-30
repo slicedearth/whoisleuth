@@ -20,6 +20,11 @@
     type DetectionRule,
     type DetectionRuleCondition,
   } from '$lib/detection-rules';
+  import {
+    REVIEWED_STATIC_PAGE_PATTERN_PACKS,
+    reviewedStaticPagePatternPackExport,
+    type StaticPagePatternPack,
+  } from '$lib/analysis/static-page-pattern-packs.ts';
 
   let { records, onselect, oncount }:{records:CaseRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void}=$props();
   let rules=$state<DetectionRule[]>([]);
@@ -58,6 +63,8 @@
   async function remove(rule:DetectionRule){if(!confirm(`Delete custom rule “${rule.name}”?`))return;try{await refresh(await deleteDetectionRule(rule.id));message=`Deleted “${rule.name}”.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete the custom rule.';}}
   async function download(){try{await exportDetectionRules();message='Exported the custom-rule collection.';}catch(cause){message=cause instanceof Error?cause.message:'Could not export custom rules.';}}
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_RULE_IMPORT_BYTES)throw new Error('Custom-rule imports are limited to 2 MB.');const result=await importDetectionRules(JSON.parse(await file.text()));await refresh(result.rules);message=`Imported ${result.added} new and ${result.updated} updated custom rule${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`;}catch(cause){message=cause instanceof Error?cause.message:'Custom-rule import failed.';}finally{input.value='';}}
+  async function installPack(pack:StaticPagePatternPack){try{const result=await importDetectionRules(reviewedStaticPagePatternPackExport(pack.id));await refresh(result.rules);message=`Installed or restored ${pack.rules.length} reviewed rule${pack.rules.length===1?'':'s'} from “${pack.label}”. Existing built-in Risk scores were not changed.`;}catch(cause){message=cause instanceof Error?cause.message:'Could not install the reviewed pack.';}}
+  function packInstalled(pack:StaticPagePatternPack){return pack.rules.every((candidate)=>rules.some((rule)=>rule.id===candidate.id));}
   function countMatches(ruleId:string){return evaluations.filter((result)=>result.matchedRules.some((item)=>item.id===ruleId)).length;}
   function conditionLabel(condition:DetectionRuleCondition){const field=definition(condition.field)?.label??condition.field;return condition.operator==='present'?`${field} is present`:`${field} ${operatorLabel(condition.operator)} ${String(condition.value)}`;}
   function openCase(caseId:string){const record=caseById.get(caseId);if(record)onselect?.(record);}
@@ -102,6 +109,20 @@
   <p>Custom contributions are shown beside the stored built-in score; they never rewrite it. A match is an analyst-defined heuristic, not proof of maliciousness. Missing evidence does not satisfy a condition, and imported rules cannot run JavaScript.</p>
 </section>
 
+<section class="pattern-packs card" aria-labelledby="pattern-packs-title">
+  <header><div><p class="eyebrow">Reviewed static patterns</p><h2 id="pattern-packs-title">Page-pattern packs</h2><p>Install fixed, inspectable rules that use only evidence already retained in cases.</p></div></header>
+  <div class="pack-grid">
+    {#each REVIEWED_STATIC_PAGE_PATTERN_PACKS as pack}
+      <article>
+        <div><strong>{pack.label}</strong><span>v1 · {pack.rules.length} rule{pack.rules.length === 1 ? '' : 's'}</span></div>
+        <p>{pack.description}</p>
+        <small>{pack.evidenceBoundary}</small>
+        <button type="button" class="btn" onclick={() => void installPack(pack)}>{packInstalled(pack) ? 'Restore reviewed pack' : 'Install reviewed pack'}</button>
+      </article>
+    {/each}
+  </div>
+</section>
+
 {#if rules.length}
   <section class="rule-list" aria-label="Custom detection rules">
     {#each rules as rule (rule.id)}
@@ -123,6 +144,8 @@
 
 <style>
   .rule-builder{display:grid;gap:16px;padding:18px}.rule>header{display:flex;justify-content:space-between;gap:14px;align-items:start}.rule-builder h2,.test-results h2{margin:0}.rule-builder header p:not(.eyebrow),.rule-limits p,.test-results>p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.rule>header>div:last-child{display:flex;flex-wrap:wrap;gap:8px}.rule-builder form{display:grid;gap:14px}.rule-fields{display:grid;grid-template-columns:minmax(180px,1.7fr) repeat(3,minmax(130px,1fr));gap:10px}.condition-row label{display:grid;gap:5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.rule-fields input,.condition-row input{min-height:var(--control-h)}fieldset{display:grid;gap:10px;margin:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}.condition-row{display:grid;grid-template-columns:1.4fr 1fr 1.2fr auto;gap:8px;align-items:end}.remove-condition{align-self:end}.create{justify-self:start}.message{color:var(--accent);font-size:var(--text-sm)}.rule-limits{margin:12px 0;padding:14px}.rule-limits strong{font-size:var(--text-sm)}.rule-limits p{margin:5px 0 0}.rule-list{display:grid;gap:10px}.rule{display:grid;gap:10px;padding:16px}.rule.disabled{opacity:.62}.rule header>div:first-child{display:grid;gap:3px;min-width:0}.rule header strong{font:700 var(--text-md) var(--mono);overflow-wrap:anywhere}.rule header small,.rule li,.rule footer{color:var(--muted);font-size:var(--text-xs)}.rule ul{display:grid;gap:5px;margin:0;padding-left:18px}.rule footer{display:flex;flex-wrap:wrap;gap:16px;padding-top:9px;border-top:1px solid var(--border)}.rule footer strong{color:var(--text)}.test-results{display:grid;gap:12px;margin-top:12px;padding:16px}.test-results ul{display:grid;gap:8px;margin:0;padding:0;list-style:none}.test-results li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm)}.test-results li>div:first-child{display:grid;gap:3px;min-width:0}.test-results li strong{font-size:var(--text-sm);overflow-wrap:anywhere}.test-results small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.scores{display:flex;flex-wrap:wrap;justify-content:end;gap:7px;align-items:center}.scores span{color:var(--muted);font-size:var(--text-2xs);white-space:nowrap}
+  .pattern-packs{display:grid;gap:12px;margin:12px 0;padding:16px}.pattern-packs h2{margin:0;font:700 var(--text-md) var(--mono)}.pattern-packs header p:not(.eyebrow){margin:5px 0 0;color:var(--muted);font-size:var(--text-xs)}.pack-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pack-grid article{display:grid;gap:7px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.pack-grid article>div{display:flex;justify-content:space-between;gap:8px}.pack-grid strong{font-size:var(--text-sm);overflow-wrap:anywhere}.pack-grid span,.pack-grid p,.pack-grid small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.pack-grid p{margin:0}.pack-grid button{justify-self:start;margin-top:auto}
   @media(max-width:850px){.rule-fields{grid-template-columns:1fr 1fr}.condition-row{grid-template-columns:1fr 1fr}.remove-condition{width:100%}}
-  @media(max-width:600px){.rule>header,.test-results li{align-items:stretch;flex-direction:column}.rule-fields,.condition-row{grid-template-columns:1fr}.rule>header>div:last-child button,.create,fieldset>.btn{width:100%}.scores{justify-content:start}.scores button{width:100%}}
+  @media(max-width:850px){.pack-grid{grid-template-columns:1fr}}
+  @media(max-width:600px){.rule>header,.test-results li{align-items:stretch;flex-direction:column}.rule-fields,.condition-row{grid-template-columns:1fr}.rule>header>div:last-child button,.create,fieldset>.btn{width:100%}.scores{justify-content:start}.scores button{width:100%}.pack-grid button{width:100%}}
 </style>

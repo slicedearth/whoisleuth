@@ -384,6 +384,12 @@ sessions. Its filters and due-state labels help an analyst resume work; opening
 an item does not start collection, change a disposition, submit a response, or
 claim that the underlying evidence is complete.
 
+The Dashboard **hostname-only handoff** accepts a pasted domain or HTTP(S) URL
+and constructs a Deep Lookup link from the normalized hostname only.
+Credentials, port, path, query, and fragment are omitted. Opening the link
+fills Lookup but does not submit it, so the analyst still reviews the target
+and collection plan.
+
 Below the inbox, **Contact and lifecycle review** projects reporting routes
 only from deliberately saved case actions. A due label means the saved due or
 follow-up date has arrived; it does not prove that a route is reachable,
@@ -402,6 +408,14 @@ submits a report or treats a planned action as completed.
 The complete evidence timeline remains depth-aware. A Fast observation does
 not erase last-known Deep-only evidence, and score changes are compared only
 when their explicit model versions match.
+
+Monitor's custom-rule view includes optional reviewed static page-pattern
+packs. The packs are fixed sets of the same bounded, inspectable rule
+conditions available to an analyst. They use retained password-field, favicon,
+official-asset, language, mail, and availability cues; contribute no custom
+score by default; and create review tags rather than maliciousness findings.
+Installing a pack makes a browser-local copy that can be inspected, disabled,
+edited, exported, or deleted.
 
 An open domain case can also turn a selected Lookup checkpoint into a reviewed
 acquisition-transition plan. Mark each fact as expected to stay the same,
