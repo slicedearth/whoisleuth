@@ -665,9 +665,15 @@ completeness, truncation, derivation, and source state, and links back to its
 owning record. The projection does not copy raw payloads, pin values, analyst
 notes, or relationship values, and it never starts collection.
 
-The Cases view also accepts the strict WHOISleuth external-findings schema and
+The Cases view also accepts the strict WHOISleuth external-findings schema,
+fixed-column finding rows in CSV or JSON, sanitised web-capture summaries, and
 bounded STIX 2.1 or MISP event JSON. Every file is validated and previewed
-locally before a merge. STIX and MISP previews separate accepted claims,
+locally before a merge. Generic row conversion accepts only domain, category,
+summary, observation time, completeness, limitation, and reference columns.
+The capture schema accepts bounded titles, normalized HTTP(S) origins,
+technology labels, screenshot SHA-256 digests, completeness, and limitations;
+it rejects raw HTML, screenshot content, cookies, request bodies, complete
+URLs, and arbitrary fields. STIX and MISP previews separate accepted claims,
 duplicates, conflicting identifiers, and exclusions, then require an existing
 case to be selected. Merged claims become external `unknown` assertions with
 their source-file SHA-256 digest, publisher, external identifier, timestamps,

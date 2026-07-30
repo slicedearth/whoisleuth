@@ -11,6 +11,15 @@
     type ExternalFindingsDocument,
     type ExternalIntelligencePreview,
   } from '$lib/cases';
+  import {
+    EXTERNAL_FINDING_ROWS_SCHEMA,
+    convertExternalFindingRows,
+    convertExternalFindingsCsv,
+  } from '$lib/analysis/external-findings-converters.ts';
+  import {
+    WEB_CAPTURE_SUMMARY_SCHEMA,
+    parseWebCaptureSummary,
+  } from '$lib/analysis/web-capture-import.ts';
 
   let {
     cases,
@@ -54,11 +63,15 @@
         throw new Error('External intelligence imports are limited to 512 KiB.');
       }
       const bytes = await file.arrayBuffer();
-      let value: unknown;
-      try {
-        value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-      } catch {
-        throw new Error('The selected file is not valid UTF-8 JSON.');
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      const csv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+      let value: unknown = null;
+      if (!csv) {
+        try {
+          value = JSON.parse(decoded);
+        } catch {
+          throw new Error('The selected file is not valid UTF-8 JSON.');
+        }
       }
       if (value && typeof value === 'object' && !Array.isArray(value) && (value as Record<string, unknown>).schema === EXTERNAL_FINDINGS_SCHEMA) {
         if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
@@ -68,6 +81,38 @@
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
         onmessage(`Validated ${document.findings.length} local finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the preview before importing.`);
+      } else if (
+        csv
+        || Array.isArray(value)
+        || (
+          value
+          && typeof value === 'object'
+          && !Array.isArray(value)
+          && (value as Record<string, unknown>).schema === EXTERNAL_FINDING_ROWS_SCHEMA
+        )
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Converted finding imports are limited to 384 KiB.');
+        }
+        const document = csv
+          ? convertExternalFindingsCsv(decoded)
+          : convertExternalFindingRows(value);
+        preview = { kind: 'findings', document };
+        const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
+        onmessage(`Converted and validated ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
+      } else if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && (value as Record<string, unknown>).schema === WEB_CAPTURE_SUMMARY_SCHEMA
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Sanitised web-capture imports are limited to 384 KiB.');
+        }
+        const document = parseWebCaptureSummary(value);
+        preview = { kind: 'findings', document };
+        const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
+        onmessage(`Validated ${document.findings.length} sanitised web-capture finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
       } else {
         const document = parseExternalIntelligenceDocument(value, await sourceDigest(bytes));
         preview = { kind: 'intelligence', document };
@@ -106,8 +151,8 @@
 <details class="external-import card">
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code> schema, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
-    <label class="btn file-btn">Choose JSON<input type="file" accept="application/json,.json" onchange={selectFile}></label>
+    <p>Preview the strict <code>whoisleuth.external-findings</code> or sanitised <code>whoisleuth.web-capture-summary</code> schema, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
+    <label class="btn file-btn">Choose JSON or CSV<input type="file" accept="application/json,text/csv,.json,.csv" onchange={selectFile}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
         <header>
