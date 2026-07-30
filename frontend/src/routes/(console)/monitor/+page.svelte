@@ -46,7 +46,12 @@
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadBulkSessions } from '$lib/bulk-sessions';
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
-  import { buildAnalystReviewInbox } from '$lib/analysis/analyst-review-inbox.ts';
+  import {
+    analystReviewDismissalReasonLabel,
+    buildAnalystReviewInbox,
+    type AnalystReviewDismissalReason,
+    type AnalystReviewItem,
+  } from '$lib/analysis/analyst-review-inbox.ts';
   import { buildRetainedEvidenceTimeline } from '$lib/analysis/retained-evidence-timeline.ts';
   import {
     buildWebsiteClusterAssertion,
@@ -164,6 +169,21 @@
     await refreshCases();
     caseMessage=`Recorded a separately typed website-profile review lead for ${domain}.`;
   }
+  async function dismissEvidenceGap(item:AnalystReviewItem,reason:AnalystReviewDismissalReason){
+    if(item.kind!=='evidence_gap'||!item.caseId||!item.dismissalTarget)return;
+    const record=cases.find((candidate)=>candidate.id===item.caseId);
+    const reasonLabel=analystReviewDismissalReasonLabel(reason);
+    if(!record||!reasonLabel){caseMessage='That evidence-gap review is no longer available.';return;}
+    try{
+      await editCase(record.id,{trailEvent:{
+        kind:'review',
+        summary:`Dismissed the current evidence-gap review: ${reasonLabel}.`,
+        target:item.dismissalTarget,
+      }});
+      await refreshCases();
+      caseMessage=`Recorded the reviewed evidence-gap dismissal for ${record.domain}. The underlying evidence and assertions were not changed.`;
+    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not record the evidence-gap review.';}
+  }
   function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
   async function trackDomain(){const domain=newDomain.trim();if(!domain){caseMessage='Enter a domain to track.';return;}try{const{record,created,pruned}=await openCase({domain,source:'monitor'});await refreshCases();newDomain='';showCasePage(record);expandedId=record.id;tagDraft=record.tags.join(', ');noteDraft='';caseMessage=`${created?`Opened a new case for ${record.domain}.`:`${record.domain} already has a case.`}${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not open the case.';}}
   async function setStatus(record:CaseRecord,value:string){try{const{pruned}=await editCase(record.id,{status:value});await refreshCases();showCasePage(record);caseMessage=`Set ${record.domain} to ${statusLabel(value)}.${prunedNote(pruned)}`;}catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not update the case.';}}
@@ -219,7 +239,7 @@
 
 {#if view==='inbox'}
 <div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
-  <AnalystReviewInbox inbox={reviewInbox} />
+  <AnalystReviewInbox inbox={reviewInbox} ondismiss={dismissEvidenceGap} />
   <CaseLifecycleReview records={cases} />
 </div>
 {/if}

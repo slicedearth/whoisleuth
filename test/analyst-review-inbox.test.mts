@@ -126,6 +126,44 @@ describe('analyst review inbox', () => {
     assert.equal(gap.completeness, 'inconclusive');
     assert.match(gap.detail, /1 open unknown · 1 limited evidence pin/i);
     assert.match(gap.href, /case-response-case-one$/);
+    assert.equal(gap.retryHref, '/lookup?q=review.invalid&depth=deep');
+    assert.match(gap.dismissalTarget ?? '', /^evidence-gap-review:case-one:/u);
+  });
+
+  test('hides only an explicitly reviewed gap fingerprint and restores a changed gap', () => {
+    const record = caseRecord();
+    record.disposition = 'suspicious';
+    record.assertions = [{
+      id: 'assertion-unknown',
+      kind: 'unknown',
+      statement: 'The effective service remains unresolved.',
+      rationale: null,
+      evidencePinIds: [],
+      state: 'open',
+      createdAt: '2026-07-27T08:00:00.000Z',
+      updatedAt: '2026-07-27T08:00:00.000Z',
+    }];
+    const first = buildAnalystReviewInbox({ cases: [record] }, NOW);
+    const gap = first.items.find((item) => item.kind === 'evidence_gap');
+    assert.ok(gap?.dismissalTarget);
+    record.manualTrail = [{
+      id: 'trail-dismissal',
+      kind: 'review',
+      summary: 'Dismissed the current evidence-gap review: Accepted source limitation.',
+      target: gap.dismissalTarget,
+      createdAt: NOW,
+    }];
+    assert.equal(buildAnalystReviewInbox({ cases: [record] }, NOW).counts.evidence_gap, 0);
+
+    record.assertions.push({
+      ...record.assertions[0]!,
+      id: 'assertion-new',
+      statement: 'A new contradiction requires review.',
+      kind: 'contradiction',
+    });
+    const changed = buildAnalystReviewInbox({ cases: [record] }, NOW);
+    assert.equal(changed.counts.evidence_gap, 1);
+    assert.notEqual(changed.items.find((item) => item.kind === 'evidence_gap')?.dismissalTarget, gap.dismissalTarget);
   });
 
   test('excludes resolved cases, settled actions, unchanged watchlists, and complete sessions', () => {

@@ -399,7 +399,12 @@ The **Review inbox** is a bounded local queue projected from retained cases,
 planned case actions, material watchlist changes, and incomplete saved Bulk
 sessions. Its filters and due-state labels help an analyst resume work; opening
 an item does not start collection, change a disposition, submit a response, or
-claim that the underlying evidence is complete.
+claim that the underlying evidence is complete. Evidence-gap items link both
+to the owning case and to a prefilled Deep Lookup refresh. An analyst can
+dismiss the exact current gap only after choosing a fixed review outcome. The
+dismissal is recorded in the case investigation trail; it does not resolve or
+delete a pin or assertion. A changed gap receives a new fingerprint and returns
+to the queue.
 
 The Dashboard **hostname-only handoff** accepts a pasted domain or HTTP(S) URL
 and constructs a Deep Lookup link from the normalized hostname only.

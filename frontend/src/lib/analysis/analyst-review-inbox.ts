@@ -7,6 +7,12 @@ export const ANALYST_REVIEW_KINDS = ['case', 'case_action', 'evidence_gap', 'wat
 export type AnalystReviewKind = typeof ANALYST_REVIEW_KINDS[number];
 export type AnalystReviewPriority = 'urgent' | 'high' | 'normal';
 export type AnalystReviewCompleteness = 'complete' | 'partial' | 'inconclusive';
+export const ANALYST_REVIEW_DISMISSAL_REASONS = [
+  { value: 'accepted_limitation', label: 'Accepted source limitation' },
+  { value: 'reviewed_not_actionable', label: 'Reviewed, not actionable' },
+  { value: 'superseded', label: 'Superseded by newer evidence' },
+] as const;
+export type AnalystReviewDismissalReason = typeof ANALYST_REVIEW_DISMISSAL_REASONS[number]['value'];
 
 export type AnalystReviewItem = Readonly<{
   id: string;
@@ -19,6 +25,9 @@ export type AnalystReviewItem = Readonly<{
   dueAt: string | null;
   completeness: AnalystReviewCompleteness;
   href: string;
+  retryHref: string | null;
+  caseId: string | null;
+  dismissalTarget: string | null;
 }>;
 
 export type AnalystReviewInbox = Readonly<{
@@ -30,6 +39,7 @@ export type AnalystReviewInbox = Readonly<{
 
 const OPEN_ACTION_STATES = new Set(['planned', 'ready_for_review', 'submitted', 'acknowledged']);
 const PRIORITY_RANK: Record<AnalystReviewPriority, number> = { urgent: 0, high: 1, normal: 2 };
+const DISMISSAL_PREFIX = 'evidence-gap-review:';
 
 function timestamp(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 64) return null;
@@ -49,6 +59,24 @@ function itemSort(left: AnalystReviewItem, right: AnalystReviewItem, nowMs: numb
   return Date.parse(right.observedAt) - Date.parse(left.observedAt) || left.id.localeCompare(right.id);
 }
 
+function hashGapParts(parts: readonly string[]): string {
+  let value = 0x811c9dc5;
+  for (const character of parts.join('\u001f')) {
+    value ^= character.codePointAt(0) ?? 0;
+    value = Math.imul(value, 0x01000193);
+  }
+  return (value >>> 0).toString(16).padStart(8, '0');
+}
+
+function gapDismissalTarget(record: CaseRecord, gapIds: readonly string[]): string {
+  return `${DISMISSAL_PREFIX}${record.id}:${hashGapParts([...gapIds].sort())}`;
+}
+
+export function analystReviewDismissalReasonLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return ANALYST_REVIEW_DISMISSAL_REASONS.find((item) => item.value === value)?.label ?? null;
+}
+
 function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystReviewItem[] {
   const items: AnalystReviewItem[] = [];
   for (const record of records.slice(0, 500)) {
@@ -65,32 +93,51 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         dueAt: null,
         completeness: record.evidenceHistory.length || record.evidencePins.length ? 'partial' : 'inconclusive',
         href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}`,
+        retryHref: null,
+        caseId: record.id,
+        dismissalTarget: null,
       });
     }
-    const openUnknowns = record.assertions.filter((item) => item.state === 'open' && item.kind === 'unknown').length;
-    const openContradictions = record.assertions.filter((item) => item.state === 'open' && item.kind === 'contradiction').length;
-    const limitedPins = record.evidencePins.filter((item) =>
+    const openUnknownRecords = record.assertions.filter((item) => item.state === 'open' && item.kind === 'unknown');
+    const openContradictionRecords = record.assertions.filter((item) => item.state === 'open' && item.kind === 'contradiction');
+    const limitedPinRecords = record.evidencePins.filter((item) =>
       item.completeness !== 'complete' || item.truncated === true
-    ).length;
+    );
+    const openUnknowns = openUnknownRecords.length;
+    const openContradictions = openContradictionRecords.length;
+    const limitedPins = limitedPinRecords.length;
     const gapCount = openUnknowns + openContradictions + limitedPins;
     if (record.status !== 'resolved' && gapCount > 0) {
-      const parts = [
-        openUnknowns ? `${openUnknowns} open unknown${openUnknowns === 1 ? '' : 's'}` : '',
-        openContradictions ? `${openContradictions} open contradiction${openContradictions === 1 ? '' : 's'}` : '',
-        limitedPins ? `${limitedPins} limited evidence pin${limitedPins === 1 ? '' : 's'}` : '',
-      ].filter(Boolean);
-      items.push({
-        id: `evidence-gap:${record.id}`,
-        kind: 'evidence_gap',
-        priority: openContradictions > 0 ? 'high' : 'normal',
-        title: `Review evidence gaps for ${record.domain}`,
-        detail: parts.join(' · '),
-        source: 'Browser-local case evidence and analyst assertions',
-        observedAt: updatedAt,
-        dueAt: null,
-        completeness: openContradictions || openUnknowns ? 'inconclusive' : 'partial',
-        href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
-      });
+      const dismissalTarget = gapDismissalTarget(record, [
+        ...openUnknownRecords.map((item) => `unknown:${item.id}`),
+        ...openContradictionRecords.map((item) => `contradiction:${item.id}`),
+        ...limitedPinRecords.map((item) => `pin:${item.id}:${item.completeness}:${String(item.truncated)}`),
+      ]);
+      const dismissed = record.manualTrail.some((event) =>
+        event.kind === 'review' && event.target === dismissalTarget
+      );
+      if (!dismissed) {
+        const parts = [
+          openUnknowns ? `${openUnknowns} open unknown${openUnknowns === 1 ? '' : 's'}` : '',
+          openContradictions ? `${openContradictions} open contradiction${openContradictions === 1 ? '' : 's'}` : '',
+          limitedPins ? `${limitedPins} limited evidence pin${limitedPins === 1 ? '' : 's'}` : '',
+        ].filter(Boolean);
+        items.push({
+          id: `evidence-gap:${record.id}`,
+          kind: 'evidence_gap',
+          priority: openContradictions > 0 ? 'high' : 'normal',
+          title: `Review evidence gaps for ${record.domain}`,
+          detail: parts.join(' · '),
+          source: 'Browser-local case evidence and analyst assertions',
+          observedAt: updatedAt,
+          dueAt: null,
+          completeness: openContradictions || openUnknowns ? 'inconclusive' : 'partial',
+          href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
+          retryHref: `/lookup?q=${encodeURIComponent(record.domain)}&depth=deep`,
+          caseId: record.id,
+          dismissalTarget,
+        });
+      }
     }
     for (const action of record.actions.slice(-50)) {
       if (!OPEN_ACTION_STATES.has(action.state)) continue;
@@ -107,6 +154,9 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         dueAt,
         completeness: action.state === 'submitted' || action.state === 'acknowledged' ? 'complete' : 'partial',
         href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}`,
+        retryHref: null,
+        caseId: record.id,
+        dismissalTarget: null,
       });
     }
   }
@@ -130,6 +180,9 @@ function watchlistItems(watchlists: WatchlistCollection, nowIso: string): Analys
       dueAt: null,
       completeness: latestChange.conclusiveCount === latestChange.resultCount && latestChange.omittedChanges === 0 ? 'complete' : 'partial',
       href: '/monitor?view=watchlists',
+      retryHref: null,
+      caseId: null,
+      dismissalTarget: null,
     });
   }
   return items;
@@ -152,6 +205,9 @@ function bulkItems(sessions: readonly BulkSession[], nowIso: string): AnalystRev
       dueAt: null,
       completeness: 'partial',
       href: '/bulk#saved-sessions',
+      retryHref: null,
+      caseId: null,
+      dismissalTarget: null,
     });
   }
   return items;
@@ -193,6 +249,7 @@ export function buildAnalystReviewInbox(
       'The inbox is a browser-local projection of retained records. It does not run checks, change cases, or infer maliciousness.',
       'Partial and inconclusive source states remain review prompts, not evidence of absence or safety.',
       'Evidence gaps are projected from explicit incomplete pins and open unknown or contradiction assertions; the queue does not invent missing facts.',
+      'A reviewed dismissal hides only the exact current gap fingerprint and records the fixed reason in the case investigation trail. It does not resolve, delete, or rewrite the underlying evidence or assertion.',
     ],
   };
 }

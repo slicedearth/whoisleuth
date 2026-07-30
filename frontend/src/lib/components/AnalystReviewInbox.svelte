@@ -1,6 +1,12 @@
 <script lang="ts">
   import Pagination from './Pagination.svelte';
-  import type { AnalystReviewInbox, AnalystReviewKind } from '../analysis/analyst-review-inbox.ts';
+  import {
+    ANALYST_REVIEW_DISMISSAL_REASONS,
+    type AnalystReviewDismissalReason,
+    type AnalystReviewInbox,
+    type AnalystReviewItem,
+    type AnalystReviewKind,
+  } from '../analysis/analyst-review-inbox.ts';
 
   type Filter = 'all' | 'overdue' | AnalystReviewKind;
   const PAGE_SIZE = 25;
@@ -14,9 +20,18 @@
     { value: 'bulk_session', label: 'Bulk sessions' },
   ];
 
-  let { inbox, now = new Date().toISOString() }: { inbox: AnalystReviewInbox; now?: string } = $props();
+  let {
+    inbox,
+    now = new Date().toISOString(),
+    ondismiss,
+  }: {
+    inbox: AnalystReviewInbox;
+    now?: string;
+    ondismiss?: (item: AnalystReviewItem, reason: AnalystReviewDismissalReason) => void | Promise<void>;
+  } = $props();
   let filter = $state<Filter>('all');
   let page = $state(1);
+  let dismissalReasons = $state<Record<string, AnalystReviewDismissalReason | ''>>({});
   const nowMs = $derived(Date.parse(now));
   const filtered = $derived(inbox.items.filter((item) => {
     if (filter === 'all') return true;
@@ -36,6 +51,13 @@
     if (!value) return '';
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  }
+
+  async function dismiss(item: AnalystReviewItem) {
+    const reason = dismissalReasons[item.id];
+    if (!ondismiss || !reason || !item.dismissalTarget || !item.caseId) return;
+    await ondismiss(item, reason);
+    dismissalReasons = { ...dismissalReasons, [item.id]: '' };
   }
 </script>
 
@@ -71,7 +93,30 @@
             <p>{item.detail}</p>
             <small>{item.source} · observed {formatDate(item.observedAt)}</small>
           </div>
-          <a class="btn" href={item.href}>Review</a>
+          <div class="item-actions">
+            <a class="btn" href={item.href}>Review</a>
+            {#if item.retryHref}<a class="btn secondary" href={item.retryHref}>Refresh evidence</a>{/if}
+            {#if ondismiss && item.dismissalTarget}
+              <label>
+                <span class="sr-only">Dismissal reason for {item.title}</span>
+                <select
+                  value={dismissalReasons[item.id] ?? ''}
+                  onchange={(event) => {
+                    dismissalReasons = {
+                      ...dismissalReasons,
+                      [item.id]: (event.currentTarget as HTMLSelectElement).value as AnalystReviewDismissalReason | '',
+                    };
+                  }}
+                >
+                  <option value="">Select review outcome</option>
+                  {#each ANALYST_REVIEW_DISMISSAL_REASONS as reason}
+                    <option value={reason.value}>{reason.label}</option>
+                  {/each}
+                </select>
+              </label>
+              <button type="button" class="dismiss" disabled={!dismissalReasons[item.id]} onclick={() => dismiss(item)}>Dismiss gap</button>
+            {/if}
+          </div>
         </li>
       {/each}
     </ol>
@@ -106,8 +151,15 @@
   h3{margin:8px 0 3px;font:700 var(--text-sm) var(--mono);overflow-wrap:anywhere}
   .items p,.items small{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .items small{display:block;margin-top:5px;font-size:var(--text-2xs)}
+  .item-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:168px}
+  .item-actions .btn{text-align:center}
+  .item-actions select,.dismiss{width:100%;min-height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:650 var(--text-2xs) var(--mono)}
+  .item-actions select{padding:0 7px}
+  .dismiss{cursor:pointer}
+  .dismiss:disabled{cursor:not-allowed;opacity:.5}
+  .item-actions select:focus-visible,.dismiss:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .empty,.warning,.limitations{color:var(--muted);font-size:var(--text-sm)}
   .warning{color:var(--warning)}
   .limitations{margin:18px 0 0;padding-left:20px}
-  @media(max-width:640px){.items li{display:grid}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}}
+  @media(max-width:640px){.items li{display:grid}.item-actions{width:100%}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}}
 </style>
