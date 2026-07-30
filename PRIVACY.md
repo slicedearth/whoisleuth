@@ -75,9 +75,11 @@ default (see the README), so many lookups return no personal data at all.
   RDAP, WHOIS, or grouped domain-evidence source, and can offer those source
   groups after the displayed unified observation becomes stale. Each retry
   repeats only the stated bounded endpoint and displays a separate source
-  result with its own observation time. It does not merge into, replace, save,
-  or export the original unified response. A limited or failed retry remains
-  inconclusive and is not evidence of absence or safety.
+  result with its own observation and supersession time. Repeated refreshes
+  form a capped versioned chain in page memory. That chain is cleared with the
+  page and does not merge into, replace, save, or export the original unified
+  response. A limited or failed retry remains inconclusive and is not evidence
+  of absence or safety.
 - **Analyst-controlled external evidence pivots**: a completed Lookup can show
   a collapsed set of ordinary links to reviewed public registration,
   top-level-domain delegation, Certificate Transparency, archived-page,

@@ -1,6 +1,8 @@
 <script lang="ts">
   import {
     requestLookupSourceRefresh,
+    mergeLookupSourceRefreshLedger,
+    type LookupSourceRefreshLedger,
     type LookupSourceRefreshPlan,
     type LookupSourceRefreshPlanItem,
     type LookupSourceRefreshResult,
@@ -18,16 +20,20 @@
 
   let active = $state('');
   let message = $state('');
-  let results = $state<LookupSourceRefreshResult[]>([]);
+  let ledger = $state<LookupSourceRefreshLedger | null>(null);
+  const results = $derived(ledger?.entries || []);
 
   async function refresh(item: LookupSourceRefreshPlanItem) {
     if (active) return;
     active = item.id;
     message = '';
-    const outcome = await requestLookupSourceRefresh(item, query, depth);
+    const previous = [...results].reverse().find((result) => result.id === item.id);
+    const outcome = await requestLookupSourceRefresh(item, query, depth, {
+      supersedesObservedAt: previous?.observedAt || item.supersedesObservedAt,
+    });
     if (outcome.ok) {
-      results = [...results.filter((result) => result.id !== outcome.value.id), outcome.value].slice(-3);
-      message = `${item.label} refreshed separately. The original Lookup evidence was not changed.`;
+      ledger = mergeLookupSourceRefreshLedger(ledger, outcome.value);
+      message = `${item.label} refreshed in a separate versioned chain. The original Lookup evidence was not changed.`;
     } else {
       message = outcome.message;
     }
@@ -65,12 +71,13 @@
           <li>
             <span class={`state state-${result.state}`}>{result.state}</span>
             <p><strong>{result.id.replaceAll('_', ' ')}</strong> · {result.detail}</p>
-            <small>Received {formatted(result.observedAt)} · not merged or retained</small>
+            <small>Received {formatted(result.observedAt)} · supersedes {result.supersedesObservedAt ? formatted(result.supersedesObservedAt) : 'no earlier observation'} · transient only</small>
           </li>
         {/each}
       </ul>
     {/if}
     {#if message}<p class="message" role="status">{message}</p>{/if}
+    {#if ledger?.truncated}<p class="message">Older transient refresh entries were dropped at the local history bound.</p>{/if}
     <ul class="limitations">{#each plan.limitations as limitation}<li>{limitation}</li>{/each}</ul>
   </section>
 {/if}

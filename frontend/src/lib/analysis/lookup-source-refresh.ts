@@ -8,6 +8,7 @@ export const LOOKUP_SOURCE_STALE_AFTER_DAYS = 7;
 export const LOOKUP_SOURCE_REFRESH_TIMEOUT_MS = 40_000;
 export const MAX_LOOKUP_SOURCE_REFRESH_KEYS = 512;
 export const MAX_LOOKUP_SOURCE_REFRESH_BYTES = 2 * 1024 * 1024;
+export const MAX_LOOKUP_SOURCE_REFRESH_HISTORY = 12;
 
 export type LookupSourceRefreshId = 'availability' | 'rdap' | 'whois';
 
@@ -18,6 +19,7 @@ export type LookupSourceRefreshPlanItem = Readonly<{
   evidenceIds: readonly string[];
   reason: 'limited' | 'stale';
   requestDisclosure: string;
+  supersedesObservedAt: string | null;
 }>;
 
 export type LookupSourceRefreshPlan = Readonly<{
@@ -29,10 +31,20 @@ export type LookupSourceRefreshPlan = Readonly<{
 }>;
 
 export type LookupSourceRefreshResult = Readonly<{
+  version: typeof LOOKUP_SOURCE_REFRESH_VERSION;
   id: LookupSourceRefreshId;
   state: 'complete' | 'limited' | 'unavailable';
   detail: string;
   observedAt: string;
+  reason: LookupSourceRefreshPlanItem['reason'];
+  evidenceIds: readonly string[];
+  supersedesObservedAt: string | null;
+}>;
+
+export type LookupSourceRefreshLedger = Readonly<{
+  version: typeof LOOKUP_SOURCE_REFRESH_VERSION;
+  entries: readonly LookupSourceRefreshResult[];
+  truncated: boolean;
 }>;
 
 type RefreshRequestOutcome =
@@ -122,6 +134,9 @@ export function buildLookupSourceRefreshPlan(
       evidenceIds,
       reason: isLimited ? 'limited' : 'stale',
       requestDisclosure: group.disclosure,
+      supersedesObservedAt: typeof observedAt === 'string' && Number.isFinite(Date.parse(observedAt))
+        ? new Date(observedAt).toISOString()
+        : null,
     });
   }
   return {
@@ -187,17 +202,26 @@ function text(value: unknown, maximum = 180): string {
 }
 
 function summarizeSource(
-  id: LookupSourceRefreshId,
+  plan: LookupSourceRefreshPlanItem,
   body: Record<string, unknown>,
   observedAt: string,
   depth: 'deep' | 'fast',
+  supersedesObservedAt: string | null,
 ): LookupSourceRefreshResult {
-  if (id === 'rdap') {
+  const base = {
+    version: LOOKUP_SOURCE_REFRESH_VERSION,
+    id: plan.id,
+    observedAt,
+    reason: plan.reason,
+    evidenceIds: plan.evidenceIds.slice(0, 12),
+    supersedesObservedAt,
+  };
+  if (plan.id === 'rdap') {
     const upstreamStatus = Number(body.upstreamStatus);
     const parsed = record(body.parsed);
     const complete = upstreamStatus === 200 && Object.keys(parsed).length > 0;
     return {
-      id,
+      ...base,
       state: complete ? 'complete' : 'limited',
       detail: complete
         ? `Registry RDAP returned a validated ${upstreamStatus} response.`
@@ -205,12 +229,12 @@ function summarizeSource(
       observedAt,
     };
   }
-  if (id === 'whois') {
+  if (plan.id === 'whois') {
     const chain = Array.isArray(body.chain) ? body.chain : [];
     const chainStatus = text(record(body.parsed).chainStatus, 40);
     const complete = chain.length > 0 && chainStatus === 'complete';
     return {
-      id,
+      ...base,
       state: complete ? 'complete' : 'limited',
       detail: complete
         ? `WHOIS returned a complete ${chain.length}-hop referral chain.`
@@ -225,7 +249,7 @@ function summarizeSource(
     .map((key) => text(record(body[key]).status, 40))
     .filter(Boolean);
   return {
-    id,
+    ...base,
     state: complete ? 'complete' : 'limited',
     detail: `Domain evidence returned ${state}${sourceStates.length ? `; DNS, HTTP, and TLS states: ${sourceStates.join(', ')}` : ''}.`,
     observedAt,
@@ -240,6 +264,7 @@ export async function requestLookupSourceRefresh(
     fetchImpl?: FetchImplementation;
     timeoutMs?: number;
     now?: () => string;
+    supersedesObservedAt?: string | null;
   }> = {},
 ): Promise<RefreshRequestOutcome> {
   const normalizedQuery = text(query, 4096);
@@ -267,7 +292,15 @@ export async function requestLookupSourceRefresh(
     }
     return {
       ok: true,
-      value: summarizeSource(plan.id, body, options.now?.() ?? new Date().toISOString(), depth),
+      value: summarizeSource(
+        plan,
+        body,
+        options.now?.() ?? new Date().toISOString(),
+        depth,
+        options.supersedesObservedAt === undefined
+          ? plan.supersedesObservedAt
+          : options.supersedesObservedAt,
+      ),
     };
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'oversized') {
@@ -280,4 +313,28 @@ export async function requestLookupSourceRefresh(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export function mergeLookupSourceRefreshLedger(
+  current: LookupSourceRefreshLedger | null,
+  result: LookupSourceRefreshResult,
+): LookupSourceRefreshLedger {
+  const candidates = [
+    ...(current?.version === LOOKUP_SOURCE_REFRESH_VERSION ? current.entries : []),
+    result,
+  ];
+  const byObservation = new Map<string, LookupSourceRefreshResult>();
+  for (const entry of candidates.slice(-MAX_LOOKUP_SOURCE_REFRESH_HISTORY * 4)) {
+    byObservation.set(`${entry.id}:${entry.observedAt}`, entry);
+  }
+  const ordered = [...byObservation.values()]
+    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt));
+  const truncated = Boolean(current?.truncated)
+    || ordered.length > MAX_LOOKUP_SOURCE_REFRESH_HISTORY
+    || candidates.length > MAX_LOOKUP_SOURCE_REFRESH_HISTORY;
+  return {
+    version: LOOKUP_SOURCE_REFRESH_VERSION,
+    entries: ordered.slice(-MAX_LOOKUP_SOURCE_REFRESH_HISTORY),
+    truncated,
+  };
 }

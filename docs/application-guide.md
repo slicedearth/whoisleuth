@@ -94,7 +94,10 @@ bounds. Leaving Lookup applies the same browser cancellation.
 If a completed result contains limited Registry RDAP, WHOIS, or domain-evidence
 states, **Evidence coverage** offers an explicit source-family refresh. Results
 are normalized into a short transient health summary, with a 2 MiB response
-bound, and are not merged into the original envelope. A result that is at
+bound, and are not merged into the original envelope. Repeated refreshes form
+a bounded versioned display chain with explicit observation and supersession
+times. That transient chain is cleared with the page and is not saved or
+exported. A result that is at
 least seven days old can offer the same reviewed refreshes for otherwise
 complete sources. Run a complete Lookup before saving, comparing, or exporting
 replacement evidence so observations collected at different times are not

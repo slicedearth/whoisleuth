@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { buildEvidenceCoverageLedger } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
 import {
   buildLookupSourceRefreshPlan,
+  mergeLookupSourceRefreshLedger,
   requestLookupSourceRefresh,
 } from '../frontend/src/lib/analysis/lookup-source-refresh.ts';
 
@@ -53,10 +54,14 @@ test('summarizes a separate WHOIS refresh without retaining its raw response', a
   assert.deepEqual(outcome, {
     ok: true,
     value: {
+      version: 1,
       id: 'whois',
       state: 'complete',
       detail: 'WHOIS returned a complete 2-hop referral chain.',
       observedAt: NOW,
+      reason: 'limited',
+      evidenceIds: ['whois'],
+      supersedesObservedAt: NOW,
     },
   });
 });
@@ -69,6 +74,7 @@ test('recognizes complete deep and fast domain-evidence refresh contracts', asyn
     evidenceIds: ['dns', 'http', 'tls'],
     reason: 'limited',
     requestDisclosure: 'Repeats bounded domain evidence.',
+    supersedesObservedAt: NOW,
   } as const;
   const deep = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
     now: () => NOW,
@@ -100,6 +106,7 @@ test('keeps inconclusive fast domain evidence limited', async () => {
     evidenceIds: ['dns'],
     reason: 'limited',
     requestDisclosure: 'Repeats bounded domain evidence.',
+    supersedesObservedAt: NOW,
   } as const;
   const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'fast', {
     now: () => NOW,
@@ -131,4 +138,32 @@ test('rejects oversized source refresh bodies before retaining raw content', asy
     }),
   });
   assert.deepEqual(outcome, { ok: false, message: 'Source refresh returned an oversized response.' });
+});
+
+test('merges repeated refreshes into a bounded versioned chain without changing the unified result', () => {
+  const first = {
+    version: 1 as const,
+    id: 'rdap' as const,
+    state: 'limited' as const,
+    detail: 'First refresh.',
+    observedAt: '2026-07-30T00:01:00.000Z',
+    reason: 'limited' as const,
+    evidenceIds: ['rdap'],
+    supersedesObservedAt: NOW,
+  };
+  const second = {
+    ...first,
+    state: 'complete' as const,
+    detail: 'Second refresh.',
+    observedAt: '2026-07-30T00:02:00.000Z',
+    supersedesObservedAt: first.observedAt,
+  };
+  const ledger = mergeLookupSourceRefreshLedger(
+    mergeLookupSourceRefreshLedger(null, first),
+    second,
+  );
+  assert.equal(ledger.version, 1);
+  assert.equal(ledger.truncated, false);
+  assert.deepEqual(ledger.entries.map((entry) => entry.observedAt), [first.observedAt, second.observedAt]);
+  assert.equal(ledger.entries[1]?.supersedesObservedAt, first.observedAt);
 });
