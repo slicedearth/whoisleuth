@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
+  import { buildOwnedDomainPostureReview } from '$lib/analysis/owned-domain-posture-review.ts';
   type AuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string };
   let { active, disabledReason, auditing, results, audit }: {
     active: BrandProfile;
@@ -31,7 +32,24 @@
           {#if item.error}
             <p class="error">{item.error}</p>
           {:else if item.report}
+            {@const review = buildOwnedDomainPostureReview(active, item.report)}
             <p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p>
+            <section class="desired-state" aria-label={`Desired posture for ${item.domain}`}>
+              <header>
+                <div><strong>{review.profileLabel}</strong><span>Desired-state review</span></div>
+                <small>{review.attestationCounts.current} current private control attestation{review.attestationCounts.current === 1 ? '' : 's'} · {review.attestationCounts.expired} expired</small>
+              </header>
+              <div class="desired-groups">
+                {#each review.desiredGroups as group}
+                  <article class={`state-${group.state}`}>
+                    <div><strong>{group.label}</strong><span>{group.state}</span></div>
+                    <p>{group.purpose}</p>
+                    <small>{group.checks.length ? group.checks.map((check) => `${check.label}: ${check.status}`).join(' · ') : 'No compatible check was returned.'}</small>
+                  </article>
+                {/each}
+              </div>
+              <p class="limitation">{review.limitations[0]}</p>
+            </section>
             <div class="checks">
               {#each item.report.checks as check}
                 <details class={check.status}>
@@ -80,25 +98,20 @@
                 </ul>
               </details>
             {/if}
-            {#if item.report.externalDependencies.length}
+            {#if review.dependencies.length}
               <details class="analysis">
-                <summary><span>External dependencies</span><strong>{item.report.externalDependencies.length}</strong></summary>
-                <div class="table-wrap">
-                  <table>
-                    <thead><tr><th>Target</th><th>Source</th><th>Scope</th><th>State</th></tr></thead>
-                    <tbody>
-                      {#each item.report.externalDependencies as dependency}
-                        <tr>
-                          <td class="wrap">{dependency.target}</td>
-                          <td>{dependency.source}</td>
-                          <td>{dependency.scope.replaceAll('_', ' ')}</td>
-                          <td>{dependency.state}</td>
-                        </tr>
-                      {/each}
-                    </tbody>
-                  </table>
+                <summary><span>External dependency review</span><strong>{review.dependencyCounts.unavailable} need evidence</strong></summary>
+                <div class="dependency-grid">
+                  {#each review.dependencies as dependency}
+                    <article>
+                      <strong class="wrap">{dependency.target}</strong>
+                      <span>{dependency.kind.replaceAll('_', ' ')} · {dependency.scope.replaceAll('_', ' ')}</span>
+                      <p>{dependency.source}</p>
+                      <small class:needs-evidence={dependency.review === 'needs_evidence'}>{dependency.review.replaceAll('_', ' ')}</small>
+                    </article>
+                  {/each}
                 </div>
-                <p class="limitation">External or shared infrastructure is an operational review lead, not evidence of common ownership, insecurity, or exploitability.</p>
+                <p class="limitation">{review.limitations[1]}</p>
               </details>
             {/if}
           {:else}
@@ -136,5 +149,19 @@
   .analysis th{color:var(--muted);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.08em}
   .limitation{margin-bottom:0}
   .wrap{overflow-wrap:anywhere}
+  .desired-state{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .desired-state>header{display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:8px}
+  .desired-state>header div{display:grid;gap:2px}.desired-state>header span,.desired-state>header small{color:var(--muted);font-size:var(--text-2xs)}
+  .desired-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .desired-groups article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .desired-groups article>div{display:flex;justify-content:space-between;gap:8px}.desired-groups article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+  .desired-groups article.state-action>div span{color:var(--danger)}.desired-groups article.state-review>div span{color:var(--warning)}.desired-groups article.state-aligned>div span{color:var(--accent2)}
+  .desired-groups p,.desired-groups small{color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.desired-groups p{margin:5px 0}.desired-groups small{overflow-wrap:anywhere}
+  .dependency-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
+  .dependency-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .dependency-grid article>span,.dependency-grid article>small{display:block;margin-top:3px;color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}
+  .dependency-grid article>p{margin:5px 0;color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
+  .dependency-grid article>small.needs-evidence{color:var(--warning)}
   @media(max-width:750px){.checks{grid-template-columns:1fr}.audit .section-head{display:block}.audit .section-head button{margin-top:12px}}
+  @media(max-width:620px){.desired-groups,.dependency-grid{grid-template-columns:1fr}}
 </style>

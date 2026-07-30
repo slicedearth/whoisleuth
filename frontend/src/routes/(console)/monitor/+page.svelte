@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import AnalystReviewInbox from '$lib/components/AnalystReviewInbox.svelte';
+  import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
   import CalibrationExportReview from '$lib/components/CalibrationExportReview.svelte';
@@ -205,6 +206,7 @@
 {#if view==='inbox'}
 <div id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox">
   <AnalystReviewInbox inbox={reviewInbox} />
+  <CaseLifecycleReview records={cases} />
 </div>
 {/if}
 

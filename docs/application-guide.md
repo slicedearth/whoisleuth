@@ -384,6 +384,14 @@ sessions. Its filters and due-state labels help an analyst resume work; opening
 an item does not start collection, change a disposition, submit a response, or
 claim that the underlying evidence is complete.
 
+Below the inbox, **Contact and lifecycle review** projects reporting routes
+only from deliberately saved case actions. A due label means the saved due or
+follow-up date has arrived; it does not prove that a route is reachable,
+monitored, suitable, or responsible. The local iCalendar export contains
+bounded action-review and observed-expiry review dates without case notes or
+recipient values. An observed expiry date remains point-in-time evidence, not
+a release, deletion, availability, or acquisition forecast.
+
 Inside an expanded case, the response workspace keeps evidence pins, observed
 facts, analyst assertions, decisions, actions, and manual investigation steps
 separately typed. Its decision packet summarizes required incident facts,
@@ -666,6 +674,14 @@ their source-file SHA-256 digest, publisher, external identifier, timestamps,
 confidence, labels, and markings. They do not become collected evidence and do
 not create cases, start collection, change scores, publish events, or enable
 correlation. See [External findings and intelligence import](external-findings-import.md).
+
+Brand Profile posture results include a local **desired-state review**. It
+organizes the selected standard, defensive-no-mail, or parked profile into
+registration, mail, transport, and certificate-policy groups while preserving
+each server-returned check status. The external-dependency review keeps
+observed and unavailable dependencies distinct. It never tests provider
+accounts or claimability and never labels a dependency dangling, abandoned,
+vulnerable, safe, or controlled by another party.
 
 ## Browser-local storage and archives
 
