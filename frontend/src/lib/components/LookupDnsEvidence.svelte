@@ -1,4 +1,5 @@
 <script lang="ts">
+  import DnsChangeRehearsal from '$lib/components/DnsChangeRehearsal.svelte';
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   let {
     status,
@@ -7,6 +8,8 @@
     failureDetail,
     truncated,
     delegation = null,
+    domain = '',
+    allowRehearsal = false,
     initiallyExpanded = false,
     title = 'DNS intelligence',
     summaryDetail = 'Expand for observed records, provenance, and limitations',
@@ -41,6 +44,8 @@
       }[];
       limitations: readonly string[];
     } | null;
+    domain?: string;
+    allowRehearsal?: boolean;
     initiallyExpanded?: boolean;
     title?: string;
     summaryDetail?: string;
@@ -96,6 +101,14 @@
               {/each}
             </div>
           </details>
+        {/if}
+        {#if allowRehearsal && domain}
+          <DnsChangeRehearsal
+            {domain}
+            currentNameservers={delegation.parentNameservers}
+            registryNameservers={delegation.registryNameservers}
+            evidenceComplete={delegation.complete}
+          />
         {/if}
         {#each delegation.limitations as limitation}<p class="delegation-limitation">{limitation}</p>{/each}
       </section>

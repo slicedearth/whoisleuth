@@ -688,6 +688,8 @@
           failureDetail={networkDisplay.dnsQueryFailures}
           truncated={Boolean(dnsEvidence.truncated)}
           delegation={networkDisplay.dnsDelegation}
+          domain={caseDomain}
+          allowRehearsal={result?.type === 'domain'}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
         /></div>
         {#if serviceDependencyReview}

@@ -311,6 +311,15 @@ service dangling or vulnerable. Complete current DNS evidence with no alias is
 reported only as a point-in-time non-observation; incomplete DNS remains
 unavailable.
 
+**DNS change rehearsal** is available under a completed authoritative DNS
+health result in Deep Lookup. Enter the complete intended nameserver set,
+optional in-bailiwick glue, the DNSSEC change type, and reviewed readiness
+confirmations. The local planner highlights unresolved current disagreement,
+missing glue, unprepared authorities, TTL preparation, and DNSSEC ordering,
+then presents an ordered change and rollback checklist. Entered values remain
+analyst assertions. The rehearsal makes no request, changes no DNS or registry
+state, and cannot guarantee propagation or correctness.
+
 ### Monitor
 
 Monitor contains Cases, Campaigns, Relationships, and Watchlists.
