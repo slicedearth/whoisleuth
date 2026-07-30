@@ -253,6 +253,30 @@ test('the focused comparison handoff requires exactly two domains and opens Bulk
   await expect(page.locator('.results-table')).toHaveCount(0);
 });
 
+test('the privacy-safe browser handoff previews exact third-party disclosure before opening', async ({ page }) => {
+  await page.goto('/dashboard');
+  await page.getByLabel('Domain or URL').fill('https://user:secret@Sub.Example.Invalid:8443/private?token=secret#fragment');
+  await page.getByLabel('Destination').selectOption('external_https');
+  await page.getByLabel('Disclose').selectOption('sanitized_url');
+  await page.getByLabel('Exact endpoint').fill('https://analyst-service.invalid/review');
+  await page.getByRole('button', { name: 'Prepare exact preview' }).click();
+
+  const preview = page.locator('.browser-handoff .preview');
+  await expect(preview).toContainText('Configured external service');
+  await expect(preview).toContainText('https://sub.example.invalid/');
+  await expect(preview).toContainText('third party');
+  await expect(preview).toContainText('https://analyst-service.invalid/review?target=https%3A%2F%2Fsub.example.invalid%2F');
+  await expect(preview).toContainText('Removed: credentials, port, path, query, fragment.');
+  await expect(preview).not.toContainText('secret');
+  await expect(preview).not.toContainText('token');
+  await expect(page.getByRole('button', { name: 'Open reviewed destination' })).toBeDisabled();
+  await page.getByLabel(/I reviewed the exact endpoint/).check();
+  await expect(page.getByRole('button', { name: 'Open reviewed destination' })).toBeEnabled();
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('the dashboard reports bounded browser-local counts and recent saved work', async ({ page }) => {
   await page.goto('/dashboard');
   const stored = {

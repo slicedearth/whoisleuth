@@ -413,11 +413,17 @@ dismissal is recorded in the case investigation trail; it does not resolve or
 delete a pin or assertion. A changed gap receives a new fingerprint and returns
 to the queue.
 
-The Dashboard **hostname-only handoff** accepts a pasted domain or HTTP(S) URL
-and constructs a Deep Lookup link from the normalized hostname only.
-Credentials, port, path, query, and fragment are omitted. Opening the link
-fills Lookup but does not submit it, so the analyst still reviews the target
-and collection plan.
+The Dashboard **privacy-safe browser handoff** accepts a pasted domain or
+HTTP(S) URL and reduces it to either the normalized hostname or sanitized
+HTTP(S) origin. Credentials, port, path, query, fragment, and browser-local
+identifiers are omitted. The default destination is a prefilled Deep Lookup
+that does not submit. An analyst can instead configure an exact loopback
+companion endpoint or HTTPS external endpoint; WHOISleuth discovers neither.
+The preview shows the exact disclosed value, destination URL, and visibility,
+and a non-Lookup destination requires explicit confirmation before opening.
+An optional separate action records only the prepared handoff and normalized
+domain in a selected browser-local case trail. It never records the external
+result.
 
 Below the inbox, **Contact and lifecycle review** projects reporting routes
 only from deliberately saved case actions. A due label means the saved due or
