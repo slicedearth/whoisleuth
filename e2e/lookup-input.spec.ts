@@ -682,6 +682,17 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await page.locator('#query').fill('registrar-source.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
+  const agreementMatrix = page.locator('.agreement-matrix');
+  await expect(agreementMatrix.locator('title').filter({
+    hasText: 'Registry object ID, Registry RDAP: observed — registry-object-handle',
+  })).toHaveCount(1);
+  await expect(agreementMatrix.locator('title').filter({
+    hasText: 'Registry object ID, Registrar RDAP: not collected',
+  })).toHaveCount(1);
+  await expect(agreementMatrix.locator('title').filter({
+    hasText: 'Registry object ID, WHOIS: partial',
+  })).toHaveCount(1);
+
   const analystPivots = page.locator('details.analyst-pivots');
   await expect(analystPivots).not.toHaveAttribute('open', '');
   await expect(analystPivots.getByText('External evidence pivots', { exact: true })).toBeVisible();

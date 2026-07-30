@@ -463,9 +463,9 @@ export function syntheticDemoLookupView(id: string) {
     registry: {
       comparisonSummary: conclusive ? 'Synthetic RDAP and WHOIS fields are equivalent' : 'Synthetic comparison unavailable',
       comparisonRows: conclusive ? [
-        { label: 'Registrar', rdapValue: registry.registrar, whoisValue: registry.registrar, status: 'equivalent', assessment: 'Equivalent', tone: 'good' },
-        { label: 'Created', rdapValue: registry.registeredAt, whoisValue: registry.registeredAt, status: 'equivalent', assessment: 'Equivalent', tone: 'good' },
-        { label: 'Nameservers', rdapValue: dns.nameservers.join(', '), whoisValue: dns.nameservers.join(', '), status: 'equivalent', assessment: 'Equivalent', tone: 'good' },
+        { label: 'Registrar', rdapValue: registry.registrar, whoisValue: registry.registrar, status: 'equivalent', rdapMatrixState: 'equal', whoisMatrixState: 'equal', assessment: 'Equivalent', tone: 'good' },
+        { label: 'Created', rdapValue: registry.registeredAt, whoisValue: registry.registeredAt, status: 'equivalent', rdapMatrixState: 'equal', whoisMatrixState: 'equal', assessment: 'Equivalent', tone: 'good' },
+        { label: 'Nameservers', rdapValue: dns.nameservers.join(', '), whoisValue: dns.nameservers.join(', '), status: 'equivalent', rdapMatrixState: 'equal', whoisMatrixState: 'equal', assessment: 'Equivalent', tone: 'good' },
       ] : [],
       comparisonHasConflicts: false,
       rdapError: conclusive ? '' : 'The synthetic registry fixture is inconclusive; no absence finding is inferred.',

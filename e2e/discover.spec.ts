@@ -699,3 +699,14 @@ test('no horizontal overflow at 390px for structured CT results', async ({ page 
   await expect(page.locator('.candidate')).toHaveCount(2);
   await expectNoHorizontalOverflow(page);
 });
+
+test('discovery method tabs reflow without an inner scrollbar on narrow phones', async ({ page }) => {
+  for (const width of [320, 360, 375]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto('/discover');
+    const methods = page.getByRole('tablist', { name: 'Discovery method' });
+    await expect(methods.getByRole('tab')).toHaveCount(3);
+    expect(await methods.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await expectNoHorizontalOverflow(page);
+  }
+});

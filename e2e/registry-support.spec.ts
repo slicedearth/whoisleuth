@@ -206,3 +206,16 @@ test('the registry-support reference remains readable without horizontal overflo
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
   await expectNoHorizontalOverflow(page);
 });
+
+test('registry reference tables reflow before laptop content columns need to scroll', async ({ page }) => {
+  for (const width of [1024, 1366]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/registry-support');
+    const tableFrames = page.locator('.capability-table-wrap, .catalogue-section .table-wrap');
+    await expect(tableFrames).toHaveCount(2);
+    expect(await tableFrames.evaluateAll((elements) => elements.every(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    ))).toBe(true);
+    await expectNoHorizontalOverflow(page);
+  }
+});

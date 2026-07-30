@@ -29,6 +29,8 @@ for (const viewport of VIEWPORTS) {
       // client-side session check after navigation.
       await expect(page.locator('.shell > header strong', { hasText: 'WHOISleuth' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'WHOISleuth Dashboard' })).toHaveAttribute('href', '/dashboard');
+      const headerWordmark = page.locator('.shell > header > a strong');
+      expect(await headerWordmark.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
       const visibleBrandCount = await page
         .locator('strong', { hasText: 'WHOISleuth' })
         .evaluateAll((els) => els.filter((el) => (el as HTMLElement).offsetParent !== null).length);

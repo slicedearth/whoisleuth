@@ -73,6 +73,11 @@
               <text x={validity.toX} y="93" text-anchor="middle">{validity.validTo.slice(0, 10)}</text>
             </svg>
           </div>
+          <dl class="validity-mobile" aria-label="Certificate validity dates">
+            <div><dt>Valid from</dt><dd>{validity.validFrom.slice(0, 10)}</dd></div>
+            {#if validity.hasObservation}<div><dt>Observed</dt><dd>{validity.observedAt.slice(0, 10)}</dd></div>{/if}
+            <div><dt>Valid to</dt><dd>{validity.validTo.slice(0, 10)}</dd></div>
+          </dl>
         {/if}
         {#if chain.length}
           <ol class="chain-flow" aria-label="Observed certificate chain">
@@ -112,16 +117,16 @@
   .finding-list span{display:block;margin-top:3px}
   .certificate-visual{margin-top:13px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .certificate-visual h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
-  .validity-chart{max-width:100%;margin-top:9px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .validity-chart svg{display:block;width:100%;min-width:560px;height:auto}
+  .validity-chart{max-width:100%;margin-top:9px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .validity-chart svg{display:block;width:100%;min-width:0;height:auto}
+  .validity-mobile{display:none}
   .validity-line{stroke:var(--accent);stroke-width:5;stroke-linecap:round}
   .validity-bound{fill:var(--panel);stroke:var(--accent);stroke-width:3}
   .observed-line{stroke:var(--success);stroke-width:3}
   .observed-line.outside{stroke:var(--danger)}
   .validity-chart text{fill:var(--muted);font:600 9px var(--mono)}
-  .chain-flow{display:flex;gap:0;margin:12px 0 0;padding:0;overflow-x:auto;list-style:none}
-  .chain-flow li{display:grid;position:relative;flex:1 0 180px;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:center;padding:9px 14px 9px 0}
-  .chain-flow li:not(:last-child)::after{position:absolute;right:3px;width:8px;height:8px;border-top:1px solid var(--muted);border-right:1px solid var(--muted);transform:rotate(45deg);content:""}
+  .chain-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin:12px 0 0;padding:0;list-style:none}
+  .chain-flow li{display:grid;position:relative;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:center;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .chain-flow li>span{display:grid;width:26px;height:26px;place-items:center;border:1px solid var(--border-strong);border-radius:50%;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .chain-flow strong,.chain-flow small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chain-flow strong{font-size:var(--text-xs)}.chain-flow small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
@@ -133,6 +138,12 @@
   .disclosure dd{min-width:0;margin:0;overflow-wrap:anywhere}
   .http-hash{overflow-wrap:anywhere;font-family:var(--mono)}
   @media(max-width:650px){
+    .validity-chart{display:none}
+    .validity-mobile{display:grid;gap:1px;margin:9px 0 0;background:var(--border)}
+    .validity-mobile div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;padding:8px 9px;background:var(--panel-raised)}
+    .validity-mobile dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
+    .validity-mobile dd{min-width:0;margin:0;font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}
+    .chain-flow{grid-template-columns:1fr}
     .disclosure dl{grid-template-columns:1fr;gap:4px}
     .disclosure dt{margin-top:6px}
   }

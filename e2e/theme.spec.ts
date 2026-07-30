@@ -115,12 +115,50 @@ test('the authenticated console reuses the same persisted selector', async ({ pa
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
-test('theme controls do not create horizontal overflow on narrow public and console layouts', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 });
+test('theme controls fit beside authenticated public navigation across common phone widths', async ({ page }) => {
   await clearThemePreference(page);
-  await page.goto('/');
-  await expectNoHorizontalOverflow(page);
+  for (const width of [320, 360, 375, 390, 412, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
 
+    const publicNavigation = page.getByRole('navigation', { name: 'Public navigation' });
+    const publicBrand = page.locator('.public-brand');
+    const theme = publicNavigation.locator('.theme-selector');
+    const trigger = publicNavigation.getByRole('button', { name: /^Colour theme,/ });
+    const consoleLink = publicNavigation.getByRole('link', { name: 'Open console' });
+    const signOut = publicNavigation.getByRole('button', { name: 'Sign out' });
+    const [brandBox, navigationBox, themeBox, triggerBox, consoleBox, signOutBox] = await Promise.all([
+      publicBrand.boundingBox(),
+      publicNavigation.boundingBox(),
+      theme.boundingBox(),
+      trigger.boundingBox(),
+      consoleLink.boundingBox(),
+      signOut.boundingBox(),
+    ]);
+
+    expect(brandBox).not.toBeNull();
+    expect(navigationBox).not.toBeNull();
+    expect(themeBox).not.toBeNull();
+    expect(triggerBox).not.toBeNull();
+    expect(consoleBox).not.toBeNull();
+    expect(signOutBox).not.toBeNull();
+    expect(navigationBox!.x - (brandBox!.x + brandBox!.width)).toBeGreaterThanOrEqual(2);
+    expect(consoleBox!.x - (triggerBox!.x + triggerBox!.width)).toBeGreaterThanOrEqual(5);
+    expect(consoleBox!.x - (themeBox!.x + themeBox!.width)).toBeGreaterThanOrEqual(5);
+    expect(signOutBox!.x - (consoleBox!.x + consoleBox!.width)).toBeGreaterThanOrEqual(5);
+    expect(signOutBox!.x + signOutBox!.width).toBeLessThanOrEqual(width);
+    const [themeFontSize, consoleFontSize, signOutFontSize] = await Promise.all([
+      trigger.evaluate((element) => getComputedStyle(element).fontSize),
+      consoleLink.evaluate((element) => getComputedStyle(element).fontSize),
+      signOut.evaluate((element) => getComputedStyle(element).fontSize),
+    ]);
+    expect(themeFontSize).toBe(consoleFontSize);
+    expect(themeFontSize).toBe(signOutFontSize);
+    await expectNoHorizontalOverflow(page);
+  }
+
+  await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/dashboard');
   await page.getByRole('button', { name: 'Toggle navigation' }).click();
   await expect(page.getByRole('button', { name: /^Colour theme,/ })).toBeVisible();

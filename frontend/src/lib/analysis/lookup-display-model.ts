@@ -612,11 +612,24 @@ export function buildLookupRegistryDisplay(input: {
     registrarRdapParsed,
     registrarPublicationComparison,
   } = input;
+  const matrixState = (sourceState: string | undefined, comparisonStatus: string): string => {
+    if (sourceState === 'value') {
+      if (comparisonStatus === 'equivalent') return 'equal';
+      if (comparisonStatus === 'conflict') return 'conflict';
+      return 'observed';
+    }
+    if (sourceState === 'redacted' || sourceState === 'incomplete') return 'partial';
+    if (sourceState === 'unavailable') return 'unavailable';
+    if (sourceState === 'absent') return 'not_collected';
+    return comparisonStatus;
+  };
   const comparisonRows = comparison.fields.map((field) => ({
     label: field.label,
     rdapValue: field.rdapDisplay,
     whoisValue: field.whoisDisplay,
     status: field.status,
+    rdapMatrixState: matrixState(field.rdapState, field.status),
+    whoisMatrixState: matrixState(field.whoisState, field.status),
     assessment: assessment(field.status),
     tone:
       field.status === 'conflict'
@@ -634,6 +647,8 @@ export function buildLookupRegistryDisplay(input: {
     registryValue: field.registryDisplay,
     registrarValue: field.registrarDisplay,
     status: field.status,
+    registryMatrixState: matrixState(field.registryState, field.status),
+    registrarMatrixState: matrixState(field.registrarState, field.status),
     assessment: publicationAssessment(field.status),
     tone:
       field.status === 'conflict'
