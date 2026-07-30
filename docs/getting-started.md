@@ -203,6 +203,20 @@ npm run lookup:transport-spike
 npm run lookup:transport-qualify
 ```
 
+After a production build, measure each public and protected route's initial
+static dependency closure:
+
+```bash
+npm run build
+npm run frontend:loading-report
+```
+
+The report uses only local build artifacts. It fails if the browser-local
+workspace chunk enters a public route and reports gzip estimates rather than
+claiming measured network timings. A large protected chunk is not, by itself,
+a reason to split the storage boundary; authenticated runtime measurements are
+still required before changing that architecture.
+
 Both commands are offline. The qualification report exercises protocol
 chunking, buffering detection, slow-consumer handling, authentication expiry,
 duplicate events, timeout and abort cancellation, and final-envelope

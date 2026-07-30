@@ -47,6 +47,7 @@
     "sslbl:status": "node tools/sslbl-snapshot-status.mts",
     "lookup:transport-spike": "node tools/incremental-lookup-transport-spike.mts",
     "lookup:transport-qualify": "node tools/incremental-lookup-qualification.mts",
+    "frontend:loading-report": "node tools/frontend-loading-report.mts",
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",
     "catalog:retire": "node tools/retire-browser-catalog.mts",
