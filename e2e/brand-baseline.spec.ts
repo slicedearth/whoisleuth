@@ -336,7 +336,7 @@ test('a browser quota failure reports a stable message and preserves the previou
   await cleanBrandStorage(page);
   const stored = [profileFixture()];
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: stored });
-  await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'brand_profiles');
 
   await page.getByRole('button', { name: 'Edit' }).click();
@@ -344,5 +344,5 @@ test('a browser quota failure reports a stable message and preserves the previou
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.getByRole('status')).toContainText('out of storage space');
   const after = await readBrowserLocalCollection(page, 'brand_profiles');
-  expect(after.records.map((entry) => entry.value)).toEqual(stored);
+  expect(after.records.map((entry) => entry.value)).toEqual(before.records.map((entry) => entry.value));
 });

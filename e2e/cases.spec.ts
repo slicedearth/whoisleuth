@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -1392,7 +1393,7 @@ test.describe('case report export', () => {
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-cases-.*\.json$/);
-    expect(parsed.version).toBe(7);
+    expect(parsed.version).toBe(CASE_SCHEMA_VERSION);
     expect(parsed.cases).toEqual(expect.arrayContaining([
       expect.objectContaining({ domain: 'backup-test.invalid' }),
     ]));
