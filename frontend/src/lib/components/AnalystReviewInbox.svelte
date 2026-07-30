@@ -9,6 +9,7 @@
     { value: 'overdue', label: 'Overdue' },
     { value: 'case', label: 'Cases' },
     { value: 'case_action', label: 'Actions' },
+    { value: 'evidence_gap', label: 'Evidence gaps' },
     { value: 'watchlist_change', label: 'Changes' },
     { value: 'bulk_session', label: 'Bulk sessions' },
   ];
@@ -43,7 +44,7 @@
     <div>
       <p class="eyebrow">Analyst review</p>
       <h2 id="review-inbox-title">Review inbox</h2>
-      <p>One queue for retained case decisions, reviewed follow-ups, watchlist changes, and incomplete Bulk sessions.</p>
+      <p>One queue for retained case decisions, evidence gaps, reviewed follow-ups, watchlist changes, and incomplete Bulk sessions.</p>
     </div>
     <strong>{inbox.counts.all}</strong>
   </div>

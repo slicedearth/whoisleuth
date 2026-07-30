@@ -630,6 +630,12 @@ collection. They can be exported or imported as a strict versioned JSON
 document and are included in the deliberate workspace archive. They contain
 analyst-authored workflow guidance, so review them before sharing.
 
+Monitor's **Inbox** projects one evidence-gap item per unresolved case when
+that case retains an explicit partial, inconclusive, unknown, or truncated
+evidence pin or an open analyst-authored unknown or contradiction. It does not
+infer facts that were never saved. Resolving the queue requires reviewing the
+owning case rather than treating a source failure as absence.
+
 Monitor's **Timeline** view combines a bounded projection of deliberately
 retained case snapshots, evidence pins and checkpoint facts, website-profile
 snapshots, watchlist checks, and relationship observations. Filters cover

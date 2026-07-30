@@ -3,7 +3,7 @@ import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 
 export const MAX_ANALYST_REVIEW_ITEMS = 500;
-export const ANALYST_REVIEW_KINDS = ['case', 'case_action', 'watchlist_change', 'bulk_session'] as const;
+export const ANALYST_REVIEW_KINDS = ['case', 'case_action', 'evidence_gap', 'watchlist_change', 'bulk_session'] as const;
 export type AnalystReviewKind = typeof ANALYST_REVIEW_KINDS[number];
 export type AnalystReviewPriority = 'urgent' | 'high' | 'normal';
 export type AnalystReviewCompleteness = 'complete' | 'partial' | 'inconclusive';
@@ -65,6 +65,31 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         dueAt: null,
         completeness: record.evidenceHistory.length || record.evidencePins.length ? 'partial' : 'inconclusive',
         href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}`,
+      });
+    }
+    const openUnknowns = record.assertions.filter((item) => item.state === 'open' && item.kind === 'unknown').length;
+    const openContradictions = record.assertions.filter((item) => item.state === 'open' && item.kind === 'contradiction').length;
+    const limitedPins = record.evidencePins.filter((item) =>
+      item.completeness !== 'complete' || item.truncated === true
+    ).length;
+    const gapCount = openUnknowns + openContradictions + limitedPins;
+    if (record.status !== 'resolved' && gapCount > 0) {
+      const parts = [
+        openUnknowns ? `${openUnknowns} open unknown${openUnknowns === 1 ? '' : 's'}` : '',
+        openContradictions ? `${openContradictions} open contradiction${openContradictions === 1 ? '' : 's'}` : '',
+        limitedPins ? `${limitedPins} limited evidence pin${limitedPins === 1 ? '' : 's'}` : '',
+      ].filter(Boolean);
+      items.push({
+        id: `evidence-gap:${record.id}`,
+        kind: 'evidence_gap',
+        priority: openContradictions > 0 ? 'high' : 'normal',
+        title: `Review evidence gaps for ${record.domain}`,
+        detail: parts.join(' · '),
+        source: 'Browser-local case evidence and analyst assertions',
+        observedAt: updatedAt,
+        dueAt: null,
+        completeness: openContradictions || openUnknowns ? 'inconclusive' : 'partial',
+        href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
       });
     }
     for (const action of record.actions.slice(-50)) {
@@ -156,6 +181,7 @@ export function buildAnalystReviewInbox(
     overdue: items.filter((item) => item.dueAt !== null && Date.parse(item.dueAt) <= nowMs).length,
     case: items.filter((item) => item.kind === 'case').length,
     case_action: items.filter((item) => item.kind === 'case_action').length,
+    evidence_gap: items.filter((item) => item.kind === 'evidence_gap').length,
     watchlist_change: items.filter((item) => item.kind === 'watchlist_change').length,
     bulk_session: items.filter((item) => item.kind === 'bulk_session').length,
   };
@@ -166,6 +192,7 @@ export function buildAnalystReviewInbox(
     limitations: [
       'The inbox is a browser-local projection of retained records. It does not run checks, change cases, or infer maliciousness.',
       'Partial and inconclusive source states remain review prompts, not evidence of absence or safety.',
+      'Evidence gaps are projected from explicit incomplete pins and open unknown or contradiction assertions; the queue does not invent missing facts.',
     ],
   };
 }

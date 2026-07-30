@@ -88,6 +88,46 @@ describe('analyst review inbox', () => {
     assert.equal(inbox.items.find((item) => item.kind === 'case')?.completeness, 'inconclusive');
   });
 
+  test('projects explicit case evidence gaps without inventing missing facts', () => {
+    const record = caseRecord();
+    record.disposition = 'suspicious';
+    record.evidencePins = [{
+      id: 'pin-limited',
+      checkpointId: null,
+      field: 'whois.registrar',
+      category: 'registration',
+      label: 'WHOIS registrar',
+      value: 'Unavailable',
+      source: 'whois',
+      sourceState: 'partial',
+      sourceSchema: null,
+      observedAt: '2026-07-27T08:00:00.000Z',
+      collectionDepth: 'deep',
+      completeness: 'partial',
+      truncated: false,
+      transitionExpectation: null,
+      limitations: ['The authoritative WHOIS hop did not answer.'],
+      createdAt: '2026-07-27T08:00:00.000Z',
+    }];
+    record.assertions = [{
+      id: 'assertion-unknown',
+      kind: 'unknown',
+      statement: 'The effective registrar contact remains unresolved.',
+      rationale: null,
+      evidencePinIds: ['pin-limited'],
+      state: 'open',
+      createdAt: '2026-07-27T08:00:00.000Z',
+      updatedAt: '2026-07-27T08:00:00.000Z',
+    }];
+    const inbox = buildAnalystReviewInbox({ cases: [record] }, NOW);
+    const gap = inbox.items.find((item) => item.kind === 'evidence_gap');
+    assert.ok(gap);
+    assert.equal(inbox.counts.evidence_gap, 1);
+    assert.equal(gap.completeness, 'inconclusive');
+    assert.match(gap.detail, /1 open unknown · 1 limited evidence pin/i);
+    assert.match(gap.href, /case-response-case-one$/);
+  });
+
   test('excludes resolved cases, settled actions, unchanged watchlists, and complete sessions', () => {
     const record = caseRecord();
     record.status = 'resolved';
