@@ -296,7 +296,7 @@ test('valid posture results disclose bounded SPF and external-dependency evidenc
 
   await expect(page.getByRole('status')).toHaveText('Audited 1/1 official domain.');
   await expect(page.getByText('SPF expansion', { exact: true })).toBeVisible();
-  await page.getByText('External dependencies', { exact: true }).click();
+  await page.getByText('External dependency review', { exact: true }).click();
   await expect(page.getByText('ns1.example.net', { exact: true })).toBeVisible();
 });
 

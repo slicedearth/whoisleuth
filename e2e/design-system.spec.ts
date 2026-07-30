@@ -563,8 +563,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
 
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
-  await expect(coverage.getByText(/complete$/u)).toBeVisible();
-  await expect(coverage.getByText(/limited$/u)).toBeVisible();
+  const coverageSummary = coverage.getByRole('group', { name: 'Evidence coverage summary' });
+  await expect(coverageSummary.getByText(/complete$/u)).toBeVisible();
+  await expect(coverageSummary.getByText(/limited$/u)).toBeVisible();
   await coverage.getByText(/Review \d+ source and analysis states/u).click();
   await expect(coverage).toContainText('Registry RDAP');
   await expect(coverage).toContainText('WHOIS');

@@ -25,7 +25,12 @@ function currentAction(page: import('@playwright/test').Page) {
 async function allowAndOpen(page: import('@playwright/test').Page, tool: 'Discover' | 'Bulk' | 'Lookup') {
   const action = currentAction(page);
   await action.getByRole('button', { name: 'Review requests' }).click();
-  await expect(action.getByRole('region', { name: /Review requests for/ })).toContainText('Requests:');
+  const review = action.getByRole('region', { name: /Review requests for/ });
+  await expect(review).toBeVisible();
+  await expect(review).toContainText('1 target');
+  await expect(review).toContainText('Retention');
+  await expect(review).toContainText('Controls');
+  await expect(review).toContainText('Limits');
   await action.getByRole('button', { name: `Allow and open ${tool}` }).click();
 }
 
