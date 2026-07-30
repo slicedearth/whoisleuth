@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Capability } from '$lib/capabilities';
+  import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
+  import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
 
   let {
     query = $bindable(),
@@ -54,6 +56,15 @@
   );
   const entryLimit = 2_000;
   const deepMode = $derived(lookupMode === 'deep');
+  const preflight = $derived(buildLookupCollectionPreflight({
+    mode: lookupMode,
+    targetCount: entryCount,
+    disabledSourceIds: lookupLimitations.map((item) => item.id),
+    includeSecurityTxt,
+    includeExternalIntelligence,
+    includeMalwareHostIntelligence,
+    includeMalwareIocIntelligence,
+  }));
   const loadingDetail = $derived(lookupMode === 'fast'
     ? 'Fast lookup is checking authoritative registration evidence and omitting slower web, WHOIS, and enrichment sources.'
     : 'Deep lookup is waiting for one final response covering registry, WHOIS, domain, web, TLS, and eligible enrichment branches. Some registries can take several seconds to answer.');
@@ -172,6 +183,8 @@
       {/if}
     </fieldset>
   {/if}
+
+  <CollectionPreflight {preflight} />
 
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 </form>

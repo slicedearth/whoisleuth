@@ -65,6 +65,14 @@ sources decides domain availability, Risk, ownership, or hosting control.
 Press **Ctrl+Enter** or **Command+Enter** in the query field to start the same
 validated submission as the Run lookup button.
 
+Before starting, expand **Collection preflight** to review the target count,
+selected profile, included, optional, or policy-disabled source families,
+retention boundary, cancellation controls, and important limitations. The same
+summary appears in Bulk and at approval-gated guided-investigation steps. It
+describes planned source families rather than promising an exact request count:
+redirects, referrals, source eligibility, and bounded retries can change the
+number of requests that actually run.
+
 The primary assessment, source health, and material registration conflicts
 remain expanded. Long RDAP and WHOIS records and secondary DNS, HTTP, page,
 passive-posture, technology, TLS, and observed-network cards start collapsed.
@@ -596,6 +604,10 @@ current browser-local case has a reviewed disposition, a typed analyst
 decision, supporting evidence pins, and explicit unresolved unknowns or
 contradictions. This checklist measures workflow structure only. It does not
 validate an analyst conclusion or make a claim about the target.
+Approval-gated steps show the same Collection preflight language used by
+Lookup and Bulk before the analyst opens the tool. Approval applies only to
+that bounded guide step. It is not general authorization for active testing or
+an assurance that every named source will succeed.
 
 The Console also offers a short in-tab undo after changing a Bulk review state,
 shortlist membership, case tags, or a temporary evidence-cluster label. The
