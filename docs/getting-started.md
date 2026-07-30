@@ -237,6 +237,22 @@ Each authenticated staging adapter and its real proxy or CDN must pass the same
 gates before that adapter can be marked qualified. Express and Netlify remain
 disabled and use the ordinary buffered response.
 
+After staged adapter runs have produced redacted evidence summaries for the
+same build, verify them offline with:
+
+```bash
+npm run lookup:staging-evidence -- express.json netlify.json
+```
+
+The strict evidence contract requires fresh desktop and mobile measurements
+through both direct and production-proxy paths, progressive event timing,
+collector-visible cancellation, safe response headers, authentication-expiry
+handling, duplicate and timeout rejection, ordinary fallback success, and
+final-envelope equivalence. Extra fields are rejected so targets, queries,
+credentials, responses, and partial events cannot enter the summary. A passing
+report records staging qualification only; it does not enable either adapter
+or change the production deployment.
+
 ### First-use analyst study
 
 `fixtures/first-use-analyst-study-tasks.mts` provides one repeatable desktop and
