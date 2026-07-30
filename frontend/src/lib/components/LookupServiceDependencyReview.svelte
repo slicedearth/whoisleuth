@@ -131,12 +131,17 @@
             <header><span>{dependency.recordType}</span><strong>{dependency.state.replaceAll('_', ' ')}</strong></header>
             <code>{dependency.target}</code>
             {#if dependency.serviceFamily}<p class="classification">{dependency.serviceFamily}</p>{/if}
+            {#if dependency.signatureReviewedAt || dependency.signatureProvenance}
+              <p>{dependency.signatureProvenance ?? 'Reviewed local service catalogue'}{dependency.signatureReviewedAt ? ` · reviewed ${dependency.signatureReviewedAt}` : ''}</p>
+            {/if}
+            <p class="qualification">{dependency.qualification.replaceAll('_', ' ')}</p>
             {#if dependency.scope !== 'unspecified'}
               <p class:scope-match={dependency.scope === 'authorized'} class="scope-state">
                 {dependency.scope === 'authorized' ? 'Within reviewed scope' : 'Outside reviewed scope'}
               </p>
             {/if}
             <p>{dependency.detail}</p>
+            <p>{dependency.qualificationDetail}</p>
             <small>{dependency.provenance}</small>
           </article>
         {/each}

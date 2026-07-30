@@ -381,6 +381,8 @@
     httpEvidence,
     authorizedScope:serviceDependencyScope,
     falsePositiveTargets:serviceDependencyFalsePositives,
+    pageTitle:pageIdentity.title,
+    observedAt:result?.fetchedAt,
   }));
   const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
     targetType:result?.type,

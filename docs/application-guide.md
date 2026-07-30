@@ -327,7 +327,10 @@ produce legitimate relationships.
 **Service dependency review** reuses current CNAME, HTTPS alias-mode,
 nameserver, mail-server, and final HTTP-origin evidence. A fixed, bounded local
 catalogue can label recognized service families without making another
-request. Analysts can optionally enter reviewed expected targets or parent
+request. Each match displays the fixed catalogue provenance and review date.
+Exact matches against three bounded passive page-title phrases can add a
+collision-prone deprovision cue, while evidence older than 30 days is labelled
+stale and incomplete DNS stays inconclusive. Analysts can optionally enter reviewed expected targets or parent
 namespaces and exact reviewed false-positive targets for the current Lookup
 view; neither input is retained. Candidate, unresolved, active, unsupported,
 and false-positive labels remain manual review states. “Active” means only

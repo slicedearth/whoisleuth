@@ -197,4 +197,60 @@ describe('service dependency review projection', () => {
     assert.match(review.limitations.join(' '), /None establishes dangling status/u);
     assert.doesNotMatch(JSON.stringify(review), /token=secret/u);
   });
+
+  test('qualifies exact passive deprovision cues, stale observations, and incomplete evidence conservatively', () => {
+    const signature = [{
+      id: 'fixture-hosting',
+      label: 'Fixture hosting service',
+      targetSuffixes: ['service.test'],
+      reviewedAt: '2026-07-01',
+      provenance: 'Reviewed fixture catalogue',
+      deprovisionPageTitles: ['site not found'],
+    }];
+    const evidence = {
+      source: 'dns',
+      complete: true,
+      diagnostics: {
+        cname: { status: 'success' },
+        https: { status: 'not_found' },
+        ns: { status: 'not_found' },
+        mx: { status: 'not_found' },
+      },
+    };
+    const current = buildServiceDependencyReview({
+      domain: 'example.test',
+      authorizedScope: ['tenant.service.test'],
+      signatures: signature,
+      dnsEvidence: evidence,
+      dnsRecords: { cname: ['tenant.service.test'], https: [], ns: [], mx: [] },
+      pageTitle: ' Site   Not Found ',
+      observedAt: '2026-07-29T08:00:00.000Z',
+      now: '2026-07-30T08:00:00.000Z',
+    });
+    assert.equal(current?.dependencies[0]?.qualification, 'known_deprovision_pattern');
+    assert.match(current?.dependencies[0]?.qualificationDetail ?? '', /manual verification cue/u);
+    assert.equal(current?.dependencies[0]?.signatureReviewedAt, '2026-07-01');
+    assert.equal(current?.dependencies[0]?.signatureProvenance, 'Reviewed fixture catalogue');
+
+    const stale = buildServiceDependencyReview({
+      domain: 'example.test',
+      signatures: signature,
+      dnsEvidence: evidence,
+      dnsRecords: { cname: ['tenant.service.test'], https: [], ns: [], mx: [] },
+      pageTitle: 'site not found',
+      observedAt: '2026-05-01T08:00:00.000Z',
+      now: '2026-07-30T08:00:00.000Z',
+    });
+    assert.equal(stale?.dependencies[0]?.qualification, 'stale_evidence');
+
+    const incomplete = buildServiceDependencyReview({
+      domain: 'example.test',
+      signatures: signature,
+      dnsEvidence: { ...evidence, complete: false },
+      dnsRecords: { cname: ['tenant.service.test'], https: [], ns: [], mx: [] },
+      pageTitle: 'site not found',
+    });
+    assert.equal(incomplete?.dependencies[0]?.qualification, 'inconclusive');
+    assert.doesNotMatch(JSON.stringify(current), /claimable":true|vulnerable":true/u);
+  });
 });
