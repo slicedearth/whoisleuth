@@ -2,6 +2,8 @@ import { normalizeDomain } from './case-model.ts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
+  MAX_EXTERNAL_FINDING_DOMAINS,
+  MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
 } from './external-findings-import.ts';
@@ -96,11 +98,20 @@ export function parseWebCaptureSummary(value: unknown): ExternalFindingsDocument
     throw new Error(`Web captures must contain between 1 and ${MAX_WEB_CAPTURE_SUMMARIES} summaries.`);
   }
   const findings: Array<Record<string, unknown>> = [];
+  const domainCounts = new Map<string, number>();
   for (const [index, raw] of root.captures.entries()) {
     const capture = record(raw);
     if (!capture || !onlyKeys(capture, CAPTURE_KEYS)) throw new Error(`Web capture ${index + 1} contains unsupported fields.`);
     const domain = normalizeDomain(text(capture.domain, 253, `Web capture ${index + 1} domain`));
     if (!domain) throw new Error(`Web capture ${index + 1} domain is invalid.`);
+    const domainCount = (domainCounts.get(domain) ?? 0) + 1;
+    if (domainCount > MAX_EXTERNAL_FINDINGS_PER_DOMAIN) {
+      throw new Error(`Web captures exceed the ${MAX_EXTERNAL_FINDINGS_PER_DOMAIN}-summary per-domain limit.`);
+    }
+    domainCounts.set(domain, domainCount);
+    if (domainCounts.size > MAX_EXTERNAL_FINDING_DOMAINS) {
+      throw new Error(`Web captures exceed the ${MAX_EXTERNAL_FINDING_DOMAINS}-domain limit.`);
+    }
     const observedAt = timestamp(capture.capturedAt, `Web capture ${index + 1} time`);
     const completeness = ['complete', 'inconclusive', 'partial', 'unknown'].includes(String(capture.completeness))
       ? capture.completeness
@@ -126,20 +137,18 @@ export function parseWebCaptureSummary(value: unknown): ExternalFindingsDocument
       screenshotSha256 ? `Screenshot SHA-256: ${screenshotSha256}.` : '',
     ].filter(Boolean);
     if (!summaries.length) throw new Error(`Web capture ${index + 1} contains no supported summary evidence.`);
-    for (const summary of summaries) {
-      findings.push({
-        domain,
-        category: summary.startsWith('Observed technology') ? 'http' : 'page',
-        summary,
-        observedAt,
-        completeness,
-        limitations: [
-          'Imported sanitised capture summary; WHOISleuth did not collect or independently verify this observation.',
-          ...limitations,
-        ].slice(0, 8),
-        reference: sourceReference,
-      });
-    }
+    findings.push({
+      domain,
+      category: technologies.length && summaries.length === 1 ? 'http' : 'page',
+      summary: summaries.join(' '),
+      observedAt,
+      completeness,
+      limitations: [
+        'Imported sanitised capture summary; WHOISleuth did not collect or independently verify this observation.',
+        ...limitations,
+      ].slice(0, 8),
+      reference: sourceReference,
+    });
   }
   return parseExternalFindingsDocument({
     schema: EXTERNAL_FINDINGS_SCHEMA,

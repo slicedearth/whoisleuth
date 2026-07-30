@@ -61,6 +61,23 @@ default (see the README), so many lookups return no personal data at all.
   briefly cached in server memory like other RDAP responses. The selected
   address can belong to a CDN, proxy, load balancer, or shared edge and is not
   proof of an origin host, hosting control, ownership, intent, or maliciousness.
+- **Authoritative DNS health in deep Lookup**: deep non-compact domain Lookup
+  can compare the recursive nameserver view with registry RDAP nameserver and
+  glue publication, then send direct NS and SOA queries to at most four
+  selected nameservers and two validated public addresses per nameserver.
+  Registry, recursive, and direct evidence remain separately attributed.
+  Private and reserved addresses are rejected before a direct query. Refused,
+  unreachable, partial, truncated, and unsupported observations remain
+  explicit and are not treated as record absence. This collection is excluded
+  from Fast and compact Bulk lookups and never decides registration
+  availability, ownership, control, intent, safety, or maliciousness.
+- **Source-specific Lookup refresh**: Lookup can deliberately retry a limited
+  RDAP, WHOIS, or grouped domain-evidence source, and can offer those source
+  groups after the displayed unified observation becomes stale. Each retry
+  repeats only the stated bounded endpoint and displays a separate source
+  result with its own observation time. It does not merge into, replace, save,
+  or export the original unified response. A limited or failed retry remains
+  inconclusive and is not evidence of absence or safety.
 - **Analyst-controlled external evidence pivots**: a completed Lookup can show
   a collapsed set of ordinary links to reviewed public registration,
   top-level-domain delegation, Certificate Transparency, archived-page,
@@ -479,6 +496,23 @@ default (see the README), so many lookups return no personal data at all.
   application make no network request, do not fetch references, and do not
   change analyst status or disposition. Creating or editing these records makes
   no network request.
+  Fixed-column external finding conversion and sanitised web-capture summary
+  import happen locally before that ordinary reviewed case import. Capture
+  summaries retain only normalized domains and HTTP(S) origins, bounded titles,
+  technology labels, network origins, screenshot SHA-256 digests, timestamps,
+  completeness, limitations, and optional source references. They reject raw
+  HTML, screenshot bytes, cookies, authorization data, request bodies, complete
+  URLs, paths, queries, fragments, and arbitrary fields. WHOISleuth does not
+  collect or independently verify the imported observation.
+  A hostname-only browser handoff can turn a pasted domain or HTTP(S) URL into
+  a local Lookup link after discarding credentials, port, path, query, and
+  fragment. The preview and link stay in browser memory, and opening it fills
+  Lookup without starting collection or saving the target.
+  A local DNS change rehearsal can compare an analyst-entered intended
+  nameserver set, optional glue, DNSSEC change type, and readiness confirmations
+  with the displayed bounded delegation evidence. It makes no request, saves
+  nothing automatically, changes no DNS or registry state, verifies no
+  authorization, and cannot guarantee a safe or successful change.
   Watchlists retain a bounded timeline of material scan changes alongside
   their latest results; older timeline events are automatically discarded.
   Structured Certificate Transparency searches retain bounded per-keyword

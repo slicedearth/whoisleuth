@@ -61,6 +61,53 @@ test('summarizes a separate WHOIS refresh without retaining its raw response', a
   });
 });
 
+test('recognizes complete deep and fast domain-evidence refresh contracts', async () => {
+  const plan = {
+    id: 'availability',
+    label: 'Domain evidence',
+    endpoint: '/api/availability',
+    evidenceIds: ['dns', 'http', 'tls'],
+    reason: 'limited',
+    requestDisclosure: 'Repeats bounded domain evidence.',
+  } as const;
+  const deep = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
+    now: () => NOW,
+    fetchImpl: async () => new Response(JSON.stringify({
+      state: 'registered',
+      deepScanComplete: true,
+      dns: { status: 'success' },
+      http: { status: 'success' },
+      tls: { status: 'success' },
+    }), { status: 200 }),
+  });
+  assert.equal(deep.ok && deep.value.state, 'complete');
+
+  const fast = await requestLookupSourceRefresh(plan, 'example.test', 'fast', {
+    now: () => NOW,
+    fetchImpl: async (input) => {
+      assert.match(String(input), /fast=true/);
+      return new Response(JSON.stringify({ state: 'registered' }), { status: 200 });
+    },
+  });
+  assert.equal(fast.ok && fast.value.state, 'complete');
+});
+
+test('keeps inconclusive fast domain evidence limited', async () => {
+  const plan = {
+    id: 'availability',
+    label: 'Domain evidence',
+    endpoint: '/api/availability',
+    evidenceIds: ['dns'],
+    reason: 'limited',
+    requestDisclosure: 'Repeats bounded domain evidence.',
+  } as const;
+  const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'fast', {
+    now: () => NOW,
+    fetchImpl: async () => new Response(JSON.stringify({ state: 'unknown' }), { status: 200 }),
+  });
+  assert.equal(outcome.ok && outcome.value.state, 'limited');
+});
+
 test('keeps failed source refreshes explicit and bounded', async () => {
   const plan = buildLookupSourceRefreshPlan(buildEvidenceCoverageLedger([
     { id: 'rdap', label: 'RDAP', category: 'registry', status: 'unavailable' },

@@ -190,6 +190,7 @@ function summarizeSource(
   id: LookupSourceRefreshId,
   body: Record<string, unknown>,
   observedAt: string,
+  depth: 'deep' | 'fast',
 ): LookupSourceRefreshResult {
   if (id === 'rdap') {
     const upstreamStatus = Number(body.upstreamStatus);
@@ -217,8 +218,9 @@ function summarizeSource(
       observedAt,
     };
   }
-  const complete = body.complete === true;
   const state = text(body.state, 40) || 'unknown';
+  const complete = body.deepScanComplete === true
+    || (depth === 'fast' && state !== 'unknown');
   const sourceStates = ['dns', 'http', 'tls']
     .map((key) => text(record(body[key]).status, 40))
     .filter(Boolean);
@@ -265,7 +267,7 @@ export async function requestLookupSourceRefresh(
     }
     return {
       ok: true,
-      value: summarizeSource(plan.id, body, options.now?.() ?? new Date().toISOString()),
+      value: summarizeSource(plan.id, body, options.now?.() ?? new Date().toISOString(), depth),
     };
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'oversized') {

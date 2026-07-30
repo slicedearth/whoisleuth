@@ -267,11 +267,14 @@ async function collectDnsDelegationHealth(
         const error = boundedText(query.error, MAX_ERROR_LENGTH);
         const nameservers = hostnames(query.nameservers);
         const soaPrimary = hostname(query.soaPrimary);
-        const state = code && LAME_CODES.has(code)
-          ? 'lame' as const
-          : error || (!nameservers.length && !soaPrimary)
-            ? 'unreachable' as const
-            : 'success' as const;
+        const hasAnswer = nameservers.length > 0 || soaPrimary !== null;
+        const state = error && hasAnswer
+          ? 'partial' as const
+          : code && LAME_CODES.has(code)
+            ? 'lame' as const
+            : error || !hasAnswer
+              ? 'unreachable' as const
+              : 'success' as const;
         return { address, state, nameservers, soaPrimary, errorCode: code, error };
       } catch (error) {
         const code = errorCode(error);
@@ -286,22 +289,27 @@ async function collectDnsDelegationHealth(
       }
     }));
     const successful = attempts.find((attempt) => attempt.state === 'success');
+    const partial = attempts.find((attempt) => attempt.state === 'partial');
+    const retained = successful ?? partial;
     return {
       nameserver,
       addressSource: glue.length ? 'registry_glue' as const : 'recursive_address' as const,
       addresses,
       state: successful
         ? 'success' as const
-        : attempts.some((attempt) => attempt.state === 'lame')
-          ? 'lame' as const
-          : 'unreachable' as const,
-      nameservers: successful?.nameservers ?? [],
-      soaPrimary: successful?.soaPrimary ?? null,
+        : partial
+          ? 'partial' as const
+          : attempts.some((attempt) => attempt.state === 'lame')
+            ? 'lame' as const
+            : 'unreachable' as const,
+      nameservers: retained?.nameservers ?? [],
+      soaPrimary: retained?.soaPrimary ?? null,
       attempts,
     };
   }));
 
   const successfulAuthorities = authorities.filter((authority) => authority.state === 'success');
+  const partialAuthorities = authorities.filter((authority) => authority.state === 'partial');
   const lameAuthorities = authorities.filter((authority) => authority.state === 'lame');
   const unreachableAuthorities = authorities.filter((authority) => authority.state === 'unreachable');
   const authoritySets = successfulAuthorities.map((authority) => authority.nameservers);
@@ -340,16 +348,18 @@ async function collectDnsDelegationHealth(
       'authority_reachability',
       'Direct nameserver reachability',
       lameAuthorities.length ? 'danger'
-        : unreachableAuthorities.length ? 'warning'
+        : partialAuthorities.length || unreachableAuthorities.length ? 'warning'
           : successfulAuthorities.length ? 'healthy' : 'unknown',
       lameAuthorities.length
         ? `${lameAuthorities.length} nameserver${lameAuthorities.length === 1 ? '' : 's'} refused or was not authoritative`
-        : unreachableAuthorities.length
+        : partialAuthorities.length
+          ? `${partialAuthorities.length} nameserver${partialAuthorities.length === 1 ? '' : 's'} returned only part of the direct NS and SOA evidence`
+          : unreachableAuthorities.length
           ? `${unreachableAuthorities.length} nameserver${unreachableAuthorities.length === 1 ? '' : 's'} could not be confirmed`
           : successfulAuthorities.length
             ? 'Selected nameservers answered direct NS and SOA queries'
             : 'No eligible public nameserver address was available',
-      `Successful: ${successfulAuthorities.length}. Lame or refused: ${lameAuthorities.length}. Unreachable or unresolved: ${unreachableAuthorities.length}.`,
+      `Successful: ${successfulAuthorities.length}. Partial: ${partialAuthorities.length}. Lame or refused: ${lameAuthorities.length}. Unreachable or unresolved: ${unreachableAuthorities.length}.`,
       'Restore authoritative service on every delegated nameserver and verify public address reachability before relying on the delegation.',
     ),
     finding(
@@ -422,6 +432,7 @@ async function collectDnsDelegationHealth(
         authorityCount: authorities.length,
         queriedAddressCount: authorities.reduce((sum, authority) => sum + authority.attempts.length, 0),
         successfulAuthorityCount: successfulAuthorities.length,
+        partialAuthorityCount: partialAuthorities.length,
         lameAuthorityCount: lameAuthorities.length,
         unreachableAuthorityCount: unreachableAuthorities.length,
       },

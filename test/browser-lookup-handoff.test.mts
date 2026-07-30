@@ -13,6 +13,7 @@ describe('browser lookup handoff', () => {
 
   test('rejects IP addresses and malformed targets', () => {
     assert.throws(() => buildBrowserLookupHandoff('https://127.0.0.1/private'), /valid domain/);
+    assert.throws(() => buildBrowserLookupHandoff('ftp://example.test/private'), /HTTP\(S\)/);
     assert.throws(() => buildBrowserLookupHandoff('not a domain'), /valid domain/);
   });
 });

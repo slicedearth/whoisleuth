@@ -23,10 +23,11 @@ describe('sanitised web-capture import', () => {
         networkOrigins: ['https://static.example.test'],
       }],
     });
-    assert.equal(document.findings.length, 4);
+    assert.equal(document.findings.length, 1);
     assert.ok(document.findings.every((finding) => finding.domain === 'example.test'));
     assert.ok(document.findings.every((finding) => finding.completeness === 'partial'));
     assert.match(document.findings[0]?.limitations.join(' ') ?? '', /did not collect or independently verify/i);
+    assert.match(document.findings[0]?.summary ?? '', /Example sign-in.*Example framework.*static\.example\.test.*SHA-256/is);
   });
 
   test('rejects complete URLs and unsupported raw capture fields', () => {
@@ -54,5 +55,29 @@ describe('sanitised web-capture import', () => {
         screenshotSha256: 'data:image/png;base64,private',
       }],
     }), /must be SHA-256/);
+  });
+
+  test('applies capture bounds before converting to the external-finding envelope', () => {
+    assert.throws(() => parseWebCaptureSummary({
+      schema: WEB_CAPTURE_SUMMARY_SCHEMA,
+      schemaVersion: 1,
+      source: { name: 'Capture', reference: null, collectedAt: null },
+      captures: Array.from({ length: 26 }, (_, index) => ({
+        domain: `site-${index}.example.test`,
+        capturedAt: '2026-07-01T00:00:00Z',
+        pageTitle: 'Observed page',
+      })),
+    }), /25-domain limit/);
+
+    assert.throws(() => parseWebCaptureSummary({
+      schema: WEB_CAPTURE_SUMMARY_SCHEMA,
+      schemaVersion: 1,
+      source: { name: 'Capture', reference: null, collectedAt: null },
+      captures: Array.from({ length: 21 }, () => ({
+        domain: 'example.test',
+        capturedAt: '2026-07-01T00:00:00Z',
+        pageTitle: 'Observed page',
+      })),
+    }), /20-summary per-domain limit/);
   });
 });

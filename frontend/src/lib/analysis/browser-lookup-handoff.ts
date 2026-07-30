@@ -17,6 +17,9 @@ export function buildBrowserLookupHandoff(value: unknown): BrowserLookupHandoff 
   } catch {
     parsed = null;
   }
+  if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Enter a valid domain or HTTP(S) URL.');
+  }
   const discarded = [
     parsed?.username || parsed?.password ? 'credentials' : '',
     parsed?.port ? 'port' : '',

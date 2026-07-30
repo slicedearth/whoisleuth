@@ -134,6 +134,32 @@ describe('DNS delegation health', () => {
     assert.equal(calls, MAX_AUTHORITIES * MAX_AUTHORITY_ADDRESSES);
   });
 
+  test('preserves a partial direct authority answer without calling it unreachable', async () => {
+    const result = await collectDnsDelegationHealth('example.test', {
+      ...PARENT,
+      records: ['ns1.example.test'],
+    }, {
+      registryEvidence: {
+        nameservers: ['ns1.example.test'],
+        nameserverDetails: [{ name: 'ns1.example.test', addresses: ['8.8.8.8'] }],
+      },
+      queryAuthority: async () => ({
+        nameservers: ['ns1.example.test'],
+        soaPrimary: null,
+        errorCode: 'ETIMEOUT',
+        error: 'SOA query timed out',
+      }),
+      now: () => 0,
+      observedAt: () => OBSERVED_AT,
+    });
+
+    assert.equal(result.status, 'partial');
+    assert.equal(result.authorities[0]?.state, 'partial');
+    assert.deepEqual(result.authorities[0]?.nameservers, ['ns1.example.test']);
+    assert.equal(result.diagnostics.partialAuthorityCount, 1);
+    assert.equal(result.diagnostics.unreachableAuthorityCount, 0);
+  });
+
   test('keeps resolver failure inconclusive and exposes no source payload', async () => {
     const result = await collectDnsDelegationHealth('example.test', {
       status: 'error',
