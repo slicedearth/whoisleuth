@@ -31,6 +31,15 @@ describe('browser lookup handoff', () => {
     assert.doesNotMatch(handoff.destinationUrl, /user|secret|8443|private|token|fragment/u);
   });
 
+  test('accepts an exact bracketed IPv6 loopback companion endpoint', () => {
+    const handoff = buildBrowserLookupHandoff('example.test', {
+      destinationKind: 'local_companion',
+      endpoint: 'http://[::1]:4312/review',
+    });
+    assert.equal(handoff.destinationUrl, 'http://[::1]:4312/review?target=example.test');
+    assert.equal(handoff.visibility, 'local_device');
+  });
+
   test('requires HTTPS for configured external services and strips endpoint query material', () => {
     const handoff = buildBrowserLookupHandoff('example.test', {
       destinationKind: 'external_https',

@@ -26,6 +26,7 @@ function addDays(value: string, days: number): string {
 function escapeCalendarText(value: string): string {
   return value
     .replaceAll('\\', '\\\\')
+    .replaceAll('\r', '')
     .replaceAll('\n', '\\n')
     .replaceAll(',', '\\,')
     .replaceAll(';', '\\;');

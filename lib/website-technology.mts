@@ -108,7 +108,6 @@ const PASSIVE_HEADER_NAMES = new Set([
   'cf-ray',
   'x-drupal-cache',
   'x-fastly-request-id',
-  'x-generator',
   'x-powered-by',
   'x-shopify-stage',
   'x-sorting-hat-podid',

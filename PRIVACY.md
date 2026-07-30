@@ -525,10 +525,17 @@ default (see the README), so many lookups return no personal data at all.
   review calendar only when the analyst explicitly pins those facts to a case.
   The calendar excludes the pinned values themselves, recipient values, notes,
   and source payloads.
-  A hostname-only browser handoff can turn a pasted domain or HTTP(S) URL into
-  a local Lookup link after discarding credentials, port, path, query, and
-  fragment. The preview and link stay in browser memory, and opening it fills
-  Lookup without starting collection or saving the target.
+  A privacy-safe browser handoff can reduce a pasted domain or HTTP(S) URL to
+  the normalized hostname or a sanitized HTTP(S) origin after discarding
+  credentials, port, path, query, fragment, and browser-local identifiers.
+  The default destination is a local Lookup link that fills Deep Lookup
+  without starting collection or saving the target. An analyst can instead
+  enter an exact loopback companion endpoint or HTTPS external endpoint;
+  WHOISleuth does not discover, validate, poll, or retain that configuration.
+  Before opening a non-Lookup destination, the browser shows the exact
+  disclosed value, destination URL, and local-device or third-party visibility
+  and requires explicit confirmation. Only the displayed normalized hostname
+  or sanitized origin is sent to that endpoint.
   A local DNS change rehearsal can compare analyst-entered intended nameserver,
   glue, DS, MX, CAA, and critical address sets plus a DNSSEC change type and
   readiness confirmations with displayed bounded DNS and registry evidence.

@@ -84,5 +84,12 @@ describe('case lifecycle calendar', () => {
     assert.match(calendar, /BEGIN:VCALENDAR/);
     assert.match(calendar, /X-WHOISLEUTH-SCHEMA:whoisleuth\.case-review-calendar/);
     assert.doesNotMatch(calendar, /private-route/);
+
+    const hostileCalendar = serializeCaseLifecycleCalendar(record ? [{
+      ...record,
+      id: 'case-1\rX-INJECTED:yes',
+    }] : [], '2026-06-01T00:00:00.000Z');
+    assert.doesNotMatch(hostileCalendar, /\r(?!\n)/u);
+    assert.doesNotMatch(hostileCalendar, /\rX-INJECTED/iu);
   });
 });

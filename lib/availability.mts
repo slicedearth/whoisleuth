@@ -317,7 +317,6 @@ async function fetchHomepage(domain: string, { fetcher = safeFetchDetailed as Ho
             'cf-ray': res.headers.get('cf-ray') || '',
             'x-drupal-cache': res.headers.get('x-drupal-cache') || '',
             'x-fastly-request-id': res.headers.get('x-fastly-request-id') || '',
-            'x-generator': res.headers.get('x-generator') || '',
             'x-powered-by': res.headers.get('x-powered-by') || '',
             'x-shopify-stage': res.headers.get('x-shopify-stage') || '',
             'x-sorting-hat-podid': res.headers.get('x-sorting-hat-podid') || '',

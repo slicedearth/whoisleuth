@@ -130,13 +130,14 @@ describe('website technology profile', () => {
       responseHeaders: {
         'x-powered-by': 'PHP/8.4 private-build',
         'x-vercel-id': 'private-request-value',
+        'x-generator': 'unused-private-generator',
         'x-unrelated-secret': 'must-not-be-evaluated',
       },
     });
     assert.deepEqual(result.findings.map((item) => item.id), ['php', 'vercel']);
     assert.ok(result.findings.every((item) => item.evidence[0]?.source === 'passive response header'));
     assert.equal(result.diagnostics.passiveHeadersEvaluated, 2);
-    assert.doesNotMatch(JSON.stringify(result), /8\\.4|private-build|private-request-value|must-not-be-evaluated/);
+    assert.doesNotMatch(JSON.stringify(result), /8\\.4|private-build|private-request-value|unused-private-generator|must-not-be-evaluated/);
   });
 
   test('requires exact allowlisted header value signatures for runtime indicators', () => {

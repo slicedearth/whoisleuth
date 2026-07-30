@@ -27,6 +27,13 @@ type BrowserLookupHandoffOptions = Readonly<{
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
+function normalizedEndpointHostname(endpoint: URL): string {
+  const hostname = endpoint.hostname.toLowerCase();
+  return hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname;
+}
+
 function destinationEndpoint(kind: BrowserHandoffDestinationKind, raw: unknown): URL | null {
   if (kind === 'lookup') return null;
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 2048) {
@@ -42,7 +49,7 @@ function destinationEndpoint(kind: BrowserHandoffDestinationKind, raw: unknown):
     throw new Error('The endpoint cannot contain credentials, a query, or a fragment.');
   }
   if (kind === 'local_companion') {
-    if (!['http:', 'https:'].includes(endpoint.protocol) || !LOOPBACK_HOSTS.has(endpoint.hostname.toLowerCase())) {
+    if (!['http:', 'https:'].includes(endpoint.protocol) || !LOOPBACK_HOSTS.has(normalizedEndpointHostname(endpoint))) {
       throw new Error('A local companion endpoint must use HTTP(S) on localhost or a loopback address.');
     }
   } else if (endpoint.protocol !== 'https:') {
