@@ -9,6 +9,11 @@ import {
 
 export const EXTERNAL_FINDING_ROWS_SCHEMA = 'whoisleuth.external-finding-rows';
 export const EXTERNAL_FINDING_ROWS_VERSION = 1;
+export const DOMAIN_OBSERVATION_ROWS_SCHEMA = 'whoisleuth.domain-observation-rows';
+export const DNS_OBSERVATION_ROWS_SCHEMA = 'whoisleuth.dns-observation-rows';
+export const CERTIFICATE_OBSERVATION_ROWS_SCHEMA = 'whoisleuth.certificate-observation-rows';
+export const SUPPORTED_OBSERVATION_ROWS_VERSION = 1;
+export const MAX_CONVERSION_INPUT_ROWS = MAX_EXTERNAL_FINDINGS * 4;
 export const EXTERNAL_FINDING_CSV_COLUMNS = [
   'domain',
   'category',
@@ -21,6 +26,24 @@ export const EXTERNAL_FINDING_CSV_COLUMNS = [
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const MAX_CSV_COLUMNS = EXTERNAL_FINDING_CSV_COLUMNS.length;
+const SHA256_RE = /^[a-f0-9]{64}$/iu;
+const DNS_TYPES = new Set(['A', 'AAAA', 'CAA', 'CNAME', 'DS', 'MX', 'NS', 'SOA', 'SVCB', 'HTTPS', 'TXT']);
+
+export type ExternalFindingConversionFormat =
+  | 'certificate-observations-v1'
+  | 'dns-observations-v1'
+  | 'domain-observations-v1';
+
+export type ExternalFindingConversionReport = Readonly<{
+  format: ExternalFindingConversionFormat;
+  document: ExternalFindingsDocument;
+  inputRows: number;
+  accepted: number;
+  rejected: number;
+  duplicates: number;
+  truncated: boolean;
+  exclusions: readonly Readonly<{ row: number; reason: string }>[];
+}>;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -78,6 +101,154 @@ export function convertExternalFindingRows(value: unknown, fallbackSource = 'Ext
   }
   const source = record(root.source);
   return rowsDocument(root.rows, sourceName(source?.name, fallbackSource));
+}
+
+function timestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return null;
+  return new Date(value).toISOString();
+}
+
+function requiredText(value: unknown, maximum: number): string | null {
+  if (typeof value !== 'string' || CONTROL_RE.test(value)) return null;
+  const normalized = value.replace(/\s+/gu, ' ').trim();
+  return normalized ? normalized.slice(0, maximum) : null;
+}
+
+function supportedRowsRoot(
+  value: unknown,
+  schema: string,
+): Readonly<{ rows: readonly unknown[]; source: string }> {
+  const root = record(value);
+  if (
+    !root
+    || root.schema !== schema
+    || root.schemaVersion !== SUPPORTED_OBSERVATION_ROWS_VERSION
+    || !Array.isArray(root.observations)
+  ) {
+    throw new Error(`${schema} schema version ${SUPPORTED_OBSERVATION_ROWS_VERSION} is required.`);
+  }
+  const source = record(root.source);
+  return {
+    rows: root.observations.slice(0, MAX_CONVERSION_INPUT_ROWS),
+    source: sourceName(source?.name, 'External observations'),
+  };
+}
+
+function mappedDomainObservation(value: unknown): Record<string, unknown> | null {
+  const item = record(value);
+  if (!item) return null;
+  const source = requiredText(item.source, 80);
+  const status = requiredText(item.status, 80);
+  const observedAt = timestamp(item.observedAt);
+  if (!source || !status || !observedAt) return null;
+  return {
+    domain: item.domain,
+    category: 'registration',
+    summary: `${source} reported domain state: ${status}.`,
+    observedAt,
+    completeness: item.completeness ?? 'unknown',
+    limitations: ['Imported state is an external observation and was not independently verified by WHOISleuth.'],
+    reference: item.reference ?? null,
+  };
+}
+
+function mappedDnsObservation(value: unknown): Record<string, unknown> | null {
+  const item = record(value);
+  if (!item) return null;
+  const type = requiredText(item.type, 10)?.toUpperCase();
+  const recordValue = requiredText(item.value, 500);
+  const observedAt = timestamp(item.observedAt);
+  if (!type || !DNS_TYPES.has(type) || !recordValue || !observedAt) return null;
+  return {
+    domain: item.domain,
+    category: 'dns',
+    summary: `External ${type} observation: ${recordValue}`,
+    observedAt,
+    completeness: item.completeness ?? 'unknown',
+    limitations: ['Imported DNS data was not queried or independently verified by WHOISleuth.'],
+    reference: item.reference ?? null,
+  };
+}
+
+function mappedCertificateObservation(value: unknown): Record<string, unknown> | null {
+  const item = record(value);
+  if (!item) return null;
+  const fingerprint = requiredText(item.fingerprintSha256, 64);
+  const observedAt = timestamp(item.observedAt);
+  if (!fingerprint || !SHA256_RE.test(fingerprint) || !observedAt) return null;
+  const issuer = requiredText(item.issuer, 160);
+  const notAfter = timestamp(item.notAfter);
+  return {
+    domain: item.domain,
+    category: 'certificate',
+    summary: `External certificate SHA-256 ${fingerprint.toLowerCase()}${issuer ? `; issuer ${issuer}` : ''}${notAfter ? `; not after ${notAfter}` : ''}.`,
+    observedAt,
+    completeness: item.completeness ?? 'unknown',
+    limitations: ['Imported certificate metadata was not fetched or independently verified by WHOISleuth.'],
+    reference: item.reference ?? null,
+  };
+}
+
+export function convertSupportedExternalFindings(
+  value: unknown,
+  format: ExternalFindingConversionFormat,
+): ExternalFindingConversionReport {
+  const config = format === 'domain-observations-v1'
+    ? { schema: DOMAIN_OBSERVATION_ROWS_SCHEMA, map: mappedDomainObservation }
+    : format === 'dns-observations-v1'
+      ? { schema: DNS_OBSERVATION_ROWS_SCHEMA, map: mappedDnsObservation }
+      : { schema: CERTIFICATE_OBSERVATION_ROWS_SCHEMA, map: mappedCertificateObservation };
+  const root = supportedRowsRoot(value, config.schema);
+  const accepted: Array<ExternalFindingsDocument['findings'][number]> = [];
+  const exclusions: Array<{ row: number; reason: string }> = [];
+  const seen = new Set<string>();
+  let duplicates = 0;
+  let rejected = 0;
+  for (let index = 0; index < root.rows.length; index += 1) {
+    const mapped = config.map(root.rows[index]);
+    if (!mapped) {
+      rejected += 1;
+      if (exclusions.length < 20) exclusions.push({ row: index + 1, reason: 'Malformed or unsupported row.' });
+      continue;
+    }
+    try {
+      const finding = rowsDocument([mapped], root.source).findings[0];
+      if (!finding) throw new Error('No normalized finding.');
+      const key = JSON.stringify(finding);
+      if (seen.has(key)) {
+        duplicates += 1;
+        continue;
+      }
+      seen.add(key);
+      if (accepted.length >= MAX_EXTERNAL_FINDINGS) continue;
+      accepted.push(finding);
+    } catch {
+      rejected += 1;
+      if (exclusions.length < 20) exclusions.push({ row: index + 1, reason: 'Row failed the strict findings contract.' });
+    }
+  }
+  if (!accepted.length) throw new Error('The selected observation document did not contain a valid supported row.');
+  const document = parseExternalFindingsDocument({
+    schema: EXTERNAL_FINDINGS_SCHEMA,
+    schemaVersion: EXTERNAL_FINDINGS_VERSION,
+    source: { name: root.source, reference: null, collectedAt: null },
+    findings: accepted,
+  });
+  const inspectedRows = root.rows.length;
+  const inputRoot = record(value);
+  const originalRows = Array.isArray(inputRoot?.observations)
+    ? inputRoot.observations.length
+    : inspectedRows;
+  return {
+    format,
+    document,
+    inputRows: originalRows,
+    accepted: document.findings.length,
+    rejected,
+    duplicates,
+    truncated: originalRows > inspectedRows || accepted.length >= MAX_EXTERNAL_FINDINGS,
+    exclusions,
+  };
 }
 
 function parseCsvRows(value: string): string[][] {

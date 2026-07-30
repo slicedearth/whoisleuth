@@ -67,6 +67,28 @@ Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
 
+## Documented observation-row converters
+
+Three neutral version-1 row formats can be converted locally into the strict
+findings schema. Each root uses `schemaVersion: 1`, an optional bounded
+`source.name`, and an `observations` array:
+
+| Schema | Required row fields | Result |
+| --- | --- | --- |
+| `whoisleuth.domain-observation-rows` | `domain`, `source`, `status`, `observedAt` | Registration-category finding |
+| `whoisleuth.dns-observation-rows` | `domain`, supported `type`, `value`, `observedAt` | DNS-category finding |
+| `whoisleuth.certificate-observation-rows` | `domain`, 64-character `fingerprintSha256`, `observedAt` | Certificate-category finding |
+
+Rows can additionally supply a supported `completeness` state and a bounded
+`reference`. Certificate rows can include a bounded issuer and `notAfter`
+timestamp. Supported DNS types are A, AAAA, CAA, CNAME, DS, MX, NS, SOA, SVCB,
+HTTPS, and TXT. Conversion inspects at most 400 rows, retains at most 100
+strict findings, and reports accepted, rejected, duplicate, and truncated
+counts before import. Exclusions identify only the row number and a fixed
+reason, not rejected values. The converter does not autodetect arbitrary
+third-party files, fetch records, or treat imported values as independently
+verified observations.
+
 ## Bounds and merge behavior
 
 - Maximum file size: 384 KiB.

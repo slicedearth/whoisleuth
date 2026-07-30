@@ -504,14 +504,17 @@ default (see the README), so many lookups return no personal data at all.
   application make no network request, do not fetch references, and do not
   change analyst status or disposition. Creating or editing these records makes
   no network request.
-  Fixed-column external finding conversion and sanitised web-capture summary
-  import happen locally before that ordinary reviewed case import. Capture
-  summaries retain only normalized domains and HTTP(S) origins, bounded titles,
-  technology labels, network origins, screenshot SHA-256 digests, timestamps,
-  completeness, limitations, and optional source references. They reject raw
-  HTML, screenshot bytes, cookies, authorization data, request bodies, complete
-  URLs, paths, queries, fragments, and arbitrary fields. WHOISleuth does not
-  collect or independently verify the imported observation.
+  Fixed-column external finding conversion, documented domain, DNS, and
+  certificate observation-row conversion, and sanitised web-capture summary
+  import happen locally before that ordinary reviewed case import. Row
+  conversion reports accepted, rejected, duplicate, and truncated counts
+  without retaining excluded values. Capture summaries retain only normalized
+  domains and HTTP(S) origins, bounded titles, technology labels, network
+  origins, screenshot SHA-256 digests, timestamps, completeness, limitations,
+  and optional source references. They reject raw HTML, screenshot bytes,
+  cookies, authorization data, request bodies, complete URLs, paths, queries,
+  fragments, and arbitrary fields. WHOISleuth does not collect or
+  independently verify the imported observation.
   A hostname-only browser handoff can turn a pasted domain or HTTP(S) URL into
   a local Lookup link after discarding credentials, port, path, query, and
   fragment. The preview and link stay in browser memory, and opening it fills

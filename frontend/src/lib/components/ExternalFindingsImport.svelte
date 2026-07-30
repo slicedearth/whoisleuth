@@ -13,8 +13,13 @@
   } from '$lib/cases';
   import {
     EXTERNAL_FINDING_ROWS_SCHEMA,
+    CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
+    DNS_OBSERVATION_ROWS_SCHEMA,
+    DOMAIN_OBSERVATION_ROWS_SCHEMA,
     convertExternalFindingRows,
     convertExternalFindingsCsv,
+    convertSupportedExternalFindings,
+    type ExternalFindingConversionReport,
   } from '$lib/analysis/external-findings-converters.ts';
   import {
     WEB_CAPTURE_SUMMARY_SCHEMA,
@@ -36,6 +41,7 @@
     | Readonly<{ kind: 'intelligence'; document: ExternalIntelligencePreview }>;
 
   let preview = $state<Preview | null>(null);
+  let conversionReport = $state<ExternalFindingConversionReport | null>(null);
   let applying = $state(false);
   let targetCaseId = $state('');
   const findingsPreview = $derived(preview?.kind === 'findings' ? preview.document : null);
@@ -56,6 +62,7 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     preview = null;
+    conversionReport = null;
     targetCaseId = '';
     if (!file) return;
     try {
@@ -81,6 +88,28 @@
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
         onmessage(`Validated ${document.findings.length} local finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the preview before importing.`);
+      } else if (
+        value
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && [
+          DOMAIN_OBSERVATION_ROWS_SCHEMA,
+          DNS_OBSERVATION_ROWS_SCHEMA,
+          CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
+        ].includes(String((value as Record<string, unknown>).schema))
+      ) {
+        if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
+          throw new Error('Converted observation imports are limited to 384 KiB.');
+        }
+        const schema = (value as Record<string, unknown>).schema;
+        const format = schema === DOMAIN_OBSERVATION_ROWS_SCHEMA
+          ? 'domain-observations-v1'
+          : schema === DNS_OBSERVATION_ROWS_SCHEMA
+            ? 'dns-observations-v1'
+            : 'certificate-observations-v1';
+        conversionReport = convertSupportedExternalFindings(value, format);
+        preview = { kind: 'findings', document: conversionReport.document };
+        onmessage(`Converted ${conversionReport.accepted} accepted ${format.replaceAll('-', ' ')} row${conversionReport.accepted === 1 ? '' : 's'}; ${conversionReport.rejected} rejected, ${conversionReport.duplicates} duplicate, truncation ${conversionReport.truncated ? 'reached' : 'not reached'}. Review before importing.`);
       } else if (
         csv
         || Array.isArray(value)
@@ -139,6 +168,7 @@
       }
       await oncomplete();
       preview = null;
+      conversionReport = null;
       targetCaseId = '';
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'External findings could not be imported.');
@@ -151,7 +181,7 @@
 <details class="external-import card">
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code> or sanitised <code>whoisleuth.web-capture-summary</code> schema, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
+    <p>Preview the strict <code>whoisleuth.external-findings</code> or sanitised <code>whoisleuth.web-capture-summary</code> schema, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
     <label class="btn file-btn">Choose JSON or CSV<input type="file" accept="application/json,text/csv,.json,.csv" onchange={selectFile}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
@@ -159,13 +189,26 @@
           <div><p class="eyebrow">Validated findings preview</p><h3 id="external-findings-preview-title">{findingsPreview.source.name}</h3></div>
           <span>{countLabel(findingsPreview.findings.length, 'finding')} · {countLabel(domains.length, 'domain')}</span>
         </header>
+        {#if conversionReport}
+          <div class="preview-metrics" aria-label="Observation conversion summary">
+            <span><strong>{conversionReport.accepted}</strong> accepted</span>
+            <span><strong>{conversionReport.rejected}</strong> rejected</span>
+            <span><strong>{conversionReport.duplicates}</strong> duplicate</span>
+            <span><strong>{conversionReport.truncated ? 'yes' : 'no'}</strong> truncated</span>
+          </div>
+          {#if conversionReport.exclusions.length}
+            <details class="excluded"><summary>Review conversion exclusions</summary>
+              <ul>{#each conversionReport.exclusions as exclusion}<li><strong>Row {exclusion.row}</strong><p>{exclusion.reason}</p></li>{/each}</ul>
+            </details>
+          {/if}
+        {/if}
         <ul>
           {#each findingsPreview.findings.slice(0, 8) as finding}
             <li><strong>{finding.domain}</strong><span>{finding.category} · {finding.completeness}</span><p>{finding.summary}</p></li>
           {/each}
         </ul>
         {#if findingsPreview.findings.length > 8}<p class="preview-note">Showing 8 of {findingsPreview.findings.length} validated findings.</p>{/if}
-        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={applying}>{applying ? 'Importing…' : 'Import into cases'}</button><button class="btn" type="button" onclick={() => preview = null} disabled={applying}>Cancel</button></div>
+        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={applying}>{applying ? 'Importing…' : 'Import into cases'}</button><button class="btn" type="button" onclick={() => { preview = null; conversionReport = null; }} disabled={applying}>Cancel</button></div>
       </section>
     {:else if intelligencePreview}
       <section class="preview" aria-labelledby="external-intelligence-preview-title">
