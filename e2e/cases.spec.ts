@@ -388,6 +388,54 @@ test('projects retained evidence into a filterable source-aware timeline', async
   await expectNoHorizontalOverflow(page);
 });
 
+test('saved website profiles form searchable cross-domain pivots without another request', async ({ page }) => {
+  const observedAt = '2026-07-01T00:00:00.000Z';
+  const identity = {
+    normalizedHtml: 'a'.repeat(64),
+    visibleText: null,
+    domStructure: null,
+    formStructure: null,
+    resourceHosts: null,
+    trackingIdentifiers: null,
+    faviconHash: null,
+  };
+  const snapshotRecord = (domain: string, id: string) => ({
+    id,
+    domain,
+    observedAt,
+    savedAt: '2026-07-02T00:00:00.000Z',
+    complete: true,
+    truncated: false,
+    technologies: [{ id: 'example-commerce', name: 'Example commerce', category: 'commerce', confidence: 'high' }],
+    posture: [],
+    identity,
+    sources: [{ source: 'http', state: 'success' }],
+  });
+  await page.goto('/monitor?view=relationships');
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-website-snapshots-v1': {
+      schema: 'whoisleuth.website-profile-snapshots',
+      version: 1,
+      snapshots: [
+        snapshotRecord('first.invalid', 'profile-first'),
+        snapshotRecord('second.invalid', 'profile-second'),
+      ],
+    },
+  });
+
+  const workspace = page.getByRole('region', { name: 'Cross-domain website pivots' });
+  await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
+  await expect(workspace.getByRole('link', { name: 'first.invalid' }).first()).toBeVisible();
+  await expect(workspace.getByRole('link', { name: 'second.invalid' }).first()).toBeVisible();
+  await workspace.getByLabel('Search saved profiles').fill('DOM structure');
+  await expect(workspace.getByText('No saved website-profile cluster matches these filters.')).toBeVisible();
+  await workspace.getByLabel('Search saved profiles').fill('second.invalid');
+  await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
+
 test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {

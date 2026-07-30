@@ -15,6 +15,7 @@
   import HostedWatchlistManager from '$lib/components/HostedWatchlistManager.svelte';
   import MonitorActivityHeatmap from '$lib/components/MonitorActivityHeatmap.svelte';
   import RetainedEvidenceTimeline from '$lib/components/RetainedEvidenceTimeline.svelte';
+  import WebsiteProfileClusters from '$lib/components/WebsiteProfileClusters.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import CampaignManager from '$lib/components/CampaignManager.svelte';
   import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
@@ -46,6 +47,7 @@
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
   import { buildAnalystReviewInbox } from '$lib/analysis/analyst-review-inbox.ts';
   import { buildRetainedEvidenceTimeline } from '$lib/analysis/retained-evidence-timeline.ts';
+  import { buildWebsiteProfileClusters } from '$lib/analysis/website-profile-clusters.ts';
   import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '$lib/website-snapshots';
 
   type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules';
@@ -76,6 +78,7 @@
   let cases=$state<CaseRecord[]>([]);
   let bulkSessions=$state<BulkSession[]>([]);
   let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
+  const websiteProfileClusters=$derived(buildWebsiteProfileClusters(websiteSnapshots));
   const reviewInbox=$derived(buildAnalystReviewInbox({cases,watchlists,bulkSessions}));
   let casePage=$state(1);
   let campaignCount=$state(0);
@@ -85,7 +88,7 @@
   let customRuleCount=$state(0);
   const relationshipSummary=$derived(buildInvestigationCaseRelationships(investigationProjection));
   const relationshipClusters=$derived(buildCaseRelationshipClusters(relationshipSummary));
-  const relationshipCount=$derived(relationshipSummary.groups.length+retainedRelationships.length);
+  const relationshipCount=$derived(relationshipSummary.groups.length+retainedRelationships.length+websiteProfileClusters.clusters.length);
   let statusFilter=$state('');let dispositionFilter=$state('');let caseSearch=$state('');let caseSort=$state<'updated'|'domain'|'status'>('updated');
   let expandedId=$state('');let noteDraft=$state('');let tagDraft=$state('');let caseMessage=$state('');let newDomain=$state('');
   let calibrationCaseIds=$state<string[]>([]);
@@ -219,6 +222,7 @@
 
 {#if view==='relationships'}
 <div id="panel-relationships" role="tabpanel" aria-labelledby="tab-relationships">
+  <WebsiteProfileClusters summary={websiteProfileClusters} />
   <RetainedRelationshipObservations
     records={retainedRelationships}
     focusId={page.url.searchParams.get('observation')||''}

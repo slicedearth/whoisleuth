@@ -342,6 +342,11 @@ Monitor contains Cases, Campaigns, Relationships, and Watchlists.
   and campaign membership without another network request. The Evidence
   clusters review layer groups connected cases, keeps every contributing
   relationship inspectable, and qualifies common shared infrastructure.
+  A separate website-profile view groups exact curated technology identifiers
+  and page-identity digests across the latest explicitly saved compact
+  snapshot for each domain. It can be searched by domain or evidence type and
+  keeps partial snapshots visible. Common software, templates, placeholders,
+  and copied content mean these groups are pivots rather than attribution.
   Split, merge, label, and dismiss controls alter only the current review view;
   export the reviewed view if it needs to be retained.
 - **Watchlists** retain bounded material-change timelines and can be rescanned
