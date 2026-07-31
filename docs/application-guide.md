@@ -177,6 +177,10 @@ current task view. It keeps verified normalized facts, explicit
 contradictions, unknowns, source-quality counts, observed relationship types,
 and suggested manual next steps separate. It does not add analyst assertions,
 make an attribution, or turn an incomplete source into a negative conclusion.
+The brief can be downloaded or copied locally. When a case is already open,
+the analyst can deliberately record that a brief was prepared as a handoff
+event; this records summary metadata in the case trail without copying the
+brief or changing any evidence.
 The Identity & trust graph lens classifies observed destinations as the same
 origin, within the queried registrable domain, a reviewed Brand Profile
 relationship, external, or unresolved. These are routing and declaration

@@ -99,4 +99,33 @@ describe('Lookup case controller', () => {
     assert.ok(Array.isArray(patch.evidencePins));
     assert.equal(patch.evidencePins.length, 1);
   });
+
+  test('records a deliberate investigation brief handoff without copying evidence into the trail', async () => {
+    const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
+    const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
+    const api: LookupCaseApi = {
+      getByDomain: unused,
+      open: unused,
+      addNote: unused,
+      edit: async (_id, value) => {
+        patches.push(value);
+        return { record, pruned: 0 };
+      },
+    };
+    const controller = new LookupCaseController(api);
+    const result = await controller.recordBriefHandoff(record, {
+      target: 'case-context.example',
+      taskLabel: 'Incident response',
+      generatedAt: '2026-07-29T01:30:00.000Z',
+      contradictionCount: 2,
+      unknownCount: 1,
+    });
+
+    assert.match(result.status, /Recorded the local investigation brief/u);
+    assert.deepEqual(patches[0]?.trailEvent, {
+      kind: 'handoff',
+      summary: 'Prepared Incident response brief for case-context.example with 2 contradictions and 1 unknown record.',
+      target: 'Local investigation brief generated 2026-07-29T01:30:00.000Z',
+    });
+  });
 });

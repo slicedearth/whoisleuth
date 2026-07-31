@@ -574,6 +574,20 @@
     caseRecord=next.record;
     caseStatus=next.status;
   }
+  async function copyInvestigationBrief(){
+    await copyDraft(formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief),'investigation brief');
+  }
+  async function recordInvestigationBriefHandoff(){
+    const next=await lookupCaseController.recordBriefHandoff(caseRecord,{
+      target:lookupInvestigationBrief.target,
+      taskLabel:lookupInvestigationBrief.taskLabel,
+      generatedAt:lookupInvestigationBrief.generatedAt,
+      contradictionCount:lookupInvestigationBrief.contradictions.length,
+      unknownCount:lookupInvestigationBrief.unknowns.length,
+    });
+    caseRecord=next.record;
+    caseStatus=next.status;
+  }
   function cancelLookup(){lookupRequestController.cancel();}
   function setEvidenceDensity(value:LookupEvidenceDensity){
     evidenceDensity=normalizeLookupEvidenceDensity(value);
@@ -723,7 +737,11 @@
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
-      <LookupDecisionSupport support={lookupDecisionSupport} />
+      <LookupDecisionSupport
+        support={lookupDecisionSupport}
+        onbriefcopy={copyInvestigationBrief}
+        onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
+      />
 
       {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
         <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">

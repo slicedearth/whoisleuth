@@ -1,7 +1,15 @@
 <script lang="ts">
   import type { LookupDecisionSupport } from '$lib/analysis/lookup-decision-support.ts';
 
-  let { support }: { support: LookupDecisionSupport } = $props();
+  let {
+    support,
+    onbriefcopy = null,
+    onbriefhandoff = null,
+  }: {
+    support: LookupDecisionSupport;
+    onbriefcopy?: (() => void | Promise<void>) | null;
+    onbriefhandoff?: (() => void | Promise<void>) | null;
+  } = $props();
 
   function stateLabel(value: 'conflict' | 'uncertain'): string {
     return value === 'conflict' ? 'Disagreement' : 'Uncertain';
@@ -45,6 +53,12 @@
       {/if}
     </section>
   </div>
+  {#if onbriefcopy || onbriefhandoff}
+    <div class="brief-actions" aria-label="Investigation brief actions">
+      {#if onbriefcopy}<button class="btn small" type="button" onclick={onbriefcopy}>Copy current brief</button>{/if}
+      {#if onbriefhandoff}<button class="btn small" type="button" onclick={onbriefhandoff}>Record brief handoff</button>{/if}
+    </div>
+  {/if}
 
   {#if support.entries.length}
     <details>
@@ -81,6 +95,7 @@
   .counts .attention strong{color:var(--amber)}
   .decision-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
   .decision-grid>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
+  .brief-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
   h5{margin:0 0 8px;font:700 var(--text-xs) var(--mono)}
   .questions,.actions{margin:0;padding-left:20px}
   .questions li{margin:5px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}

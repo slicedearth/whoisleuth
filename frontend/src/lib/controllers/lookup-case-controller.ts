@@ -198,6 +198,44 @@ export class LookupCaseController {
       };
     }
   }
+
+  async recordBriefHandoff(
+    record: CaseRecord | null,
+    brief: Readonly<{
+      target: string;
+      taskLabel: string;
+      generatedAt: string;
+      contradictionCount: number;
+      unknownCount: number;
+    }>,
+  ): Promise<LookupCaseActionResult> {
+    if (!record) {
+      return {
+        record: null,
+        status: 'Create or open the analyst case before recording a brief handoff.',
+      };
+    }
+    try {
+      const updated = await this.#api.edit(record.id, {
+        trailEvent: {
+          kind: 'handoff',
+          summary: `Prepared ${brief.taskLabel} brief for ${brief.target} with ${brief.contradictionCount} contradiction${brief.contradictionCount === 1 ? '' : 's'} and ${brief.unknownCount} unknown record${brief.unknownCount === 1 ? '' : 's'}.`,
+          target: `Local investigation brief generated ${brief.generatedAt}`,
+        },
+      });
+      return {
+        record: updated.record,
+        status: `Recorded the local investigation brief in the case trail.${pruneSuffix(updated.pruned)}`,
+      };
+    } catch (cause) {
+      return {
+        record,
+        status: cause instanceof Error
+          ? cause.message
+          : 'Could not record the investigation brief handoff.',
+      };
+    }
+  }
 }
 
 export type {
