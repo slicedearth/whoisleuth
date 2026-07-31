@@ -13,6 +13,7 @@
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
   import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
   import LookupEvidenceQuality from '$lib/components/LookupEvidenceQuality.svelte';
+  import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
@@ -53,6 +54,11 @@
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
   import { buildLookupAssetGraph } from '$lib/analysis/lookup-asset-graph.ts';
+  import {
+    buildLookupInvestigationBrief,
+    formatLookupInvestigationBriefMarkdown,
+    lookupInvestigationBriefFilename,
+  } from '$lib/analysis/lookup-investigation-brief.ts';
   import {
     buildLookupDecisionSupport,
     buildLookupEvidenceQualityMatrix,
@@ -472,6 +478,15 @@
     expiresDate:lifecycleDates.expires,
     updatedDate:lifecycleDates.updated,
   }));
+  const lookupInvestigationBrief=$derived(buildLookupInvestigationBrief({
+    target:result?.registrableDomain||result?.query,
+    targetType:result?.type,
+    task:taskView,
+    summary:lookupSummary,
+    decisionSupport:lookupDecisionSupport,
+    quality:evidenceQualityMatrix,
+    graph:lookupAssetGraph,
+  }));
   const evidenceTopologyTarget=$derived({
     label:show(result?.registrableDomain||result?.query),
     detail:`${show(result?.type)} · ${lookupEvidenceDepth} lookup`,
@@ -584,6 +599,7 @@
   }
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks(){return buildLookupResultSectionLinks({
       hasWebEvidence,
@@ -664,9 +680,11 @@
   oncancel={cancelLookup}
 />
 
+<LookupEvidenceReplay />
+
 {#if result}
   <section class="result-root" id="result">
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} />
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
 
     <LookupPresentationControls density={evidenceDensity} task={taskView} setDensity={setEvidenceDensity} setTask={setTaskView} />
 

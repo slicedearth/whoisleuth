@@ -157,6 +157,19 @@ partial states, and limitations while deliberately excluding raw RDAP and
 WHOIS responses, expanded contacts, provider payloads, scripts, and remote
 assets.
 
+**Download brief** creates a shorter deterministic decision packet from the
+current task view. It keeps verified normalized facts, explicit
+contradictions, unknowns, source-quality counts, observed relationship types,
+and suggested manual next steps separate. It does not add analyst assertions,
+make an attribution, or turn an incomplete source into a negative conclusion.
+
+The collapsed **Replay exported evidence** control accepts only a current
+first-party Lookup evidence JSON document of up to 5 MB. The browser validates
+the schema, calculates a SHA-256 file digest, and displays a bounded normalized
+source and fact summary without uploading the file or contacting the target.
+Replay time is not observation time. Raw source payloads in the export are not
+rendered, and future or foreign schemas fail closed.
+
 When a domain case is open, **Retain selected normalized facts** lets you save
 only the fields needed for later review. Each field keeps source, observation
 time, collection depth, source state, completeness, truncation, schema version,
@@ -166,7 +179,8 @@ unavailable or incomplete source into a change or an absent finding.
 **Export evidence JSON** remains the separate full-fidelity option. It can
 include normalized and raw registration sources, supporting observations,
 diagnostics, comparisons, and provenance. It can contain public contact data,
-so review and store it accordingly.
+so review and store it accordingly. Offline replay intentionally exposes only
+its bounded normalized review projection.
 
 ### Discover
 
