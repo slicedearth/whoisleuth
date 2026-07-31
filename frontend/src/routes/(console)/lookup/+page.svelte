@@ -382,6 +382,8 @@
     httpEvidence,
     tlsEvidence,
     tlsCertificate,
+    tlsAuthorization,
+    tlsHostname,
     tlsAltNames,
     tlsPublicKey,
     tlsIssuer,

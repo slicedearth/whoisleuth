@@ -71,7 +71,13 @@ function fixture() {
       }],
     },
     tlsEvidence: { status: 'success', complete: true, observedAt: '2026-07-31T00:00:04.000Z' },
-    tlsCertificate: { fingerprintSha256: 'a'.repeat(64) },
+    tlsCertificate: {
+      fingerprintSha256: 'a'.repeat(64),
+      validFrom: '2026-07-01T00:00:00.000Z',
+      validTo: '2026-10-01T00:00:00.000Z',
+    },
+    tlsAuthorization: { authorized: true, error: null },
+    tlsHostname: { matches: true, error: null },
     tlsAltNames: { dnsNames: ['example.test', '*.example.test'] },
     tlsPublicKey: { type: 'rsa', bits: 2048, fingerprintSha256: 'b'.repeat(64) },
     tlsIssuer: { organization: 'Example Certificate Authority' },
@@ -107,6 +113,12 @@ test('asset graph keeps separately attributed typed relationships', () => {
   assert.ok(graph.edges.some((edge) => edge.kind === 'declares-open-graph' && edge.boundary === 'reviewed_profile'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'form-destination' && edge.boundary === 'external'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'uses-key'));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'reviewed-hostname-match'));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
+  assert.match(
+    graph.nodes.find((node) => node.kind === 'certificate')?.detail ?? '',
+    /Valid from 2026-07-01T00:00:00\.000Z · Valid to 2026-10-01T00:00:00\.000Z/u,
+  );
   assert.ok(graph.edges.every((edge) => edge.observedAt !== null));
 });
 
@@ -123,6 +135,8 @@ test('graph lenses reuse one model without cross-contaminating evidence classes'
   assert.ok(delegation.edges.some((edge) => edge.completeness === 'partial'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'authorizes-name'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'issued-by'));
+  assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-hostname-match'));
+  assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
   assert.ok(certificate.edges.some((edge) => edge.kind === 'reviewed-against-policy'));
 });
 

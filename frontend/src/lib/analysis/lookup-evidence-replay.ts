@@ -305,6 +305,8 @@ export async function parseLookupEvidenceReplay(
     httpEvidence: http,
     tlsEvidence: tls,
     tlsCertificate: tls.certificate,
+    tlsAuthorization: tls.authorization,
+    tlsHostname: tls.hostname,
     tlsAltNames: record(tls.certificate).subjectAltNames,
     tlsPublicKey: record(tls.certificate).publicKey,
     tlsIssuer: record(tls.certificate).issuer,

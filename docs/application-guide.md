@@ -186,6 +186,11 @@ origin, within the queried registrable domain, a reviewed Brand Profile
 relationship, external, or unresolved. These are routing and declaration
 relationships, not proof that data was submitted or that two hosts share
 ownership or control.
+The Certificate lens connects the requested hostname to the observed leaf,
+runtime trust and hostname-match results, validity window, bounded SAN scope,
+public-key digest, issuer and any reviewed Brand Profile certificate baseline.
+Each edge retains its own source health and limitations; a failed or incomplete
+TLS check is not shown as an absent certificate relationship.
 
 The collapsed **Replay exported evidence** control accepts only a current
 first-party Lookup evidence JSON document of up to 5 MB. The browser validates

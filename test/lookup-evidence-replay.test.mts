@@ -46,8 +46,12 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
           status: 'success',
           complete: true,
           connectedAddress: '192.0.2.10',
+          authorization: { authorized: true, error: null },
+          hostname: { matches: true, error: null },
           certificate: {
             fingerprintSha256: 'a'.repeat(64),
+            validFrom: '2026-07-01T00:00:00.000Z',
+            validTo: '2026-10-01T00:00:00.000Z',
             subjectAltNames: { dnsNames: ['example.test'] },
           },
         },
@@ -75,6 +79,8 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.ok(replay.unknowns.some((value) => value.includes('WHOIS')));
   assert.ok(replay.recommendedSteps.some((value) => value.includes('historical evidence')));
   assert.ok(replay.graph.edges.some((edge) => edge.kind === 'presents-certificate'));
+  assert.ok(replay.graph.edges.some((edge) => edge.kind === 'reviewed-hostname-match'));
+  assert.ok(replay.graph.edges.some((edge) => edge.kind === 'reviewed-runtime-trust'));
   assert.equal(JSON.stringify(replay).includes('<script>'), true);
 });
 

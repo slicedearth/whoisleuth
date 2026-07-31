@@ -171,6 +171,8 @@ export function buildLookupAssetGraph(input: Readonly<{
   httpEvidence?: unknown;
   tlsEvidence?: unknown;
   tlsCertificate?: unknown;
+  tlsAuthorization?: unknown;
+  tlsHostname?: unknown;
   tlsAltNames?: unknown;
   tlsPublicKey?: unknown;
   tlsIssuer?: unknown;
@@ -644,6 +646,13 @@ export function buildLookupAssetGraph(input: Readonly<{
   const tlsEvidence = record(input.tlsEvidence);
   const certificate = record(input.tlsCertificate);
   const fingerprint = text(certificate.fingerprintSha256, 80);
+  const validFrom = isoDate(certificate.validFrom);
+  const validTo = isoDate(certificate.validTo);
+  const certificateDetail = [
+    fingerprint,
+    validFrom ? `Valid from ${validFrom}` : '',
+    validTo ? `Valid to ${validTo}` : '',
+  ].filter(Boolean).join(' · ');
   const certificateId = fingerprint
     ? connect(
         'certificate',
@@ -658,10 +667,70 @@ export function buildLookupAssetGraph(input: Readonly<{
           lenses: ['all', 'certificate'],
           href: '#evidence-tls',
         },
-        fingerprint,
+        certificateDetail,
       )
     : null;
   if (certificateId) {
+    const hostnameReview = record(input.tlsHostname);
+    if (typeof hostnameReview.matches === 'boolean') {
+      const matchId = addNode(
+        'identity',
+        hostnameReview.matches ? 'Hostname match confirmed' : 'Hostname match not confirmed',
+        hostnameReview.matches
+          ? `The certificate matched ${target} during this TLS observation.`
+          : text(hostnameReview.error, 160) || `The certificate did not match ${target} during this TLS observation.`,
+      );
+      if (matchId) {
+        addEdge({
+          source: targetId,
+          target: matchId,
+          kind: 'reviewed-hostname-match',
+          label: 'reviewed hostname match',
+          sourceLabel: 'TLS hostname verification',
+          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          completeness: sourceCompleteness(tlsEvidence),
+          limitations: limitations(tlsEvidence.limitations),
+          lenses: ['certificate', 'identity'],
+          href: '#evidence-tls',
+        });
+        addEdge({
+          source: matchId,
+          target: certificateId,
+          kind: 'evaluated-certificate',
+          label: 'evaluated certificate',
+          sourceLabel: 'TLS hostname verification',
+          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          completeness: sourceCompleteness(tlsEvidence),
+          limitations: limitations(tlsEvidence.limitations),
+          lenses: ['certificate'],
+          href: '#evidence-tls',
+        });
+      }
+    }
+    const authorizationReview = record(input.tlsAuthorization);
+    if (typeof authorizationReview.authorized === 'boolean') {
+      const authorizationId = addNode(
+        'identity',
+        authorizationReview.authorized ? 'Runtime trust confirmed' : 'Runtime trust not confirmed',
+        authorizationReview.authorized
+          ? 'The runtime trust store authorized the observed certificate chain.'
+          : text(authorizationReview.error, 160) || 'The runtime trust store did not authorize the observed certificate chain.',
+      );
+      if (authorizationId) {
+        addEdge({
+          source: certificateId,
+          target: authorizationId,
+          kind: 'reviewed-runtime-trust',
+          label: 'reviewed runtime trust',
+          sourceLabel: 'TLS chain verification',
+          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          completeness: sourceCompleteness(tlsEvidence),
+          limitations: limitations(tlsEvidence.limitations),
+          lenses: ['certificate'],
+          href: '#evidence-tls',
+        });
+      }
+    }
     for (const name of textList(record(input.tlsAltNames).dnsNames, 16)) {
       const sanId = addNode('hostname', name, 'Certificate DNS subject alternative name');
       if (sanId) {
