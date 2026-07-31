@@ -27,6 +27,10 @@
     parseWebCaptureManifest,
     parseWebCaptureSummary,
   } from '$lib/analysis/web-capture-import.ts';
+  import {
+    MAX_WARC_IMPORT_BYTES,
+    parseWarcEvidenceArchive,
+  } from '$lib/analysis/warc-evidence-import.ts';
 
   let {
     cases,
@@ -68,6 +72,16 @@
     targetCaseId = '';
     if (!file) return;
     try {
+      const warc = file.name.toLowerCase().endsWith('.warc') || file.type === 'application/warc';
+      if (warc) {
+        if (file.size > MAX_WARC_IMPORT_BYTES) {
+          throw new Error('Portable WARC imports are limited to 8 MiB.');
+        }
+        const report = await parseWarcEvidenceArchive(await file.arrayBuffer(), file.name);
+        preview = { kind: 'findings', document: report.document };
+        onmessage(`Validated ${report.accepted} portable WARC finding${report.accepted === 1 ? '' : 's'} from ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The archive stayed local and only normalized page evidence is available for deliberate import.`);
+        return;
+      }
       if (file.size > MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES) {
         throw new Error('External intelligence imports are limited to 512 KiB.');
       }
@@ -196,8 +210,8 @@
 <details class="external-import card">
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artifact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, or a bounded MISP event locally before changing a case. Imports never fetch references, accept archive contents, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
-    <label class="btn file-btn">Choose JSON or CSV<input type="file" accept="application/json,text/csv,.json,.csv" onchange={selectFile}></label>
+    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artifact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, a bounded MISP event, or a strict uncompressed WARC response archive locally before changing a case. WARC processing rejects or discards request records, sensitive headers, downloads, unsupported response types, excessive records, and mismatched supported record digests. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
+    <label class="btn file-btn">Choose JSON, CSV, or WARC<input type="file" accept="application/json,text/csv,application/warc,.json,.csv,.warc" onchange={selectFile}></label>
     {#if findingsPreview}
       <section class="preview" aria-labelledby="external-findings-preview-title">
         <header>

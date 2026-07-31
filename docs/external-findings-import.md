@@ -107,9 +107,29 @@ names, URL credentials, paths, queries, fragments, duplicate artifact kinds,
 unsupported MIME types, and arbitrary fields. The resulting case finding says
 that the metadata was imported and unverified.
 
+## Portable WARC response evidence
+
+The Cases importer accepts a strict uncompressed `.warc` file as a separate
+local-only path. It parses at most 8 MiB, 100 records, and 1 MiB per record,
+then retains at most 25 supported HTML response findings. Request records,
+cookie or authorization material, downloads, compressed response bodies,
+non-HTML content, invalid or credentialed target URLs, excessive HTML, and
+mismatched supported record digests are excluded. The importer never executes
+page content or makes a request.
+
+For each retained response, the importer keeps only the normalized domain,
+HTTP(S) origin, bounded title, response status, WARC observation time,
+completeness, fixed limitations, and whole-archive SHA-256 digest. Supported
+SHA-1 and SHA-256 `WARC-Block-Digest` values are checked locally. A missing or
+unsupported record digest leaves the finding partial; a mismatched supported
+digest excludes the response. Paths, queries, fragments, headers, request
+bodies, response bodies, and archive bytes are not retained. WACZ ZIP
+containers and compressed WARC files are not supported by this version.
+
 ## Bounds and merge behavior
 
-- Maximum file size: 384 KiB.
+- Maximum JSON or CSV file size: 384 KiB.
+- Maximum WARC file size: 8 MiB.
 - Maximum findings: 100.
 - Maximum distinct domains: 25.
 - Maximum findings per domain: 20.
