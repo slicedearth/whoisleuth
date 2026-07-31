@@ -32,6 +32,7 @@ type ScopedRateLimitCheckers = Readonly<{
   login: RateLimitChecker;
   api: RateLimitChecker;
   scheduledMonitorManagement: RateLimitChecker;
+  prerenderedHtml: RateLimitChecker;
 }>;
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -100,6 +101,10 @@ function createScopedRateLimitCheckers(
     api: createRateLimitChecker(API_RATE_LIMIT, maximumBucketsPerScope),
     scheduledMonitorManagement: createRateLimitChecker(
       SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
+      maximumBucketsPerScope,
+    ),
+    prerenderedHtml: createRateLimitChecker(
+      PRERENDERED_HTML_RATE_LIMIT,
       maximumBucketsPerScope,
     ),
   });
@@ -191,15 +196,25 @@ const SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT: Readonly<RateLimitConfig> = {
   windowMs: 60 * 1000,
 };
 
+// The portable Express host serves one fixed prerendered HTML override through
+// a custom file response. Keep that inexpensive route separately bounded so a
+// file-request flood cannot consume login, API, or hosted-management buckets.
+const PRERENDERED_HTML_RATE_LIMIT: Readonly<RateLimitConfig> = {
+  limit: 600,
+  windowMs: 60 * 1000,
+};
+
 const scopedRateLimitCheckers = createScopedRateLimitCheckers();
 const checkLoginRateLimit = scopedRateLimitCheckers.login;
 const checkApiRateLimit = scopedRateLimitCheckers.api;
 const checkScheduledMonitorManagementRateLimit = scopedRateLimitCheckers.scheduledMonitorManagement;
+const checkPrerenderedHtmlRateLimit = scopedRateLimitCheckers.prerenderedHtml;
 
 export {
   checkLoginRateLimit,
   checkApiRateLimit,
   checkScheduledMonitorManagementRateLimit,
+  checkPrerenderedHtmlRateLimit,
   createRateLimitChecker,
   createScopedRateLimitCheckers,
   trustsForwardedHeaders,
@@ -208,6 +223,7 @@ export {
   LOGIN_RATE_LIMIT,
   API_RATE_LIMIT,
   SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
+  PRERENDERED_HTML_RATE_LIMIT,
 };
 
 export type {

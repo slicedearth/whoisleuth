@@ -36,6 +36,7 @@ import {
 import {
   checkApiRateLimit,
   checkLoginRateLimit,
+  checkPrerenderedHtmlRateLimit,
   getClientIp,
   getForwardedProtocol,
 } from './lib/rate-limit.mts';
@@ -102,6 +103,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const prerenderedHtmlRateLimit = rateLimit(checkPrerenderedHtmlRateLimit);
 
 app.disable('x-powered-by');
 
@@ -140,7 +142,7 @@ for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
 // Serve its exact HTML file before express.static sees the directory and
 // redirects to a non-existent index file.
 for (const [routePath, htmlFile] of PRERENDERED_HTML_FILE_OVERRIDES) {
-  app.get(routePath, (_req: RequestLike, res: StaticResponseLike) => {
+  app.get(routePath, prerenderedHtmlRateLimit, (_req: RequestLike, res: StaticResponseLike) => {
     res.sendFile(path.join(svelteBuildDir, htmlFile));
   });
 }

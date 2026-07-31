@@ -5,6 +5,7 @@ import {
   createScopedRateLimitCheckers,
   getClientIp,
   getForwardedProtocol,
+  PRERENDERED_HTML_RATE_LIMIT,
   trustsForwardedHeaders,
 } from '../lib/rate-limit.mts';
 
@@ -46,6 +47,22 @@ describe('fixed-window bucket bounds', () => {
     assert.deepEqual(checkers.api('api-second', 1_001), { allowed: true });
     assert.deepEqual(checkers.api('api-third', 1_002), { allowed: true });
     assert.deepEqual(checkers.login('new-login', 1_003), { allowed: true });
+  });
+
+  test('isolates fixed HTML capacity from the other request classes', () => {
+    const checkers = createScopedRateLimitCheckers(1);
+
+    assert.deepEqual(checkers.login('login', 1_000), { allowed: true });
+    assert.deepEqual(checkers.api('api', 1_001), { allowed: true });
+    assert.deepEqual(checkers.scheduledMonitorManagement('monitor', 1_002), { allowed: true });
+    assert.deepEqual(checkers.prerenderedHtml('html', 1_003), { allowed: true });
+  });
+
+  test('keeps the fixed HTML override generous but bounded', () => {
+    assert.deepEqual(PRERENDERED_HTML_RATE_LIMIT, {
+      limit: 600,
+      windowMs: 60_000,
+    });
   });
 });
 
