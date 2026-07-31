@@ -84,6 +84,13 @@
   const lifecycleLocks = $derived(asRecord(lifecycle.locks));
   const reconciliation = $derived(asRecord(insights.reconciliation));
   const publications = $derived(asRecords(insights.publications));
+  const rdapCapabilities = $derived(asRecord(insights.rdapCapabilities));
+  const registryCapabilities = $derived(asRecord(rdapCapabilities.registry));
+  const registrarCapabilities = $derived(asRecord(rdapCapabilities.registrar));
+  const registryDeclarations = $derived(asRecords(registryCapabilities.declarations));
+  const registrarDeclarations = $derived(asRecords(registrarCapabilities.declarations));
+  const registryReverseSearch = $derived(asRecord(registryCapabilities.reverseSearch));
+  const registrarReverseSearch = $derived(asRecord(registrarCapabilities.reverseSearch));
   const abuseRouting = $derived(asRecords(insights.abuseRouting));
   const registryTraceState = $derived<TraceState>(rdapError
     ? 'unavailable'
@@ -304,6 +311,26 @@
       <summary>Publication quality · {publications.filter((item) => item.state === 'complete').length} complete</summary>
       <div class="publication-list">{#each publications as publication}<article><strong>{display(publication.source)}</strong><span class={`chip ${publication.state === 'complete' ? 'ok' : publication.state === 'partial' ? 'warn' : ''}`}>{display(publication.state)}</span>{#if publication.observedAt}<small>{String(publication.observedAt)}</small>{/if}{#each asStrings(publication.issues) as issue}<p>{issue}</p>{/each}</article>{/each}</div>
     </details>
+    <details class="rdap-capabilities">
+      <summary>RDAP capability declarations · {registryDeclarations.length + registrarDeclarations.length}</summary>
+      <div class="capability-sources">
+        <article>
+          <header><strong>Registry RDAP</strong><span class={`chip ${registryCapabilities.state === 'complete' ? 'ok' : registryCapabilities.state === 'partial' ? 'warn' : ''}`}>{display(registryCapabilities.state)}</span></header>
+          {#if registryDeclarations.length}
+            <ul>{#each registryDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
+          {:else}<p>No usable declaration was retained from this response.</p>{/if}
+          <p><strong>Reverse search:</strong> {display(registryReverseSearch.state)}. {String(registryReverseSearch.detail || '')}</p>
+        </article>
+        <article>
+          <header><strong>Registrar RDAP</strong><span class={`chip ${registrarCapabilities.state === 'complete' ? 'ok' : registrarCapabilities.state === 'partial' ? 'warn' : ''}`}>{display(registrarCapabilities.state)}</span></header>
+          {#if registrarDeclarations.length}
+            <ul>{#each registrarDeclarations as declaration}<li><code>{String(declaration.identifier || '')}</code><span>{String(declaration.capability || '')}</span>{#if declaration.status === 'obsolete'}<small>Registered as obsolete</small>{:else if declaration.category === 'unknown'}<small>Unclassified; retained without interpretation</small>{/if}</li>{/each}</ul>
+          {:else}<p>No usable declaration was retained from this response.</p>{/if}
+          <p><strong>Reverse search:</strong> {display(registrarReverseSearch.state)}. {String(registrarReverseSearch.detail || '')}</p>
+        </article>
+      </div>
+      <p class="capability-limit">Declarations are response metadata, not proof that an operation is authorized, anonymous, complete, or correctly implemented. WHOISleuth does not issue a help or reverse-search request from this view.</p>
+    </details>
     {#if abuseRouting.length}
       <details class="routing">
         <summary>Published escalation routes · {abuseRouting.length}</summary>
@@ -432,6 +459,7 @@
   .acquisition-path ol{margin:8px 0;padding-left:20px}.acquisition-path li,.acquisition-path p,.interpretation-limit{color:var(--muted);font-size:var(--text-xs);line-height:1.55}.acquisition-path p{margin:8px 0 0}
   .publication-quality,.routing{margin:0 var(--card-pad) var(--card-pad);border:1px solid var(--border);border-radius:var(--radius-sm)}.publication-quality>summary,.routing>summary{padding:10px 11px}
   .publication-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border)}.publication-list article{padding:10px;background:var(--panel)}.publication-list strong,.publication-list small{display:block}.publication-list .chip{display:inline-block;margin:5px 0}.publication-list small,.publication-list p{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.publication-list p{margin:5px 0 0}
+  .rdap-capabilities{margin:0 var(--card-pad) var(--card-pad);border:1px solid var(--border);border-radius:var(--radius-sm)}.rdap-capabilities>summary{padding:10px 11px}.capability-sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border)}.capability-sources article{min-width:0;padding:11px;background:var(--panel)}.capability-sources header{display:flex;justify-content:space-between;gap:8px;align-items:center}.capability-sources ul{display:grid;gap:7px;padding:0;margin:10px 0;list-style:none}.capability-sources li{display:grid;grid-template-columns:minmax(105px,.6fr) minmax(0,1fr);gap:4px 8px;align-items:start}.capability-sources code{color:var(--accent);font-size:var(--text-2xs);overflow-wrap:anywhere}.capability-sources li span,.capability-sources p,.capability-limit{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.capability-sources li small{grid-column:2;color:var(--muted);font-size:var(--text-2xs)}.capability-limit{margin:10px 11px}
   .routing ul{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}.routing li{padding:10px;background:var(--panel)}.routing strong,.routing span,.routing small{display:block;overflow-wrap:anywhere}.routing span{margin-top:4px}.routing small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
   .comparison .table-wrap{border-top:1px solid var(--border)}
   .comparison tr.conflict{background:rgb(var(--danger-rgb) / .03)}
@@ -467,7 +495,8 @@
   .registrar-state.error{color:var(--danger)}
   @media(max-width:650px){
     .authority-trace>header{display:grid}.authority-trace>header>span{max-width:none;text-align:left}.trace-sources{grid-template-columns:1fr}
-    .insight-grid,.publication-list{grid-template-columns:1fr}
+    .insight-grid,.publication-list,.capability-sources{grid-template-columns:1fr}
+    .capability-sources li{grid-template-columns:1fr}.capability-sources li small{grid-column:1}
     .matrix-frame{display:none}
     .matrix-mobile{display:grid;gap:8px;margin-top:13px}
     .matrix-mobile article{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}

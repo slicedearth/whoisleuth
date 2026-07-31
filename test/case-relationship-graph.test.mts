@@ -41,7 +41,7 @@ describe('case relationship graph projection', () => {
   test('returns a stable empty contract for invalid input', () => {
     const graph = buildCaseRelationshipGraph(null);
     assert.equal(graph.version, CASE_RELATIONSHIP_GRAPH_VERSION);
-    assert.equal(graph.version, 2);
+    assert.equal(graph.version, 3);
     assert.deepEqual(graph.nodes, []);
     assert.deepEqual(graph.edges, []);
     assert.equal(graph.totalRelationships, 0);

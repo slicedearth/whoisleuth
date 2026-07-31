@@ -126,6 +126,11 @@ test('completes the public synthetic workflow without investigation requests or 
   await registryInterpretation.locator(':scope > summary').click();
   await expect(registryInterpretation.getByText('RDAP: redacted · WHOIS: redacted')).toBeVisible();
   await expect(registryInterpretation.getByText('clientTransferProhibited')).toBeVisible();
+  const rdapCapabilities = registryInterpretation.locator('.rdap-capabilities');
+  await expect(rdapCapabilities.getByText('RDAP capability declarations · 2')).toBeVisible();
+  await rdapCapabilities.locator(':scope > summary').click();
+  await expect(rdapCapabilities.getByText('Machine-readable response redaction markers.')).toBeVisible();
+  await expect(rdapCapabilities.getByText(/Reverse search: not advertised/)).toBeVisible();
   await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toBeVisible();
   await expect(page.locator('#watchlist-activity .activity-summary')).toContainText(/1\s*retained checks/);

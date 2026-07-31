@@ -61,6 +61,30 @@ function summary(overrides: Partial<CaseRelationshipSummary> = {}): CaseRelation
       truncated: false,
       observations,
       omittedObservations: 2,
+      lineagePaths: [{
+        id: 'lineage:one',
+        seed: { id: 'domain:a', type: 'domain', label: 'a.invalid' },
+        seedMethods: ['case_documents_domain'],
+        immediateParent: { id: 'domain:a', type: 'domain', label: 'a.invalid' },
+        target: { id: 'nameserver:shared', type: 'nameserver_set', label: 'ns.shared.invalid' },
+        hopCount: 1,
+        scopeDistance: 1,
+        discoveryMethod: 'Exact retained normalized set',
+        classification: 'normalized',
+        steps: [{
+          position: 1,
+          relationshipId: 'relationship:one',
+          relationshipType: 'domain_uses_nameserver_set',
+          method: 'Exact retained normalized set',
+          classification: 'normalized',
+          from: { id: 'domain:a', type: 'domain', label: 'a.invalid' },
+          to: { id: 'nameserver:shared', type: 'nameserver_set', label: 'ns.shared.invalid' },
+        }],
+        complete: true,
+        truncated: false,
+        limitations: ['Shared infrastructure does not establish ownership.'],
+      }],
+      omittedLineagePaths: 0,
       limitations: ['Shared infrastructure does not establish ownership.'],
     }],
     sources: ['lookup', 'monitor'],
@@ -77,6 +101,7 @@ describe('relationship graph interchange export', () => {
     const document = buildRelationshipGraphDocument(summary(), { generatedAt: NOW, source: 'monitor' });
     assert.equal(document.schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
     assert.equal(document.version, RELATIONSHIP_GRAPH_EXPORT_VERSION);
+    assert.equal(document.version, 2);
     assert.equal(document.generatedAt, NOW);
     assert.equal(document.source.projectionVersion, 1);
     assert.equal(document.source.relationshipVersion, 2);
@@ -101,6 +126,16 @@ describe('relationship graph interchange export', () => {
     assert.equal(relationship.observationCount, 12);
     assert.equal(relationship.exportedObservationCount, MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP);
     assert.equal(relationship.omittedObservationCount, 4);
+    assert.equal(relationship.lineagePathCount, 1);
+    assert.equal(relationship.exportedLineagePathCount, 1);
+    assert.equal(relationship.omittedLineagePathCount, 0);
+    assert.equal(relationship.maximumScopeDistance, 1);
+    assert.ok(Array.isArray(relationship.discoveryPaths));
+    const firstPath = relationship.discoveryPaths[0] as Record<string, unknown> | undefined;
+    assert.ok(firstPath);
+    assert.equal(firstPath.seed, 'a.invalid');
+    assert.equal(firstPath.target, 'ns.shared.invalid');
+    assert.equal(firstPath.scopeDistance, 1);
     const firstObservation = relationship.observations[0] as Record<string, unknown> | undefined;
     assert.ok(firstObservation);
     assert.deepEqual(firstObservation.schemaVersions, { caseVersion: 2 });

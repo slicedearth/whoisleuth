@@ -6,6 +6,7 @@
 // contact data or a registration condition is absent.
 
 import { compareRegistrySources } from './registry-comparison.mts';
+import { inspectRdapCapabilities } from './rdap-capabilities.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type ContactDisclosureState =
@@ -352,6 +353,10 @@ export function buildRegistryInsights(input: {
       publicationDiagnostic('whois', input.whoisParsed, input.whoisStatus, input.whoisQueriedAt),
       publicationDiagnostic('registrar_rdap', input.registrarRdapParsed, input.registrarRdapStatus, input.registrarRdapFetchedAt),
     ],
+    rdapCapabilities: {
+      registry: inspectRdapCapabilities(input.rdapParsed, input.rdapStatus),
+      registrar: inspectRdapCapabilities(input.registrarRdapParsed, input.registrarRdapStatus),
+    },
     abuseRouting: [...uniqueRoutes.values()],
   };
 }

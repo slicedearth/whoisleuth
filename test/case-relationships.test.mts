@@ -265,6 +265,11 @@ describe('projection-backed cross-case relationships', () => {
     assert.equal(nameservers.lastObservedAt, '2026-07-18T00:00:00.000Z');
     assert.equal(nameservers.complete, null);
     assert.ok(nameservers.observations.every((item) => item.store === 'cases'));
+    assert.ok(nameservers.lineagePaths);
+    assert.deepEqual(nameservers.lineagePaths.map((path) => path.seed.label), ['a.invalid', 'b.invalid']);
+    assert.ok(nameservers.lineagePaths.every((path) => path.scopeDistance === 1));
+    assert.ok(nameservers.lineagePaths.every((path) => path.target.label === 'ns.shared.invalid'));
+    assert.equal(nameservers.omittedLineagePaths, 0);
     assert.deepEqual(result.scopeOptions.map((item) => item.value), ['case:case-a', 'case:case-b', 'campaign:campaign-one']);
     assert.deepEqual(projection, before);
   });

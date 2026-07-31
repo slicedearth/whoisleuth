@@ -13,8 +13,9 @@ import {
   type CaseRelationshipScopeOption,
   type CaseRelationshipSummary,
 } from './case-relationships.ts';
+import type { InvestigationLineagePath } from './investigation-lineage.ts';
 
-export const CASE_RELATIONSHIP_GRAPH_VERSION = 2;
+export const CASE_RELATIONSHIP_GRAPH_VERSION = 3;
 export const MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS = 12;
 export const MAX_RELATIONSHIP_GRAPH_CASES = 24;
 export const MAX_RELATIONSHIP_GRAPH_EDGES = 48;
@@ -81,6 +82,8 @@ export interface CaseRelationshipGraphRelationshipNode {
   truncated: boolean;
   observations: CaseRelationshipObservation[];
   omittedObservations: number;
+  lineagePaths: InvestigationLineagePath[];
+  omittedLineagePaths: number;
   limitations: string[];
   x: number;
   y: number;
@@ -365,6 +368,8 @@ export function projectCaseRelationshipGraph(
     truncated: group.truncated === true,
     observations: Array.isArray(group.observations) ? group.observations : [],
     omittedObservations: Number.isSafeInteger(group.omittedObservations) ? Number(group.omittedObservations) : 0,
+    lineagePaths: Array.isArray(group.lineagePaths) ? group.lineagePaths : [],
+    omittedLineagePaths: Number.isSafeInteger(group.omittedLineagePaths) ? Number(group.omittedLineagePaths) : 0,
     limitations: Array.isArray(group.limitations) ? group.limitations : [],
     x: 0,
     y: 0,

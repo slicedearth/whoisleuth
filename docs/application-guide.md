@@ -79,6 +79,14 @@ passive-posture, technology, TLS, and observed-network cards start collapsed.
 Their state and summary remain visible. Expand a section before relying on its
 evidence, collection time, or limitations.
 
+The Registry interpretation panel classifies bounded `rdapConformance`
+declarations already returned by registry and registrar RDAP. Recognized,
+obsolete, and unclassified identifiers remain distinct. A `reverse_search`
+declaration is shown only as an advertised capability: this view does not fetch
+the server help document, discover permitted properties, or issue a reverse
+search. An individual response that omits the declaration is not treated as
+proof that the server does not support it.
+
 During collection, Lookup identifies the requested source families and shows
 elapsed time plus a 40-second browser deadline. Every core Express and Netlify
 deployment currently uses one buffered response and keeps each source pending
@@ -278,6 +286,13 @@ raw lookup responses, or expanded contacts. Retained observations can be
 reviewed and deleted under Monitor Relationships, included in the workspace
 archive, found through local investigation search, and projected into the
 relationship graph when at least two member domains also have local cases.
+For projection-backed relationships, the table and graph inspector also show a
+bounded discovery path from each retained case domain to the selected
+infrastructure or identifier. The path records each comparison method,
+classification, immediate parent, hop count, and scope distance using existing
+local evidence only. Exported relationship graphs include the same minimized
+path details. Distance is an explanation of the retained pivot, not evidence
+of ownership, coordination, intent, maliciousness, or safety.
 
 Defensive registration coverage groups a generated scan by mutation family and
 domain ending. It distinguishes protected or allowlisted domains, registered
