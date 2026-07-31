@@ -107,9 +107,43 @@ names, URL credentials, paths, queries, fragments, duplicate artifact kinds,
 unsupported MIME types, and arbitrary fields. The resulting case finding says
 that the metadata was imported and unverified.
 
+## Portable WARC and WACZ response evidence
+
+The Cases importer accepts a strict uncompressed `.warc` file as a separate
+local-only path. It parses at most 8 MiB, 100 records, and 1 MiB per record,
+then retains at most 25 supported HTML response findings. Request records,
+cookie or authorization material, downloads, compressed response bodies,
+non-HTML content, invalid or credentialed target URLs, excessive HTML, and
+mismatched supported record digests are excluded. The importer never executes
+page content or makes a request.
+
+For each retained response, the importer keeps only the normalized domain,
+HTTP(S) origin, bounded title, response status, WARC observation time,
+completeness, fixed limitations, and whole-archive SHA-256 digest. Supported
+SHA-1 and SHA-256 `WARC-Block-Digest` values are checked locally. A missing or
+unsupported record digest leaves the finding partial; a mismatched supported
+digest excludes the response. Paths, queries, fragments, headers, request
+bodies, response bodies, and archive bytes are not retained.
+
+The same control accepts a bounded `.wacz` package conforming to the supported
+WACZ 1.x data-package structure. The package is processed locally and is never
+replayed. WHOISleuth requires a root `datapackage.json`, one to eight declared
+`.warc` or `.warc.gz` resources under `archive/`, safe unique ZIP paths,
+supported ZIP compression, declared byte lengths, and SHA-256 resource
+digests. If `datapackage-digest.json` is present, its SHA-256 digest must match
+the manifest. The optional absence of that file is retained as a limitation.
+Selected ZIP entries, aggregate decompressed WARC bytes, gzip expansion, entry
+count, manifest size, and declared package bytes are bounded before the
+existing WARC privacy filter runs. Indexes, page lists, screenshots, custom
+files, and descriptive package fields are not imported.
+
 ## Bounds and merge behavior
 
-- Maximum file size: 384 KiB.
+- Maximum JSON or CSV file size: 384 KiB.
+- Maximum WARC or WACZ file size: 8 MiB.
+- Maximum WACZ ZIP entries: 128, including ignored entries.
+- Maximum selected WACZ WARC resources: 8.
+- Maximum aggregate expanded WARC bytes from a WACZ: 8 MiB.
 - Maximum findings: 100.
 - Maximum distinct domains: 25.
 - Maximum findings per domain: 20.

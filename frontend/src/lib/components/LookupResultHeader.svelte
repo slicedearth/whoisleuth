@@ -7,6 +7,7 @@
     inputHostname,
     onExport,
     onReportExport = null,
+    onBriefExport = null,
   }: {
     title: string;
     state: string;
@@ -15,6 +16,7 @@
     inputHostname: string;
     onExport: () => void;
     onReportExport?: (() => void) | null;
+    onBriefExport?: (() => void) | null;
   } = $props();
 </script>
 
@@ -30,6 +32,9 @@
     <span class="chip info">{state}</span>
     {#if onReportExport}
       <button class="btn" onclick={onReportExport}>Download report</button>
+    {/if}
+    {#if onBriefExport}
+      <button class="btn" onclick={onBriefExport}>Download brief</button>
     {/if}
     <button class="btn" onclick={onExport}>Export evidence JSON</button>
   </div>

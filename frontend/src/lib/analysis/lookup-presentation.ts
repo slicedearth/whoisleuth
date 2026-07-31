@@ -1,5 +1,15 @@
 export type LookupEvidenceDensity = 'summary' | 'standard' | 'full';
 export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
+export type LookupEvidencePanel =
+  | 'credential-surface'
+  | 'dns'
+  | 'http'
+  | 'network-context'
+  | 'page-identity'
+  | 'security-posture'
+  | 'structured-identity'
+  | 'technology'
+  | 'tls';
 export type LookupSectionLink = Readonly<{ href: `#${string}`; label: string }>;
 export type LookupPresentationState = Readonly<{
   density: LookupEvidenceDensity;
@@ -82,6 +92,21 @@ const PRIORITY: Readonly<Record<LookupTaskView, readonly string[]>> = Object.fre
   incident: Object.freeze(['overview', 'external-intelligence', 'web-evidence', 'registry', 'case-response', 'raw-data']),
   owned: Object.freeze(['overview', 'registry', 'web-evidence', 'case-response', 'external-intelligence', 'raw-data']),
 });
+
+const INITIAL_PANELS: Readonly<Record<LookupTaskView, readonly LookupEvidencePanel[]>> = {
+  general: [],
+  acquisition: ['dns', 'network-context', 'tls'],
+  brand: ['http', 'page-identity', 'credential-surface', 'structured-identity', 'technology'],
+  incident: ['http', 'tls', 'credential-surface', 'security-posture'],
+  owned: ['dns', 'network-context', 'tls', 'security-posture'],
+};
+
+export function lookupTaskInitiallyExpands(
+  task: unknown,
+  panel: LookupEvidencePanel,
+): boolean {
+  return INITIAL_PANELS[normalizeLookupTaskView(task)].includes(panel);
+}
 
 export function prioritizeLookupSectionLinks(
   links: readonly LookupSectionLink[],

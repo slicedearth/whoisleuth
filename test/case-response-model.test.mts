@@ -7,6 +7,7 @@ import {
   appendCaseEvidencePin,
   appendCaseEvidencePins,
   appendCaseManualTrailEvent,
+  appendCaseSighting,
   buildCaseActionOutcomeSummary,
   buildCaseInvestigationTrail,
   MAX_CASE_ACTIONS,
@@ -15,6 +16,7 @@ import {
   normalizeCaseActions,
   normalizeCaseDecisions,
   normalizeCaseEvidencePins,
+  normalizeCaseSightings,
   updateCaseAction,
   updateCaseAssertion,
 } from '../frontend/src/lib/analysis/case-response-model.ts';
@@ -184,6 +186,37 @@ describe('case response record normalization', () => {
     assert.equal(trail[1]?.kind, 'manual');
   });
 
+  test('keeps deployment, provider, and analyst sighting states source-qualified', () => {
+    const pin = requiredValue(appendCaseEvidencePin([], {
+      label: 'Observed certificate',
+      value: 'Leaf certificate fingerprint was retained.',
+    }, NOW)[0]);
+    const deployment = requiredValue(appendCaseSighting([], {
+      state: 'observed_by_deployment',
+      category: 'certificate',
+      source: 'WHOISleuth deep lookup',
+      observedAt: NOW,
+      completeness: 'partial',
+      evidencePinId: pin.id,
+      limitations: ['One point-in-time handshake.'],
+    }, NOW, new Set([pin.id]))[0]);
+    const reviewed = requiredValue(appendCaseSighting([deployment], {
+      state: 'not_reproduced',
+      category: 'certificate',
+      source: 'Manual analyst review',
+      observedAt: LATER,
+      completeness: 'inconclusive',
+      evidencePinId: 'missing-pin',
+    }, LATER, new Set([pin.id]))[1]);
+    assert.equal(deployment.sourceClass, 'deployment');
+    assert.equal(reviewed.sourceClass, 'analyst');
+    assert.equal(reviewed.evidencePinId, null);
+    assert.deepEqual(deployment.limitations, ['One point-in-time handshake.']);
+    assert.equal(normalizeCaseSightings([{ state: 'missing', source: 'invalid' }], NOW).length, 0);
+    const trail = buildCaseInvestigationTrail({ sightings: [deployment, reviewed] });
+    assert.deepEqual(trail.map((item) => item.kind), ['sighting', 'sighting']);
+  });
+
   test('collections reject malformed entries and enforce record caps', () => {
     const pins = Array.from({ length: MAX_CASE_EVIDENCE_PINS + 5 }, (_, index) => ({
       label: `Pin ${index}`,
@@ -251,6 +284,7 @@ describe('case store integration', () => {
       action: { recipient: 'security@example.test', type: 'security_contact_report' },
       assertion: { kind: 'unknown', statement: 'The operator remains unknown.' },
       trailEvent: { kind: 'review', summary: 'Reviewed the retained evidence.' },
+      sighting: { state: 'reported_by_provider', category: 'website', source: 'Reviewed provider report', observedAt: NOW },
     }, NOW);
     const payload = caseModel.buildCaseExport([created], NOW);
     const imported = requiredValue(caseModel.mergeCases([], payload).cases[0]);
@@ -259,6 +293,8 @@ describe('case store integration', () => {
     assert.equal(imported.actions.length, 1);
     assert.equal(imported.assertions.length, 1);
     assert.equal(imported.manualTrail.length, 1);
+    assert.equal(imported.sightings.length, 1);
+    assert.equal(imported.sightings[0]?.sourceClass, 'provider');
     assert.equal(imported.actions[0]?.type, 'security_contact_report');
   });
 
@@ -273,6 +309,7 @@ describe('case store integration', () => {
       action: { recipient: 'internal queue', type: 'internal_review' },
       assertion: { kind: 'next_step', statement: 'Verify the contact destination.' },
       trailEvent: { kind: 'handoff', summary: 'Handed off for internal review.' },
+      sighting: { state: 'analyst_confirmed', category: 'website', source: 'Manual analyst review', observedAt: LATER },
     }, LATER);
     assert.equal(result.record.evidenceHistory.length, 1);
     assert.equal(result.record.evidencePins.length, 1);
@@ -280,5 +317,6 @@ describe('case store integration', () => {
     assert.equal(result.record.actions.length, 1);
     assert.equal(result.record.assertions.length, 1);
     assert.equal(result.record.manualTrail.length, 1);
+    assert.equal(result.record.sightings.length, 1);
   });
 });

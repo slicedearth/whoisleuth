@@ -144,6 +144,7 @@
           <dl class="provenance">
             <div><dt>Method</dt><dd>{selectedNode.method||'Unavailable'}</dd></div>
             <div><dt>Classification</dt><dd>{selectedNode.classifications?.join(', ')||'Unavailable'}</dd></div>
+            <div><dt>Local use</dt><dd>{selectedNode.commonalityExplanation}</dd></div>
             <div><dt>Sources</dt><dd>{selectedNode.sources?.map(sourceLabel).join(', ')||'Unavailable'}</dd></div>
             <div><dt>Observed</dt><dd>{selectedNode.firstObservedAt?date(selectedNode.firstObservedAt):'Unavailable'}{#if selectedNode.lastObservedAt&&selectedNode.lastObservedAt!==selectedNode.firstObservedAt} to {date(selectedNode.lastObservedAt)}{/if}</dd></div>
             <div><dt>Completeness</dt><dd>{completenessLabel(selectedNode)}</dd></div>

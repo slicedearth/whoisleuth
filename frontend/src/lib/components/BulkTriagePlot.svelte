@@ -73,7 +73,7 @@
 {/if}
 
 <style>
-  .plot-frame{max-width:100%;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
+  .plot-frame{width:100%;min-width:0;max-width:100%;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}
   .plot-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   svg{display:block;width:100%;height:auto}
   .quadrant{fill:rgb(var(--overlay-rgb) / .012)}
@@ -101,8 +101,7 @@
   .quadrant-summary dd{margin:0;color:var(--text);font:750 var(--text-xs) var(--mono);font-variant-numeric:tabular-nums}
   .plot-note,.empty-plot{margin:9px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:620px){
-    .plot-frame{overflow-x:auto;overscroll-behavior-x:contain}
-    svg{min-width:680px}
+    svg{min-width:0}
     .quadrant-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
 </style>

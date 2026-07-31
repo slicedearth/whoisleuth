@@ -16,6 +16,7 @@
   let mx = $state('');
   let caa = $state('');
   let tlsIssuer = $state('');
+  let tlsSanPatterns = $state('');
   let tlsSpkiSha256 = $state('');
   let registrarLock = $state<DesiredPostureBaseline['registrarLock']>('unconfigured');
   let renewalReviewAt = $state('');
@@ -61,6 +62,7 @@
     mx = baseline?.mx.join('\n') || '';
     caa = baseline?.caa.join('\n') || '';
     tlsIssuer = baseline?.tlsIssuer || '';
+    tlsSanPatterns = baseline?.tlsSanPatterns.join('\n') || '';
     tlsSpkiSha256 = baseline?.tlsSpkiSha256 || '';
     registrarLock = baseline?.registrarLock || 'unconfigured';
     renewalReviewAt = baseline?.renewalReviewAt?.slice(0, 10) || '';
@@ -80,6 +82,7 @@
       mx: list(mx),
       caa: list(caa),
       tlsIssuer: tlsIssuer.trim(),
+      tlsSanPatterns: list(tlsSanPatterns),
       tlsSpkiSha256: tlsSpkiSha256.trim().toLowerCase(),
       registrarLock,
       renewalReviewAt: renewalReviewAt
@@ -154,6 +157,7 @@
       <label><span>Mail exchangers</span><textarea rows="3" maxlength="6000" bind:value={mx} placeholder="10 mail.example.test"></textarea></label>
       <label><span>CAA policy</span><textarea rows="3" maxlength="6000" bind:value={caa} placeholder='0 issue "ca.example"'></textarea></label>
       <label><span>TLS issuer</span><input maxlength="2000" bind:value={tlsIssuer} placeholder="Reviewed issuer name"></label>
+      <label><span>TLS SAN patterns</span><textarea rows="3" maxlength="6000" bind:value={tlsSanPatterns} placeholder="example.test&#10;*.example.test"></textarea></label>
       <label><span>TLS SPKI SHA-256</span><input maxlength="64" bind:value={tlsSpkiSha256} placeholder="64 hexadecimal characters"></label>
       <label>
         <span>Transfer-lock expectation</span>
@@ -165,7 +169,7 @@
       </label>
       <label><span>Renewal review date</span><input type="date" bind:value={renewalReviewAt}></label>
     </div>
-    <label class="wide"><span>Suppressions</span><textarea rows="3" maxlength="8000" bind:value={suppressions} placeholder="field | YYYY-MM-DD | reviewed reason"></textarea><small>One reviewed exception per line. Supported fields: nameservers, ds, mx, caa, tls_issuer, tls_spki, registrar_lock, renewal_review.</small></label>
+    <label class="wide"><span>Suppressions</span><textarea rows="3" maxlength="8000" bind:value={suppressions} placeholder="field | YYYY-MM-DD | reviewed reason"></textarea><small>One reviewed exception per line. Supported fields: nameservers, ds, mx, caa, tls_issuer, tls_san_patterns, tls_spki, registrar_lock, renewal_review.</small></label>
     <label class="wide"><span>Analyst note</span><textarea rows="3" maxlength="2000" bind:value={note}></textarea></label>
     <div class="actions">
       <button class="primary" onclick={save}>Save baseline</button>

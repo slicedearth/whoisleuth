@@ -85,6 +85,11 @@ function summary(overrides: Partial<CaseRelationshipSummary> = {}): CaseRelation
         limitations: ['Shared infrastructure does not establish ownership.'],
       }],
       omittedLineagePaths: 0,
+      workspaceCaseCount: 10,
+      localOccurrenceCount: 2,
+      localFrequencyPercent: 20,
+      commonality: 'shared',
+      commonalityExplanation: 'Observed in 2 of 10 comparable local cases (20%).',
       limitations: ['Shared infrastructure does not establish ownership.'],
     }],
     sources: ['lookup', 'monitor'],
@@ -101,7 +106,7 @@ describe('relationship graph interchange export', () => {
     const document = buildRelationshipGraphDocument(summary(), { generatedAt: NOW, source: 'monitor' });
     assert.equal(document.schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);
     assert.equal(document.version, RELATIONSHIP_GRAPH_EXPORT_VERSION);
-    assert.equal(document.version, 2);
+    assert.equal(document.version, 3);
     assert.equal(document.generatedAt, NOW);
     assert.equal(document.source.projectionVersion, 1);
     assert.equal(document.source.relationshipVersion, 2);
@@ -130,6 +135,10 @@ describe('relationship graph interchange export', () => {
     assert.equal(relationship.exportedLineagePathCount, 1);
     assert.equal(relationship.omittedLineagePathCount, 0);
     assert.equal(relationship.maximumScopeDistance, 1);
+    assert.equal(relationship.workspaceCaseCount, 10);
+    assert.equal(relationship.localOccurrenceCount, 2);
+    assert.equal(relationship.localFrequencyPercent, 20);
+    assert.equal(relationship.commonality, 'shared');
     assert.ok(Array.isArray(relationship.discoveryPaths));
     const firstPath = relationship.discoveryPaths[0] as Record<string, unknown> | undefined;
     assert.ok(firstPath);

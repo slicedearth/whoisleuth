@@ -7,8 +7,12 @@ import type {
   CaseRelationshipMember,
   CaseRelationshipSummary,
 } from './case-relationships.ts';
+import {
+  classifyCommonInfrastructureAddress,
+  type CommonInfrastructureMatch,
+} from './common-infrastructure.ts';
 
-export const CASE_RELATIONSHIP_CLUSTER_VERSION = 1;
+export const CASE_RELATIONSHIP_CLUSTER_VERSION = 2;
 export const MAX_RELATIONSHIP_CLUSTERS = 50;
 export const MAX_CLUSTER_CASES = 100;
 export const MAX_CLUSTER_RELATIONSHIPS = 40;
@@ -30,6 +34,7 @@ export type RelationshipCluster = Readonly<{
   complete: boolean | null;
   truncated: boolean;
   sources: readonly string[];
+  infrastructureMatches: readonly CommonInfrastructureMatch[];
   limitations: readonly string[];
 }>;
 
@@ -99,7 +104,28 @@ function validTimestamp(value: unknown): string | null {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
-function confidenceFor(groups: readonly CaseRelationshipGroup[]): RelationshipClusterConfidence {
+function infrastructureMatchesFor(
+  groups: readonly CaseRelationshipGroup[],
+): CommonInfrastructureMatch[] {
+  const matches = new Map<string, CommonInfrastructureMatch>();
+  for (const group of groups) {
+    if (group.type !== 'ip_address') continue;
+    for (const match of classifyCommonInfrastructureAddress(group.value)) {
+      matches.set(`${match.sourceId}:${match.cidr}`, match);
+      if (matches.size >= 8) break;
+    }
+    if (matches.size >= 8) break;
+  }
+  return [...matches.values()]
+    .sort((left, right) => left.sourceLabel.localeCompare(right.sourceLabel)
+      || left.cidr.localeCompare(right.cidr));
+}
+
+function confidenceFor(
+  groups: readonly CaseRelationshipGroup[],
+  infrastructureMatches = infrastructureMatchesFor(groups),
+): RelationshipClusterConfidence {
+  if (infrastructureMatches.length) return 'shared_infrastructure';
   if (groups.some((group) => COMMON_INFRASTRUCTURE_TYPES.has(group.type)
     && group.cases.length >= COMMON_INFRASTRUCTURE_CASE_THRESHOLD)) {
     return 'shared_infrastructure';
@@ -117,8 +143,13 @@ function completenessFor(groups: readonly CaseRelationshipGroup[]): boolean | nu
 function limitationsFor(
   groups: readonly CaseRelationshipGroup[],
   confidence: RelationshipClusterConfidence,
+  infrastructureMatches = infrastructureMatchesFor(groups),
 ): string[] {
   const values = new Set<string>();
+  if (infrastructureMatches.length) {
+    const labels = [...new Set(infrastructureMatches.map((match) => match.sourceLabel))].slice(0, 4);
+    values.add(`Exact catalogue match: ${labels.join(', ')}. The matched range is published as shared infrastructure and does not identify an origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.`);
+  }
   if (confidence === 'shared_infrastructure') {
     values.add('This cluster includes infrastructure shared by many cases. Common hosting, DNS, redirect, CDN, and managed-platform services can connect unrelated domains.');
   }
@@ -201,7 +232,8 @@ export function buildCaseRelationshipClusters(
       .filter((value): value is string => value !== null)
       .sort()
       .at(-1) ?? null;
-    const confidence = confidenceFor(relatedGroups);
+    const infrastructureMatches = infrastructureMatchesFor(relatedGroups);
+    const confidence = confidenceFor(relatedGroups, infrastructureMatches);
     const groupKeys = relatedGroups.map(groupKey);
     output.push({
       id: clusterId(sortedCases.map((item) => item.id), groupKeys),
@@ -214,7 +246,8 @@ export function buildCaseRelationshipClusters(
       truncated: relatedGroups.some((group) => group.truncated === true)
         || relatedGroups.length >= MAX_CLUSTER_RELATIONSHIPS,
       sources: [...new Set(relatedGroups.flatMap((group) => group.sources ?? []))].sort(),
-      limitations: limitationsFor(relatedGroups, confidence),
+      infrastructureMatches,
+      limitations: limitationsFor(relatedGroups, confidence, infrastructureMatches),
     });
   }
 
@@ -280,7 +313,8 @@ export function applyCaseRelationshipClusterAdjustments(
     const groups = [...new Map(clusters.flatMap((cluster) => cluster.groups)
       .map((group) => [groupKey(group), group])).values()]
       .slice(0, MAX_CLUSTER_RELATIONSHIPS);
-    const confidence = confidenceFor(groups);
+    const infrastructureMatches = infrastructureMatchesFor(groups);
+    const confidence = confidenceFor(groups, infrastructureMatches);
     reviewed.push({
       id: clusterId(cases.map((item) => item.id), groups.map(groupKey)),
       cases,
@@ -293,7 +327,8 @@ export function applyCaseRelationshipClusterAdjustments(
         || cases.length >= MAX_CLUSTER_CASES
         || groups.length >= MAX_CLUSTER_RELATIONSHIPS,
       sources: [...new Set(clusters.flatMap((cluster) => cluster.sources))].sort(),
-      limitations: limitationsFor(groups, confidence),
+      infrastructureMatches,
+      limitations: limitationsFor(groups, confidence, infrastructureMatches),
       sourceClusterIds: mergeIds,
       label: mergeIds.map((id) => boundedText(raw.labels[id], 80)).find(Boolean) ?? null,
       dismissed: mergeIds.every((id) => dismissed.has(id)),

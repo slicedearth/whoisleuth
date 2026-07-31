@@ -6,6 +6,8 @@
     CASE_ASSERTION_STATES,
     CASE_MANUAL_TRAIL_KINDS,
     CASE_PIN_COMPLETENESS,
+    CASE_SIGHTING_CATEGORIES,
+    CASE_SIGHTING_STATES,
     editCase,
     type CaseActionRecord,
     type CaseRecord,
@@ -14,6 +16,7 @@
     buildCaseActionOutcomeSummary,
     buildCaseInvestigationTrail,
   } from '$lib/analysis/case-response-model.ts';
+  import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
   import {
     buildCaseResponsePacket,
     buildCaseResponsePreflight,
@@ -63,7 +66,19 @@
   let trailKind = $state('pivot');
   let trailSummary = $state('');
   let trailTarget = $state('');
+  let sightingState = $state('observed_by_deployment');
+  let sightingCategory = $state('website');
+  let sightingSource = $state('WHOISleuth deep lookup');
+  let sightingObservedAt = $state('');
+  let sightingCompleteness = $state('complete');
+  let sightingEvidencePinId = $state('');
+  let sightingLimitations = $state('');
   const investigationTrail = $derived(buildCaseInvestigationTrail(record));
+  const sightingChronology = $derived(buildCaseSightingChronology(record.sightings));
+  const sightingReviewConclusionCount = $derived(
+    record.sightings.filter((sighting) =>
+      sighting.state === 'not_reproduced' || sighting.state === 'expired').length,
+  );
 
   let packetCategory = $state('');
   let packetProfile = $state<ResponsePacketProfileId>('internal_soc');
@@ -188,6 +203,21 @@
     trailKind = 'pivot';
     trailSummary = '';
     trailTarget = '';
+  }
+
+  async function addSighting() {
+    await persist({
+      sighting: {
+        state: sightingState,
+        category: sightingCategory,
+        source: sightingSource,
+        observedAt: isoFromLocal(sightingObservedAt) || new Date().toISOString(),
+        completeness: sightingCompleteness,
+        evidencePinId: sightingEvidencePinId || null,
+        limitations: list(sightingLimitations),
+      },
+    }, `Recorded a source-qualified sighting for ${record.domain}.`);
+    sightingLimitations = '';
   }
 
   function actionInput() {
@@ -343,7 +373,7 @@
 <section id={`case-response-${record.id}`} class="response-workspace" aria-labelledby={`response-title-${record.id}`} tabindex="-1">
   <header>
     <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
-    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
+    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')}</span>
   </header>
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
@@ -372,6 +402,52 @@
     </form>
     {#if record.evidencePins.length}
       <ol class="records">{#each [...record.evidencePins].reverse() as pin}<li><strong>{pin.label}</strong><p>{pin.value}</p><small>{pin.source} · {pin.completeness} · {pin.observedAt}</small>{#if pin.limitations.length}<small>Limits: {pin.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
+    {/if}
+  </details>
+
+  <details>
+    <summary>Record a source-qualified sighting</summary>
+    <form class="response-form" onsubmit={(event) => { event.preventDefault(); void addSighting(); }}>
+      <p class="notice">Use observed or reported states for source evidence. Analyst confirmed, not reproduced, and expired are review conclusions and do not alter the original observation.</p>
+      <div class="two-columns">
+        <label class="field">Sighting state<select bind:value={sightingState}>{#each CASE_SIGHTING_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+        <label class="field">Evidence category<select bind:value={sightingCategory}>{#each CASE_SIGHTING_CATEGORIES as value}<option {value}>{value}</option>{/each}</select></label>
+        <label class="field">Source<input bind:value={sightingSource} maxlength="80" required></label>
+        <label class="field">Observed or reviewed at<input type="datetime-local" bind:value={sightingObservedAt}></label>
+        <label class="field">Completeness<select bind:value={sightingCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
+        {#if record.evidencePins.length}<label class="field">Supporting evidence pin<select bind:value={sightingEvidencePinId}><option value="">No pin selected</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>{/if}
+      </div>
+      <label class="field">Limitations <small>one per line</small><textarea bind:value={sightingLimitations} maxlength="2000" rows="2"></textarea></label>
+      <button class="btn" type="submit">Record sighting</button>
+    </form>
+    {#if record.sightings.length}
+      <ol class="records">{#each [...record.sightings].reverse() as sighting}<li><strong>{sighting.state.replaceAll('_', ' ')} · {sighting.category}</strong><p>{sighting.source}</p><small>{sighting.sourceClass} source · {sighting.completeness} · {sighting.observedAt}</small>{#if sighting.limitations.length}<small>Limits: {sighting.limitations.join('; ')}</small>{/if}</li>{/each}</ol>
+    {/if}
+    {#if sightingChronology.length}
+      <section class="chronology" aria-labelledby={`sighting-chronology-${record.id}`}>
+        <div>
+          <strong id={`sighting-chronology-${record.id}`}>Observation chronology</strong>
+          <span>{countLabel(sightingChronology.length, 'source sequence')}</span>
+        </div>
+        <p>First and last observed describe retained evidence, not domain creation, activation, or removal. Review conclusions remain outside these ranges.</p>
+        <ol>
+          {#each sightingChronology as entry}
+            <li>
+              <div><strong>{entry.category}</strong><span>{entry.sourceClass} · {entry.completeness}</span></div>
+              <p>{entry.source}</p>
+              <dl>
+                <div><dt>First observed</dt><dd>{entry.firstObservedAt}</dd></div>
+                <div><dt>Last observed</dt><dd>{entry.lastObservedAt}</dd></div>
+                <div><dt>Observations</dt><dd>{entry.observationCount}</dd></div>
+              </dl>
+              {#if entry.limitations.length}<small>Limits: {entry.limitations.join('; ')}</small>{/if}
+            </li>
+          {/each}
+        </ol>
+        {#if sightingReviewConclusionCount}
+          <small>{countLabel(sightingReviewConclusionCount, 'review conclusion')} retained separately and excluded from observed ranges.</small>
+        {/if}
+      </section>
     {/if}
   </details>
 
@@ -509,6 +585,7 @@
   textarea,input,select{width:100%}.field small{color:var(--muted)}
   .records{display:grid;gap:8px;margin:0;padding:0 12px 12px;list-style:none}.records li{padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .records strong,.records small{display:block}.records p{margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}.records small{color:var(--muted);font-size:var(--text-2xs)}
+  .chronology{display:grid;gap:8px;margin:0 12px 12px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.chronology>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}.chronology>div>span,.chronology>p,.chronology>small{color:var(--muted);font-size:var(--text-2xs)}.chronology>p{margin:0;line-height:1.5}.chronology ol{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:7px;margin:0;padding:0;list-style:none}.chronology li{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.chronology li>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px}.chronology li>div>strong{font:700 var(--text-xs) var(--mono);text-transform:capitalize}.chronology li>div>span,.chronology li>small{color:var(--muted);font-size:var(--text-2xs)}.chronology li>p{margin:6px 0;overflow-wrap:anywhere}.chronology dl{display:grid;gap:3px;margin:0}.chronology dl div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 8px}.chronology dt,.chronology dd{margin:0;font-size:var(--text-2xs)}.chronology dt{color:var(--muted)}.chronology dd{font-family:var(--mono);overflow-wrap:anywhere}
   .pin-references,.contacts{display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}
   .actions{display:flex;flex-wrap:wrap;gap:8px}.notice{margin:0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-xs)}
   .preflight{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.preflight>div{display:flex;align-items:center;justify-content:space-between;gap:8px}.preflight>p{margin:0;color:var(--muted);font-size:var(--text-2xs)}.preflight-state{padding:4px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.preflight .state-ready_for_review{color:var(--accent);border-color:rgb(var(--accent-rgb) / .4)}.preflight .state-review_cautions{color:var(--amber);border-color:rgb(var(--amber-rgb) / .4)}.preflight .state-needs_input{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}.preflight ul{display:grid;gap:5px;margin:0;padding:0;list-style:none}.preflight li{display:grid;grid-template-columns:minmax(110px,.35fr) minmax(0,1fr);gap:8px;padding:7px;border-left:3px solid var(--border);font-size:var(--text-2xs)}.preflight li[data-state="pass"]{border-color:var(--accent)}.preflight li[data-state="caution"]{border-color:var(--amber)}.preflight li[data-state="block"]{border-color:var(--danger)}.preflight li span{color:var(--muted);line-height:1.45}

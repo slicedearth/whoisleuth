@@ -3,13 +3,17 @@
   import { buildDisclosureRouteReview } from '$lib/analysis/disclosure-route-review.ts';
   import {
     buildCaseLifecycleEvents,
+    filterCaseLifecycleEvents,
     serializeCaseLifecycleCalendar,
   } from '$lib/analysis/case-lifecycle-calendar.ts';
 
   let { records }: { records: readonly CaseRecord[] } = $props();
   let message = $state('');
+  let kind = $state('all');
+  let window = $state('future');
   const routeReview = $derived(buildDisclosureRouteReview(records));
   const events = $derived(buildCaseLifecycleEvents(records));
+  const visibleEvents = $derived(filterCaseLifecycleEvents(events, { kind, window }));
 
   function downloadCalendar() {
     if (!events.length) return;
@@ -34,6 +38,24 @@
     <button type="button" class="btn" onclick={downloadCalendar} disabled={!events.length}>Export review calendar ({events.length})</button>
   </header>
   {#if message}<p class="message" role="status">{message}</p>{/if}
+  <fieldset class="timeline-filters">
+    <legend>Lifecycle review filters</legend>
+    <label class="field">Event type<select bind:value={kind}><option value="all">All review events</option><option value="action_due">Action due dates</option><option value="action_follow_up">Action follow-ups</option><option value="domain_expiry_review">Domain expiry reviews</option><option value="certificate_expiry_review">Certificate reviews</option><option value="disclosure_expiry_review">Disclosure reviews</option></select></label>
+    <label class="field">Time window<select bind:value={window}><option value="future">All upcoming</option><option value="30d">Next 30 days</option><option value="90d">Next 90 days</option><option value="overdue">Overdue</option><option value="all">All retained time</option></select></label>
+  </fieldset>
+  {#if visibleEvents.length}
+    <ol class="timeline" aria-label="Browser-local lifecycle review timeline">
+      {#each visibleEvents.slice(0, 24) as event}
+        <li>
+          <time datetime={event.startsAt}>{new Date(event.startsAt).toLocaleDateString()}</time>
+          <div><strong>{event.summary}</strong><p>{event.description}</p><small>{event.sourceLabel}</small><a href={`/monitor?view=cases&case=${encodeURIComponent(event.caseId)}`}>Open {event.domain}</a></div>
+        </li>
+      {/each}
+    </ol>
+    {#if visibleEvents.length > 24}<p class="note">Showing the next 24 of {visibleEvents.length} matching browser-local review events. Export includes all {events.length} retained events.</p>{/if}
+  {:else}
+    <p class="empty">No lifecycle review events match these filters.</p>
+  {/if}
   {#if routeReview.routes.length}
     <div class="route-grid">
       {#each routeReview.routes.slice(0, 12) as route}
@@ -63,6 +85,8 @@
   .route-grid span{color:var(--accent2);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.route-grid span.due{color:var(--warning)}
   .route-grid p,.route-grid small{display:block;margin-top:5px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.route-grid a{display:inline-block;margin-top:8px;font-size:var(--text-xs)}
   .message{color:var(--accent);font-size:var(--text-xs)}.empty,.note,.limitations{color:var(--muted);font-size:var(--text-xs)}.limitations{margin:0;padding-left:18px}
+  .timeline-filters{display:flex;flex-wrap:wrap;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md)}.timeline-filters legend{padding:0 5px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
+  .timeline{display:grid;gap:0;padding:0;margin:0;list-style:none}.timeline li{display:grid;grid-template-columns:minmax(96px,130px) minmax(0,1fr);gap:14px;padding:11px 0;border-top:1px solid var(--border)}.timeline li:first-child{border-top:0}.timeline time{color:var(--accent2);font:650 var(--text-xs) var(--mono)}.timeline strong,.timeline p,.timeline small,.timeline a{display:block;overflow-wrap:anywhere}.timeline p,.timeline small{margin-top:4px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}.timeline a{margin-top:6px;font-size:var(--text-xs)}
   @media(max-width:850px){.route-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:600px){.lifecycle>header{display:grid}.lifecycle>header button{width:100%}.route-grid{grid-template-columns:1fr}}
+  @media(max-width:600px){.lifecycle>header,.timeline-filters{display:grid}.lifecycle>header button,.timeline-filters select{width:100%}.route-grid{grid-template-columns:1fr}.timeline li{grid-template-columns:1fr;gap:4px}}
 </style>

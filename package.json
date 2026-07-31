@@ -3,7 +3,19 @@
   "version": "1.26.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Domain intelligence and brand-protection toolkit built on WHOIS/RDAP - lookups, bulk scans, availability/opportunity scoring, typosquat detection, and watchlist monitoring.",
+  "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
+  "keywords": [
+    "whois",
+    "rdap",
+    "dns",
+    "domain-intelligence",
+    "brand-protection",
+    "typosquatting",
+    "certificate-transparency",
+    "osint",
+    "threat-intelligence",
+    "asn"
+  ],
   "files": [
     "bin/**/*.mts",
     "cli/**/*.mts",
@@ -35,6 +47,7 @@
     "schema:inventory": "node tools/schema-inventory.mts",
     "deployment:self-check": "node tools/deployment-self-check.mts",
     "registry:drift": "node tools/registry-drift-audit.mts",
+    "rdap-extensions:drift": "node tools/rdap-extension-drift-audit.mts",
     "registry:fixtures": "node tools/registry-fixture-freshness.mts",
     "registry:fixture-scaffold": "node tools/registry-fixture-scaffold.mts",
     "unicode:confusables": "node tools/unicode-confusable-audit.mts",
@@ -42,14 +55,18 @@
     "technology:coverage-check": "node tools/technology-signature-benchmark.mts --require-reviewed",
     "technology:signature-scaffold": "node tools/technology-signature-scaffold.mts",
     "technology:fixture-review": "node tools/technology-fixture-review.mts",
+    "service-dependencies:audit": "node tools/service-dependency-signature-audit.mts",
     "study:first-use": "node tools/first-use-analyst-study.mts",
     "sslbl:snapshot": "node tools/sslbl-snapshot.mts",
     "sslbl:check": "node tools/sslbl-snapshot.mts --check-only",
     "sslbl:status": "node tools/sslbl-snapshot-status.mts",
+    "common-infrastructure:update": "node tools/common-infrastructure-snapshot.mts",
+    "common-infrastructure:check": "node tools/common-infrastructure-snapshot.mts --check-only",
     "lookup:transport-spike": "node tools/incremental-lookup-transport-spike.mts",
     "lookup:transport-qualify": "node tools/incremental-lookup-qualification.mts",
     "lookup:staging-evidence": "node tools/incremental-lookup-staging-evidence.mts",
     "frontend:loading-report": "node tools/frontend-loading-report.mts",
+    "frontend:authenticated-loading-report": "playwright test e2e/console-loading.spec.ts --workers=1",
     "benchmark:workflow": "node tools/specialist-workflow-benchmark.mts",
     "platform:local-data": "node tools/local-data-platform-evaluation.mts",
     "catalog:retire": "node tools/retire-browser-catalog.mts",
@@ -64,11 +81,12 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@netlify/blobs": "10.1.0",
+    "@netlify/blobs": "10.7.9",
     "express": "^5.2.1",
+    "fflate": "0.8.3",
     "parse5": "^8.0.1",
     "tldts": "^7.4.9",
-    "undici": "^8.5.0"
+    "undici": "^8.7.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

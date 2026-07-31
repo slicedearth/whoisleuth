@@ -8,11 +8,13 @@ import {
   appendCaseEvidencePin,
   appendCaseEvidencePins,
   appendCaseManualTrailEvent,
+  appendCaseSighting,
   normalizeCaseActions,
   normalizeCaseAssertions,
   normalizeCaseDecisions,
   normalizeCaseEvidencePins,
   normalizeCaseManualTrail,
+  normalizeCaseSightings,
   updateCaseAction,
   updateCaseAssertion,
   type CaseActionRecord,
@@ -144,6 +146,7 @@ export function normalizeCase(
     actions: normalizeCaseActions(record.actions, updatedAt),
     assertions: normalizeCaseAssertions(record.assertions, updatedAt, pinIds),
     manualTrail: normalizeCaseManualTrail(record.manualTrail, updatedAt),
+    sightings: normalizeCaseSightings(record.sightings, updatedAt, pinIds),
     createdAt,
     updatedAt,
   };
@@ -160,6 +163,12 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   if (!domain) throw new Error('A valid domain is required to open a case.');
   const noteBody = normalizeNoteBody(input.note);
   const source = normalizeSource(input.source);
+  const evidencePins = input.evidencePins !== undefined
+    ? appendCaseEvidencePins([], input.evidencePins, now)
+    : input.evidencePin !== undefined
+      ? appendCaseEvidencePin([], input.evidencePin, now)
+      : [];
+  const pinIds = new Set(evidencePins.map((item) => item.id));
   return {
     id: makeId(),
     domain,
@@ -172,11 +181,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       source: inferCaptureSource(source),
       fallback: now,
     }),
-    evidencePins: input.evidencePins !== undefined
-      ? appendCaseEvidencePins([], input.evidencePins, now)
-      : input.evidencePin !== undefined
-        ? appendCaseEvidencePin([], input.evidencePin, now)
-        : [],
+    evidencePins,
     decisions: input.decision !== undefined
       ? appendCaseDecision([], input.decision, now)
       : [],
@@ -188,6 +193,9 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       : [],
     manualTrail: input.trailEvent !== undefined
       ? appendCaseManualTrailEvent([], input.trailEvent, now)
+      : [],
+    sightings: input.sighting !== undefined
+      ? appendCaseSighting([], input.sighting, now, pinIds)
       : [],
     createdAt: now,
     updatedAt: now,
@@ -286,6 +294,10 @@ export function updateCase(
   if (patch.trailEvent !== undefined) {
     manualTrail = appendCaseManualTrailEvent(current.manualTrail, patch.trailEvent, now);
   }
+  let sightings = current.sightings;
+  if (patch.sighting !== undefined) {
+    sightings = appendCaseSighting(current.sightings, patch.sighting, now, pinIds);
+  }
   const record: CaseRecord = {
     ...current,
     status: patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
@@ -298,6 +310,7 @@ export function updateCase(
     actions,
     assertions,
     manualTrail,
+    sightings,
     notes,
     updatedAt: now,
   };

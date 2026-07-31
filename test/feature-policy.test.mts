@@ -42,6 +42,15 @@ describe('network feature policy', () => {
     assert.match(decision.reason, /DNS intelligence is disabled/i);
   });
 
+  test('disables nameserver search when RDAP is disabled', () => {
+    const policy = networkFeaturePolicy({ WHOISLEUTH_DISABLE_RDAP: 'true' });
+    const decision = featureDecision('rdap_nameserver_search', policy);
+    assert.equal(decision.enabled, false);
+    assert.equal(decision.feature, 'rdap_nameserver_search');
+    assert.equal(decision.disabledBy, 'rdap');
+    assert.match(decision.reason, /RDAP is disabled/iu);
+  });
+
   test('returns a stable bounded disabled response without exposing environment names', () => {
     const policy = networkFeaturePolicy({ WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY: 'on' });
     const payload = requiredValue(featureDisabledError('certificate_transparency', policy));

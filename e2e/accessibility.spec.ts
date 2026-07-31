@@ -115,6 +115,9 @@ test('scans representative public initial, error, populated, and expanded states
   await expectNoAccessibilityViolations(page, testInfo, 'public-initial-dark-desktop');
   await expectSequentialHeadingOrder(page);
 
+  await page.goto('/resources/rdap-vs-whois');
+  await expectNoAccessibilityViolations(page, testInfo, 'public-resource-dark-desktop');
+
   await page.goto('/demo');
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await page.evaluate(() => sessionStorage.setItem('whoisleuth:synthetic-demo:v1', '{malformed'));

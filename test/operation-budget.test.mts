@@ -28,6 +28,7 @@ describe('network operation classification', () => {
     assert.equal(operationClassFor('lookup'), OPERATION_CLASSES.REGISTRY_DEEP);
     assert.equal(operationClassFor('availability', { fast: true }), OPERATION_CLASSES.REGISTRY_LIGHT);
     assert.equal(operationClassFor('rdap'), OPERATION_CLASSES.REGISTRY_LIGHT);
+    assert.equal(operationClassFor('rdap_nameserver_search'), OPERATION_CLASSES.REGISTRY_LIGHT);
     assert.equal(operationClassFor('whois'), OPERATION_CLASSES.REGISTRY_DEEP);
     assert.equal(operationClassFor('certificate_transparency'), OPERATION_CLASSES.CERTIFICATE_SEARCH);
     assert.equal(operationClassFor('domain_posture'), OPERATION_CLASSES.POSTURE_AUDIT);
@@ -43,6 +44,7 @@ describe('network operation classification', () => {
     assert.equal(operationFeatureFor('availability', { fast: true }), OPERATION_FEATURES.AVAILABILITY_FAST);
     assert.equal(operationFeatureFor('availability'), OPERATION_FEATURES.AVAILABILITY_DEEP);
     assert.equal(operationFeatureFor('rdap'), OPERATION_FEATURES.RDAP);
+    assert.equal(operationFeatureFor('rdap_nameserver_search'), OPERATION_FEATURES.RDAP_NAMESERVER_SEARCH);
     assert.equal(operationFeatureFor('whois'), OPERATION_FEATURES.WHOIS);
     assert.equal(operationFeatureFor('certificate_transparency'), OPERATION_FEATURES.CERTIFICATE_TRANSPARENCY);
     assert.equal(operationFeatureFor('domain_posture'), OPERATION_FEATURES.DOMAIN_POSTURE);
@@ -57,6 +59,10 @@ describe('network operation classification', () => {
     assert.deepEqual(operationBudgetTargetFor('lookup'), {
       operationFeature: OPERATION_FEATURES.LOOKUP_DEEP,
       operationClass: OPERATION_CLASSES.REGISTRY_DEEP,
+    });
+    assert.deepEqual(operationBudgetTargetFor('rdap_nameserver_search'), {
+      operationFeature: OPERATION_FEATURES.RDAP_NAMESERVER_SEARCH,
+      operationClass: OPERATION_CLASSES.REGISTRY_LIGHT,
     });
     assert.equal(operationBudgetTargetFor('not-implemented'), null);
     assert.deepEqual(normalizeOperationBudgetTarget('custom_class'), {

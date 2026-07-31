@@ -134,6 +134,18 @@
             {#if dependency.signatureReviewedAt || dependency.signatureProvenance}
               <p>{dependency.signatureProvenance ?? 'Reviewed local service catalogue'}{dependency.signatureReviewedAt ? ` · reviewed ${dependency.signatureReviewedAt}` : ''}</p>
             {/if}
+            {#if dependency.signatureSource || dependency.signatureLicense || dependency.signatureCatalogDigestSha256}
+              <details class="signature-context">
+                <summary>Signature provenance</summary>
+                <dl>
+                  {#if dependency.signatureSource}<div><dt>Source</dt><dd>{dependency.signatureSource}</dd></div>{/if}
+                  {#if dependency.signatureLicense}<div><dt>Licence</dt><dd>{dependency.signatureLicense}</dd></div>{/if}
+                  {#if dependency.signatureEvidenceTypes?.length}<div><dt>Evidence</dt><dd>{dependency.signatureEvidenceTypes.map((item) => item.replaceAll('_', ' ')).join(', ')}</dd></div>{/if}
+                  {#if dependency.signatureSourceDate}<div><dt>Source date</dt><dd>{dependency.signatureSourceDate}{dependency.signatureReviewAgeDays === undefined ? '' : ` · ${dependency.signatureReviewAgeDays} days old`}</dd></div>{/if}
+                  {#if dependency.signatureCatalogDigestSha256}<div><dt>Catalogue digest</dt><dd><code>{dependency.signatureCatalogDigestSha256}</code></dd></div>{/if}
+                </dl>
+              </details>
+            {/if}
             <p class="qualification">{dependency.qualification.replaceAll('_', ' ')}</p>
             {#if dependency.scope !== 'unspecified'}
               <p class:scope-match={dependency.scope === 'authorized'} class="scope-state">
@@ -186,6 +198,14 @@
   article p.scope-state{color:var(--amber);font-family:var(--mono);text-transform:uppercase}
   article p.scope-state.scope-match{color:var(--cyan)}
   article small{display:block;margin-top:7px;color:var(--muted);font:var(--text-2xs) var(--mono)}
+  .signature-context{margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
+  .signature-context>summary{cursor:pointer;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .signature-context>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .signature-context dl{display:grid;gap:5px;margin:7px 0 0}
+  .signature-context dl div{display:grid;grid-template-columns:minmax(72px,.35fr) minmax(0,1fr);gap:7px}
+  .signature-context dt,.signature-context dd{margin:0;color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
+  .signature-context dt{font-family:var(--mono);font-weight:700}
+  .signature-context code{margin:0;font-size:var(--text-2xs)}
   .next-steps{padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .next-steps h5{margin:0;font:700 var(--text-xs) var(--mono)}
   .next-steps ol,.limits ul{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.55}

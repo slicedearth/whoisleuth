@@ -91,6 +91,7 @@ function rdapEventDate(events: UnknownRecord[], action: string): string | null {
 type AvailabilityOptions = {
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
+  includeInheritedCaa?: boolean;
   includeCredentialSurfaceProfile?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
@@ -661,11 +662,15 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     dnsIntelligenceEnabled
       ? collectDns(domain, {
           includeExtendedContext: options.includeExtendedDnsContext === true,
+          includeInheritedCaa: options.includeInheritedCaa === true,
           registryEvidence: registryDnsEvidence,
         })
       : Promise.resolve(skippedDnsIntelligence(
           'DNS intelligence is disabled by deployment policy.',
-          { includeExtendedContext: options.includeExtendedDnsContext === true },
+          {
+            includeExtendedContext: options.includeExtendedDnsContext === true,
+            includeInheritedCaa: options.includeInheritedCaa === true,
+          },
         )),
     tlsIntelligenceEnabled
       ? collectTls(domain)

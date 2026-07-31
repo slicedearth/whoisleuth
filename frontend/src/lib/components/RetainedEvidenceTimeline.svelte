@@ -57,14 +57,14 @@
       <h2 id="retained-evidence-timeline-title">Investigation timeline</h2>
       <p>Review when retained evidence was observed and when this browser stored it. Open an owner to inspect exact values, limitations, and analyst context.</p>
     </div>
-    <div class="metrics" aria-label="Timeline summary">
+    <div class="metrics" role="group" aria-label="Timeline summary">
       <span><strong>{timeline.counts.all}</strong> retained events</span>
       <span><strong>{timeline.counts.change}</strong> changes</span>
       <span><strong>{timeline.freshnessCounts.stale}</strong> stale</span>
     </div>
   </header>
 
-  <div class="filters" aria-label="Timeline filters">
+  <div class="filters" role="group" aria-label="Timeline filters">
     <label>Entity<select bind:value={entity} onchange={resetPage}><option value="">All entities</option>{#each timeline.entities as option}<option value={option}>{option}</option>{/each}</select></label>
     <label>Case<select bind:value={caseId} onchange={resetPage}><option value="">All cases</option>{#each timeline.cases as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
     <label>Source<select bind:value={source} onchange={resetPage}><option value="">All sources</option>{#each timeline.sources as option}<option value={option}>{option}</option>{/each}</select></label>

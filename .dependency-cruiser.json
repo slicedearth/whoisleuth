@@ -12,6 +12,17 @@
       }
     },
     {
+      "name": "production-no-orphans",
+      "severity": "error",
+      "comment": "Shared and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
+      "from": {
+        "path": "^(?:frontend/src/lib|lib)/",
+        "pathNot": "^(?:frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
+        "orphan": true
+      },
+      "to": {}
+    },
+    {
       "name": "frontend-no-server-only",
       "severity": "error",
       "comment": "Browser code must not reach server networking, secrets, authentication, filesystem, CLI, or function modules.",
@@ -61,7 +72,7 @@
       },
       "to": {
         "couldNotResolve": true,
-        "pathNot": "^(?:\\$app/|svelte/internal/)"
+        "pathNot": "^(?:\\$app/|svelte/internal/|@sveltejs/kit$)"
       }
     }
   ],

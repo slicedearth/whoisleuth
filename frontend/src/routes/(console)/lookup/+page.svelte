@@ -8,9 +8,13 @@
   import LookupAssessment from '$lib/components/LookupAssessment.svelte';
   import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
   import LookupActivationContext from '$lib/components/LookupActivationContext.svelte';
+  import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
   import LookupBrandMimicryReview from '$lib/components/LookupBrandMimicryReview.svelte';
   import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
-  import LookupEvidenceCoverage from '$lib/components/LookupEvidenceCoverage.svelte';
+  import LookupDecisionSupport from '$lib/components/LookupDecisionSupport.svelte';
+  import LookupEvidenceQuality from '$lib/components/LookupEvidenceQuality.svelte';
+  import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
+  import LookupCertificatePolicyReview from '$lib/components/LookupCertificatePolicyReview.svelte';
   import LookupCredentialSurfaceProfile from '$lib/components/LookupCredentialSurfaceProfile.svelte';
   import LookupDnsEvidence from '$lib/components/LookupDnsEvidence.svelte';
   import LookupExternalIntelligence from '$lib/components/LookupExternalIntelligence.svelte';
@@ -35,7 +39,6 @@
   import RegistryAccessNotice from '$lib/components/RegistryAccessNotice.svelte';
   import LookupCaseResponse from '$lib/components/LookupCaseResponse.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
-  import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, profileSignals as matchProfileSignals, type BrandProfile } from '$lib/brand-profiles';
   import { dispositionLabel as caseDispositionLabel, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
@@ -51,6 +54,17 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { compactHttpObservation } from '$lib/analysis/http-summary.ts';
   import { buildLookupEvidenceCoverageLedger } from '$lib/analysis/evidence-coverage-ledger.ts';
+  import { buildLookupAssetGraph } from '$lib/analysis/lookup-asset-graph.ts';
+  import { buildCertificatePolicyReview } from '$lib/analysis/certificate-policy-review.ts';
+  import {
+    buildLookupInvestigationBrief,
+    formatLookupInvestigationBriefMarkdown,
+    lookupInvestigationBriefFilename,
+  } from '$lib/analysis/lookup-investigation-brief.ts';
+  import {
+    buildLookupDecisionSupport,
+    buildLookupEvidenceQualityMatrix,
+  } from '$lib/analysis/lookup-decision-support.ts';
   import { buildLookupSourceRefreshPlan } from '$lib/analysis/lookup-source-refresh.ts';
   import { buildLookupCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { buildAnalystEvidencePivots } from '$lib/analysis/analyst-evidence-pivots.ts';
@@ -87,6 +101,7 @@
   import {
     normalizeLookupEvidenceDensity,
     normalizeLookupTaskView,
+    lookupTaskInitiallyExpands,
     readLookupPresentation,
     writeLookupPresentation,
     type LookupEvidenceDensity,
@@ -114,6 +129,14 @@
 
   type ScoreExplanation = { modelVersion?:number; score:number; factors:Array<{label:string;delta:number}> }|null;
   type LookupMode = 'fast' | 'deep';
+
+  function latestIsoTimestamp(...values: unknown[]): string | null {
+    const timestamps = values
+      .flatMap((value) => Array.isArray(value) ? value : [value])
+      .map((value) => typeof value === 'string' ? Date.parse(value) : Number.NaN)
+      .filter(Number.isFinite);
+    return timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
+  }
 
   let query=$state('');
   let lookupMode=$state<LookupMode>('deep');
@@ -216,6 +239,54 @@
   const whoisContactsByRole=$derived(rec(whoisParsed.contactsByRole));
   const rdapDiagnostic=$derived(rec(diagnostics.rdap));
   const whoisDiagnostic=$derived(rec(diagnostics.whois));
+  const lookupObservedAt=$derived(latestIsoTimestamp(
+    result?.observedAt,
+    result?.fetchedAt,
+    rdapDiagnostic.fetchedAt,
+    whoisDiagnostic.queriedAt,
+    registrarRdap.fetchedAt,
+    reverseDns.observedAt,
+    observedNetworkContext.observedAt,
+    observedNetworkRdap.fetchedAt,
+    dnsEvidence.observedAt,
+    httpEvidence.observedAt,
+    tlsEvidence.observedAt,
+    pageIdentity.observedAt,
+    technologyProfile.observedAt,
+    pageRoleProfile.observedAt,
+    clientBehaviorProfile.observedAt,
+    securityPosture.observedAt,
+    securityTxt.observedAt,
+    sslbl.observedAt,
+    threatIntelligenceProviders.map((provider)=>rec(provider).observedAt),
+  ));
+  const evidenceObservedAtById=$derived.by(()=>{
+    const output:Record<string,unknown>={
+      rdap:rdapDiagnostic.fetchedAt,
+      whois:whoisDiagnostic.queriedAt,
+      availability:latestIsoTimestamp(dnsEvidence.observedAt,httpEvidence.observedAt,tlsEvidence.observedAt),
+      'registrar-rdap':registrarRdap.fetchedAt,
+      'reverse-dns':reverseDns.observedAt,
+      'network-context':latestIsoTimestamp(observedNetworkContext.observedAt,observedNetworkRdap.fetchedAt),
+      dns:dnsEvidence.observedAt,
+      http:httpEvidence.observedAt,
+      tls:tlsEvidence.observedAt,
+      'page-identity':latestIsoTimestamp(pageIdentity.observedAt,httpEvidence.observedAt),
+      technology:latestIsoTimestamp(technologyProfile.observedAt,httpEvidence.observedAt),
+      'page-role':latestIsoTimestamp(pageRoleProfile.observedAt,httpEvidence.observedAt),
+      'client-behavior':latestIsoTimestamp(clientBehaviorProfile.observedAt,httpEvidence.observedAt),
+      'security-posture':latestIsoTimestamp(securityPosture.observedAt,httpEvidence.observedAt,tlsEvidence.observedAt),
+      'security-txt':securityTxt.observedAt,
+      'sslbl-certificate':sslbl.observedAt,
+    };
+    for(const providerValue of threatIntelligenceProviders){
+      const provider=rec(providerValue);
+      const identity=rec(provider.provider);
+      const id=String(identity.id||'').trim();
+      if(id)output[`external-${id}`]=provider.observedAt;
+    }
+    return output;
+  });
   const populatedWhoisRoles=$derived(whoisRoleOrder.filter((role)=>records(whoisContactsByRole[role]).length>0));
   const comparison=$derived(result?.type==='domain'?compareRegistrySources(rdapParsed,whoisParsed,{rdapStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,whoisStatus:typeof whoisDiagnostic.status==='string'?whoisDiagnostic.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,rdap_only:0,whois_only:0,rdap_redacted:0,whois_redacted:0,rdap_unavailable:0,whois_unavailable:0,rdap_incomplete:0,whois_incomplete:0}});
   const registrarPublicationComparison=$derived(result?.type==='domain'?compareRdapPublications(rdapParsed,registrarRdapParsed,{registryStatus:typeof rdapDiagnostic.status==='string'?rdapDiagnostic.status:undefined,registrarStatus:typeof registrarRdap.status==='string'?registrarRdap.status:undefined}):{fields:[],counts:{equivalent:0,conflict:0,registry_only:0,registrar_only:0,registry_redacted:0,registrar_redacted:0,registry_unavailable:0,registrar_unavailable:0,registry_incomplete:0,registrar_incomplete:0}});
@@ -341,6 +412,50 @@
     securityPosture,
     securityPostureSummary,
   }));
+  const desiredCertificateBaseline=$derived(
+    profile?.desiredPostureBaselines.find((item)=>item.domain===caseDomain)??null,
+  );
+  const certificatePolicyReview=$derived(buildCertificatePolicyReview({
+    observedAt:lookupObservedAt,
+    dnsEvidence,
+    dnsRecords,
+    tlsEvidence,
+    tlsIssuer,
+    tlsPublicKey,
+    tlsAltNames,
+    baseline:desiredCertificateBaseline,
+  }));
+  const lookupAssetGraph=$derived(buildLookupAssetGraph({
+    target:caseDomain,
+    observedAt:lookupObservedAt,
+    rdapEvidence:rdap,
+    rdapParsed,
+    dnsEvidence,
+    dnsRecords,
+    observedNetworkContext,
+    observedNetworkEndpoint,
+    observedNetwork,
+    httpEvidence,
+    tlsEvidence,
+    tlsCertificate,
+    tlsAuthorization,
+    tlsHostname,
+    tlsAltNames,
+    tlsPublicKey,
+    tlsIssuer,
+    pageCanonical,
+    pageOpenGraphUrl,
+    pageForms,
+    pageResources,
+    pageIdentity,
+    structuredDataIdentity,
+    certificatePolicyReview,
+    profileDomains:{
+      official:profile?.officialDomains??[],
+      partner:profile?.approvedPartnerDomains??[],
+      allowlisted:profile?.allowlistedDomains??[],
+    },
+  }));
   const analystEvidencePivots=$derived(buildAnalystEvidencePivots({
     type:result?.type,
     query:result?.query,
@@ -356,7 +471,7 @@
     registryExpires:lifecycleDates.expires,
     tlsValidFrom:tlsCertificate.validFrom,
     tlsValidTo:tlsCertificate.validTo,
-    observedAt:typeof result?.fetchedAt==='string'?result.fetchedAt:typeof rdapDiagnostic.fetchedAt==='string'?rdapDiagnostic.fetchedAt:typeof whoisDiagnostic.queriedAt==='string'?whoisDiagnostic.queriedAt:null,
+    observedAt:lookupObservedAt,
     dnsStatus:dnsEvidence.status,
     dnsComplete:dnsEvidence.complete,
     hasMx:availability.hasMx,
@@ -382,7 +497,7 @@
     authorizedScope:serviceDependencyScope,
     falsePositiveTargets:serviceDependencyFalsePositives,
     pageTitle:pageIdentity.title,
-    observedAt:result?.fetchedAt,
+    observedAt:lookupObservedAt,
   }));
   const evidenceCoverage=$derived(buildLookupEvidenceCoverageLedger({
     targetType:result?.type,
@@ -408,8 +523,30 @@
   }));
   const lookupSourceRefreshPlan=$derived(buildLookupSourceRefreshPlan(
     evidenceCoverage,
-    result?.fetchedAt,
+    lookupObservedAt,
   ));
+  const lookupDecisionSupport=$derived(buildLookupDecisionSupport({
+    task:taskView,
+    coverage:evidenceCoverage,
+    refreshPlan:lookupSourceRefreshPlan,
+    registryComparison:comparison,
+    registrarPublicationComparison,
+    requestedHost:result?.inputHostname||result?.registrableDomain||result?.query,
+    registrableDomain:result?.registrableDomain,
+    finalUrl:httpEvidence.finalUrl,
+    canonicalUrl:pageCanonical.url,
+    openGraphUrl:pageOpenGraphUrl.url,
+    tlsAuthorization,
+    certificatePolicyReview,
+    hasCaseSection,
+  }));
+  const evidenceQualityMatrix=$derived(buildLookupEvidenceQualityMatrix({
+    coverage:evidenceCoverage,
+    refreshPlan:lookupSourceRefreshPlan,
+    timing:lookupTiming,
+    observedAt:lookupObservedAt,
+    observedAtByEvidence:evidenceObservedAtById,
+  }));
   const lookupSummary=$derived(buildLookupSummaryModel({
     availability,
     rdapParsed,
@@ -420,10 +557,19 @@
     diagnostics,
     profileSignals,
     idnAnalysis,
-    resultObservedAt:result?.fetchedAt,
+    resultObservedAt:lookupObservedAt,
     createdDate:lifecycleDates.created,
     expiresDate:lifecycleDates.expires,
     updatedDate:lifecycleDates.updated,
+  }));
+  const lookupInvestigationBrief=$derived(buildLookupInvestigationBrief({
+    target:result?.registrableDomain||result?.query,
+    targetType:result?.type,
+    task:taskView,
+    summary:lookupSummary,
+    decisionSupport:lookupDecisionSupport,
+    quality:evidenceQualityMatrix,
+    graph:lookupAssetGraph,
   }));
   const evidenceTopologyTarget=$derived({
     label:show(result?.registrableDomain||result?.query),
@@ -487,6 +633,20 @@
     caseRecord=next.record;
     caseStatus=next.status;
   }
+  async function copyInvestigationBrief(){
+    await copyDraft(formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief),'investigation brief');
+  }
+  async function recordInvestigationBriefHandoff(){
+    const next=await lookupCaseController.recordBriefHandoff(caseRecord,{
+      target:lookupInvestigationBrief.target,
+      taskLabel:lookupInvestigationBrief.taskLabel,
+      generatedAt:lookupInvestigationBrief.generatedAt,
+      contradictionCount:lookupInvestigationBrief.contradictions.length,
+      unknownCount:lookupInvestigationBrief.unknowns.length,
+    });
+    caseRecord=next.record;
+    caseStatus=next.status;
+  }
   function cancelLookup(){lookupRequestController.cancel();}
   function setEvidenceDensity(value:LookupEvidenceDensity){
     evidenceDensity=normalizeLookupEvidenceDensity(value);
@@ -523,11 +683,12 @@
     return buildLookupWebsiteSnapshot({
       id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       domain:caseDomain,
-      observedAt:typeof result?.fetchedAt==='string'?result.fetchedAt:now,
+      observedAt:lookupObservedAt||now,
       savedAt:now,
       lookupEvidenceDepth,
       technologyProfile,
       securityPosture,
+      tlsEvidence,
       baseline:observedPageBaseline,
       pageIdentity,
       technologyFindings:pageDisplay.technologyFindings,
@@ -537,6 +698,7 @@
   }
   function downloadEvidence(){if(!result)return;const body=JSON.stringify(buildLookupEvidence(result,{idnAnalysis}),null,2);const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);}
   function downloadReadableReport(){if(!result)return;const body=buildLookupReadableReport(result,{risk});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
+  function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks(){return buildLookupResultSectionLinks({
       hasWebEvidence,
@@ -617,9 +779,11 @@
   oncancel={cancelLookup}
 />
 
+<LookupEvidenceReplay />
+
 {#if result}
   <section class="result-root" id="result">
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} />
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
 
     <LookupPresentationControls density={evidenceDensity} task={taskView} setDensity={setEvidenceDensity} setTask={setTaskView} />
 
@@ -633,6 +797,12 @@
         <LookupAssessment detail={show(availability.detail||availability.state)} confidence={show(availability.confidence)} {risk} {opportunity} signals={[...lookupSummary.signals]} trusted={String(profileSignals.trusted||'')} />
       {/if}
 
+      <LookupDecisionSupport
+        support={lookupDecisionSupport}
+        onbriefcopy={copyInvestigationBrief}
+        onbriefhandoff={caseRecord ? recordInvestigationBriefHandoff : null}
+      />
+
       {#if sslbl.sslblVersion===1&&sslbl.verdict==='listed'}
         <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
           <div>
@@ -644,10 +814,6 @@
         </aside>
       {/if}
 
-      {#if lookupTiming}
-        <LookupCollectionTiming timing={lookupTiming} />
-      {/if}
-
       <EvidenceTopology
         id="lookup-evidence-topology"
         title="Evidence topology"
@@ -655,6 +821,8 @@
         target={evidenceTopologyTarget}
         nodes={evidenceTopologyNodes}
       />
+
+      <LookupAssetGraph graph={lookupAssetGraph} />
 
       <AnalystEvidencePivots pivots={analystEvidencePivots} />
 
@@ -665,15 +833,16 @@
         <LookupAcquisitionDueDiligence
           review={acquisitionDueDiligence}
           target={caseDomain}
-          observedAt={typeof result?.fetchedAt==='string'?result.fetchedAt:null}
+          observedAt={lookupObservedAt}
         />
       {/if}
 
-      <LookupEvidenceCoverage
-        ledger={evidenceCoverage}
+      <LookupEvidenceQuality
+        matrix={evidenceQualityMatrix}
         refreshPlan={lookupSourceRefreshPlan}
         query={String(result?.query || caseDomain)}
         depth={lookupEvidenceDepth}
+        timing={lookupTiming}
       />
 
       <LookupOverviewFacts facts={[...lookupSummary.facts]} diagnostics={[...lookupSummary.diagnostics]} hasAssessment={availability.applicable!==false} />
@@ -723,6 +892,7 @@
           rehearsalEvidence={dnsRehearsalEvidence}
           domain={caseDomain}
           allowRehearsal={result?.type === 'domain'}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'dns')}
           note="Point-in-time resolver evidence. HTTPS service-binding targets, aliases, ports, and address hints are displayed as publication evidence only; WHOISleuth does not follow or connect to them. Shared DNS infrastructure does not prove common ownership or maliciousness."
         /></div>
         {#if serviceDependencyReview}
@@ -738,11 +908,12 @@
       {/if}
 
       {#if httpEvidence.source==='http'}
-        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} /></div>
+        <div class="evidence-component" id="evidence-http"><LookupHttpEvidence status={statusLabel(show(httpEvidence.status))} complete={httpEvidence.complete!==false} rows={networkDisplay.httpRows} crossOriginRedirect={Boolean(httpEvidence.crossOriginRedirect)} httpsDowngrade={Boolean(httpEvidence.httpsDowngrade)} redirects={networkDisplay.httpRedirects} attempts={networkDisplay.httpAttempts} metadata={networkDisplay.httpMetadata} limitations={Array.isArray(httpEvidence.limitations)?httpEvidence.limitations.map(String):[]} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'http')} /></div>
       {/if}
 
       {#if tlsEvidence.source==='tls'}
-        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={typeof result.fetchedAt==='string'?result.fetchedAt:null} /></div>
+        <div class="evidence-component" id="evidence-tls"><LookupTlsEvidence status={statusLabel(show(tlsEvidence.status))} complete={tlsEvidence.complete!==false} rows={networkDisplay.tlsRows} findings={networkDisplay.tlsFindings} leafCertificate={networkDisplay.leafCertificate} alternativeNames={networkDisplay.alternativeNames} alternativeNamesTruncated={Boolean(tlsAltNames.truncated)} chain={networkDisplay.tlsChain} chainTruncated={Boolean(tlsEvidence.chainTruncated)} validationDetails={networkDisplay.tlsValidation} limitations={Array.isArray(tlsEvidence.limitations)?tlsEvidence.limitations.map(String):[]} validFrom={typeof tlsCertificate.validFrom==='string'?tlsCertificate.validFrom:null} validTo={typeof tlsCertificate.validTo==='string'?tlsCertificate.validTo:null} observedAt={lookupObservedAt} initiallyExpanded={lookupTaskInitiallyExpands(taskView,'tls')} /></div>
+        <div class="evidence-component"><LookupCertificatePolicyReview review={certificatePolicyReview} /></div>
       {/if}
 
       {#if sslbl.sslblVersion===1}
@@ -792,6 +963,7 @@
           trackingIdentifiers={pageDisplay.trackingIdentifiers}
           fingerprints={pageDisplay.fingerprints}
           limitations={stringList(pageIdentity.limitations)}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'page-identity')}
         /></div>
       {/if}
 
@@ -807,6 +979,7 @@
           methods={credentialSurface.methods}
           actions={credentialSurface.actions}
           limitations={pageDisplay.credentialSurfaceLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'credential-surface')}
         /></div>
       {/if}
 
@@ -817,6 +990,7 @@
           summary={pageDisplay.securityPostureSummary}
           findings={pageDisplay.securityPostureFindings}
           limitations={pageDisplay.securityPostureLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'security-posture')}
         /></div>
       {/if}
 
@@ -826,6 +1000,7 @@
           complete={Boolean(structuredDataIdentity.complete)}
           entities={pageDisplay.structuredIdentities}
           limitations={pageDisplay.structuredIdentityLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'structured-identity')}
         /></div>
       {/if}
 
@@ -841,6 +1016,7 @@
           libraryCatalog={boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version,80)}
           libraries={pageDisplay.browserLibraries}
           libraryLimitations={pageDisplay.browserLibraryLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'technology')}
         /></div>
       {/if}
 
@@ -903,6 +1079,7 @@
           fetchedAt={dateTimeAttribute(observedNetworkRdap.fetchedAt)||''}
           rows={pageDisplay.observedNetworkRows}
           limitations={pageDisplay.observedNetworkLimitations}
+          initiallyExpanded={lookupTaskInitiallyExpands(taskView,'network-context')}
         /></div>
       {/if}
     </section>

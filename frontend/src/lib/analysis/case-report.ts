@@ -18,7 +18,7 @@ import { httpSecurityHeaderLabel } from './http-summary.ts';
 // ---------------------------------------------------------------------------
 
 export const CASE_REPORT_SCHEMA = 'whoisleuth.case-report';
-export const CASE_REPORT_SCHEMA_VERSION = 3;
+export const CASE_REPORT_SCHEMA_VERSION = 4;
 
 const APPLICATION_NAME = 'WHOISleuth';
 
@@ -79,6 +79,7 @@ type CaseReportJson = {
     actions: CaseRecord['actions'];
     assertions: CaseRecord['assertions'];
     manualTrail: CaseRecord['manualTrail'];
+    sightings: CaseRecord['sightings'];
   };
   limitations: string;
 };
@@ -300,6 +301,7 @@ export function buildCaseReport(
         } : {}),
       })),
       manualTrail: caseRecord.manualTrail.map((item) => ({ ...item })),
+      sightings: caseRecord.sightings.map((item) => ({ ...item, limitations: [...item.limitations] })),
     },
     limitations: LIMITATIONS_TEXT,
   };
@@ -468,8 +470,8 @@ function buildMarkdown(report: CaseReportJson): string {
   lines.push('## Analyst Decision Packet');
   lines.push('');
   const response = report.analystResponse;
-  if (!response.evidencePins.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length) {
-    lines.push('No evidence pins, structured assertions, decision records, case actions, or manual investigation steps recorded.');
+  if (!response.evidencePins.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length) {
+    lines.push('No evidence pins, source-qualified sightings, structured assertions, decision records, case actions, or manual investigation steps recorded.');
     lines.push('');
   } else {
     lines.push('### Evidence pins');
@@ -479,6 +481,16 @@ function buildMarkdown(report: CaseReportJson): string {
       lines.push(`- **${escapeMarkdownInline(pin.label)}:** ${escapeMarkdownInline(pin.value)}`);
       lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt)}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
       if (pin.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(pin.limitations.join('; '))}`);
+    }
+    lines.push('');
+    lines.push('### Source-qualified sightings');
+    lines.push('');
+    if (!response.sightings.length) lines.push('No source-qualified sightings recorded.');
+    for (const sighting of response.sightings) {
+      lines.push(`- **${escapeMarkdownInline(sighting.state.replaceAll('_', ' '))}:** ${escapeMarkdownInline(sighting.category)} (${escapeMarkdownInline(sighting.observedAt)})`);
+      lines.push(`  Source: ${escapeMarkdownInline(sighting.source)}; class ${escapeMarkdownInline(sighting.sourceClass)}; completeness ${escapeMarkdownInline(sighting.completeness)}.`);
+      if (sighting.evidencePinId) lines.push(`  Evidence pin: ${escapeMarkdownInline(sighting.evidencePinId)}`);
+      if (sighting.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(sighting.limitations.join('; '))}`);
     }
     lines.push('');
     for (const section of [

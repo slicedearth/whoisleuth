@@ -403,10 +403,19 @@ function dnsFindings(dnsValue: unknown, dnssecValue: unknown): PostureFinding[] 
   const records = record(dns.records);
   const diagnostics = record(dns.diagnostics);
   const caaDiagnostic = record(diagnostics.caa);
-  const caaAvailable = statusAvailable(dns, 'dns')
-    && typeof caaDiagnostic.status === 'string'
-    && ['success', 'not_found'].includes(caaDiagnostic.status);
-  const caaCount = Math.min(Array.isArray(records.caa) ? records.caa.length : 0, 16);
+  const caaPolicy = record(dns.caaPolicy);
+  const hasEffectivePolicy = caaPolicy.policyVersion === 1;
+  const caaAvailable = hasEffectivePolicy
+    ? caaPolicy.complete === true
+      && caaPolicy.truncated !== true
+      && typeof caaPolicy.status === 'string'
+      && ['success', 'not_found'].includes(caaPolicy.status)
+    : statusAvailable(dns, 'dns')
+      && typeof caaDiagnostic.status === 'string'
+      && ['success', 'not_found'].includes(caaDiagnostic.status);
+  const caaRecords = hasEffectivePolicy ? caaPolicy.records : records.caa;
+  const caaCount = Math.min(Array.isArray(caaRecords) ? caaRecords.length : 0, 16);
+  const caaSource = hasEffectivePolicy ? 'DNS effective CAA policy' : 'DNS CAA query';
   const findings: PostureFinding[] = [];
   const dnssec = dnssecState(dnssecValue);
 
@@ -428,16 +437,19 @@ function dnsFindings(dnsValue: unknown, dnssecValue: unknown): PostureFinding[] 
   findings.push(!caaAvailable
     ? finding(
       'caa_unavailable', 'domain controls', 'unavailable', 'neutral', 'CAA posture unavailable',
-      'The CAA query did not produce a conclusive response for this observation.', ['DNS CAA query'],
+      'The CAA query did not produce a conclusive response for this observation.', [caaSource],
     )
     : caaCount > 0
       ? finding(
         'caa_observed', 'domain controls', 'observed', 'configured', 'CAA records observed',
-        `${caaCount} bounded CAA record${caaCount === 1 ? ' was' : 's were'} observed. Record policy quality was not scored.`, ['DNS CAA query'],
+        `${caaCount} bounded CAA record${caaCount === 1 ? ' was' : 's were'} observed. Record policy quality was not scored.`, [caaSource],
       )
       : finding(
         'caa_absent', 'domain controls', 'observed_absence', 'review', 'CAA records not observed',
-        'The resolver returned no CAA record in this point-in-time query.', ['DNS CAA query'],
+        hasEffectivePolicy
+          ? 'The completed effective-policy walk returned no applicable CAA record in this point-in-time observation.'
+          : 'The resolver returned no CAA record in this point-in-time query.',
+        [caaSource],
       ));
   return findings;
 }

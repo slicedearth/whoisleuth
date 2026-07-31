@@ -148,6 +148,9 @@
             <div><dt>Sources</dt><dd>{cluster.sources.length || 'Unavailable'}</dd></div>
             <div><dt>Coverage</dt><dd>{cluster.truncated ? 'Partial' : cluster.complete === true ? 'Complete' : cluster.complete === false ? 'Partial' : 'Unknown'}</dd></div>
           </dl>
+          {#if cluster.infrastructureMatches.length}
+            <p class="catalogue-match"><strong>Known shared range</strong><span>{cluster.infrastructureMatches.map((match)=>match.sourceLabel).join(' · ')}</span></p>
+          {/if}
           <div class="cases">
             {#each cluster.cases as member}
               <span>{member.domain}<button type="button" onclick={() => splitCase(sourceClusterIdForCase(cluster.sourceClusterIds, member.id), member.id)} aria-label={`Split ${member.domain} from this review cluster`}>Split</button></span>
@@ -198,6 +201,7 @@
   dl div{min-width:0;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:3px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .cases{display:flex;flex-wrap:wrap;gap:6px}.cases span{display:inline-flex;align-items:center;max-width:100%;gap:5px;padding:4px 6px;border:1px solid var(--border);border-radius:999px;font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}.cases button,.dismiss{border:0;background:none;color:var(--muted);font:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer}.cases button:hover,.dismiss:hover{color:var(--accent)}
+  .catalogue-match{display:flex;flex-wrap:wrap;gap:5px 9px;margin:0;padding:8px 9px;border:1px solid color-mix(in srgb,var(--amber) 30%,var(--border));border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.catalogue-match strong{color:var(--text);font-family:var(--mono)}
   details summary{color:var(--muted);font-size:var(--text-xs);cursor:pointer}details ul{display:grid;gap:7px;margin:8px 0 0;padding-left:18px}details li{font-size:var(--text-xs)}details strong,details code,details small{display:block}details code{margin-top:2px;color:var(--accent);overflow-wrap:anywhere}details small{color:var(--muted)}
   .limitation,.limits p,.empty p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}.dismiss{justify-self:start;padding:0}
   .limits{margin-top:2px}.limits p{margin-top:6px}.empty h3{margin:0}.empty{padding:14px}

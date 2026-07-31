@@ -10,8 +10,12 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-si
 const { app } = await import('../server.mts');
 const {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PRERENDERED_HTML_FILE_OVERRIDES,
   PRERENDERED_ROUTES,
 } = await import('../lib/prerendered-routes.mts');
+const {
+  PUBLIC_RESOURCE_ROUTES,
+} = await import('../lib/public-resource-routes.mts');
 
 function routeSourcePages(directory: string): string[] {
   const files: string[] = [];
@@ -54,9 +58,16 @@ after(async () => {
 describe('canonical route redirects', () => {
   test('shared manifest covers every prerendered page source', () => {
     const sourceRoutes = routeSourcePages(join(process.cwd(), 'frontend', 'src', 'routes'))
-      .map(publicRouteForPage)
+      .flatMap((filename): string[] => {
+        const route = publicRouteForPage(filename);
+        return route === '/resources/[slug]' ? [...PUBLIC_RESOURCE_ROUTES] : [route];
+      })
       .sort();
     assert.deepEqual([...PRERENDERED_ROUTES].sort(), sourceRoutes);
+  });
+
+  test('declares the fixed prerendered file for the public resource hub', () => {
+    assert.deepEqual(PRERENDERED_HTML_FILE_OVERRIDES, [['/resources', 'resources.html']]);
   });
 
   test('redirect each allowlisted trailing-slash route to its fixed local path', async () => {

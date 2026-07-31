@@ -33,6 +33,7 @@ after(() => {
 const [
   { handler: lookupHandler },
   { handler: rdapHandler },
+  { handler: rdapNameserverSearchHandler },
   { handler: whoisHandler },
   { handler: availabilityHandler },
   { handler: certificateSearchHandler },
@@ -40,6 +41,7 @@ const [
 ] = await Promise.all([
   import('../netlify/functions/lookup.mts'),
   import('../netlify/functions/rdap.mts'),
+  import('../netlify/functions/rdap-nameserver-search.mts'),
   import('../netlify/functions/whois.mts'),
   import('../netlify/functions/availability.mts'),
   import('../netlify/functions/ct-search.mts'),
@@ -53,6 +55,7 @@ type DisabledNetworkHandlerEntry = readonly [string, string, NetworkHandler];
 const networkHandlers: NetworkHandlerEntry[] = [
   ['lookup', lookupHandler],
   ['rdap', rdapHandler],
+  ['RDAP nameserver search', rdapNameserverSearchHandler],
   ['whois', whoisHandler],
   ['availability', availabilityHandler],
   ['certificate search', certificateSearchHandler],
@@ -61,6 +64,7 @@ const networkHandlers: NetworkHandlerEntry[] = [
 const disabledNetworkHandlers: DisabledNetworkHandlerEntry[] = [
   ['lookup', 'WHOISLEUTH_DISABLE_LOOKUP', lookupHandler],
   ['rdap', 'WHOISLEUTH_DISABLE_RDAP', rdapHandler],
+  ['rdap_nameserver_search', 'WHOISLEUTH_DISABLE_RDAP_NAMESERVER_SEARCH', rdapNameserverSearchHandler],
   ['whois', 'WHOISLEUTH_DISABLE_WHOIS', whoisHandler],
   ['availability', 'WHOISLEUTH_DISABLE_AVAILABILITY', availabilityHandler],
   ['certificate_transparency', 'WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY', certificateSearchHandler],
@@ -128,6 +132,15 @@ describe('direct serverless network paths', () => {
     assert.equal(afterFailure, before);
   });
 
+  test('nameserver search rejects malformed input before registry discovery', async () => {
+    const response = await rdapNameserverSearchHandler({
+      headers: { cookie },
+      queryStringParameters: { nameserver: 'not a hostname', scope: 'co.uk' },
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'INVALID_RDAP_NAMESERVER_SEARCH');
+  });
+
   for (const [feature, environmentName, handler] of disabledNetworkHandlers) {
     test(`blocks disabled ${feature} before any upstream work can begin`, async () => {
       await withEnvironment(environmentName, '1', async () => {
@@ -155,6 +168,20 @@ describe('direct serverless network paths', () => {
       assert.equal(body.errorCode, 'FEATURE_DISABLED');
       assert.equal(body.feature, 'domain_posture');
       assert.equal(body.disabledBy, 'dns_intelligence');
+    });
+  });
+
+  test('enforces RDAP shutdown for direct nameserver searches', async () => {
+    await withEnvironment('WHOISLEUTH_DISABLE_RDAP', 'true', async () => {
+      const response = await rdapNameserverSearchHandler({
+        headers: { cookie },
+        queryStringParameters: { nameserver: 'ns1.infra.example', scope: 'example' },
+      });
+      assert.equal(response.statusCode, 503);
+      const body = JSON.parse(requiredValue(response.body));
+      assert.equal(body.errorCode, 'FEATURE_DISABLED');
+      assert.equal(body.feature, 'rdap_nameserver_search');
+      assert.equal(body.disabledBy, 'rdap');
     });
   });
 

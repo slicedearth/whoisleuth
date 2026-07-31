@@ -5,7 +5,9 @@
 // endpoints (rdap/whois/availability/ct-search/domain-posture) to stop a scripted flood
 // from hammering upstream registries, without breaking the documented
 // worst-case bulk scan (up to MAX_FAST_BULK_DOMAINS domains, client-driven
-// at the Bulk workspace's configured number of in-flight requests).
+// at the Bulk workspace's configured number of in-flight requests). Each
+// request class owns a separate bounded store so high-cardinality lookup
+// traffic cannot consume the login or hosted-management bucket budget.
 //
 // This is in-memory, so on server.mts (one long-lived process) it limits
 // globally; on Netlify Functions each container has its own memory, so it
@@ -22,35 +24,90 @@ type RateLimitDecision = {
   allowed: boolean;
   retryAfterSeconds?: number;
 };
+type RateLimitChecker = (
+  key: string,
+  now?: number,
+) => RateLimitDecision;
+type ScopedRateLimitCheckers = Readonly<{
+  login: RateLimitChecker;
+  api: RateLimitChecker;
+  scheduledMonitorManagement: RateLimitChecker;
+  prerenderedHtml: RateLimitChecker;
+}>;
 
-const buckets = new Map<string, RateLimitBucket>();
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
-let nextSweepAt = 0;
+const MAX_RATE_LIMIT_BUCKETS_PER_SCOPE = 4_096;
+const MAX_RATE_LIMIT_KEY_LENGTH = 160;
 
-function sweepExpiredBuckets(now: number): void {
-  if (now < nextSweepAt) return;
-  nextSweepAt = now + SWEEP_INTERVAL_MS;
-  for (const [key, bucket] of buckets) {
-    if (now >= bucket.resetAt) buckets.delete(key);
+function createRateLimitChecker(
+  config: Readonly<RateLimitConfig>,
+  maximumBuckets = MAX_RATE_LIMIT_BUCKETS_PER_SCOPE,
+): RateLimitChecker {
+  if (!Number.isSafeInteger(maximumBuckets) || maximumBuckets < 1) {
+    throw new Error('Rate-limit bucket capacity must be a positive safe integer.');
   }
+  const buckets = new Map<string, RateLimitBucket>();
+  let nextSweepAt = 0;
+
+  function sweepExpiredBuckets(now: number, force = false): void {
+    if (!force && now < nextSweepAt) return;
+    nextSweepAt = now + SWEEP_INTERVAL_MS;
+    for (const [key, bucket] of buckets) {
+      if (now >= bucket.resetAt) buckets.delete(key);
+    }
+  }
+
+  return (key, suppliedNow = Date.now()): RateLimitDecision => {
+    const { limit, windowMs } = config;
+    const now = Number.isFinite(suppliedNow) ? suppliedNow : Date.now();
+    sweepExpiredBuckets(now);
+    const bucket = buckets.get(key);
+
+    if (!bucket || now >= bucket.resetAt) {
+      if (!key || key.length > MAX_RATE_LIMIT_KEY_LENGTH) {
+        return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(windowMs / 1_000)) };
+      }
+      if (!bucket && buckets.size >= maximumBuckets) {
+        sweepExpiredBuckets(now, true);
+        if (buckets.size >= maximumBuckets) {
+          // A checker owns one fixed window, so insertion order also orders
+          // expiry. Evicting the oldest entry keeps memory bounded without
+          // turning table saturation into a lockout for every new identity.
+          // Under a high-cardinality flood, eviction can reset one retained
+          // identity's counter; this limiter is defense in depth rather than
+          // exact distributed accounting.
+          const oldestKey = buckets.keys().next().value;
+          if (typeof oldestKey === 'string') buckets.delete(oldestKey);
+        }
+      }
+      buckets.set(key, { count: 1, resetAt: now + windowMs });
+      return { allowed: true };
+    }
+
+    if (bucket.count >= limit) {
+      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000)) };
+    }
+
+    bucket.count += 1;
+    return { allowed: true };
+  };
 }
 
-function checkRateLimit(key: string, { limit, windowMs }: RateLimitConfig): RateLimitDecision {
-  const now = Date.now();
-  sweepExpiredBuckets(now);
-  const bucket = buckets.get(key);
-
-  if (!bucket || now >= bucket.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true };
-  }
-
-  if (bucket.count >= limit) {
-    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
-  }
-
-  bucket.count += 1;
-  return { allowed: true };
+function createScopedRateLimitCheckers(
+  maximumBucketsPerScope = MAX_RATE_LIMIT_BUCKETS_PER_SCOPE,
+): ScopedRateLimitCheckers {
+  return Object.freeze({
+    login: createRateLimitChecker(LOGIN_RATE_LIMIT, maximumBucketsPerScope),
+    api: createRateLimitChecker(API_RATE_LIMIT, maximumBucketsPerScope),
+    scheduledMonitorManagement: createRateLimitChecker(
+      SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
+      maximumBucketsPerScope,
+    ),
+    prerenderedHtml: createRateLimitChecker(
+      PRERENDERED_HTML_RATE_LIMIT,
+      maximumBucketsPerScope,
+    ),
+  });
 }
 
 // Expired buckets are swept lazily during rate-limit checks. This avoids an
@@ -139,14 +196,34 @@ const SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT: Readonly<RateLimitConfig> = {
   windowMs: 60 * 1000,
 };
 
+// The portable Express host serves one fixed prerendered HTML override through
+// a custom file response. Keep that inexpensive route separately bounded so a
+// file-request flood cannot consume login, API, or hosted-management buckets.
+const PRERENDERED_HTML_RATE_LIMIT: Readonly<RateLimitConfig> = {
+  limit: 600,
+  windowMs: 60 * 1000,
+};
+
+const scopedRateLimitCheckers = createScopedRateLimitCheckers();
+const checkLoginRateLimit = scopedRateLimitCheckers.login;
+const checkApiRateLimit = scopedRateLimitCheckers.api;
+const checkScheduledMonitorManagementRateLimit = scopedRateLimitCheckers.scheduledMonitorManagement;
+const checkPrerenderedHtmlRateLimit = scopedRateLimitCheckers.prerenderedHtml;
+
 export {
-  checkRateLimit,
+  checkLoginRateLimit,
+  checkApiRateLimit,
+  checkScheduledMonitorManagementRateLimit,
+  checkPrerenderedHtmlRateLimit,
+  createRateLimitChecker,
+  createScopedRateLimitCheckers,
   trustsForwardedHeaders,
   getForwardedProtocol,
   getClientIp,
   LOGIN_RATE_LIMIT,
   API_RATE_LIMIT,
   SCHEDULED_MONITOR_MANAGEMENT_RATE_LIMIT,
+  PRERENDERED_HTML_RATE_LIMIT,
 };
 
 export type {
@@ -154,5 +231,7 @@ export type {
   HeaderInput,
   RateLimitBucket,
   RateLimitConfig,
+  RateLimitChecker,
   RateLimitDecision,
+  ScopedRateLimitCheckers,
 };

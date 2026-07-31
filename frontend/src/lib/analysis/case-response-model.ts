@@ -9,6 +9,7 @@ export const MAX_CASE_DECISIONS = 30;
 export const MAX_CASE_ACTIONS = 50;
 export const MAX_CASE_ASSERTIONS = 50;
 export const MAX_CASE_MANUAL_TRAIL_EVENTS = 80;
+export const MAX_CASE_SIGHTINGS = 80;
 export const MAX_RESPONSE_LABEL_LENGTH = 80;
 export const MAX_RESPONSE_VALUE_LENGTH = 1000;
 export const MAX_RESPONSE_RATIONALE_LENGTH = 2000;
@@ -93,6 +94,39 @@ export type CaseAssertionExternalProvenance = {
 export const CASE_MANUAL_TRAIL_KINDS = ['pivot', 'review', 'handoff'] as const;
 export type CaseManualTrailKind = typeof CASE_MANUAL_TRAIL_KINDS[number];
 
+export const CASE_SIGHTING_STATES = [
+  'observed_by_deployment',
+  'reported_by_provider',
+  'analyst_confirmed',
+  'not_reproduced',
+  'expired',
+] as const;
+export type CaseSightingState = typeof CASE_SIGHTING_STATES[number];
+
+export const CASE_SIGHTING_CATEGORIES = [
+  'registration',
+  'delegation',
+  'certificate',
+  'mail',
+  'website',
+  'infrastructure',
+  'other',
+] as const;
+export type CaseSightingCategory = typeof CASE_SIGHTING_CATEGORIES[number];
+
+export type CaseSightingRecord = {
+  id: string;
+  state: CaseSightingState;
+  sourceClass: 'deployment' | 'provider' | 'analyst';
+  category: CaseSightingCategory;
+  source: string;
+  observedAt: string;
+  completeness: CasePinCompleteness;
+  evidencePinId: string | null;
+  limitations: string[];
+  createdAt: string;
+};
+
 export type CaseEvidencePin = {
   id: string;
   checkpointId: string | null;
@@ -161,7 +195,7 @@ export type CaseManualTrailEvent = {
 
 export type CaseInvestigationTrailItem = {
   id: string;
-  kind: 'assertion' | 'decision' | 'action' | 'manual';
+  kind: 'assertion' | 'decision' | 'action' | 'manual' | 'sighting';
   label: string;
   detail: string;
   createdAt: string;
@@ -198,6 +232,8 @@ const ASSERTION_STATES = new Set<string>(CASE_ASSERTION_STATES);
 const ASSERTION_EXTERNAL_FORMATS = new Set<string>(CASE_ASSERTION_EXTERNAL_FORMATS);
 const ASSERTION_EXTERNAL_ENTITY_TYPES = new Set<string>(CASE_ASSERTION_EXTERNAL_ENTITY_TYPES);
 const TRAIL_KINDS = new Set<string>(CASE_MANUAL_TRAIL_KINDS);
+const SIGHTING_STATES = new Set<string>(CASE_SIGHTING_STATES);
+const SIGHTING_CATEGORIES = new Set<string>(CASE_SIGHTING_CATEGORIES);
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -722,12 +758,94 @@ export function mergeCaseManualTrail(
   return normalizeCaseManualTrail([...local, ...imported], fallback);
 }
 
+function sightingSourceClass(state: CaseSightingState): CaseSightingRecord['sourceClass'] {
+  if (state === 'observed_by_deployment') return 'deployment';
+  if (state === 'reported_by_provider') return 'provider';
+  return 'analyst';
+}
+
+function normalizeCaseSighting(
+  raw: unknown,
+  fallback: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseSightingRecord | null {
+  const item = record(raw);
+  if (typeof item.state !== 'string' || !SIGHTING_STATES.has(item.state)) return null;
+  const state = item.state as CaseSightingState;
+  const source = text(item.source, MAX_RESPONSE_LABEL_LENGTH);
+  if (!source) return null;
+  const createdAt = iso(item.createdAt, fallback);
+  const evidencePinId = typeof item.evidencePinId === 'string'
+    && SAFE_ID_RE.test(item.evidencePinId)
+    && (!validPinIds || validPinIds.has(item.evidencePinId))
+    ? item.evidencePinId
+    : null;
+  return {
+    id: safeId(item.id, 'sighting', { state, source, createdAt }),
+    state,
+    sourceClass: sightingSourceClass(state),
+    category: typeof item.category === 'string' && SIGHTING_CATEGORIES.has(item.category)
+      ? item.category as CaseSightingCategory
+      : 'other',
+    source,
+    observedAt: iso(item.observedAt, createdAt),
+    completeness: typeof item.completeness === 'string' && COMPLETENESS.has(item.completeness)
+      ? item.completeness as CasePinCompleteness
+      : 'unknown',
+    evidencePinId,
+    limitations: limitations(item.limitations),
+    createdAt,
+  };
+}
+
+export function normalizeCaseSightings(
+  raw: unknown,
+  fallback: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseSightingRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const byId = new Map<string, CaseSightingRecord>();
+  for (const item of raw.slice(0, MAX_CASE_SIGHTINGS * 2)) {
+    const normalized = normalizeCaseSighting(item, fallback, validPinIds);
+    if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized);
+  }
+  return [...byId.values()]
+    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt) || left.id.localeCompare(right.id))
+    .slice(-MAX_CASE_SIGHTINGS);
+}
+
+export function appendCaseSighting(
+  current: readonly CaseSightingRecord[],
+  raw: unknown,
+  now: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseSightingRecord[] {
+  const item = record(raw);
+  const created = normalizeCaseSighting({
+    ...item,
+    id: freshId('sighting'),
+    createdAt: now,
+  }, now, validPinIds);
+  if (!created) throw new Error('A sighting requires a source and explicit source-qualified state.');
+  return normalizeCaseSightings([...current, created], now, validPinIds);
+}
+
+export function mergeCaseSightings(
+  local: readonly CaseSightingRecord[],
+  imported: readonly CaseSightingRecord[],
+  fallback: string,
+  validPinIds?: ReadonlySet<string>,
+): CaseSightingRecord[] {
+  return normalizeCaseSightings([...local, ...imported], fallback, validPinIds);
+}
+
 export function buildCaseInvestigationTrail(
   input: Readonly<{
     assertions?: readonly CaseAssertionRecord[];
     decisions?: readonly CaseDecisionRecord[];
     actions?: readonly CaseActionRecord[];
     manualTrail?: readonly CaseManualTrailEvent[];
+    sightings?: readonly CaseSightingRecord[];
   }>,
 ): CaseInvestigationTrailItem[] {
   return [
@@ -758,6 +876,13 @@ export function buildCaseInvestigationTrail(
       label: item.kind.replaceAll('_', ' '),
       detail: item.target ? `${item.summary} · ${item.target}` : item.summary,
       createdAt: item.createdAt,
+    })),
+    ...(input.sightings ?? []).map((item): CaseInvestigationTrailItem => ({
+      id: `sighting:${item.id}`,
+      kind: 'sighting',
+      label: `${item.state.replaceAll('_', ' ')} · ${item.category}`,
+      detail: `${item.source} · ${item.completeness}`,
+      createdAt: item.observedAt,
     })),
   ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || left.id.localeCompare(right.id));
 }

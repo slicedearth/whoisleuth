@@ -15,6 +15,10 @@ export type ServiceDependencySignature = Readonly<{
   id: string;
   label: string;
   targetSuffixes: readonly string[];
+  evidenceTypes?: readonly ('dns_target_suffix' | 'passive_page_title')[];
+  source?: string;
+  license?: string;
+  sourceDate?: string;
   reviewedAt?: string;
   provenance?: string;
   deprovisionPageTitles?: readonly string[];
@@ -28,6 +32,12 @@ export type ServiceDependency = Readonly<{
   scope: ServiceDependencyScope;
   signatureId?: string;
   serviceFamily?: string;
+  signatureEvidenceTypes?: readonly string[];
+  signatureSource?: string;
+  signatureLicense?: string;
+  signatureSourceDate?: string;
+  signatureCatalogDigestSha256?: string;
+  signatureReviewAgeDays?: number;
   signatureReviewedAt?: string;
   signatureProvenance?: string;
   state: ServiceDependencyState;
@@ -48,6 +58,10 @@ export type ServiceDependencyReview = Readonly<{
 }>;
 
 type UnknownRecord = Record<string, unknown>;
+type NormalizedServiceDependencySignature = ServiceDependencySignature & Readonly<{
+  catalogDigestSha256?: string;
+  reviewAgeDays?: number;
+}>;
 
 const HOSTNAME = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 const MAX_DEPENDENCIES = 20;
@@ -56,8 +70,12 @@ const MAX_SIGNATURES = 32;
 const MAX_SIGNATURE_SUFFIXES = 12;
 const MAX_DEPROVISION_TITLES = 8;
 const STALE_OBSERVATION_MS = 30 * 24 * 60 * 60 * 1_000;
+export const SERVICE_DEPENDENCY_SIGNATURE_MAX_AGE_DAYS = 180;
 const REVIEWED_SERVICE_PROVENANCE = 'Reviewed exact target-suffix and passive page-title catalogue';
 const REVIEWED_SERVICE_DATE = '2026-07-30';
+export const SERVICE_DEPENDENCY_SIGNATURE_SOURCE = 'Reviewed factual service-routing identifiers';
+export const SERVICE_DEPENDENCY_SIGNATURE_LICENSE = 'Factual interoperability identifiers; no source-page content redistributed';
+export const SERVICE_DEPENDENCY_SIGNATURE_CATALOG_DIGEST_SHA256 = 'c15282f1aef3f2a0422dd49dd592b8f8c91988aec47bbc2167dc0bd560f3c913';
 const GENERIC_DEPROVISION_TITLES = Object.freeze([
   'domain not configured',
   'no such app',
@@ -69,6 +87,10 @@ export const SERVICE_DEPENDENCY_SIGNATURES: readonly ServiceDependencySignature[
     id: 'static-site-service',
     label: 'Hosted static-site service',
     targetSuffixes: Object.freeze(['github.io', 'netlify.app', 'pages.dev', 'readthedocs.io', 'vercel.app']),
+    evidenceTypes: Object.freeze(['dns_target_suffix', 'passive_page_title'] as const),
+    source: SERVICE_DEPENDENCY_SIGNATURE_SOURCE,
+    license: SERVICE_DEPENDENCY_SIGNATURE_LICENSE,
+    sourceDate: REVIEWED_SERVICE_DATE,
     reviewedAt: REVIEWED_SERVICE_DATE,
     provenance: REVIEWED_SERVICE_PROVENANCE,
     deprovisionPageTitles: GENERIC_DEPROVISION_TITLES,
@@ -77,6 +99,10 @@ export const SERVICE_DEPENDENCY_SIGNATURES: readonly ServiceDependencySignature[
     id: 'application-platform',
     label: 'Hosted application platform',
     targetSuffixes: Object.freeze(['azurewebsites.net', 'herokudns.com', 'herokussl.com', 'onrender.com']),
+    evidenceTypes: Object.freeze(['dns_target_suffix', 'passive_page_title'] as const),
+    source: SERVICE_DEPENDENCY_SIGNATURE_SOURCE,
+    license: SERVICE_DEPENDENCY_SIGNATURE_LICENSE,
+    sourceDate: REVIEWED_SERVICE_DATE,
     reviewedAt: REVIEWED_SERVICE_DATE,
     provenance: REVIEWED_SERVICE_PROVENANCE,
     deprovisionPageTitles: GENERIC_DEPROVISION_TITLES,
@@ -85,6 +111,10 @@ export const SERVICE_DEPENDENCY_SIGNATURES: readonly ServiceDependencySignature[
     id: 'commerce-platform',
     label: 'Hosted commerce platform',
     targetSuffixes: Object.freeze(['bigcommerce.com', 'myshopify.com']),
+    evidenceTypes: Object.freeze(['dns_target_suffix', 'passive_page_title'] as const),
+    source: SERVICE_DEPENDENCY_SIGNATURE_SOURCE,
+    license: SERVICE_DEPENDENCY_SIGNATURE_LICENSE,
+    sourceDate: REVIEWED_SERVICE_DATE,
     reviewedAt: REVIEWED_SERVICE_DATE,
     provenance: REVIEWED_SERVICE_PROVENANCE,
     deprovisionPageTitles: GENERIC_DEPROVISION_TITLES,
@@ -93,6 +123,10 @@ export const SERVICE_DEPENDENCY_SIGNATURES: readonly ServiceDependencySignature[
     id: 'content-platform',
     label: 'Hosted content platform',
     targetSuffixes: Object.freeze(['pantheonsite.io', 'webflow.io']),
+    evidenceTypes: Object.freeze(['dns_target_suffix', 'passive_page_title'] as const),
+    source: SERVICE_DEPENDENCY_SIGNATURE_SOURCE,
+    license: SERVICE_DEPENDENCY_SIGNATURE_LICENSE,
+    sourceDate: REVIEWED_SERVICE_DATE,
     reviewedAt: REVIEWED_SERVICE_DATE,
     provenance: REVIEWED_SERVICE_PROVENANCE,
     deprovisionPageTitles: GENERIC_DEPROVISION_TITLES,
@@ -101,6 +135,10 @@ export const SERVICE_DEPENDENCY_SIGNATURES: readonly ServiceDependencySignature[
     id: 'delivery-platform',
     label: 'Content delivery service',
     targetSuffixes: Object.freeze(['cloudfront.net', 'fastly.net']),
+    evidenceTypes: Object.freeze(['dns_target_suffix', 'passive_page_title'] as const),
+    source: SERVICE_DEPENDENCY_SIGNATURE_SOURCE,
+    license: SERVICE_DEPENDENCY_SIGNATURE_LICENSE,
+    sourceDate: REVIEWED_SERVICE_DATE,
     reviewedAt: REVIEWED_SERVICE_DATE,
     provenance: REVIEWED_SERVICE_PROVENANCE,
     deprovisionPageTitles: GENERIC_DEPROVISION_TITLES,
@@ -109,6 +147,10 @@ export const SERVICE_DEPENDENCY_SIGNATURES: readonly ServiceDependencySignature[
     id: 'object-storage',
     label: 'Hosted object storage',
     targetSuffixes: Object.freeze(['storage.googleapis.com']),
+    evidenceTypes: Object.freeze(['dns_target_suffix', 'passive_page_title'] as const),
+    source: SERVICE_DEPENDENCY_SIGNATURE_SOURCE,
+    license: SERVICE_DEPENDENCY_SIGNATURE_LICENSE,
+    sourceDate: REVIEWED_SERVICE_DATE,
     reviewedAt: REVIEWED_SERVICE_DATE,
     provenance: REVIEWED_SERVICE_PROVENANCE,
     deprovisionPageTitles: GENERIC_DEPROVISION_TITLES,
@@ -163,8 +205,12 @@ function dependencyScope(target: string, authorizedScope: readonly string[]): Se
     : 'outside';
 }
 
-function normalizedSignatures(value: readonly ServiceDependencySignature[]): ServiceDependencySignature[] {
-  const signatures: ServiceDependencySignature[] = [];
+function normalizedSignatures(
+  value: readonly ServiceDependencySignature[],
+  now: number,
+  catalogDigestSha256 = '',
+): NormalizedServiceDependencySignature[] {
+  const signatures: NormalizedServiceDependencySignature[] = [];
   for (const candidate of value.slice(0, MAX_SIGNATURES)) {
     const id = typeof candidate.id === 'string' ? candidate.id.trim().slice(0, 80) : '';
     const label = typeof candidate.label === 'string' ? candidate.label.trim().slice(0, 120) : '';
@@ -172,6 +218,21 @@ function normalizedSignatures(value: readonly ServiceDependencySignature[]): Ser
       .slice(0, MAX_SIGNATURE_SUFFIXES);
     const reviewedAt = typeof candidate.reviewedAt === 'string' && Number.isFinite(Date.parse(candidate.reviewedAt))
       ? new Date(candidate.reviewedAt).toISOString().slice(0, 10)
+      : '';
+    const sourceDate = typeof candidate.sourceDate === 'string' && Number.isFinite(Date.parse(candidate.sourceDate))
+      ? new Date(candidate.sourceDate).toISOString().slice(0, 10)
+      : reviewedAt;
+    const evidenceTypes = [...new Set(
+      (Array.isArray(candidate.evidenceTypes) ? candidate.evidenceTypes : [])
+        .filter((item): item is 'dns_target_suffix' | 'passive_page_title' => (
+          item === 'dns_target_suffix' || item === 'passive_page_title'
+        )),
+    )];
+    const source = typeof candidate.source === 'string'
+      ? candidate.source.replace(/\s+/gu, ' ').trim().slice(0, 240)
+      : '';
+    const license = typeof candidate.license === 'string'
+      ? candidate.license.replace(/\s+/gu, ' ').trim().slice(0, 240)
       : '';
     const provenance = typeof candidate.provenance === 'string'
       ? candidate.provenance.replace(/\s+/gu, ' ').trim().slice(0, 240)
@@ -187,6 +248,14 @@ function normalizedSignatures(value: readonly ServiceDependencySignature[]): Ser
       id,
       label,
       targetSuffixes,
+      ...(catalogDigestSha256 ? { catalogDigestSha256 } : {}),
+      ...(evidenceTypes.length ? { evidenceTypes } : {}),
+      ...(source ? { source } : {}),
+      ...(license ? { license } : {}),
+      ...(sourceDate ? {
+        sourceDate,
+        reviewAgeDays: Math.max(0, Math.floor((now - Date.parse(sourceDate)) / 86_400_000)),
+      } : {}),
       ...(reviewedAt ? { reviewedAt } : {}),
       ...(provenance ? { provenance } : {}),
       ...(deprovisionPageTitles.length ? { deprovisionPageTitles } : {}),
@@ -197,8 +266,8 @@ function normalizedSignatures(value: readonly ServiceDependencySignature[]): Ser
 
 function serviceSignature(
   target: string,
-  signatures: readonly ServiceDependencySignature[],
-): ServiceDependencySignature | null {
+  signatures: readonly NormalizedServiceDependencySignature[],
+): NormalizedServiceDependencySignature | null {
   return signatures.find((candidate) => candidate.targetSuffixes.some(
     (suffix) => targetMatchesSuffix(target, suffix),
   )) ?? null;
@@ -209,7 +278,7 @@ function dependency(
   target: string,
   domain: string,
   authorizedScope: readonly string[],
-  signatures: readonly ServiceDependencySignature[],
+  signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
   falsePositiveTargets: ReadonlySet<string>,
   pageTitle: string,
@@ -262,6 +331,14 @@ function dependency(
     ...(signature ? {
       signatureId: signature.id,
       serviceFamily: signature.label,
+      ...(signature.evidenceTypes?.length ? { signatureEvidenceTypes: signature.evidenceTypes } : {}),
+      ...(signature.source ? { signatureSource: signature.source } : {}),
+      ...(signature.license ? { signatureLicense: signature.license } : {}),
+      ...(signature.sourceDate ? { signatureSourceDate: signature.sourceDate } : {}),
+      ...(signature.catalogDigestSha256 ? {
+        signatureCatalogDigestSha256: signature.catalogDigestSha256,
+      } : {}),
+      ...(signature.reviewAgeDays !== undefined ? { signatureReviewAgeDays: signature.reviewAgeDays } : {}),
       ...(signature.reviewedAt ? { signatureReviewedAt: signature.reviewedAt } : {}),
       ...(signature.provenance ? { signatureProvenance: signature.provenance } : {}),
     } : {}),
@@ -291,7 +368,7 @@ function cnameDependencies(
   raw: unknown,
   domain: string,
   authorizedScope: readonly string[],
-  signatures: readonly ServiceDependencySignature[],
+  signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
   falsePositiveTargets: ReadonlySet<string>,
   pageTitle: string,
@@ -316,7 +393,7 @@ function httpsDependencies(
   domain: string,
   remaining: number,
   authorizedScope: readonly string[],
-  signatures: readonly ServiceDependencySignature[],
+  signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
   falsePositiveTargets: ReadonlySet<string>,
   pageTitle: string,
@@ -344,7 +421,7 @@ function hostnameDependencies(
   domain: string,
   remaining: number,
   authorizedScope: readonly string[],
-  signatures: readonly ServiceDependencySignature[],
+  signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
   falsePositiveTargets: ReadonlySet<string>,
   pageTitle: string,
@@ -381,7 +458,7 @@ function httpDependency(
   domain: string,
   remaining: number,
   authorizedScope: readonly string[],
-  signatures: readonly ServiceDependencySignature[],
+  signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
   falsePositiveTargets: ReadonlySet<string>,
   pageTitle: string,
@@ -418,7 +495,6 @@ export function buildServiceDependencyReview(input: Readonly<{
   const diagnostics = record(dnsEvidence.diagnostics);
   const authorizedScope = parseAuthorizedServiceScope(input.authorizedScope);
   const falsePositiveTargets = new Set(parseAuthorizedServiceScope(input.falsePositiveTargets));
-  const signatures = normalizedSignatures(input.signatures ?? SERVICE_DEPENDENCY_SIGNATURES);
   const httpEvidence = record(input.httpEvidence);
   const pageTitle = typeof input.pageTitle === 'string'
     ? input.pageTitle.replace(/\s+/gu, ' ').trim().toLowerCase().slice(0, 120)
@@ -429,6 +505,11 @@ export function buildServiceDependencyReview(input: Readonly<{
   const now = typeof input.now === 'string' && Number.isFinite(Date.parse(input.now))
     ? Date.parse(input.now)
     : Date.now();
+  const signatures = normalizedSignatures(
+    input.signatures ?? SERVICE_DEPENDENCY_SIGNATURES,
+    now,
+    input.signatures ? '' : SERVICE_DEPENDENCY_SIGNATURE_CATALOG_DIGEST_SHA256,
+  );
   const stale = Number.isFinite(observedAt) && Math.max(0, now - observedAt) > STALE_OBSERVATION_MS;
   const activeTargets = new Set<string>();
   const finalHttpTarget = urlHostname(httpEvidence.finalUrl);

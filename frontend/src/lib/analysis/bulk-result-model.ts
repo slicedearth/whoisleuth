@@ -5,6 +5,7 @@ import type { CompactLookupHttpResponse } from './lookup-response.ts';
 import type { RelationshipObservation } from './relationship-evidence.ts';
 import type {
   BulkSessionDnsEvidence,
+  BulkSessionComparisonEvidence,
   BulkSessionMode,
   BulkSessionResult,
   BulkSessionSourceCoverage,
@@ -82,6 +83,7 @@ export interface ScanResult {
   idn: IdnAnalysis | null;
   dns: BulkDnsEvidence | null;
   dnssec: string | null;
+  comparisonEvidence?: BulkSessionComparisonEvidence | null;
   relationship: RelationshipObservation;
   sourceCoverage: BulkSessionSourceCoverage[];
 }
@@ -227,6 +229,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     riskFactors: row.saved.riskFactors,
     dns: row.dns,
     dnssec: row.dnssec,
+    comparisonEvidence: row.comparisonEvidence ?? null,
     relationship: row.relationship,
     sourceCoverage: row.sourceCoverage,
   };
@@ -292,6 +295,7 @@ export function fromBulkSessionResult(
     idn: analyzeDomainIdn(row.domain, officialDomains),
     dns: row.dns,
     dnssec: row.dnssec,
+    comparisonEvidence: row.comparisonEvidence ?? null,
     relationship: row.relationship,
     sourceCoverage: row.sourceCoverage,
   };

@@ -24,7 +24,11 @@ automated verdicts.
   &nbsp;·&nbsp;
   <a href="https://whoisleuth.com/demo"><strong>Explore the synthetic demo</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://whoisleuth.com/guide"><strong>Read the public guide</strong></a>
+  <a href="https://whoisleuth.com/resources"><strong>Browse investigation resources</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.png" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation workflow" /></a>
 </p>
 
 The demo uses fixed fictional evidence on reserved domains. Its six-stage
@@ -42,7 +46,7 @@ navigation without shortening the policy.
 | --- | --- | --- |
 | **Dashboard** | Start or resume investigations, defensive reviews, comparisons, and case work. | Guided recipes require explicit approval before requests and cannot run arbitrary actions. |
 | **Lookup** | Inspect one domain, IP address, or ASN through separately attributed registration, DNS, website, certificate, network, and derived evidence. Deep domain results can review bounded authoritative DNS health and compare the observed leaf certificate with a generated local SSLBL snapshot. | Deep is the default; Fast is registration-first. Supporting sources never override authoritative availability evidence, direct DNS failures remain inconclusive, and no warning-list miss establishes safety. |
-| **Discover** | Generate bounded local lookalikes or review names observed in public certificate logs. | Local results initially surface visible review cues; certificate-log results initially use newest observation. Sorting does not change evidence or score. |
+| **Discover** | Generate bounded local lookalikes, review names observed in public certificate logs, or deliberately pivot through one registry's RDAP nameserver-search results. | Registry pivots are suffix-scoped lower bounds. Local results initially surface visible review cues; certificate-log results initially use newest observation. Sorting does not change evidence or score. |
 | **Bulk** | Compare bounded domain sets with explicit request pacing, source-aware filters, compact Deep evidence, relationships, review actions, and resumable sessions. | Each domain is a separate request. Incomplete coverage, request failure, and missing evidence remain distinct. |
 | **Brands** | Define official domains, trusted infrastructure, defensive mail expectations, optional page-identity baselines, and reviewed desired posture. | Public observations, desired state, retained comparison points, and analyst attestations remain separate and browser-local. |
 | **Monitor** | Retain cases, evidence pins, decisions, response actions, campaigns, watchlists, relationships, and review history. | Ordinary workspace state stays in IndexedDB. Response packets and defensive exports require human review and are never submitted automatically. |
@@ -103,6 +107,7 @@ Install, build, and start the Express deployment:
 npm install
 SITE_PASSWORD=choose-a-password \
 SESSION_SECRET=choose-a-separate-random-secret \
+SESSION_MAX_AGE_DAYS=7 \
 npm start
 ```
 
@@ -111,9 +116,10 @@ Open `http://localhost:3000` for the public overview or
 
 `SITE_PASSWORD` is the deployment-wide shared password. `SESSION_SECRET`
 should be a separate random value, such as 32 random bytes encoded as hex. The
-application has no individual accounts, roles, or selective session
-revocation. See the [getting-started guide](docs/getting-started.md) for local
-development, verification, browser tests, and CLI usage.
+optional `SESSION_MAX_AGE_DAYS` setting accepts a whole number from 1 to 30 and
+defaults to 7. The application has no individual accounts, roles, or selective
+session revocation. See the [getting-started guide](docs/getting-started.md) for
+local development, verification, browser tests, and CLI usage.
 
 ## Architecture
 
@@ -188,6 +194,7 @@ npm run platform:local-data
 npm run release:check
 npm run security:codeql
 npm run registry:drift
+npm run rdap-extensions:drift
 npm run deployment:self-check -- https://your-deployment.example
 ```
 
@@ -199,8 +206,10 @@ buffering, cancellation, slow consumers, authentication expiry, duplicate
 events, timeouts, and final-response equivalence without enabling response
 streaming in any deployed adapter.
 The registry-drift and deployment checks make only their documented, fixed,
-bounded network requests. Automated unit and browser tests use deterministic
-fixtures and do not query live registries, domains, or providers.
+bounded network requests. The RDAP extension audit is offline by default; its
+explicit `--live` mode makes one bounded request to the fixed official registry
+URL. Automated unit and browser tests use deterministic fixtures and do not
+query live registries, domains, or providers.
 
 ## Deployment summary
 

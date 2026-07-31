@@ -22,9 +22,7 @@ const INTELLIGENCE_CAPABILITIES = {
   limitations: [],
 };
 
-test('the phosphorous brand cursor stays aligned and static across public and console layouts', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-
+test('the wordmark stays clean without a cursor-like status treatment across layouts', async ({ page }) => {
   const variants = [
     { path: '/', selector: '.public-brand strong', width: 1280, height: 800 },
     { path: '/', selector: '.public-brand strong', width: 390, height: 844 },
@@ -38,72 +36,37 @@ test('the phosphorous brand cursor stays aligned and static across public and co
 
     const wordmark = page.locator(variant.selector);
     await expect(wordmark).toBeVisible();
-    const cursor = await wordmark.evaluate((element) => {
-      const wordmarkStyle = getComputedStyle(element);
-      const cursorStyle = getComputedStyle(element, '::after');
-      const fontSize = Number.parseFloat(wordmarkStyle.fontSize);
+    const marker = await wordmark.evaluate((element) => {
+      const markerStyle = getComputedStyle(element, '::after');
       return {
-        content: cursorStyle.content,
-        display: cursorStyle.display,
-        heightRatio: Number.parseFloat(cursorStyle.height) / fontSize,
-        verticalAlignRatio: Number.parseFloat(cursorStyle.verticalAlign) / fontSize,
-        animationName: cursorStyle.animationName,
+        content: markerStyle.content,
+        boxShadow: markerStyle.boxShadow,
+        animationName: markerStyle.animationName,
       };
     });
 
-    expect(cursor.content).toBe('""');
-    expect(cursor.display).toBe('inline-block');
-    expect(cursor.heightRatio).toBeCloseTo(0.76, 2);
-    expect(cursor.verticalAlignRatio).toBeCloseTo(-0.02, 2);
-    expect(cursor.animationName).toBe('none');
+    expect(marker.content).toBe('none');
+    expect(marker.boxShadow).toBe('none');
+    expect(marker.animationName).toBe('none');
     await expectNoHorizontalOverflow(page);
   }
-
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/');
-  const motion = await page.locator('.public-brand strong').evaluate((element) => {
-    const cursorStyle = getComputedStyle(element, '::after');
-    return {
-      animationName: cursorStyle.animationName,
-      boxShadow: cursorStyle.boxShadow,
-    };
-  });
-  expect(motion.animationName).toBe('none');
-  expect(motion.boxShadow).not.toBe('none');
 });
 
-test('the Signal Lens mark stays transparent, theme-aware, and contained across layouts', async ({ page }) => {
+test('the approved WHOISleuth mark stays consistent and contained across themes and layouts', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/');
 
   const publicMark = page.locator('.public-brand .brand-mark');
   await expect(publicMark).toBeVisible();
-  await expect(publicMark.locator('.primary')).toHaveCount(2);
-  await expect(publicMark.locator('.secondary-fill')).toHaveCount(3);
-  await expect(publicMark.locator('circle.primary')).toHaveAttribute('fill', 'none');
-
-  const darkColors = await publicMark.evaluate((element) => {
-    const primary = element.querySelector<SVGElement>('.primary');
-    const secondary = element.querySelector<SVGElement>('.secondary');
-    return {
-      primary: primary ? getComputedStyle(primary).stroke : '',
-      secondary: secondary ? getComputedStyle(secondary).stroke : '',
-    };
-  });
+  await expect(publicMark).toHaveAttribute('src', '/favicon.svg');
+  expect(await publicMark.evaluate((element) => element.tagName)).toBe('IMG');
+  expect(await publicMark.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(512);
 
   await page.getByRole('button', { name: /Colour theme/ }).click();
   await page.getByRole('option', { name: 'Light theme' }).click();
   const lightMark = page.locator('.public-brand .brand-mark');
-  const lightColors = await lightMark.evaluate((element) => {
-    const primary = element.querySelector<SVGElement>('.primary');
-    const secondary = element.querySelector<SVGElement>('.secondary');
-    return {
-      primary: primary ? getComputedStyle(primary).stroke : '',
-      secondary: secondary ? getComputedStyle(secondary).stroke : '',
-    };
-  });
-  expect(lightColors.primary).not.toBe(darkColors.primary);
-  expect(lightColors.secondary).not.toBe(darkColors.secondary);
+  await expect(lightMark).toBeVisible();
+  await expect(lightMark).toHaveAttribute('src', '/favicon.svg');
 
   await page.setViewportSize({ width: 320, height: 640 });
   await page.reload();
@@ -536,7 +499,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   ));
   expect(new Set(lifecycleColours).size).toBe(lifecycleColours.length);
   await expect(lifecycle.locator('.event-shape')).toHaveCount(lifecycleColours.length);
-  await expect(lifecycle.locator('.registry-shape')).toHaveCount(lifecycleColours.length);
+  await expect(lifecycle.locator('.registry-shape')).toHaveCount(3);
+  await expect(lifecycle.locator('.observation-shape')).toHaveCount(1);
 
   const activationContext = page.getByRole('region', { name: 'Observed service relationship' });
   await expect(activationContext).toBeVisible();
@@ -566,11 +530,11 @@ test('a data-heavy Lookup result groups evidence into navigable sections', async
   const coverageSummary = coverage.getByRole('group', { name: 'Evidence coverage summary' });
   await expect(coverageSummary.getByText(/complete$/u)).toBeVisible();
   await expect(coverageSummary.getByText(/limited$/u)).toBeVisible();
-  await coverage.getByText(/Review \d+ source and analysis states/u).click();
+  await coverage.getByText(/Review \d+ source and analysis records/u).click();
   await expect(coverage).toContainText('Registry RDAP');
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
-  await expect(coverage).toContainText('Limited, unavailable, skipped, unsupported, unknown, and not-found states remain distinct');
+  await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   await registrationFact.getByText('Inspect evidence').click();
@@ -716,7 +680,9 @@ test('Lookup task and density controls change presentation without changing evid
 
   await density.selectOption('full');
   await expect(page.locator('#raw-data details')).toBeVisible();
+  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', false);
   await task.selectOption('acquisition');
+  await expect(page.locator('#evidence-dns > details')).toHaveJSProperty('open', true);
   await expect(localNav.getByRole('link').evaluateAll((links) => links.map((link) => link.textContent?.trim()))).resolves.toEqual([
     'Overview',
     'Registry',

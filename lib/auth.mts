@@ -11,7 +11,33 @@ type CookieOptions = { secure?: boolean };
 type SigningSecret = string | Buffer;
 
 const COOKIE_NAME = 'wrt_session';
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_MAX_AGE_ENV = 'SESSION_MAX_AGE_DAYS';
+const DEFAULT_SESSION_MAX_AGE_DAYS = 7;
+const MIN_SESSION_MAX_AGE_DAYS = 1;
+const MAX_SESSION_MAX_AGE_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function configuredSessionTtlMs(): number | null {
+  const raw = process.env[SESSION_MAX_AGE_ENV];
+  if (raw === undefined) return DEFAULT_SESSION_MAX_AGE_DAYS * DAY_MS;
+  if (raw.length > 2) return null;
+  if (!/^[1-9][0-9]*$/u.test(raw)) return null;
+  const days = Number(raw);
+  if (!Number.isSafeInteger(days)
+    || days < MIN_SESSION_MAX_AGE_DAYS
+    || days > MAX_SESSION_MAX_AGE_DAYS) return null;
+  return days * DAY_MS;
+}
+
+function requiredSessionTtlMs(): number {
+  const ttlMs = configuredSessionTtlMs();
+  if (ttlMs === null) {
+    throw new Error(
+      `${SESSION_MAX_AGE_ENV} must be a whole number from ${MIN_SESSION_MAX_AGE_DAYS} to ${MAX_SESSION_MAX_AGE_DAYS}.`,
+    );
+  }
+  return ttlMs;
+}
 
 function getSecret(): string | null {
   return process.env.SITE_PASSWORD || null;
@@ -54,20 +80,24 @@ function checkPassword(candidate: unknown): boolean {
 function createSessionToken(): string {
   const secret = getSigningSecret();
   if (!secret) throw new Error('SITE_PASSWORD is not configured');
-  const payload = String(Date.now() + SESSION_TTL_MS);
+  const payload = String(Date.now() + requiredSessionTtlMs());
   return `${payload}.${sign(payload, secret)}`;
 }
 
 function isValidSessionToken(token: unknown): boolean {
   const secret = getSigningSecret();
-  if (!secret || !token || typeof token !== 'string') return false;
+  const ttlMs = configuredSessionTtlMs();
+  if (!secret || ttlMs === null || !token || typeof token !== 'string') return false;
   const dot = token.indexOf('.');
   if (dot === -1) return false;
   const payload = token.slice(0, dot);
   const sig = token.slice(dot + 1);
   if (!timingSafeStringsEqual(sig, sign(payload, secret))) return false;
   const expires = Number(payload);
-  return Number.isFinite(expires) && Date.now() < expires;
+  const now = Date.now();
+  return Number.isSafeInteger(expires)
+    && now < expires
+    && expires <= now + ttlMs;
 }
 
 // Convenience for callers that just have a raw Cookie header (e.g. a
@@ -103,12 +133,13 @@ function parseCookies(header: string | null | undefined): Record<string, string>
 }
 
 function buildSessionCookie(token: string, { secure = true }: CookieOptions = {}): string {
+  const ttlMs = requiredSessionTtlMs();
   const attrs = [
     `${COOKIE_NAME}=${encodeURIComponent(token)}`,
     'HttpOnly',
     'SameSite=Lax',
     'Path=/',
-    `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+    `Max-Age=${Math.floor(ttlMs / 1000)}`,
   ];
   if (secure) attrs.push('Secure');
   return attrs.join('; ');

@@ -181,6 +181,23 @@ with code 2. The command never probes a registry or tests current reachability.
 Coverage is context only and cannot decide registration, availability,
 ownership, safety, or maliciousness.
 
+The separate maintenance command `npm run rdap-extensions:drift` compares the
+pinned official RDAP extension fixture with the reviewed local interpretation
+catalogue entirely offline. `--live` performs one bounded manual fetch from the
+fixed official CSV URL and reports added, removed, renamed, status-changed,
+unrecognized, and local-only identifiers. `--json` emits
+`whoisleuth.rdap-extension-drift-audit` version 1. Drift exits with status 1 and
+requires specification and fixture review; the command never enables an
+extension, changes authority or availability logic, or issues reverse search.
+
+`npm run service-dependencies:audit` validates the passive service-dependency
+catalogue entirely offline. It checks the catalogue digest, duplicate
+identifiers and target suffixes, evidence classes, source and licence
+treatment, source dates, and a fixed 180-day review age. `--json` emits
+`whoisleuth.service-dependency-signature-audit` version 1. A stale or changed
+signature requires manual provider and benign-fixture review; the command
+never resolves a target, checks an account, or tests claimability.
+
 ## Offline Risk calibration
 
 `risk-calibrate` replays a versioned analyst-labelled fixture dataset through

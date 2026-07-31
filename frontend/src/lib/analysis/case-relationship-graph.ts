@@ -85,6 +85,11 @@ export interface CaseRelationshipGraphRelationshipNode {
   lineagePaths: InvestigationLineagePath[];
   omittedLineagePaths: number;
   limitations: string[];
+  workspaceCaseCount: number;
+  localOccurrenceCount: number;
+  localFrequencyPercent: number;
+  commonality: 'limited_sample' | 'focused' | 'shared' | 'widespread';
+  commonalityExplanation: string;
   x: number;
   y: number;
   width: number;
@@ -371,6 +376,11 @@ export function projectCaseRelationshipGraph(
     lineagePaths: Array.isArray(group.lineagePaths) ? group.lineagePaths : [],
     omittedLineagePaths: Number.isSafeInteger(group.omittedLineagePaths) ? Number(group.omittedLineagePaths) : 0,
     limitations: Array.isArray(group.limitations) ? group.limitations : [],
+    workspaceCaseCount: Number.isSafeInteger(group.workspaceCaseCount) ? Number(group.workspaceCaseCount) : 0,
+    localOccurrenceCount: Number.isSafeInteger(group.localOccurrenceCount) ? Number(group.localOccurrenceCount) : 0,
+    localFrequencyPercent: Number.isFinite(group.localFrequencyPercent) ? Number(group.localFrequencyPercent) : 0,
+    commonality: group.commonality || 'limited_sample',
+    commonalityExplanation: group.commonalityExplanation || 'Local commonality was unavailable for this relationship.',
     x: 0,
     y: 0,
     width: NODE_WIDTH,

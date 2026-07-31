@@ -2,6 +2,7 @@
   import { INVESTIGATION_RECIPES, type InvestigationRecipeId } from '$lib/analysis/investigation-guide.ts';
   import {
     deleteInvestigationTemplate,
+    exportCacaoInvestigationTemplate,
     exportInvestigationTemplates,
     importInvestigationTemplates,
     MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
@@ -136,6 +137,15 @@
     }
   }
 
+  function downloadPlaybook(template: InvestigationTemplate) {
+    try {
+      exportCacaoInvestigationTemplate(template);
+      message = `Exported ${template.label} as a restricted manual CACAO playbook.`;
+    } catch (cause) {
+      message = cause instanceof Error ? cause.message : 'Could not export the investigation playbook.';
+    }
+  }
+
   async function importFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -160,7 +170,7 @@
     <div>
       <p class="eyebrow">Reusable local workflow</p>
       <h2 id="template-manager-title">Investigation templates</h2>
-      <p>Adapt an existing bounded guide. Templates can change guidance, omit steps, or add approval gates, but cannot run code, start requests, submit evidence, or remove a required gate.</p>
+      <p>Adapt an existing bounded guide. Templates can change guidance, omit steps, or add approval gates, but cannot run code, start requests, submit evidence, or remove a required gate. A restricted CACAO export contains manual steps only.</p>
     </div>
     <div class="toolbar">
       <button class="btn" type="button" onclick={beginNew}>New template</button>
@@ -176,6 +186,7 @@
           <div><strong>{template.label}</strong><span>{INVESTIGATION_RECIPES.find((item) => item.id === template.recipeId)?.label} · {template.stages.length} step{template.stages.length === 1 ? '' : 's'}</span></div>
           <div class="row-actions">
             <button class="btn small" type="button" onclick={() => beginEdit(template)}>Edit</button>
+            <button class="btn small" type="button" onclick={() => downloadPlaybook(template)}>CACAO</button>
             <button class="btn small danger" type="button" onclick={() => remove(template)}>Delete</button>
           </div>
         </li>

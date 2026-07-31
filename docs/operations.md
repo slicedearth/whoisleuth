@@ -9,20 +9,30 @@ deployment, and the public deployment self-check.
 WHOISleuth uses one deployment-wide password rather than individual accounts.
 Set:
 
-- `SITE_PASSWORD` to the shared Console password; and
+- `SITE_PASSWORD` to the shared Console password;
 - `SESSION_SECRET` to a separate random signing secret, such as 32 random bytes
-  encoded as hex.
+  encoded as hex; and
+- optionally, `SESSION_MAX_AGE_DAYS` to a whole number from 1 to 30. It
+  defaults to 7.
 
 Every investigation API route validates the signed session independently. The
 login and boolean session-status routes are the narrow anonymous API exceptions
 needed to enter the Console and render public navigation. Direct anonymous
 navigation to protected pages returns to sign-in.
 
-Sessions are stateless and valid for up to 30 days. Signing out clears the
-cookie in that browser but cannot revoke a copied token. Rotate
+Sessions are stateless and valid for the configured lifetime, which defaults
+to 7 days and cannot exceed 30 days. Invalid lifetime configuration prevents
+new sessions and rejects existing ones. Lowering the configured lifetime also
+rejects tokens whose remaining lifetime exceeds the new maximum. Signing out
+clears the cookie in that browser but cannot revoke a copied token. Rotate
 `SESSION_SECRET` to invalidate all outstanding sessions. If an older deployment
 omits it, the application derives a slower signing key from `SITE_PASSWORD`,
 but an independent secret is recommended.
+
+Deployments upgrading from the previous fixed 30-day session lifetime move to
+the 7-day default unless `SESSION_MAX_AGE_DAYS` is set explicitly. Existing
+cookies with more than 7 days remaining are rejected, so affected users must
+sign in again after the deployment.
 
 The shared login provides no individual identity, role, per-user audit trail,
 or selective revocation. Every signed-in user can manage the same optional
@@ -52,6 +62,7 @@ Set a switch to `1`, `true`, `yes`, or `on` to disable that hosted feature:
 | --- | --- |
 | `WHOISLEUTH_DISABLE_LOOKUP` | Blocks unified Lookup and Bulk submissions. |
 | `WHOISLEUTH_DISABLE_RDAP` | Blocks direct RDAP and omits it from unified Lookup and availability. |
+| `WHOISLEUTH_DISABLE_RDAP_NAMESERVER_SEARCH` | Blocks the deliberate registry-scoped nameserver search in Discover. Disabling RDAP also blocks it. |
 | `WHOISLEUTH_DISABLE_WHOIS` | Blocks direct WHOIS and omits it from Deep Lookup and availability. |
 | `WHOISLEUTH_DISABLE_AVAILABILITY` | Blocks direct availability and omits it from unified Lookup. |
 | `WHOISLEUTH_DISABLE_DNS_INTELLIGENCE` | Stops evidence and posture DNS queries while retaining transport DNS needed by enabled endpoints. |
@@ -108,7 +119,7 @@ Express and functions share fixed-window request controls:
 | Route family | Default ceiling |
 | --- | ---: |
 | Login | 10 attempts per 5 minutes per client IP |
-| Lookup, RDAP, WHOIS, availability, Certificate Transparency, and posture | 1,000 requests per minute per client IP |
+| Lookup, RDAP, registry-scoped nameserver search, WHOIS, availability, Certificate Transparency, and posture | 1,000 requests per minute per client IP |
 | Scheduled-monitor management | 60 authenticated requests per minute per warm runtime and signed session, plus the general API limit |
 
 An exceeded limit returns HTTP 429 with `Retry-After`. The in-memory limiter is
@@ -124,7 +135,7 @@ Network-heavy authenticated operations also acquire an immediate lease:
 
 | Operation class | Included work | Per session | Per runtime instance |
 | --- | --- | ---: | ---: |
-| `registry_light` | Fast Lookup, RDAP, Fast availability | 12 | 36 |
+| `registry_light` | Fast Lookup, RDAP, registry-scoped nameserver search, Fast availability | 12 | 36 |
 | `registry_deep` | Deep Lookup, WHOIS, Deep availability | 4 | 12 |
 | `certificate_search` | Certificate Transparency | 2 | 4 |
 | `posture_audit` | Official-domain posture audit | 3 | 8 |
@@ -210,7 +221,8 @@ stop.
    `npm run build`, publishes `frontend/build`, and packages
    `netlify/functions/`.
 3. Set `SITE_PASSWORD` and a separate `SESSION_SECRET` before the first
-   production deployment.
+   production deployment. Optionally set `SESSION_MAX_AGE_DAYS` from 1 to 30;
+   otherwise sessions default to 7 days.
 4. Add optional provider, distributed-budget, or scheduled-monitor values only
    after reviewing their boundaries above.
 5. Confirm the deploy log reports the code-based login and Lookup rate rules as

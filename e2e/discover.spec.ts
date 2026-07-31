@@ -51,6 +51,33 @@ async function runCtSearch(page: Page, keyword = 'example') {
   await page.getByRole('button', { name: 'Search certificates' }).click();
 }
 
+async function mockRdapNameserverSearch(page: Page) {
+  await page.route('**/api/rdap-nameserver-search?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      schema: 'whoisleuth.rdap-nameserver-search',
+      version: 1,
+      state: 'partial',
+      nameserver: 'ns1.infrastructure.example',
+      registryScope: 'example',
+      lowerBound: true,
+      observedAt: '2026-08-01T00:00:00.000Z',
+      source: { endpoint: 'https://registry.example/rdap/domains?nsLdhName=ns1.infrastructure.example' },
+      domains: [{
+        domain: 'matched.example',
+        unicodeDomain: null,
+        statuses: ['active'],
+        nameserverObserved: true,
+        partial: false,
+      }],
+      truncated: true,
+      omittedInvalid: 1,
+      limitations: ['Results cover only the .example registry selected for this request.'],
+    }),
+  }));
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/discover');
 });
@@ -70,6 +97,25 @@ test('certificate search exposes and enforces the shared bounded query contract'
   const invalidResponse = await request.get(`/api/ct-search?q=${encodeURIComponent('x'.repeat(201))}`);
   expect(invalidResponse.status()).toBe(400);
   expect(await invalidResponse.json()).toMatchObject({ errorCode: 'INVALID_CT_QUERY' });
+});
+
+test('registry-scoped nameserver results disclose their lower-bound scope and continue to Bulk', async ({ page }) => {
+  await mockRdapNameserverSearch(page);
+  await page.getByRole('tab', { name: 'Nameservers' }).click();
+  await page.getByRole('textbox', { name: 'Nameserver hostname' }).fill('NS1.Infrastructure.Example.');
+  await page.getByRole('textbox', { name: 'Registry suffix' }).fill('.example');
+  await page.getByRole('button', { name: 'Search registry' }).click();
+
+  await expect(page.getByRole('note').filter({ hasText: 'Registry-scoped result' })).toContainText('.example');
+  await expect(page.locator('.status')).toContainText('1 bounded partial domain result');
+  await expect(page.locator('.candidate strong')).toHaveText(['matched.example']);
+  await expect(page.getByText(/not a global reverse-nameserver inventory/iu)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Select filtered (1)' }).click();
+  await page.getByRole('button', { name: 'Continue to Bulk with 1' }).click();
+  await expect(page).toHaveURL(/\/bulk/);
+  await expect(page.locator('#domains')).toHaveValue('matched.example');
+  await expect(page.locator('.handoff')).toContainText('Loaded 1 candidate from nameserver');
 });
 
 test('lookalike generation discloses its limits and paginates every retained candidate', async ({ page }) => {
@@ -705,7 +751,7 @@ test('discovery method tabs reflow without an inner scrollbar on narrow phones',
     await page.setViewportSize({ width, height: 700 });
     await page.goto('/discover');
     const methods = page.getByRole('tablist', { name: 'Discovery method' });
-    await expect(methods.getByRole('tab')).toHaveCount(3);
+    await expect(methods.getByRole('tab')).toHaveCount(4);
     expect(await methods.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await expectNoHorizontalOverflow(page);
   }

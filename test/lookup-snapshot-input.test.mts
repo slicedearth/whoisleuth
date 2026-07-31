@@ -37,6 +37,24 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
     lookupEvidenceDepth: 'deep',
     technologyProfile: { complete: true, truncated: false },
     securityPosture: { complete: true, truncated: false },
+    tlsEvidence: {
+      source: 'tls',
+      scanMode: 'deep',
+      complete: true,
+      truncated: false,
+      certificate: {
+        fingerprintSha256: 'c'.repeat(64),
+        serialNumber: '00a1',
+        validFrom: '2026-07-01T00:00:00.000Z',
+        validTo: '2026-08-01T00:00:00.000Z',
+        subject: { commonNames: ['snapshot.example'] },
+        issuer: { commonNames: ['Fixture issuing authority'] },
+        publicKey: { fingerprintSha256: 'd'.repeat(64) },
+      },
+      authorization: { authorized: true },
+      hostname: { matches: true },
+      validity: { status: 'valid' },
+    },
     baseline,
     pageIdentity: { forms: { externalActionOrigins: ['https://forms.snapshot.example'] } },
     technologyFindings: [{ id: 'framework', name: 'Framework', category: 'framework', confidence: 'high' }],
@@ -63,6 +81,23 @@ test('builds the compact lookup snapshot behind a typed behavior-neutral facade'
   assert.deepEqual(snapshot.technologies, [
     { id: 'framework', name: 'Framework', category: 'framework', confidence: 'high' },
   ]);
+  assert.deepEqual(snapshot.certificate, {
+    observationVersion: 1,
+    source: 'tls',
+    collectionDepth: 'deep',
+    fingerprintSha256: 'c'.repeat(64),
+    spkiFingerprintSha256: 'd'.repeat(64),
+    issuer: 'Fixture issuing authority',
+    subject: 'snapshot.example',
+    serialNumber: '00a1',
+    validFrom: '2026-07-01T00:00:00.000Z',
+    validTo: '2026-08-01T00:00:00.000Z',
+    authorized: true,
+    hostnameMatches: true,
+    validity: 'valid',
+    complete: true,
+    truncated: false,
+  });
 });
 
 test('keeps a fast or incomplete lookup snapshot explicitly partial', () => {
@@ -74,6 +109,7 @@ test('keeps a fast or incomplete lookup snapshot explicitly partial', () => {
     lookupEvidenceDepth: 'fast',
     technologyProfile: { complete: true, truncated: true },
     securityPosture: { complete: true },
+    tlsEvidence: {},
     baseline,
     technologyFindings: [],
     securityPostureFindings: [],
@@ -81,4 +117,5 @@ test('keeps a fast or incomplete lookup snapshot explicitly partial', () => {
   });
   assert.equal(snapshot.complete, false);
   assert.equal(snapshot.truncated, true);
+  assert.equal(snapshot.certificate, null);
 });

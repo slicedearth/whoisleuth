@@ -5,6 +5,7 @@
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
   import { activeProfile } from '$lib/brand-profiles';
   import { loadCases, type CaseRecord } from '$lib/cases';
+  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
   import { buildInvestigationHandoffReadiness } from '$lib/analysis/investigation-handoff-readiness.ts';
   import { buildGuidedCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
@@ -66,6 +67,11 @@
   let targetChangePending = $state(false);
   let contextDomain = $state('');
   let contextError = $state('');
+  let localContextError = $state('');
+  let evidenceContextAvailable = $state(true);
+  let savedRecordContextAvailable = $state(true);
+  let localContextPending = $state(true);
+  let localContextRefreshVersion = 0;
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
@@ -99,6 +105,9 @@
     caseRecord: contextCase,
     evidenceProjection: evidence,
   }));
+  const handoffContextAvailable = $derived(
+    !localContextPending && evidenceContextAvailable && savedRecordContextAvailable,
+  );
   const caseWorkspaceHref = $derived(contextCase
     ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
     : null);
@@ -122,9 +131,33 @@
     }).format(parsed)}`;
   }
 
-  async function refresh() {
-    guide = loadInvestigationGuide();
-    await Promise.all([refreshEvidence(), refreshContext()]);
+  async function refreshStoredContext() {
+    const refreshVersion = ++localContextRefreshVersion;
+    localContextPending = true;
+    localContextError = '';
+    const [evidenceResult, recordResult] = await Promise.allSettled([
+      refreshEvidence(),
+      refreshContext(),
+    ]);
+    if (refreshVersion !== localContextRefreshVersion) return;
+    evidenceContextAvailable = evidenceResult.status === 'fulfilled';
+    savedRecordContextAvailable = recordResult.status === 'fulfilled';
+    if (!evidenceContextAvailable) {
+      evidence = { observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' };
+    }
+    if (!savedRecordContextAvailable) {
+      contextProfile = null;
+      contextCase = null;
+    }
+    localContextPending = false;
+    if (!evidenceContextAvailable || !savedRecordContextAvailable) {
+      const expectedFailure = [evidenceResult, recordResult].every((result) => (
+        result.status === 'fulfilled' || isExpectedBrowserLocalDataFailure(result.reason)
+      ));
+      localContextError = expectedFailure
+        ? 'Some browser-local investigation context is unavailable. The guide remains usable, and unavailable saved data is not treated as absent.'
+        : 'Browser-local investigation context could not be refreshed. The guide remains usable, and unreadable saved data is not treated as absent.';
+    }
   }
 
   function guideIdentity(value: InvestigationGuide | null) {
@@ -219,7 +252,7 @@
       contextDomain = guide?.focusDomain || guide?.domain || '';
       contextError = '';
     }
-    await Promise.all([refreshEvidence(), refreshContext()]);
+    void refreshStoredContext();
     if (identityChanged) void revealGuide();
     void observeAction();
   }
@@ -319,7 +352,7 @@
       targetChangePending = false;
       contextDomain = domain;
       contextError = '';
-      void Promise.all([refreshEvidence(), refreshContext()]);
+      void refreshStoredContext();
     } catch (cause) {
       contextError = cause instanceof Error ? cause.message : 'Could not change the investigation target.';
     }
@@ -426,11 +459,13 @@
 
   onMount(() => {
     mounted = true;
-    void refresh().then(async () => {
+    guide = loadInvestigationGuide();
+    void (async () => {
       contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
       await observeAction();
-    });
+      void refreshStoredContext();
+    })();
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     return () => {
       actionObserver?.disconnect();
@@ -467,11 +502,12 @@
     </div>
     <dl class="context-tray" aria-label="Active investigation context">
       <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
-      <div><dt>Brand Profile</dt><dd>{contextProfile?.name || 'None active'}</dd></div>
-      <div><dt>Case</dt><dd>{contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained'}</dd></div>
-      <div><dt>Evidence freshness</dt><dd>{evidenceFreshness}</dd></div>
+      <div><dt>Brand Profile</dt><dd>{localContextPending ? 'Loading…' : savedRecordContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
+      <div><dt>Case</dt><dd>{localContextPending ? 'Loading…' : savedRecordContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
+      <div><dt>Evidence freshness</dt><dd>{localContextPending ? 'Loading…' : evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
+    {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
 
     {#if !contextDismissed}
     {#if actionStage && actionProgress}
@@ -496,22 +532,32 @@
           <div class="action-controls">
             <p class="mobile-action-label"><span>Next action</span><strong>{actionStage.label}</strong></p>
             {#if actionStage.workspace === 'monitor'}
-              <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
-                <div>
-                  <span>Case handoff</span>
-                  <strong>{handoffReadiness.label}</strong>
-                </div>
-                <ul>
-                  {#each handoffReadiness.checks as check}
-                    <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
-                      <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
-                      <span><strong>{check.label}</strong><small>{check.detail}</small></span>
-                    </li>
-                  {/each}
-                </ul>
-                {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
-                <p>{handoffReadiness.limitations[0]}</p>
-              </section>
+              {#if handoffContextAvailable}
+                <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
+                  <div>
+                    <span>Case handoff</span>
+                    <strong>{handoffReadiness.label}</strong>
+                  </div>
+                  <ul>
+                    {#each handoffReadiness.checks as check}
+                      <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
+                        <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
+                        <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                      </li>
+                    {/each}
+                  </ul>
+                  {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
+                  <p>{handoffReadiness.limitations[0]}</p>
+                </section>
+              {:else}
+                <section class="handoff-readiness unavailable" aria-label="Case handoff readiness">
+                  <div>
+                    <span>Case handoff</span>
+                    <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+                  </div>
+                  <p>{localContextPending ? 'The readiness check will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No handoff check is inferred from unavailable saved data.'}</p>
+                </section>
+              {/if}
             {/if}
             {#if guide.status === 'paused'}
               <button class="primary compact" type="button" onclick={togglePause}>Resume guide</button>
@@ -578,14 +624,24 @@
         <p class="step-number">Guide reviewed</p>
         <h2>All {stages.length} steps have an outcome</h2>
         <p>Review the full plan or export the compact progress summary. The guide outcomes remain analyst workflow markers, not findings about the target.</p>
-        <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
-          <div>
-            <span>Decision handoff</span>
-            <strong>{handoffReadiness.label}</strong>
-          </div>
-          <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
-          {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
-        </section>
+        {#if handoffContextAvailable}
+          <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
+            <div>
+              <span>Decision handoff</span>
+              <strong>{handoffReadiness.label}</strong>
+            </div>
+            <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
+            {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
+          </section>
+        {:else}
+          <section class="handoff-readiness complete-handoff unavailable" aria-label="Completed guide handoff readiness">
+            <div>
+              <span>Decision handoff</span>
+              <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+            </div>
+            <p>{localContextPending ? 'The readiness summary will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No completed handoff state is inferred from unavailable saved data.'}</p>
+          </section>
+        {/if}
       </article>
     {/if}
 
@@ -621,8 +677,8 @@
 
     <div class="secondary-details">
       <details class="evidence-checkpoint">
-        <summary>Saved evidence · {evidence.observations} observation{evidence.observations === 1 ? '' : 's'} · {evidence.relationships} relationship{evidence.relationships === 1 ? '' : 's'}</summary>
-        <p>{evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.'}{evidence.partial ? ' Some retained evidence is partial.' : ''}{evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
+        <summary>{localContextPending ? 'Checking saved evidence' : evidenceContextAvailable ? `Saved evidence · ${evidence.observations} observation${evidence.observations === 1 ? '' : 's'} · ${evidence.relationships} relationship${evidence.relationships === 1 ? '' : 's'}` : 'Saved evidence unavailable'}</summary>
+        <p>{localContextPending ? 'Browser-local evidence context is still loading, so no retained-evidence conclusion is available yet.' : evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Browser-local evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{!localContextPending && evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{!localContextPending && evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
       </details>
       <details class="guide-options">
         <summary>Guide options</summary>
@@ -676,6 +732,7 @@
   .context-tray div{display:block;min-width:0;padding:8px 9px;background:var(--surface)}
   .context-tray dt,.context-tray dd{display:block}
   .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
+  .local-context-error{margin:8px 0 0;color:var(--warning);font-size:var(--text-2xs);line-height:1.45}
   .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:18px;align-items:start;margin-top:13px;padding:16px;border:1px solid rgb(var(--accent-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .07);scroll-margin-top:88px}
   .step-number{margin:0;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .action-copy h2{margin:4px 0 5px;font:700 var(--text-md) var(--mono)}
@@ -705,6 +762,7 @@
   .outcome-review>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
   .handoff-readiness{display:grid;gap:8px;padding:11px;border:1px solid var(--warning);border-radius:var(--radius-sm);background:var(--surface)}
   .handoff-readiness.ready{border-color:var(--accent)}
+  .handoff-readiness.unavailable{border-color:var(--border)}
   .handoff-readiness>div>span,.handoff-readiness>div>strong{display:block}
   .handoff-readiness>div>span{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .handoff-readiness>div>strong{margin-top:2px;font:700 var(--text-xs) var(--mono)}

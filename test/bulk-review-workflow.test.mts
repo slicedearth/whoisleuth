@@ -51,6 +51,7 @@ function result(
     riskFactors: [],
     dns: null,
     dnssec: null,
+    comparisonEvidence: null,
     relationship: {
       version: 2,
       nameservers: ['ns1.example.test'],
@@ -106,7 +107,7 @@ describe('Bulk evidence review workflow', () => {
       },
     );
     assert.ok(comparison);
-    assert.equal(comparison.version, 2);
+    assert.equal(comparison.version, 3);
     assert.equal(comparison.rows.find((row) => row.id === 'registrar')?.state, 'different');
     assert.equal(comparison.rows.find((row) => row.id === 'dmarc')?.state, 'not_recorded');
     assert.equal(comparison.rows.find((row) => row.id === 'page-title')?.state, 'not_recorded');
@@ -122,6 +123,33 @@ describe('Bulk evidence review workflow', () => {
     const verification = await verifyOfflineArtifact(exported.content);
     assert.equal(verification.artifact.schema, 'whoisleuth.domain-comparison');
     assert.equal(verification.state, 'verified');
+  });
+
+  test('compares bounded technology, issuer, and public-key evidence when retained', () => {
+    const shared = {
+      version: 1 as const,
+      technology: { state: 'success' as const, ids: ['shop-platform'], truncated: false },
+      tls: {
+        state: 'success' as const,
+        issuerLabel: 'Example Issuing CA',
+        spkiSha256: 'a'.repeat(64),
+      },
+    };
+    const comparison = buildBulkDomainComparison(
+      result('left.example', { comparisonEvidence: shared }),
+      result('right.example', {
+        comparisonEvidence: {
+          ...shared,
+          technology: { ...shared.technology, ids: ['web-framework'] },
+          tls: { ...shared.tls, spkiSha256: 'b'.repeat(64) },
+        },
+      }),
+      OBSERVED_AT,
+    );
+
+    assert.equal(comparison?.rows.find((row) => row.id === 'technology')?.state, 'different');
+    assert.equal(comparison?.rows.find((row) => row.id === 'tls-issuer')?.state, 'equal');
+    assert.equal(comparison?.rows.find((row) => row.id === 'tls-spki')?.state, 'different');
   });
 
   test('keeps conflicting, unavailable, and explicitly absent evidence distinct', () => {

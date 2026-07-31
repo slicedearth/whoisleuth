@@ -8,7 +8,7 @@ import {
   isAuthenticatedFromCookieHeader,
   sessionFingerprintFromCookieHeader,
 } from './auth.mts';
-import { checkRateLimit, getClientIp, API_RATE_LIMIT } from './rate-limit.mts';
+import { checkApiRateLimit, getClientIp } from './rate-limit.mts';
 import {
   featureDisabledError,
   networkFeaturePolicy,
@@ -40,7 +40,7 @@ function guardNetlifyNetworkRequest(
 ): NetlifyGuardResult {
   const headers = event && event.headers ? event.headers : {};
   const ip = getClientIp(headers);
-  const { allowed, retryAfterSeconds } = checkRateLimit(`api:${ip}`, API_RATE_LIMIT);
+  const { allowed, retryAfterSeconds } = checkApiRateLimit(ip);
   if (!allowed) {
     return {
       response: json(429, {

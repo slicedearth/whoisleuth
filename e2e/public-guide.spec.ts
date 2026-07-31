@@ -32,6 +32,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
+  await expect(page.locator('.learn article')).toHaveCount(4);
+  await expect(page.getByRole('link', { name: 'Browse all domain investigation resources' })).toHaveAttribute('href', '/resources');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const sourceSummary = page.locator('.mobile-source-summary');
@@ -52,6 +54,45 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   });
   expect(sourceStateColors.warning).toBe(sourceStateColors.amber);
   expect(sourceStateColors.warning).not.toBe(sourceStateColors.success);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('public resources offer task-specific source boundaries on desktop and mobile', async ({ page }) => {
+  await page.goto('/resources');
+
+  await expect(page.getByRole('heading', { name: 'Understand the evidence before using the result.' })).toBeVisible();
+  await expect(page.locator('.resource-grid article')).toHaveCount(8);
+  await page.getByRole('link', { name: 'RDAP versus WHOIS', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS: why registration sources disagree' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(4);
+  await expect(page.getByRole('heading', { name: 'Questions worth answering.' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Inspect synthetic registration evidence' })).toHaveAttribute('href', '/demo');
+  await expect(page.getByRole('link', { name: 'Open docs/registry-data-contract.md' })).toHaveAttribute(
+    'href',
+    'https://github.com/slicedearth/whoisleuth/blob/main/docs/registry-data-contract.md',
+  );
+  const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  const breadcrumbLayout = await breadcrumb.locator(':scope > *').evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      y: box.y,
+      height: box.height,
+      margin: style.margin,
+      padding: style.padding,
+    };
+  }));
+  expect(new Set(breadcrumbLayout.map((item) => Math.round(item.y))).size).toBe(1);
+  expect(new Set(breadcrumbLayout.map((item) => Math.round(item.height))).size).toBe(1);
+  expect(breadcrumbLayout[0]?.margin).toBe('0px');
+  expect(breadcrumbLayout[0]?.padding).toBe('0px');
+  await expectNoHorizontalOverflow(page);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.reload();
+  await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
+  expect(await breadcrumb.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('0px');
   await expectNoHorizontalOverflow(page);
 });
 
@@ -78,6 +119,12 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await trackingSteps.nth(2).click();
   await expect(page.locator('#tool-monitor-next')).toBeInViewport();
   await expect(page.locator('.goal-paths article')).toHaveCount(3);
+  const practice = page.getByRole('region', { name: 'Try a guided analyst decision.' });
+  await expect(practice).toBeVisible();
+  await expect(practice.getByLabel('Practice scenario')).toHaveValue('brand-boundary-review');
+  await practice.getByLabel('Review the official domain and trusted allowlists before generating candidates.').check();
+  await expect(practice.getByText('Defensible choice')).toBeVisible();
+  await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
   await expect(page.locator('.tool-guide article')).toHaveCount(5);
   await expect(page.locator('.reference-guide article')).toHaveCount(1);
   await expect(page.locator('.state-grid article')).toHaveCount(9);
@@ -87,7 +134,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.glossary-grid').getByText('PTR', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('SOA', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('Website profile snapshot', { exact: true })).toBeVisible();
-  await expect(page.locator('.faq-list details')).toHaveCount(20);
+  await expect(page.locator('.faq-list details')).toHaveCount(21);
 
   const question = page.getByText('Does WHOISleuth decide whether a domain is malicious?', { exact: true });
   await question.click();
@@ -134,8 +181,39 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expect(page.getByRole('navigation', { name: 'Guide sections' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Common WHOISleuth workflow map' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#tools');
+  await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
   await expect(page.getByRole('navigation', { name: 'Guide sections' }).getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
   await expect(page.getByRole('heading', { name: 'Domain investigation terms.' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test('public footer keeps an even compact rhythm on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('/');
+
+  const footer = page.locator('footer.site-footer');
+  const links = footer.locator('.footer-links a');
+  await expect(footer).toBeVisible();
+  await expect(links).toHaveCount(4);
+
+  const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      height: box.height,
+      y: box.y,
+      marginLeft: style.marginLeft,
+      marginRight: style.marginRight,
+      paddingLeft: style.paddingLeft,
+      paddingRight: style.paddingRight
+    };
+  }));
+
+  expect(linkLayout.every((link) => link.height <= 32)).toBe(true);
+  expect(new Set(linkLayout.map((link) => Math.round(link.y))).size).toBe(1);
+  expect(linkLayout.every((link) => link.marginLeft === '0px' && link.marginRight === '0px')).toBe(true);
+  expect(linkLayout.every((link) => link.paddingLeft === '0px' && link.paddingRight === '0px')).toBe(true);
+  expect((await footer.boundingBox())?.height).toBeLessThan(210);
   await expectNoHorizontalOverflow(page);
 });
 

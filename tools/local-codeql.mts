@@ -86,6 +86,10 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 // review instead of suppressing an entire rule or file.
 const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   Object.freeze({ ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: 'bb6b221105506c3:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' as const }),
+  // The route and file are fixed build-time allowlist entries, and the handler
+  // now has its own bounded request middleware. CodeQL does not recognize the
+  // project-local limiter, so retain only this exact reviewed fingerprint.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3398efe9f888d67d:1', primaryLocationStartColumnFingerprint: '45', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
 ]);
 

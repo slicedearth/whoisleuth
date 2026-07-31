@@ -115,7 +115,7 @@ describe('registry-support runner', () => {
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.profile.coverageState, 'fixture_verified');
     assert.equal(document.interpretation.liveReachability, 'not_tested');
-    assert.equal(document.standardsCoverage.verifiedAt, '2026-07-28');
+    assert.equal(document.standardsCoverage.verifiedAt, '2026-08-01');
     assert.match(document.interpretation.statement, /does not test current live reachability/);
   });
 

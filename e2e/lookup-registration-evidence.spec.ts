@@ -173,15 +173,19 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await page.locator('#query').fill('registrar-source.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
+  const evidenceQuality = page.locator('#evidence-quality');
+  await evidenceQuality.locator('summary').click();
+  await expect(evidenceQuality).not.toContainText('Observation time unavailable');
+
   const agreementMatrix = page.locator('.agreement-matrix');
   await expect(agreementMatrix.locator('title').filter({
-    hasText: 'Registry object ID, Registry RDAP: observed — registry-object-handle',
+    hasText: 'Registry object ID, Registry RDAP: Source-only value: registry-object-handle',
   })).toHaveCount(1);
   await expect(agreementMatrix.locator('title').filter({
     hasText: 'Registry object ID, Registrar RDAP: not collected',
   })).toHaveCount(1);
   await expect(agreementMatrix.locator('title').filter({
-    hasText: 'Registry object ID, WHOIS: partial',
+    hasText: 'Registry object ID, WHOIS: Incomplete / redacted',
   })).toHaveCount(1);
 
   const analystPivots = page.locator('details.analyst-pivots');

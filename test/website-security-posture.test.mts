@@ -246,6 +246,23 @@ describe('passive website security posture', () => {
     assert.equal(byId(analyze({
       dns: dns({ status: 'partial', complete: false, records: { caa: [] }, diagnostics: { caa: { status: 'error' } } }),
     }), 'caa_unavailable').state, 'unavailable');
+    const inherited = byId(analyze({
+      dns: dns({
+        records: { caa: [] },
+        diagnostics: { caa: { status: 'not_found' } },
+        caaPolicy: {
+          policyVersion: 1,
+          source: 'dns',
+          status: 'success',
+          complete: true,
+          truncated: false,
+          effectiveOwner: 'example.test',
+          records: [{ critical: 0, tag: 'issue', value: 'ca.example' }],
+        },
+      }),
+    }), 'caa_observed');
+    assert.equal(inherited.state, 'observed');
+    assert.deepEqual(inherited.evidence, ['DNS effective CAA policy']);
   });
 
   test('collapses missing source families into explicit unavailable findings', () => {

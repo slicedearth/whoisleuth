@@ -1,7 +1,7 @@
 import { normalizeDomain } from './case-model.ts';
 
 export const WEBSITE_SNAPSHOT_SCHEMA = 'whoisleuth.website-profile-snapshots';
-export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 2;
+export const WEBSITE_SNAPSHOT_SCHEMA_VERSION = 3;
 export const MAX_WEBSITE_SNAPSHOTS = 60;
 export const MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN = 12;
 export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
@@ -15,6 +15,23 @@ export type WebsiteSnapshotTechnology = Readonly<{
 }>;
 export type WebsiteSnapshotPosture = Readonly<{ id: string; state: string }>;
 export type WebsiteSnapshotSource = Readonly<{ source: string; state: string }>;
+export type WebsiteCertificateObservation = Readonly<{
+  observationVersion: 1;
+  source: 'tls';
+  collectionDepth: 'deep';
+  fingerprintSha256: string;
+  spkiFingerprintSha256: string | null;
+  issuer: string | null;
+  subject: string | null;
+  serialNumber: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  authorized: boolean | null;
+  hostnameMatches: boolean | null;
+  validity: string | null;
+  complete: boolean;
+  truncated: boolean;
+}>;
 export type WebsiteIdentityDigests = Readonly<{
   normalizedHtml: string | null;
   visibleText: string | null;
@@ -41,6 +58,7 @@ export type WebsiteProfileSnapshot = Readonly<{
   identity: WebsiteIdentityDigests;
   identityValues: WebsiteIdentityValues;
   sources: WebsiteSnapshotSource[];
+  certificate: WebsiteCertificateObservation | null;
 }>;
 export type WebsiteSnapshotChange = Readonly<{
   field: string;
@@ -52,6 +70,8 @@ export type WebsiteSnapshotChange = Readonly<{
 type UnknownRecord = Record<string, unknown>;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const DIGEST_RE = /^[a-f0-9]{16,128}$/iu;
+const SHA256_RE = /^[a-f0-9]{64}$/iu;
+const SERIAL_RE = /^[a-f0-9]{1,128}$/iu;
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
@@ -104,6 +124,36 @@ function source(value: unknown): WebsiteSnapshotSource | null {
   const sourceName = text(item?.source, 40);
   const state = text(item?.state, 40);
   return sourceName && state ? { source: sourceName, state } : null;
+}
+function nullableBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+function nullableText(value: unknown, maximum: number): string | null {
+  return text(value, maximum) || null;
+}
+function certificate(value: unknown): WebsiteCertificateObservation | null {
+  const item = record(value);
+  const fingerprintSha256 = text(item?.fingerprintSha256, 64).toLowerCase();
+  if (!SHA256_RE.test(fingerprintSha256)) return null;
+  const spkiCandidate = text(item?.spkiFingerprintSha256, 64).toLowerCase();
+  const serialCandidate = text(item?.serialNumber, 128).toLowerCase();
+  return {
+    observationVersion: 1,
+    source: 'tls',
+    collectionDepth: 'deep',
+    fingerprintSha256,
+    spkiFingerprintSha256: SHA256_RE.test(spkiCandidate) ? spkiCandidate : null,
+    issuer: nullableText(item?.issuer, 180),
+    subject: nullableText(item?.subject, 180),
+    serialNumber: SERIAL_RE.test(serialCandidate) ? serialCandidate : null,
+    validFrom: timestamp(item?.validFrom) || null,
+    validTo: timestamp(item?.validTo) || null,
+    authorized: nullableBoolean(item?.authorized),
+    hostnameMatches: nullableBoolean(item?.hostnameMatches),
+    validity: nullableText(item?.validity, 40),
+    complete: item?.complete === true,
+    truncated: item?.truncated === true,
+  };
 }
 function identity(value: unknown): WebsiteIdentityDigests {
   const item = record(value);
@@ -170,6 +220,7 @@ export function normalizeWebsiteProfileSnapshot(raw: unknown): WebsiteProfileSna
     identity: identity(value?.identity),
     identityValues: identityValues(value?.identityValues),
     sources: values(value?.sources, 16, source) as WebsiteSnapshotSource[],
+    certificate: certificate(value?.certificate),
   };
 }
 
@@ -281,6 +332,42 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
       new Map(after.identityValues.formActionOrigins.map((item) => [item, item])),
     ),
   );
+  if (before.certificate || after.certificate) {
+    if (!before.certificate || !after.certificate) {
+      changes.push({
+        field: 'certificate.observation',
+        state: 'unavailable',
+        before: before.certificate?.fingerprintSha256 ?? null,
+        after: after.certificate?.fingerprintSha256 ?? null,
+      });
+    } else {
+      const certificateFields: Array<keyof WebsiteCertificateObservation> = [
+        'fingerprintSha256',
+        'spkiFingerprintSha256',
+        'issuer',
+        'subject',
+        'serialNumber',
+        'validFrom',
+        'validTo',
+        'authorized',
+        'hostnameMatches',
+        'validity',
+        'complete',
+        'truncated',
+      ];
+      for (const key of certificateFields) {
+        const left = before.certificate[key];
+        const right = after.certificate[key];
+        if (left === right) continue;
+        changes.push({
+          field: `certificate.${key}`,
+          state: left === null || right === null ? 'unavailable' : 'changed',
+          before: left === null ? null : String(left),
+          after: right === null ? null : String(right),
+        });
+      }
+    }
+  }
   if (before.complete !== after.complete || before.truncated !== after.truncated) {
     changes.push({ field: 'completeness', state: 'incomparable', before: `${before.complete}/${before.truncated}`, after: `${after.complete}/${after.truncated}` });
   }

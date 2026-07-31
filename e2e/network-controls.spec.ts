@@ -106,6 +106,17 @@ test('disabled certificate and website capabilities degrade their own controls o
   await expect(saveProfileButton).toHaveCSS('background-image', /linear-gradient/);
 });
 
+test('a disabled registry nameserver-search capability leaves local discovery available', async ({ page }) => {
+  await mockCapabilities(page, ['rdap_nameserver_search']);
+  await page.goto('/discover');
+  await page.getByRole('tab', { name: 'Nameservers' }).click();
+  await expect(page.getByRole('button', { name: 'Search registry' })).toBeDisabled();
+  await expect(page.getByText('rdap nameserver search is disabled by deployment policy.', { exact: true })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Lookalikes' }).click();
+  await expect(page.getByRole('button', { name: 'Generate candidates' })).toBeEnabled();
+});
+
 test('an incomplete deep scan is stored conservatively so skipped probes cannot erase prior evidence', async ({ page }) => {
   await mockCapabilities(page, ['dns_intelligence', 'website_probe', 'tls_intelligence']);
   await page.route('**/api/lookup?*', async (route) => route.fulfill({

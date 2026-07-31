@@ -144,6 +144,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   const content = await readFile((await download!.path())!, 'utf8');
   expect(content).toContain('limited-one.example');
   expect(content).not.toContain('available-two.example');
+  expect(content).toContain('technology_ids,tls_issuer,tls_spki_sha256');
   const manifestContent = JSON.parse(await readFile((await manifest!.path())!, 'utf8'));
   expect(manifestContent).toMatchObject({
     schema: 'whoisleuth.bulk-review-manifest',
@@ -175,6 +176,19 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
           dns: {
             status: 'success',
             records: { a: [], aaaa: [], cname: [], caa: [] },
+          },
+          bulkComparison: {
+            version: 1,
+            technology: {
+              state: 'success',
+              ids: left ? ['fixture-cms', 'shared-edge'] : ['fixture-commerce', 'shared-edge'],
+              truncated: false,
+            },
+            tls: {
+              state: 'success',
+              issuerLabel: left ? 'CN=Fixture Authority One' : 'CN=Fixture Authority Two',
+              spkiSha256: left ? 'a'.repeat(64) : 'b'.repeat(64),
+            },
           },
         },
         diagnostics: {
@@ -213,9 +227,15 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(comparison).toContainText('Second Registrar');
   await expect(comparison.getByText('different', { exact: true }).first()).toBeVisible();
   await expect(comparison.getByText('not recorded', { exact: true }).first()).toBeVisible();
-  await expect(comparison.getByText('Technology findings', { exact: true })).toBeVisible();
+  const technologyRow = comparison.getByRole('row', { name: /Technology Technology identifiers/u });
+  await expect(technologyRow).toContainText('fixture-cms, shared-edge');
+  await expect(technologyRow).toContainText('fixture-commerce, shared-edge');
+  const issuerRow = comparison.getByRole('row', { name: /Certificate TLS issuer label/u });
+  await expect(issuerRow).toContainText('CN=Fixture Authority One');
+  await expect(issuerRow).toContainText('CN=Fixture Authority Two');
+  await expect(comparison.getByRole('row', { name: /Certificate TLS public-key fingerprint/u })).toBeVisible();
   await expect(comparison.getByText('Evidence freshness')).toBeVisible();
-  await expect(comparison.getByRole('link', { name: 'View settled row' })).toHaveCount(52);
+  await expect(comparison.getByRole('link', { name: 'View settled row' })).toHaveCount(56);
 
   const downloadPromise = page.waitForEvent('download');
   await comparison.getByRole('button', { name: 'Export comparison' }).click();
@@ -225,7 +245,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   expect(exported).toMatchObject({
     schema: 'whoisleuth.domain-comparison',
     comparison: {
-      version: 2,
+      version: 3,
       leftDomain: expect.any(String),
       rightDomain: expect.any(String),
     },
@@ -337,6 +357,10 @@ test('a malformed successful response remains an explicit failure in exports and
 
   await page.getByLabel('Watchlist name').fill('Invalid response audit');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
+  await expect(page.locator('.save-watchlist').getByRole('status')).toHaveText(
+    'Saved 1 result to Invalid response audit.',
+    { timeout: 10_000 },
+  );
   const retained = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
   expect(retained.records[0]?.value?.results?.[0]).toMatchObject({
     domain: 'malformed-response.example',

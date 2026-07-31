@@ -49,6 +49,21 @@ function snapshot(
       rawAction: 'excluded',
     },
     sources: [{ source: 'page', state: 'success', response: 'excluded' }],
+    certificate: {
+      fingerprintSha256: 'c'.repeat(64),
+      spkiFingerprintSha256: 'd'.repeat(64),
+      subject: 'snapshot.invalid',
+      issuer: 'Fixture issuing authority',
+      serialNumber: '00a1',
+      validFrom: EARLIER,
+      validTo: LATER,
+      authorized: true,
+      hostnameMatches: true,
+      validity: 'valid',
+      complete: true,
+      truncated: false,
+      rawCertificate: 'excluded',
+    },
     rawWhois: 'excluded',
     ...overrides,
   };
@@ -72,6 +87,23 @@ describe('website profile snapshots', () => {
       resourceHosts: ['assets.snapshot.invalid'],
       trackingIdentifiers: [{ type: 'analytics', value: 'TRACK-1' }],
       formActionOrigins: ['https://forms.snapshot.invalid'],
+    });
+    assert.deepEqual(normalized.certificate, {
+      observationVersion: 1,
+      source: 'tls',
+      collectionDepth: 'deep',
+      fingerprintSha256: 'c'.repeat(64),
+      spkiFingerprintSha256: 'd'.repeat(64),
+      subject: 'snapshot.invalid',
+      issuer: 'Fixture issuing authority',
+      serialNumber: '00a1',
+      validFrom: EARLIER,
+      validTo: LATER,
+      authorized: true,
+      hostnameMatches: true,
+      validity: 'valid',
+      complete: true,
+      truncated: false,
     });
     assert.equal(JSON.stringify(normalized).includes('rawWhois'), false);
     assert.equal(JSON.stringify(normalized).includes('rawHtml'), false);
@@ -99,6 +131,20 @@ describe('website profile snapshots', () => {
           trackingIdentifiers: [],
           formActionOrigins: [],
         },
+        certificate: {
+          fingerprintSha256: 'e'.repeat(64),
+          spkiFingerprintSha256: 'f'.repeat(64),
+          subject: 'snapshot.invalid',
+          issuer: 'Replacement fixture authority',
+          serialNumber: '00a2',
+          validFrom: EARLIER,
+          validTo: LATER,
+          authorized: true,
+          hostnameMatches: true,
+          validity: 'valid',
+          complete: true,
+          truncated: false,
+        },
       }),
     );
 
@@ -109,6 +155,8 @@ describe('website profile snapshots', () => {
     assert.ok(result.changes.some((change) => change.field === 'source.page' && change.state === 'changed'));
     assert.ok(result.changes.some((change) => change.field === 'identity.visibleText' && change.state === 'unavailable'));
     assert.ok(result.changes.some((change) => change.field === 'identityValues.resourceHosts.assets.snapshot.invalid' && change.state === 'removed'));
+    assert.ok(result.changes.some((change) => change.field === 'certificate.fingerprintSha256' && change.state === 'changed'));
+    assert.ok(result.changes.some((change) => change.field === 'certificate.issuer' && change.state === 'changed'));
   });
 
   test('reports different domains and collection completeness as incomparable', () => {
@@ -167,5 +215,17 @@ describe('website profile snapshots', () => {
       }),
       /newer schema/,
     );
+  });
+
+  test('keeps version 2 records readable without inventing certificate evidence', () => {
+    const legacy = snapshot('legacy-snapshot');
+    Reflect.deleteProperty(legacy, 'certificate');
+    const store = normalizeWebsiteSnapshotStore({
+      schema: WEBSITE_SNAPSHOT_SCHEMA,
+      version: 2,
+      snapshots: [legacy],
+    });
+    assert.equal(store.version, WEBSITE_SNAPSHOT_SCHEMA_VERSION);
+    assert.equal(store.snapshots[0]?.certificate, null);
   });
 });

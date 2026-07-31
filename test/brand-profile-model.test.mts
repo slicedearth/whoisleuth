@@ -126,6 +126,7 @@ test('normalizes bounded desired posture baselines and retained observations', (
       mx: ['10 mail.example.invalid'],
       caa: ['0 issue "ca.invalid"'],
       tlsIssuer: 'Reviewed issuer',
+      tlsSanPatterns: ['EXAMPLE.INVALID.', '*.EXAMPLE.INVALID', '*.*.invalid', '*.example.invalid'],
       tlsSpkiSha256: 'A'.repeat(64),
       registrarLock: 'required',
       renewalReviewAt: '2026-12-01',
@@ -153,6 +154,7 @@ test('normalizes bounded desired posture baselines and retained observations', (
   const baseline = requiredValue(result.desiredPostureBaselines[0]);
   assert.equal(baseline.domain, 'example.invalid');
   assert.deepEqual(baseline.nameservers, ['ns1.example.invalid', 'ns2.example.invalid']);
+  assert.deepEqual(baseline.tlsSanPatterns, ['*.example.invalid', 'example.invalid']);
   assert.equal(baseline.tlsSpkiSha256, 'a'.repeat(64));
   assert.deepEqual(baseline.suppressions, [{
     field: 'mx',
@@ -280,8 +282,8 @@ test('imports reject unrelated and future schemas', () => {
   assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2, 3, or 4/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 5/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 2, 3, 4, or 5/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 6/);
 });
 
 test('serialized stores stay within a dedicated UTF-8 byte budget', () => {

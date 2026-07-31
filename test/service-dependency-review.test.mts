@@ -203,6 +203,10 @@ describe('service dependency review projection', () => {
       id: 'fixture-hosting',
       label: 'Fixture hosting service',
       targetSuffixes: ['service.test'],
+      evidenceTypes: ['dns_target_suffix', 'passive_page_title'] as const,
+      source: 'Reviewed fixture source',
+      license: 'Fixture data',
+      sourceDate: '2026-07-01',
       reviewedAt: '2026-07-01',
       provenance: 'Reviewed fixture catalogue',
       deprovisionPageTitles: ['site not found'],
@@ -231,6 +235,11 @@ describe('service dependency review projection', () => {
     assert.match(current?.dependencies[0]?.qualificationDetail ?? '', /manual verification cue/u);
     assert.equal(current?.dependencies[0]?.signatureReviewedAt, '2026-07-01');
     assert.equal(current?.dependencies[0]?.signatureProvenance, 'Reviewed fixture catalogue');
+    assert.equal(current?.dependencies[0]?.signatureSource, 'Reviewed fixture source');
+    assert.equal(current?.dependencies[0]?.signatureLicense, 'Fixture data');
+    assert.equal(current?.dependencies[0]?.signatureSourceDate, '2026-07-01');
+    assert.equal(current?.dependencies[0]?.signatureReviewAgeDays, 29);
+    assert.equal(current?.dependencies[0]?.signatureCatalogDigestSha256, undefined);
 
     const stale = buildServiceDependencyReview({
       domain: 'example.test',

@@ -61,6 +61,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
     actions: [],
     assertions: [],
     manualTrail: [],
+    sightings: [],
     createdAt: ISO,
     updatedAt: ISO,
     ...overrides,
@@ -74,7 +75,7 @@ function caseRecord(overrides: Record<string, unknown> = {}) {
 describe('schema identity', () => {
   test('exports correct schema and version', () => {
     assert.equal(caseReport.CASE_REPORT_SCHEMA, 'whoisleuth.case-report');
-    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 3);
+    assert.equal(caseReport.CASE_REPORT_SCHEMA_VERSION, 4);
   });
 });
 
@@ -88,7 +89,7 @@ describe('buildCaseReport JSON', () => {
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
 
     assert.equal(json.schema, 'whoisleuth.case-report');
-    assert.equal(json.schemaVersion, 3);
+    assert.equal(json.schemaVersion, 4);
     assert.equal(json.generatedAt, ISO);
     assert.equal(json.application.name, 'WHOISleuth');
     assert.equal(json.case.id, 'case-1');
@@ -112,10 +113,25 @@ describe('buildCaseReport JSON', () => {
         { id: 'assertion-5', kind: 'next_step', statement: 'Verify the provider contact manually.', rationale: null, evidencePinIds: [], state: 'open', createdAt: ISO, updatedAt: ISO },
       ],
       manualTrail: [{ id: 'trail-1', kind: 'pivot', summary: 'Reviewed certificate evidence.', target: 'certificate fingerprint', createdAt: ISO }],
+      sightings: [{
+        id: 'sighting-1',
+        state: 'reported_by_provider',
+        sourceClass: 'provider',
+        category: 'website',
+        source: 'Reviewed provider report',
+        observedAt: ISO,
+        completeness: 'partial',
+        evidencePinId: null,
+        limitations: ['Provider coverage is not complete.'],
+        createdAt: ISO,
+      }],
     });
     const { json, markdown } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
     assert.equal(json.analystResponse.assertions.length, 5);
     assert.equal(json.analystResponse.manualTrail.length, 1);
+    assert.equal(json.analystResponse.sightings.length, 1);
+    assert.match(markdown, /### Source-qualified sightings/u);
+    assert.match(markdown, /reported by provider/u);
     assert.match(markdown, /### Verified facts/u);
     assert.match(markdown, /### Hypotheses/u);
     assert.match(markdown, /### Unknowns/u);

@@ -50,26 +50,31 @@ function lines() {
   ];
 }
 
+function steppedClock(stepMs: number): () => number {
+  let current = 0;
+  return () => {
+    const value = current;
+    current += stepMs;
+    return value;
+  };
+}
+
 function responseFromChunks(
   chunks: readonly string[],
   options: Readonly<{
     stallAfter?: number;
     onCancel?: () => void;
-    delayBeforeChunkMs?: number;
     headers?: Readonly<Record<string, string>>;
   }> = {},
 ): Response {
   const encoder = new TextEncoder();
   let index = 0;
   return new Response(new ReadableStream<Uint8Array>({
-    async pull(controller) {
+    pull(controller) {
       if (options.stallAfter !== undefined && index >= options.stallAfter) return;
       const chunk = chunks[index++];
       if (chunk === undefined) controller.close();
       else {
-        if (options.delayBeforeChunkMs) {
-          await new Promise((resolve) => setTimeout(resolve, options.delayBeforeChunkMs));
-        }
         controller.enqueue(encoder.encode(chunk));
       }
     },
@@ -99,23 +104,25 @@ async function rejected(operation: () => Promise<unknown>, pattern: RegExp): Pro
 export async function buildIncrementalLookupQualificationReport() {
   const eventLines = lines();
   const normal = await qualifyLookupProgressResponse(
-    responseFromChunks(eventLines, { delayBeforeChunkMs: 5 }),
+    responseFromChunks(eventLines),
     {
       expectedFinal: FINAL,
       timeoutMs: 1000,
       readDelayMs: 1,
       maximumFirstEventMs: 100,
       minimumEventSpanMs: 10,
+      now: steppedClock(5),
       sleep: async () => {},
     },
   );
   const buffered = await qualifyLookupProgressResponse(
-    responseFromChunks([eventLines.join('')], { delayBeforeChunkMs: 5 }),
+    responseFromChunks([eventLines.join('')]),
     {
       expectedFinal: FINAL,
       timeoutMs: 1000,
       maximumFirstEventMs: 100,
       minimumEventSpanMs: 10,
+      now: () => 0,
     },
   );
   const authenticationExpiry = await rejected(

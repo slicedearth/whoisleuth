@@ -105,7 +105,7 @@
     .console-label-short{display:inline}
     .public-content{padding-top:38px}
   }
-  @media(max-width:400px){
+  @media(max-width:440px){
     .public-shell{padding-inline:8px}
     .public-header{gap:4px}
     .public-brand{gap:4px}

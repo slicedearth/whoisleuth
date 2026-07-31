@@ -5,6 +5,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildSessionCookie,
   createSessionToken,
   isTrustedLoginOrigin,
   isTrustedOrigin,
@@ -13,6 +14,21 @@ import {
   sessionFingerprintFromCookieHeader,
 } from '../lib/auth.mts';
 import { requiredValue } from './value-assertions.mts';
+
+function withSessionTestSecrets(run: () => void): void {
+  const previousPassword = process.env.SITE_PASSWORD;
+  const previousSessionSecret = process.env.SESSION_SECRET;
+  try {
+    process.env.SITE_PASSWORD = 'session-policy-test-password';
+    process.env.SESSION_SECRET = 'session-policy-test-signing-secret';
+    run();
+  } finally {
+    if (previousPassword === undefined) delete process.env.SITE_PASSWORD;
+    else process.env.SITE_PASSWORD = previousPassword;
+    if (previousSessionSecret === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = previousSessionSecret;
+  }
+}
 
 describe('isTrustedOrigin', () => {
   test('accepts a matching Origin/Host pair', () => {
@@ -79,6 +95,91 @@ describe('parseCookies', () => {
 });
 
 describe('session signing', () => {
+  test('defaults new sessions and cookies to seven days', () => {
+    const previousMaxAge = process.env.SESSION_MAX_AGE_DAYS;
+    const actualNow = Date.now;
+    const now = 1_750_000_000_000;
+    try {
+      withSessionTestSecrets(() => {
+        delete process.env.SESSION_MAX_AGE_DAYS;
+        Date.now = () => now;
+        const token = createSessionToken();
+        assert.equal(Number(token.split('.')[0]), now + (7 * 24 * 60 * 60 * 1000));
+        assert.match(buildSessionCookie(token), /(?:^|; )Max-Age=604800(?:;|$)/u);
+        assert.equal(isValidSessionToken(token), true);
+        Date.now = () => now + (7 * 24 * 60 * 60 * 1000);
+        assert.equal(isValidSessionToken(token), false);
+      });
+    } finally {
+      Date.now = actualNow;
+      if (previousMaxAge === undefined) delete process.env.SESSION_MAX_AGE_DAYS;
+      else process.env.SESSION_MAX_AGE_DAYS = previousMaxAge;
+    }
+  });
+
+  test('uses a bounded configured session lifetime for tokens and cookies', () => {
+    const previousMaxAge = process.env.SESSION_MAX_AGE_DAYS;
+    const actualNow = Date.now;
+    const now = 1_750_000_000_000;
+    try {
+      withSessionTestSecrets(() => {
+        process.env.SESSION_MAX_AGE_DAYS = '2';
+        Date.now = () => now;
+        const token = createSessionToken();
+        assert.equal(Number(token.split('.')[0]), now + (2 * 24 * 60 * 60 * 1000));
+        assert.match(buildSessionCookie(token), /(?:^|; )Max-Age=172800(?:;|$)/u);
+        assert.equal(isValidSessionToken(token), true);
+      });
+    } finally {
+      Date.now = actualNow;
+      if (previousMaxAge === undefined) delete process.env.SESSION_MAX_AGE_DAYS;
+      else process.env.SESSION_MAX_AGE_DAYS = previousMaxAge;
+    }
+  });
+
+  test('rejects invalid session lifetime configuration without accepting existing tokens', () => {
+    const previousMaxAge = process.env.SESSION_MAX_AGE_DAYS;
+    const actualNow = Date.now;
+    const now = 1_750_000_000_000;
+    try {
+      withSessionTestSecrets(() => {
+        delete process.env.SESSION_MAX_AGE_DAYS;
+        Date.now = () => now;
+        const token = createSessionToken();
+        for (const invalid of ['', '0', '31', '7.5', ' 7', '99999999999999999999']) {
+          process.env.SESSION_MAX_AGE_DAYS = invalid;
+          assert.throws(() => createSessionToken(), /SESSION_MAX_AGE_DAYS must be a whole number from 1 to 30/u);
+          assert.throws(() => buildSessionCookie(token), /SESSION_MAX_AGE_DAYS must be a whole number from 1 to 30/u);
+          assert.equal(isValidSessionToken(token), false);
+        }
+      });
+    } finally {
+      Date.now = actualNow;
+      if (previousMaxAge === undefined) delete process.env.SESSION_MAX_AGE_DAYS;
+      else process.env.SESSION_MAX_AGE_DAYS = previousMaxAge;
+    }
+  });
+
+  test('invalidates a token whose remaining lifetime exceeds a lowered maximum', () => {
+    const previousMaxAge = process.env.SESSION_MAX_AGE_DAYS;
+    const actualNow = Date.now;
+    const now = 1_750_000_000_000;
+    try {
+      withSessionTestSecrets(() => {
+        process.env.SESSION_MAX_AGE_DAYS = '30';
+        Date.now = () => now;
+        const token = createSessionToken();
+        assert.equal(isValidSessionToken(token), true);
+        process.env.SESSION_MAX_AGE_DAYS = '7';
+        assert.equal(isValidSessionToken(token), false);
+      });
+    } finally {
+      Date.now = actualNow;
+      if (previousMaxAge === undefined) delete process.env.SESSION_MAX_AGE_DAYS;
+      else process.env.SESSION_MAX_AGE_DAYS = previousMaxAge;
+    }
+  });
+
   test('derives an opaque stable concurrency key without retaining the bearer token', () => {
     const cookie = 'theme=dark; wrt_session=12345.signature';
     const fingerprint = requiredValue(sessionFingerprintFromCookieHeader(cookie));

@@ -118,11 +118,11 @@
 {/if}
 
 <style>
-  .relationships{margin-top:16px;padding:var(--card-pad)}
+  .relationships{min-width:0;margin-top:16px;padding:var(--card-pad)}
   .relationships h2{margin:0}
   .relationship-intro,.relationship-limitations p{color:var(--muted);font-size:var(--text-xs)}
   .relationship-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
-  .relationship-list article{padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .relationship-list article{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .relationship-list header{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center}
   .relationship-list .relationship-glyph{display:grid;width:32px;height:32px;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:50%;background:rgb(var(--accent-rgb) / .07);color:var(--accent)}
   .relationship-heading{min-width:0}
@@ -135,10 +135,10 @@
   .relationship-list code{color:var(--accent);font-size:var(--text-xs);font-family:var(--mono)}
   .relationship-list p{overflow-wrap:anywhere}
   .relationship-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-  .relationship-actions button{margin:0}
+  .relationship-actions button{max-width:100%;margin:0;white-space:normal}
   .retain-status{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .relationship-limitations{margin-top:12px}
   .relationship-limitations summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}
-  @media(max-width:700px){.relationship-list{grid-template-columns:1fr}}
+  @media(max-width:700px){.relationship-list{grid-template-columns:minmax(0,1fr)}}
   @media(max-width:420px){.relationship-list header{grid-template-columns:34px minmax(0,1fr)}.relationship-count{grid-column:2;justify-self:start}}
 </style>

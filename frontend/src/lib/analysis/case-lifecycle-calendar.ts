@@ -3,11 +3,16 @@ import type { CaseRecord } from './case-model.ts';
 export const CASE_LIFECYCLE_CALENDAR_SCHEMA = 'whoisleuth.case-review-calendar';
 export const MAX_CASE_LIFECYCLE_EVENTS = 500;
 
+export type CaseLifecycleCalendarKind = 'action_due' | 'action_follow_up' | 'certificate_expiry_review' | 'disclosure_expiry_review' | 'domain_expiry_review';
+export type CaseLifecycleCalendarSource = 'case_action' | 'evidence_history' | 'evidence_pin';
+
 export type CaseLifecycleCalendarEvent = Readonly<{
   uid: string;
   caseId: string;
   domain: string;
-  kind: 'action_due' | 'action_follow_up' | 'certificate_expiry_review' | 'disclosure_expiry_review' | 'domain_expiry_review';
+  kind: CaseLifecycleCalendarKind;
+  source: CaseLifecycleCalendarSource;
+  sourceLabel: string;
   startsAt: string;
   summary: string;
   description: string;
@@ -59,6 +64,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
           caseId: record.id,
           domain: record.domain,
           kind: 'action_due',
+          source: 'case_action',
+          sourceLabel: 'Saved case action',
           startsAt: dueAt,
           summary: `Review ${action.type.replaceAll('_', ' ')} for ${record.domain}`,
           description: `Case action state: ${action.state}. Open the browser-local case to review the recorded recipient and evidence.`,
@@ -70,6 +77,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
           caseId: record.id,
           domain: record.domain,
           kind: 'action_follow_up',
+          source: 'case_action',
+          sourceLabel: 'Saved case action',
           startsAt: followUpAt,
           summary: `Follow up ${action.type.replaceAll('_', ' ')} for ${record.domain}`,
           description: `Case action state: ${action.state}. Open the browser-local case before contacting any recipient.`,
@@ -83,6 +92,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
         caseId: record.id,
         domain: record.domain,
         kind: 'domain_expiry_review',
+        source: 'evidence_history',
+        sourceLabel: 'Latest retained domain evidence',
         startsAt: addDays(expiry, -30),
         summary: `Review observed expiry evidence for ${record.domain}`,
         description: 'The retained expiry date is point-in-time evidence, not a guarantee of deletion, availability, release, or acquisition eligibility.',
@@ -101,6 +112,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
         caseId: record.id,
         domain: record.domain,
         kind: 'certificate_expiry_review',
+        source: 'evidence_pin',
+        sourceLabel: 'Analyst-selected TLS evidence pin',
         startsAt: addDays(certificateExpiry, -30),
         summary: `Review retained certificate expiry for ${record.domain}`,
         description: 'This date came from an analyst-selected TLS evidence pin. Recollect before interpreting current certificate state.',
@@ -113,6 +126,8 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
         caseId: record.id,
         domain: record.domain,
         kind: 'disclosure_expiry_review',
+        source: 'evidence_pin',
+        sourceLabel: 'Analyst-selected disclosure evidence pin',
         startsAt: addDays(disclosureExpiry, -14),
         summary: `Review retained security.txt expiry for ${record.domain}`,
         description: 'This date came from an analyst-selected disclosure evidence pin. Publication and contact reachability must be reviewed again.',
@@ -122,6 +137,41 @@ export function buildCaseLifecycleEvents(records: readonly CaseRecord[]): CaseLi
   return events
     .sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt) || left.uid.localeCompare(right.uid))
     .slice(0, MAX_CASE_LIFECYCLE_EVENTS);
+}
+
+export function filterCaseLifecycleEvents(
+  events: readonly CaseLifecycleCalendarEvent[],
+  options: { kind?: unknown; window?: unknown } = {},
+  now: unknown = new Date().toISOString(),
+): CaseLifecycleCalendarEvent[] {
+  const kinds = new Set<CaseLifecycleCalendarKind>([
+    'action_due',
+    'action_follow_up',
+    'certificate_expiry_review',
+    'disclosure_expiry_review',
+    'domain_expiry_review',
+  ]);
+  const kind = typeof options.kind === 'string' && kinds.has(options.kind as CaseLifecycleCalendarKind)
+    ? options.kind as CaseLifecycleCalendarKind
+    : 'all';
+  const window = typeof options.window === 'string' && ['all', 'overdue', '30d', '90d', 'future'].includes(options.window)
+    ? options.window
+    : 'future';
+  const nowAt = timestamp(now) || new Date(0).toISOString();
+  const nowMs = Date.parse(nowAt);
+  const maximum = window === '30d'
+    ? nowMs + 30 * 86_400_000
+    : window === '90d'
+      ? nowMs + 90 * 86_400_000
+      : Number.POSITIVE_INFINITY;
+  return events.filter((event) => {
+    if (kind !== 'all' && event.kind !== kind) return false;
+    const startsAt = Date.parse(event.startsAt);
+    if (window === 'overdue') return startsAt < nowMs;
+    if (window === 'future') return startsAt >= nowMs;
+    if (window === '30d' || window === '90d') return startsAt >= nowMs && startsAt <= maximum;
+    return true;
+  }).slice(0, MAX_CASE_LIFECYCLE_EVENTS);
 }
 
 export function serializeCaseLifecycleCalendar(

@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, runBulkScan } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
@@ -547,7 +549,7 @@ test('reviewed response records persist and produce a local non-submitted packet
   await page.reload();
   await page.getByRole('tab', { name: /Cases/ }).click();
   await page.locator('.case-head', { hasText: 'response.invalid' }).click();
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 1 decision · 0 assertions · 1 action');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action');
 });
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
@@ -584,7 +586,98 @@ test('external findings require a validated preview before creating local eviden
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.getByRole('status')).toContainText('skipped 1 duplicate');
-  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 decisions');
+  await expect(page.locator('.response-workspace')).toContainText('1 pin · 0 sightings · 0 decisions');
+});
+
+test('portable WARC evidence is normalized locally before deliberate case import', async ({ page }) => {
+  await openCasesView(page);
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const block = Buffer.from([
+    'HTTP/1.1 200 OK',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<!doctype html><html><head><title>Reviewed archive page</title></head><body>private body</body></html>',
+  ].join('\r\n'));
+  const digest = createHash('sha256').update(block).digest('hex');
+  const headers = Buffer.from([
+    'WARC/1.1',
+    'WARC-Type: response',
+    'WARC-Date: 2026-07-28T01:00:00.000Z',
+    'WARC-Record-ID: <urn:uuid:e2e-response>',
+    'WARC-Target-URI: https://archive-review.invalid/private?token=secret',
+    `WARC-Block-Digest: sha256:${digest}`,
+    'Content-Type: application/http; msgtype=response',
+    `Content-Length: ${block.byteLength}`,
+    '',
+    '',
+  ].join('\r\n'));
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'reviewed-evidence.warc',
+    mimeType: 'application/warc',
+    buffer: Buffer.concat([headers, block, Buffer.from('\r\n\r\n')]),
+  });
+  await expect(externalImport.getByRole('heading', { name: 'Portable WARC evidence' })).toBeVisible();
+  await expect(externalImport).toContainText('Reviewed archive page');
+  await expect(externalImport).not.toContainText('private body');
+  await expect(externalImport).not.toContainText('token=secret');
+  await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.locator('.case-head', { hasText: 'archive-review.invalid' })).toBeVisible();
+});
+
+test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }) => {
+  await openCasesView(page);
+  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const block = Buffer.from([
+    'HTTP/1.1 200 OK',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<!doctype html><html><head><title>Reviewed packaged page</title></head><body>discarded package body</body></html>',
+  ].join('\r\n'));
+  const recordDigest = createHash('sha256').update(block).digest('hex');
+  const headers = Buffer.from([
+    'WARC/1.1',
+    'WARC-Type: response',
+    'WARC-Date: 2026-07-28T01:00:00.000Z',
+    'WARC-Record-ID: <urn:uuid:wacz-e2e-response>',
+    'WARC-Target-URI: https://package-review.invalid/private?token=secret',
+    `WARC-Block-Digest: sha256:${recordDigest}`,
+    'Content-Type: application/http; msgtype=response',
+    `Content-Length: ${block.byteLength}`,
+    '',
+    '',
+  ].join('\r\n'));
+  const compressedWarc = gzipSync(Buffer.concat([headers, block, Buffer.from('\r\n\r\n')]));
+  const manifest = Buffer.from(JSON.stringify({
+    profile: 'data-package',
+    wacz_version: '1.1.1',
+    resources: [{
+      name: 'capture.warc.gz',
+      path: 'archive/capture.warc.gz',
+      hash: `sha256:${createHash('sha256').update(compressedWarc).digest('hex')}`,
+      bytes: compressedWarc.byteLength,
+    }],
+  }));
+  const wacz = zipSync({
+    'archive/capture.warc.gz': [compressedWarc, { level: 0 }],
+    'datapackage.json': manifest,
+    'datapackage-digest.json': Buffer.from(JSON.stringify({
+      path: 'datapackage.json',
+      hash: `sha256:${createHash('sha256').update(manifest).digest('hex')}`,
+    })),
+  });
+  await externalImport.locator('input[type="file"]').setInputFiles({
+    name: 'reviewed-evidence.wacz',
+    mimeType: 'application/wacz',
+    buffer: Buffer.from(wacz),
+  });
+  await expect(externalImport.getByRole('heading', { name: 'Portable WACZ evidence' })).toBeVisible();
+  await expect(externalImport).toContainText('Reviewed packaged page');
+  await expect(externalImport).not.toContainText('discarded package body');
+  await expect(externalImport).not.toContainText('token=secret');
+  await externalImport.getByRole('button', { name: 'Import into cases' }).click();
+  await expect(page.locator('.case-head', { hasText: 'package-review.invalid' })).toBeVisible();
 });
 
 test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }) => {
@@ -631,7 +724,7 @@ test('STIX claims require an existing selected case and remain separate from col
   const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
   if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
   const response = page.locator('.response-workspace');
-  await expect(response).toContainText('0 pins · 0 decisions · 1 assertion');
+  await expect(response).toContainText('0 pins · 0 sightings · 0 decisions · 1 assertion');
   await response.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
   await expect(response).toContainText('external import · open');
   await expect(response).toContainText('External review source');

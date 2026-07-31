@@ -50,6 +50,7 @@ test('truncation overrides a nominal source success', () => {
     { id: 'page', label: 'Page identity', category: 'web', status: 'success', truncated: true },
   ]);
   assert.equal(ledger.entries[0]?.state, 'partial');
+  assert.equal(ledger.entries[0]?.truncated, true);
 });
 
 test('builds domain lookup coverage without merging source limitations', () => {

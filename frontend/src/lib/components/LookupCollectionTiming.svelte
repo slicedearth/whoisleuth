@@ -3,9 +3,10 @@
     LookupTiming,
     LookupTimingSource,
   } from '$lib/analysis/lookup-response.ts';
+  import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import { projectCollectionTiming } from '$lib/analysis/visualization-models.ts';
 
-  let { timing }: { timing: LookupTiming } = $props();
+  let { timing, embedded = false }: { timing: LookupTiming; embedded?: boolean } = $props();
 
   const sourceLabels: Record<LookupTimingSource, string> = {
     rdap: 'Registry RDAP',
@@ -21,11 +22,6 @@
   };
   const chart = $derived(projectCollectionTiming(timing.sources, timing.totalMs));
 
-  function duration(value: number): string {
-    if (value < 1_000) return `${value} ms`;
-    return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} s`;
-  }
-
   function mobileBarStyle(source: (typeof chart.sources)[number]): string {
     const total = chart.totalMs;
     const start = Math.max(0, source.completedAfterMs - source.durationMs);
@@ -35,13 +31,17 @@
   }
 </script>
 
-<section class="collection-timing card" aria-labelledby="collection-timing-title">
+<section class="collection-timing" class:card={!embedded} class:embedded aria-labelledby="collection-timing-title">
   <header>
     <div>
-      <p class="eyebrow">Request diagnostics</p>
-      <h4 id="collection-timing-title">Collection timing</h4>
+      {#if !embedded}<p class="eyebrow">Request diagnostics</p>{/if}
+      {#if embedded}
+        <h5 id="collection-timing-title">Collection timing</h5>
+      {:else}
+        <h4 id="collection-timing-title">Collection timing</h4>
+      {/if}
     </div>
-    <span class="chip info">{duration(timing.totalMs)} total</span>
+    <span class="chip info">{formatCollectionDuration(timing.totalMs)} total</span>
   </header>
 
   <p class="timing-note">
@@ -55,13 +55,13 @@
       <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
         {#each chart.ticks as tick}
           <line x1={tick.x} x2={tick.x} y1="18" y2={chart.height - 10} class="tick-line" />
-          <text x={tick.x} y="13" text-anchor="middle" class="tick-label">{duration(tick.value)}</text>
+          <text x={tick.x} y="13" text-anchor="middle" class="tick-label">{formatCollectionDuration(tick.value)}</text>
         {/each}
         {#each chart.sources as source}
           <g class:rejected={source.outcome === 'rejected'} class="timing-source">
             <text x="8" y={source.y + 13}>{sourceLabels[source.label as LookupTimingSource] ?? source.label}</text>
             <rect x={source.x} y={source.y} width={source.width} height="17" rx="4">
-              <title>{duration(source.durationMs)} duration, settled at +{duration(source.completedAfterMs)}</title>
+              <title>{formatCollectionDuration(source.durationMs)} duration, settled at +{formatCollectionDuration(source.completedAfterMs)}</title>
             </rect>
             <circle cx={source.x + source.width} cy={source.y + 8.5} r="4" />
           </g>
@@ -71,7 +71,7 @@
         {#each chart.sources as source}
           <div class:rejected={source.outcome === 'rejected'} class="mobile-timing-source">
             <span>{sourceLabels[source.label as LookupTimingSource] ?? source.label}</span>
-            <strong>{duration(source.durationMs)} · +{duration(source.completedAfterMs)}</strong>
+            <strong>{formatCollectionDuration(source.durationMs)} · +{formatCollectionDuration(source.completedAfterMs)}</strong>
             <i style={mobileBarStyle(source)}><b></b></i>
           </div>
         {/each}
@@ -87,17 +87,19 @@
         <span class:rejected={source.outcome === 'rejected'} class="outcome">
           {source.outcome === 'rejected' ? 'request error' : 'settled'}
         </span>
-        <span class="duration">{duration(source.durationMs)}</span>
-        <span class="settled">at +{duration(source.completedAfterMs)}</span>
+        <span class="duration">{formatCollectionDuration(source.durationMs)}</span>
+        <span class="settled">at +{formatCollectionDuration(source.completedAfterMs)}</span>
       </li>
     {/each}
   </ul>
 </section>
 
 <style>
-  .collection-timing{padding:var(--card-pad)}
+  .collection-timing{min-width:0;padding:var(--card-pad)}
+  .collection-timing.embedded{padding:4px 0 0}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-  header h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
+  header :is(h4,h5){margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
+  .embedded header h5{font-size:var(--text-sm)}
   header .chip{flex:0 0 auto}
   .timing-note{max-width:78ch;margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .timing-chart{max-width:100%;margin-top:14px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
@@ -112,7 +114,7 @@
   .timing-source.rejected circle{fill:var(--danger)}
   .timing-limit{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs)}
   .timing-data{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;list-style:none}
-  @media(max-width:620px){
+  @media(max-width:760px){
     .timing-chart{overflow:visible}
     .timing-chart svg{display:none}
     .mobile-timing{display:grid;gap:11px;padding:12px}

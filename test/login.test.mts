@@ -110,6 +110,33 @@ describe('login handler origin enforcement', () => {
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
   });
 
+  test('fails closed with a sanitized response when the session lifetime is misconfigured', async () => {
+    const previousMaxAge = process.env.SESSION_MAX_AGE_DAYS;
+    try {
+      process.env.SESSION_MAX_AGE_DAYS = '31';
+      const response = await loginHandler(new Request('https://example.com/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          host: 'example.com',
+          origin: 'https://example.com',
+          'x-nf-client-connection-ip': '192.0.2.31',
+        },
+        body: JSON.stringify({ password: process.env.SITE_PASSWORD }),
+      }));
+
+      assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), {
+        error: 'Internal server error',
+        errorCode: 'INTERNAL_ERROR',
+      });
+      assert.equal(response.headers.get('Set-Cookie'), null);
+    } finally {
+      if (previousMaxAge === undefined) delete process.env.SESSION_MAX_AGE_DAYS;
+      else process.env.SESSION_MAX_AGE_DAYS = previousMaxAge;
+    }
+  });
+
   test('rejects malformed UTF-8 at the modern Request boundary', async () => {
     const response = await loginHandler(new Request('https://example.com/api/login', {
       method: 'POST',

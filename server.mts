@@ -5,11 +5,18 @@ import { fileURLToPath } from 'node:url';
 
 import { classifyQuery } from './lib/classify.mts';
 import { fetchRdapRecord } from './lib/rdap.mts';
+import {
+  RdapNameserverSearchInputError,
+  searchRdapNameserver,
+} from './lib/rdap-nameserver-search.mts';
 import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
-import { CANONICAL_TRAILING_SLASH_REDIRECTS } from './lib/prerendered-routes.mts';
+import {
+  CANONICAL_TRAILING_SLASH_REDIRECTS,
+  PRERENDERED_HTML_FILE_OVERRIDES,
+} from './lib/prerendered-routes.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
@@ -26,7 +33,14 @@ import {
   buildClearCookie,
   isTrustedLoginOrigin,
 } from './lib/auth.mts';
-import { checkRateLimit, getClientIp, getForwardedProtocol, LOGIN_RATE_LIMIT, API_RATE_LIMIT } from './lib/rate-limit.mts';
+import {
+  checkApiRateLimit,
+  checkLoginRateLimit,
+  checkPrerenderedHtmlRateLimit,
+  getClientIp,
+  getForwardedProtocol,
+} from './lib/rate-limit.mts';
+import type { RateLimitChecker } from './lib/rate-limit.mts';
 import {
   defaultOperationBudget,
   operationBudgetError,
@@ -56,9 +70,12 @@ type ResponseLike = {
   redirect: (statusCode: number, path: string) => unknown;
 };
 
+type StaticResponseLike = ResponseLike & {
+  sendFile: (path: string) => unknown;
+};
+
 type Next = () => void;
 type ErrorNext = (error?: unknown) => void;
-type RateLimitOptions = Readonly<{ limit: number; windowMs: number }>;
 type OperationTarget = ReturnType<typeof operationBudgetTargetFor>;
 
 function recordValue(value: unknown, key: string): unknown {
@@ -86,6 +103,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const prerenderedHtmlRateLimit = rateLimit(checkPrerenderedHtmlRateLimit);
 
 app.disable('x-powered-by');
 
@@ -111,12 +129,24 @@ app.use('/_app/immutable', express.static(path.join(svelteBuildDir, '_app', 'imm
   immutable: true,
   maxAge: '1y',
 }));
-app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
 for (const [sourcePath, canonicalPath] of CANONICAL_TRAILING_SLASH_REDIRECTS) {
-  app.get(sourcePath, (_req: RequestLike, res: ResponseLike) => {
+  app.get(sourcePath, (req: RequestLike, res: ResponseLike, next: Next) => {
+    if (req.path !== sourcePath) {
+      next();
+      return;
+    }
     res.redirect(308, canonicalPath);
   });
 }
+// A prerendered route can also be the parent directory for other pages.
+// Serve its exact HTML file before express.static sees the directory and
+// redirects to a non-existent index file.
+for (const [routePath, htmlFile] of PRERENDERED_HTML_FILE_OVERRIDES) {
+  app.get(routePath, prerenderedHtmlRateLimit, (_req: RequestLike, res: StaticResponseLike) => {
+    res.sendFile(path.join(svelteBuildDir, htmlFile));
+  });
+}
+app.use(express.static(svelteBuildDir, { extensions: ['html'] }));
 
 // True when the request actually arrived over HTTPS - directly, or via a
 // reverse proxy that sets the standard forwarded-proto header - so the
@@ -143,10 +173,10 @@ function requireAuth(req: RequestLike, res: ResponseLike, next: Next) {
   next();
 }
 
-function rateLimit(scope: string, opts: RateLimitOptions) {
+function rateLimit(check: RateLimitChecker) {
   return (req: RequestLike, res: ResponseLike, next: Next) => {
-    const key = `${scope}:${getClientIp(req.headers, req.socket && req.socket.remoteAddress)}`;
-    const { allowed, retryAfterSeconds } = checkRateLimit(key, opts);
+    const identity = getClientIp(req.headers, req.socket && req.socket.remoteAddress);
+    const { allowed, retryAfterSeconds } = check(identity);
     if (!allowed) {
       res.setHeader('Retry-After', String(retryAfterSeconds));
       return res.status(429).json({ error: 'Too many requests. Please try again later.', errorCode: LOOKUP_ERROR_CODES.RATE_LIMITED });
@@ -155,8 +185,8 @@ function rateLimit(scope: string, opts: RateLimitOptions) {
   };
 }
 
-const loginRateLimit = rateLimit('login', LOGIN_RATE_LIMIT);
-const apiRateLimit = rateLimit('api', API_RATE_LIMIT);
+const loginRateLimit = rateLimit(checkLoginRateLimit);
+const apiRateLimit = rateLimit(checkApiRateLimit);
 const parseApiJson = express.json({ limit: MAX_API_JSON_BODY_BYTES });
 
 function requireFeature(feature: NetworkFeatureId) {
@@ -278,6 +308,23 @@ app.get('/api/rdap', apiRateLimit, requireAuth, requireFeature('rdap'), async (r
       });
     } catch (err) {
       sendUnexpectedApiError(res);
+    }
+  });
+});
+
+app.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
+  return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async () => {
+    try {
+      const result = await searchRdapNameserver(
+        queryText(req.query.nameserver),
+        queryText(req.query.scope),
+      );
+      return res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof RdapNameserverSearchInputError) {
+        return res.status(400).json({ error: error.message, errorCode: error.code });
+      }
+      return sendUnexpectedApiError(res);
     }
   });
 });

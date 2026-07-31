@@ -25,6 +25,15 @@ default (see the README), so many lookups return no personal data at all.
   candidates continue to Bulk, only the resulting domain names and bounded
   mutation provenance follow the normal lookup path; the original dictionary
   list does not.
+- **Registry-scoped nameserver search**: when an analyst explicitly enters a
+  nameserver and one registry suffix in Discover, the deployment selects that
+  registry through IANA RDAP bootstrap data and sends the nameserver in a
+  bounded public RDAP search request. The transient response retains at most
+  200 normalized in-scope domains, source state, observation time, truncation,
+  endpoint attempts, and limitations. It discards the raw registry response
+  and published contacts. The result is a lower bound for that registry, not a
+  global reverse-nameserver inventory. Nothing is saved unless the analyst
+  deliberately selects resulting domains for the ordinary Bulk handoff.
 - **Single and bulk lookups**: proxied through the server and never written to
   an ordinary investigation database or disk server-side. Request data is
   transient, while bounded registry bootstrap and selected public RDAP/WHOIS
@@ -192,7 +201,11 @@ default (see the README), so many lookups return no personal data at all.
   limitations, and up to 8 bounded source observations per relationship as
   versioned JSON, GraphML, or GEXF. It excludes case notes, status, disposition,
   raw registry or page responses, contacts, credentials, and transient graph
-  view state. Selected security-policy values are discarded after the
+  view state. The table and graph can also calculate how frequently a
+  relationship appears among comparable cases already retained in the current
+  browser workspace. This local proportion is not sent anywhere, does not
+  estimate wider internet prevalence, and is not evidence of attribution.
+  Selected security-policy values are discarded after the
   transient analysis described below. Other raw header values, attempt errors,
   and redirect inventories are not copied into browser-local investigation
   stores or graph exports.
@@ -457,6 +470,13 @@ default (see the README), so many lookups return no personal data at all.
   curated technology identifiers, passive posture states, selected
   page-identity digests, up to 30 normalized resource hosts and tracking
   identifiers, up to 20 external form-action origins, and source-health states.
+  When the same reviewed Deep result contains a normalized leaf certificate,
+  the snapshot can additionally retain its SHA-256 and SPKI SHA-256
+  fingerprints, bounded subject and issuer labels, serial, validity dates,
+  authorization and hostname-match states, and TLS completeness. It stores no
+  certificate bytes or expanded alternative-name list. The certificate record
+  is labelled as observed by this browser at the snapshot time; it is not
+  refreshed automatically and is not a statement of current deployment.
   It excludes complete URLs, form paths and queries, raw RDAP, WHOIS, HTTP,
   HTML, contact, credential, and provider payloads. Snapshot comparison,
   deletion, import, and export happen locally and make no request. Monitor can
@@ -466,6 +486,12 @@ default (see the README), so many lookups return no personal data at all.
   shared, similar, or unavailable field is a review lead, not evidence of
   compromise, ownership, authorship, coordination, intent, safety, or
   maliciousness.
+  Cases can also retain bounded source-qualified sightings. A sighting records
+  a fixed state, evidence category, short source label, observation or review
+  time, completeness, optional evidence-pin reference, and limitations.
+  Deployment observations, provider reports, and analyst-reviewed states stay
+  distinct. An analyst state such as not reproduced or expired does not remove,
+  rewrite, or negate the original collected evidence.
   Investigation templates retain only allowlisted guide-stage identities,
   bounded analyst-authored labels and instructions, expected evidence,
   completion criteria, and optional additional request gates. They cannot add
@@ -473,6 +499,14 @@ default (see the README), so many lookups return no personal data at all.
   evidence, change a case, or remove mandatory gates. Saving, editing,
   importing, exporting, and deleting templates happen locally and make no
   network request.
+  A deliberate restricted CACAO 2.0 export represents the same allowlisted
+  stages as manual analyst steps. Its importer rejects executable or encoded
+  commands, branches, targets, credentials, and unknown capabilities; it never
+  executes imported command text or starts a request.
+  The public Guide's three fixed fictional practice scenarios keep their
+  current choice and step only in component memory. They make no request, write
+  no browser storage, disappear on reload, and do not produce findings or
+  evidence reports.
   Bulk filters and group summaries are derived locally from the compact rows
   already in memory. Explicit batch selection is stored in the same bounded
   shortlist and does not make a request. A selected deep rescan sends only the
@@ -518,13 +552,25 @@ default (see the README), so many lookups return no personal data at all.
   authorization data, request bodies, complete URLs, paths, queries,
   fragments, and arbitrary fields. WHOISleuth does not collect or
   independently verify the imported observation.
+  A separate analyst-selected WARC or WACZ import is also processed only in
+  browser memory. It is capped at 8 MiB and retains only normalized page
+  findings after excluding request records, sensitive headers, downloads,
+  unsupported or excessive responses, and mismatched supported record
+  digests. WACZ packages are not replayed. Safe ZIP paths, entry and byte
+  bounds, the data-package manifest, declared WARC resource sizes, and SHA-256
+  resource digests are checked before the same WARC filter runs; an optional
+  manifest digest is verified when present. Package indexes, page lists,
+  screenshots, custom files, raw response content, and archive bytes are not
+  stored.
   A selected security.txt result can be organized transiently into disclosure
   health using only its retained contact, policy, encryption, language, expiry,
   and source state. This adds no request and does not test contact
   reachability. Certificate and security.txt expiry dates enter the local
   review calendar only when the analyst explicitly pins those facts to a case.
-  The calendar excludes the pinned values themselves, recipient values, notes,
-  and source payloads.
+  A filterable browser view groups these review dates with saved action due and
+  follow-up dates and links them back to their local cases. The calendar and
+  view exclude the pinned values themselves, recipient values, notes, and
+  source payloads.
   A privacy-safe browser handoff can reduce a pasted domain or HTTP(S) URL to
   the normalized hostname or a sanitized HTTP(S) origin after discarding
   credentials, port, path, query, fragment, and browser-local identifiers.
@@ -600,7 +646,12 @@ default (see the README), so many lookups return no personal data at all.
   context when collected; ASN reports include normalized routing registration
   evidence. All preserve source states and collection time while excluding raw
   RDAP and WHOIS responses, expanded contacts, provider payloads, scripts, and
-  remote assets. A
+  remote assets. A selected current-schema Lookup evidence JSON file can be
+  replayed locally after schema, nesting, entry-count, and byte-limit checks.
+  Replay calculates SHA-256 and can compare it with an explicitly supplied
+  trusted checksum. The file and checksum remain in the current browser tab,
+  no source is contacted, raw payloads are not rendered, and replay time is not
+  treated as observation time. A
   deliberate unified workspace archive can contain cases and their analyst
   notes, campaigns, Brand Profiles, watchlists, shortlist entries, custom
   detection rules, retained relationship observations, compact saved Bulk
@@ -706,7 +757,7 @@ default (see the README), so many lookups return no personal data at all.
   evidence and are not retained by the server. Registry and resolver failures,
   exhausted traversal bounds, and unsupported policy targets remain explicit
   incomplete states. A Brand Profile can separately retain analyst-authored
-  desired nameserver, DS, MX, CAA, TLS issuer or public-key digest,
+  desired nameserver, DS, MX, CAA, TLS issuer, SAN patterns or public-key digest,
   transfer-lock, and renewal-review values; reviewed suppressions; and one
   explicitly selected compact prior posture observation per official domain.
   Those local values are not sent with a posture request, do not change
@@ -729,10 +780,12 @@ default (see the README), so many lookups return no personal data at all.
   window ends. Deployments without this optional configuration keep
   concurrency state in server memory only and have no durable usage counters.
 
-The signed session cookie is stateless and valid for up to 30 days. Signing
-out removes it from that browser but does not revoke a captured copy; the
-operator must rotate `SESSION_SECRET` (or the shared password when it is also
-used for signing) to invalidate all outstanding sessions before expiry.
+The signed session cookie is stateless and valid for the configured lifetime,
+which defaults to 7 days and cannot exceed 30 days. Lowering the configured
+maximum rejects tokens with a longer remaining lifetime. Signing out removes
+the cookie from that browser but does not revoke a captured copy; the operator
+must rotate `SESSION_SECRET` (or the shared password when it is also used for
+signing) to invalidate all outstanding sessions before expiry.
 
 ## Audience measurement
 

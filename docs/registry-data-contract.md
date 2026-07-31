@@ -26,6 +26,12 @@ full successful response contains:
   non-applicable result for IP/ASN input.
 - `diagnostics`: independent source status and provenance. Deep non-compact
   responses also include bounded orchestration timing described below.
+
+`GET /api/rdap-nameserver-search?nameserver=<hostname>&scope=<suffix>` is a
+separate authenticated Discover action. It accepts one normalized nameserver
+and one top-level registry suffix, selects the registry from IANA RDAP
+bootstrap data, and requests its RFC 9082 `nsLdhName` domain search. It does not
+change the Fast, Compact, Deep, availability, or monitoring contracts.
 - `networkContext`: for an eligible deep non-compact domain result, a
   separately attributed summary of one observed public endpoint address and
   its IP RDAP network registration.
@@ -69,10 +75,12 @@ full successful response contains:
 raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
 downloaded into Bulk or copied into watchlists and analyst cases. Deep compact
 collection still runs the bounded WHOIS, DNS, website, TLS, and mail checks
-used by triage, but omits the single-domain registrar-RDAP follow-up, observed
-network RDAP, credential-surface profile, structured-data identity,
-technology profile, page-role profile, client-behaviour profile, passive
-security-posture detail,
+used by triage. Compact Deep can derive and retain only the bounded
+`bulkComparison` technology identifiers, TLS issuer label, SPKI fingerprint,
+and their source states. It omits the single-domain registrar-RDAP follow-up,
+observed network RDAP, credential-surface profile, structured-data identity,
+complete technology profile, page-role profile, client-behaviour profile,
+passive security-posture detail,
 `security.txt`, and optional external-intelligence providers.
 
 Fast mode is WHOIS-free. It uses RDAP first and may perform a bounded NS lookup
@@ -151,7 +159,13 @@ one SOA query to retain the bounded primary nameserver, responsible mailbox,
 serial, refresh, retry, expiry, and minimum-TTL values. It also adds one HTTPS
 resource-record query through the deployment's configured recursive DNS
 servers and retains up to sixteen normalized service-binding publications.
-Compact Bulk keeps the existing eight-query profile. Each record family has an independent
+The same full Deep path resolves the effective CAA policy by walking from the
+exact hostname toward, but not including, the DNS root. It reuses the direct
+CAA answer, stops at the first non-empty RRset, and queries at most eight owner
+names. A resolver error stops the walk and remains incomplete rather than
+being treated as an empty RRset. The direct-owner and effective-policy records
+remain separately attributed. Compact Bulk keeps the existing eight-query
+profile and does not run the parent walk. Each record family has an independent
 `success`/`not_found`/`error` diagnostic, malformed neighbours are counted and
 discarded, and capped inventories set their truncation flag.
 Resolver failure produces `null` for the compatible `hasMx`, `hasSpf`, or
@@ -183,8 +197,19 @@ The observation is point-in-time context. CNAME targets are not followed
 recursively, unrelated TXT records are not retained, and shared DNS
 infrastructure is not proof of common ownership or maliciousness. Full Lookup
 and deliberate evidence exports retain the bounded observation. Compact Bulk
-responses may display or export it, but watchlists and analyst cases continue
-to store only their existing compact compatibility fields.
+does not retain the delegation-health observation or the inherited CAA walk.
+Watchlists and analyst cases continue to store only their existing compact
+compatibility fields.
+
+Compact Deep Bulk responses can include a version-1 `bulkComparison` envelope.
+It is derived from technology and TLS evidence already collected for that
+request and adds no request of its own. The envelope contains independent
+source states, at most 12 normalized curated technology identifiers, a
+truncation flag, one issuer label capped at 240 characters, and one exact
+lowercase SPKI SHA-256 fingerprint. Fast Bulk omits the envelope. The complete
+technology profile, signature evidence, certificate record, alternative names,
+chain, and TLS session details remain excluded. A source miss, failure, or
+partial result stays explicit and does not become an empty authoritative set.
 
 Node.js 24 does not expose HTTPS or SVCB through its documented high-level DNS
 resolver API, so WHOISleuth implements the small required DNS wire boundary
@@ -352,8 +377,9 @@ temporary application-control responses, not upstream registry results or
 evidence about the queried domain. Current endpoint denials also include the
 server-derived `operationFeature` and `operationFeatureModelVersion: 1`.
 Version 1 distinguishes fast/deep ordinary Lookup, fast/deep compact Bulk,
-direct RDAP, direct WHOIS, fast/deep availability, Certificate Transparency,
-and domain-posture requests. The feature is accounting provenance rather than
+direct RDAP, registry-scoped nameserver search, direct WHOIS, fast/deep
+availability, Certificate Transparency, and domain-posture requests. The
+feature is accounting provenance rather than
 proof of the browser workflow: compact mode is the Bulk contract, but a custom
 client can select a different compatible response shape, so future durable
 enforcement must also retain deployment-wide totals.
@@ -431,6 +457,18 @@ state, and a control-safe detail of at most 240 characters.
 Registrar diagnostics may include its status, endpoint, HTTPS transport,
 upstream status, fetch time, and one bounded attempt. Registrar `not_found` is
 diagnostic only and never an availability signal.
+
+The nameserver-search response uses schema
+`whoisleuth.rdap-nameserver-search`, version 1. It always sets
+`lowerBound: true`, identifies the canonical nameserver and selected registry
+suffix, and preserves `success`, `partial`, `no_results`, `unsupported`,
+`rate_limited`, or `unavailable`. It inspects no more than 800 returned objects,
+retains no more than 200 unique in-scope domains, and exposes local or
+registry-declared truncation, invalid omitted rows, bounded notices, endpoint
+attempts, observation time, and limitations. Raw RDAP search payloads and
+published contacts are discarded. `no_results` means only that the selected
+registry returned no match for that bounded request; it is not evidence that
+the nameserver is unused elsewhere.
 
 Observed-network diagnostics may include status, selected address, address
 family, whether the selection came from TLS or DNS fallback, IP RDAP endpoint,

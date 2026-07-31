@@ -24,6 +24,14 @@ only exact SHA-1 fingerprints plus source timestamps and integrity digests. It
 omits listing reasons and performs matching locally. Source:
 https://sslbl.abuse.ch/blacklist/
 
+The checked-in Common-infrastructure snapshot is a bounded projection of
+selected MISP warning-lists. It retains exact CIDR entries, source dates,
+source digests, the pinned upstream commit, and attribution needed to qualify
+shared cloud, delivery, and reviewed public-resolver ranges. MISP
+warning-lists are available under CC0 1.0 Universal or the BSD 2-Clause
+"Simplified" License. Source:
+https://github.com/MISP/misp-warninglists
+
 The exact locked production-dependency inventory and the licence documents
 distributed by those packages are retained in
 frontend/static/third-party-notices.txt. The same file is served by the static

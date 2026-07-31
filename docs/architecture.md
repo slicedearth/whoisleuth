@@ -87,7 +87,7 @@ Fast and deep modes are execution profiles, not confidence labels:
 | --- | --- | --- |
 | **Fast** | High-volume candidate triage. | RDAP-led registration analysis, with bounded authoritative DNS delegation fallback where needed. WHOIS and deep website/TLS evidence are skipped explicitly. |
 | **Deep, full** | Single-target Lookup and full CLI investigation. | RDAP plus bounded registrar RDAP follow-up, WHOIS, availability, DNS with domain SOA or public-IP PTR context, HTTP, favicon, page identity, privacy-minimized credential-surface counts, publisher-declared structured identity, one-connection TLS, derived technology and passive-posture findings, and one observed-address IP RDAP context. Optional security.txt and external provider actions run only when explicitly selected. |
-| **Deep, compact** | Analyst-selected richer Bulk triage. | RDAP, WHOIS, availability, DNS, bounded website evidence, and TLS evidence needed by the compact result. Registrar RDAP follow-up, raw registry payloads, structured-identity, technology and passive-posture detail, observed-address IP RDAP, security.txt, and external providers remain omitted. |
+| **Deep, compact** | Analyst-selected richer Bulk triage. | RDAP, WHOIS, availability, DNS, bounded website evidence, TLS evidence, up to 12 normalized technology identifiers, a bounded TLS issuer label, and an SPKI SHA-256 fingerprint needed by the compact result. Registrar RDAP follow-up, raw registry payloads, structured-identity, rich technology and passive-posture detail, the full certificate profile, observed-address IP RDAP, security.txt, and external providers remain omitted. |
 
 Bulk uses the same `/api/lookup` orchestration one domain at a time and requests
 a compact response. The compact profile does not collect omitted full-lookup
@@ -135,7 +135,11 @@ version 7 and their existing payload shape.
 - **RDAP** starts from validated IANA bootstrap data, prefers HTTPS, validates
   successful objects against the requested domain/IP/ASN, and records bounded
   endpoint-attempt diagnostics. A stale validated bootstrap can bridge a
-  temporary bootstrap outage.
+  temporary bootstrap outage. Discover can separately request one RFC 9082
+  nameserver search from the IANA-selected service for an analyst-supplied
+  registry suffix. That explicit action retains at most 200 normalized
+  in-scope domains, is never part of Fast, Compact, Deep, or monitoring, and
+  remains a registry-scoped lower bound rather than a global reverse pivot.
 - **WHOIS** follows a bounded TCP/43 referral chain with validated public
   targets, per-hop attempt caps, one overall deadline, incremental decoding,
   and source-aware authority analysis. Positive registry evidence is not
@@ -273,6 +277,33 @@ through duplicated business logic. Platform-specific limitations remain
 visible: without the optional distributed provider, Express budgets are
 process-local and Netlify budgets are warm-instance-local and reset on cold
 starts.
+
+Protected-route loading has two separate local checks. The static manifest
+report measures each route's production asset closure and fails if the
+browser-local workspace chunk enters a public route. The authenticated
+Playwright baseline cold-loads Lookup and Monitor through the local session
+boundary, records encoded transfer bytes, first enabled route-control time,
+paint and navigation milestones, and Chromium long-task cost, and applies broad
+regression ceilings. These local measurements are repeatable build tripwires,
+not claims about production latency, mobile hardware, proxy behavior, or a
+particular visitor's experience.
+
+## Common-infrastructure catalogue
+
+Evidence-cluster review can qualify an exact retained IP relationship against a
+checked-in Common-infrastructure snapshot. The maintenance command
+`npm run common-infrastructure:update -- --commit <full-sha>` reads only a
+pinned MISP warning-lists commit, caps every source response at 1 MiB, accepts
+only exact CIDR lists no older than 30 days, rejects malformed or duplicate
+entries, and caps the generated snapshot at 20,000 entries and 1 MiB. The
+retained snapshot records the upstream commit, source date, SHA-256 digest,
+licence, exclusions, and limitations.
+
+Runtime matching is browser-local and makes no provider request. A match only
+qualifies the relationship as shared infrastructure. It does not identify an
+origin host, tenant, account, operator, ownership, intent, safety, or
+maliciousness. A non-match is inconclusive. Stale or oversized sources are
+excluded rather than silently treated as current.
 
 ## Verification strategy
 

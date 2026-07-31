@@ -151,16 +151,22 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   releaseLookup?.();
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
-  const timing = page.getByRole('region', { name: 'Collection timing' });
-  await expect(timing).toBeVisible();
-  await expect(timing.getByText('2.4 s total')).toBeVisible();
-  const exactTiming = timing.locator('ul[aria-label="Exact collection timing data"]');
-  await expect(exactTiming).toHaveCSS('clip-path', 'inset(50%)');
-  await expect(exactTiming).toContainText('request error');
-  await expect(exactTiming).toContainText('WHOIS chain');
-  await expect(exactTiming).toContainText('at +2.1 s');
-  await expect(timing.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
+  const coverage = page.getByRole('region', { name: 'Evidence coverage' });
+  await expect(coverage).toBeVisible();
+  await expect(coverage.getByRole('group', { name: 'Evidence coverage summary' })).toContainText('2.4 s total');
+  await coverage.getByText(/Review \d+ source and analysis records/u).click();
+  await expect(coverage).toContainText('700 ms');
+  await expect(coverage).toContainText('Request error');
+  await expect(coverage).toContainText('WHOIS');
+  await expect(coverage).toContainText('2.0 s');
+  const diagnostics = coverage.locator('details.timing-detail');
+  await expect(diagnostics).not.toHaveAttribute('open', '');
+  await diagnostics.getByText('Request diagnostics', { exact: true }).click();
+  await expect(diagnostics.getByRole('heading', { name: 'Collection timing' })).toBeVisible();
+  await expect(diagnostics.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 720 });
+  await expect(diagnostics.locator('svg')).toBeHidden();
+  await expect(diagnostics.locator('.mobile-timing')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

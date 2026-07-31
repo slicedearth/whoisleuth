@@ -66,6 +66,20 @@ type CompactLookupAvailabilityState =
   | 'registered'
   | 'unknown';
 type CompactLookupConfidence = 'high' | 'low' | 'medium';
+type CompactBulkComparisonState = 'error' | 'not_found' | 'partial' | 'success' | 'unavailable';
+type CompactBulkComparisonEvidence = {
+  readonly version: 1;
+  readonly technology: JsonObject & {
+    readonly state: CompactBulkComparisonState;
+    readonly ids: string[];
+    readonly truncated: boolean;
+  };
+  readonly tls: JsonObject & {
+    readonly state: CompactBulkComparisonState;
+    readonly issuerLabel: string | null;
+    readonly spkiSha256: string | null;
+  };
+};
 type CompactLookupHttpResponse = JsonObject & {
   readonly query?: string;
   readonly type?: 'domain';
@@ -77,6 +91,7 @@ type CompactLookupHttpResponse = JsonObject & {
     readonly domain: string;
     readonly state: CompactLookupAvailabilityState;
     readonly confidence: CompactLookupConfidence;
+    readonly bulkComparison?: CompactBulkComparisonEvidence;
   };
   readonly diagnostics: JsonObject & {
     readonly version: 7;
@@ -165,6 +180,7 @@ const MAX_LOOKUP_RESPONSE_ERROR_LENGTH = 240;
 const MAX_COMPACT_LOOKUP_RESPONSE_TOP_LEVEL_KEYS = 8;
 const MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS = 128;
 const MAX_COMPACT_LOOKUP_DIAGNOSTIC_KEYS = 16;
+const MAX_COMPACT_BULK_TECHNOLOGY_IDS = 12;
 const MAX_THREAT_INTELLIGENCE_PROVIDERS = 10;
 const MAX_LOOKUP_TIMING_MS = 120_000;
 const MAX_LOOKUP_TIMING_SOURCES = 10;
@@ -179,6 +195,15 @@ const COMPACT_AVAILABILITY_STATES = new Set<CompactLookupAvailabilityState>([
 ]);
 const COMPACT_CONFIDENCE_LEVELS = new Set<CompactLookupConfidence>(['high', 'low', 'medium']);
 const COMPACT_AVAILABILITY_DIAGNOSTIC_STATES = new Set(['complete', 'disabled', 'error']);
+const COMPACT_BULK_COMPARISON_STATES = new Set<CompactBulkComparisonState>([
+  'error',
+  'not_found',
+  'partial',
+  'success',
+  'unavailable',
+]);
+const COMPACT_BULK_TECHNOLOGY_ID_RE = /^[a-z0-9][a-z0-9_-]{0,79}$/u;
+const SHA256_RE = /^[a-f0-9]{64}$/u;
 const LOOKUP_TIMING_SOURCES = new Set<LookupTimingSource>([
   'rdap',
   'whois',
@@ -241,6 +266,31 @@ function compactDomainMatches(value: unknown, expectedDomain: unknown): boolean 
   const domain = normalizedDomain(value);
   const expected = normalizedDomain(expectedDomain);
   return Boolean(domain && expected && (domain === expected || expected.endsWith(`.${domain}`)));
+}
+
+function validCompactBulkComparison(value: unknown): value is CompactBulkComparisonEvidence {
+  if (!isJsonObject(value)
+    || Object.keys(value).length > 3
+    || value.version !== 1
+    || !isJsonObject(value.technology)
+    || Object.keys(value.technology).length > 3
+    || typeof value.technology.state !== 'string'
+    || !COMPACT_BULK_COMPARISON_STATES.has(value.technology.state as CompactBulkComparisonState)
+    || !Array.isArray(value.technology.ids)
+    || value.technology.ids.length > MAX_COMPACT_BULK_TECHNOLOGY_IDS
+    || typeof value.technology.truncated !== 'boolean'
+    || !isJsonObject(value.tls)
+    || Object.keys(value.tls).length > 3
+    || typeof value.tls.state !== 'string'
+    || !COMPACT_BULK_COMPARISON_STATES.has(value.tls.state as CompactBulkComparisonState)
+    || (value.tls.issuerLabel !== null && !optionalBoundedText(value.tls.issuerLabel, 240))
+    || (value.tls.spkiSha256 !== null
+      && (typeof value.tls.spkiSha256 !== 'string' || !SHA256_RE.test(value.tls.spkiSha256)))) {
+    return false;
+  }
+  const ids = value.technology.ids;
+  return ids.every((id) => typeof id === 'string' && COMPACT_BULK_TECHNOLOGY_ID_RE.test(id))
+    && new Set(ids).size === ids.length;
 }
 
 function invalidLookupResponse(): LookupResponseParseResult {
@@ -310,6 +360,8 @@ function parseCompactLookupHttpResponse(
     || typeof availability.confidence !== 'string'
     || !COMPACT_CONFIDENCE_LEVELS.has(availability.confidence as CompactLookupConfidence)
     || (availability.deepScanComplete !== undefined && typeof availability.deepScanComplete !== 'boolean')
+    || (availability.bulkComparison !== undefined
+      && !validCompactBulkComparison(availability.bulkComparison))
     || (value.query !== undefined && !compactDomainMatches(value.query, expectedDomain))
     || (value.type !== undefined && value.type !== 'domain')
     || (value.inputHostname !== undefined && !compactDomainMatches(value.inputHostname, expectedDomain))
