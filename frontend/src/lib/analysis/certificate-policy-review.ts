@@ -9,7 +9,7 @@ export type CertificatePolicyState =
   | 'no_target_policy_observed';
 
 export type CertificatePolicyFinding = Readonly<{
-  id: 'caa' | 'expected_issuer' | 'expected_spki';
+  id: 'caa' | 'expected_issuer' | 'expected_san' | 'expected_spki';
   label: string;
   state: CertificatePolicyState;
   observed: readonly string[];
@@ -225,6 +225,61 @@ function exactBaselineFinding(input: Readonly<{
   };
 }
 
+function sanPatternMatches(pattern: string, observed: string): boolean {
+  if (!pattern.startsWith('*.')) return pattern === observed;
+  const suffix = pattern.slice(1);
+  return observed.endsWith(suffix)
+    && observed.slice(0, -suffix.length).length > 0
+    && !observed.slice(0, -suffix.length).includes('.');
+}
+
+function sanBaselineFinding(
+  observedNames: readonly string[],
+  expectedPatterns: readonly string[],
+): CertificatePolicyFinding {
+  if (!expectedPatterns.length) {
+    return {
+      id: 'expected_san',
+      label: 'Reviewed expected certificate names',
+      state: 'not_configured',
+      observed: observedNames,
+      expected: [],
+      detail: 'No reviewed SAN pattern is configured for this official domain.',
+      sources: ['TLS certificate', 'Brand Profile'],
+      limitations: ['SAN expectations are analyst-authored posture context, not externally verified ownership or control.'],
+    };
+  }
+  if (!observedNames.length) {
+    return {
+      id: 'expected_san',
+      label: 'Reviewed expected certificate names',
+      state: 'indeterminate',
+      observed: [],
+      expected: expectedPatterns,
+      detail: 'Expected SAN patterns are configured, but current settled TLS evidence did not provide comparable names.',
+      sources: ['TLS certificate', 'Brand Profile'],
+      limitations: ['Unavailable current evidence is not treated as a change or mismatch.'],
+    };
+  }
+  const missing = expectedPatterns.filter((pattern) =>
+    !observedNames.some((observed) => sanPatternMatches(pattern, observed)));
+  return {
+    id: 'expected_san',
+    label: 'Reviewed expected certificate names',
+    state: missing.length ? 'changed' : 'aligned',
+    observed: observedNames,
+    expected: expectedPatterns,
+    detail: missing.length
+      ? `Current certificate names do not satisfy ${missing.length} reviewed SAN pattern${missing.length === 1 ? '' : 's'}.`
+      : 'Current certificate names satisfy every reviewed SAN pattern.',
+    sources: ['TLS certificate', 'Brand Profile'],
+    limitations: [
+      'Unexpected additional SANs remain visible for review but do not establish compromise, ownership, or maliciousness.',
+      'A wildcard pattern matches exactly one label at its wildcard position.',
+    ],
+  };
+}
+
 export function buildCertificatePolicyReview(input: Readonly<{
   observedAt?: unknown;
   dnsEvidence?: unknown;
@@ -241,8 +296,13 @@ export function buildCertificatePolicyReview(input: Readonly<{
   const issuer = issuerText(input.tlsIssuer);
   const spki = text(record(input.tlsPublicKey).fingerprintSha256, 64).toLowerCase();
   const alternativeNames = record(input.tlsAltNames).dnsNames;
-  const wildcard = Array.isArray(alternativeNames)
-    && alternativeNames.some((item) => text(item, 253).startsWith('*.'));
+  const observedNames = Array.isArray(alternativeNames)
+    ? [...new Set(alternativeNames
+      .slice(0, 64)
+      .map((item) => text(item, 253).toLowerCase().replace(/\.$/u, ''))
+      .filter(Boolean))]
+    : [];
+  const wildcard = observedNames.some((item) => item.startsWith('*.'));
   const records = caaRecords(dnsRecords.caa);
   const findings: CertificatePolicyFinding[] = [
     caaFinding({ dnsEvidence, records, issuer, wildcard }),
@@ -256,6 +316,7 @@ export function buildCertificatePolicyReview(input: Readonly<{
         expected: input.baseline.tlsIssuer,
         source: 'TLS certificate',
       }),
+      sanBaselineFinding(observedNames, input.baseline.tlsSanPatterns),
       exactBaselineFinding({
         id: 'expected_spki',
         label: 'Reviewed expected certificate public key',

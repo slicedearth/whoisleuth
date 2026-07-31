@@ -150,8 +150,8 @@ settled CAA publication at the queried domain. Recognized issuer mappings can
 produce an aligned or apparently-outside-current-policy review state. An
 unknown issuer, incomplete DNS, or missing target-domain CAA remains
 indeterminate; parent-label CAA inheritance is not inferred when it was not
-collected. When the active Brand Profile contains a reviewed expected issuer
-or SPKI value for the official domain, the same panel compares that analyst
+collected. When the active Brand Profile contains a reviewed expected issuer,
+SAN pattern, or SPKI value for the official domain, the same panel compares that analyst
 baseline without treating a difference as compromise or improper issuance.
 Current CAA cannot establish the policy that applied when an existing
 certificate was issued.
@@ -839,7 +839,7 @@ vulnerable, safe, or controlled by another party.
 
 The **Owned-domain baseline** editor can additionally retain analyst-authored
 expectations for nameservers, DS records, MX records, CAA policy, a reviewed
-TLS issuer or public-key digest, transfer-lock intent, and a renewal review
+TLS issuer, SAN patterns or public-key digest, transfer-lock intent, and a renewal review
 date. Later posture audits label each configured field as aligned, drifted,
 unknown, unsupported, suppressed, or not configured. The analyst must
 explicitly retain an audit before it becomes the previous comparison point.

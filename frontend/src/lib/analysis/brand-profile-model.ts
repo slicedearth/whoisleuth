@@ -8,7 +8,7 @@ import type { PageBaseline } from './page-baseline.ts';
 import { isInformativeFaviconHash } from './utils.ts';
 
 export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
-export const BRAND_PROFILE_SCHEMA_VERSION = 4;
+export const BRAND_PROFILE_SCHEMA_VERSION = 5;
 export const MAX_PROFILES = 100;
 export const MAX_PROFILE_VALUES = 200;
 export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
@@ -53,6 +53,7 @@ const DESIRED_POSTURE_FIELDS = new Set([
   'mx',
   'caa',
   'tls_issuer',
+  'tls_san_patterns',
   'tls_spki',
   'registrar_lock',
   'renewal_review',
@@ -95,6 +96,7 @@ export type DesiredPostureBaseline = {
   mx: string[];
   caa: string[];
   tlsIssuer: string;
+  tlsSanPatterns: string[];
   tlsSpkiSha256: string;
   registrarLock: 'required' | 'not_required' | 'unconfigured';
   renewalReviewAt: string | null;
@@ -286,6 +288,20 @@ function normalizeDesiredPostureObservation(value: unknown): DesiredPostureObser
   return checks.length ? { observedAt, checks } : null;
 }
 
+function normalizeTlsSanPatterns(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const output = new Set<string>();
+  for (const item of value.slice(0, MAX_DESIRED_POSTURE_RECORDS * 4)) {
+    const candidate = boundedText(item, MAX_PROFILE_DOMAIN_LENGTH).toLowerCase().replace(/\.$/u, '');
+    const wildcard = candidate.startsWith('*.');
+    const normalized = normalizeDomain(wildcard ? candidate.slice(2) : candidate);
+    if (!normalized) continue;
+    output.add(wildcard ? `*.${normalized}` : normalized);
+    if (output.size >= MAX_DESIRED_POSTURE_RECORDS) break;
+  }
+  return [...output].sort();
+}
+
 export function normalizeDesiredPostureBaselines(
   value: unknown,
   officialDomains: readonly string[],
@@ -325,6 +341,7 @@ export function normalizeDesiredPostureBaselines(
       mx: normalizeDesiredPostureRecords(candidate.mx),
       caa: normalizeDesiredPostureRecords(candidate.caa),
       tlsIssuer: boundedText(candidate.tlsIssuer, MAX_PROFILE_TEXT_LENGTH),
+      tlsSanPatterns: normalizeTlsSanPatterns(candidate.tlsSanPatterns),
       tlsSpkiSha256: typeof candidate.tlsSpkiSha256 === 'string' && SHA256_RE.test(candidate.tlsSpkiSha256)
         ? candidate.tlsSpkiSha256.toLowerCase()
         : '',
@@ -456,8 +473,8 @@ export function mergeBrandProfiles(
   if (importedVersion !== null && importedVersion > BRAND_PROFILE_SCHEMA_VERSION) {
     throw new Error(`This Brand Profile file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
-  if (![2, 3, BRAND_PROFILE_SCHEMA_VERSION].includes(importedVersion ?? 0)) {
-    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2, 3, or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
+  if (![2, 3, 4, BRAND_PROFILE_SCHEMA_VERSION].includes(importedVersion ?? 0)) {
+    throw new Error(`Expected a WHOISleuth Brand Profile export using schema 2, 3, 4, or ${BRAND_PROFILE_SCHEMA_VERSION}.`);
   }
   const local = normalizeBrandProfileStore(localRaw).profiles;
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));

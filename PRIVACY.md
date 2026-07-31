@@ -726,7 +726,7 @@ default (see the README), so many lookups return no personal data at all.
   evidence and are not retained by the server. Registry and resolver failures,
   exhausted traversal bounds, and unsupported policy targets remain explicit
   incomplete states. A Brand Profile can separately retain analyst-authored
-  desired nameserver, DS, MX, CAA, TLS issuer or public-key digest,
+  desired nameserver, DS, MX, CAA, TLS issuer, SAN patterns or public-key digest,
   transfer-lock, and renewal-review values; reviewed suppressions; and one
   explicitly selected compact prior posture observation per official domain.
   Those local values are not sent with a posture request, do not change

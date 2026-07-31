@@ -331,10 +331,10 @@ describe('schema compatibility inventory', () => {
     assert.equal(brandProfileStoreVersion([]), 1);
     assert.equal(watchlistStoreVersion({ Legacy: { results: [] } }), 1);
     assert.equal(shortlistStoreVersion([]), 1);
-    assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [1, 2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [1, 2, 3, 4, 5]);
     assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [1, 2]);
     assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [1, 2]);
-    assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [2, 3, 4]);
+    assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [2, 3, 4, 5]);
     assert.deepEqual(byId(inventory, 'export.watchlists').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [2]);
   });
